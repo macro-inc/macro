@@ -48,6 +48,13 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
+    /// No access token could be obtained right now, so no provider request was
+    /// made. Retrying may succeed.
+    #[error("email provider credentials are temporarily unavailable: {message}")]
+    CredentialsUnavailable {
+        /// A sanitized diagnostic suitable for logs.
+        message: String,
+    },
     /// A deterministic failure that should not be retried unchanged.
     #[error("permanent email provider failure: {message}")]
     Permanent {
@@ -66,21 +73,42 @@ pub enum EmailApiError {
 impl EmailApiError {
     /// Returns whether retrying the same operation may succeed.
     pub fn is_transient(&self) -> bool {
-        matches!(self, Self::RateLimited { .. } | Self::Transient { .. })
+        matches!(
+            self,
+            Self::RateLimited { .. } | Self::Transient { .. } | Self::CredentialsUnavailable { .. }
+        )
     }
 }
 
 /// Where a rate-limit refusal originated.
 ///
-/// Callers use this to distinguish a local budget refusal (no provider quota
-/// was consumed; a drop-and-wait policy may be appropriate) from the provider
-/// itself throttling the request (retrying preserves delivery guarantees).
+/// Callers use this to distinguish a local refusal (no provider request was
+/// made, so the mailbox needs no cooldown) from the provider itself throttling
+/// the request. Both defer the work; neither drops it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateLimitOrigin {
     /// Refused by local quota policy before any provider call was made.
     Local,
+    /// Refused by the shared per-mailbox Microsoft request gate before any
+    /// provider call was made, naming the limit that refused it.
+    Gate(GateLimit),
     /// The provider itself throttled the request.
-    Provider,
+    Provider {
+        /// The provider refused because the mailbox had too many requests in
+        /// flight at once, rather than for a quota.
+        concurrency: bool,
+    },
+}
+
+/// The per-mailbox gate limit that refused a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GateLimit {
+    /// The mailbox spent its request allowance for the current window.
+    Window,
+    /// The mailbox already has its maximum number of requests in flight.
+    Concurrency,
+    /// The mailbox is cooling down after the provider throttled it.
+    Cooldown,
 }
 
 impl From<RateLimitRefusal> for EmailApiError {

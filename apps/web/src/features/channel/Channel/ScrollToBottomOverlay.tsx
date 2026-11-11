@@ -2,7 +2,7 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { MobileDockButton } from '@components/app/mobile/MobileDockButton';
 import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArrowDown from '@phosphor-icons/core/regular/arrow-down.svg?component-solid';
+import ArrowDown from '@icon/system/regular/arrow-down.svg?component-solid';
 import { Layer } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 import type { ThreadListScrollState } from './ThreadList';
@@ -46,17 +46,20 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
             </button>
           }
         >
-          <MobileDockIsland
+          <div
+            data-scroll-to-bottom
             class="absolute z-10 right-[calc(var(--safe-right,0px)+var(--mobile-chrome-gutter))]"
             style={{ bottom: `${FloatRegions.hostHeight() + 12}px` }}
           >
-            <MobileDockButton
-              icon={ArrowDown}
-              ariaLabel="Jump to latest"
-              data-keep-keyboard
-              onClick={() => props.onScrollToBottom('smooth')}
-            />
-          </MobileDockIsland>
+            <MobileDockIsland>
+              <MobileDockButton
+                icon={ArrowDown}
+                ariaLabel="Jump to latest"
+                data-keep-keyboard
+                onClick={() => props.onScrollToBottom('smooth')}
+              />
+            </MobileDockIsland>
+          </div>
         </Show>
       </Layer>
     </Show>

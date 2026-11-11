@@ -14,7 +14,9 @@ const TEAM_ID: Uuid = Uuid::from_u128(3);
 
 fn user_authentication() -> MacroUserAuthentication {
     MacroUserAuthentication {
+        origin: crate::CredentialOrigin::Session,
         agent_id: None,
+        agent_via: None,
         macro_user_id: MacroUserIdStr::try_from("macro|user@example.com".to_string())
             .expect("valid Macro user id"),
         user_context: UserContext {

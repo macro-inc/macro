@@ -1,9 +1,7 @@
+import type { SearchIndexId } from '@app/features/next-soup/core/search-filters';
+import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
-import {
-  SEARCH_INDEX_SEEDS,
-  type SearchIndexId,
-} from '@app/features/next-soup/soup-view/filters-bar/search/search-index-seeds';
 import type { EntitySearchCategory } from './queries/entity-search';
 
 type CategorySearchFilters = {

@@ -110,6 +110,10 @@ fn reply_segments(turn: TurnId, segments: &[ProjectedSegment]) -> Vec<AgentReply
                             ActivityStatus::Failed => AgentActivityStatus::Failed,
                             ActivityStatus::Interrupted => AgentActivityStatus::Interrupted,
                         },
+                        // A view is part of the reply, as its passages are,
+                        // and presenting caps it at 32 KiB. Its widgets name
+                        // items, which each reader loads with their own access.
+                        card: row.card.clone(),
                     })
                     .collect(),
                 sealed: projected.segment.sealed,
@@ -166,6 +170,7 @@ fn segments_body(
             pending = true;
             None
         }
+        Some(ReplyOutcome::Refused(reason)) => Some(reason.clone()),
     };
     AgentChatReplyBody::Segments {
         segments: shown,
@@ -196,6 +201,7 @@ fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
         ReplyOutcome::NeedsInput { question } => format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
         ReplyOutcome::AwaitingApproval(call) => awaiting_approval(&call),
         ReplyOutcome::Resumed => return AgentChatReplyBody::Pending,
+        ReplyOutcome::Refused(reason) => reason,
     };
     AgentChatReplyBody::Markdown { markdown }
 }
@@ -222,7 +228,8 @@ const fn patch_policy(outcome: &ReplyOutcome) -> PatchMessageNotificationPolicy 
         | ReplyOutcome::Empty
         | ReplyOutcome::Cancelled
         | ReplyOutcome::Failed
-        | ReplyOutcome::NeedsInput { .. } => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+        | ReplyOutcome::NeedsInput { .. }
+        | ReplyOutcome::Refused(_) => PatchMessageNotificationPolicy::NotifyAsPostedMessage,
         // The owner, the one person who can act, is notified by the hold.
         ReplyOutcome::AwaitingApproval(_) | ReplyOutcome::Resumed => {
             PatchMessageNotificationPolicy::Default

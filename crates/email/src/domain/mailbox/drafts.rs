@@ -50,41 +50,47 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         let Some(lease) = self
             .repo
             .claim_draft(macro_uuid::generate_uuid_v7(), self.claim_mode)
-            .await?
+            .await
+            .map_err(|error| super::telemetry::claim_failed("drafts", error))?
         else {
             return Ok(false);
         };
-        let result =
-            super::maintain_lease(self.execute(&lease), || self.repo.renew_draft(&lease)).await;
-        match result {
-            Ok(()) => Ok(true),
-            Err(MailboxError::Provider(EmailApiError::Conflict)) => {
-                self.repo.fail_draft(&lease, DraftFailure::Conflict).await?;
-                Ok(true)
-            }
-            Err(MailboxError::Provider(EmailApiError::Forbidden)) => {
-                self.repo.fail_draft(&lease, DraftFailure::Denied).await?;
-                Ok(true)
-            }
-            Err(MailboxError::Provider(EmailApiError::Permanent { .. })) => {
-                self.repo.fail_draft(&lease, DraftFailure::Invalid).await?;
-                Ok(true)
-            }
-            Err(error) => {
-                if !matches!(error, MailboxError::Stale) {
-                    self.repo
-                        .release_draft(
-                            &lease,
-                            match &error {
-                                MailboxError::Provider(e) => super::retry_seconds(e),
-                                _ => 30,
-                            },
-                        )
-                        .await?;
+        let link_id = lease.mailbox.link_id;
+        async {
+            let result =
+                super::maintain_lease(self.execute(&lease), || self.repo.renew_draft(&lease)).await;
+            match result {
+                Ok(()) => Ok(true),
+                Err(MailboxError::Provider(EmailApiError::Conflict)) => {
+                    self.repo.fail_draft(&lease, DraftFailure::Conflict).await?;
+                    Ok(true)
                 }
-                Err(error)
+                Err(MailboxError::Provider(EmailApiError::Forbidden)) => {
+                    self.repo.fail_draft(&lease, DraftFailure::Denied).await?;
+                    Ok(true)
+                }
+                Err(MailboxError::Provider(EmailApiError::Permanent { .. })) => {
+                    self.repo.fail_draft(&lease, DraftFailure::Invalid).await?;
+                    Ok(true)
+                }
+                Err(error) => {
+                    if !matches!(error, MailboxError::Stale) {
+                        self.repo
+                            .release_draft(
+                                &lease,
+                                match &error {
+                                    MailboxError::Provider(e) => super::retry_seconds(e),
+                                    _ => 30,
+                                },
+                            )
+                            .await?;
+                    }
+                    Err(error)
+                }
             }
         }
+        .await
+        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
 
     async fn execute(&self, lease: &DraftLease) -> Result<(), MailboxError> {
@@ -372,7 +378,9 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         }
         if matches.len() == 1 {
             let found = matches[0];
-            if found.size != file.size || found.name != file.name || found.inline != file.inline {
+            // Graph's size also counts the attachment's other properties, so it
+            // exceeds the byte length; only a smaller file means it changed.
+            if found.size < file.size || found.name != file.name || found.inline != file.inline {
                 return Err(EmailApiError::Conflict.into());
             }
             checkpoint.completed_files += 1;

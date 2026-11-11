@@ -24,7 +24,7 @@ use crate::domain::ports::{
 };
 
 struct FakeRepository {
-    candidates: Vec<ScheduledAction>,
+    candidates: std::sync::Mutex<Vec<ScheduledAction>>,
     cancellation_token: Option<CancellationToken>,
     poll_started: Semaphore,
 }
@@ -32,7 +32,7 @@ struct FakeRepository {
 impl FakeRepository {
     fn returning(candidates: Vec<ScheduledAction>) -> Self {
         Self {
-            candidates,
+            candidates: std::sync::Mutex::new(candidates),
             cancellation_token: None,
             poll_started: Semaphore::new(0),
         }
@@ -43,7 +43,7 @@ impl FakeRepository {
         cancellation_token: CancellationToken,
     ) -> Self {
         Self {
-            candidates,
+            candidates: std::sync::Mutex::new(candidates),
             cancellation_token: Some(cancellation_token),
             poll_started: Semaphore::new(0),
         }
@@ -83,7 +83,7 @@ impl ScheduledActionRepo for FakeRepository {
         if let Some(cancellation_token) = &self.cancellation_token {
             cancellation_token.cancel();
         }
-        Ok(self.candidates.clone())
+        Ok(self.candidates.lock().unwrap().clone())
     }
 
     async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
@@ -117,6 +117,12 @@ impl ScheduledActionRepo for FakeRepository {
 
     async fn get_execution_records(&self, _action_id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(Vec::new())
+    }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
+        Ok(std::collections::HashMap::new())
     }
 
     async fn update_next_run_at(&self, _id: &Uuid) -> Result<()> {
@@ -193,6 +199,9 @@ fn due_action() -> ScheduledAction {
         next_run_at: Some(now - ChronoDuration::seconds(1)),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
+        suggestion_id: None,
+        description: String::new(),
     }
 }
 
@@ -331,6 +340,69 @@ async fn only_enabled_due_schedules_including_mixed_triggers_reach_executor() {
     tracker.close();
     wait_for_tracker(&tracker).await;
     assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+}
+
+fn once_action(at: DateTime<Utc>) -> ScheduledAction {
+    let mut action = due_action();
+    action.trigger = ActionTrigger::Once { at };
+    action.next_run_at = Some(at);
+    action
+}
+
+/// Both cases run well inside the 30-second batch the loop would otherwise wait out.
+const NEAR_TERM_DEADLINE: Duration = Duration::from_secs(5);
+
+#[tokio::test]
+async fn a_saved_near_term_routine_wakes_the_idle_loop() {
+    let repository = Arc::new(FakeRepository::returning(Vec::new()));
+    let executor = RecordingExecutor {
+        execution_count: Arc::new(AtomicUsize::new(0)),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher =
+        PgPollingDispatcher::new(Arc::clone(&repository), executor).with_lifecycle(lifecycle);
+    let (dispatch_tx, mut execution_rx) = dispatcher.begin_dispatch_loop();
+    repository.wait_for_poll().await;
+
+    let action = once_action(Utc::now() + ChronoDuration::milliseconds(200));
+    let id = action.id.unwrap();
+    *repository.candidates.lock().unwrap() = vec![action.clone()];
+    dispatch_tx
+        .send(crate::domain::models::DispatchEvent::Create(action))
+        .await
+        .unwrap();
+
+    let execution = tokio::time::timeout(NEAR_TERM_DEADLINE, execution_rx.recv())
+        .await
+        .expect("the routine should run when due, not at the next batch")
+        .unwrap();
+    assert_eq!(execution.action_id, id);
+    cancellation_token.cancel();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
+}
+
+#[tokio::test]
+async fn a_polled_routine_due_before_the_next_batch_runs_when_due() {
+    let action = once_action(Utc::now() + ChronoDuration::milliseconds(200));
+    let id = action.id.unwrap();
+    let repository = Arc::new(FakeRepository::returning(vec![action]));
+    let execution_count = Arc::new(AtomicUsize::new(0));
+    let executor = RecordingExecutor {
+        execution_count: Arc::clone(&execution_count),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher = PgPollingDispatcher::new(repository, executor).with_lifecycle(lifecycle);
+    let (_dispatch_tx, mut execution_rx) = dispatcher.begin_dispatch_loop();
+
+    let execution = tokio::time::timeout(NEAR_TERM_DEADLINE, execution_rx.recv())
+        .await
+        .expect("the routine should run when due, not at the next batch")
+        .unwrap();
+    assert_eq!(execution.action_id, id);
+    cancellation_token.cancel();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
 }
 
 #[tokio::test]

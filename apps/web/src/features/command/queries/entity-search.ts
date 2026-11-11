@@ -6,12 +6,9 @@ import {
 import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import { isTransientRequestError } from '@core/util/request-error';
+import { useTeamMembers } from '@queries/team/members';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactCommandItems, mergeCommandPeople } from '../contact-items';
-import {
-  type ProjectCommandItem,
-  useProjectCommandItems,
-} from '../project-items';
 import { rankCommandSearchItems } from '../rank-command-search-items';
 import type { CategoryFilter } from '../types';
 import type { CommandContactSource, CommandMenuItem } from '../useCommandItems';
@@ -19,18 +16,17 @@ import type { CommandContactSource, CommandMenuItem } from '../useCommandItems';
 export type EntitySearchCategory =
   | Exclude<CategoryFilter, 'commands'>
   | 'email';
-export type EntitySearchItem = QuickAccessItem | ProjectCommandItem;
-
 const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   Record<EntitySearchCategory, Bucket[]>
 > = {
-  all: exclude('person', 'initiative', 'crm_contact'),
+  all: exclude('person', 'initiative', 'crm_contact', 'routine'),
   email: ['email'],
   channels: ['channel'],
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project', 'database', 'form'],
   tasks: ['task'],
   chats: ['chat'],
+  projects: ['initiative'],
   people: ['person'],
 };
 const CONTACT_CATEGORIES = new Set<EntitySearchCategory | 'commands'>([
@@ -71,18 +67,22 @@ export function useEntitySearch(
     if ((category === 'all' || category === 'dms') && hasQuery()) {
       buckets = [...buckets, 'person'];
     }
+    // Like people, projects and routines join All only for typed searches;
+    // the empty recency list leaves projects to the Projects category, and
+    // routines have no view history to rank them among recent items.
+    if (category === 'all' && hasQuery()) {
+      buckets = [...buckets, 'initiative', 'routine'];
+    }
     return quickAccess.useList({
       buckets: options.excludeEmails
         ? buckets.filter((bucket) => bucket !== 'email')
         : buckets,
       searchTerm: scopedSearchTerm,
       enabled: searchActive,
+      peopleMode: 'command',
+      excludeSelf: true,
     });
   });
-  const projectEnabled = () =>
-    searchActive() &&
-    (categoryFilter() === 'all' || categoryFilter() === 'projects');
-  const projects = useProjectCommandItems(scopedSearchTerm, projectEnabled);
   const contactsActive = () =>
     searchActive() && CONTACT_CATEGORIES.has(categoryFilter()) && hasQuery();
   const contacts = options?.contactDiscovery?.(
@@ -90,11 +90,16 @@ export function useEntitySearch(
     contactsActive
   );
   const people = {
-    users: quickAccess.useList('person').items,
+    users: () => [
+      ...(activeList()
+        ?.items()
+        .filter((item) => item.kind === 'user') ?? []),
+      ...(contacts?.users?.() ?? []),
+    ],
     directMessages: quickAccess.useList('dm').items,
     viewerId: useUserId(),
   };
-  const contactItems = createMemo((): EntitySearchItem[] =>
+  const contactItems = createMemo((): QuickAccessItem[] =>
     contacts && contactsActive()
       ? contactCommandItems({
           contacts: contacts.contacts(),
@@ -107,16 +112,15 @@ export function useEntitySearch(
   const contactItemIds = createMemo(
     () => new Set(contactItems().map((item) => item.id))
   );
-  const cachedItems = (): EntitySearchItem[] => activeList()?.items() ?? [];
+  const cachedItems = (): QuickAccessItem[] => activeList()?.items() ?? [];
   const withDiscovery = <T extends CommandMenuItem>(
     baseItems: T[]
-  ): (T | EntitySearchItem)[] => {
-    const items = [...baseItems, ...projects.items()];
+  ): (T | QuickAccessItem)[] => {
     // A contact's row keeps its CRM name searchable, so it replaces the same
     // conversation listed under its own name.
     const contactIds = contactItemIds();
     const discovered = [
-      ...items.filter((item) => !contactIds.has(item.id)),
+      ...baseItems.filter((item) => !contactIds.has(item.id)),
       ...contactItems(),
     ];
     return CONTACT_CATEGORIES.has(categoryFilter()) && query().trim()
@@ -128,6 +132,10 @@ export function useEntitySearch(
       : discovered;
   };
 
+  const team = useTeamMembers(searchActive);
+  const teammateIds = createMemo(
+    () => new Set(team.users().map((user) => user.id))
+  );
   const rankItems = <T extends CommandMenuItem>(
     items: T[],
     queryText: string
@@ -137,6 +145,8 @@ export function useEntitySearch(
       preserveAdditionalEntityMatches:
         quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),
       preservedIds: contactItemIds(),
+      teammateIds: teammateIds(),
+      viewerId: people.viewerId(),
     });
   };
 
@@ -145,40 +155,41 @@ export function useEntitySearch(
     cachedItems,
     withDiscovery,
     rankItems,
-    projectsEnabled: projects.enabled,
     isSettling: () =>
       !!activeList()?.isLoading() ||
-      projects.isLoading() ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
     hasError: () =>
-      !!activeList()?.error() ||
-      !!projects.error() ||
-      (contactsActive() && !!contacts?.error()),
+      !!activeList()?.error() || (contactsActive() && !!contacts?.error()),
     hasAuthoritativeError: () => {
-      const projectError = projects.error();
       const contactError = contactsActive() ? contacts?.error() : undefined;
-      return !!(
-        (projectError && !isTransientRequestError(projectError)) ||
-        (contactError && !isTransientRequestError(contactError))
-      );
+      return !!contactError && !isTransientRequestError(contactError);
     },
     isLoadingEntities: () =>
       (!!activeList()?.isLoading() && activeList()?.items().length === 0) ||
-      projects.isLoading() ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
     pagination: {
+      windowKey: () => {
+        if (
+          activeList()?.isLoading() ||
+          (contactsActive() && contacts?.isLoading())
+        )
+          return;
+        // People and contact matches grow in place for a query, so the
+        // window is the query: a source answering late is not a new window.
+        return activeList()?.windowKey?.() ||
+          (contactsActive() && contacts?.windowKey?.())
+          ? scopedSearchTerm()
+          : undefined;
+      },
       hasMore: () =>
         (activeList()?.hasMore() ?? false) ||
-        projects.hasMore() ||
         (contactsActive() && (contacts?.hasMore() ?? false)),
       isLoadingMore: () =>
         (activeList()?.isLoadingMore() ?? false) ||
-        projects.isLoadingMore() ||
         (contactsActive() && (contacts?.isLoadingMore() ?? false)),
       loadMore: async () => {
         await Promise.all([
           activeList()?.loadMore(),
-          projects.loadMore(),
           contactsActive() ? contacts?.loadMore() : undefined,
         ]);
       },

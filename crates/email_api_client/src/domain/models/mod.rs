@@ -8,17 +8,21 @@ mod error;
 mod mailbox;
 mod mailbox_settings;
 mod operation;
+mod permit;
 mod provider;
 mod send;
 
 pub use address_book::*;
 pub use auth::{AccessToken, TokenError, TokenFreshness};
-pub use changes::{ChangeBatch, InboxChanges, SyncCursor};
+pub use changes::{ChangeBatch, ChangePage, InboxChanges, SyncCursor};
 pub use draft::*;
-pub use error::{EmailApiError, RateLimitOrigin, RateLimitRefusal};
-pub use mailbox::{CalendarPart, MessageWithCalendarParts, ProviderSubscription, ThreadListPage};
+pub use error::{EmailApiError, GateLimit, RateLimitOrigin, RateLimitRefusal};
+pub use mailbox::{
+    CalendarPart, ContactPage, MessageWithCalendarParts, ProviderSubscription, ThreadListPage,
+};
 pub use mailbox_settings::*;
 pub use operation::ApiOperationKind;
+pub use permit::{MailboxLoad, RequestPermit};
 pub use provider::*;
 #[cfg(feature = "ports")]
 pub use send::PreparedSendMessage;

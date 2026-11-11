@@ -15,7 +15,8 @@ import {
 import type { Bucket } from './types';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
-// sources (contacts, sessions) are merged locally, after the search limit.
+// sources (such as sessions) are merged locally. Personal contacts use their
+// separate bounded, context-ranked window rather than this generic projection.
 const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'document',
   'note',
@@ -29,6 +30,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'dm',
   'crm_company',
   'crm_contact',
+  'initiative',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -55,6 +57,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   /** Visible fallback rows; duplicates do not grow the combined menu. */
   existingItems?: Accessor<readonly T[]>;
+  /** Snapshot of source availability; reading it must not trigger a new request. */
+  sourceAttributes?: Accessor<Record<string, number>>;
   /** Keep already-materialized matches visible while a new query is pending. */
   filterPreviousItems?: (items: T[], query: string) => T[];
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
@@ -118,6 +122,11 @@ export function createProjectedList<T extends { id: string }>(options: {
     span.setAttr('search.query_length', request.query.length);
     span.setAttr('search.append', append);
     try {
+      for (const [key, value] of Object.entries(
+        untrack(() => options.sourceAttributes?.() ?? {})
+      )) {
+        span.setAttr(key, value);
+      }
       do {
         const page = await span.span(
           'quick_access.search_page',
@@ -159,6 +168,8 @@ export function createProjectedList<T extends { id: string }>(options: {
         fetchedPages < pageBudget &&
         (pageCount > 0 || !foundNewRow)
       );
+      span.setAttr('search.page_count', fetchedPages);
+      span.setAttr('search.materialized_count', merged.size);
       request.cursor = cursor;
       request.pages = pages;
       setError(undefined);

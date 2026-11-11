@@ -1,11 +1,10 @@
 pub use macro_user_id::user_id::MacroUserIdStr;
 pub use mcp_toolset::{MCP_CLIENT_NAME, McpServer, client_info};
 
-/// An MCP connector a user has connected through Pipedream.
+/// An MCP connector a user has connected through Pipedream or Macro Connect.
 ///
-/// Pipedream owns the OAuth grant and tokens for the connected account; we
-/// store only which app the user connected and the Pipedream account ID the
-/// grant lives under.
+/// The provider owns the OAuth grant and tokens for the connected account; we
+/// store only which app the user connected and where the grant lives.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipedreamConnection {
     /// The user who connected the app.
@@ -14,10 +13,70 @@ pub struct PipedreamConnection {
     pub app_slug: String,
     /// Human-readable display name, e.g. `Linear`.
     pub server_name: String,
-    /// The Pipedream connected-account ID holding the grant.
+    /// Where the grant lives: the Pipedream connected-account ID, or for
+    /// [`ConnectionProvider::Connect`] the Connect app ID.
     pub account_id: String,
     /// Whether the connector is enabled for tool use.
     pub enabled: bool,
+    /// Which backend holds the grant and serves the tools.
+    pub provider: ConnectionProvider,
+}
+
+/// The backend holding a connection's grant.
+///
+/// A record keeps the Pipedream app slug either way, so tool selection and
+/// agent egress key connections the same way for both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ConnectionProvider {
+    /// Pipedream Connect: `account_id` is a Pipedream account (`apn_...`).
+    #[default]
+    Pipedream,
+    /// Macro Connect: `account_id` is the Connect app ID.
+    Connect,
+}
+
+impl ConnectionProvider {
+    /// The value stored in `pipedream_mcp_connections.provider`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pipedream => "pipedream",
+            Self::Connect => "connect",
+        }
+    }
+
+    /// Parse a stored provider value.
+    pub fn parse(value: &str) -> anyhow::Result<Self> {
+        match value {
+            "pipedream" => Ok(Self::Pipedream),
+            "connect" => Ok(Self::Connect),
+            other => anyhow::bail!("unknown connection provider {other:?}"),
+        }
+    }
+}
+
+/// A Macro Connect catalog app, addressed by the Pipedream slug it replaces.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectApp {
+    /// Connect's app ID, e.g. `airtable`.
+    pub app_id: String,
+    /// The Pipedream app slug it stands in for, e.g. `airtable_oauth`.
+    pub app_slug: String,
+    /// Human-readable name, e.g. `Airtable`.
+    pub name: String,
+}
+
+/// A catalog app that connects through the native MCP stack instead of
+/// Pipedream: the vendor's own MCP server, authorized with our OAuth client
+/// (dynamic or metadata-document registration).
+///
+/// The app still appears in the catalog under its Pipedream slug, but
+/// Pipedream never holds a grant for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectorOverlay {
+    /// Pipedream app name slug, e.g. `sentry`.
+    pub app_slug: String,
+    /// The vendor's MCP server URL, e.g. `https://mcp.sentry.dev/mcp`.
+    pub server_url: String,
 }
 
 /// A short-lived token for opening Pipedream's hosted Connect UI.
@@ -44,6 +103,8 @@ pub struct PipedreamAccount {
     pub app_name: String,
     /// Whether Pipedream considers the account's credentials healthy.
     pub healthy: bool,
+    /// When Pipedream created the account, if it reported it.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// One connectable app advertised in the catalog.

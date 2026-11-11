@@ -4,6 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import type { AgentSession } from './agent-session';
 import { type CreateReviewOptions, SessionReview } from './review';
+import { presentView, type SessionView } from './view';
 
 /** A saved code execution belonging to one agent session. */
 export class CodeExecution extends MacroEntity<ExecutionRecord> {
@@ -39,7 +40,17 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
     list: () => SessionReview.list(this.client, this),
   };
 
-  /** The session this execution belongs to. */
+  /** Views: shown to the user at once, with nothing saved. */
+  readonly views = {
+    present: (view: SessionView) =>
+      presentView(this.client, this.parent, view, this),
+  };
+
+  /**
+   * The session this execution belongs to.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return this.parent;
   }
@@ -56,12 +67,20 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
   /** Execution failure text, when present. */
   readonly error = this.field('error');
 
-  /** The program's returned JSON; preserves an explicit null result. */
+  /**
+   * The program's returned JSON; preserves an explicit null result.
+   *
+   * @readonly
+   */
   async result(): Promise<unknown> {
     return (await this.detail.get()).result;
   }
 
-  /** Reload the saved state, for example after a running execution completes. */
+  /**
+   * Reload the saved state, for example after a running execution completes.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

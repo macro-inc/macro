@@ -10,5 +10,5 @@ export type SetPropertyValueOneOfFiveType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetPropertyValueOneOfFiveType = {
-  number: 'number',
+  date_range: 'date_range',
 } as const;

@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::ports::editing::MockEditingWorkerService;
 use entity_access::domain::models::{Entity, EntityPermission, EntityType, RequiredPermission};
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813c";
 const SECRET: &str = "local-word-document-test-secret";
@@ -33,6 +35,164 @@ fn lookup(file_type: &str) -> MockWordDocumentLookup {
             Box::pin(async move { Ok(Some(file_type)) })
         });
     lookup
+}
+
+/// The sync service: answers `exists` in turn (repeating the last answer)
+/// and records the snapshots it was asked to store.
+struct FakeSync {
+    exists: Mutex<VecDeque<bool>>,
+    accept: bool,
+    initialized: Mutex<Vec<Vec<u8>>>,
+}
+
+impl FakeSync {
+    fn new(exists: &[bool], accept: bool) -> Self {
+        Self {
+            exists: Mutex::new(exists.iter().copied().collect()),
+            accept,
+            initialized: Mutex::default(),
+        }
+    }
+}
+
+impl SyncServiceProbe for FakeSync {
+    async fn exists(&self, document_id: &str) -> anyhow::Result<bool> {
+        assert_eq!(document_id, DOCUMENT);
+        let mut answers = self.exists.lock().unwrap();
+        Ok(if answers.len() > 1 {
+            answers.pop_front().unwrap()
+        } else {
+            answers[0]
+        })
+    }
+}
+
+impl SyncInitializeSnapshotPort for FakeSync {
+    async fn initialize_from_snapshot(
+        &self,
+        document_id: &str,
+        snapshot: &[u8],
+    ) -> anyhow::Result<()> {
+        assert_eq!(document_id, DOCUMENT);
+        self.initialized.lock().unwrap().push(snapshot.to_vec());
+        anyhow::ensure!(self.accept, "snapshot already exists");
+        Ok(())
+    }
+}
+
+/// The uploaded file, or `None` while it is still being extracted.
+struct FakeFiles(Option<&'static [u8]>);
+
+#[async_trait::async_trait]
+impl WordDocumentFiles for FakeFiles {
+    async fn original(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        assert_eq!(document_id, DOCUMENT);
+        Ok(self.0.map(<[u8]>::to_vec))
+    }
+}
+
+const NDA: &[u8] = include_bytes!("../../../../docx_engine/tests/fixtures/mutual-nda.docx");
+
+/// A service over a document whose live copy already exists.
+fn word_service(
+    lookup: Arc<MockWordDocumentLookup>,
+    worker: Arc<MockEditingWorkerService>,
+) -> WordDocumentService<MockWordDocumentLookup, MockEditingWorkerService, FakeSync> {
+    WordDocumentService::new(
+        lookup,
+        worker,
+        Arc::new(FakeSync::new(&[true], true)),
+        Arc::new(NoWordDocumentFiles),
+        SECRET.into(),
+    )
+}
+
+fn reading_worker(times: usize) -> MockEditingWorkerService {
+    let mut worker = MockEditingWorkerService::new();
+    worker
+        .expect_word_document()
+        .times(times)
+        .returning(|_, _, _| Box::pin(async { Ok(response("Word document with 3 blocks.")) }));
+    worker
+}
+
+async fn read_through(
+    sync: Arc<FakeSync>,
+    files: FakeFiles,
+    worker: MockEditingWorkerService,
+) -> anyhow::Result<WordDocumentResponse> {
+    WordDocumentService::new(
+        Arc::new(lookup("docx")),
+        Arc::new(worker),
+        sync,
+        Arc::new(files),
+        SECRET.into(),
+    )
+    .read(
+        receipt(AccessLevel::View),
+        &user(),
+        Some("macro|ai@macro.com"),
+        None,
+        None,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_document_nobody_opened_is_seeded_before_the_worker_reads_it() {
+    let sync = Arc::new(FakeSync::new(&[false], true));
+    read_through(sync.clone(), FakeFiles(Some(NDA)), reading_worker(1))
+        .await
+        .unwrap();
+    let initialized = sync.initialized.lock().unwrap();
+    assert_eq!(initialized.len(), 1);
+    let live = loro::LoroDoc::new();
+    live.import(&initialized[0]).unwrap();
+    assert_eq!(
+        live.get_map("docxMeta")
+            .get("formatVersion")
+            .unwrap()
+            .into_value()
+            .unwrap(),
+        loro::LoroValue::Double(2.0)
+    );
+}
+
+#[tokio::test]
+async fn an_existing_live_copy_is_never_seeded_again() {
+    let sync = Arc::new(FakeSync::new(&[true], false));
+    read_through(sync.clone(), FakeFiles(None), reading_worker(1))
+        .await
+        .unwrap();
+    assert!(sync.initialized.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn losing_the_seeding_race_to_an_editor_still_reaches_the_worker() {
+    let sync = Arc::new(FakeSync::new(&[false, true], false));
+    read_through(sync.clone(), FakeFiles(Some(NDA)), reading_worker(1))
+        .await
+        .unwrap();
+    assert_eq!(sync.initialized.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_failed_seed_never_reaches_the_worker() {
+    let sync = Arc::new(FakeSync::new(&[false], false));
+    let error = read_through(sync, FakeFiles(Some(NDA)), reading_worker(0))
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "snapshot already exists");
+}
+
+#[tokio::test]
+async fn an_upload_still_being_extracted_asks_to_retry() {
+    let sync = Arc::new(FakeSync::new(&[false], true));
+    let error = read_through(sync.clone(), FakeFiles(None), reading_worker(0))
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("still being processed"));
+    assert!(sync.initialized.lock().unwrap().is_empty());
 }
 
 fn response(content: &str) -> WordDocumentResponse {
@@ -76,13 +236,12 @@ async fn reads_mint_only_view_access_for_the_delegated_actor() {
             assert_eq!(claims["actor"], "macro|ai@macro.com");
             Box::pin(async { Ok(response("Word document with 3 blocks.")) })
         });
-    let service =
-        WordDocumentService::new(Arc::new(lookup("docx")), Arc::new(worker), SECRET.into());
+    let service = word_service(Arc::new(lookup("docx")), Arc::new(worker));
     let read = service
         .read(
             receipt(AccessLevel::View),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             Some(3),
             None,
         )
@@ -127,16 +286,15 @@ fn editing_worker(track: Option<bool>, expected_author: &'static str) -> MockEdi
 
 #[tokio::test]
 async fn edits_mint_edit_access_and_are_attributed_to_the_user() {
-    let service = WordDocumentService::new(
+    let service = word_service(
         Arc::new(named(Some("Jacob Beckerman"))),
         Arc::new(editing_worker(Some(true), "Jacob Beckerman")),
-        SECRET.into(),
     );
     let edited = service
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions {
                 track_changes: Some(true),
@@ -150,16 +308,15 @@ async fn edits_mint_edit_access_and_are_attributed_to_the_user() {
 
 #[tokio::test]
 async fn a_user_without_a_name_is_named_by_their_email() {
-    let service = WordDocumentService::new(
+    let service = word_service(
         Arc::new(named(None)),
         Arc::new(editing_worker(None, "words")),
-        SECRET.into(),
     );
     service
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions::default(),
         )
@@ -171,16 +328,15 @@ async fn a_user_without_a_name_is_named_by_their_email() {
 async fn an_explicit_author_replaces_the_user() {
     let mut lookup = lookup("docx");
     lookup.expect_display_name().never();
-    let service = WordDocumentService::new(
+    let service = word_service(
         Arc::new(lookup),
         Arc::new(editing_worker(Some(false), "Acme Legal")),
-        SECRET.into(),
     );
     service
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             vec![rename("a"), rename("b")],
             WordEditOptions {
                 track_changes: Some(false),
@@ -196,16 +352,12 @@ async fn authors_are_one_short_line() {
     for author in ["A\nB".to_owned(), "x".repeat(MAX_AUTHOR_LENGTH + 1)] {
         let mut worker = MockEditingWorkerService::new();
         worker.expect_word_document().never();
-        let service = WordDocumentService::new(
-            Arc::new(MockWordDocumentLookup::new()),
-            Arc::new(worker),
-            SECRET.into(),
-        );
+        let service = word_service(Arc::new(MockWordDocumentLookup::new()), Arc::new(worker));
         let error = service
             .edit(
                 receipt(AccessLevel::Edit),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 vec![rename("a")],
                 WordEditOptions {
                     track_changes: None,
@@ -223,13 +375,12 @@ async fn other_file_types_never_reach_the_worker() {
     for file_type in ["md", "pdf", "spreadsheet"] {
         let mut worker = MockEditingWorkerService::new();
         worker.expect_word_document().never();
-        let service =
-            WordDocumentService::new(Arc::new(lookup(file_type)), Arc::new(worker), SECRET.into());
+        let service = word_service(Arc::new(lookup(file_type)), Arc::new(worker));
         let error = service
             .read(
                 receipt(AccessLevel::View),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 None,
                 None,
             )
@@ -244,16 +395,12 @@ async fn edits_need_between_one_and_fifty_operations() {
     for operations in [vec![], vec![rename("a"); MAX_OPERATIONS + 1]] {
         let mut worker = MockEditingWorkerService::new();
         worker.expect_word_document().never();
-        let service = WordDocumentService::new(
-            Arc::new(MockWordDocumentLookup::new()),
-            Arc::new(worker),
-            SECRET.into(),
-        );
+        let service = word_service(Arc::new(MockWordDocumentLookup::new()), Arc::new(worker));
         let error = service
             .edit(
                 receipt(AccessLevel::Edit),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 operations,
                 WordEditOptions::default(),
             )

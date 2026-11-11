@@ -73,6 +73,154 @@ where
         self
     }
 
+    /// Create a project for a reviewed import using a stable ledger-derived
+    /// identity. A replay may reuse only an existing project with this owner;
+    /// attribution is checked before either creation or reuse.
+    #[tracing::instrument(skip_all, fields(%id), err)]
+    pub async fn create_imported(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
+        id: InitiativeId,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        self.create_with_id(user_id, request, attribution, id, true)
+            .await
+    }
+
+    async fn imported_existing(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: InitiativeId,
+    ) -> Result<Option<InitiativeDetail>, InitiativeError> {
+        let detail = self.repo.get_detail(id).await.map_err(Into::into)?;
+        match detail {
+            Some(mut detail) if &detail.owner_id == user_id => {
+                detail.user_access_level = AccessLevel::Owner;
+                Ok(Some(detail))
+            }
+            Some(_) => Err(InitiativeError::Unauthorized),
+            None => Ok(None),
+        }
+    }
+
+    async fn create_with_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
+        id: InitiativeId,
+        reuse: bool,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        let authorized = match &attribution {
+            activity::Attribution::Direct { actor } => {
+                actor.as_user().is_some_and(|actor| actor == user_id)
+            }
+            activity::Attribution::Delegated { actor, subject } => {
+                actor.as_bot().is_some() && subject == user_id
+            }
+        };
+        if !authorized {
+            return Err(InitiativeError::Unauthorized);
+        }
+        if reuse && let Some(detail) = self.imported_existing(user_id, id).await? {
+            self.resources.initialize(id).await?;
+            return Ok(detail);
+        }
+        let name = normalize_name(&request.name)?;
+        // Imports carry the complete source description. The 2,000-grapheme
+        // limit is for interactive create inputs; the description surface
+        // itself supports full markdown documents.
+        let prefill_markdown = if reuse {
+            request.description.unwrap_or_default().trim().to_string()
+        } else {
+            normalize_description(request.description)?
+        };
+        let owner_id = user_id.clone().into_owned();
+        let member_ids = parse_member_ids(request.member_ids.unwrap_or_default(), &owner_id)?;
+        let property_values = validate_initial_properties(request.property_values)?;
+        let team_default = self
+            .repo
+            .get_team_default_link_share(&owner_id)
+            .await
+            .map_err(Into::into)?;
+        let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
+        let team_share = if request.share_with_team.unwrap_or(true) {
+            TeamShareCreation::Initiative
+        } else {
+            TeamShareCreation::Unshared
+        };
+
+        // A description given at creation seeds the surface before the row exists, so the
+        // project never opens without it. Otherwise the surface is ensured on first open.
+        let seeded = !prefill_markdown.is_empty();
+        if seeded {
+            self.description_surfaces
+                .ensure(id, prefill_markdown)
+                .await?;
+        }
+        let created = self
+            .repo
+            .create(
+                CreateInitiativeRepoArgs {
+                    id,
+                    owner_id,
+                    name,
+                    member_ids,
+                },
+                share_permission,
+                team_share,
+            )
+            .await;
+        let mut detail = match created {
+            Ok(detail) => detail,
+            Err(error) => {
+                if reuse && let Some(detail) = self.imported_existing(user_id, id).await? {
+                    self.resources.initialize(id).await?;
+                    return Ok(detail);
+                }
+                if seeded {
+                    self.retire_description(id).await;
+                }
+                return Err(error.into());
+            }
+        };
+        if let Err(error) = initialize_properties(
+            self.resources.as_ref(),
+            user_id.clone().into_owned(),
+            id,
+            property_values,
+        )
+        .await
+        {
+            if self
+                .repo
+                .delete(id)
+                .await
+                .inspect_err(|cleanup| {
+                    tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
+                })
+                .is_ok()
+            {
+                self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+                    .await;
+                self.retire_description(id).await;
+            }
+            return Err(error);
+        }
+        detail.user_access_level = AccessLevel::Owner;
+        self.publish(
+            id,
+            InitiativeTopicEvent::Created(InitiativeChange {
+                initiative_id: id,
+                attribution: Some(attribution.into()),
+                occurred_at: Utc::now(),
+            }),
+        )
+        .await;
+        Ok(detail)
+    }
+
     async fn publish(&self, id: InitiativeId, event: InitiativeTopicEvent) {
         if let Some(publisher) = &self.events
             && let Err(error) = publisher
@@ -205,99 +353,14 @@ where
         request: CreateInitiativeRequest,
         attribution: activity::Attribution,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        let authorized = match &attribution {
-            activity::Attribution::Direct { actor } => {
-                actor.as_user().is_some_and(|actor| actor == user_id)
-            }
-            activity::Attribution::Delegated { actor, subject } => {
-                actor.as_bot().is_some() && subject == user_id
-            }
-        };
-        if !authorized {
-            return Err(InitiativeError::Unauthorized);
-        }
-        let name = normalize_name(&request.name)?;
-        let prefill_markdown = normalize_description(request.description)?;
-        let owner_id = user_id.clone().into_owned();
-        let member_ids = parse_member_ids(request.member_ids.unwrap_or_default(), &owner_id)?;
-        let property_values = validate_initial_properties(request.property_values)?;
-        let team_default = self
-            .repo
-            .get_team_default_link_share(&owner_id)
-            .await
-            .map_err(Into::into)?;
-        let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
-        let team_share = if request.share_with_team.unwrap_or(true) {
-            TeamShareCreation::Initiative
-        } else {
-            TeamShareCreation::Unshared
-        };
-
-        let id = InitiativeId::generate();
-        // A description given at creation seeds the surface before the row exists, so the
-        // project never opens without it. Otherwise the surface is ensured on first open.
-        let seeded = !prefill_markdown.is_empty();
-        if seeded {
-            self.description_surfaces
-                .ensure(id, prefill_markdown)
-                .await?;
-        }
-        let created = self
-            .repo
-            .create(
-                CreateInitiativeRepoArgs {
-                    id,
-                    owner_id,
-                    name,
-                    member_ids,
-                },
-                share_permission,
-                team_share,
-            )
-            .await;
-        let mut detail = match created {
-            Ok(detail) => detail,
-            Err(error) => {
-                if seeded {
-                    self.retire_description(id).await;
-                }
-                return Err(error.into());
-            }
-        };
-        if let Err(error) = initialize_properties(
-            self.resources.as_ref(),
-            user_id.clone().into_owned(),
-            id,
-            property_values,
+        self.create_with_id(
+            user_id,
+            request,
+            attribution,
+            InitiativeId::generate(),
+            false,
         )
         .await
-        {
-            if self
-                .repo
-                .delete(id)
-                .await
-                .inspect_err(|cleanup| {
-                    tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
-                })
-                .is_ok()
-            {
-                self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-                    .await;
-                self.retire_description(id).await;
-            }
-            return Err(error);
-        }
-        detail.user_access_level = AccessLevel::Owner;
-        self.publish(
-            id,
-            InitiativeTopicEvent::Created(InitiativeChange {
-                initiative_id: id,
-                attribution: Some(attribution.into()),
-                occurred_at: Utc::now(),
-            }),
-        )
-        .await;
-        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]

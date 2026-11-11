@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isOwnerLockUnavailableError } from '@graphql-cache/protocol';
+import {
+  isOwnerHandoffBlockedError,
+  isOwnerLockUnavailableError,
+} from '@graphql-cache/protocol';
 import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { createSignal } from 'solid-js';
 
@@ -8,6 +11,15 @@ export type CacheRecoveryState =
   | 'recovering'
   | 'unavailable'
   | 'recovery-required';
+
+/** Only known untouched/bootstrap or owner-handoff failures permit reopening. */
+export function canRetryCacheFailure(error: unknown): boolean {
+  return (
+    error instanceof CacheBootstrapExhaustedError ||
+    isOwnerLockUnavailableError(error) ||
+    isOwnerHandoffBlockedError(error)
+  );
+}
 
 /** Owns a page session's retry cycle, never the persisted cache or its scope. */
 export function createCacheRecovery(rebuild: () => Promise<void>) {
@@ -54,10 +66,9 @@ export function createCacheRecovery(rebuild: () => Promise<void>) {
   const failed = (error: unknown) => {
     failure = error;
     // Only these typed errors prove restarting cannot bypass a quarantined
-    // journal. Unknown storage/transport failures stay closed for recovery.
-    const recoverable =
-      error instanceof CacheBootstrapExhaustedError ||
-      isOwnerLockUnavailableError(error);
+    // journal: nothing opened storage, or a read was refused while the database
+    // moved between owners. Unknown storage/transport failures stay closed.
+    const recoverable = canRetryCacheFailure(error);
     setState(recoverable ? 'unavailable' : 'recovery-required');
     if (recoverable) schedule();
     else {

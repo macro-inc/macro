@@ -1,3 +1,4 @@
+use crate::crm_cleanup::candidates::insert_candidates;
 use crate::threads;
 use models_email::email::service::message;
 use sqlx::types::Uuid;
@@ -52,6 +53,15 @@ async fn delete_message_in_thread(
         });
     }
 
+    // Deletes in one thread take turns here, so the last one to commit sees
+    // the others' deletions when it checks for an empty thread and recomputes.
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR UPDATE",
+        thread_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
     // if it was the only message in the thread, delete the thread too
     let deleted_thread = threads::delete::delete_thread_if_empty(&mut *tx, thread_id).await?;
 
@@ -64,10 +74,10 @@ async fn delete_message_in_thread(
     }
 
     // The message's attachments cascade with the delete, which may have
-    // removed the thread's last calendar attachment. Drafts never have
-    // email_attachments rows, so they can't move the flag.
+    // removed the thread's last attachment of a kind. Drafts never have
+    // email_attachments rows, so they can't move the flags.
     if !deleted_thread && !is_draft {
-        threads::update::sync_thread_calendar_flag(&mut *tx, thread_id).await?;
+        threads::update::sync_thread_attachment_flags(&mut *tx, thread_id).await?;
     }
 
     Ok(MessageDeletion::Deleted {
@@ -129,16 +139,13 @@ pub async fn reconcile_deferred_deletion(
 
     // Capture recipients before the cascade. Extra candidates are harmless:
     // the CRM cleanup worker checks remaining email sources before removal.
-    sqlx::query!(
-        r#"INSERT INTO crm_cleanup_candidates (link_id, contact_email)
-           SELECT DISTINCT $2::uuid, lower(trim(c.email_address))
+    let crm_emails = sqlx::query_scalar!(
+        r#"SELECT DISTINCT lower(trim(c.email_address)) AS "email!"
            FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id
-           WHERE r.message_id=$1 AND c.email_address IS NOT NULL AND trim(c.email_address) <> ''
-           ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at=NOW()"#,
+           WHERE r.message_id=$1 AND c.email_address IS NOT NULL AND trim(c.email_address) <> ''"#,
         message_id,
-        link_id,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
     let result = delete_message_in_thread(
         &mut tx,
@@ -148,6 +155,9 @@ pub async fn reconcile_deferred_deletion(
         message.is_draft,
     )
     .await?;
+    // Upsert last, as inbox sync does: candidate rows are locked after the
+    // thread row in every delete.
+    insert_candidates(&mut *tx, link_id, &crm_emails).await?;
     tx.commit().await?;
     tracing::info!(event = "email_send.deferred_deletion_resolved", %message_id, %link_id);
     Ok(match result {

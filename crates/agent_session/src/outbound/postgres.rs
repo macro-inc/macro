@@ -10,12 +10,15 @@ use sqlx::types::Json;
 mod test;
 
 mod agent_conversation;
+mod auto_archive;
 mod pull_request;
 mod queue;
 mod recovery;
 mod session_task;
 mod sharing;
+mod source;
 mod turn_state;
+mod work_registration;
 mod working_branch;
 
 use crate::domain::coding_preferences::CodingPreferences;
@@ -23,8 +26,8 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
-    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
-    SessionPreviewCandidate, SessionSource, SessionStatus, SessionVisibility,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionArchive, SessionBot, SessionClaim,
+    SessionManager, SessionPreviewCandidate, SessionSource, SessionStatus, SessionVisibility,
     StoredAgentSessionLog, StoredQueuedAction, ThreadSession, TurnPrompter, cursor_run_checkpoint,
     session_owner_user,
 };
@@ -34,6 +37,7 @@ use crate::domain::ports::{
 };
 use crate::domain::sharing::{SessionBotOwnership, originating_channel_access};
 use crate::domain::turn_state::moves_session_list;
+use crate::domain::updates::{CodingAgentUpdatesRepo, UpdateCandidate, UpdateTurnState};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -62,6 +66,64 @@ pub struct PgAgentSessionRepo<B> {
     pool: PgPool,
     registrar: OwnedEntityRegistrar<B>,
     list_policy: crate::domain::list_visibility::SessionListPolicy,
+}
+
+impl<B: BotFacts + 'static> CodingAgentUpdatesRepo for PgAgentSessionRepo<B> {
+    async fn candidates(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> std::result::Result<Vec<UpdateCandidate>, crate::domain::coding_agents::CodingAgentError>
+    {
+        let rows = sqlx::query!(
+            r#"
+            SELECT s.id, s.name, s.harness, s.pull_request_url, s.turn_state,
+                   s.archived_by IS NOT NULL AS "archived!", GREATEST(s.modified_at, recent.created_at) AS "last_activity!"
+            FROM agent_session s
+            LEFT JOIN agent_configs config ON config.bot_id = s.bot_id
+            LEFT JOIN LATERAL (
+                SELECT created_at FROM agent_session_log
+                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1
+            ) recent ON true
+            WHERE s.owner_id = $1 AND s.archived_by IS NULL
+              AND COALESCE(config.is_coding, s.harness NOT IN ('in-memory', 'macro-inmem'))
+              AND (s.turn_state = 'blocked' OR
+                   (s.turn_state = 'running' AND GREATEST(s.modified_at, recent.created_at) <= now() - interval '20 minutes'))
+            ORDER BY GREATEST(s.modified_at, recent.created_at) DESC, s.id DESC
+            LIMIT 26
+            "#,
+            owner.as_ref(),
+        ).fetch_all(&self.pool).await.map_err(|_| crate::domain::coding_agents::CodingAgentError::OperationFailed)?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(UpdateCandidate {
+                    id: AgentSessionId::new_from_uuid(row.id),
+                    name: row.name,
+                    harness: row.harness,
+                    pull_request_url: row.pull_request_url,
+                    turn_state: match row.turn_state.as_deref()? {
+                        "blocked" => UpdateTurnState::Blocked,
+                        "running" => UpdateTurnState::Running,
+                        _ => return None,
+                    },
+                    archived: row.archived,
+                    last_activity: row.last_activity,
+                })
+            })
+            .collect())
+    }
+
+    async fn log(
+        &self,
+        id: AgentSessionId,
+    ) -> std::result::Result<
+        Vec<StoredAgentSessionLog>,
+        crate::domain::coding_agents::CodingAgentError,
+    > {
+        AgentSessionLogRepo::list_by_session(self, id)
+            .await
+            .map_err(|_| crate::domain::coding_agents::CodingAgentError::OperationFailed)
+    }
 }
 
 impl<B> std::fmt::Debug for PgAgentSessionRepo<B> {
@@ -235,7 +297,8 @@ async fn touch_entity_updated(
 struct AgentSessionRow {
     id: Uuid,
     name: String,
-    is_archived: bool,
+    archived_by: Option<String>,
+    archived_at: Option<DateTime<Utc>>,
     owner_id: String,
     thread_id: Option<Uuid>,
     thread_parent: Option<Json<MessageParent>>,
@@ -248,6 +311,7 @@ struct AgentSessionRow {
     pull_request_url: Option<String>,
     task_id: Option<String>,
     source: String,
+    source_row: Option<Json<source::SourceRow>>,
     visibility: String,
     workspace: String,
     sandbox_size: String,
@@ -274,7 +338,15 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             name: row.name,
-            is_archived: row.is_archived,
+            archived: match (row.archived_by, row.archived_at) {
+                (Some(by), Some(at)) => Some(SessionArchive {
+                    by: by
+                        .parse()
+                        .context("agent session has an unknown archive cause")?,
+                    at,
+                }),
+                _ => None,
+            },
             owner_id: Owner::from_principal_str(&row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
@@ -295,6 +367,10 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                 .source
                 .parse()
                 .map_err(|_| anyhow::anyhow!("unknown agent_session source {:?}", row.source))?,
+            origin: row
+                .source_row
+                .map(|Json(source)| source.into_origin())
+                .unwrap_or_default(),
             visibility: row.visibility.parse().map_err(|_| {
                 anyhow::anyhow!("unknown agent_session visibility {:?}", row.visibility)
             })?,
@@ -342,6 +418,8 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             instructions,
             mcp_servers,
             egress_token_hash,
+            origin,
+            billing,
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
@@ -370,6 +448,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             return Err(AgentSessionError::UnknownOwner);
         }
 
+        let source_id = source::insert_source(&mut transaction, &origin).await?;
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         let conversation = sqlx::query_scalar!(
             "SELECT EXISTS (SELECT 1 FROM agent_conversation_sessions WHERE session_id = $1) AS \"exists!\"",
@@ -382,7 +461,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             conversation,
             thread_id.is_some() || originating_message_id.is_some(),
         )?;
-        let visibility = purpose.visibility(bot_id, thread_id, self.list_policy.hide_agent_dms);
+        let visibility = purpose.visibility(thread_id, self.list_policy.hide_agent_dms);
         let warm = purpose == crate::domain::model::SessionPurpose::Warm;
         let row = sqlx::query_as!(
             AgentSessionRow,
@@ -391,17 +470,21 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility
+                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id,
+                billing
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
                 NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?",
@@ -428,6 +511,8 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             warm,
             <&str>::from(purpose.source()),
             <&str>::from(visibility),
+            source_id,
+            <&str>::from(billing),
         )
         .fetch_one(&mut *transaction)
         .await
@@ -522,18 +607,54 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(
+                turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                    OR (turn_state = 'disconnected' AND turn_interrupted),
+                false
+            ) AS "unfinished!"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's turn state")?
+        .ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        let billing = sqlx::query_scalar!(
+            "SELECT billing FROM agent_session WHERE id = $1",
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's billing")?
+        .ok_or(AgentSessionError::NotFound(id))?;
+        Ok(billing
+            .parse()
+            .map_err(|_| anyhow::anyhow!("unknown agent_session billing {billing:?}"))?)
+    }
+
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -634,13 +755,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -675,13 +799,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -709,13 +836,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -745,13 +875,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
+                id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -851,6 +984,22 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .execute(&self.pool)
         .await
         .context("failed to record the turn prompter")?;
+        Ok(())
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_follower (agent_session_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+            id.as_uuid(),
+            user.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record the session's follower")?;
         Ok(())
     }
 
@@ -984,6 +1133,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             )
             UPDATE agent_session
             SET name = $2,
+                name_is_generated = false,
                 modified_at = CASE
                     WHEN name IS DISTINCT FROM $2 THEN NOW()
                     ELSE modified_at
@@ -1011,25 +1161,29 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         Ok(())
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
         let mut transaction = self
             .pool
             .begin()
             .await
             .context("begin agent session set_archived")?;
+        // Archiving an archived session keeps who archived it; restoring clears it.
         let modified_at = sqlx::query_scalar!(
             r#"
             UPDATE agent_session
-            SET is_archived = $2,
+            SET archived_by = CASE
+                    WHEN $2 THEN COALESCE(archived_by, 'user'::agent_session_archive_cause)
+                END,
+                archived_at = CASE WHEN $2 THEN COALESCE(archived_at, NOW()) END,
                 modified_at = CASE
-                    WHEN is_archived IS DISTINCT FROM $2 THEN NOW()
+                    WHEN (archived_by IS NOT NULL) IS DISTINCT FROM $2 THEN NOW()
                     ELSE modified_at
                 END
             WHERE id = $1
             RETURNING modified_at
             "#,
             id.as_uuid(),
-            is_archived,
+            archived,
         )
         .fetch_optional(&mut *transaction)
         .await
@@ -1038,6 +1192,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             return Err(anyhow::anyhow!("agent session not found").into());
         };
         touch_entity_updated(&mut transaction, id, Some(modified_at)).await?;
+        if archived {
+            work_registration::end_work_registrations_on_archive(&mut transaction, id).await?;
+        }
         transaction
             .commit()
             .await
@@ -1072,10 +1229,11 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             UPDATE agent_session
             SET name = $2,
+                name_is_generated = true,
                 modified_at = NOW()
             WHERE id = $1
               AND name = $3
-              AND NOT is_archived
+              AND archived_by IS NULL
             RETURNING modified_at
             "#,
             id.as_uuid(),
@@ -1090,6 +1248,59 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             .commit()
             .await
             .context("commit agent session set_name_if_default")?;
+        Ok(modified_at.is_some())
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT name
+            FROM agent_session
+            WHERE id = $1
+              AND name_is_generated
+              AND archived_by IS NULL
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read generated agent session name")?)
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session replace_generated_name")?;
+        let modified_at = sqlx::query_scalar!(
+            r#"
+            UPDATE agent_session
+            SET name = $3,
+                modified_at = NOW()
+            WHERE id = $1
+              AND name = $2
+              AND name_is_generated
+              AND archived_by IS NULL
+            RETURNING modified_at
+            "#,
+            id.as_uuid(),
+            current,
+            name,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("failed to persist retitled agent session name")?;
+        touch_entity_updated(&mut transaction, id, modified_at).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session replace_generated_name")?;
         Ok(modified_at.is_some())
     }
 
@@ -1254,13 +1465,17 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             DELETE FROM agent_session
             WHERE id = $1
-            RETURNING share_permission_id
+            RETURNING share_permission_id, source_id
             "#,
             id.as_uuid(),
         )
         .fetch_optional(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        if let Some(source_id) = permission.as_ref().and_then(|row| row.source_id) {
+            source::delete_source(&mut transaction, source_id).await?;
+        }
 
         if let Some(permission_id) = permission.and_then(|row| row.share_permission_id) {
             sqlx::query!(
@@ -1652,6 +1867,13 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                 r#"
                 UPDATE agent_session
                 SET turn_state = $2,
+                    turn_interrupted = CASE
+                        WHEN $2 = 'disconnected' THEN COALESCE(
+                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),
+                            false
+                        )
+                        ELSE false
+                    END,
                     modified_at = CASE WHEN $3 THEN now() ELSE modified_at END
                 WHERE id = $1 AND turn_state IS DISTINCT FROM $2
                 "#,

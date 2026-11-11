@@ -24,7 +24,7 @@ test('hands a Notion import from the Drive card to the agent', async ({
   await dialog.getByRole('button', { name: 'Import from Notion' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('status', { name: 'Agent handoff' })).toHaveText(
-    'Import my most recent documents and files from Notion into my Macro Drive.'
+    'Import my Notion workspace into Macro.'
   );
 });
 
@@ -54,7 +54,7 @@ test('hands a connected Pipedream provider to the agent', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Import from Jira' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('status', { name: 'Agent handoff' })).toHaveText(
-    'Import my most recent issues and tasks from Jira into Macro tasks.'
+    'Import my Jira workspace into Macro.'
   );
 });
 
@@ -96,3 +96,24 @@ test('offers local file and folder uploads in the Files dialog', async ({
     'Upload a folder'
   );
 });
+
+for (const provider of ['Linear', 'Jira']) {
+  test(`opens the ${provider} workspace importer on a phone`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .getByRole('complementary', { name: 'tasks sidebar' })
+      .getByRole('button', { name: 'Import tasks', exact: true })
+      .click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: `Connect ${provider}` }).click();
+    await dialog
+      .getByRole('button', { name: `Import from ${provider}` })
+      .click();
+    await expect(dialog).not.toBeVisible();
+    await expect(
+      page.getByRole('status', { name: 'Agent handoff' })
+    ).toHaveText(`Import my ${provider} workspace into Macro.`);
+  });
+}

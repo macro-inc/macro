@@ -83,10 +83,25 @@ export function columnSchemaMessage(error: DatabaseOpsError): string {
     .otherwise(() => 'This column could not be updated. Try again.');
 }
 
-/** A type a column can become; a relation's rows live in this database. */
-export type DatabaseColumnKind =
-  | Exclude<OpColumnKind, { type: 'relation' }>
-  | { type: 'relation'; table: string };
+/** A type a column can become; a relation names its table's database, which may be another one. */
+export type DatabaseColumnKind = OpColumnKind;
+
+/** A table a relation column can point at. */
+export type DatabaseRelationTable = {
+  databaseId: string;
+  tableId: string;
+  name: string;
+};
+
+/** The tables a relation column can point at: the open database's, then those of every other database the viewer can reach. */
+export type DatabaseRelationTargets = {
+  here: DatabaseRelationTable[];
+  elsewhere: {
+    databaseId: string;
+    name: string;
+    tables: DatabaseRelationTable[];
+  }[];
+};
 
 /** A type change the server validates against every stored value. */
 export type DatabaseColumnTypeChange = {
@@ -157,6 +172,7 @@ export function castTargetOf(
     .with({ type: 'number' }, () => plain('NUMBER'))
     .with({ type: 'boolean' }, () => plain('BOOLEAN'))
     .with({ type: 'date' }, () => plain('DATE'))
+    .with({ type: 'date_range' }, () => plain('DATE_RANGE'))
     .with({ type: 'link' }, () => plain('LINK'))
     .with({ type: 'select' }, ({ multi }) => plain('SELECT_STRING', multi))
     .with({ type: 'select_number' }, ({ multi }) =>

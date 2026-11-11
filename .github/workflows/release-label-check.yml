@@ -46,11 +46,11 @@ jobs:
               return 0
             fi
             if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
               return 1
             fi
             if (( $(date +%s) > deadline )); then
-              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
               return 1
             fi
             echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
@@ -93,7 +93,7 @@ jobs:
             steps="builds the app, uploads it to TestFlight and submits it for App Review"
           else
             what="Android version code $(jq -r '.bundle.android.versionCode' <<<"$conf")"
-            steps="builds the App Bundle, uploads it to the internal track and promotes it to production"
+            steps="builds the App Bundle, and **Android Play Publish** uploads it to the internal track and promotes it to production"
           fi
           gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🚀 **${WORKFLOW}** started for ${what} at ${HEAD_SHA:0:10} ([workflow run](${url})). It ${steps}, then comments here with the result."
           echo "PR #${PR_NUMBER}: ${WORKFLOW} started for ${what}: ${url}"

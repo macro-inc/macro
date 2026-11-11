@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InviteePlan } from './inviteePlan';
+import type { InviteToTeamMetadataInviterName } from './inviteToTeamMetadataInviterName';
 import type { InviteToTeamMetadataRole } from './inviteToTeamMetadataRole';
 import type { InviteToTeamMetadataSenderProfilePictureUrl } from './inviteToTeamMetadataSenderProfilePictureUrl';
 
@@ -16,6 +17,13 @@ export interface InviteToTeamMetadata {
   invitedBy: string;
   /** What the invitee gets by joining, as the team stood when the invite was sent. */
   inviteePlan?: InviteePlan;
+  /** The inviter's display name, when they have set one. It is user-provided, so it is shown
+on one line, capped, and escaped; the email falls back to the inviter's address. */
+  inviterName?: InviteToTeamMetadataInviterName;
+  /** Whether the invite creates an agent account. */
+  isAgent?: boolean;
+  /** Whether this email reminds the invitee of an invite they have not answered. */
+  reminder?: boolean;
   /** Role/permission level in the team */
   role?: InviteToTeamMetadataRole;
   /** The sender's profile picture URL, if available. */

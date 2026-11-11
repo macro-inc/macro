@@ -2,14 +2,18 @@ import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { projectRouteId } from '@app/features/projects/core/route';
 import { createSoupRowStore } from '@app/features/soup/collection/row-store';
+import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
 import {
   type EntityData,
@@ -19,17 +23,22 @@ import {
   type SearchLocation,
 } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
 import { commandSearchResultKey } from '../contact-items';
-import {
-  type EntitySearchItem,
-  useEntitySearch,
-} from '../queries/entity-search';
+import { useEntitySearch } from '../queries/entity-search';
 import { createMobileFullTextSearch } from '../queries/mobile-full-text-search';
 import { createMobileSearchEntry } from './create-mobile-search-entry';
 import { createSearchPagination } from './create-search-pagination';
@@ -50,11 +59,31 @@ function MobileNameResults(props: {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
+  usePending('search.names', source.isLoadingEntities);
+  usePending('search.rank', source.isSettling);
+  let previousWindow: string | undefined;
+  let previousWindowQuery = '';
+  createEffect(
+    on(
+      () => source.pagination.windowKey(),
+      (key) => {
+        if (key === undefined) return;
+        if (
+          previousWindow !== undefined &&
+          key !== previousWindow &&
+          previousWindowQuery === state.query()
+        )
+          virtualizer()?.scrollTo(0);
+        previousWindow = key;
+        previousWindowQuery = state.query();
+      }
+    )
+  );
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
   );
-  const itemKey = (item: EntitySearchItem) =>
+  const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);
   const results = createSearchResultWindow({
     key: 'mobileSearch.nameOrder',
@@ -119,27 +148,25 @@ function MobileNameResults(props: {
       source.pagination.isLoadingMore() ||
       source.hasError(),
     loadMore: source.pagination.loadMore,
+    replaceWindows: () =>
+      category() === 'people' ||
+      ((category() === 'all' || category() === 'dms') &&
+        state.query().trim().length > 0),
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const directMessage = useGetOrCreateDirectMessageMutation();
-  const open = async (item: EntitySearchItem) => {
+  const openDirectMessage = useOpenDirectMessage();
+  const open = async (item: QuickAccessItem) => {
     await Telemetry.span('mobile.search.open', async (span) => {
       span.setAttr('entity.id', item.id);
       span.setAttr('entity.type', item.bucket);
-      if (item.kind === 'initiative') {
+      if (item.kind === 'entity' && item.bucket === 'initiative') {
         openWithSplit({
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
         });
       } else if (item.kind === 'user') {
-        const result = await directMessage.mutateAsync({
-          recipient_id: item.id,
-        });
-        openWithSplit(
-          { type: 'channel', id: result.channel_id },
-          { reopen: 'latest' }
-        );
+        await openDirectMessage(item.id, { parentSpan: span });
       } else {
         await openEntityInSplitFromUnifiedList(item.data, {
           splitHandle: panel.handle,
@@ -147,12 +174,12 @@ function MobileNameResults(props: {
       }
     });
   };
-  const select = async (item: EntitySearchItem) => {
+  const select = async (item: QuickAccessItem) => {
     results.preserveOrder();
     try {
       await open(item);
     } catch {
-      toast.failure('Unable to open result. Please try again.');
+      toast.failure(t('commandMenu.unableToOpenResult'));
     }
   };
   return (
@@ -171,7 +198,9 @@ function MobileNameResults(props: {
         >
           <CommandMenuListItem class="min-h-11" onClick={state.searchFullText}>
             <span class="truncate">
-              Search full text for “{state.query().trim()}”
+              {t('commandMenu.searchFullTextFor', {
+                query: state.query().trim(),
+              })}
             </span>
           </CommandMenuListItem>
         </div>
@@ -181,7 +210,7 @@ function MobileNameResults(props: {
           ref={setVirtualizer}
           data={items()}
           role="region"
-          aria-label="Search results"
+          aria-label={t('commandMenu.searchResults')}
           class="min-h-0 flex-1 overscroll-none"
           onScroll={loadMoreNearEnd}
         >
@@ -197,11 +226,21 @@ function MobileNameResults(props: {
       </Show>
       <Show when={source.isLoadingEntities() && items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">
-          Loading…
+          {t('commandMenu.loading')}
         </p>
       </Show>
       <Show when={!source.isLoadingEntities() && items().length === 0}>
-        <p class="p-3 text-ink-muted">No results</p>
+        <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
+        <Show when={source.pagination.hasMore()}>
+          <Button
+            disabled={source.pagination.isLoadingMore()}
+            onClick={() =>
+              fireAndForget(source.pagination.loadMore(), 'mobile-search')
+            }
+          >
+            {t('viewMenus.nextOptions')}
+          </Button>
+        </Show>
       </Show>
     </div>
   );
@@ -214,6 +253,7 @@ function MobileFullTextResults(props: {
   const state = props.session;
   const category = useMobileSearchCategory(state.category);
   const search = createMobileFullTextSearch(state.query, category);
+  usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
   const panel = useSplitPanelOrThrow();
@@ -299,14 +339,14 @@ function MobileFullTextResults(props: {
         });
       });
     } catch {
-      toast.failure('Unable to open result. Please try again.');
+      toast.failure(t('commandMenu.unableToOpenResult'));
     }
   };
   return (
     <div
       ref={setContainer}
       role="region"
-      aria-label="Search results"
+      aria-label={t('commandMenu.searchResults')}
       onScroll={loadMoreNearEnd}
       onWheel={restoration.cancel}
       onTouchStart={restoration.cancel}
@@ -341,17 +381,18 @@ function MobileFullTextResults(props: {
       </ListEntityMetadataQueryProvider>
       <Show when={search.isSettling() && results.items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">
-          Searching…
+          {t('commandMenu.searching')}
         </p>
       </Show>
       <Show when={search.error()}>
         <p role="alert" class="p-3 text-ink-muted">
-          Search failed. Please try again.
+          {t('commandMenu.searchFailed')}
         </p>
         <Button
+          variant="ghost"
           onClick={() => fireAndForget(search.refetch(), 'mobile-search')}
         >
-          Retry
+          {t('commandMenu.retry')}
         </Button>
       </Show>
       <Show
@@ -361,7 +402,7 @@ function MobileFullTextResults(props: {
           results.items().length === 0
         }
       >
-        <p class="p-3 text-ink-muted">No results</p>
+        <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
       </Show>
     </div>
   );
@@ -374,6 +415,7 @@ function MobileFullTextResults(props: {
  */
 export function MobileSearchResults() {
   const session = createMobileSearchEntry();
+  const universalInputEnabled = useUniversalInputEnabled();
   const accountId = useUserId();
   const authenticated = useIsAuthenticated();
   return (
@@ -384,29 +426,33 @@ export function MobileSearchResults() {
         '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
       }}
     >
-      <MobileViewsRow session={session} />
-      <Show when={authenticated() === true ? accountId() : undefined} keyed>
-        {(id) => (
-          <Suspense
-            fallback={
-              <p
-                role="status"
-                class="px-3 touch:pt-(--mobile-content-inset-top)"
-              >
-                Loading…
-              </p>
-            }
-          >
-            <Show
-              when={session.mode() === 'full-text'}
-              fallback={<MobileNameResults session={session} accountId={id} />}
+      <Show when={!universalInputEnabled() || !session.universalInputActive()}>
+        <MobileViewsRow session={session} />
+        <Show when={authenticated() === true ? accountId() : undefined} keyed>
+          {(id) => (
+            <Suspense
+              fallback={
+                <p
+                  role="status"
+                  class="px-3 touch:pt-(--mobile-content-inset-top)"
+                >
+                  {t('commandMenu.loading')}
+                </p>
+              }
             >
-              <MobileFullTextResults session={session} accountId={id} />
-            </Show>
-          </Suspense>
-        )}
+              <Show
+                when={session.mode() === 'full-text'}
+                fallback={
+                  <MobileNameResults session={session} accountId={id} />
+                }
+              >
+                <MobileFullTextResults session={session} accountId={id} />
+              </Show>
+            </Suspense>
+          )}
+        </Show>
+        <MobileTopEdgeFade />
       </Show>
-      <MobileTopEdgeFade />
     </div>
   );
 }

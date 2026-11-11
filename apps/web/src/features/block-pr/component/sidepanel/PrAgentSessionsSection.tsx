@@ -1,11 +1,10 @@
 import { ListFilterDropdown } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { AgentSessionMentionLabel } from '@core/component/LexicalMarkdown/component/decorator/AgentSessionMentionLabel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
 import {
   useAgentSessionPullRequestsQuery,
@@ -16,18 +15,14 @@ import {
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { useOpenFromSidePanel } from './open-from-side-panel';
 
 const pullRequestKey = (url: string) =>
   url.replace(/^https:\/\/github\.com\//i, '').toLowerCase();
 
-function LinkedSessionRow(props: { sessionId: string; url: string }) {
-  const layout = useSplitLayout();
-  const preview = useAgentSessionMentionPreview(
-    () => props.sessionId,
-    () => true
-  );
-  const links = useAgentSessionPullRequestsQuery(() => props.sessionId);
-  const unlink = useUnlinkAgentSessionPullRequestMutation();
+/** An agent session's name, or why it can't be shown. */
+export function useAgentSessionLabel(sessionId: () => string) {
+  const preview = useAgentSessionMentionPreview(sessionId, () => true);
   const session = () => {
     const current = preview.isSuccess ? preview.data : undefined;
     return current?.access === 'access' ? current.data : undefined;
@@ -38,6 +33,14 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
     if (current?.access === 'does_not_exist') return 'Deleted agent session';
     return session()?.name || 'Agent session';
   };
+  return { session, label };
+}
+
+function LinkedSessionRow(props: { sessionId: string; url: string }) {
+  const open = useOpenFromSidePanel();
+  const { session, label } = useAgentSessionLabel(() => props.sessionId);
+  const links = useAgentSessionPullRequestsQuery(() => props.sessionId);
+  const unlink = useUnlinkAgentSessionPullRequestMutation();
   // The pull request the session's agent opened cannot be unlinked.
   const linkedByPerson = () =>
     links.isSuccess &&
@@ -55,10 +58,7 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
           class="w-full min-w-0 truncate text-left disabled:text-ink-placeholder"
           disabled={!session()}
           onClick={(event) =>
-            layout?.openWithSplit(
-              { type: 'agent', id: props.sessionId },
-              { preferNewSplit: event.shiftKey }
-            )
+            open({ type: 'agent', id: props.sessionId }, event.shiftKey)
           }
         >
           <AgentSessionMentionLabel label={label()} />
@@ -66,10 +66,11 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
       </Tooltip>
       <Show when={linkedByPerson()}>
         <Button
+          aria-label={`Unlink ${label()}`}
+          tooltip={`Unlink ${label()}`}
           variant="ghost"
           size="icon-xs"
           class="ml-auto"
-          label={`Unlink ${label()}`}
           disabled={unlink.isPending}
           onClick={() =>
             unlink.mutate(
@@ -81,7 +82,7 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
             )
           }
         >
-          <XIcon />
+          <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
     </div>
@@ -107,8 +108,13 @@ function LinkSessionPicker(props: {
     <ListFilterDropdown
       label="Link agent session"
       customTrigger={
-        <Dropdown.Trigger variant="ghost" size="xs" label="Link agent session">
-          <PlusIcon />
+        <Dropdown.Trigger
+          aria-label="Link agent session"
+          tooltip="Link agent session"
+          variant="ghost"
+          size="xs"
+        >
+          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Link session
         </Dropdown.Trigger>
       }

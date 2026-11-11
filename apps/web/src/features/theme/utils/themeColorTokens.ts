@@ -5,7 +5,6 @@ import type {
   ThemeColorTokens,
   ThemeV2,
   ThemeV2Tokens,
-  ThemeV3,
 } from '../types/themeTypes';
 
 /** Tailwind 500 hue angles used to project a legacy theme's accent color. */
@@ -109,6 +108,17 @@ export function getDefaultSemanticColorTokens(
     success: tokenReference('green'),
     warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
     failure: tokenReference('red'),
+    'priority-urgent': tokenReference('orange'),
+    'task-status-not-started': tokenReference('content-1'),
+    'task-status-in-progress': mixTokens(
+      'amber',
+      'content-0',
+      mode === 'dark' ? 0.8 : 0.85,
+      'srgb'
+    ),
+    'task-status-in-review': tokenReference('violet'),
+    'task-status-completed': tokenReference('accent'),
+    'task-status-canceled': tokenReference('content-1'),
     chrome: tokenReference('surface-4'),
   };
 }
@@ -234,21 +244,4 @@ export function themeTokenCssVar(
   }
 
   return { name: `--color-${token}`, value };
-}
-
-/**
- * All of a theme's tokens as inline CSS custom properties, for rendering a
- * theme inside a subtree instead of on the document. Every authored value is
- * either a literal color or a `var()`/`color-mix()` expression over other
- * `--color-*` tokens, so the whole set resolves against whichever element it is
- * set on.
- */
-export function themeCssVars(theme: ThemeV3): Record<string, string> {
-  const tokens = normalizeThemeColorTokens(theme.colorTokens, theme.mode);
-  const vars: Record<string, string> = {};
-  for (const [token, value] of Object.entries(tokens)) {
-    const mapped = themeTokenCssVar(token, value);
-    if (mapped) vars[mapped.name] = mapped.value;
-  }
-  return vars;
 }

@@ -1,18 +1,27 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EmailComposeContextOptions } from '../email-compose/compose-adapter';
 import { createComposeContext } from '../email-compose/tests/capabilities';
+import {
+  type EmailThreadViewContext,
+  useEmailThreadViewContext,
+} from './context/email-thread-view-context';
 import { EmailThread } from './email-thread';
 import { createThreadContext, message, thread } from './tests/fixtures';
-import type { EmailThreadSurfaceProps } from './views/email-thread-surface';
+import { EmailParticipants } from './views/email-participants';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   clearDraft: vi.fn(),
   source: vi.fn(),
+  rendering: vi.fn<(rendering: EmailThreadViewContext['rendering']) => void>(),
   composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
   started: [] as Promise<void>[],
+}));
+vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
+vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
+  EmailUserTooltip: (props: ParentProps) => <>{props.children}</>,
 }));
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
@@ -29,7 +38,27 @@ vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'viewer@example.com',
   useUserContext: () => ({ isLoading: () => false }),
 }));
-vi.mock('@core/user', () => ({ useContacts: () => () => [] }));
+const [linksLoaded, setLinksLoaded] = createSignal(true);
+vi.mock('@queries/email/link', () => ({
+  useEmailLinksQuery: () => ({
+    get isPending() {
+      return !linksLoaded();
+    },
+    get isLoading() {
+      return !linksLoaded();
+    },
+    get data() {
+      return linksLoaded()
+        ? {
+            links: [
+              { id: 'primary', email_address: 'viewer@example.com' },
+              { id: 'inbox', email_address: 'viewer@outlook.example' },
+            ],
+          }
+        : undefined;
+    },
+  }),
+}));
 vi.mock('../email-compose/compose-adapter', () => ({
   createEmailComposeContext: (options: EmailComposeContextOptions) => {
     mocks.composeOptions(options);
@@ -51,15 +80,21 @@ vi.mock('../email-message/sender-icon-adapter', () => ({
 vi.mock('./calendar-invitation', () => ({
   EmailCalendarInvitation: () => null,
 }));
+vi.mock('./read-receipts', () => ({
+  createThreadReadReceipts: () => () => undefined,
+}));
 vi.mock('./thread-action-adapter', () => ({
   createThreadActionAdapter: vi.fn(),
 }));
-vi.mock('./views/email-thread-surface', () => ({
-  EmailThreadSurface: (props: EmailThreadSurfaceProps) => {
-    const source = props.context.thread.source;
+vi.mock('./views/email-thread', () => ({
+  EmailThreadView: () => {
+    const context = useEmailThreadViewContext();
+    const source = context.thread.source;
     mocks.source(source);
+    mocks.rendering(context.rendering);
     return (
       <div>
+        <EmailParticipants />
         <span data-testid="body">
           {source.thread()?.messages[0]?.body_text}
         </span>
@@ -76,6 +111,7 @@ vi.mock('./views/email-thread-surface', () => ({
 
 afterEach(() => {
   cleanup();
+  setLinksLoaded(true);
   vi.clearAllMocks();
   mocks.started.length = 0;
 });
@@ -128,5 +164,52 @@ describe('email thread query ownership', () => {
     view.unmount();
     expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
     await Promise.all(mocks.started);
+  });
+
+  it("labels the thread's inbox address, not the Macro login, as Me", () => {
+    setLinksLoaded(false);
+    const source = createThreadContext({
+      thread: () =>
+        thread([
+          message('first', {
+            from: { email: 'viewer@example.com' },
+            to: [{ email: 'viewer@outlook.example' }],
+          }),
+        ]),
+    }).source;
+    render(() => (
+      <EmailThread
+        title="Subject"
+        threadId={source.id}
+        source={source}
+        threadTransport={() => 'graphql'}
+      />
+    ));
+    expect(screen.queryByText('Me')).toBeNull();
+    setLinksLoaded(true);
+    const participants = screen
+      .getAllByRole('listitem')
+      .map((node) => node.textContent)
+      .filter(Boolean);
+    expect(participants).toEqual(['viewer', 'Me']);
+  });
+
+  it('lets only copies the viewer received load read-receipt pixels', () => {
+    const source = createThreadContext({
+      thread: () => thread([message('first')]),
+    }).source;
+    render(() => (
+      <EmailThread
+        title="Subject"
+        threadId={source.id}
+        source={source}
+        threadTransport={() => 'graphql'}
+      />
+    ));
+    const show = mocks.rendering.mock.calls[0][0].showReadReceiptPixel;
+    expect(show?.(message('received'))).toBe(true);
+    expect(show?.(message('sent', { from: { email: 'me@example.com' } }))).toBe(
+      false
+    );
   });
 });

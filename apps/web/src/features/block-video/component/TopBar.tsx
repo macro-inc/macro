@@ -8,8 +8,10 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -21,7 +23,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { useGetFileBlob } from '../signal/blockData';
 
 export function TopBar() {

@@ -6,12 +6,14 @@
 //!
 //! High-level flow:
 //! 1. expose protected-resource and authorization-server discovery metadata
-//! 2. accept dynamic registration for public loopback clients
-//! 3. redirect the user to the upstream provider from `/authorize`
+//! 2. accept dynamic registration for public clients
+//! 3. from `/authorize`, ask the user to approve a client whose redirect URI the
+//!    deployment does not trust, then redirect to the upstream provider
 //! 4. exchange the upstream callback code at `/oauth/callback`
 //! 5. issue a short-lived broker code for the MCP client loopback callback
 //! 6. exchange that code at `/token` after redirect URI and PKCE validation
 //! 7. support refresh-token exchanges against the upstream provider
+//! 8. revoke a client's refresh-token family at `/revoke` (RFC 7009)
 //!
 //! Module layout:
 //! - `domain`: auth proxy state, models, ports, and service logic

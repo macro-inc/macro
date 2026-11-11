@@ -2,6 +2,7 @@ import {
   GithubPullRequestChecksContent,
   SidePanel,
 } from '@components/app/side-panel';
+import { EntityMetadataRow } from '@components/app/side-panel/EntityMetadata';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Show } from 'solid-js';
 import { PrAgentSessionsSection } from './PrAgentSessionsSection';
@@ -18,27 +19,37 @@ export function PrSidePanelSections(props: {
           {(pr) => (
             <div class="flex flex-col gap-1">
               <Show when={pr().authorLogin}>
-                {(author) => <div>Authored by {author()}</div>}
+                {(author) => (
+                  <EntityMetadataRow label="Author">
+                    {author()}
+                  </EntityMetadataRow>
+                )}
               </Show>
-              <div>
+              <EntityMetadataRow label="Repository">
                 {pr().owner}/{pr().repo}
-              </div>
+              </EntityMetadataRow>
               <Show when={pr().status}>
-                {(status) => <div class="capitalize">{status()}</div>}
+                {(status) => (
+                  <EntityMetadataRow label="Status">
+                    <span class="capitalize">{status()}</span>
+                  </EntityMetadataRow>
+                )}
               </Show>
               <Show when={pr().additions != null || pr().deletions != null}>
-                <div>
+                <EntityMetadataRow label="Changes">
                   +{pr().additions ?? 0} / −{pr().deletions ?? 0}
-                </div>
+                </EntityMetadataRow>
               </Show>
-              <a
-                href={pr().url}
-                target="_blank"
-                rel="noreferrer"
-                class="truncate hover:underline"
-              >
-                {pr().displayName}
-              </a>
+              <EntityMetadataRow label="Pull request">
+                <a
+                  href={pr().url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="block truncate hover:underline"
+                >
+                  {pr().displayName}
+                </a>
+              </EntityMetadataRow>
             </div>
           )}
         </Show>

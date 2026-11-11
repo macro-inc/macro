@@ -599,6 +599,7 @@ fn it_expands_single_property_select_option() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -618,6 +619,7 @@ fn it_expands_multiple_option_ids_as_or() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_a.to_string(), option_b.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -643,6 +645,7 @@ fn it_expands_entity_ref_filter() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![entity_id.clone()],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -675,12 +678,14 @@ fn it_ands_multiple_property_filters() {
                 entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_a.to_string()],
                 entity_ids: vec![],
+                ..Default::default()
             },
             PropertyFilter {
                 property_definition_id: priority_id.to_string(),
                 entity_type: Some("TASK".to_string()),
                 option_ids: vec![option_b.to_string()],
                 entity_ids: vec![],
+                ..Default::default()
             },
         ],
         ..Default::default()
@@ -708,6 +713,7 @@ fn it_ors_mixed_option_and_entity_ref_within_single_filter() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![entity_id],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -745,6 +751,7 @@ fn property_filter_with_empty_values_produce_no_ast() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -765,6 +772,7 @@ fn it_expands_property_filter_without_entity_type() {
             entity_type: None,
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -794,6 +802,7 @@ fn it_expands_property_filter_with_entity_type() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -916,6 +925,7 @@ fn invalid_entity_type_returns_error() {
             entity_type: Some("TASK'; DROP TABLE documents; --".to_string()),
             option_ids: vec![option_id.to_string()],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -935,6 +945,7 @@ fn entity_ref_with_single_quote_returns_error() {
             entity_type: Some("TASK".to_string()),
             option_ids: vec![],
             entity_ids: vec!["x'); DROP TABLE documents; --".to_string()],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -1683,12 +1694,49 @@ fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
 }
 
 #[test]
-fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
+fn initiative_notification_states_opt_in() {
+    use initiative::{InitiativeLiteral, initiatives_requested};
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            notification_filters: crate::NotificationFilters {
+                states: vec![
+                    crate::NotificationState::Unseen,
+                    crate::NotificationState::Seen,
+                    crate::NotificationState::Unseen,
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    let tree = ast.initiative_filter.as_deref().unwrap();
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        Expr::Or(a, b)
+            if matches!(**a, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Unseen)))
+                && matches!(**b, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Seen)))
+    ));
+}
+
+#[test]
+fn database_rows_are_requested_by_include_or_id_outside_a_not() {
     use database_row::{DatabaseRowLiteral, database_rows_requested};
     let table = Uuid::from_u128(0x7ab1e);
     let row = Uuid::from_u128(0x0001);
 
     assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::Include
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::Include
+    )))));
+    assert_eq!(
+        serde_json::to_value(DatabaseRowLiteral::Include).unwrap(),
+        json!("inc")
+    );
     assert!(database_rows_requested(Some(&Expr::val(
         DatabaseRowLiteral::TableId(table)
     ))));
@@ -1799,6 +1847,73 @@ fn crm_associations_deduplicate_repeated_records() {
 }
 
 #[test]
+fn date_property_expansion_preserves_utc_boundaries_and_negates_missing() {
+    use properties::{DateRange, PropertyMatchValue};
+    let definition = Uuid::from_u128(0x00000001_0000_0000_0000_000000000004);
+    let start = chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let end = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let make = |range, has_date| {
+        EntityFilterAst::new_from_filters(EntityFilters {
+            property_filters: vec![PropertyFilter {
+                property_definition_id: definition.to_string(),
+                entity_type: Some("TASK".into()),
+                date_range: range,
+                has_date,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap()
+        .unwrap()
+    };
+    let range = make(
+        Some(DateRange {
+            start: Some(start),
+            end: Some(end),
+        }),
+        None,
+    );
+    assert_matches!(range.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral {
+        value: PropertyMatchValue::DateRange(DateRange { start: lower, end: upper }), ..
+    }) if *lower == Some(start) && *upper == Some(end));
+    let missing = make(None, Some(false));
+    assert_matches!(missing.properties_filter.as_deref().unwrap(), Expr::Not(inner)
+        if matches!(inner.as_ref(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DateRange(DateRange { start: None, end: None }), .. })));
+    let present = make(None, Some(true));
+    assert_matches!(
+        present.properties_filter.as_deref().unwrap(),
+        Expr::Literal(properties::PropertiesLiteral {
+            value: PropertyMatchValue::DateRange(DateRange {
+                start: None,
+                end: None
+            }),
+            ..
+        })
+    );
+    assert!(make(None, Some(false)).properties_filter.is_some());
+    let open_end = make(
+        Some(DateRange {
+            start: Some(start),
+            end: None,
+        }),
+        None,
+    );
+    assert_matches!(open_end.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DateRange(DateRange { start: lower, end: None }), .. }) if *lower == Some(start));
+    let open_start = make(
+        Some(DateRange {
+            start: None,
+            end: Some(end),
+        }),
+        None,
+    );
+    assert_matches!(open_start.properties_filter.as_deref().unwrap(), Expr::Literal(properties::PropertiesLiteral { value: PropertyMatchValue::DateRange(DateRange { start: None, end: upper }), .. }) if *upper == Some(end));
+}
+
+#[test]
 fn agent_session_source_literals_use_the_column_values() {
     use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionSource};
 
@@ -1836,4 +1951,44 @@ fn agent_session_visibility_literals_use_the_column_values() {
     );
     assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
     assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
+}
+
+#[test]
+fn email_subject_literal_trims_and_bounds_its_text() {
+    use crate::ast::email::EmailLiteral;
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "  FYI  " } })).unwrap();
+    assert_matches!(&tree, Expr::Literal(EmailLiteral::Subject(query)) => {
+        assert_eq!(query.as_str(), "FYI");
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "l": { "Subject": "FYI" } })
+    );
+
+    for rejected in [json!("   "), json!("x".repeat(201))] {
+        let result: Result<Expr<EmailLiteral>, _> =
+            serde_json::from_value(json!({ "l": { "Subject": rejected } }));
+        assert!(result.is_err());
+    }
+    let longest: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Subject": "é".repeat(200) } })).unwrap();
+    assert_matches!(longest, Expr::Literal(EmailLiteral::Subject(_)));
+}
+
+#[test]
+fn email_attachment_literal_names_kinds_in_snake_case() {
+    use crate::ast::email::{AttachmentKind, EmailLiteral};
+
+    let tree: Expr<EmailLiteral> =
+        serde_json::from_value(json!({ "l": { "Attachment": "document" } })).unwrap();
+    assert_matches!(
+        tree,
+        Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Document))
+    );
+    assert!(
+        serde_json::from_value::<Expr<EmailLiteral>>(json!({ "l": { "Attachment": "zip" } }))
+            .is_err()
+    );
 }

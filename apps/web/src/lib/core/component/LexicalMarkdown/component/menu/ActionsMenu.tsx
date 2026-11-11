@@ -63,6 +63,11 @@ function ActionsMenuItem(props: {
         e.preventDefault();
         e.stopPropagation();
       }}
+      on:pointerdown={(e) => {
+        // Keep the editor focused so /gif (and other slash actions) can run.
+        // iOS still emits mousedown after a cancelled pointerdown; cancel both.
+        e.preventDefault();
+      }}
       on:mousedown={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -330,7 +335,7 @@ export function ActionMenu(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           data-holds-prompts
-          class="w-60 cursor-default select-none z-modal-content menu-open-animation"
+          class="w-60 mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
           use:clickOutside={clickOutsideHandler}

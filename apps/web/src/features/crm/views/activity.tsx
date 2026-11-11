@@ -1,71 +1,143 @@
-import { fireAndForget } from '@core/util/fireAndForget';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { t } from '@app/lib/i18n';
+import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
+import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
+import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
+import { type JSX, Show } from 'solid-js';
+import { ActivityControls } from '../components/activity-controls';
+import { CrmListEmpty } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmActivityTab } from '../core/navigation';
+import { ActivitySection } from './activity-section';
 import { RecordItemList } from './record-item-list';
 
-const DESCRIPTIONS: Record<CrmActivityTab, string> = {
-  tasks: 'Tasks linked to your CRM companies and people.',
-  email: 'Email in your mailbox exchanged with your CRM companies and people.',
-  notes: 'Notes linked to your CRM companies and people.',
-  calls: 'Calls linked to your CRM companies and people.',
+const CONTENT = {
+  email: {
+    get title() {
+      return t('crm.salesEmail');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesEmail');
+    },
+    graphic: EmptyStateEmailGraphic,
+    action: 'New email',
+    description:
+      'Email your CRM companies and people to see those conversations here.',
+  },
+  notes: {
+    get title() {
+      return t('crm.salesNotes');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesNotes');
+    },
+    graphic: EmptyStateDocGraphic,
+    action: 'New note',
+    description:
+      'Create a note and link a company or person through its Companies or Contacts property.',
+  },
+  calls: {
+    get title() {
+      return t('crm.salesCalls');
+    },
+    get searchLabel() {
+      return t('crm.searchSalesCalls');
+    },
+    graphic: EmptyStateCallsGraphic,
+    action: 'New call',
+    description:
+      'Start a call with your CRM contacts, or link a company or person to an existing call.',
+  },
 };
 
-/** The workspace-wide feed uses the same paged rows as a record's activity. */
-export function CrmActivityView(props: { tab: CrmActivityTab }) {
+/** Workspace activity combines normal view controls with the fixed CRM scope. */
+export function CrmActivityView(props: {
+  tab: CrmActivityTab;
+  title?: JSX.Element;
+}) {
   const crm = useCrmContext();
-  const source = crm.createActivity(() => props.tab);
-  const [retrying, setRetrying] = createSignal(false);
-  const retry = async () => {
-    if (!source.refetch || retrying()) return;
-    setRetrying(true);
-    try {
-      await source.refetch();
-    } catch {
-      // Keep the source's error state and retry action visible.
-    } finally {
-      setRetrying(false);
-    }
+  return (
+    <Show
+      when={props.tab !== 'tasks' ? props.tab : undefined}
+      keyed
+      fallback={<crm.ActivityTasks title={props.title} />}
+    >
+      {(activity) => (
+        <TagSetsQueryProvider>
+          <ActivityList tab={activity} title={props.title} />
+        </TagSetsQueryProvider>
+      )}
+    </Show>
+  );
+}
+
+function ActivityList(props: {
+  tab: Exclude<CrmActivityTab, 'tasks'>;
+  title?: JSX.Element;
+}) {
+  const crm = useCrmContext();
+  const [state, setState] = crm.createActivityState(props.tab);
+  const filters = crm.createActivityFilters(props.tab, state, setState);
+  const source = crm.createActivity(
+    () => props.tab,
+    () => state
+  );
+  const content = () => CONTENT[props.tab];
+  const create = () => {
+    if (props.tab === 'email') return crm.openEmailComposer();
+    return crm.openCreateItem(props.tab);
   };
   return (
-    <div class="flex min-h-0 flex-1 flex-col">
-      <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-3">
-        <p class="text-sm text-ink-muted">{DESCRIPTIONS[props.tab]}</p>
-        <Show when={props.tab === 'tasks'}>
-          <Button
-            variant="outline"
-            class="shrink-0"
-            onClick={crm.openTaskComposer}
+    <ActivitySection
+      label={content().title}
+      searchLabel={content().searchLabel}
+      title={props.title}
+      search={state.search}
+      onSearchChange={(search) => setState('search', search)}
+      createLabel={content().action}
+      onCreate={create}
+      controls={
+        <ActivityControls
+          label={props.tab}
+          state={state}
+          filters={filters}
+          setSort={(sort) => setState('sort', sort)}
+          setDirection={(direction) => setState('direction', direction)}
+          setGroupBy={(groupBy) => setState('groupBy', groupBy)}
+        />
+      }
+    >
+      <RecordItemList
+        source={source}
+        search={state.search}
+        onClearSearch={() => setState('search', '')}
+        groupByDate={state.groupBy === 'date'}
+        dateField={state.sort}
+        referencePropertyIds={[
+          SYSTEM_PROPERTY_IDS.COMPANIES,
+          SYSTEM_PROPERTY_IDS.CONTACTS,
+        ]}
+        emptyContent={
+          <Show
+            when={filters.activeCount() === 0}
+            fallback={
+              <CrmListEmpty
+                title={`No ${props.tab} match these filters`}
+                description="Clear your filters to see all CRM-linked items."
+                action={{ label: 'Clear filters', onClick: filters.clear }}
+              />
+            }
           >
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </Show>
-      </div>
-      <div class="min-h-0 flex-1 overflow-y-auto p-4">
-        <Show
-          when={!source.isError}
-          fallback={
-            <div class="flex flex-col items-start gap-3 text-sm text-ink-muted">
-              <p>Could not load CRM {props.tab}.</p>
-              <Button
-                variant="outline"
-                disabled={retrying()}
-                onClick={() => fireAndForget(retry(), 'crm')}
-              >
-                {retrying() ? 'Retrying…' : 'Try again'}
-              </Button>
-            </div>
-          }
-        >
-          <RecordItemList
-            source={source}
-            empty={`No ${props.tab} linked to your CRM companies or people yet.`}
-          />
-        </Show>
-      </div>
-    </div>
+            <CrmListEmpty
+              graphic={content().graphic}
+              title={`No ${props.tab} linked yet`}
+              description={content().description}
+              action={{ label: content().action, onClick: create }}
+            />
+          </Show>
+        }
+      />
+    </ActivitySection>
   );
 }

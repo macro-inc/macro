@@ -32,7 +32,7 @@ afterEach(() => {
 
 it('finds a direct message and a group inside the caller span', async () => {
   let inSpan = false;
-  const trace = {
+  const parentSpan = {
     run: <T,>(operation: () => T): T => {
       inSpan = true;
       try {
@@ -72,8 +72,8 @@ it('finds a direct message and a group inside the caller span', async () => {
   );
 
   const found = [
-    await direct.mutateAsync({ recipient_id: 'ana', trace }),
-    await group.mutateAsync({ recipients: ['ana', 'ben'], trace }),
+    await direct.mutateAsync({ recipient_id: 'ana', parentSpan }),
+    await group.mutateAsync({ recipients: ['ana', 'ben'], parentSpan }),
   ];
 
   expect(found.map(({ channel_id }) => channel_id)).toEqual([

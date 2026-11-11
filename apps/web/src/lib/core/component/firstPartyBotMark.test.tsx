@@ -14,16 +14,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { firstPartyBotMark } from './firstPartyBotMark';
 import { UserIcon } from './UserIcon';
 
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit: vi.fn() }),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => vi.fn(),
 }));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutate: vi.fn() }),
+const nameReads = vi.hoisted(() => ({
+  parts: vi.fn(() => ({ firstName: '', lastName: '' })),
+  full: vi.fn(() => undefined),
+  initials: vi.fn(() => 'PN'),
 }));
 vi.mock('@core/user', () => ({
-  getDisplayName: () => undefined,
-  getDisplayNameParts: () => ({ firstName: '', lastName: '' }),
+  getDisplayName: nameReads.full,
+  getDisplayNameParts: nameReads.parts,
   getInitials: () => '?',
+  getInitialsFromName: nameReads.initials,
   macroIdToEmail: (id: string) => id,
   tryMacroId: () => undefined,
   useIsConnectedSecondaryInbox: () => () => false,
@@ -61,6 +64,26 @@ describe('firstPartyBotMark', () => {
     expect(firstPartyBotMark('macro|peter@macro.com')).toBeUndefined();
     expect(firstPartyBotMark(undefined)).toBeUndefined();
   });
+});
+
+it('uses supplied contact names without populating the global name store', () => {
+  nameReads.parts.mockClear();
+  nameReads.full.mockClear();
+  const { container } = render(() => (
+    <UserIcon
+      id="macro|person@example.com"
+      name="Person Name"
+      suppressClick
+      showTooltip={false}
+    />
+  ));
+  expect(container.textContent).toContain('PN');
+  expect(nameReads.initials).toHaveBeenCalledWith(
+    'Person Name',
+    expect.any(String)
+  );
+  expect(nameReads.parts).not.toHaveBeenCalled();
+  expect(nameReads.full).not.toHaveBeenCalled();
 });
 
 describe('UserIcon for first-party bots', () => {

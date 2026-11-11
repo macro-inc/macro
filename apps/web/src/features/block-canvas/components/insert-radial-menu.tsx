@@ -1,6 +1,7 @@
-import ImageIcon from '@phosphor/image.svg';
-import LinkIcon from '@phosphor/link.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import {
   ctrlJKMenuNavigation,
   wrapIndex,
@@ -15,27 +16,42 @@ export function CanvasInsertRadialMenu(props: {
   onMedia: () => void;
   onUpload: () => void;
   onReference: () => void;
+  onArtifact?: () => void;
 }) {
-  const choices = [
-    {
-      label: 'Media',
-      icon: ImageIcon,
-      action: props.onMedia,
-      position: 'left-1/2 top-4 -translate-x-1/2',
-    },
-    {
-      label: 'Upload media',
-      icon: UploadIcon,
-      action: props.onUpload,
-      position: 'right-0 top-40',
-    },
-    {
-      label: 'Reference',
-      icon: LinkIcon,
-      action: props.onReference,
-      position: 'left-0 top-40',
-    },
-  ];
+  const media = {
+    label: 'Media',
+    icon: ImageIcon,
+    action: props.onMedia,
+    position: 'left-1/2 top-4 -translate-x-1/2',
+  };
+  const upload = {
+    label: 'Upload media',
+    icon: UploadIcon,
+    action: props.onUpload,
+  };
+  const reference = {
+    label: 'Reference',
+    icon: LinkIcon,
+    action: props.onReference,
+  };
+  // Slices run clockwise from the top, so a fourth choice fills the bottom.
+  const choices = props.onArtifact
+    ? [
+        media,
+        { ...upload, position: 'right-0 top-[6.75rem]' },
+        {
+          label: 'Artifact',
+          icon: CodeIcon,
+          action: props.onArtifact,
+          position: 'left-1/2 bottom-4 -translate-x-1/2',
+        },
+        { ...reference, position: 'left-0 top-[6.75rem]' },
+      ]
+    : [
+        media,
+        { ...upload, position: 'right-0 top-40' },
+        { ...reference, position: 'left-0 top-40' },
+      ];
   const [index, setIndex] = createSignal(0);
   const [active, setActive] = createSignal<number | undefined>(0);
   const sliceAngle = 360 / choices.length;

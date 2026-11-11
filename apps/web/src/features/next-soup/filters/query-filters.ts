@@ -173,7 +173,8 @@ export function filterSoupItemByRequestBody(
         Boolean(filters?.owners?.length) ||
         (filters?.name !== undefined && filters.name !== null) ||
         (filters?.due_after !== undefined && filters.due_after !== null) ||
-        (filters?.due_before !== undefined && filters.due_before !== null);
+        (filters?.due_before !== undefined && filters.due_before !== null) ||
+        Boolean(filters?.notification_filters?.states?.length);
       return (
         optedIn &&
         !isIdFilteredOut(filters?.initiative_ids, data.id) &&
@@ -194,10 +195,15 @@ export function filterSoupItemByRequestBody(
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
     })
-    .with({ tag: 'databaseRow' }, { tag: 'crmContact' }, () => {
-      // These partitions are opt-in through the filter AST only.
-      return false;
-    })
+    .with(
+      { tag: 'databaseRow' },
+      { tag: 'crmContact' },
+      { tag: 'harness' },
+      () => {
+        // These partitions are opt-in through the filter AST only.
+        return false;
+      }
+    )
     .exhaustive(() => false);
 }
 

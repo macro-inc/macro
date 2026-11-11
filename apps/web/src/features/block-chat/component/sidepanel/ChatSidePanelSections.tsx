@@ -4,7 +4,11 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { useBlockId } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
 import { useChatDataQuery } from '@queries/cognition/chat-data';
@@ -33,11 +37,14 @@ export function ChatSidePanelSections() {
         title="Properties"
         defaultOpen
         order={30}
-      >
-        <Suspense fallback={<SidePanel.Loading />}>
-          <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
-        </Suspense>
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <ChatPropertiesContent
+            chatId={chatId}
+            canEdit={canEdit()}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <EntityActivitySectionConditional
         entityId={chatId}
         entityType="CHAT"
@@ -68,17 +75,20 @@ function ChatDetailsContent(props: { chatId: string }) {
         })()}
       >
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
   );
 }
 
-function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
+function ChatPropertiesContent(props: {
+  chatId: string;
+  canEdit: boolean;
+  renderSection: SidePanelSectionLayout;
+}) {
   const query = useChatDataQuery(() => props.chatId);
 
   return (
@@ -88,6 +98,7 @@ function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
       canEdit={props.canEdit}
       documentName={query.data?.name}
       showTags={false}
+      renderSection={props.renderSection}
     />
   );
 }

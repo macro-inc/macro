@@ -17,6 +17,7 @@ const [metadata, setMetadata] = createSignal<SessionMetadata>({
   pendingInteractions: [],
   turn: 'idle',
   notifications: [],
+  reviewRevisions: [],
   noopTurn: null,
 });
 export const session = {
@@ -28,6 +29,7 @@ export const session = {
   turn: () => metadata().turn,
 };
 export const useOptionalAgentSession = () => session;
+export const useAgentSession = () => session;
 
 export function receiveDecision() {
   setMetadata((value) => ({
@@ -57,6 +59,7 @@ export function receiveText(turn: number) {
     ...values,
     {
       agentSessionId: session.sessionId(),
+      key: `${turn}:agent`,
       turn,
       author: { kind: 'agent' },
       parts: [

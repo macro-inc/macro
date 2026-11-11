@@ -4,13 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { OptionId } from './optionId';
 import type { SqlCellOneOfOneoneType } from './sqlCellOneOfOneoneType';
 
 /**
- * The referenced entity ids; one for single-valued columns.
+ * The selected option ids; one for single-select columns.
  */
 export type SqlCellOneOfOneone = {
   type: SqlCellOneOfOneoneType;
-  /** The referenced entity ids; one for single-valued columns. */
-  value: string[];
+  /** The selected option ids; one for single-select columns. */
+  value: OptionId[];
 };

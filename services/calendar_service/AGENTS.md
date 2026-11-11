@@ -16,7 +16,7 @@ gateway `/calendar` prefix.
 ## Scope
 
 - Owns: the Google Calendar push webhook, calendar mutation routes, calendar
-  sync scheduling/outbox, meeting-note link routes, and the backfill queue worker.
+  sync scheduling/outbox, and the backfill queue worker.
 - Not here: calendar domain logic and the Postgres/Google adapters →
   `crates/calendar_events`, `crates/calendar_scheduling`.
 
@@ -39,14 +39,16 @@ gateway `/calendar` prefix.
 ## Checks
 
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
-- `curl http://localhost:8088/health` after `just run_local` or `just stack up`.
+- `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
 
+- The API's server spans come from `macro_tower_layers` (`api::traced`).
+  tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO
+  filter, so an API wrapped in it sends no server spans.
+
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
-- Meeting-note routes remain mounted with calendar sync disabled; compose their
-  repository and document access service from the primary database.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;
@@ -58,3 +60,5 @@ gateway `/calendar` prefix.
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service` ·
   Docs: `docs/guides/new-service.md` (uses this service as the model)
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

@@ -1,5 +1,5 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Key } from '@solid-primitives/keyed';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Dropdown } from '@ui';
@@ -12,6 +12,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import type { SearchableOptionSource } from './option-source';
 import {
   SearchableMultiSelectInline,
   type SearchableOption,
@@ -208,16 +209,10 @@ export function FilterOptionItem(props: {
   disabled?: boolean;
   closeOnSelect?: SelectionDismissal;
   onSelect: () => void;
+  onOnly?: () => void;
 }) {
-  return (
-    <Dropdown.Item
-      role="menuitemcheckbox"
-      aria-checked={props.active}
-      disabled={props.disabled}
-      onSelect={props.onSelect}
-      closeOnSelect={props.closeOnSelect}
-    >
-      <TypeIndicator active={props.active} />
+  const content = () => (
+    <>
       <Show when={props.icon}>
         {(icon) => (
           <span class="size-4 flex items-center justify-center shrink-0">
@@ -233,7 +228,38 @@ export function FilterOptionItem(props: {
       >
         {props.content?.() ?? props.label}
       </span>
-    </Dropdown.Item>
+    </>
+  );
+  return (
+    <Show
+      when={props.onOnly}
+      fallback={
+        <Dropdown.Item
+          role="menuitemcheckbox"
+          aria-checked={props.active}
+          disabled={props.disabled}
+          onSelect={props.onSelect}
+          closeOnSelect={props.closeOnSelect}
+        >
+          <TypeIndicator active={props.active} />
+          {content()}
+        </Dropdown.Item>
+      }
+    >
+      {(onOnly) => (
+        <Dropdown.MultiSelectItem
+          checked={props.active}
+          label={props.label}
+          disabled={props.disabled}
+          onChange={(checked) => {
+            if (checked !== props.active) props.onSelect();
+          }}
+          onOnly={onOnly()}
+        >
+          {content()}
+        </Dropdown.MultiSelectItem>
+      )}
+    </Show>
   );
 }
 
@@ -265,6 +291,7 @@ export function FilterSubmenu<TId extends string>(props: {
   isSelected: (id: TId) => boolean;
   onSelect: (id: TId) => void;
   closeOnSelect?: SelectionDismissal;
+  onOnly?: (id: TId) => void;
   contentClass?: string;
   selectionMode?: 'single' | 'multiple';
 }) {
@@ -297,6 +324,7 @@ export function FilterSubmenu<TId extends string>(props: {
                     disabled={option().disabled}
                     active={props.isSelected(option().id)}
                     onSelect={() => props.onSelect(option().id)}
+                    onOnly={props.onOnly && (() => props.onOnly?.(option().id))}
                     closeOnSelect={props.closeOnSelect}
                   />
                 )}
@@ -347,6 +375,7 @@ export function FilterSubmenu<TId extends string>(props: {
 
 /** Searchable submenu for filters with many options like assignees */
 export const SearchableFilterSubmenu = (props: {
+  source?: SearchableOptionSource;
   label: string;
   active?: boolean;
   options: Accessor<SearchableOption[]>;
@@ -358,6 +387,9 @@ export const SearchableFilterSubmenu = (props: {
   onOpenChange?: (v: boolean) => void;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
+  footer?: JSX.Element;
 }) => {
   const submenu = createFilterSubmenuHover({
     open: props.open,
@@ -413,6 +445,7 @@ export const SearchableFilterSubmenu = (props: {
       <Dropdown.SubContent {...submenu.contentProps} class="w-65 max-w-[90vw]">
         <Dropdown.Group class="p-0 gap-0">
           <SearchableMultiSelectInline
+            source={props.source}
             onRequestClose={() => setIsOpen(false)}
             placeholder={props.placeholder}
             activeIds={props.activeIds}
@@ -423,6 +456,8 @@ export const SearchableFilterSubmenu = (props: {
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
+            createOption={props.createOption}
+            footer={props.footer}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>

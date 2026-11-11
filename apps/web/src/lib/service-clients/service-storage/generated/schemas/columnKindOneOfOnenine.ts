@@ -4,15 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ColumnKindOneOfOnenineType } from './columnKindOneOfOnenineType';
+import type { EntityKind } from './entityKind';
 
 /**
- * Rows of another table.
+ * References to Macro entities.
  */
 export type ColumnKindOneOfOnenine = {
-  /** The database of the related table. */
-  database: string;
-  /** The related table. */
-  table: string;
+  /** Whether a cell holds several references. */
+  multi: boolean;
+  /** What the references point at. */
+  target: EntityKind;
   type: ColumnKindOneOfOnenineType;
 };

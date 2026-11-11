@@ -16,8 +16,10 @@ import {
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -30,7 +32,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { URL_PARAMS } from '../constants';
 import type { CanvasDocumentChrome } from './CanvasDocument';

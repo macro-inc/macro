@@ -41,7 +41,21 @@ impl<R, T: MailboxTokenSource, L: ProviderRateLimiter> MailboxApiService<R, T, L
         self.tokens
             .access_token(mailbox, freshness)
             .await
-            .map_err(super::map_token_error)
+            .map_err(|error| match error {
+                // No provider request was made, which callers report apart
+                // from provider failures.
+                TokenError::Transient { message } => {
+                    EmailApiError::CredentialsUnavailable { message }
+                }
+                error => super::map_token_error(error),
+            })
+    }
+}
+
+impl<R: MailboxRequestCount, T, L> MailboxApiService<R, T, L> {
+    /// Requests the mailbox's gate admitted in its current sync generation.
+    pub async fn admitted_requests(&self, mailbox: MailboxAccess) -> Option<u64> {
+        self.repository.admitted_requests(mailbox).await
     }
 }
 
@@ -134,6 +148,42 @@ impl<
         }
     }
 
+    /// The newest inbox messages, newest first, read straight from the
+    /// provider, so a mailbox can be looked at before it synchronizes.
+    pub async fn recent_inbox_messages(
+        &self,
+        mailbox: MailboxAccess,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> Result<Vec<MailboxMessage>, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::ListMessages,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository
+            .recent_inbox_messages(&token, mailbox.link_id, limit, folders)
+            .await
+        {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(
+                        mailbox,
+                        ApiOperationKind::ListMessages,
+                        TokenFreshness::Fresh,
+                    )
+                    .await?;
+                repository
+                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, folders)
+                    .await
+            }
+            result => result,
+        }
+    }
+
     /// Download an attachment with the same mailbox binding as its parent message.
     pub async fn attachment(
         &self,
@@ -159,6 +209,31 @@ impl<
                     )
                     .await?;
                 repository.attachment(&fresh, message, attachment).await
+            }
+            result => result,
+        }
+    }
+
+    /// Download a message's original RFC 822 bytes.
+    pub async fn mime(
+        &self,
+        mailbox: MailboxAccess,
+        message: &ProviderId,
+    ) -> Result<Vec<u8>, EmailApiError> {
+        let token = self
+            .token(
+                mailbox,
+                ApiOperationKind::GetMessage,
+                TokenFreshness::Cached,
+            )
+            .await?;
+        let repository = self.repository.for_mailbox(mailbox);
+        match repository.mime(&token, message).await {
+            Err(EmailApiError::AuthRequired) => {
+                let fresh = self
+                    .token(mailbox, ApiOperationKind::GetMessage, TokenFreshness::Fresh)
+                    .await?;
+                repository.mime(&fresh, message).await
             }
             result => result,
         }

@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import {
@@ -21,11 +22,14 @@ const editorMocks = vi.hoisted(() => ({
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
+  blur: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
+  mentionScope: vi.fn<() => IUser[] | undefined>(),
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
   inlineMenuOpen: false,
   onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
+  ignoredActions: [] as string[],
 }));
 
 vi.mock(
@@ -104,6 +108,11 @@ vi.hoisted(() => {
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: vi.fn(() => false) }));
 
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+
 vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
   createComposerLayout: (
     _editor: unknown,
@@ -161,34 +170,31 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
 
-vi.mock('@phosphor-icons/core/regular/paperclip.svg?component-solid', () => ({
+vi.mock('@icon/system/regular/paperclip.svg?component-solid', () => ({
   default: () => <span data-testid="paperclip-icon" />,
 }));
 
-vi.mock('@phosphor/text-aa.svg', () => ({
+vi.mock('@icon/system/regular/text-aa.svg', () => ({
   default: () => <span data-testid="format-icon" />,
 }));
 
-vi.mock('@phosphor/trash.svg', () => ({
+vi.mock('@icon/system/regular/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
-vi.mock('@phosphor/x.svg', () => ({
+vi.mock('@icon/system/regular/x.svg', () => ({
   default: () => <span data-testid="close-icon" />,
 }));
 
-vi.mock('@phosphor/arrow-up.svg', () => ({
+vi.mock('@icon/system/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="paper-plane-icon" />,
-  })
-);
+vi.mock('@icon/system/regular/paper-plane-right.svg?component-solid', () => ({
+  default: () => <span data-testid="paper-plane-icon" />,
+}));
 
-vi.mock('@phosphor/spinner-gap.svg', () => ({
+vi.mock('@icon/system/regular/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 
@@ -260,6 +266,7 @@ vi.mock(
       };
       const lexical = {
         focus: vi.fn(),
+        blur: editorMocks.blur,
         dispatchCommand: vi.fn(),
         getElementByKey: vi.fn(),
         getRootElement: vi.fn(),
@@ -274,12 +281,20 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: (options: { users?: () => IUser[] }) => {
-          editorMocks.mentionUsers = options.users;
+        withMentions: (options: MentionsOptions) => {
+          editorMocks.mentionScope.mockImplementation(() => options.users?.());
+          editorMocks.mentionUsers = () => {
+            // Stand in for one loaded window, not a whole directory.
+            const users = options.users?.() ?? [CONTACT];
+            return options.transformUsers?.(users) ?? users;
+          };
           return builder;
         },
         withEmojis: () => builder,
-        withActions: () => builder,
+        withActions: (options?: { ignoreActionIds?: string[] }) => {
+          editorMocks.ignoredActions.push(...(options?.ignoreActionIds ?? []));
+          return builder;
+        },
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
@@ -332,9 +347,6 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
-const peopleMocks = vi.hoisted(() => ({
-  contactsEnabled: undefined as boolean | undefined,
-}));
 const CONTACT = {
   id: 'macro|ann@macro.test',
   name: 'Ann',
@@ -342,12 +354,6 @@ const CONTACT = {
 };
 const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
 
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: (enabled?: () => boolean) => {
-    peopleMocks.contactsEnabled = enabled?.() ?? true;
-    return () => [CONTACT];
-  },
-}));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: (channelId: () => string) => ({
     isLoading: false,
@@ -406,11 +412,15 @@ describe('Input slots', () => {
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
+    editorMocks.blur.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
     editorMocks.inlineMenuOpen = false;
     editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
+    editorMocks.mentionScope.mockReset();
+    device.touch = false;
+    editorMocks.ignoredActions = [];
     vi.mocked(isMobile).mockReturnValue(false);
   });
 
@@ -458,10 +468,13 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = true;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).not.toHaveBeenCalled();
+    expect(editorMocks.blur).not.toHaveBeenCalled();
 
     editorMocks.inlineMenuOpen = false;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).toHaveBeenCalledOnce();
+    // The editor lets go of its selection, so it cannot pull focus back.
+    expect(editorMocks.blur).toHaveBeenCalledOnce();
   });
 
   it('lets Escape continue when there is no menu, dictation, or host handler', () => {
@@ -469,23 +482,51 @@ describe('Input slots', () => {
     expect(editorMocks.onEscape?.()).toBe(false);
   });
 
-  it('starts dictation from the collapsed channel composer', async () => {
+  it('omits the microphone on touch devices, whose keyboards dictate', () => {
+    device.touch = true;
     vi.mocked(isMobile).mockReturnValue(true);
-    const user = userEvent.setup();
-    const { container } = render(() => (
+    const collapsed = render(() => (
       <ChannelInput input={baseInput} collapsible />
     ));
-    const collapsed = container.querySelector('[data-composer-collapsed]');
-    expect(collapsed).toBeTruthy();
-    const microphone = collapsed?.querySelector(
-      'button[aria-label="Start dictation"]'
-    );
-    expect(microphone).toBeTruthy();
-    await user.click(microphone!);
+    expect(
+      collapsed.container.querySelector('[data-composer-collapsed]')
+    ).toBeTruthy();
+    expect(
+      collapsed.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
+
+    const expanded = render(() => <ChannelInput input={baseInput} />);
+    expect(
+      expanded.queryByRole('button', { name: 'Start dictation' })
+    ).toBeNull();
+  });
+
+  it('previews a collapsed draft’s attachments before its text and opens the composer from them', async () => {
+    const user = userEvent.setup();
+    device.touch = true;
+    vi.mocked(isMobile).mockReturnValue(true);
+    const { container } = render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'see attached' }}
+        attachmentTracker={createInputAttachmentTracker({
+          initialAttachments: [
+            { id: 'image-1', name: 'photo.png', kind: 'image' },
+            { id: 'doc-1', name: 'notes.pdf', kind: 'document' },
+            { id: 'image-2', name: 'photo-2.png', kind: 'image' },
+          ],
+        })}
+        collapsible
+      />
+    ));
+
+    const preview = screen.getByRole('img', { name: '3 attachments' });
+    expect(preview.textContent).toBe('3');
+    const collapsedInput = preview.closest('button');
+    expect(collapsedInput?.textContent).toContain('see attached');
+    expect(screen.queryByRole('button', { name: '3 attachments' })).toBeNull();
+
+    await user.click(collapsedInput as HTMLElement);
     expect(container.querySelector('[data-composer-collapsed]')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Dictation' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Cancel dictation' }));
-    expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
   });
 
   it('offers Cursor and Codex within their rollouts before account setup', () => {
@@ -614,6 +655,24 @@ describe('Input slots', () => {
     expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
 
+  it.each([false, true])(
+    'rechecks deferred focus before editor connection (current: %s)',
+    async (current) => {
+      let focusCurrent = true;
+      render(() => (
+        <ChannelInput
+          input={baseInput}
+          onReady={(handle) => {
+            handle.focus({ when: () => focusCurrent });
+            focusCurrent = current;
+          }}
+        />
+      ));
+      await Promise.resolve();
+      expect(editorMocks.focus).toHaveBeenCalledTimes(current ? 1 : 0);
+    }
+  );
+
   it('does not refocus the editor when a portaled editor control is clicked', async () => {
     const user = userEvent.setup();
     render(() => <ChannelInput input={baseInput} />);
@@ -712,6 +771,29 @@ describe('Input slots', () => {
     expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
+  });
+
+  it('offers only text, formatting and files when a host switches features off', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        features={{
+          mentions: false,
+          createItems: false,
+          gifs: false,
+          richBlocks: false,
+        }}
+      />
+    ));
+    expect(editorMocks.mentionUsers).toBeUndefined();
+    expect(editorMocks.ignoredActions).toEqual(
+      expect.arrayContaining(['task', 'document', 'gif', 'table', 'heading1'])
+    );
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(['Attach files']);
   });
 
   it('omits the reply action for channel mode', () => {
@@ -829,13 +911,13 @@ describe('mention people', () => {
 
   beforeEach(() => {
     editorMocks.mentionUsers = undefined;
-    peopleMocks.contactsEnabled = undefined;
+    editorMocks.mentionScope.mockReset();
   });
 
-  it('offers a document composer the workspace contacts', () => {
+  it('delegates a document composer to the bounded workspace window', () => {
     render(() => <ChannelInput input={baseInput} parent={documentParent} />);
-
     expect(mentionIds()).toContain(CONTACT.id);
+    expect(editorMocks.mentionScope()).toBeUndefined();
   });
 
   it('offers a channel composer its participants, not the workspace contacts', () => {
@@ -843,8 +925,9 @@ describe('mention people', () => {
 
     expect(mentionIds()).toContain(CHANNEL_MEMBER.user_id);
     expect(mentionIds()).not.toContain(CONTACT.id);
-    // A channel never shows them, so it should not fetch them either.
-    expect(peopleMocks.contactsEnabled).toBe(false);
+    expect(editorMocks.mentionScope()?.map((user) => user.id)).toContain(
+      CHANNEL_MEMBER.user_id
+    );
   });
 
   it('keeps an explicitly supplied participants list', () => {

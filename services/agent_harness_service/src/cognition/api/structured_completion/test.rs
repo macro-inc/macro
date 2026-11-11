@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use tower::ServiceExt;
 
 #[derive(Default)]
-struct OneShot(Mutex<Vec<(String, String)>>);
+struct OneShot(Mutex<Vec<(String, String, CompletionThinking)>>);
 
 #[async_trait::async_trait]
 impl ToolFreeCompletion for OneShot {
@@ -29,7 +29,7 @@ impl ToolFreeCompletion for OneShot {
         self.0
             .lock()
             .unwrap()
-            .push((owner.to_string(), request.prompt));
+            .push((owner.to_string(), request.prompt, request.thinking));
         Ok(json!({"answer": "hello"}))
     }
 }
@@ -49,6 +49,7 @@ async fn tool_free_requests_call_one_completion_without_an_agent_or_discovery(po
         .with_state(state);
     let mut body = request_body();
     body["additional_instructions"] = json!("Be brief.");
+    body["thinking"] = json!("low");
     let response = router.oneshot(authorized_request("/", body)).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -63,7 +64,11 @@ async fn tool_free_requests_call_one_completion_without_an_agent_or_discovery(po
     );
     assert_eq!(
         *one_shot.0.lock().unwrap(),
-        [(ADMISSION_TEST_USER.into(), "hello".into())]
+        [(
+            ADMISSION_TEST_USER.into(),
+            "hello".into(),
+            CompletionThinking::Low
+        )]
     );
     assert_eq!(
         *admission.calls.lock().unwrap(),

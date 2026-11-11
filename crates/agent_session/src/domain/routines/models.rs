@@ -5,7 +5,9 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::{AgentSessionId, SessionSource, SessionVisibility};
+use crate::domain::model::{
+    AgentMcpServer, AgentSessionId, SessionBilling, SessionSource, SessionVisibility,
+};
 
 /// A persona selected by a routine's validated user owner.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +18,10 @@ pub struct ValidateRoutineSession {
     pub bot_id: BotId,
     /// Omitted means the persona's current default at preparation time.
     pub model: Option<String>,
+    /// Apps the routine itself requires. The owner must have each one
+    /// connected; the session gets them on top of the persona's own servers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<AgentMcpServer>,
 }
 
 /// An authorized selection. Validation does not establish runtime availability.
@@ -40,6 +46,16 @@ pub struct PrepareRoutineSession {
     /// schedulers omit it along with `source`.
     #[serde(default)]
     pub visibility: SessionVisibility,
+    /// What opened the session. Older schedulers omit it.
+    #[serde(
+        default,
+        skip_serializing_if = "trigger_context::TriggerOrigin::is_unknown"
+    )]
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner. Older
+    /// schedulers omit it and get `Billable`, as every session was.
+    #[serde(default, skip_serializing_if = "SessionBilling::is_billable")]
+    pub billing: SessionBilling,
 }
 
 /// A verified, persisted session ready for its first prompt.
@@ -95,6 +111,15 @@ pub enum RoutineActionStatus {
     Failed(RoutineFailureReason),
 }
 
+/// How much a session did, without what: for its opener's telemetry.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutineActivity {
+    /// Tool calls the agent made, across every turn.
+    pub tool_calls: u32,
+    /// Turns the session ran.
+    pub turns: u32,
+}
+
 /// Why the action has not established completion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -146,6 +171,13 @@ pub enum RoutineSessionError {
     /// Persona access or session ownership was denied.
     #[error("routine owner is not authorized")]
     Forbidden,
+    /// The owner has not connected an app the routine requires.
+    #[error("connect every app this routine requires")]
+    AppNotConnected,
+    /// The selected agent's runtime opens its own sessions and cannot be
+    /// handed the routine's apps.
+    #[error("the selected agent cannot use apps added to a routine")]
+    AppsUnsupported,
     /// A runtime could not serve the selected agent.
     #[error("selected runtime is unavailable")]
     RuntimeUnavailable,

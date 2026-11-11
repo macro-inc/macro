@@ -11,6 +11,7 @@
 mod aggregate;
 mod join;
 mod predicate;
+pub(crate) use predicate::normalized_like;
 mod sort;
 #[cfg(test)]
 mod test;
@@ -19,14 +20,13 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use models_databases::position::Position;
-use models_databases::{Formula, OptionId, RowId};
+use models_databases::{DateRange, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
 use crate::catalog::Catalog;
-use crate::formula;
-use crate::resolve::{AggregateFunction, OrderKey, SelectItem, binding, column_key};
+use crate::resolve::{AggregateFunction, OrderKey, SelectItem};
 use crate::run::RunError;
 use crate::split::{Plan, Shape};
 
@@ -46,6 +46,8 @@ pub enum Cell {
     Bool(bool),
     /// A date-time.
     Date(DateTime<Utc>),
+    /// A span from one date-time to another.
+    DateRange(DateRange),
     /// The selected option ids; one for single-select columns.
     Options(Vec<OptionId>),
     /// The referenced entity ids; one for single-valued columns.
@@ -70,6 +72,7 @@ pub(crate) enum CellKey {
     Number(u64),
     Bool(bool),
     Date(DateTime<Utc>),
+    DateRange(DateRange),
     Options(Vec<OptionId>),
     Entities(Vec<String>),
     Row(RowId),
@@ -83,6 +86,7 @@ impl From<&Cell> for CellKey {
             Cell::Number(number) => CellKey::Number(number.to_bits()),
             Cell::Bool(checked) => CellKey::Bool(*checked),
             Cell::Date(date) => CellKey::Date(*date),
+            Cell::DateRange(range) => CellKey::DateRange(*range),
             Cell::Options(ids) => CellKey::Options(ids.clone()),
             Cell::Entities(ids) => CellKey::Entities(ids.clone()),
             Cell::Row(id) => CellKey::Row(*id),
@@ -125,40 +129,9 @@ pub type Table = Vec<Vec<Option<Cell>>>;
 pub fn fold_relations(
     catalog: &Catalog,
     plan: &Plan,
-    mut fetched: Vec<Vec<Row>>,
+    fetched: Vec<Vec<Row>>,
 ) -> (Table, Vec<RowId>) {
-    for (index, rows) in fetched.iter_mut().enumerate() {
-        derive(catalog, plan, index, rows);
-    }
     fold_joined(catalog, plan, join::join(plan, fetched))
-}
-
-/// Give the rows of relation `index` the cells of its table's derived
-/// columns the plan reads, computed from their other cells.
-fn derive(catalog: &Catalog, plan: &Plan, index: usize, rows: &mut [Row]) {
-    let Some(table) = catalog
-        .tables
-        .iter()
-        .find(|table| table.id == plan.relations[index].relation.table)
-    else {
-        return;
-    };
-    let key = |definition: Uuid| column_key(index, definition);
-    let derived: Vec<(Uuid, &Formula)> = formula::derived(table)
-        .map(|(column, formula)| (key(column.id), formula))
-        .filter(|(derived_key, _)| binding(&plan.bindings, *derived_key).is_some())
-        .collect();
-    if derived.is_empty() {
-        return;
-    }
-    for row in rows {
-        for (derived_key, formula) in &derived {
-            match formula::evaluate(table, formula, &row.cells, key) {
-                Some(cell) => row.cells.insert(*derived_key, cell),
-                None => row.cells.remove(derived_key),
-            };
-        }
-    }
 }
 
 /// Finish a plan over rows that are already joined (or come from one
@@ -180,7 +153,7 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
     match &plan.shape {
         Shape::Rows(columns) => {
             let mut rows = rows;
-            sort::rows(catalog, plan, &mut rows);
+            sort::rows(catalog, plan, columns, &mut rows);
             let projected = rows.into_iter().map(|row| {
                 let cells: Vec<Option<Cell>> = columns
                     .iter()

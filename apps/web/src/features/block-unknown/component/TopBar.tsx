@@ -10,15 +10,17 @@ import { BlockItemSplitLabel } from '@components/app/split-layout/components/Spl
 import { useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { toast } from '@core/component/Toast/Toast';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 

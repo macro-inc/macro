@@ -4,12 +4,32 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
-import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
+import { Button, ComposerSurface, Layer, Tabs } from '@ui';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
+import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
+import { RoutineTemplateStrip } from './routine-template-strip';
+
+/**
+ * Suggestions on the Routines page: one row above the list, and a Discover
+ * tab with all of them.
+ */
+export type RoutinesDiscover = {
+  /** The row above the list on All; `openDiscover` switches to Discover. */
+  row(openDiscover: () => void): JSX.Element;
+  /** Discover in place of the list, narrowed by the list's search. */
+  page(search: Accessor<string>): JSX.Element;
+  /** Discover has something the person hasn't seen there. */
+  unseen(): boolean;
+  /** Discover was opened or left, so what it shows has been seen. */
+  onSeen(): void;
+};
+
+type ListTab = 'all' | 'on' | 'discover';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
@@ -23,15 +43,74 @@ export function RoutinesList(props: {
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
+  /**
+   * Templates to start from, above the list; absent where none are offered.
+   * Suggestions take their place where they are on.
+   */
+  templates?: RoutineTemplate[];
+  onTemplate?: (template: RoutineTemplate) => void;
+  /** Suggestions and the Discover tab; absent where they are off. */
+  discover?: RoutinesDiscover;
 }) {
   const [search, setSearch] = createSignal('');
+  const [show, setShowState] = createSignal<ListTab>('all');
+  const showing = (): ListTab =>
+    show() === 'discover' && !props.discover ? 'all' : show();
+  // Opening or leaving Discover marks what it shows as seen.
+  const setShow = (next: ListTab) => {
+    if (next === showing()) return;
+    if (next === 'discover' || showing() === 'discover')
+      props.discover?.onSeen();
+    setShowState(next);
+  };
   let list: HTMLDivElement | undefined;
   const filtered = () =>
-    props.rows.filter((row) =>
-      `${row.name} ${row.creator} ${row.target}`
-        .toLowerCase()
-        .includes(search().trim().toLowerCase())
+    props.rows.filter(
+      (row) =>
+        (showing() !== 'on' || row.enabled) &&
+        `${row.name} ${row.when} ${row.does}`
+          .toLowerCase()
+          .includes(search().trim().toLowerCase())
     );
+  const groups = () =>
+    (
+      [
+        { key: 'activity', title: 'When something happens' },
+        { key: 'schedule', title: 'On a schedule' },
+      ] as const
+    )
+      .map((group) => ({
+        ...group,
+        rows: filtered().filter((row) => row.group === group.key),
+      }))
+      .filter((group) => group.rows.length > 0);
+  const tabs = (): JSX.Element => (
+    <Tabs
+      aria-label="Show routines"
+      options={[
+        { value: 'all', label: 'All', count: props.rows.length },
+        {
+          value: 'on',
+          label: 'On',
+          count: props.rows.filter((row) => row.enabled).length,
+        },
+        ...(props.discover
+          ? [
+              {
+                value: 'discover' as const,
+                label: t('routineSuggestions.discover'),
+                dot:
+                  showing() !== 'discover' && props.discover.unseen()
+                    ? ('violet' as const)
+                    : undefined,
+              },
+            ]
+          : []),
+      ]}
+      value={showing()}
+      onChange={setShow}
+    />
+  );
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
       <Show
@@ -43,6 +122,7 @@ export function RoutinesList(props: {
                 Routines
               </h1>
             </Show>
+            <div class="mb-3">{tabs()}</div>
             <div class="flex min-w-0 items-center justify-between gap-3">
               <SearchBar
                 ref={(input) =>
@@ -59,7 +139,7 @@ export function RoutinesList(props: {
                 class="max-w-md flex-1"
                 hotkey="cmd+f"
               />
-              <Button variant="outline" onClick={props.onCreate}>
+              <Button variant="secondary" onClick={props.onCreate}>
                 Create Routine
               </Button>
             </div>
@@ -67,7 +147,12 @@ export function RoutinesList(props: {
         }
       >
         <ListHeader
-          title={<h1 class="text-sm font-semibold text-ink">Routines</h1>}
+          title={
+            <div class="flex min-w-0 items-center gap-3">
+              <h1 class="text-sm font-semibold text-ink">Routines</h1>
+              {tabs()}
+            </div>
+          }
         >
           <ViewCreateButton
             presentation="toolbar"
@@ -94,41 +179,136 @@ export function RoutinesList(props: {
           </Button>
         </div>
       </Show>
+      <div class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto">
+        <Show
+          when={showing() === 'discover' && props.discover}
+          fallback={
+            <RoutinesTable
+              {...props}
+              search={search()}
+              show={showing()}
+              groups={groups()}
+              empty={!filtered().length}
+              listRef={(element) => (list = element)}
+              onOpenDiscover={() => setShow('discover')}
+            />
+          }
+        >
+          {(discover) => discover().page(search)}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+/** Above the list: the suggestions row, else the templates strip. */
+function RoutinesTable(props: {
+  rows: RoutineRow[];
+  loading: boolean;
+  error: boolean;
+  pendingId?: string;
+  search: string;
+  show: ListTab;
+  groups: { key: string; title: string; rows: RoutineRow[] }[];
+  empty: boolean;
+  listRef(element: HTMLDivElement): void;
+  onCreate: () => void;
+  onOpen: (id: string, history?: boolean) => void;
+  onToggle: (row: RoutineRow) => void;
+  templates?: RoutineTemplate[];
+  onTemplate?: (template: RoutineTemplate) => void;
+  discover?: RoutinesDiscover;
+  onOpenDiscover(): void;
+}) {
+  // Both sit above the list, out of the way of a search.
+  const above = () => !props.search.trim() && props.show === 'all';
+  return (
+    <>
+      <Show
+        when={props.discover}
+        fallback={
+          <Show
+            when={
+              above() && (props.templates?.length ?? 0) > 0 && props.onTemplate
+            }
+          >
+            {(onTemplate) => (
+              <RoutineTemplateStrip
+                templates={props.templates ?? []}
+                onUse={onTemplate()}
+                onAll={props.onCreate}
+              />
+            )}
+          </Show>
+        }
+      >
+        {(discover) => (
+          <Show when={above()}>{discover().row(props.onOpenDiscover)}</Show>
+        )}
+      </Show>
       <div
-        ref={list}
+        ref={props.listRef}
         role="table"
         aria-label="Routines"
         aria-busy={props.loading}
         tabIndex={-1}
-        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
+        class="min-w-0 outline-none"
       >
-        <div role="rowgroup" class="sticky top-0 z-1 min-w-[748px] bg-panel">
+        <div
+          role="rowgroup"
+          class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
+        >
           <RoutineRowLayout
             role="row"
-            class="text-xs font-medium text-ink-extra-muted"
+            class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
           >
-            <span role="columnheader">Routine</span>
-            <span role="columnheader">Created by</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Runs with</span>
-            <span role="columnheader" class="px-2">
-              Enabled
+            <span role="columnheader">Name</span>
+            <span role="columnheader">Trigger</span>
+            <span role="columnheader">Steps</span>
+            <span role="columnheader">Last run</span>
+            <span role="columnheader" class="sr-only">
+              On
             </span>
           </RoutineRowLayout>
         </div>
-        <div role="rowgroup" class="min-w-[748px]">
-          <For each={filtered()}>
-            {(row) => (
-              <RoutineListRow
-                row={row}
-                pending={props.pendingId === row.id}
-                onOpen={props.onOpen}
-                onToggle={props.onToggle}
-              />
+        <div
+          role="rowgroup"
+          class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
+        >
+          <For each={props.groups}>
+            {(group) => (
+              <>
+                {/* A band like the tasks list's group headers. */}
+                <div role="row" class="pb-0.5 pt-3">
+                  <div role="cell" aria-colspan={5}>
+                    <Layer depth={3}>
+                      <ComposerSurface
+                        as="div"
+                        class="mx-1 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight text-ink-muted touch:rounded-lg touch:border touch:border-edge-muted touch:bg-surface"
+                      >
+                        {group.title}
+                        <span class="font-normal tabular-nums text-ink-extra-muted">
+                          {group.rows.length}
+                        </span>
+                      </ComposerSurface>
+                    </Layer>
+                  </div>
+                </div>
+                <For each={group.rows}>
+                  {(row) => (
+                    <RoutineListRow
+                      row={row}
+                      pending={props.pendingId === row.id}
+                      onOpen={props.onOpen}
+                      onToggle={props.onToggle}
+                    />
+                  )}
+                </For>
+              </>
             )}
           </For>
         </div>
-        <Show when={!filtered().length}>
+        <Show when={props.empty}>
           <div role="row">
             <div
               role="cell"
@@ -141,20 +321,22 @@ export function RoutinesList(props: {
                   ? 'Loading routines…'
                   : props.error
                     ? 'Routines are unavailable'
-                    : search().trim()
+                    : props.search.trim() || props.show === 'on'
                       ? 'No matching routines'
                       : 'No routines yet'}
               </p>
-              <Show when={!props.loading && !props.error && !search().trim()}>
+              <Show
+                when={!props.loading && !props.error && !props.search.trim()}
+              >
                 <p>
-                  Create a routine to run an agent on a schedule or a Macro
-                  event.
+                  Create a routine to act on new email, tasks and messages, or
+                  on a schedule.
                 </p>
               </Show>
             </div>
           </div>
         </Show>
       </div>
-    </div>
+    </>
   );
 }

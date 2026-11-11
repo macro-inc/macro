@@ -1,22 +1,14 @@
+import './toast.css';
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
+import CheckIcon from '@icon/system/bold/check-bold.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import CheckIcon from '@phosphor/check.svg';
-import ExclamationIcon from '@phosphor/exclamation-mark.svg';
-import Spinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Spinner } from '@ui';
 import type { Component, JSX } from 'solid-js';
-import {
-  createEffect,
-  createSignal,
-  For,
-  Match,
-  on,
-  onCleanup,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export enum ToastType {
@@ -26,84 +18,25 @@ export enum ToastType {
   LOADING = 'loading',
 }
 
-interface ToastStyle {
-  background: string;
-  /** Accent color for icon and icon background */
-  accent: string;
-  /** Border color class for animated border (Tailwind class, e.g. 'border-success') */
-  borderColor: string;
-  /** Text color for title */
-  titleText: string;
-  /** Text color for subtext/description */
-  subtitleText: string;
-  /** Icon component */
-  icon: Component<{ class?: string }>;
-  /** Action button styles */
-  button: {
-    background: string;
-    hover: string;
-    text: string;
-  };
-  /** Close button hover text color */
-  closeButtonHover: string;
-}
-
-const TOAST_STYLES: Record<ToastType, ToastStyle> = {
+const TOAST_STYLES: Record<
+  ToastType,
+  { icon: Component<{ class?: string }>; iconClass: string }
+> = {
   [ToastType.SUCCESS]: {
-    background: 'bg-success-bg',
-    accent: 'bg-success',
-    borderColor: 'var(--color-success)',
-    titleText: 'text-success-ink',
-    subtitleText: 'text-success-ink/70',
     icon: CheckIcon,
-    button: {
-      background: 'bg-success',
-      hover: 'hover:bg-success/80',
-      text: 'text-success-ink',
-    },
-    closeButtonHover: 'hover:text-success-ink hover:bg-success-hover',
+    iconClass: 'text-success',
   },
   [ToastType.FAILURE]: {
-    background: 'bg-failure-bg',
-    accent: 'bg-failure',
-    titleText: 'text-failure-ink',
-    borderColor: 'var(--color-failure)',
-    subtitleText: 'text-failure-ink/70',
     icon: ExclamationIcon,
-    button: {
-      background: 'bg-failure',
-      hover: 'hover:bg-failure/80',
-      text: 'text-failure-ink',
-    },
-    closeButtonHover: 'hover:text-failure-ink hover:bg-failure-hover',
+    iconClass: 'text-failure',
   },
   [ToastType.ALERT]: {
-    background: 'bg-alert/10',
-    accent: 'bg-alert',
-    borderColor: 'var(--color-alert)',
-    titleText: 'text-alert-ink',
-    subtitleText: 'text-alert-ink/70',
-    icon: ExclamationIcon,
-    button: {
-      background: 'bg-alert',
-      hover: 'hover:bg-alert/80',
-      text: 'text-alert-ink',
-    },
-    closeButtonHover: 'hover:text-alert-ink hover:bg-alert/10',
+    icon: WarningIcon,
+    iconClass: 'text-warning',
   },
   [ToastType.LOADING]: {
-    background: 'bg-accent/10',
-    accent: 'bg-accent',
-    borderColor: 'var(--color-edge)',
-    titleText: 'text-ink',
-    subtitleText: 'text-ink-muted',
-    icon: Spinner,
-    button: {
-      background: 'bg-accent',
-      hover: 'hover:bg-accent/80',
-      text: 'text-surface',
-    },
-    closeButtonHover: 'hover:text-accent hover:bg-accent/10',
+    icon: (props) => <Spinner {...props} size="md" decorative />,
+    iconClass: 'text-accent',
   },
 };
 
@@ -111,18 +44,37 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
 interface ToastAction {
   label: string;
   icon?: Component<{ class?: string }>;
+  /** Directional actions place their icon after the label. */
+  trailingIcon?: boolean;
+  variant?: 'primary' | 'secondary' | 'danger' | 'accent';
   onClick: () => void;
 }
+
+type ToastActionLayout = 'stacked' | 'inline';
+type ToastDismissStyle = 'button' | 'icon';
 
 /**
  * Common options for all toast calls.
  */
 interface ToastOptions {
   subtext?: string;
-  /** Auto-dismiss duration in ms. When omitted, the toast uses a default 3s timer. */
+  /** Entity glyph beside the title, separate from the toast's status icon. */
+  titleIcon?: Component<{ class?: string }>;
+  /** Auto-dismiss duration in ms. When omitted, the toast uses a default 4.5s timer. */
   duration?: number;
   /** When true, don't render this toast on mobile. */
   hideOnMobile?: boolean;
+  /** Hide the visible dismissal control; Escape, swipe, and expiry stay unchanged. */
+  showCloseButton?: boolean;
+  /** Replace an action toast's Dismiss button with a desktop close icon. */
+  dismissStyle?: ToastDismissStyle;
+  /** Inline multiple actions on notices without a description; single actions inline automatically. */
+  actionLayout?: ToastActionLayout;
+  /**
+   * Runs once the toast closes, however it closes: expiry, its close
+   * control, Escape, a swipe, or `toast.dismiss`.
+   */
+  onDismiss?: () => void;
 }
 
 interface ToastActionOptions extends ToastOptions {
@@ -134,7 +86,7 @@ interface ToastActionOptions extends ToastOptions {
 /**
  * Config for a fully custom toast.
  * Replaces the icon, title, and accent color of the standard layout while
- * still using the shared Surface chrome and progress/dismiss machinery.
+ * still using the shared toast chrome and dismissal behavior.
  */
 export interface CustomToastConfig {
   title: string;
@@ -142,7 +94,12 @@ export interface CustomToastConfig {
   icon?: Component<{ class?: string }>;
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
+  /** Optional title color; descriptions and action colors stay independent. */
+  titleColor?: string;
   actions?: ToastAction[];
+  actionLayout?: ToastActionLayout;
+  /** Label for the secondary dismissal action; defaults to Dismiss. */
+  dismissLabel?: string;
 }
 
 interface ToastMessage {
@@ -159,8 +116,8 @@ const recentToasts: Map<string, ToastMessage> = new Map();
 const THROTTLE_DURATION = 3000;
 
 /**
- * The currently-visible toast in the main region. Each new toast dismisses the
- * previous one immediately so transient notifications never stack.
+ * Most recently created desktop toast. Desktop notifications queue through
+ * the region limit; unlike mobile, new notifications do not replace this one.
  */
 let activeToastId: number | undefined;
 /**
@@ -184,6 +141,7 @@ function setActiveToastId(region: string, toastId: number | undefined): void {
 }
 
 function dismissActiveToast(region: string): boolean {
+  if (region !== 'mobile-toast-region') return false;
   const activeId = getActiveToastId(region);
   if (activeId === undefined) return false;
 
@@ -193,8 +151,7 @@ function dismissActiveToast(region: string): boolean {
 }
 
 /**
- * Hand the region's single visible slot to a new toast, and report whether it
- * displaced one (so the newcomer can skip its entrance animation).
+ * Replace the mobile region's single visible slot. Desktop toasts stack.
  *
  * Persistent toasts opt out of the slot entirely: they are prompts the user is
  * expected to answer, so a passing "Copied" must not tear one down, and a
@@ -255,10 +212,10 @@ function dismiss(toastId: number) {
 // Tell users that an action has failed, because of us
 function failure(
   message: string,
-  options?: ToastOptions & { actions?: ToastAction[] }
-) {
-  dismissIfRecent(message, ToastType.FAILURE);
-  createToast(message, ToastType.FAILURE, options);
+  options?: ToastActionOptions
+): number | undefined {
+  if (!options?.stack) dismissIfRecent(message, ToastType.FAILURE);
+  return createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
@@ -270,323 +227,237 @@ function alert(
   return createToast(message, ToastType.ALERT, options);
 }
 
-function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
-  return (
-    <For each={props.actions}>
-      {(action) => (
-        <Button
-          size={props.mobile ? 'sm' : 'md'}
-          onClick={action.onClick}
-          variant="outline"
-          class="px-2 py-1 bg-surface"
-          depth={4}
-        >
-          <Show when={action.icon}>
-            {(icon) => (
-              <Dynamic
-                component={icon()}
-                class="size-[1em] touch:min-h-0! touch:min-w-0!"
-              />
-            )}
-          </Show>
-          {action.label}
-        </Button>
-      )}
-    </For>
-  );
-}
-
-function ToastBodyWrapper(props: {
-  mobile?: boolean;
-  accentColor: string;
-  children: JSX.Element;
+function ActionButtons(props: {
+  actions: ToastAction[];
+  showDismiss: boolean;
+  dismissLabel: string;
+  onDismiss?: () => void;
 }) {
   return (
-    <Show
-      when={props.mobile}
-      fallback={
-        <Surface
-          highlightColor={props.accentColor}
-          hideBorder
-          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl glass bg-toast"
+    <>
+      <Show when={props.showDismiss}>
+        <Toast.CloseButton
+          as={Button}
+          size="sm"
+          variant="secondary"
+          aria-label={props.dismissLabel}
+          onClick={() => props.onDismiss?.()}
         >
-          {props.children}
-        </Surface>
-      }
-    >
-      <div class="island relative w-full p-2 rounded-xl bg-toast">
-        {props.children}
-      </div>
-    </Show>
+          {props.dismissLabel}
+        </Toast.CloseButton>
+      </Show>
+      <For each={props.actions}>
+        {(action) => (
+          <Button
+            size="sm"
+            onClick={action.onClick}
+            variant={action.variant ?? 'primary'}
+            class="max-w-full"
+          >
+            <Show when={action.icon}>
+              {(Icon) => (
+                <Dynamic
+                  component={Icon()}
+                  class={cn(
+                    'size-4 shrink-0',
+                    action.trailingIcon && 'order-last'
+                  )}
+                />
+              )}
+            </Show>
+            <span class="min-w-0 whitespace-normal break-words">
+              {action.label}
+            </span>
+          </Button>
+        )}
+      </For>
+    </>
   );
 }
 
-function ToastContent(props: {
+/** Shared presentation for the app service and isolated gallery regions. */
+export function ToastContent(props: {
   toastId: number;
   toastType?: ToastType;
   message?: string;
   subtext?: string;
+  titleIcon?: Component<{ class?: string }>;
   actions?: ToastAction[];
+  actionLayout?: ToastActionLayout;
   persistent?: boolean;
-  /** When provided, drives the auto-dismiss timer AND shows the progress bar. */
   duration?: number;
   embed?: Component;
   custom?: CustomToastConfig;
-  /** Render the mobile variant (no highlight border, text-xs, simplified). */
-  mobile?: boolean;
-  /** Avoid entrance motion when this toast is replacing another toast. */
-  skipOpenAnimation?: boolean;
-  /** Called when this toast is removed from the DOM, so callers can clean up tracking. */
+  showCloseButton?: boolean;
+  dismissStyle?: ToastDismissStyle;
   onDismiss?: () => void;
-  /** Called at a user close gesture, before the exit animation begins. */
   onUserDismiss?: () => void;
 }) {
-  const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
-  // Two actions beside the title squeeze it to a few characters; like the
-  // stacked custom layout, they get their own row under the description.
-  const stackActions = () => (props.actions?.length ?? 0) > 1;
+  const styles = () =>
+    props.toastType ? TOAST_STYLES[props.toastType] : undefined;
+  const icon = () => props.custom?.icon ?? styles()?.icon;
+  const actions = () => props.custom?.actions ?? props.actions ?? [];
+  const hasBody = () => Boolean(props.custom?.content || props.subtext);
+  const hasActions = () => actions().length > 0;
+  const inlineActions = () =>
+    !props.embed &&
+    !hasBody() &&
+    hasActions() &&
+    (actions().length === 1 ||
+      (props.custom?.actionLayout ?? props.actionLayout) === 'inline');
+  const singleRow = () =>
+    !props.embed && !hasBody() && (!hasActions() || inlineActions());
+  const dismissLabel = () => props.custom?.dismissLabel ?? t('common.dismiss');
+  const showDismiss = () => props.showCloseButton !== false;
+  const showDismissAction = () =>
+    showDismiss() && props.dismissStyle !== 'icon';
+  const showCloseButton = () =>
+    showDismiss() &&
+    (!hasActions() || props.dismissStyle === 'icon') &&
+    !isMobile();
+  const [height, setHeight] = createSignal<number>();
+  let surface!: HTMLDivElement;
 
-  const accentColor = () => {
-    if (props.custom?.color) return props.custom.color;
-    return styles()?.borderColor ?? 'var(--color-edge)';
-  };
-
-  // progress: 1 = full time remaining, 0 = expired.
-  // Only meaningful (and only rendered) when props.duration is explicitly set.
-  const [progress, setProgress] = createSignal(1);
-
-  const showProgress = () => false;
-
-  const [isHovered, setIsHovered] = createSignal(false);
-
-  let elapsed = 0;
-
-  onCleanup(() => props.onDismiss?.());
-
+  // Keep the natural height while older cards are tucked into the stack.
   onMount(() => {
-    // Persistent toasts never auto-dismiss
-    if (props.persistent) return;
-
-    const duration = props.duration ?? 3000;
-    let lastTime: number | null = null;
-    let rafId: number;
-
-    const update = () => {
-      const currentTime = performance.now();
-
-      if (lastTime === null) {
-        lastTime = currentTime;
-      }
-
-      // Only accumulate time when not hovered
-      if (!isHovered()) {
-        elapsed += currentTime - lastTime;
-      }
-      lastTime = currentTime;
-
-      const remaining = Math.max(0, 1 - elapsed / duration);
-      setProgress(remaining);
-
-      if (remaining > 0) {
-        rafId = requestAnimationFrame(update);
-      } else {
-        toaster.dismiss(props.toastId);
-      }
-    };
-
-    rafId = requestAnimationFrame(update);
-    onCleanup(() => cancelAnimationFrame(rafId));
+    const measure = () => setHeight(surface.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(surface);
+    onCleanup(() => observer.disconnect());
   });
-
-  // Reset timer when user starts hovering
-  createEffect(
-    on(isHovered, (hovered) => {
-      if (hovered && !props.persistent) {
-        elapsed = 0;
-        setProgress(1);
-      }
-    })
-  );
+  onCleanup(() => props.onDismiss?.());
 
   return (
     <Toast
       toastId={props.toastId}
-      class={cn(
-        `relative overflow-visible pointer-events-auto
-        transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
-        data-[swipe=move]:transition-none
-        data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200
-        data-[swipe=end]:data-[swipe-direction=right]:animate-swipe-out
-        data-[swipe=end]:data-[swipe-direction=left]:animate-swipe-out-left`,
-        !props.skipOpenAnimation && 'data-opened:animate-slide-in',
-        props.mobile && 'w-full'
-      )}
-      persistent={true}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      data-macro-toast
+      data-toast-id={props.toastId}
+      data-mobile={isMobile() ? '' : undefined}
+      data-single-row={singleRow() ? '' : undefined}
+      class="macro-toast"
+      style={{ '--toast-height': height() ? `${height()}px` : undefined }}
+      persistent={props.persistent}
+      duration={props.duration ?? 4500}
       onSwipeEnd={() => props.onUserDismiss?.()}
       onEscapeKeyDown={(event) => {
         if (!event.defaultPrevented) props.onUserDismiss?.();
       }}
     >
-      <ToastBodyWrapper mobile={props.mobile} accentColor={accentColor()}>
-        <Switch>
-          {/* ── Embed layout ── */}
-          <Match when={props.embed}>
-            {(embed) => (
-              <>
-                <Dynamic component={embed()} />
-                <Toast.CloseButton class="absolute top-2 right-2 z-user-highlight">
-                  <Button variant="ghost" size="icon-sm">
-                    <XIcon />
-                  </Button>
-                </Toast.CloseButton>
-              </>
-            )}
-          </Match>
-
-          {/* ── Custom layout ── */}
-          <Match when={props.custom}>
-            {(customConfig) => {
-              // A persistent prompt on mobile can't borrow the transient
-              // one-line treatment: with the body and close button stripped it
-              // reduces to a bare title that never goes away. Give it the full
-              // card — description, close button, and its actions on their own
-              // row so the tap targets aren't fighting a truncated title.
-              const stacked = () => Boolean(props.mobile && props.persistent);
-              const showContent = () =>
-                Boolean(customConfig().content) && (!props.mobile || stacked());
-              return (
-                <>
-                  <div class="flex items-center gap-2 justify-between">
-                    <Show when={customConfig().icon && !props.mobile}>
-                      {(_) => {
-                        const icon = customConfig().icon!;
-                        return (
-                          <div class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75">
-                            <Dynamic component={icon} />
-                          </div>
-                        );
-                      }}
-                    </Show>
-                    <Toast.Title
-                      class={cn(
-                        'font-semibold grow shrink truncate text-left flex items-center',
-                        props.mobile ? 'text-xs' : 'text-ink',
-                        stacked() && 'text-sm'
-                      )}
-                    >
-                      {customConfig().title}
-                    </Toast.Title>
-                    <Show when={customConfig().actions?.length && !stacked()}>
-                      <ActionButtons
-                        actions={customConfig().actions!}
-                        mobile={props.mobile}
-                      />
-                    </Show>
-                    <Show when={!props.mobile || props.persistent}>
-                      <Toast.CloseButton
-                        as={Button}
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => props.onUserDismiss?.()}
-                      >
-                        <XIcon />
-                      </Toast.CloseButton>
-                    </Show>
-                  </div>
-                  <Show when={showContent()}>
-                    <div
-                      class={cn(
-                        'my-2',
-                        props.mobile && 'text-xs text-ink-muted'
-                      )}
-                    >
-                      {customConfig().content?.()}
-                    </div>
-                  </Show>
-                  <Show when={stacked() && customConfig().actions?.length}>
-                    <div class="flex justify-end gap-2">
-                      <ActionButtons actions={customConfig().actions!} mobile />
-                    </div>
-                  </Show>
-                </>
-              );
-            }}
-          </Match>
-
-          {/* ── Standard layout ── */}
-          <Match when={styles()}>
-            {(s) => (
-              <>
-                <div class="flex items-center gap-2 justify-between">
-                  <div
-                    class="size-5 flex shrink-0 justify-center items-center rounded-full p-0.75"
-                    style={{ 'background-color': s().borderColor }}
-                  >
-                    <Dynamic
-                      component={s().icon}
-                      class={cn(
-                        'size-3.5 text-surface',
-                        props.toastType === ToastType.LOADING
-                          ? 'animate-spin'
-                          : ''
-                      )}
-                    />
-                  </div>
+      <div ref={surface} class="macro-toast-surface">
+        <div
+          class={cn(
+            'macro-toast-content min-w-0',
+            showCloseButton() && (hasActions() ? 'pr-8' : 'pr-10')
+          )}
+        >
+          <Show
+            when={props.embed}
+            fallback={
+              <div class={cn('min-w-0', icon() && 'pl-7')}>
+                <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
                   <Toast.Title
-                    class={cn(
-                      'font-semibold grow shrink truncate text-left',
-                      props.mobile ? 'text-xs' : 'text-ink'
-                    )}
+                    class="relative min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere"
+                    style={{ color: props.custom?.titleColor }}
                   >
-                    {props.message}
+                    <Show when={icon()}>
+                      {(Icon) => (
+                        <span
+                          aria-hidden="true"
+                          class={cn(
+                            'absolute top-0.5 -left-7 flex size-5 items-center justify-center',
+                            props.custom
+                              ? 'text-ink-muted'
+                              : styles()?.iconClass
+                          )}
+                          style={
+                            props.custom
+                              ? { color: props.custom.color }
+                              : undefined
+                          }
+                        >
+                          <Dynamic
+                            component={Icon()}
+                            class={props.custom ? 'size-4' : 'size-5'}
+                          />
+                        </span>
+                      )}
+                    </Show>
+                    <Show when={props.titleIcon}>
+                      {(Icon) => (
+                        <Dynamic
+                          component={Icon()}
+                          class="mr-1 inline-block size-4 align-text-bottom text-ink-muted"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </Show>
+                    {props.custom?.title ?? props.message}
                   </Toast.Title>
-                  <Show when={props.actions?.length && !stackActions()}>
-                    <ActionButtons
-                      actions={props.actions!}
-                      mobile={props.mobile}
-                    />
-                  </Show>
-                  <Show when={!props.mobile}>
-                    <Toast.CloseButton>
-                      <Button variant="ghost" size="icon-sm">
-                        <XIcon />
-                      </Button>
-                    </Toast.CloseButton>
+                  <Show when={inlineActions()}>
+                    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+                      <ActionButtons
+                        actions={actions()}
+                        showDismiss={showDismissAction()}
+                        dismissLabel={dismissLabel()}
+                        onDismiss={props.onUserDismiss}
+                      />
+                    </div>
                   </Show>
                 </div>
-                <Show when={props.subtext && (!props.mobile || stackActions())}>
-                  <Toast.Description
-                    class={cn(
-                      'ml-7 text-ink-extra-muted',
-                      props.mobile ? 'text-xs' : 'text-sm'
-                    )}
-                  >
-                    {props.subtext}
+                <Show when={hasBody()}>
+                  <Toast.Description class="mt-0.5 text-sm leading-normal text-ink-muted wrap-anywhere">
+                    {props.custom?.content
+                      ? props.custom.content()
+                      : props.subtext}
                   </Toast.Description>
                 </Show>
-                <Show when={stackActions()}>
-                  <div class="mt-2 ml-7 flex flex-wrap gap-2">
-                    <ActionButtons actions={props.actions!} mobile />
+                <Show when={hasActions() && !inlineActions()}>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <ActionButtons
+                      actions={actions()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
+                      onDismiss={props.onUserDismiss}
+                    />
                   </div>
                 </Show>
-              </>
+              </div>
+            }
+          >
+            {(Embed) => (
+              <div class="min-w-0">
+                <Dynamic component={Embed()} />
+                <Show when={hasActions()}>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <ActionButtons
+                      actions={actions()}
+                      showDismiss={showDismissAction()}
+                      dismissLabel={dismissLabel()}
+                      onDismiss={props.onUserDismiss}
+                    />
+                  </div>
+                </Show>
+              </div>
             )}
-          </Match>
-        </Switch>
-
-        {/* Progress bar — only rendered when an explicit duration was passed */}
-        <Show when={showProgress()}>
-          <div
-            class="absolute bottom-0 h-1 left-0"
-            style={{
-              'background-color': accentColor(),
-              width: `${(1 - progress()) * 100}%`,
-            }}
-          />
-        </Show>
-      </ToastBodyWrapper>
+          </Show>
+          <Show when={showCloseButton()}>
+            <Toast.CloseButton
+              as={Button}
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('common.close')}
+              class={cn(
+                'absolute right-2 z-10',
+                singleRow() ? 'top-1/2 -translate-y-1/2' : 'top-2'
+              )}
+              onClick={() => props.onUserDismiss?.()}
+            >
+              <XIcon class="size-4" />
+            </Toast.CloseButton>
+          </Show>
+        </div>
+      </div>
     </Toast>
   );
 }
@@ -603,13 +474,14 @@ async function promise<T>(
     subtext?: string;
     /** When true, don't render the loading/result toasts on mobile. */
     hideOnMobile?: boolean;
+    showCloseButton?: boolean;
   }
 ): Promise<T> {
   if (isMobile() && options.hideOnMobile) return promiseArg;
 
   const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-  const skipOpenAnimation = dismissActiveToast(region);
+  dismissActiveToast(region);
 
   const toastId = toaster.show(
     (props) => (
@@ -619,8 +491,7 @@ async function promise<T>(
         message={options.loading}
         subtext={options.subtext}
         persistent={true}
-        mobile={useMobile}
-        skipOpenAnimation={skipOpenAnimation}
+        showCloseButton={options.showCloseButton}
         onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
@@ -643,6 +514,7 @@ async function promise<T>(
 
         createToast(successMessage, toastType, {
           hideOnMobile: options.hideOnMobile,
+          showCloseButton: options.showCloseButton,
         });
       }
 
@@ -655,7 +527,10 @@ async function promise<T>(
           typeof options.error === 'function'
             ? options.error(error)
             : options.error;
-        failure(errorMessage, { hideOnMobile: options.hideOnMobile });
+        failure(errorMessage, {
+          hideOnMobile: options.hideOnMobile,
+          showCloseButton: options.showCloseButton,
+        });
       }
       throw error;
     });
@@ -668,7 +543,18 @@ function createToast(
   toastType: ToastType,
   options?: ToastActionOptions
 ) {
-  const { subtext, actions, duration, stack, hideOnMobile } = options ?? {};
+  const {
+    subtext,
+    titleIcon,
+    actions,
+    actionLayout,
+    duration,
+    stack,
+    hideOnMobile,
+    showCloseButton,
+    dismissStyle,
+    onDismiss,
+  } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
 
@@ -682,7 +568,7 @@ function createToast(
 
   const useMobile = isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-  const skipOpenAnimation = dismissActiveToast(region);
+  dismissActiveToast(region);
 
   const toastId = toaster.show(
     (props) => (
@@ -691,14 +577,15 @@ function createToast(
         toastType={toastType}
         message={message}
         subtext={subtext}
+        titleIcon={titleIcon}
         actions={actions}
-        // Pass duration only when explicitly provided — this is what gates the progress bar.
-        // When undefined, ToastContent falls back to its own default dismiss timing internally.
+        actionLayout={actionLayout}
         duration={duration}
-        mobile={useMobile}
-        skipOpenAnimation={skipOpenAnimation}
+        showCloseButton={showCloseButton}
+        dismissStyle={dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
+          onDismiss?.();
         }}
       />
     ),
@@ -734,12 +621,13 @@ function embed(
     persistent?: boolean;
     duration?: number;
     region?: string;
+    showCloseButton?: boolean;
   }
 ) {
   const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  const skipOpenAnimation = replaceActiveToast(region, options?.persistent);
+  replaceActiveToast(region, options?.persistent);
   const toastId = toaster.show(
     (props) => (
       <ToastContent
@@ -747,8 +635,7 @@ function embed(
         embed={component}
         persistent={options?.persistent}
         duration={options?.duration}
-        mobile={useMobile}
-        skipOpenAnimation={skipOpenAnimation}
+        showCloseButton={options?.showCloseButton}
         onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
@@ -762,8 +649,8 @@ function embed(
 
 /**
  * Show a toast with a fully custom title, icon, accent color, body content,
- * and actions row — while still using the shared Surface chrome and
- * progress/dismiss machinery.
+ * and actions row — while still using the shared toast chrome and
+ * dismissal behavior.
  */
 function custom(
   config: CustomToastConfig,
@@ -773,12 +660,14 @@ function custom(
     region?: string;
     onDismiss?: () => void;
     onUserDismiss?: () => void;
+    showCloseButton?: boolean;
+    dismissStyle?: ToastDismissStyle;
   }
 ): number {
   const useMobile = isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  const skipOpenAnimation = replaceActiveToast(region, options?.persistent);
+  replaceActiveToast(region, options?.persistent);
   const toastId = toaster.show(
     (props) => (
       <ToastContent
@@ -786,9 +675,9 @@ function custom(
         custom={config}
         persistent={options?.persistent}
         duration={options?.duration}
-        mobile={useMobile}
-        skipOpenAnimation={skipOpenAnimation}
         onUserDismiss={options?.onUserDismiss}
+        showCloseButton={options?.showCloseButton}
+        dismissStyle={options?.dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
           options?.onDismiss?.();

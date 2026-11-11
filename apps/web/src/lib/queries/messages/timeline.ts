@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import type {
+  CallEntryStatus,
   Message as EntityMessage,
   MessageListItem,
   MessageParent,
@@ -441,7 +442,7 @@ export function mapMessageTimelineItems(
   const pages = data.pages.map((page) => {
     let pageChanged = false;
     const entries = page.entries.map((entry) => {
-      if (entry.type !== 'message') return entry;
+      if (entry.type === 'activity') return entry;
       const message = updater(entry.message);
       if (message === entry.message) return entry;
       didChange = true;
@@ -463,7 +464,7 @@ function filterMessageTimelineItems(
 
   const pages = data.pages.map((page) => {
     const entries = page.entries.filter((entry) => {
-      if (entry.type !== 'message') return true;
+      if (entry.type === 'activity') return true;
       const message = entry.message;
       const keep = predicate(message);
       if (!keep) didChange = true;
@@ -552,9 +553,9 @@ function getTopLevelMessageSnapshot(
 
   for (const page of data.pages) {
     const entry = page.entries.find(
-      (entry) => entry.type === 'message' && entry.message.id === messageId
+      (entry) => entry.type !== 'activity' && entry.message.id === messageId
     );
-    if (entry?.type !== 'message') continue;
+    if (!entry || entry.type === 'activity') continue;
     return { message: entry.message };
   }
 }
@@ -733,13 +734,26 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
   });
 }
 
+/** Whether `next` joins the activity row that `previous`, just before it, ends. */
+export type ActivityMerge = (
+  previous: TimelineActivity,
+  next: TimelineActivity
+) => boolean;
+
 /**
  * Build a single oldest-first timeline index for display and lookup.
  * Pages arrive newest-first, entries within each page are newest-first,
  * so we reverse both layers in one pass.
  */
-/** The rows a timeline renders, oldest first, from its cached pages. */
-export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
+/**
+ * The rows a timeline renders, oldest first, from its cached pages.
+ * Consecutive activity that `mergeActivity` accepts shares one row, keyed and
+ * dated by its newest activity.
+ */
+export function buildMessageIndex(
+  pages: MessageTimelinePage[] | undefined,
+  mergeActivity?: ActivityMerge
+) {
   /**
    * New objects carrying their row key as `id`, so `reconcile` pairs each
    * entry with its own previous copy. Without an `id` it pairs by position
@@ -749,12 +763,26 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
   const entries: (MessageTimelineEntry & { id: string })[] = [];
   /** Every rendered row, messages and activity. */
   const entryKeys: string[] = [];
-  /** Message ids only: selection and navigation skip activity. */
+  /** Message ids only: selection and navigation skip activity and calls. */
   const keys: string[] = [];
   const byId = new Map<string, MessageListItem>();
+  /** The life of each row that is a call, keyed like `byId`. */
+  const callStatusByKey = new Map<string, CallEntryStatus>();
+  /** Each activity row's newest activity. */
   const activityByKey = new Map<string, TimelineActivity>();
+  /** Every activity of a row that merged several, oldest first. */
+  const activityGroupByKey = new Map<string, TimelineActivity[]>();
 
-  if (!pages?.length) return { entries, entryKeys, keys, byId, activityByKey };
+  if (!pages?.length)
+    return {
+      entries,
+      entryKeys,
+      keys,
+      byId,
+      callStatusByKey,
+      activityByKey,
+      activityGroupByKey,
+    };
 
   const seen = new Set<string>();
   for (let i = pages.length - 1; i >= 0; i--) {
@@ -764,26 +792,58 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
       const key = timelineEntryKey(entry);
       if (seen.has(key)) continue;
       seen.add(key);
-      entries.push({ ...entry, id: key });
-      entryKeys.push(key);
       if (entry.type === 'activity') {
+        const lastKey = entryKeys.at(-1);
+        const previous =
+          lastKey === undefined ? undefined : activityByKey.get(lastKey);
+        if (
+          lastKey !== undefined &&
+          previous &&
+          mergeActivity?.(previous, entry.activity)
+        ) {
+          const group = activityGroupByKey.get(lastKey) ?? [previous];
+          activityByKey.delete(lastKey);
+          activityGroupByKey.delete(lastKey);
+          entries[entries.length - 1] = { ...entry, id: key };
+          entryKeys[entryKeys.length - 1] = key;
+          activityByKey.set(key, entry.activity);
+          activityGroupByKey.set(key, [...group, entry.activity]);
+          continue;
+        }
+        entries.push({ ...entry, id: key });
+        entryKeys.push(key);
         activityByKey.set(key, entry.activity);
         continue;
       }
-      keys.push(key);
+      entries.push({ ...entry, id: key });
+      entryKeys.push(key);
       byId.set(key, entry.message);
+      if (entry.type === 'call') {
+        callStatusByKey.set(key, entry.status);
+        continue;
+      }
+      keys.push(key);
     }
   }
 
-  return { entries, entryKeys, keys, byId, activityByKey };
+  return {
+    entries,
+    entryKeys,
+    keys,
+    byId,
+    callStatusByKey,
+    activityByKey,
+    activityGroupByKey,
+  };
 }
 
 /** A reactive index over a timeline query's cached pages. */
 export function createMessageIndex(
-  data: Accessor<MessageTimelineData | undefined>
+  data: Accessor<MessageTimelineData | undefined>,
+  mergeActivity?: ActivityMerge
 ) {
   const [messageIndex, setMessageIndex] = createStore(
-    buildMessageIndex(data()?.pages)
+    buildMessageIndex(data()?.pages, mergeActivity)
   );
 
   createEffect(
@@ -792,7 +852,9 @@ export function createMessageIndex(
       if (!data()) {
         return;
       }
-      setMessageIndex(reconcile(buildMessageIndex(data()?.pages)));
+      setMessageIndex(
+        reconcile(buildMessageIndex(data()?.pages, mergeActivity))
+      );
     })
   );
 

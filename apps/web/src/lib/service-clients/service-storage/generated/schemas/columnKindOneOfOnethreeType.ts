@@ -10,5 +10,5 @@ export type ColumnKindOneOfOnethreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnKindOneOfOnethreeType = {
-  select_number: 'select_number',
+  select: 'select',
 } as const;

@@ -5,6 +5,7 @@ import {
 } from '@core/component/ShareComposeLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { ShareCard } from '@core/component/TopBar/ShareDialogFrame';
 import {
   ShareDrawerAction,
   ShareDrawerHeader,
@@ -12,8 +13,8 @@ import {
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import { Button, Dialog, Hotkey, Panel } from '@ui';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import { Button, Dialog, Hotkey } from '@ui';
 import { type JSX, onMount, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ShareNotices, ShareReport } from '../components/share-status';
@@ -174,81 +175,72 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
         </>
       }
     >
-      <Panel
-        depth={2}
-        hideBorder
-        class="elevated-surface rounded-[24px] bg-dialog"
-      >
-        <Panel.Header class="px-4">
+      <ShareCard
+        header={
           <Dialog.Title class="min-w-0 truncate text-sm font-medium">
             {title()}
           </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body>
-          <div ref={attachHotkeys}>
-            <div class="border-b border-edge-muted px-4 py-2">
-              {props.selection}
-            </div>
-            <ShareComposeLayout
-              recipients={props.recipientField}
-              access={
-                <Show when={props.form.level()}>
-                  {(level) => (
-                    <>
-                      <Show when={props.form.recipients().length > 0}>
-                        <span class="text-sm text-ink-extra-muted">can</span>
-                      </Show>
-                      <ShareOptions
-                        allowedAccessLevels={level().options}
-                        permissions={level().value}
-                        setPermissions={setLevel}
-                        label="Permission"
-                        hideNoAccess
-                        noBorder
-                        disabled={props.form.locked()}
-                      />
-                    </>
-                  )}
-                </Show>
-              }
-              message={props.messageField}
-              focusMessage={props.focusMessage}
-              status={status()}
-              group={groupToggle()}
-              actions={
-                <Show
-                  when={!settled()}
-                  fallback={
-                    <Button variant="strong" depth={3} onClick={props.onFinish}>
-                      Done
-                      <Hotkey shortcut="cmd+enter" theme="current" />
-                    </Button>
-                  }
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="text-ink-extra-muted"
-                    onClick={dismiss}
-                  >
-                    {report() ? 'Close' : 'Cancel'}
-                  </Button>
-                  <Button
-                    variant="strong"
-                    depth={3}
-                    disabled={!canShare()}
-                    onClick={() => fireAndForget(share(), 'bulk-share')}
-                  >
-                    <PaperPlaneTilt class="size-4" />
-                    {report() ? 'Retry' : 'Share'}
+        }
+      >
+        <div ref={attachHotkeys}>
+          <div class="border-b border-edge-muted px-4 py-2">
+            {props.selection}
+          </div>
+          <ShareComposeLayout
+            recipients={props.recipientField}
+            access={
+              <Show when={props.form.level()}>
+                {(level) => (
+                  <>
+                    <ShareOptions
+                      allowedAccessLevels={level().options}
+                      permissions={level().value}
+                      setPermissions={setLevel}
+                      label="Permission"
+                      hideNoAccess
+                      noBorder
+                      disabled={props.form.locked()}
+                    />
+                  </>
+                )}
+              </Show>
+            }
+            message={props.messageField}
+            focusMessage={props.focusMessage}
+            status={status()}
+            group={groupToggle()}
+            actions={
+              <Show
+                when={!settled()}
+                fallback={
+                  <Button variant="primary" onClick={props.onFinish}>
+                    Done
                     <Hotkey shortcut="cmd+enter" theme="current" />
                   </Button>
-                </Show>
-              }
-            />
-          </div>
-        </Panel.Body>
-      </Panel>
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="text-ink-extra-muted"
+                  onClick={dismiss}
+                >
+                  {report() ? 'Close' : 'Cancel'}
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!canShare()}
+                  onClick={() => fireAndForget(share(), 'bulk-share')}
+                >
+                  <PaperPlaneTilt class="size-4" />
+                  {report() ? 'Retry' : 'Share'}
+                  <Hotkey shortcut="cmd+enter" theme="current" />
+                </Button>
+              </Show>
+            }
+          />
+        </div>
+      </ShareCard>
     </Show>
   );
 }

@@ -142,6 +142,17 @@ export function handleLegacySplitPath(
     return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
   }
 
+  if (segments.length === 1 && segments[0] === 'calendar') {
+    return [
+      {
+        route: paneRoute({
+          id: CALENDAR_ROUTE_ID,
+          params: { period: getPreferredCalendarPeriodView() },
+        }),
+      },
+    ];
+  }
+
   if (
     context.matchedRouteId &&
     context.matchedRouteId !== 'settings' &&

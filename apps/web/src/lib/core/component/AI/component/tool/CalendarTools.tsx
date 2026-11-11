@@ -1,15 +1,14 @@
 import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
-import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
-import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
-import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
-import CalendarX from '@phosphor-icons/core/regular/calendar-x.svg';
-import VideoCamera from '@phosphor-icons/core/regular/video-camera.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarDots from '@icon/system/regular/calendar-dots.svg';
+import CalendarPlus from '@icon/system/regular/calendar-plus.svg';
+import CalendarX from '@icon/system/regular/calendar-x.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { Tooltip } from '@ui';
 import { format, isSameDay, subDays } from 'date-fns';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { CalendarChatCompose } from './calendar/ChatCompose';
 import {
   openToolCalendarEvent,
   type ToolCalendarEvent,
@@ -57,11 +56,7 @@ const EventDetails = (props: {
   onOpen: () => void;
 }) => (
   <Tool.List>
-    <button
-      type="button"
-      class="block w-full text-left hover:bg-hover"
-      onClick={props.onOpen}
-    >
+    <Tool.ListButton onClick={props.onOpen}>
       <Tool.ListItem icon={<CalendarBlank class="size-4" />}>
         <div class="flex min-w-0 flex-col gap-0.5">
           <span class="truncate text-xs text-ink">{props.event.title}</span>
@@ -90,7 +85,7 @@ const EventDetails = (props: {
           </Show>
         </div>
       </Tool.ListItem>
-    </button>
+    </Tool.ListButton>
     <Show when={props.event.macroCallUrl ?? props.event.conferenceUrl}>
       {(url) => (
         <Tool.ListItem icon={<VideoCamera class="size-4" />}>
@@ -194,12 +189,12 @@ export const createCalendarEventHandler = createToolRenderer({
         }
       >
         <Match when={response() === 'PendingUserExecution'}>
-          <CalendarChatCompose
-            chatId={ctx.chat_id}
-            initialData={ctx.tool.data}
-            messageId={ctx.message_id}
-            streamLocked={ctx.renderContext.isStreaming}
-            toolCallId={ctx.tool.id}
+          <CalendarMutationCard
+            icon={CalendarPlus}
+            label="Create calendar event"
+            renderContext={ctx.renderContext}
+            status="Not created"
+            title={ctx.tool.data.title}
           />
         </Match>
         <Match when={response() === 'Rejected'}>

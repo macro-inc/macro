@@ -143,6 +143,8 @@ function invalidate(id = SESSION) {
   for (const listener of updates.listeners) listener({ agentSessionId: id });
 }
 
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@app/lib/analytics', () => ({ analytics }));
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
@@ -307,6 +309,55 @@ describe('AgentSession', () => {
     // Same id back: nothing to reconcile.
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
     expect(events).toEqual([[speculated]]);
+    live.release();
+  });
+
+  it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
+    harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'stop' });
+    await live.issue({ type: 'prompt', prompt: 'hi' });
+    harness.control.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+    await live.issue({ type: 'prompt', prompt: 'refused' });
+    await settle();
+
+    expect(analytics.track.mock.calls).toEqual([
+      [
+        'ai_message_sent',
+        {
+          surface: 'agent',
+          agentSessionId: SESSION,
+          agentId: 'bot-id',
+          newSession: false,
+          submitSurface: 'agent_session',
+          queued: false,
+          attachmentCount: 0,
+        },
+      ],
+    ]);
+    live.release();
+  });
+
+  it('reports the files an accepted prompt carries on its AI message', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({
+      type: 'prompt',
+      prompt: 'see these',
+      attachments: [
+        { uri: 'https://files.test/a', name: 'a.pdf' },
+        { uri: 'https://files.test/b', name: 'b.png' },
+      ],
+    });
+    await settle();
+
+    expect(analytics.track).toHaveBeenCalledExactlyOnceWith(
+      'ai_message_sent',
+      expect.objectContaining({ surface: 'agent', attachmentCount: 2 })
+    );
     live.release();
   });
 
@@ -662,6 +713,40 @@ describe('AgentSession', () => {
       kind: 'snapshot',
       rows: [row(1), row(2)],
     });
+    live.release();
+  });
+
+  it('refreshes on request and resolves once the refetched log is folded', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const refetch = deferred<LogSnapshot>();
+    logSource.fetched.mockReturnValueOnce(refetch.promise);
+    const done = vi.fn();
+    const refreshed = live.refresh().then(done);
+    // A second request while the first is out rides the same run.
+    const joined = live.refresh().then(done);
+    await settle();
+    expect(done).not.toHaveBeenCalled();
+    logSource.fetched.mockResolvedValueOnce(logOf([row(1), row(2), row(3)]));
+    refetch.resolve(logOf([row(1), row(2)]));
+    await Promise.all([refreshed, joined]);
+    expect(done).toHaveBeenCalledTimes(2);
+    expect(inputs().at(-1)).toEqual({
+      kind: 'snapshot',
+      rows: [row(1), row(2), row(3)],
+    });
+    live.release();
+  });
+
+  it('resolves a refresh whose fetch fails, leaving the fold as it was', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const before = inputs();
+    logSource.fetched.mockRejectedValueOnce(
+      new logSource.Unavailable(SESSION, 'failed')
+    );
+    await live.refresh();
+    expect(inputs()).toEqual(before);
     live.release();
   });
 
@@ -1106,6 +1191,33 @@ describe('AgentSession', () => {
       live.release();
     });
 
+    it('reports a second open of a loaded session as reused, fetching nothing', async () => {
+      const first = AgentSession.acquire(SESSION);
+      await first.load();
+      const second = AgentSession.acquire(SESSION);
+      await second.load();
+
+      expect(logSource.watch).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledOnce();
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded', 'reused']);
+      second.release();
+      first.release();
+    });
+
+    it('does not trace a hold as an open', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const held = AgentSession.acquire(SESSION, 'hold');
+
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded']);
+      held.release();
+      live.release();
+    });
+
     it('says why a load failed', async () => {
       harness.get.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
       const live = AgentSession.acquire(SESSION);
@@ -1152,6 +1264,7 @@ describe('AgentSession', () => {
       live.rendered('fetched', [
         {
           agentSessionId: SESSION,
+          key: '0:user',
           turn: 0,
           author: { kind: 'user', userId: null },
           requestId: null,
@@ -1164,6 +1277,7 @@ describe('AgentSession', () => {
         },
         {
           agentSessionId: SESSION,
+          key: '0:agent',
           turn: 0,
           author: { kind: 'agent' },
           requestId: null,
@@ -1295,6 +1409,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:user',
             turn: 1,
             author: { kind: 'user', userId: 'macro|wolf@macro.com' },
             requestId: actionId,
@@ -1310,6 +1425,7 @@ describe('AgentSession', () => {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,
@@ -1361,6 +1477,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,

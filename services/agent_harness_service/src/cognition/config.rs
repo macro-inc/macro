@@ -64,6 +64,13 @@ maybe_env_vars!(
     /// unauthenticated because Pipedream is the caller. When unset, the
     /// webhook route is not mounted.
     pub struct PipedreamWebhookSecret;
+    /// PostHog project token. When unset, integration analytics are not sent.
+    pub struct PosthogApiKey;
+    /// PostHog ingestion origin. Falls back to the US origin when unset.
+    pub struct PosthogHost;
+    /// Macro's customer key for the Macro Connect API. When unset, Connect
+    /// is off and every connection goes through Pipedream.
+    pub struct ConnectCustomerKey;
 );
 
 /// The configuration parameters for the application.
@@ -78,8 +85,8 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Optional TypeSafe credential for named yes/no decisions. Without it,
-    /// the decisions endpoint remains available but responds with 503.
+    /// Optional TypeSafe credential for named decisions.
+    /// Without it, these endpoints respond with 503.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
@@ -109,8 +116,8 @@ pub struct Config {
     /// document storage service auth key
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
-    /// authentication service secret key (for soup service)
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// Redis host for stream service
     pub redis_host: RedisHost,
     /// The S3 bucket for DOCX document uploads
@@ -144,6 +151,13 @@ pub struct Config {
     pub pipedream_webhook_uri: PipedreamWebhookUri,
     /// Shared secret guarding the public Pipedream webhook route.
     pub pipedream_webhook_secret: PipedreamWebhookSecret,
+    /// PostHog project token for integration connect/disconnect analytics.
+    pub posthog_api_key: PosthogApiKey,
+    /// PostHog ingestion origin for integration analytics.
+    pub posthog_host: PosthogHost,
+    /// Customer key for Macro Connect, which serves the apps it has in its
+    /// catalog to users in the `macro-connect` rollout.
+    pub connect_customer_key: ConnectCustomerKey,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -213,8 +227,8 @@ impl Config {
             sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
                 "SYNC_SERVICE_AUTH_KEY",
             )),
-            authentication_service_secret_key: AuthenticationServiceSecretKey::Comptime(
-                "AUTHENTICATION_SERVICE_SECRET_KEY",
+            authentication_service_secret_key: LocalOrRemoteSecret::Local(
+                AuthenticationServiceSecretKey::Comptime("AUTHENTICATION_SERVICE_SECRET_KEY"),
             ),
             redis_host: RedisHost::Comptime("REDIS_HOST"),
             docx_document_upload_bucket: DocxDocumentUploadBucket::Comptime(
@@ -245,6 +259,9 @@ impl Config {
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
             pipedream_webhook_uri: PipedreamWebhookUri::Unset,
             pipedream_webhook_secret: PipedreamWebhookSecret::Unset,
+            posthog_api_key: PosthogApiKey::Unset,
+            posthog_host: PosthogHost::Unset,
+            connect_customer_key: ConnectCustomerKey::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

@@ -1,5 +1,6 @@
 import { analytics } from './utilAnalytic';
-import { buildAuthServiceUrl } from './utilBaseUrl';
+import { buildAuthServiceUrl, capturedAttribution } from './utilBaseUrl';
+import { normalizeAnalyticsEmail } from './utilMobileCaptureIdentity';
 
 /**
  * Mobile-web email capture, served by the site itself.
@@ -26,13 +27,25 @@ export const MOBILE_SIGNUP_SENT_PATH = '/mobile-signup-sent';
  */
 export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
 
+export type MobileStorePlatform = 'ios' | 'android';
+
 /**
- * True on iPhone, iPod, and iPad — the only phones with a Macro app. iPadOS
- * Safari reports itself as a Mac, so a touch-capable "Macintosh" counts too.
+ * The app store a visitor's device installs Macro from, or undefined on a
+ * computer. iPadOS Safari reports itself as a Mac, so a touch-capable
+ * "Macintosh" counts as iOS.
  */
-export const isIOS = (userAgent: string, maxTouchPoints: number): boolean =>
-  /iPhone|iPad|iPod/.test(userAgent) ||
-  (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+export const mobileStorePlatform = (
+  userAgent: string,
+  maxTouchPoints: number
+): MobileStorePlatform | undefined => {
+  if (
+    /iPhone|iPad|iPod/.test(userAgent) ||
+    (/Macintosh/.test(userAgent) && maxTouchPoints > 1)
+  )
+    return 'ios';
+  if (/Android/.test(userAgent)) return 'android';
+  return undefined;
+};
 
 // Survives the navigation from the capture step to the confirmation step (and a
 // refresh of it), which is where the conversions fire.
@@ -80,34 +93,60 @@ export const isLikelyEmail = (value: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 /** Must match `SendMobileWelcomeEmailError::PersonalEmail` in the auth service. */
-const WORK_EMAIL_REQUIRED = 'Please use your work email';
+const WORK_EMAIL_REQUIRED = 'Please use your work email or Gmail';
 
 export type MobileSignupResult = { ok: true } | { ok: false; message: string };
 
 /**
- * Sends the "open Macro on your computer" email to `email` via the auth
- * service's public `/mobile-welcome-email` endpoint, and identifies the
- * visitor to the analytics providers so the lead is attributable.
+ * Identifies the visitor as this email, then records `mobile_signup_submitted`
+ * on that person. Identification has to happen first: an event captured on the
+ * anonymous id does not reliably move onto the email person afterward.
  *
- * Resolves with a visitor-facing message instead of throwing — every failure
- * mode here is something the person can act on (fix the address, wait, retry).
+ * Returns the normalized email, or null when the address should not be sent.
+ */
+export const recordMobileSignupSubmitted = (
+  email: string,
+  input: { buttonName: string; pageLocation: string }
+): string | null => {
+  const normalized = normalizeAnalyticsEmail(email);
+  if (!isLikelyEmail(normalized)) return null;
+  analytics.identifyMobileCapture(normalized);
+  analytics.track('mobile_signup_submitted', {
+    page_location: input.pageLocation,
+    button_name: input.buttonName,
+  });
+  return normalized;
+};
+
+/**
+ * Sends the "open Macro on your computer" email to `email` via the auth
+ * service's public `/mobile-welcome-email` endpoint.
+ *
+ * The caller identifies the visitor and records `mobile_signup_submitted`
+ * first (`recordMobileSignupSubmitted`), so this request does not touch
+ * analytics. Resolves with a visitor-facing message instead of throwing —
+ * every failure mode here is something the person can act on (fix the
+ * address, wait, retry).
  */
 export const submitMobileSignup = async (
   email: string
 ): Promise<MobileSignupResult> => {
-  const trimmed = email.trim();
-  if (!isLikelyEmail(trimmed)) {
+  const normalized = normalizeAnalyticsEmail(email);
+  if (!isLikelyEmail(normalized)) {
     return { ok: false, message: 'Enter a valid email address.' };
   }
 
-  analytics.identifyEmail(trimmed);
-
   let response: Response;
   try {
+    const attribution = capturedAttribution();
     response = await fetch(buildAuthServiceUrl('/mobile-welcome-email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: trimmed }),
+      body: JSON.stringify(
+        Object.keys(attribution).length > 0
+          ? { email: normalized, attribution }
+          : { email: normalized }
+      ),
     });
   } catch {
     return { ok: false, message: 'Network error. Please try again.' };
@@ -116,7 +155,7 @@ export const submitMobileSignup = async (
   // 200 covers both "sent" and `sent: false` (we already emailed this address).
   // The confirmation page is accurate either way, so both advance.
   if (response.ok) {
-    writeSession(SUBMITTED_EMAIL_KEY, trimmed);
+    writeSession(SUBMITTED_EMAIL_KEY, normalized);
     return { ok: true };
   }
 

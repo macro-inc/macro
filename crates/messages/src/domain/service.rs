@@ -87,41 +87,50 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read the same bounded message timeline for either parent.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        self.repo.timeline(&parent, query).await
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            self.repo.timeline(&parent, query).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Read a parent's messages and its timeline activity as one ordered page.
     /// Parents without a timeline activity source return their messages only.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline_entries(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessageTimelinePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        let Some(source) = timeline_activity(&parent) else {
-            return self.repo.timeline(&parent, query).await.map(Into::into);
-        };
-        // These filters select a subset of roots, and activity has no matching
-        // filter, so the merged window would be wrong. Including deleted threads
-        // only adds tombstones on the same keyset, so it combines with activity.
-        if !query.ids.is_empty()
-            || query.anchored.is_some()
-            || query.activity_after.is_some()
-            || query.activity_before.is_some()
-        {
-            return Err(MessageError::Invalid(
-                "activity timelines cannot be combined with message filters",
-            ));
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            let Some(source) = timeline_activity(&parent) else {
+                return self.repo.timeline(&parent, query).await.map(Into::into);
+            };
+            // These filters select a subset of roots, and activity has no matching
+            // filter, so the merged window would be wrong. Including deleted threads
+            // only adds tombstones on the same keyset, so it combines with activity.
+            if !query.ids.is_empty()
+                || query.anchored.is_some()
+                || query.activity_after.is_some()
+                || query.activity_before.is_some()
+            {
+                return Err(MessageError::Invalid(
+                    "activity timelines cannot be combined with message filters",
+                ));
+            }
+            let page = self.activity_timeline(&parent, source, query).await?;
+            self.with_call_entries(page).await
         }
-        self.activity_timeline(&parent, source, query).await
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Validate a selection and resolve the parent it reads.
@@ -157,34 +166,42 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read a message and its canonical root for navigation.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get(
         &self,
         access: EntityAccessReceipt<MessageView>,
         id: Uuid,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, true).await
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            self.active_message(&parent, id, true).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Open a specific discussion, including roots outside the current timeline page.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get_thread(
         &self,
         access: EntityAccessReceipt<MessageView>,
         root_id: Uuid,
     ) -> Result<MessageThread, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        let state = self.active_thread(&parent, root_id).await?;
-        let root = self.active_message(&parent, root_id, true).await?;
-        let replies = self.repo.replies(&parent, root_id).await?;
-        Ok(MessageThread {
-            state,
-            root,
-            replies,
-        })
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            let state = self.active_thread(&parent, root_id).await?;
+            let root = self.active_message(&parent, root_id, true).await?;
+            let replies = self.repo.replies(&parent, root_id).await?;
+            Ok(MessageThread {
+                state,
+                root,
+                replies,
+            })
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Load authorized history preceding a live prompt in this conversation.
@@ -352,7 +369,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         {
             return Err(MessageError::Invalid(error));
         }
-        self.validate_references(&access, &input.mentions, &input.attachments)
+        input.mentions = self
+            .validate_references(&access, input.mentions, &input.attachments)
             .await?;
         let canonical_root_id = match parent {
             MessageParent::Call(call_id) => {
@@ -361,11 +379,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                         "call messages belong to the call thread",
                     ));
                 }
+
+                // A stale client must not write to a chat nobody will see.
+                if self.repo.call_thread_facts(call_id).await?.is_some() {
+                    return Err(MessageError::Invalid(
+                        "this call's discussion is in its channel",
+                    ));
+                }
+
                 Some(call_id)
             }
             _ => {
                 if let Some(root) = input.thread_id {
-                    self.active_thread(&parent, root).await?;
+                    self.active_thread_or_call_root(&parent, root).await?;
                 }
                 None
             }
@@ -380,13 +406,27 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 parent: parent.clone(),
                 actor: actor.clone(),
                 guest_name: None,
-                triggered_by: access
-                    .acting_user_id()
-                    .filter(|_| {
-                        actor.as_bot().is_some()
-                            && input.attribution == MessageAttribution::ActingUser
-                    })
-                    .map(ToString::to_string),
+                kind: MessageKind::Message,
+                triggered_by: match &input.attribution {
+                    MessageAttribution::AccountManager { manager_user_id } => {
+                        Some(manager_user_id.clone())
+                    }
+                    MessageAttribution::ActingUser
+                    | MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::Unprompted => access
+                        .acting_user_id()
+                        .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
+                        .map(ToString::to_string),
+                },
+                triggered_via: match &input.attribution {
+                    MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
+                        Some(client.clone())
+                    }
+                    MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::ActingUser
+                    | MessageAttribution::AccountManager { .. }
+                    | MessageAttribution::Unprompted => None,
+                },
                 input,
             })
             .await?;
@@ -398,6 +438,72 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 notification_policy,
                 message: message.clone(),
                 mentions,
+            },
+        })
+        .await;
+        Ok(message)
+    }
+
+    /// Create a channel call's thread root once, however often it is asked for.
+    ///
+    /// Takes no receipt because nothing here is the caller's to choose: the
+    /// channel, sender and text all come from the call's own record, which only
+    /// the call domain writes after checking channel access.
+    #[tracing::instrument(err, skip(self), name = "call.discussion.create_root")]
+    pub async fn ensure_call_root(&self, call_id: Uuid) -> Result<Message, MessageError> {
+        let facts = self
+            .repo
+            .call_thread_facts(call_id)
+            .await?
+            .ok_or(MessageError::NotFound)?;
+        let parent = MessageParent::Channel(facts.channel_id);
+        if let Some(root) = self.repo.get(&parent, call_id).await? {
+            return Ok(root);
+        }
+
+        let actor = ChannelSender::try_from(facts.created_by)
+            .map_err(|_| MessageError::Invalid("the call has an invalid creator"))?;
+        let created = self
+            .repo
+            .create(CreateMessage {
+                canonical_root_id: None,
+                parent: parent.clone(),
+                actor: actor.clone(),
+                guest_name: None,
+                kind: MessageKind::CallRoot,
+                triggered_by: None,
+                triggered_via: None,
+                input: PostMessage {
+                    attribution: MessageAttribution::default(),
+                    notification_policy: PostMessageNotificationPolicy::Silent,
+                    id: Some(call_id),
+                    content: CALL_ROOT_TEXT.to_owned(),
+                    thread_id: None,
+                    anchor: None,
+                    mentions: vec![],
+                    attachments: vec![],
+                    nonce: None,
+                },
+            })
+            .await;
+        let message = match created {
+            // The other request created it and delivers it.
+            Err(MessageError::Conflict) => {
+                return self
+                    .repo
+                    .get(&parent, call_id)
+                    .await?
+                    .ok_or(MessageError::Conflict);
+            }
+            result => result?,
+        };
+
+        self.publish(MessageEvent {
+            parent,
+            actor: actor.as_ref().to_owned(),
+            nonce: None,
+            change: MessageChange::CallRootPosted {
+                message: message.clone(),
             },
         })
         .await;
@@ -416,6 +522,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         if current.sender_id != actor
             && !(matches!(parent, MessageParent::Channel(_))
                 && can_moderate(access.entity_permission()))
@@ -467,12 +574,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "a message needs content or an attachment",
             ));
         }
-        self.validate_references(
-            &access,
-            &input.mentions,
-            input.attachments.as_deref().unwrap_or_default(),
-        )
-        .await?;
+        input.mentions = self
+            .validate_references(
+                &access,
+                input.mentions,
+                input.attachments.as_deref().unwrap_or_default(),
+            )
+            .await?;
         // Reconciliation may repeat a bot's final reply after a process died
         // between patching it and recording success. Identical content must
         // not produce another edit event or completion notification.
@@ -514,6 +622,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         // A comment's replies and its place in the document belong to the comment,
         // not to its first message, so the root carries the whole discussion with
         // it. Channel roots are one message in a conversation that continues
@@ -558,7 +667,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, false).await?;
+        let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
@@ -738,12 +848,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(resolved)
     }
 
+    /// Rejects malformed references and attachments the sender cannot view, and
+    /// returns the mentions to record. A mention of something the sender cannot
+    /// view stays in the content but is not recorded, so it shares, notifies,
+    /// and triggers nothing.
     async fn validate_references(
         &self,
         access: &EntityAccessReceipt<MessageWrite>,
-        mentions: &[SimpleMention],
+        mentions: Vec<SimpleMention>,
         attachments: &[NewAttachment],
-    ) -> Result<(), MessageError> {
+    ) -> Result<Vec<SimpleMention>, MessageError> {
         if attachments.len() > 10 || mentions.len() > 100 {
             return Err(MessageError::Invalid("too many message references"));
         }
@@ -754,7 +868,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
         }
         let mut checked = std::collections::HashSet::new();
-        for (kind, id, mention) in mentions
+        let mut hidden = std::collections::HashSet::new();
+        for (raw_kind, id, mention) in mentions
             .iter()
             .map(|m| (m.entity_type.as_str(), m.entity_id.as_str(), true))
             .chain(
@@ -763,13 +878,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .map(|a| (a.entity_type.as_str(), a.entity_id.as_str(), false)),
             )
         {
-            if !checked.insert((kind, id, mention)) {
+            if !checked.insert((raw_kind, id, mention)) {
                 continue;
             }
             // Editors also emit display-only chips (dates, contacts, colors) as
             // mentions. They name nothing that can be authorized, so they are
             // stored as written, exactly as the channel writer did before.
-            let Some(kind) = MessageReferenceKind::parse(kind) else {
+            let Some(kind) = MessageReferenceKind::parse(raw_kind) else {
                 continue;
             };
             let entity_type = match kind {
@@ -819,6 +934,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 MessageReferenceKind::Project => EntityType::Project,
                 MessageReferenceKind::CrmCompany => EntityType::CrmCompany,
                 MessageReferenceKind::CrmContact => EntityType::CrmContact,
+                MessageReferenceKind::ExternalChat => EntityType::ExternalChat,
                 _ => return Err(MessageError::Invalid("unsupported message reference")),
             };
             if !self
@@ -826,10 +942,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .can_view(access.auth(), entity_type, id)
                 .await?
             {
-                return Err(MessageError::Forbidden);
+                if !mention {
+                    return Err(MessageError::Forbidden);
+                }
+                hidden.insert((raw_kind.to_owned(), id.to_owned()));
             }
         }
-        Ok(())
+        Ok(mentions
+            .into_iter()
+            .filter(|m| !hidden.contains(&(m.entity_type.clone(), m.entity_id.clone())))
+            .collect())
     }
 
     async fn ensure_parent(&self, parent: &MessageParent) -> Result<(), MessageError> {
@@ -853,6 +975,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::NotFound);
         }
         Ok(thread)
+    }
+
+    /// A reply's root, creating a call's root first if posting it failed when
+    /// the call started.
+    async fn active_thread_or_call_root(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<ThreadState, MessageError> {
+        match self.active_thread(parent, root).await {
+            Err(MessageError::NotFound) => {
+                let facts = self.repo.call_thread_facts(root).await?;
+                let in_this_channel =
+                    facts.is_some_and(|facts| MessageParent::Channel(facts.channel_id) == *parent);
+                if !in_this_channel {
+                    return Err(MessageError::NotFound);
+                }
+
+                self.ensure_call_root(root).await?;
+                self.active_thread(parent, root).await
+            }
+            result => result,
+        }
     }
 
     async fn active_message(
@@ -907,6 +1052,21 @@ fn can_moderate(permission: &EntityPermission) -> bool {
     permission.satisfies::<OwnerAccessLevel>() || permission.satisfies::<AdminParticipantRole>()
 }
 
+/// Logs a failed read in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps refusals at
+/// INFO: clients and agents read messages, threads, and parents that were
+/// deleted under them. Repository failures stay at ERROR.
+fn log_read_error(error: &MessageError) {
+    match error {
+        MessageError::Repository(_) => tracing::error!(error = %error),
+        MessageError::NotFound
+        | MessageError::Forbidden
+        | MessageError::Invalid(_)
+        | MessageError::Conflict => tracing::info!(error = %error),
+    }
+}
+
 fn parent_from_receipt<P: RequiredPermission>(
     access: &EntityAccessReceipt<P>,
 ) -> Result<MessageParent, MessageError> {
@@ -922,6 +1082,15 @@ fn parent_from_receipt<P: RequiredPermission>(
     };
     MessageParent::parse(kind, &entity.entity_id)
         .map_err(|_| MessageError::Invalid("invalid message parent"))
+}
+
+/// A call's root stands for the call, so nobody can change it, its author
+/// included. People talk about the call in its thread.
+fn reject_call_root(message: &Message) -> Result<(), MessageError> {
+    if message.kind == MessageKind::CallRoot {
+        return Err(MessageError::Forbidden);
+    }
+    Ok(())
 }
 
 fn actor_from_receipt<P: RequiredPermission>(
@@ -991,6 +1160,10 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
 
 /// Longest page or layer id a design anchor may carry. Figma ids are short
 /// (`12:34`, or a `;`-joined path for a layer inside nested instances).
+/// What a call's root says to anything that reads it as a plain message: search
+/// results, notification previews, agents and the channel list.
+const CALL_ROOT_TEXT: &str = "started a call";
+
 const FIG_ANCHOR_ID_LIMIT: usize = 512;
 
 /// The document file type an anchor kind belongs to, with the error for any

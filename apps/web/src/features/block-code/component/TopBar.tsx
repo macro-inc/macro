@@ -13,8 +13,10 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName, useBlockId } from '@core/block';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
@@ -26,7 +28,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download-simple.svg';
+import Download from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
@@ -90,8 +92,12 @@ export const TopBar: Component<{
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
+        />
       ),
     },
     {

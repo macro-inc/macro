@@ -1,5 +1,6 @@
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
+import { tryMacroId } from '@core/user/macroId';
 import { Popover } from '@kobalte/core/popover';
 import { Button, cn, HoverCard } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -8,6 +9,8 @@ type ReactionChipProps = {
   emoji: string;
   count: number;
   users: string[];
+  /** Names of reactors outside Macro, by their id in `users`. */
+  names?: Record<string, string>;
   currentUserId: string | undefined;
   selected?: boolean;
   interactive?: boolean;
@@ -18,21 +21,34 @@ type ReactionChipProps = {
  * Format a list of user display names with Oxford comma style.
  * Current user ("You") is always listed first regardless of input order.
  * e.g. "You", "You and Alice", "You, Alice, and Bob"
+ * Reactors outside Macro go by their entry in `externalNames`; without one they
+ * are counted as other people.
  */
 export function formatReactorNames(
   userIds: string[],
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  externalNames: Record<string, string> = {}
 ): string {
   if (userIds.length === 0) return '';
 
+  const isNamed = (id: string) =>
+    id === currentUserId ||
+    externalNames[id] !== undefined ||
+    tryMacroId(id) !== undefined;
   const ordered = [
     ...userIds.filter((id) => id === currentUserId),
-    ...userIds.filter((id) => id !== currentUserId),
+    ...userIds.filter((id) => id !== currentUserId && isNamed(id)),
   ];
+  const others = userIds.filter((id) => !isNamed(id)).length;
 
-  const names = ordered.map((id) =>
-    id === currentUserId ? 'You' : idToDisplayName(id)
-  );
+  const names = [
+    ...ordered.map((id) =>
+      id === currentUserId ? 'You' : (externalNames[id] ?? idToDisplayName(id))
+    ),
+    ...(others === 0
+      ? []
+      : [others === 1 ? '1 other person' : `${others} other people`]),
+  ];
 
   if (names.length === 1) return names[0]!;
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -44,13 +60,14 @@ export function formatReactorNames(
 
 function ReactionTooltipContent(props: {
   users: string[];
+  names?: Record<string, string>;
   currentUserId: string | undefined;
   emoji: string;
 }): JSX.Element {
   return (
     <span>
-      {formatReactorNames(props.users, props.currentUserId)} reacted with{' '}
-      <span class="text-base">{props.emoji}</span>
+      {formatReactorNames(props.users, props.currentUserId, props.names)}{' '}
+      reacted with <span class="text-base">{props.emoji}</span>
     </span>
   );
 }
@@ -70,6 +87,7 @@ export function ReactionChip(props: ReactionChipProps) {
           content={
             <ReactionTooltipContent
               users={props.users}
+              names={props.names}
               currentUserId={props.currentUserId}
               emoji={props.emoji}
             />
@@ -80,7 +98,6 @@ export function ReactionChip(props: ReactionChipProps) {
             data-emoji={props.emoji}
             data-user-reacted={props.selected ? '' : undefined}
             aria-pressed={!!props.selected}
-            noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
                 onLongPress: () => {
@@ -90,9 +107,12 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant={props.selected ? 'accent' : 'outline'}
+            variant="secondary"
+            appearance={props.selected ? 'bare' : undefined}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1',
+              props.selected &&
+                'border-border-secondary bg-accent-bg text-accent aria-pressed:overlay-active not-touch:not-data-disabled:hover:overlay-accent-bg',
               !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}
@@ -112,6 +132,7 @@ export function ReactionChip(props: ReactionChipProps) {
         <Popover.Content class="menu-surface z-modal p-1.5 text-ink-muted text-xs">
           <ReactionTooltipContent
             users={props.users}
+            names={props.names}
             currentUserId={props.currentUserId}
             emoji={props.emoji}
           />

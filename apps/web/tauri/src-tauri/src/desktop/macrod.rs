@@ -8,14 +8,21 @@
 //! to the webview as a `macrod-status` event, and exposes commands to detect
 //! installed agents, start or stop the daemon, and read the snapshot.
 //!
-//! GUI apps on macOS inherit launchd's minimal `PATH`, where user-installed
-//! CLIs (`claude`, `codex`, `npm`) are invisible. Every macrod invocation runs
-//! with the user's login-shell `PATH` so detection matches what a terminal
-//! would see.
+//! Once started, the daemon is kept up: an unexpected exit (a crash, a lost
+//! connection, an expired pairing) restarts it with backoff until the user
+//! stops it, and app launch resumes any configured daemon the user has not
+//! stopped.
+//!
+//! GUI apps on macOS inherit launchd's minimal environment, where
+//! user-installed CLIs (`claude`, `codex`, `npm`) and the credentials and
+//! config their shells export are invisible. Every macrod invocation runs with
+//! the user's interactive login-shell environment, so detection and agent
+//! authentication match what a terminal would see.
 
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -23,6 +30,18 @@ use tokio::io::AsyncBufReadExt as _;
 
 /// The webview event carrying each [`MacrodStatus`] change.
 const STATUS_EVENT: &str = "macrod-status";
+
+/// The first restart delay after an unexpected exit; doubles per consecutive
+/// failure up to [`RESTART_MAX_DELAY`].
+const RESTART_BASE_DELAY: Duration = Duration::from_secs(1);
+const RESTART_MAX_DELAY: Duration = Duration::from_secs(60);
+
+/// How long to wait before restart attempt `attempt` (1-based).
+fn restart_delay(attempt: u32) -> Duration {
+    RESTART_BASE_DELAY
+        .saturating_mul(1 << attempt.saturating_sub(1).min(6))
+        .min(RESTART_MAX_DELAY)
+}
 
 /// Where the daemon lifecycle currently stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -116,6 +135,11 @@ struct Inner {
     status: MacrodStatus,
     /// Increments per start so a stale reader task cannot clobber a newer run.
     generation: u64,
+    /// Whether the daemon should be up: set by a start, cleared by a stop.
+    /// An exit while this is set is unexpected and triggers a restart.
+    wanted: bool,
+    /// Consecutive restarts without reaching `running`, for backoff.
+    restarts: u32,
 }
 
 fn emit_status(app: &AppHandle, status: &MacrodStatus) {
@@ -124,37 +148,125 @@ fn emit_status(app: &AppHandle, status: &MacrodStatus) {
     }
 }
 
-/// The user's login-shell `PATH`, resolved once. `None` when it cannot be
-/// read (non-unix, odd shells); callers fall back to the process `PATH`.
+/// Brackets the shell's `env` output, so rc-file banners are never parsed.
+#[cfg(any(unix, test))]
+const ENV_START: &str = "__MACRO_SHELL_ENV_START__";
+#[cfg(any(unix, test))]
+const ENV_END: &str = "__MACRO_SHELL_ENV_END__";
+
+/// How long an interactive login shell may take to print its environment.
+#[cfg(unix)]
+const SHELL_ENV_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Shell bookkeeping that describes the probe shell, not the user's setup.
+const SHELL_ONLY_VARS: [&str; 5] = ["_", "SHLVL", "PWD", "OLDPWD", "PATH"];
+
+/// The environment of the user's interactive login shell, resolved once:
+/// what a terminal sees, including variables exported from `.zshrc` or
+/// `.bashrc` that a non-interactive login shell skips. Agents read their
+/// credentials and config from there (`CLAUDE_CODE_OAUTH_TOKEN`,
+/// `CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY`, ...); without them Claude Code
+/// falls back to stale stored credentials and fails to authenticate. Empty
+/// when it cannot be read (non-unix, odd shells, a hung rc file).
+fn login_shell_env() -> &'static [(String, String)] {
+    static RESOLVED: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    RESOLVED.get_or_init(|| {
+        #[cfg(unix)]
+        {
+            read_login_shell_env().unwrap_or_default()
+        }
+        #[cfg(not(unix))]
+        {
+            Vec::new()
+        }
+    })
+}
+
+#[cfg(unix)]
+fn read_login_shell_env() -> Option<Vec<(String, String)>> {
+    use std::io::Read as _;
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
+    // `env` output is shell-agnostic (fish would join "$PATH" with spaces).
+    let script = format!("echo {ENV_START}; env; echo {ENV_END}");
+    let mut child = std::process::Command::new(&shell)
+        .args(["-i", "-l", "-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdout = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        bytes
+    });
+    let deadline = std::time::Instant::now() + SHELL_ENV_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => {
+                tracing::warn!(shell, "login shell environment timed out");
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let bytes = reader.join().ok()?;
+    let vars = parse_shell_env(&String::from_utf8_lossy(&bytes));
+    (!vars.is_empty()).then_some(vars)
+}
+
+/// Parse `env` output between the markers. A line that does not start a
+/// `NAME=` assignment continues the previous value (a multi-line variable).
+#[cfg(any(unix, test))]
+fn parse_shell_env(output: &str) -> Vec<(String, String)> {
+    let Some((_, rest)) = output.split_once(&format!("{ENV_START}\n")) else {
+        return Vec::new();
+    };
+    let Some((body, _)) = rest.rsplit_once(ENV_END) else {
+        return Vec::new();
+    };
+    let mut vars: Vec<(String, String)> = Vec::new();
+    for line in body.lines() {
+        // bash prints exported functions as `BASH_FUNC_name%%=() {`; they
+        // start an entry (so their body lines don't join the previous
+        // variable) that is dropped below.
+        let assignment = line.split_once('=').filter(|(name, _)| {
+            let name = name
+                .strip_prefix("BASH_FUNC_")
+                .and_then(|function| function.strip_suffix("%%"))
+                .unwrap_or(name);
+            !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+        match (assignment, vars.last_mut()) {
+            (Some((name, value)), _) => vars.push((name.to_owned(), value.to_owned())),
+            (None, Some((_, value))) => {
+                value.push('\n');
+                value.push_str(line);
+            }
+            (None, None) => {}
+        }
+    }
+    vars.retain(|(name, _)| !name.starts_with("BASH_FUNC_"));
+    vars
+}
+
+/// The user's login-shell `PATH`, when the shell environment was read.
 fn login_shell_path() -> Option<&'static str> {
-    static RESOLVED: OnceLock<Option<String>> = OnceLock::new();
-    RESOLVED
-        .get_or_init(|| {
-            #[cfg(unix)]
-            {
-                let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
-                // `env` output is shell-agnostic (fish would join "$PATH" with
-                // spaces); take the last PATH= line in case a login banner
-                // happens to contain one.
-                let output = std::process::Command::new(&shell)
-                    .args(["-l", "-c", "env"])
-                    .stdin(Stdio::null())
-                    .output()
-                    .ok()?;
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                stdout
-                    .lines()
-                    .rev()
-                    .find_map(|line| line.strip_prefix("PATH="))
-                    .map(str::to_owned)
-                    .filter(|path| !path.is_empty())
-            }
-            #[cfg(not(unix))]
-            {
-                None
-            }
-        })
-        .as_deref()
+    login_shell_env()
+        .iter()
+        .rev()
+        .find(|(name, _)| name == "PATH")
+        .map(|(_, path)| path.as_str())
+        .filter(|path| !path.is_empty())
 }
 
 /// The `PATH` macrod runs with: login shell first, then this process's own,
@@ -225,6 +337,12 @@ fn macrod_command(app: &AppHandle) -> Result<tokio::process::Command, String> {
     let binary =
         macrod_binary(app).ok_or_else(|| "macrod is not bundled with this build".to_owned())?;
     let mut command = tokio::process::Command::new(binary);
+    command.envs(
+        login_shell_env()
+            .iter()
+            .filter(|(name, _)| !SHELL_ONLY_VARS.contains(&name.as_str()))
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+    );
     command.env("PATH", macrod_path_env());
     if crate::AppEnvironment::current() == crate::AppEnvironment::Development {
         // A config created by this daemon must target the dev deployment,
@@ -300,14 +418,14 @@ pub(crate) async fn macrod_inspect(app: AppHandle) -> Result<serde_json::Value, 
 }
 
 /// Setup choices for a first-time (or re-) configuration. All optional: a
-/// plain restart of an already configured daemon passes none of them.
+/// plain restart of an already configured daemon passes none of them. The
+/// runtime's name, ownership, and permission bypass are set on the web, not
+/// here; fields an older web bundle still sends are ignored.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MacrodStartOptions {
     agent: Option<String>,
     workspace: Option<String>,
-    scope: Option<String>,
-    allow_permission_bypass: Option<bool>,
 }
 
 /// Start (or restart) the supervised daemon and remember to auto-start it on
@@ -318,9 +436,29 @@ pub(crate) async fn macrod_start(
     state: tauri::State<'_, MacrodState>,
     options: MacrodStartOptions,
 ) -> Result<MacrodStatus, String> {
-    stop_child(&app, &state.inner).await;
+    stop_child(&state.inner).await;
+    {
+        let mut inner = state.inner.lock().expect("macrod state lock");
+        inner.wanted = true;
+        inner.restarts = 0;
+    }
+    set_autostart(&app, true);
+    let status =
+        launch(&app, &state.inner, &options, None)?.expect("an unconditional launch always spawns");
+    emit_status(&app, &status);
+    Ok(status)
+}
 
-    let mut command = macrod_command(&app)?;
+/// Spawn `macrod service` and attach its readers. With `resume`, this is a
+/// supervisor restart after that generation exited: it spawns nothing
+/// (returns `None`) when a start or stop has happened since.
+fn launch(
+    app: &AppHandle,
+    state: &Arc<Mutex<Inner>>,
+    options: &MacrodStartOptions,
+    resume: Option<u64>,
+) -> Result<Option<MacrodStatus>, String> {
+    let mut command = macrod_command(app)?;
     command.arg("service");
     if let Some(agent) = &options.agent {
         command.args(["--agent", agent]);
@@ -328,46 +466,26 @@ pub(crate) async fn macrod_start(
     if let Some(workspace) = &options.workspace {
         command.args(["--workspace", workspace]);
     }
-    if let Some(scope) = &options.scope {
-        command.args(["--scope", scope]);
-    }
-    if let Some(allowed) = options.allow_permission_bypass {
-        command.args([
-            "--allow-permission-bypass",
-            if allowed { "true" } else { "false" },
-        ]);
-    }
-    let mut child = command
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+
+    // Spawn under the lock so a concurrent start or stop cannot interleave
+    // with a supervisor restart.
+    let mut inner = state.lock().expect("macrod state lock");
+    if resume.is_some_and(|generation| inner.generation != generation || !inner.wanted) {
+        return Ok(None);
+    }
+    let mut child = command
         .spawn()
         .map_err(|error| format!("could not start macrod: {error}"))?;
-
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| "macrod started without stdout".to_owned())?;
-    let stderr = child.stderr.take();
-
-    let status = {
-        let mut inner = state.inner.lock().expect("macrod state lock");
-        inner.child = Some(child);
-        inner.generation += 1;
-        inner.status = MacrodStatus {
-            phase: MacrodPhase::Starting,
-            ..MacrodStatus::default()
-        };
-        tauri::async_runtime::spawn(read_events(
-            app.clone(),
-            state.inner.clone(),
-            inner.generation,
-            stdout,
-        ));
-        inner.status.clone()
-    };
-    if let Some(stderr) = stderr {
+    if let Some(stderr) = child.stderr.take() {
         tauri::async_runtime::spawn(async move {
             let mut lines = tokio::io::BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -375,9 +493,58 @@ pub(crate) async fn macrod_start(
             }
         });
     }
-    set_autostart(&app, true);
-    emit_status(&app, &status);
-    Ok(status)
+    inner.child = Some(child);
+    inner.generation += 1;
+    inner.status = MacrodStatus {
+        phase: MacrodPhase::Starting,
+        ..MacrodStatus::default()
+    };
+    tauri::async_runtime::spawn(read_events(
+        app.clone(),
+        state.clone(),
+        inner.generation,
+        stdout,
+    ));
+    Ok(Some(inner.status.clone()))
+}
+
+/// Restart the daemon once the backoff for this failure elapses, unless a
+/// start or stop superseded `generation` meanwhile. A spawn failure counts as
+/// another failure and schedules the next attempt.
+fn schedule_restart(app: AppHandle, state: Arc<Mutex<Inner>>, generation: u64) {
+    let attempt = {
+        let mut inner = state.lock().expect("macrod state lock");
+        inner.restarts += 1;
+        inner.restarts
+    };
+    let delay = restart_delay(attempt);
+    tracing::warn!(target: "macrod", attempt, ?delay, "macrod exited unexpectedly; restarting");
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(delay).await;
+        match launch(
+            &app,
+            &state,
+            &MacrodStartOptions::default(),
+            Some(generation),
+        ) {
+            Ok(Some(status)) => emit_status(&app, &status),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(target: "macrod", "macrod restart failed: {error}");
+                let status = {
+                    let mut inner = state.lock().expect("macrod state lock");
+                    if inner.generation != generation || !inner.wanted {
+                        return;
+                    }
+                    inner.status.phase = MacrodPhase::Error;
+                    inner.status.last_error = Some(error);
+                    inner.status.clone()
+                };
+                emit_status(&app, &status);
+                schedule_restart(app, state, generation);
+            }
+        }
+    });
 }
 
 /// Fold the service's stdout into the snapshot until it closes.
@@ -399,24 +566,34 @@ async fn read_events(
                 return;
             }
             inner.status.apply(&event);
+            if inner.status.phase == MacrodPhase::Running {
+                inner.restarts = 0;
+            }
             inner.status.clone()
         };
         emit_status(&app, &status);
     }
     // stdout closed: the daemon exited. Keep an error phase so the user sees
-    // why; otherwise show it as stopped.
-    let status = {
+    // why; otherwise show it as starting again, or stopped when unwanted.
+    let (status, restart) = {
         let mut inner = inner.lock().expect("macrod state lock");
         if inner.generation != generation {
             return;
         }
         inner.child = None;
         if inner.status.phase != MacrodPhase::Error {
-            inner.status.phase = MacrodPhase::Stopped;
+            inner.status.phase = if inner.wanted {
+                MacrodPhase::Starting
+            } else {
+                MacrodPhase::Stopped
+            };
         }
-        inner.status.clone()
+        (inner.status.clone(), inner.wanted)
     };
     emit_status(&app, &status);
+    if restart {
+        schedule_restart(app, inner, generation);
+    }
 }
 
 /// Stop the supervised daemon and stop auto-starting it.
@@ -426,7 +603,8 @@ pub(crate) async fn macrod_stop(
     state: tauri::State<'_, MacrodState>,
 ) -> Result<MacrodStatus, String> {
     set_autostart(&app, false);
-    stop_child(&app, &state.inner).await;
+    state.inner.lock().expect("macrod state lock").wanted = false;
+    stop_child(&state.inner).await;
     let status = {
         let mut inner = state.inner.lock().expect("macrod state lock");
         inner.status = MacrodStatus::default();
@@ -451,6 +629,7 @@ pub(crate) fn macrod_status(state: tauri::State<'_, MacrodState>) -> MacrodStatu
 pub(crate) fn kill_now(state: &MacrodState) {
     let child = {
         let mut inner = state.inner.lock().expect("macrod state lock");
+        inner.wanted = false;
         inner.generation += 1;
         inner.child.take()
     };
@@ -460,7 +639,7 @@ pub(crate) fn kill_now(state: &MacrodState) {
 }
 
 /// Kill the child, invalidating any reader still attached to it.
-async fn stop_child(_app: &AppHandle, inner: &Arc<Mutex<Inner>>) {
+async fn stop_child(inner: &Arc<Mutex<Inner>>) {
     let child = {
         let mut inner = inner.lock().expect("macrod state lock");
         inner.generation += 1;
@@ -510,24 +689,27 @@ fn set_autostart(app: &AppHandle, autostart: bool) {
     }
 }
 
-fn autostart_enabled(app: &AppHandle) -> bool {
+/// Whether the user explicitly stopped the daemon. Only a stop opts out of
+/// auto-start; a missing or unreadable marker does not.
+fn stopped_by_user(app: &AppHandle) -> bool {
     autostart_marker(app)
         .and_then(|path| std::fs::read(path).ok())
         .and_then(|raw| serde_json::from_slice::<AutostartMarker>(&raw).ok())
-        .is_some_and(|marker| marker.autostart)
+        .is_some_and(|marker| !marker.autostart)
 }
 
-/// At app launch: resume the daemon when the user enabled it and a paired
-/// config exists, so agents are reachable without opening settings.
+/// At app launch: resume the daemon whenever a config exists and the user has
+/// not stopped it, so agents are reachable without opening settings. A config
+/// whose credential lapsed re-pairs, and the webview approves the new code.
 pub(crate) fn autostart(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if !autostart_enabled(&app) || macrod_binary(&app).is_none() {
+        if stopped_by_user(&app) || macrod_binary(&app).is_none() {
             return;
         }
-        let paired = match macrod_query(&app, &["inspect"]).await {
+        let configured = match macrod_query(&app, &["inspect"]).await {
             Ok(inspection) => inspection
-                .get("paired")
+                .get("exists")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
             Err(error) => {
@@ -535,7 +717,7 @@ pub(crate) fn autostart(app: &AppHandle) {
                 false
             }
         };
-        if !paired {
+        if !configured {
             return;
         }
         let state = app.state::<MacrodState>();
@@ -543,4 +725,39 @@ pub(crate) fn autostart(app: &AppHandle) {
             tracing::warn!(target: "macrod", "autostart failed: {error}");
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restart_delay_doubles_up_to_the_cap() {
+        let seconds: Vec<u64> = (1..=9).map(|n| restart_delay(n).as_secs()).collect();
+        assert_eq!(seconds, [1, 2, 4, 8, 16, 32, 60, 60, 60]);
+        assert_eq!(restart_delay(u32::MAX), RESTART_MAX_DELAY);
+    }
+
+    #[test]
+    fn shell_env_skips_banners_and_keeps_multiline_values() {
+        let output = format!(
+            "Welcome! PATH=/banner\n{ENV_START}\nPATH=/usr/bin:/bin\n\
+             CLAUDE_CODE_OAUTH_TOKEN=token\nNOTE=line one\nline two\n\
+             BASH_FUNC_greet%%=() {{  echo hi\n}}\nEMPTY=\n{ENV_END}\nbye\n"
+        );
+        assert_eq!(
+            parse_shell_env(&output),
+            [
+                ("PATH".to_owned(), "/usr/bin:/bin".to_owned()),
+                ("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), "token".to_owned()),
+                ("NOTE".to_owned(), "line one\nline two".to_owned()),
+                ("EMPTY".to_owned(), String::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn shell_env_without_markers_is_empty() {
+        assert!(parse_shell_env("PATH=/usr/bin\n").is_empty());
+    }
 }

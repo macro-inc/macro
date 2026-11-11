@@ -3,7 +3,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { UserCardAction } from '@core/component/userCardActions';
 import { enableCrm } from '@core/constant/featureFlags';
-import WideContact from '@phosphor/address-book.svg';
+import WideContact from '@icon/system/regular/address-book.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Accessor } from 'solid-js';
 
@@ -19,7 +19,7 @@ export function createCrmUserCardAction(
   // a card that suspends takes its hover surface or sheet down with it.
   const team = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team : undefined;
-  const crmEnabled = () => crmFlag().enabled && team()?.crm_enabled === true;
+  const crmEnabled = () => crmFlag().enabled && !!team();
   const contactQuery = useCrmContactByEmailQuery(
     () => team()?.id ?? '',
     () => email() ?? '',

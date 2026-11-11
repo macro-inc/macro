@@ -1,3 +1,4 @@
+import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import { enableProjects } from '@core/constant/featureFlags';
@@ -22,20 +23,12 @@ import { useTagsQuery } from '@queries/properties/tags';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
+import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
-/**
- * Props shown in the composer (Linear-style left-to-right order). Project
- * shows only while Projects is enabled.
- */
-export const DEFAULT_TASK_COMPOSER_PROPERTY_IDS = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
-  SYSTEM_PROPERTY_IDS.PROJECT,
-];
+export { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
+
 const COMPOSER_PROPERTY_SET = new Set<string>(
   DEFAULT_TASK_COMPOSER_PROPERTY_IDS
 );
@@ -125,7 +118,15 @@ export async function createTaskWithProperties(
   options?: {
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
+    /** Disable when the caller provides its own recovery notification. */
+    showFailureToast?: boolean;
     onMutate?: () => void;
+    /** The create response arrived, before history/project follow-up work. */
+    onCreated?: (
+      task: NonNullable<
+        Awaited<ReturnType<typeof createTaskWithInitialSnapshot>>
+      >
+    ) => void;
   }
 ) {
   options?.onMutate?.();
@@ -151,9 +152,12 @@ export async function createTaskWithProperties(
   });
 
   if (!createdTask) {
-    toast.failure('Failed to create Task');
+    if (options?.showFailureToast !== false)
+      toast.failure('Failed to create Task');
     return null;
   }
+
+  options?.onCreated?.(createdTask);
 
   // createTaskWithInitialSnapshot already revalidates Soup; just update history.
   upsertToHistory({
@@ -255,7 +259,11 @@ function extractPropertyValue(
  */
 export function createTaskComposerProperties(args: {
   initialValues: Record<string, PropertyApiValues>;
+  values?: Accessor<Record<string, PropertyApiValues>>;
+  additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
+  /** Properties a host edits with its own control: no pill, not addable. */
+  hiddenPropertyIds?: readonly string[];
   allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
@@ -337,10 +345,15 @@ export function createTaskComposerProperties(args: {
 
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
-      visiblePropertyIds(),
+      [
+        ...new Set([
+          ...visiblePropertyIds(),
+          ...(args.additionalPropertyIds?.() ?? []),
+        ]),
+      ],
       availableDefinitions(),
       projects().enabled
-    );
+    ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
       (definition) =>
@@ -365,7 +378,9 @@ export function createTaskComposerProperties(args: {
     availableDefinitions()
       .filter(
         (definition) =>
-          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
+          (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT ||
+            projects().enabled) &&
+          !args.hiddenPropertyIds?.includes(definition.id)
       )
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))
@@ -385,7 +400,11 @@ export function createTaskComposerProperties(args: {
         updatedAt: new Date(0),
         createdAt: new Date(0),
         valueType: definition.data_type,
-        value: extractPropertyValue(definition, propertyValues, options()),
+        value: extractPropertyValue(
+          definition,
+          args.values?.() ?? propertyValues,
+          options()
+        ),
         options: options().get(definition.id),
       } as Property;
     });

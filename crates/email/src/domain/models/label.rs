@@ -1,3 +1,4 @@
+use super::SimpleMessage;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -68,11 +69,52 @@ pub struct LinkLabel {
     pub type_: LabelType,
 }
 
+impl LinkLabel {
+    /// The label called `name` among one inbox's labels: a system label by
+    /// its provider id (INBOX, UNREAD, STARRED, ...), otherwise any label by
+    /// its display name. Case and surrounding whitespace are ignored.
+    pub fn find<'a>(labels: &'a [LinkLabel], name: &str) -> Option<&'a LinkLabel> {
+        let name = name.trim().to_lowercase();
+        labels
+            .iter()
+            .find(|label| {
+                label.type_ == LabelType::System && label.provider_label_id.to_lowercase() == name
+            })
+            .or_else(|| {
+                labels
+                    .iter()
+                    .find(|label| label.name.trim().to_lowercase() == name)
+            })
+    }
+}
+
 /// Result of updating labels on a thread's messages.
 #[derive(Debug, Clone)]
 pub struct UpdateThreadLabelsResult {
     pub successful_ids: Vec<Uuid>,
     pub failed_ids: Vec<Uuid>,
+}
+
+/// A label change staged on a thread for Gmail, read in the same transaction
+/// that applied it.
+#[derive(Debug, Clone)]
+pub struct StagedLabelChange {
+    /// Every message of the thread.
+    pub messages: Vec<SimpleMessage>,
+    /// The messages that gained or lost the label.
+    pub changed_ids: Vec<Uuid>,
+}
+
+/// The most threads one bulk archive request may change.
+pub const MAX_BULK_ARCHIVE_THREADS: usize = 100;
+
+/// Result of archiving or unarchiving many threads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SetThreadsArchivedResult {
+    /// Threads whose archive state now matches the request.
+    pub updated_thread_ids: Vec<Uuid>,
+    /// Threads left unchanged because they could not be updated.
+    pub failed_thread_ids: Vec<Uuid>,
 }
 
 /// Well-known system label identifiers.

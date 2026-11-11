@@ -70,47 +70,22 @@ impl AccessRepository for PgAccessRepository {
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
-        let access = if let Ok(document_uuid) = document_id.parse::<Uuid>() {
-            queries::document_access::get_document_access(
-                &self.pool,
-                &document_uuid,
-                &source_ids,
-                user_id,
-            )
-            .await?
-        } else {
-            queries::document_access::get_legacy_document_access(
+        let Ok(document_uuid) = document_id.parse::<Uuid>() else {
+            return Ok(queries::document_access::get_legacy_document_access(
                 &self.pool,
                 document_id,
                 &source_ids,
                 user_id,
             )
-            .await?
+            .await?);
         };
-        if access.is_some() || user_id.is_none() {
-            return Ok(access);
-        }
-        let has_note_access = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM calendar_event_notes note
-                JOIN "Document" d ON d.id = note.document_id
-                  AND d."deletedAt" IS NULL AND d."fileType" = 'md'
-                WHERE note.document_id = $1 AND (
-                    calendar_note_event_visible($2, note.event_id, note.occurrence_key)
-                    OR EXISTS (
-                        SELECT 1 FROM team_user member
-                        WHERE member.team_id = note.team_id AND member.user_id = $2
-                    )
-                )
-            ) AS "visible!"
-        "#,
-            document_id,
-            user_id.map(AsRef::as_ref)
+        Ok(queries::document_access::get_document_access(
+            &self.pool,
+            &document_uuid,
+            &source_ids,
+            user_id,
         )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(has_note_access.then_some(AccessLevel::View))
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -425,6 +400,46 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
     }
 
+    /// Resolve ordinary shares on an external chat.
+    async fn get_harness_access(
+        &self,
+        harness_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let harness_uuid = harness_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid harness ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        Ok(sqlx::query_scalar!(
+            r#"SELECT harness_access_level($1, $2) AS "access_level?: AccessLevel""#,
+            harness_uuid,
+            user_id.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    async fn get_external_chat_access(
+        &self,
+        group_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let group_uuid = group_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid external chat ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::external_chat_access::get_external_chat_access(
+            &self.pool,
+            &group_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_row_access(
         &self,
@@ -617,6 +632,9 @@ impl AccessRepository for PgAccessRepository {
                 )
                 .await
             }
+            EntityType::ExternalChat => {
+                queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, &source_ids).await
+            }
             EntityType::Form => {
                 queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await
             }
@@ -631,8 +649,9 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::CrmContact
             | EntityType::Skill
             // Reminders and scheduled actions are user-owned, never reachable
-            // through a team scope.
+            // through a team scope. A runtime is used by people, not team bots.
             | EntityType::Reminder
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",

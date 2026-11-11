@@ -121,6 +121,16 @@ describe('Reactions', () => {
 });
 
 describe('formatReactorNames', () => {
+  it('names reactors outside Macro by their given name', () => {
+    expect(
+      formatReactorNames(
+        ['user-1', 'external-reactor:1', 'external-reactor:2'],
+        'user-1',
+        { 'external-reactor:1': 'Ana' }
+      )
+    ).toBe('You, Ana, and 1 other person');
+  });
+
   it('returns empty string for empty input', () => {
     expect(formatReactorNames([], 'user-1')).toBe('');
   });
@@ -157,6 +167,18 @@ describe('formatReactorNames', () => {
         'other-user'
       )
     ).toBe('alice@test.com and bob@test.com');
+  });
+
+  it('counts reactors outside Macro instead of naming them', () => {
+    expect(
+      formatReactorNames(
+        ['whatsapp-reactor:1', 'user-1', 'whatsapp-reactor:2'],
+        'user-1'
+      )
+    ).toBe('You and 2 other people');
+    expect(formatReactorNames(['whatsapp-reactor:1'], 'user-1')).toBe(
+      '1 other person'
+    );
   });
 
   it('puts current user first regardless of input order', () => {

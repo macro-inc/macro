@@ -204,11 +204,21 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -219,13 +229,21 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
                 | "ReadThread"
                 | "UpdateThreadLabels"
                 | "SetSenderPolicy"
+                // macro.email.sendConfirmed runs the tool itself.
+                | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"
@@ -234,16 +252,34 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadChannelThread"
                 | "RenameChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
                 | "ListCalendars"
                 | "ListCalendarEvents"
+                // macro.calendar.createConfirmed runs the tool itself.
+                | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
+                // macro.calendar.booking.
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
@@ -251,8 +287,80 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.documents.upload(), which sends the bytes through Macro.
+                | "UploadFile"
+                // macro.search, macro.workspace and macro.chats.
+                | "ContentSearch"
+                | "NameSearch"
+                | "ListEntities"
+                | "ReadChat"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
+                // macro.bots and Bot. IssueBotCredential stays: its chat card
+                // mints the secret without the model ever reading it.
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
+                // macro.agents.coding() and macro.agentSessions.createManaged.
+                | "ListCodingAgents"
+                | "DispatchCodingAgent"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
+                // macro.agentSessions.byId(): log(), foldedLog(), rename(),
+                // archive(), delete(), prompt(), control() and sharing.
+                | "ReadAgentSession"
+                | "ManageAgentSession"
+                | "ReadAgentSessionSharing"
+                | "UpdateAgentSessionSharing"
+                // macro.databases: list(), schema(), query() and view ops.
+                | "ListDatabases"
+                | "DescribeDatabase"
+                | "QueryDatabase"
+                | "SaveDatabaseView"
+                | "DeleteDatabaseView"
+                // macro.routines.
+                | "CreateRoutine"
+                | "ListRoutines"
+                | "ReadRoutine"
+                | "UpdateRoutine"
+                | "RunRoutine"
+                | "DeleteRoutine"
+                // macro.calendar.event(id).record() and addToCalendar().
+                | "ReadCalendarEvent"
+                | "AddSharedCalendarEvent"
+                // macro.images.generate().
+                | "GenerateImage"
+                // document.copy(), database.duplicate() and project.rename().
+                | "DuplicateItem"
+                | "RenameItem"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadActivity"
+                | "ReadInitiativeActivity"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
         )
 }
 
@@ -270,7 +378,7 @@ impl SessionCodeMode for CodeModeService {
         if self.0.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
-        if session.is_archived {
+        if session.is_archived() {
             return Err(CodeModeError::Forbidden);
         }
         if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
@@ -295,18 +403,37 @@ impl SessionCodeMode for CodeModeService {
         let cancel = cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let service = self.clone();
+        let span = tracing::info_span!(
+            "code_mode.execution",
+            agent_session_id = %session.id,
+            execution_id = %execution,
+            source_bytes = request.source.len(),
+            status = tracing::field::Empty,
+            activity = tracing::field::Empty,
+            result_bytes = tracing::field::Empty,
+        );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
         tokio::spawn(
             async move {
                 let _permit = permit;
                 let result = service.run(identity, execution, request, cancel).await;
-                if let Err(error) = &result {
-                    tracing::error!(?error, "could not finish code execution journal");
+                match &result {
+                    Ok(receipt) => {
+                        let span = tracing::Span::current();
+                        span.record("status", tracing::field::debug(receipt.status));
+                        span.record("activity", receipt.activity.len());
+                        if let Some(value) = &receipt.result {
+                            span.record("result_bytes", value.to_string().len());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(?error, "could not finish code execution journal");
+                    }
                 }
                 result
             }
-            .in_current_span(),
+            .instrument(span.or_current()),
         )
         .await
         .map_err(CodeModeError::Task)?

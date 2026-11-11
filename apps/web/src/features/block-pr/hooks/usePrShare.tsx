@@ -1,4 +1,3 @@
-import { toShareItem } from '@app/features/sharing/share-delivery/share-delivery';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
@@ -6,17 +5,17 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import CopyIcon from '@phosphor/copy.svg';
-import { createCallback } from '@solid-primitives/rootless';
 import { Button, Panel } from '@ui';
-import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 
 interface PrShareModalProps {
   foreignEntityId: string;
   name: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  copyLink: () => Promise<boolean>;
 }
 
 function prShareUrl(foreignEntityId: string): string {
@@ -24,23 +23,6 @@ function prShareUrl(foreignEntityId: string): string {
 }
 
 function PrShareModal(props: PrShareModalProps) {
-  const copyEntityLink = useCopyLink();
-  const shareItem = createMemo(() =>
-    toShareItem({
-      id: props.foreignEntityId,
-      kind: 'foreign',
-      name: props.name,
-      canGrant: false,
-    })
-  );
-
-  const copyLink = createCallback(() => {
-    fireAndForget(
-      copyEntityLink(prShareUrl(props.foreignEntityId)),
-      'pr-share-modal'
-    );
-  });
-
   return (
     <Show
       when={!isMobile()}
@@ -67,11 +49,21 @@ function PrShareModal(props: PrShareModalProps) {
               </div>
               <div class="border-b border-edge-muted mb-2" />
               <ForwardToChannel
-                item={shareItem()}
+                entity={{
+                  entity_type: 'foreign_entity',
+                  entity_id: props.foreignEntityId,
+                }}
+                name={props.name}
                 onSubmit={() => props.onOpenChange(false)}
+                submitPermissionInfo={undefined}
               />
               <div class="px-4 py-3 border-t border-edge-muted">
-                <Button variant="outline" onClick={copyLink}>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    fireAndForget(props.copyLink(), 'pr-share-modal')
+                  }
+                >
                   <CopyIcon class="size-4" />
                   <span>Copy Link</span>
                 </Button>
@@ -103,9 +95,14 @@ function PrShareModal(props: PrShareModalProps) {
                 </Panel.Header>
                 <Panel.Body>
                   <ForwardToChannel
-                    item={shareItem()}
+                    entity={{
+                      entity_type: 'foreign_entity',
+                      entity_id: props.foreignEntityId,
+                    }}
+                    name={props.name}
                     onSubmit={() => props.onOpenChange(false)}
                     onCancel={() => props.onOpenChange(false)}
+                    submitPermissionInfo={undefined}
                   />
                 </Panel.Body>
               </Panel>
@@ -120,7 +117,12 @@ function PrShareModal(props: PrShareModalProps) {
                       Anyone with access to the PR on GitHub can view it in
                       Macro
                     </span>
-                    <Button variant="outline" onClick={copyLink}>
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        fireAndForget(props.copyLink(), 'pr-share-modal')
+                      }
+                    >
                       <CopyIcon class="size-4" />
                       <span>Copy Link</span>
                     </Button>
@@ -136,16 +138,18 @@ function PrShareModal(props: PrShareModalProps) {
 }
 
 /**
- * Hook to manage PR share modal state. Returns the modal component and an
- * opener function.
+ * Hook to manage PR share modal state. Returns the modal component, an opener
+ * function, and the share link copy the modal and header both offer.
  */
 export function usePrShare(
   foreignEntityId: Accessor<string>,
   name: Accessor<string>
 ) {
   const [open, setOpen] = createSignal(false);
+  const copyEntityLink = useCopyLink();
 
   const openShare = () => setOpen(true);
+  const copyLink = () => copyEntityLink(prShareUrl(foreignEntityId()));
 
   const ShareModal = () => (
     <PrShareModal
@@ -153,8 +157,9 @@ export function usePrShare(
       name={name()}
       open={open()}
       onOpenChange={setOpen}
+      copyLink={copyLink}
     />
   );
 
-  return { openShare, ShareModal, isOpen: open };
+  return { openShare, copyLink, ShareModal, isOpen: open };
 }

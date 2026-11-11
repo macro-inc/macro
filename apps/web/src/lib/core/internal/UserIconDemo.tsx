@@ -1,7 +1,7 @@
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
 import { seedMockDisplayNames } from '@core/user/displayName';
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import User from '@icon/system/regular/user.svg?component-solid';
 import { Avatar } from '@ui';
 import { For } from 'solid-js';
 
@@ -18,9 +18,6 @@ const USER_IDS = MOCK_USERS.map((u) => u.id);
 
 const SIZE_LABELS = ['sm', 'md', 'lg'] as const;
 type GroupSize = 'sm' | 'md' | 'lg';
-
-// Seed mock display names so tooltips work
-seedMockDisplayNames(MOCK_USERS);
 
 function Section(props: { title: string; children: any }) {
   return (
@@ -40,6 +37,7 @@ function SizeLabel(props: { size: string }) {
 }
 
 export default function UserIconDemo() {
+  seedMockDisplayNames(MOCK_USERS);
   return (
     <div class="p-8 space-y-12 bg-surface min-h-full overflow-auto">
       <div>

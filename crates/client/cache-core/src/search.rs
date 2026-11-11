@@ -10,14 +10,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use subsequence_match::{normalize_text as normalize_search_text, subsequence_score};
 use thiserror::Error;
 
-mod catalog;
 mod changes;
 mod ranking;
-pub(crate) use catalog::SearchCatalogs;
 pub(crate) use changes::{collect_search_changes, snapshot_search_fields};
-pub(crate) use ranking::rank_documents;
+pub(crate) use ranking::SearchRanker;
 
 /// Current compact projection profile used by Quick Access, Cmd-K and entity
 /// mention pickers. Profile names are persisted and therefore versioned.
@@ -53,6 +52,7 @@ impl SearchProfile {
                 "email",
                 "crm_company",
                 "crm_contact",
+                "initiative",
             ],
         }
     }
@@ -86,6 +86,52 @@ pub struct SearchDocument {
     pub source_hash: String,
 }
 
+/// A row borrowed from storage or an optimistic projection. Only ranked winners
+/// need an owned document; the storage visitor may reuse its buffers immediately.
+#[derive(Clone, Copy)]
+pub struct SearchDocumentRef<'a> {
+    /// Projection profile.
+    pub profile: SearchProfile,
+    /// Canonical normalized-record key.
+    pub record_key: &'a EntityKey<'a>,
+    /// Quick Access bucket.
+    pub bucket: &'a str,
+    /// Normalized matching text.
+    pub search_text: &'a str,
+    /// Recency timestamp.
+    pub timestamp_ms: i64,
+    /// Hash of the source record.
+    pub source_hash: &'a str,
+}
+
+impl SearchDocumentRef<'_> {
+    /// Retains a winning row independently of the next storage step.
+    pub fn into_owned(self) -> SearchDocument {
+        SearchDocument {
+            profile: self.profile,
+            record_key: self.record_key.clone().into_owned(),
+            bucket: self.bucket.to_owned(),
+            search_text: self.search_text.to_owned(),
+            timestamp_ms: self.timestamp_ms,
+            source_hash: self.source_hash.to_owned(),
+        }
+    }
+}
+
+impl SearchDocument {
+    /// Borrows an already-materialized projection for ranking.
+    pub fn as_borrowed(&self) -> SearchDocumentRef<'_> {
+        SearchDocumentRef {
+            profile: self.profile,
+            record_key: &self.record_key,
+            bucket: &self.bucket,
+            search_text: &self.search_text,
+            timestamp_ms: self.timestamp_ms,
+            source_hash: &self.source_hash,
+        }
+    }
+}
+
 /// Bounded search request over cached contents.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +156,10 @@ pub struct SearchRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchPage {
+    /// Revision of the projection maintained by this engine. Older native
+    /// engines omit this field; callers must not mistake unsupported contact
+    /// projection for an empty directory.
+    pub projection_version: u32,
     /// Ranked compact documents.
     pub documents: Vec<SearchDocument>,
     /// Empty-query continuation cursor when more cached documents exist.
@@ -125,14 +175,14 @@ pub enum SearchError {
     /// Bucket names cross storage boundaries and must remain compact.
     #[error("invalid search bucket")]
     InvalidBucket,
-    /// Query text is bounded before loading/ranking the catalog.
+    /// Query text is bounded before filtering and streaming storage matches.
     #[error("search query is too long")]
     QueryTooLong,
 }
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 3;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 6;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -144,14 +194,14 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupChannel",
     "GraphqlSoupCrmCompany",
     "GraphqlSoupCrmContact",
-    "GraphqlUser",
-    "User",
+    "GraphqlSoupInitiative",
+    "GraphqlContact",
 ];
 
 /// Maximum number of compact documents returned by one RPC.
 pub const MAX_SEARCH_LIMIT: usize = 500;
 /// Maximum accepted query length in bytes.
-pub const MAX_SEARCH_QUERY_BYTES: usize = 512;
+pub const MAX_SEARCH_QUERY_BYTES: usize = subsequence_match::MAX_QUERY_BYTES;
 /// Restores the Quick Access preference for matching direct messages.
 const DM_SEARCH_BOOST: f64 = 1.8;
 
@@ -209,7 +259,10 @@ fn quick_access_fields<'a>(
         "GraphqlSoupChannel" => (channel_bucket(record), &["channelName", "name"]),
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
         "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
-        "GraphqlUser" | "User" => ("person", &["name", "email"]),
+        "GraphqlSoupInitiative" => ("initiative", &["displayName"]),
+        // Only the viewer-scoped directory record proves membership. Public
+        // profiles (including the authenticated viewer) are not contact rows.
+        "GraphqlContact" => ("person", &["name", "email"]),
         _ => return None,
     };
 
@@ -221,15 +274,22 @@ fn quick_access_fields<'a>(
 
 fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
     let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
-    let search_text = normalize_search_text(
-        text_fields
-            .iter()
-            .filter_map(|field| record.fields.get(*field))
-            .flat_map(search_value_text)
-            .collect::<Vec<_>>()
-            .join(" | ")
-            .as_str(),
-    );
+    let search_text = if typename == "GraphqlContact" {
+        let email = string_field(record, "email").unwrap_or("");
+        let name = string_field(record, "name")
+            .unwrap_or_else(|| email.split('@').next().unwrap_or(email));
+        normalize_search_text(&format!("{name} | {email}"))
+    } else {
+        normalize_search_text(
+            text_fields
+                .iter()
+                .filter_map(|field| record.fields.get(*field))
+                .flat_map(search_value_text)
+                .collect::<Vec<_>>()
+                .join(" | ")
+                .as_str(),
+        )
+    };
     Some(SearchDocument {
         profile: SearchProfile::QuickAccessV1,
         record_key: key.clone(),
@@ -301,15 +361,41 @@ fn search_value_text(value: &CacheValue) -> Vec<&str> {
     }
 }
 
-fn normalize_search_text(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
+/// Normalized text-search input shared by storage filtering and ranking.
+/// Storage may return a superset of matches; the ranker always checks each row.
+pub struct SearchQuery(String);
+
+impl SearchQuery {
+    /// Applies the same Unicode lowercase and whitespace normalization as the projection.
+    pub fn new(query: &str) -> Self {
+        Self(normalize_search_text(query))
+    }
+
+    /// Whitespace/comma-separated tokens, each matching an ordered subsequence.
+    pub fn tokens(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|token| !token.is_empty())
+    }
+
+    /// Whether every token matches, independent of freshness and ranking.
+    pub fn matches(&self, text: &str) -> bool {
+        self.tokens()
+            .all(|token| subsequence_score(text, token).is_some())
+    }
 }
 
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
+    // Initiatives keep their timestamps in an embedded metadata object.
+    if typename == "GraphqlSoupInitiative" {
+        let Some(CacheValue::Object(metadata)) = record.fields.get("metadata") else {
+            return 0;
+        };
+        return ["viewedAt", "updatedAt", "createdAt"]
+            .into_iter()
+            .find_map(|field| metadata.get(field).and_then(value_timestamp))
+            .unwrap_or(0);
+    }
     if typename == "GraphqlSoupCrmContact" {
         return ["lastInteraction", "updatedAt", "createdAt"]
             .into_iter()
@@ -376,28 +462,48 @@ pub(crate) fn compare_record_keys(left: &EntityKey<'_>, right: &EntityKey<'_>) -
 
 /// Sorts recent browse results deterministically.
 pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering {
+    compare_recent_rows(left.as_borrowed(), right.as_borrowed())
+}
+
+fn compare_recent_rows(left: SearchDocumentRef<'_>, right: SearchDocumentRef<'_>) -> Ordering {
     right
         .timestamp_ms
         .cmp(&left.timestamp_ms)
-        .then_with(|| compare_record_keys(&left.record_key, &right.record_key))
+        .then_with(|| compare_record_keys(left.record_key, right.record_key))
 }
 
 /// Returns a fuzzy+freshness score, or `None` when every query token fails to
 /// match as an ordered subsequence. Fuzzy relevance contributes 70%, freshness
 /// contributes 30%, and matching direct messages receive the legacy 1.8x boost.
 pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64) -> Option<f64> {
-    score_normalized_query(document, &normalize_search_text(query), now_ms)
+    score_normalized_query(
+        document.as_borrowed(),
+        &normalize_search_text(query),
+        now_ms,
+    )
 }
 
-fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i64) -> Option<f64> {
+fn score_normalized_query(
+    document: SearchDocumentRef<'_>,
+    normalized: &str,
+    now_ms: i64,
+) -> Option<f64> {
     if normalized.is_empty() {
         return Some(1.0);
     }
     let mut score = 0.0;
     let mut tokens = 0usize;
-    for token in normalized.split_whitespace() {
+    // Commas separate tokens as in the server's channel name search. Left on a
+    // token, a comma would only match a name with one after it.
+    for token in normalized
+        .split([' ', ','])
+        .filter(|token| !token.is_empty())
+    {
         tokens += 1;
-        score += subsequence_score(&document.search_text, token)?;
+        score += subsequence_score(document.search_text, token)?;
+    }
+    if tokens == 0 {
+        return None;
     }
     let fuzzy = score / tokens as f64;
     let age = now_ms.saturating_sub(document.timestamp_ms).max(0) as f64;
@@ -413,33 +519,6 @@ fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i
     } else {
         score
     })
-}
-
-fn subsequence_score(haystack: &str, needle: &str) -> Option<f64> {
-    if let Some(start) = haystack.find(needle) {
-        let prefix = start == 0
-            || haystack[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|character| !character.is_alphanumeric());
-        return Some(if prefix { 1.0 } else { 0.9 });
-    }
-    let mut chars = needle.chars();
-    let mut wanted = chars.next()?;
-    let mut first = None;
-    for (position, character) in haystack.chars().enumerate() {
-        if character == wanted {
-            first.get_or_insert(position);
-            match chars.next() {
-                Some(next) => wanted = next,
-                None => {
-                    let span = position.saturating_sub(first.unwrap_or(position)) + 1;
-                    return Some((needle.chars().count() as f64 / span as f64).clamp(0.1, 0.8));
-                }
-            }
-        }
-    }
-    None
 }
 
 fn parse_rfc3339_millis(value: &str) -> Option<i64> {

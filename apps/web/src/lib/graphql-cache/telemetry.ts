@@ -9,6 +9,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
+  'graphql_cache.registration_retry',
   'graphql_cache.host_request',
   'graphql_cache.coordinator_request',
   'graphql_cache.engine_request',
@@ -21,6 +22,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.storage_reset_required',
   'graphql_cache.logical_reset',
   'graphql_cache.revision_advance',
+  'graphql_cache.change_batch',
   'graphql_cache.reset_wipe',
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
@@ -129,6 +131,13 @@ export const CACHE_OWNER_EVENTS = [
   'activated',
   'graceful-drain-started',
   'graceful-drain-completed',
+  'visibility-handoff-started',
+  'visibility-handoff-blocked',
+  'visibility-handoff-completed',
+  'park-started',
+  'parked',
+  'unpark-started',
+  'unpark-completed',
   'navigation-departure',
   'coordinator-restarted',
   'abrupt-loss',
@@ -505,11 +514,23 @@ export function operationCategoryForRequest(
       'current-revision',
       'read-records-by-keys',
       'search',
+      'people-search',
+      'people-references',
+      'people-sql',
+      'contact-snapshot',
+      'people-context',
       'entity-filter',
       'calendar-range',
       () => 'read' as const
     )
-    .with('write', 'hydrate', 'calendar-commit', () => 'write' as const)
+    .with(
+      'write',
+      'hydrate',
+      'calendar-commit',
+      'people-update',
+      'contact-reconcile',
+      () => 'write' as const
+    )
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -540,6 +561,7 @@ export function isStorageTransactionRequest(
   return [
     'write',
     'hydrate',
+    'people-update',
     'calendar-commit',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',

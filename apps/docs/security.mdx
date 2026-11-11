@@ -16,7 +16,7 @@ To request a Data Processing Agreement (DPA) with specific details, contact us a
 
 Under our shared responsibility model, Macro secures the components that we control, including the application layer, underlying platform, and cloud infrastructure. This includes protecting against threats targeting these components through security controls, monitoring, and incident response.
 
-Customers are responsible for how they use Macro. This includes configuring team access and roles, determining what data they share into which channels, deciding which documents have public links enabled, managing the agents and MCP clients they connect, and maintaining the security settings on the Google account they sign in with.
+Customers are responsible for how they use Macro. This includes configuring team access and roles, determining what data they share into which channels, deciding which documents have public links enabled, managing the agents and MCP clients they connect, and maintaining the security settings on the Google account they sign in with and on the Microsoft account connected for Outlook mail.
 
 ## Certifications
 
@@ -41,7 +41,7 @@ You have the option to select the region where you want your data to be stored. 
 
 Most of the data associated with the workspace — including email, messages, documents, tasks, call recordings, and CRM records — will only be stored in the selected region, across three systems inside it:
 
-* **Postgres** for blocks and the relationships between them
+* **Postgres** for Blocks and the relationships between them
 * **S3** for files, attachments, images, and call recordings
 * **OpenSearch** for the index that powers [Search](/product/search)
 
@@ -49,13 +49,13 @@ Most of the data associated with the workspace — including email, messages, do
 
 Access in Macro is derived from [channel-based sharing](/permissions) rather than per-file permission dialogs. That model is the security boundary:
 
-* Mentioning a block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
-* [Teams](/account/teams) set the defaults for some block types. Tasks are visible to the team, calls are shared to team memory unless a call is opted out, and emails flow into the CRM when Email Sync is enabled for that company.
+* Mentioning a Block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
+* [Teams](/account/teams) set the defaults for some Block types. Tasks are shared with the team unless **Share with** your team is turned off. Calls started from a channel are shared with the team unless **Share with team** is turned off. Standalone calls stay with the people on the call. Emails stay on the thread unless Email Sync is on for that company.
 * Team roles are **Member**, **Admin**, and **Owner**. Admins and owners can remove members and can limit invitations to admins.
 * **Auto-join on domain**, when an admin enables it, adds anyone who signs up with an email on the owner's domain to the team.
-* **Public links** make a document readable by anyone with the URL, including people without a Macro account.
+* **Anyone with the link** lets anyone with the URL open that Block, including people without a Macro account.
 
-Macro does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Macro. Revoking Macro's access from your Google account, or disconnecting it in **Settings → Email**, ends email sync.
+Macro does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Macro. Revoking Macro's access from your Google or Microsoft account, or disconnecting it in **Settings → Email**, ends email sync.
 
 ## Agents and your data
 
@@ -83,17 +83,17 @@ Macro routes requests to model providers including Anthropic and OpenAI, dependi
 
 ## Retention and deletion
 
-* Deleting a block moves it to trash first, so it can be recovered.
+* Deleting a Block moves it to trash first, so it can be recovered.
 * Deleting your account is permanent. **Settings → Account → Delete account** removes your account and its associated data after a confirmation step.
 * Organizations can set a retention window that deletes documents and chats which haven't been accessed within a set number of days. Contact [support@macro.com](mailto:support@macro.com) to configure one for your organization.
 
-Disconnecting a Gmail account stops future sync but doesn't delete mail that has already synced.
+Disconnecting a Gmail or Outlook account stops future sync but doesn't delete mail that has already synced.
 
 ## Report a vulnerability
 
 Send suspected security issues to [security@macro.com](mailto:security@macro.com). We pay bounties in accordance with the severity and impact of the finding.
 
-Please include steps to reproduce, the affected surface (web, iOS, API, or MCP), and any accounts involved, and give us a chance to ship a fix before disclosing publicly. Because the codebase is open source, you can reference specific files or commits.
+Please include steps to reproduce, the affected surface (web, iOS, Android, API, or MCP), and any accounts involved, and give us a chance to ship a fix before disclosing publicly. Because the codebase is open source, you can reference specific files or commits.
 
 <Warning>
   Don't file security issues on the public GitHub tracker. Use [security@macro.com](mailto:security@macro.com) so a report isn't visible before there's a fix.

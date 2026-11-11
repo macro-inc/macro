@@ -71,7 +71,7 @@ export function HoldButton(props: HoldButtonProps) {
       {...rest}
       data-holding={holding() ? '' : undefined}
       class={cn('overflow-hidden touch-none', local.class)}
-      onPointerDown={(event) => {
+      onPointerDown={(event: PointerEvent) => {
         if (event.button > 0) return;
         press();
       }}
@@ -81,7 +81,7 @@ export function HoldButton(props: HoldButtonProps) {
       onBlur={release}
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(event: MouseEvent) => event.preventDefault()}
     >
       <span
         aria-hidden="true"

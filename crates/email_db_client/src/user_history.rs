@@ -44,11 +44,17 @@ where
 /// - `snippet`, `sender`, `pretty_sender`: from the *latest* message in the thread
 /// - `subject`: from the *earliest* message in the thread (so it doesn't include "Re:"s
 ///
+/// `sender` and `pretty_sender` are empty when the latest message has no
+/// sender contact (`from_contact_id` is nullable and `ON DELETE SET NULL`).
+///
 /// The "earliest" and "latest" messages are determined by:
 /// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
 /// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
 ///
 /// Note: This will exclude any threads where the latest message is marked as TRASH
+///
+/// Discarded drafts (`provider_missing` tombstones) are skipped, as the thread
+/// view skips them, so a thread left with only one is excluded.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -72,14 +78,15 @@ pub async fn get_thread_summary_info(
                 earliest_msg.subject as "subject?",
                 l.macro_id,
                 t.link_id,
-                latest_msg.sender as sender,
-                latest_msg.pretty_sender as "pretty_sender!",
+                latest_msg.sender as "sender?",
+                latest_msg.pretty_sender as "pretty_sender?",
                 latest_msg.trash_label as trash_label,
                 (
                     SELECT m_latest.is_draft
                     FROM email_messages m_latest
                     WHERE m_latest.thread_id = t.id
                       AND m_latest.link_id = t.link_id
+                      AND NOT (m_latest.is_draft AND COALESCE((m_latest.mailbox_state->>'provider_missing')::boolean, false))
                     ORDER BY m_latest.internal_date_ts DESC NULLS LAST
                     LIMIT 1
                 ) AS "is_draft!",
@@ -121,6 +128,7 @@ pub async fn get_thread_summary_info(
                 LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
                 WHERE m2.thread_id = t.id
                   AND m2.link_id = t.link_id
+                  AND NOT (m2.is_draft AND COALESCE((m2.mailbox_state->>'provider_missing')::boolean, false))
                 ORDER BY
                     (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
                     COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
@@ -135,6 +143,7 @@ pub async fn get_thread_summary_info(
                 FROM email_messages m3
                 WHERE m3.thread_id = t.id
                   AND m3.link_id = t.link_id
+                  AND NOT (m3.is_draft AND COALESCE((m3.mailbox_state->>'provider_missing')::boolean, false))
                 ORDER BY
                     -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
                     (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
@@ -160,6 +169,11 @@ pub async fn get_thread_summary_info(
         if row.trash_label.unwrap_or_default() {
             continue;
         }
+        let sender = row.sender.unwrap_or_else(|| {
+            tracing::warn!(thread_id = %row.thread_id, "latest message has no sender contact");
+            String::new()
+        });
+        let pretty_sender = row.pretty_sender.unwrap_or_else(|| sender.clone());
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
             user_id: row.macro_id,
@@ -173,8 +187,8 @@ pub async fn get_thread_summary_info(
             viewed_at: row
                 .viewed_at
                 .filter(|&viewed| viewed >= row.last_message_ts),
-            sender: row.sender,
-            pretty_sender: row.pretty_sender,
+            sender,
+            pretty_sender,
             is_read: row.is_read,
             inbox_visible: row.inbox_visible,
             is_draft: row.is_draft,

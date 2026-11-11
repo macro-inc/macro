@@ -1,12 +1,15 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import ChevronDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import { createUniqueId, Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { RecipientDropRow } from '../components/recipient-drop-row';
-import type { EmailInbox } from '../context/compose-capabilities';
+import type {
+  EmailInbox,
+  EmailRecipientSourceFactory,
+} from '../context/compose-capabilities';
 import type { EmailRecipient, RecipientFieldId } from '../core/email-recipient';
 import { getRecipientDisplayName } from '../core/email-recipient';
 import { fromInboxOptions } from '../core/email-sender';
@@ -19,6 +22,7 @@ type ReplyEnvelopeProps = {
   fields: ReturnType<typeof createReplyRecipientFields>;
   values: Accessor<EmailFormRecipients>;
   options: Accessor<EmailRecipient[]>;
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   inboxes: Accessor<EmailInbox[]>;
   activeInboxId: Accessor<string | undefined>;
   senderEmail: Accessor<string | undefined>;
@@ -101,6 +105,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             : setBccRef
       }
       options={props.options}
+      createSource={props.createRecipientSource}
       selfEmail={props.senderEmail()}
       selectedOptions={props.values()[field.field]}
       setSelectedOptions={(values) =>
@@ -115,6 +120,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
       }
       onChipDragEnd={handleChipDragEnd}
       hideMenuOnEscape
+      showChipAddresses
     />
   );
   return (
@@ -165,6 +171,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                   <div class="flex items-center ml-auto shrink-0">
                     <Show when={!showCc()}>
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={props.disabled()}
                         onClick={() => {
@@ -177,6 +184,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                     </Show>
                     <Show when={!showBcc()}>
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={props.disabled()}
                         onClick={() => {

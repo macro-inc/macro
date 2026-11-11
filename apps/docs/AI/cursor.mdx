@@ -1,0 +1,58 @@
+---
+title: "Cursor"
+sidebarTitle: "Cursor"
+icon: "code"
+description: "Run coding agents on your Cursor plan from Macro, and see the sessions Macro starts in Cursor's agent list."
+---
+
+Connect Cursor so your coding agents run as Cursor cloud agents on your own Cursor plan. You start and follow a session from Macro; the work runs in Cursor Cloud and streams into the session in Macro.
+
+<Note>
+  Your Cursor plan must include [cloud agents](https://cursor.com/docs/cloud-agent), and a Cursor account admin must connect source control for your Cursor account.
+</Note>
+
+## Connect Cursor
+
+<Steps>
+  <Step title="Create an API key in Cursor">
+    In the [Cursor dashboard](https://cursor.com/dashboard/api), open **API & SSH Keys** and click **New API Key**.
+  </Step>
+  <Step title="Paste it into Macro">
+    Open **Settings → Machines**, choose **Cursor**, and paste the key. Macro stores it encrypted and only uses it to start and follow your Cursor sessions.
+  </Step>
+  <Step title="Choose a default model">
+    New Cursor agents start with this model. You can change it per agent.
+  </Step>
+</Steps>
+
+To remove the connection, click **Disconnect** on the same page. This deletes Macro's copy of the key; revoke the key in the Cursor dashboard if you no longer need it.
+
+## Run a Cursor agent
+
+In **Settings → General → Agents**, create an agent (or edit one) and set where it runs to **In Cursor**. Then:
+
+- In **Agents**, switch to **Code**, pick the agent, choose a repository and branch, and send your prompt.
+- In a [channel](/product/channels), @mention the agent. The session opens in the thread, and later mentions in that thread go to the same session.
+
+A session needs access to its repository on both sides. Macro lists the repositories your [GitHub](/integrations/github) connection covers, and Cursor needs source control connected for that repository too. Connecting one does not connect the other, so a repository missing from either side fails to start.
+
+Each session works like any other coding session in Macro: you see its progress, tool calls, and linked pull request, and you can send follow-ups or stop it.
+
+## See Macro's sessions in Cursor
+
+A session Macro starts is a regular cloud agent on your Cursor account, so you can open it from Cursor Web or the Cursor agents window. Follow-ups you send there show up in the Macro session too.
+
+Cursor hides agents started through its API from the agent list by default, and that includes every session Macro starts. To list them without opening each one from Macro:
+
+<Steps>
+  <Step title="Open your agent list in Cursor">
+    Go to [cursor.com/agents](https://cursor.com/agents), or open the agents window in Cursor.
+  </Step>
+  <Step title="Filter by source">
+    Click **Filter**, then **Source**, and select **API**. Choosing a source overrides Cursor's default, so the sessions Macro started appear in the list.
+  </Step>
+</Steps>
+
+<Note>
+  Macro starts sessions with your own API key, so they appear under **My agents**.
+</Note>

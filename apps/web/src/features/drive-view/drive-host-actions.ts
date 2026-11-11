@@ -4,7 +4,6 @@ import {
 } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
-  markCalendarNotificationSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -25,6 +24,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import type { Accessor } from 'solid-js';
 import type { DriveHostActions } from './context/drive-context';
 import { useDriveDetailNavigation } from './drive-detail-navigation';
@@ -83,7 +83,7 @@ export function createDriveHostActions(options: {
       // Nested project/content targets reach this adapter. The main row
       // consumes Cmd/Ctrl itself for selection.
       if (event?.metaKey || event?.ctrlKey) {
-        markCalendarNotificationSeenOnOpen(entity, notificationSource);
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
 
         return;
@@ -95,7 +95,7 @@ export function createDriveHostActions(options: {
         return;
       }
 
-      markCalendarNotificationSeenOnOpen(entity, notificationSource);
+      markRowNotificationsSeenOnOpen(entity, notificationSource);
 
       const target =
         openInNewSplit || location ? undefined : inlineDetailTarget(entity);

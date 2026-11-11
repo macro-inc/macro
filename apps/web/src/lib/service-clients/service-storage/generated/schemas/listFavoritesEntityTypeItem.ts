@@ -29,6 +29,7 @@ export const ListFavoritesEntityTypeItem = {
   crm_contact: 'crm_contact',
   crm_pipeline: 'crm_pipeline',
   reminder: 'reminder',
+  harness: 'harness',
   skill: 'skill',
   agent_session: 'agent_session',
   scheduled_action: 'scheduled_action',
@@ -36,4 +37,5 @@ export const ListFavoritesEntityTypeItem = {
   database: 'database',
   database_row: 'database_row',
   form: 'form',
+  external_chat: 'external_chat',
 } as const;

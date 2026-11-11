@@ -5,8 +5,8 @@
  */
 
 import type { PublishedAsset } from '@core/fig-engine/library-types';
-import BookOpen from '@phosphor/book-open.svg';
-import CaretDown from '@phosphor/caret-down.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { type AssetGroup, LIBRARY_ASSET_MIME } from '../core/libraries';
 import { AssetSwatch, AssetThumbnail } from './asset-thumbnail';

@@ -7,7 +7,6 @@ import { ShareRecipientField } from '@core/component/ShareRecipientField';
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { EntityData } from '@entity';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -45,14 +44,13 @@ export function BulkShare(props: {
     enableMentions: true,
     onChange: form.setText,
   });
-  const { all: options } = useCombinedRecipients();
 
   return (
     <BulkShareView
       form={form}
       count={items().length}
       selection={<EntityActionSelection entities={props.entities} />}
-      recipientField={<ShareRecipientField form={form} options={options} />}
+      recipientField={<ShareRecipientField form={form} />}
       messageField={
         <MarkdownShell
           config={editor}

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment a SET state = 'ready', file_id = $5\n            FROM external_chat_message m\n            WHERE a.chat_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.state = 'downloaded'\n              AND m.chat_id = a.chat_id AND m.person_id = a.person_id AND m.source_id = a.source_id\n            RETURNING m.message_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "230fac5d57cfcf5fc500520fdbd2278b969064f365b9647ca3d4f3eccba86e1c"
+}

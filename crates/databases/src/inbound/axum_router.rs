@@ -5,6 +5,8 @@
 /// What a column's values would do under each type (`GET …/casts`), and
 /// what they become under one (`POST …/conversion`).
 pub mod casts;
+/// Database duplication transport.
+pub mod duplicate;
 /// The change journal: a row's history
 /// (`GET /{id}/tables/{table_id}/rows/{row_id}/history`) and undoing a change
 /// (`POST /{id}/changes/{change}/undo`).
@@ -21,11 +23,13 @@ mod test;
 pub mod transfer;
 /// A board's card places: `GET /{id}/views/{view_id}/positions`.
 pub mod views;
+use crate::domain::duplicate::DatabaseDuplicateService;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
 use models_databases::{DatabaseId, TableId};
 use std::sync::Arc;
+use tracing::Level;
 
 use axum::{
     Json, Router,
@@ -116,7 +120,10 @@ pub fn databases_router<Service, EntityAccess, Authorization, RouterState>(
     state: DatabasesRouterState<Service, EntityAccess, Authorization>,
 ) -> Router<RouterState>
 where
-    Service: DatabasesService + DatabaseSharingService + DatabaseTransferService,
+    Service: DatabasesService
+        + DatabaseSharingService
+        + DatabaseTransferService
+        + DatabaseDuplicateService,
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
     RouterState: Send + Sync + 'static,
@@ -135,11 +142,8 @@ where
             "/",
             post(create_database_handler::<Service, EntityAccess, Authorization>),
         )
-        // Static segments win over `/{id}`, so these never read as a database.
-        .route(
-            "/queries",
-            post(saved_queries::save_query_handler::<Service, EntityAccess, Authorization>),
-        )
+        // Static segments win over `/{id}`, so this never reads as a database.
+        // Saving a query compiles it, so that route is `databases_sql`'s.
         .route(
             "/queries/{query_id}",
             get(saved_queries::get_query_handler::<Service, EntityAccess, Authorization>),
@@ -147,6 +151,10 @@ where
         .route(
             "/{id}",
             get(get_database_handler::<Service, EntityAccess, Authorization>),
+        )
+        .route(
+            "/{id}/duplicate",
+            post(duplicate::duplicate_database_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
             "/{id}/awareness",
@@ -199,6 +207,23 @@ pub(crate) fn viewer_of<Authorization>(
         user_id: user.authorization.user.macro_user_id.clone(),
         acting_bot: None,
     }
+}
+
+/// The agent an SDK token (code mode) carries, recorded on the current span.
+/// A creation made with it is attributed to the agent, like the native tool's,
+/// so channel delivery can share what the agent made for the request; access
+/// checks still run as the plain user ([`viewer_of`]).
+pub(crate) fn agent_attribution<Authorization>(
+    user: &MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+) -> Option<bot_id::BotId> {
+    let acting_bot = user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
+    acting_bot
 }
 
 /// Request body for creating a database.
@@ -261,7 +286,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn create_database_handler<Service, EntityAccess, Authorization>(
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
     user: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
@@ -272,12 +297,13 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    let acting_bot = agent_attribution(&user);
     let database = state
         .service
         .create_database(CreateDatabase {
             name: request.name,
             owner_id: viewer_of(&user).user_id,
-            acting_bot: None,
+            acting_bot,
         })
         .await?;
     Ok((StatusCode::CREATED, Json(database)))
@@ -298,7 +324,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_database_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,

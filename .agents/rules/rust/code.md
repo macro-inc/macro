@@ -14,6 +14,9 @@ Type design, idioms, errors and observability, performance, and tests.
 
 - **CS-10** Newtype your identifiers and tokens — wrap raw `String`
   ids/tokens/model-ids in a validated newtype that checks shape at construction.
+  Reuse the type that already exists for that id (its id crate, or the
+  provider SDK's type such as `stripe::PriceId`); never define a second type
+  or crate for the same id.
 - **CS-11** A closed set of string values is an enum, not a `String` — impl
   `Display`/`FromStr` as needed.
 - **CS-12** Optional means `Option<T>` — don't rely on sentinel values or
@@ -21,7 +24,9 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-13** Model tri-state data (not-loaded / missing / present) as one flat
   enum, not nested `Option`s or ad-hoc flags.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
-  `jsonwebtoken` failure into a generic internal error.
+  `jsonwebtoken` failure into a generic internal error. A provider outage
+  (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
+  answered 502/503 — see `crates/upstream_error`.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
@@ -72,6 +77,11 @@ Type design, idioms, errors and observability, performance, and tests.
   and never record prompts, tool arguments or tool results as span fields or
   logs — they are content, recorded on the spans under the
   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` policy and a size budget.
+- **CS-73** A function that reaches a service's router or composition root is
+  never a non-generic `pub async fn`, even in a private module: rustc compiles
+  the body of every such function in every build, so the lib test compiles the
+  whole service. Use `pub(crate) async fn`, or `pub fn run() -> impl Future` over
+  a private `async fn` when another crate calls it.
 - **CS-68** Don't mark types `#[non_exhaustive]` by default. Exhaustive matches
   are how a new variant reaches every place that must handle it; reserve the
   attribute for types published outside the workspace.

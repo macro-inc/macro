@@ -43,6 +43,32 @@ fn build_thread_email_filter(ast: &Expr<EmailLiteral>, sort_ts_field: &str) -> S
     super::filters::build_thread_email_filter(ast, sort_ts_field, &ResolvedFilters::empty())
 }
 
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn date_literals_match_nothing_and_preserve_negation(pool: sqlx::PgPool) {
+    use item_filters::ast::properties::{DateRange, PropertiesLiteral, PropertyMatchValue};
+
+    let literal = Expr::Literal(EmailLiteral::Property(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(4),
+        entity_type: None,
+        value: PropertyMatchValue::DateRange(DateRange {
+            start: None,
+            end: None,
+        }),
+    }));
+    for (filter, expected) in [(literal.clone(), false), (Expr::is_not(literal), true)] {
+        let mut query = QueryBuilder::new("SELECT TRUE");
+        build_thread_email_filter(&filter, "t.updated_at").push_into(&mut query, "unused");
+        assert_eq!(
+            query
+                .build_query_scalar::<bool>()
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+}
+
 #[test]
 fn unresolved_sender_short_circuits() {
     let expr = Expr::Literal(EmailLiteral::Sender(complete("missing@x.com")));
@@ -565,8 +591,8 @@ fn test_build_query_shared_include_uses_union_instead_of_or() {
 }
 
 #[test]
-fn test_build_query_projects_real_updated_at_for_candidate_threads() {
-    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+fn test_build_query_preserves_thread_updated_at_outside_all_mail() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::Shared(
         item_filters::SharedEmailFilter::Include,
     ));
@@ -618,6 +644,31 @@ fn test_build_query_single_link_fans_out_per_link() {
         !sql.contains("t.link_id = ANY("),
         "single-link owned scan must not use = ANY: {sql}"
     );
+}
+
+#[test]
+fn test_build_query_subject_binds_each_link_and_matches_facts_after_ordering() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Subject(
+        item_filters::ast::email::SubjectQuery::try_from("fyi".to_owned()).unwrap(),
+    ));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    // Each inbox is bound, so the planner reads that inbox's statistics.
+    assert!(!sql.contains("FROM unnest("), "{sql}");
+    assert_eq!(sql.matches("UNION ALL").count(), 1, "{sql}");
+    assert_eq!(sql.matches(") AS ordered").count(), 2, "{sql}");
+
+    // The ordered step matches subjects only; mailbox facts wait for the
+    // per-thread check that runs in that order until LIMIT.
+    let inner = sql
+        .split("(SELECT ordered.* FROM (")
+        .nth(1)
+        .and_then(|branch| branch.split(") AS ordered").next())
+        .unwrap();
+    assert!(inner.contains("sm.subject ILIKE"), "{inner}");
+    assert!(!inner.contains("email_message_mailbox_facts"), "{inner}");
+    assert!(!sql.contains("COALESCE(m.subject"), "{sql}");
 }
 
 #[test]
@@ -1944,4 +1995,93 @@ fn test_build_query_shared_include_project_branch_keeps_owned() {
         !sql.contains("AND NOT (t.link_id = ANY("),
         "Shared=Include must not exclude owned threads from the project branch: {sql}"
     );
+}
+
+const PREVIEW_MESSAGE_SCAN: &str = "FROM email_messages m\n            WHERE m.thread_id = t.id";
+
+#[test]
+fn test_build_query_all_checks_mailbox_facts_once_per_message() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    assert!(
+        sql.contains("mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk)"),
+        "All Mail's junk check must share the presence/trash probe: {sql}"
+    );
+    assert!(
+        !sql.contains("mf.id = m.id AND NOT mf.in_junk"),
+        "All Mail must not probe mailbox facts a second time for junk: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_single_link_picks_preview_in_candidates() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert_eq!(
+        sql.matches(PREVIEW_MESSAGE_SCAN).count(),
+        1,
+        "a single-link page must pick each preview once: {sql}"
+    );
+    let pick = sql.find(PREVIEW_MESSAGE_SCAN).unwrap();
+    let candidate_limit = sql.find(") AS per_link").unwrap();
+    assert!(
+        pick < candidate_limit,
+        "the preview must be picked inside the per-link scan: {sql}"
+    );
+    assert!(
+        !sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"),
+        "the candidate pick replaces the message EXISTS: {sql}"
+    );
+    assert!(
+        sql.contains("SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft")
+    );
+}
+
+#[test]
+fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded() {
+    let all = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let trash = PreviewView::StandardLabel(PreviewViewStandardLabel::Trash);
+    let unfiltered = Expr::Literal(EmailLiteral::CalendarOnly(false));
+    let shared = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+
+    for (case, sql) in [
+        (
+            "multi-link",
+            super::query::debug_build_query_sql_multi_link(&all, &unfiltered),
+        ),
+        (
+            "team",
+            super::query::debug_build_query_sql_team_scoped(&all, &unfiltered),
+        ),
+        ("shared", super::query::debug_build_query_sql(&all, &shared)),
+        (
+            "folder",
+            super::query::debug_build_query_sql(&trash, &unfiltered),
+        ),
+        (
+            "viewed-updated sort",
+            super::query::debug_build_query_sql_with_sort(
+                &all,
+                &unfiltered,
+                models_pagination::SimpleSortMethod::ViewedUpdated,
+            ),
+        ),
+    ] {
+        assert!(
+            sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"),
+            "{case}: candidates must still require a visible message: {sql}"
+        );
+        let pick = sql.rfind(PREVIEW_MESSAGE_SCAN).unwrap();
+        let step_two = sql.find("-- Step 2: For each thread").unwrap();
+        assert!(
+            step_two < pick,
+            "{case}: the preview must be picked after the candidate LIMIT: {sql}"
+        );
+    }
 }

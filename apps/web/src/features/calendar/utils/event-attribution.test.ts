@@ -45,7 +45,7 @@ describe('eventAttribution', () => {
       })
     );
 
-    expect(attribution.calendarName).toBe('Jackson Kustec');
+    expect(attribution.calendarName).toBe('jackson@example.com');
     expect(attribution.creator).toEqual({
       displayName: 'Teo Nys',
       email: 'teo@example.com',
@@ -62,7 +62,7 @@ describe('eventAttribution', () => {
       })
     );
 
-    expect(attribution.calendarName).toBe('Jackson Kustec');
+    expect(attribution.calendarName).toBe('jackson@example.com');
     expect(attribution.creator).toBeUndefined();
     expect(attribution.organizer).toBeUndefined();
   });

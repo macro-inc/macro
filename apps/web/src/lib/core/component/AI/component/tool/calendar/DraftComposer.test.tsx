@@ -1,4 +1,4 @@
-import type { EventFormProps } from '@app/features/calendar/components/composer/EventForm';
+import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
@@ -45,7 +45,6 @@ vi.mock('@core/email-link', () => ({
   useAddInboxFlow: () => mocks.startAddInbox,
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@ui', () => ({

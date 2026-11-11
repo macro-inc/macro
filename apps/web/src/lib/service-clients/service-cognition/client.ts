@@ -16,40 +16,30 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
-import type { CreateChatRequest } from './generated/schemas/createChatRequest';
+import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
+import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
-import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
 import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
 import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
 import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
-import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
 import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
 import type { UpsertProjectionRequest } from './generated/schemas/upsertProjectionRequest';
-import type * as toolTypes from './generated/tools/tool.ts';
-
-type ToolCallArgs = {
-  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'call'>['data'];
-};
-type ToolResponseArgs = {
-  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'response'>['data'];
-};
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
 type WithChatId = { chat_id: string };
-type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
 function dcsFetch(
@@ -75,27 +65,46 @@ type IdMappingResponse = { target_id: string | null };
 // Hand-written mirrors of the DCS OpenAPI types for the Pipedream MCP
 // connector endpoints (`/pipedream/mcp/*`); replace with the orval-generated
 // schemas on the next client regeneration.
+/** The backend holding a connection's grant. */
+export type PipedreamProvider = 'pipedream' | 'connect';
 export type PipedreamConnectionResponse = {
   app_slug: string;
   server_name: string;
   enabled: boolean;
+  provider?: PipedreamProvider;
 };
 export type PipedreamUpdateRequest = {
   app_slug: string;
   server_name?: string;
   enabled?: boolean;
 };
+export type PipedreamTokenRequest = {
+  /** With it, an app Macro Connect serves may answer with a Connect URL. */
+  app_slug?: string;
+};
+/** A Pipedream Connect token, or for `provider: 'connect'` a Connect URL. */
 export type PipedreamTokenResponse = {
-  token: string;
-  expires_at: string;
-  connect_link_url: string;
+  provider: PipedreamProvider;
+  token?: string | null;
+  expires_at?: string | null;
+  connect_link_url?: string | null;
+  connect_url?: string | null;
+};
+export type PipedreamConnectCompleteRequest = {
+  app_slug: string;
+  server_name?: string;
 };
 export type PipedreamCompleteRequest = {
   account_id: string;
   server_name?: string;
 };
+export type PipedreamRecoverRequest = {
+  app_slug: string;
+  server_name?: string;
+};
 export type { PipedreamCatalogEntryResponse } from './generated/schemas/pipedreamCatalogEntryResponse';
 export type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 
 /** Error code for deployments where Pipedream MCP connect is not configured. */
 export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
@@ -167,28 +176,6 @@ export const cognitionApiServiceClient = {
         }),
       })
     ).map(() => ({ success: true }));
-  },
-  async copyChat(args: WithChatId & WithName) {
-    const { chat_id, name } = args;
-    return (
-      await dcsFetch<StringIDResponse>(`/chats/${chat_id}/copy`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name,
-        }),
-      })
-    ).map((result) => result);
-  },
-  async createChat(args: CreateChatRequest) {
-    return (
-      await dcsFetch<StringIDResponse>(`/chats`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: args.name,
-          projectId: args.projectId,
-        }),
-      })
-    ).map((result) => result);
   },
   async deleteChat(args: WithChatId) {
     const { chat_id } = args;
@@ -264,88 +251,6 @@ export const cognitionApiServiceClient = {
       })
     ).map((result) => result);
   },
-  /** Update a tool call's arguments (validates against tool schema server-side). */
-  async updateToolCall<T extends keyof ToolCallArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    args: ToolCallArgs[T];
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/update`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-        args: args.args,
-      }),
-    });
-  },
-
-  /** Update a tool response. */
-  async updateToolResponse<T extends keyof ToolResponseArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    response: ToolResponseArgs[T];
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/response/update`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-        response: args.response,
-      }),
-    });
-  },
-
-  /** Execute a pending tool call, optionally with updated arguments. */
-  async callTool<T extends keyof ToolCallArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    args?: ToolCallArgs[T];
-  }) {
-    return (
-      await dcsFetch<{ result: unknown }>(`/chats/${args.chat_id}/tool/call`, {
-        method: 'POST',
-        body: JSON.stringify({
-          messageId: args.messageId,
-          toolCallId: args.toolCallId,
-          args: args.args,
-        }),
-      })
-    ).map((result) => result.result);
-  },
-
-  /** Reject a pending tool call. */
-  async rejectToolCall(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/reject`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-      }),
-    });
-  },
-
-  /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
-  async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
-    return (
-      await fetchWithToken<
-        SendChatMessageResponse,
-        typeof AI_USAGE_LIMIT_ERROR
-      >(`${dcsHost}/stream/chat/message`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-        errorResponseHandler: aiUsageErrorResponseHandler,
-      })
-    ).map((result) => result);
-  },
-
   /** Stops an in-flight AI chat stream. The streaming task persists whatever
    * the user has already seen and emits StreamEnd. */
   async stopChatStream(args: StopChatStreamRequest) {
@@ -427,17 +332,18 @@ export const cognitionApiServiceClient = {
   },
 
   /**
-   * Create a Pipedream Connect token for authorizing an MCP connector.
+   * Start connecting an MCP connector: a Pipedream Connect token, or a
+   * Macro Connect URL when the backend routes `app_slug` through Connect.
    * Answers with the {@link PIPEDREAM_DISABLED} error code on deployments
    * where Pipedream isn't configured (HTTP 501).
    */
-  async createPipedreamToken() {
+  async createPipedreamToken(args: PipedreamTokenRequest = {}) {
     return (
       await fetchWithToken<PipedreamTokenResponse, typeof PIPEDREAM_DISABLED>(
         `${dcsHost}/pipedream/mcp/token`,
         {
           method: 'POST',
-          body: JSON.stringify({}),
+          body: JSON.stringify(args),
           errorResponseHandler: async (response) => {
             if (response.status === 501) {
               return {
@@ -466,6 +372,35 @@ export const cognitionApiServiceClient = {
   },
 
   /**
+   * Record an app connected through Macro Connect. Fails with `NOT_FOUND`
+   * until Connect lists the connection, so callers poll it.
+   */
+  async completeMacroConnect(args: PipedreamConnectCompleteRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(
+        `/pipedream/mcp/connect/complete`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Register an account a Connect flow created but the Connect UI never
+   * reported. Fails with `NOT_FOUND` when there is none.
+   */
+  async recoverPipedreamConnection(args: PipedreamRecoverRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(`/pipedream/mcp/recover`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  /**
    * Browse or search Pipedream apps in popularity order, including their
    * category labels for grouping.
    */
@@ -487,6 +422,29 @@ export const cognitionApiServiceClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  /**
+   * Catalog apps that connect through their own MCP server instead of
+   * Pipedream; connect them with `startMcpAuth` against `server_url`.
+   */
+  async listPipedreamOverlays() {
+    return (
+      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async databaseQuery(args: DatabaseQueryRequest) {
+    return fetchWithToken<DatabaseQueryAnswer, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/database-query`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
   },
 
   async structuredCompletion(args: StructuredCompletionRequest) {

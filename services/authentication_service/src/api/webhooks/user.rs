@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::{Router, routing::post};
 
-mod create_user_webhook;
+pub(in crate::api) mod create_user_webhook;
 mod delete_user_webhook;
 mod populate_jwt;
 mod stripe_webhook;

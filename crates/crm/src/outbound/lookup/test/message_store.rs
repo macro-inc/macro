@@ -224,11 +224,13 @@ async fn crm_discussion_lifecycle_cascades_on_company_deletion(pool: PgPool) {
             && !residual.mentions
     );
     let late = CreateMessage {
+        kind: messages::domain::models::MessageKind::Message,
         guest_name: None,
         canonical_root_id: None,
         parent: company,
         actor: USER.to_owned().try_into().unwrap(),
         triggered_by: None,
+        triggered_via: None,
         input: input("race", None),
     };
     assert!(matches!(

@@ -1,20 +1,18 @@
-import {
-  type Client,
-  gql,
-  makeOperation,
-  type Operation,
-  type OperationResult,
-} from '@urql/core';
+import { gql, type OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject, pipe, type Source, subscribe } from 'wonka';
-import { normalizedCacheExchange } from '../exchange/normalized-cache-exchange';
 import type { CacheRequest, CacheResponse } from '../protocol';
 import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runtime';
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
+import { createCacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { CoordinatorRouter } from '../worker/coordinator-router';
 import { EFFECT_WORKER_CLOSE_FRAME } from '../worker/effect-worker-transport';
-import type { CacheHost } from './types';
 import { createWorkerCacheHost } from './worker-host';
+import {
+  exchangeHarness,
+  LinkedMessageChannel,
+  LinkedMessagePort,
+  optimisticMutation,
+} from './worker-host.integration-helpers';
 
 const PAGEHIDE_MUTATION = gql`
   mutation HoldPagehide {
@@ -37,92 +35,6 @@ const RETIREMENT_FAILURE_MUTATION = gql`
   }
 `;
 
-function exchangeHarness(
-  host: CacheHost,
-  operation: Operation,
-  onResult?: (result: OperationResult) => void
-) {
-  const operations = makeSubject<Operation>();
-  const network = makeSubject<OperationResult>();
-  const forwarded: Operation[] = [];
-  const results: OperationResult[] = [];
-  const client = { reexecuteOperation: vi.fn() } as unknown as Client;
-  const forward = (source: Source<Operation>): Source<OperationResult> => {
-    pipe(
-      source,
-      subscribe((forwardedOperation) => forwarded.push(forwardedOperation))
-    );
-    return network.source;
-  };
-  pipe(
-    normalizedCacheExchange(host)({
-      forward,
-      client,
-      dispatchDebug: () => undefined,
-    })(operations.source),
-    subscribe((result) => {
-      results.push(result);
-      onResult?.(result);
-    })
-  );
-  operations.next(operation);
-  return { forwarded, results };
-}
-
-function optimisticMutation(key: number, query: Operation['query']): Operation {
-  return makeOperation('mutation', { key, query, variables: {} }, {
-    requestPolicy: 'cache-first',
-    url: 'http://integration.test',
-    suspense: false,
-    normalizedCacheOptimistic: {
-      uuid: '00000000-0000-4000-8000-000000000001',
-      optimisticResponse: { held: true },
-    },
-  } as never);
-}
-
-class LinkedMessagePort extends EventTarget {
-  peer: LinkedMessagePort | undefined;
-  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
-  onmessageerror: (() => void) | null = null;
-  closed = false;
-
-  postMessage(
-    message: unknown,
-    transfer: Transferable[] | StructuredSerializeOptions = []
-  ): void {
-    const peer = this.peer;
-    if (this.closed || !peer || peer.closed) return;
-    const ports = (
-      Array.isArray(transfer) ? transfer : (transfer.transfer ?? [])
-    ) as MessagePort[];
-    queueMicrotask(() => {
-      if (peer.closed) return;
-      peer.onmessage?.({
-        data: message,
-        ports,
-      } as unknown as MessageEvent);
-      peer.dispatchEvent(new MessageEvent('message', { data: message, ports }));
-    });
-  }
-
-  start(): void {}
-
-  close(): void {
-    this.closed = true;
-  }
-}
-
-class LinkedMessageChannel {
-  readonly port1 = new LinkedMessagePort();
-  readonly port2 = new LinkedMessagePort();
-
-  constructor() {
-    this.port1.peer = this.port2;
-    this.port2.peer = this.port1;
-  }
-}
-
 type RuntimeLog = {
   epoch: number;
   kind: CacheRequest['kind'] | 'drain';
@@ -131,6 +43,8 @@ type RuntimeLog = {
 };
 
 const requestObservers = new Set<(entry: RuntimeLog) => void>();
+// Fake durable storage shared by successive engine instances.
+const committedEnqueues: string[] = [];
 
 type Deferred = { promise: Promise<void>; resolve: () => void };
 const deferred = (): Deferred => {
@@ -179,6 +93,7 @@ class IntegrationCore {
       return;
     }
     if (request.kind === 'enqueue-optimistic-mutation') {
+      committedEnqueues.push(request.uuid);
       const gate = this.enqueueGates.get(request.operationName ?? '');
       if (gate) await gate;
     }
@@ -315,6 +230,7 @@ describe('worker CacheHost coordinator integration', () => {
     hostInitGates.clear();
     enqueueGates.clear();
     requestObservers.clear();
+    committedEnqueues.length = 0;
     router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,
       watchTabLock: () => () => undefined,
@@ -803,6 +719,179 @@ describe('worker CacheHost coordinator integration', () => {
     expect(localStorage.getItem('graphql-cache:scope')).toBe(
       'integration-scope'
     );
+  });
+
+  it.each([false, true])(
+    'never forwards a committed standby enqueue after owner navigation (link patches: %s)',
+    async (withLinkPatches) => {
+      // Only the owner navigates; the standby's page/host remains alive.
+      const owner = createCacheCoordinatorPageAdapter({
+        scope: 'integration-scope',
+      });
+      await owner.start();
+      const admitted = Promise.withResolvers<void>();
+      requestObservers.add((entry) => {
+        if (entry.kind === 'enqueue-optimistic-mutation') admitted.resolve();
+      });
+      const gate = deferred();
+      enqueueGates.set('HoldStandby', gate.promise);
+      const standby = createWorkerCacheHost({ scope: 'integration-scope' });
+      const recovered = Promise.withResolvers<unknown>();
+      standby.onCacheGenerationChanged(recovered.resolve);
+      const completed = Promise.withResolvers<OperationResult | 'forwarded'>();
+      const { forwarded, results } = exchangeHarness(
+        standby,
+        optimisticMutation(
+          105,
+          STANDBY_MUTATION,
+          withLinkPatches
+            ? [
+                {
+                  query: 'query Items { items { id } }',
+                  variablesJson: '{}',
+                  path: [{ field: 'items' }],
+                  operation: { kind: 'remove', entityKey: 'Item:1' },
+                },
+              ]
+            : []
+        ),
+        completed.resolve,
+        () => completed.resolve('forwarded')
+      );
+      try {
+        await admitted.promise;
+        expect(committedEnqueues).toEqual([
+          '00000000-0000-4000-8000-000000000001',
+        ]);
+        await owner.dispose({ graceful: false, preserveDatabase: true });
+        expect(await completed.promise).toMatchObject({
+          error: { networkError: { errorCode: 'admitted-enqueue-uncertain' } },
+        });
+        expect(await recovered.promise).toEqual({ storage: 'preserved' });
+        await expect(
+          standby.readQuery({ query: 'query After { after }' })
+        ).resolves.toEqual({ kind: 'miss' });
+        gate.resolve();
+        expect(dedicatedWorkers.map(({ epoch }) => epoch)).toEqual([1, 2]);
+        expect(dedicatedWorkers[0]?.terminated).toBe(true);
+        expect(forwarded).toHaveLength(0);
+        expect(results).toHaveLength(1);
+        expect(committedEnqueues).toEqual([
+          '00000000-0000-4000-8000-000000000001',
+        ]);
+        expect(
+          logs.filter(({ kind }) => kind === 'enqueue-optimistic-mutation')
+        ).toHaveLength(1);
+      } finally {
+        gate.resolve();
+        standby.dispose();
+        await owner.dispose({ graceful: false, preserveDatabase: true });
+      }
+    }
+  );
+
+  it('bounds reads for existing and joining clients without terminating a blocked owner or replaying writes', async () => {
+    class Visibility extends EventTarget {
+      visibilityState: DocumentVisibilityState = 'visible';
+    }
+    const visibility = new Visibility();
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const blocked = Promise.withResolvers<void>();
+    router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      handoffReadTimeoutMs: 0,
+      telemetry: {
+        record: (event) => {
+          if (event.ownerEvent === 'visibility-handoff-blocked')
+            blocked.resolve();
+        },
+        flush() {},
+      },
+    });
+    const owner = createCacheCoordinatorPageAdapter({
+      scope: 'integration-scope',
+      visibility,
+    });
+    await owner.start();
+    const standby = createWorkerCacheHost({ scope: 'integration-scope' });
+    await standby.readQuery({ opKey: 7, query: 'query Warm { warm }' });
+    const recovered = Promise.withResolvers<unknown>();
+    const affected = Promise.withResolvers<number[]>();
+    standby.onCacheGenerationChanged(recovered.resolve);
+    standby.onOpsAffected(affected.resolve);
+    const admitted = Promise.withResolvers<void>();
+    requestObservers.add((entry) => {
+      if (entry.kind === 'enqueue-optimistic-mutation') admitted.resolve();
+    });
+    const gate = deferred();
+    enqueueGates.set('HoldStandby', gate.promise);
+    const completed = Promise.withResolvers<OperationResult>();
+    const { forwarded } = exchangeHarness(
+      standby,
+      optimisticMutation(106, STANDBY_MUTATION),
+      completed.resolve
+    );
+    await admitted.promise;
+    visibility.visibilityState = 'hidden';
+    visibility.dispatchEvent(new Event('visibilitychange'));
+    await blocked.promise;
+    await expect(
+      standby.readQuery({ opKey: 9, query: 'query Blocked { blocked }' })
+    ).rejects.toThrow('owner handoff timeout');
+    const write = standby.writeQuery({
+      query: 'query Write { write }',
+      data: { write: true },
+    });
+    const onInitializationError = vi.fn();
+    const late = createWorkerCacheHost({
+      scope: 'integration-scope',
+      onInitializationError,
+    });
+    const lateAffected = Promise.withResolvers<number[]>();
+    late.onOpsAffected(lateAffected.resolve);
+    try {
+      await expect(
+        late.readQuery({ opKey: 11, query: 'query Late { late }' })
+      ).rejects.toThrow('owner handoff timeout');
+      expect(onInitializationError).not.toHaveBeenCalled();
+      expect(dedicatedWorkers).toHaveLength(1);
+      expect(dedicatedWorkers[0]?.terminated).toBe(false);
+      expect(router.snapshot()?.state.kind).toBe('draining');
+      expect(logs.filter(({ kind }) => kind === 'write')).toEqual([]);
+      expect(forwarded).toHaveLength(0);
+      gate.resolve();
+      expect((await completed.promise).error).toBeUndefined();
+      expect(await recovered.promise).toEqual({ storage: 'preserved' });
+      expect(await affected.promise).toEqual([7, 9]);
+      await write;
+      expect(await lateAffected.promise).toEqual([11]);
+      await expect(
+        late.readQuery({ query: 'query Recovered { recovered }' })
+      ).resolves.toEqual({ kind: 'miss' });
+      const ownerRead = Promise.withResolvers<unknown>();
+      owner.onmessage = ({ data }) => {
+        if ('id' in data && data.id === 55) ownerRead.resolve(data);
+      };
+      owner.postMessage({ id: 55, kind: 'current-revision' });
+      expect(await ownerRead.promise).toMatchObject({ ok: true });
+      expect(sharedWorkers[0]?.port.closed).toBe(false);
+      expect(dedicatedWorkers.map(({ epoch }) => epoch)).toEqual([1, 2]);
+      expect(dedicatedWorkers[0]?.terminated).toBe(true);
+      expect(logs.filter(({ kind }) => kind === 'write')).toMatchObject([
+        { epoch: 2 },
+      ]);
+      expect(
+        logs.filter(({ kind }) => kind === 'enqueue-optimistic-mutation')
+      ).toHaveLength(1);
+      expect(onInitializationError).not.toHaveBeenCalled();
+      expect(forwarded).toHaveLength(0);
+    } finally {
+      gate.resolve();
+      standby.dispose();
+      late.dispose();
+      await owner.dispose({ graceful: false, preserveDatabase: true });
+    }
   });
 
   it('keeps a standby connected until its admitted enqueue response settles', async () => {

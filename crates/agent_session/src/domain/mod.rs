@@ -1,7 +1,9 @@
 pub mod action_history;
+pub mod activity;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
+pub mod auto_archive;
 pub mod coding_agents;
 pub mod coding_preferences;
 pub mod connection;
@@ -17,6 +19,7 @@ pub mod ports;
 pub mod pull_request;
 pub mod pull_request_links;
 pub mod read;
+pub mod retitle;
 mod sandbox_size;
 pub mod search;
 pub mod service;
@@ -25,6 +28,7 @@ pub mod session;
 pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
+pub mod updates;
 
 pub mod credentials;
 
@@ -53,3 +57,6 @@ pub mod tool_actions;
 
 /// Durable system notifications.
 pub mod notifications;
+
+/// Sessions registered as an account's work.
+pub mod work_registration;

@@ -1,4 +1,5 @@
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
+import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import { localDraftMessage } from '@queries/email/local-drafts';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
@@ -15,6 +16,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
     created_at: thread.created_at,
     updated_at: thread.updated_at,
     inbox_visible: thread.inbox_visible,
+    has_received_mail: thread.has_received_mail,
     is_read: thread.is_read,
     latest_inbound_message_ts: thread.latest_inbound_message_ts,
     link_id: thread.link_id,
@@ -110,7 +112,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
 export function createEmailThreadSource(
   threadId: Accessor<string>,
   query: ThreadQueryResult<ThreadQueryData>
-): EmailThreadSource {
+): EmailThreadSource & { isLocalDraft: Accessor<boolean> } {
   // Status guards prevent a pending Solid resource from suspending its owner.
   const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
     (previous) => {
@@ -155,15 +157,7 @@ export function createEmailThreadSource(
           [draft.threadId, draft.serverThreadId].includes(requested) ||
           (base && [draft.threadId, draft.serverThreadId].includes(base.db_id))
       );
-    const edits = copies.filter(
-      (draft) =>
-        draft.status !== 'synced' &&
-        !(
-          draft.status === 'deleting' &&
-          draft.queuedAttemptId &&
-          draft.queuedAttemptId === draft.latestAttemptId
-        )
-    );
+    const edits = copies.filter(isListedLocalDraft);
     const messages = edits.map(localDraftMessage);
     if (!base) {
       const draft = edits.find((draft) => !draft.content.replying_to_id);
@@ -171,7 +165,8 @@ export function createEmailThreadSource(
       return {
         access_level: 'owner' as const,
         db_id: draft.serverThreadId ?? draft.threadId ?? requested,
-        inbox_visible: true,
+        inbox_visible: false,
+        has_received_mail: false,
         is_read: true,
         link_id: draft.inboxId ?? '',
         messages,
@@ -230,6 +225,22 @@ export function createEmailThreadSource(
   return {
     id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,
+    // A first-use working copy may not have reached the mutation queue, so
+    // its temporary thread ID can still return NOT_FOUND from the server.
+    isLocalDraft: () =>
+      query.transport === 'graphql' &&
+      query.resolvedThreadId === threadId() &&
+      !!thread() &&
+      local
+        .drafts()
+        .some(
+          (draft) =>
+            draft.threadId === threadId() &&
+            !draft.serverDraftId &&
+            !draft.serverThreadId &&
+            !draft.content.replying_to_id &&
+            draft.status !== 'synced'
+        ),
     isError: () =>
       query.isError && (query.transport !== 'graphql' || !thread()),
     isLoading: () =>

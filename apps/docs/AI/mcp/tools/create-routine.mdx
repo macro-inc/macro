@@ -1,12 +1,51 @@
 ---
 title: CreateRoutine
 description: >-
-  Schedule recurring or one-off work for a model or agent.
+  Create a routine: work that runs as the authenticated user on a schedule or
+  when activity happens in Macro, after this session ends.
 ---
 
 # CreateRoutine
 
-Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+Create a routine: work that runs as the authenticated user on a schedule or when activity happens in Macro, after this session ends. Returns the saved routine's id and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute, and do not create a new routine on every run of an existing one.
+
+A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
+
+Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+
+Steps run in order and a failed step stops the run:
+- `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
+- `agent` ("Ask AI"): hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override): a built-in agent, or one the user owns or can use, including one on a self-hosted runtime, which need not be online to save the routine (a run it cannot serve fails and shows in ReadRoutine history). Give it `instructions`, for open-ended work such as drafting, research or summarizing many items. It sees the triggering event and what earlier steps returned. A routine has at most one agent step. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
+
+Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
+
+By default, code steps' posts, comments and emails are attributed to Macro's agent acting for the user. `dangerouslyOperateAsUser: true` makes them appear written by the user, with no agent badge. Set it ONLY when the user explicitly asks for the routine to act as them, send as them or post as them; never infer it from the task, and leave it out otherwise. Ask AI steps stay attributed to their agent either way.
+
+Example, label invoices as they arrive. Triggers: `[{"type":"event","events":["email.message_received"]}]`. Its `steps` string holds:
+[\{"type":"code","title":"Label invoices","summary":"Asks AI whether the new email is an invoice and adds the inbox's Finance label if so.","source":"export async function main(\{ macro, trigger }: StepContext) \{\n  if (trigger.kind !== 'event') return \{ labeled: false };\n  const \{ probabilities } = await macro.ai.decide(\{\n    input: \{ subject: trigger.item.email?.subject },\n    questions: \{ invoice: 'Is this email an invoice or a payment request?' },\n  });\n  if ((probabilities.invoice ?? 0) \< 0.5) return \{ labeled: false };\n  const thread = macro.email.byId(trigger.item.entity_id);\n  const inbox = (await thread.link()).id;\n  for (const label of await macro.email.labels()) \{\n    if ((await label.linkId()) === inbox && (await label.name()) === 'Finance') \{\n      await thread.addLabel(label);\n      return \{ labeled: true };\n    }\n  }\n  return \{ labeled: false, missing: 'Finance' };\n}\n"}]
+
+Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use code for everything a routine does or decides: labeling or archiving email, setting properties, creating tasks, posting messages, reading many items, loops, and judgments with `macro.ai.decide`. Usually one code step does all of it. It takes:
+- `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
+- `summary`: one sentence on how, for the routine's owner.
+- `knobs`: the values its owner may want to change without new code, which the code reads as `knobs.<name>`: label, channel or people's names, priorities, thresholds, time windows, and the yes/no questions it asks AI. Make a knob for every such constant instead of writing it into the code, never for logic; at most 12, and the code must read every one. Each is `{ "type", "name", "label", "value" }`:
+  - `name` is camelCase (`dueWithinDays`); `label` says what it is, in up to 60 characters ("Label for money email").
+  - `type` is `text`, `number` (optional `min` and `max`), `boolean`, `choice` (with `options`: 2 to 12 strings, `value` one of them), or `question`: a yes/no question for `macro.ai.decide`, its `value` the question and its `label` the condition as a short clause that reads inside a sentence ("it's about money").
+  - The owner can change any value later, so don't rely on today's.
+- `sentence`: what the step does, as one plain sentence for its owner (up to 300 characters), with `{name}` where a knob's value shows and `{?name}` where a question knob's clause shows: "Label it \{moneyLabel} when \{?aboutMoney}, and \{marketingLabel} when \{?aboutMarketing}." Every `{…}` names one of the step's knobs; question knobs use `{?…}`. It must say what the code does, no more.
+- `source`: a module exporting `async function main({ macro, run, routine, trigger, steps, knobs }: StepContext)`. Take only what you use.
+  - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
+  - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
+  - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
+  - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
+  - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
+  - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options.
+- What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. An Ask AI step after it sees it too.
+- Call SDK methods as their declarations show, with `await`. Don't import anything.
+- Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. Pass question knobs as the questions: `questions: { aboutMoney: knobs.aboutMoney }`. Build questions in code only when they come from data, such as one per label the owner has. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
+- Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
+- The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs with the owner's access, within 30 seconds.
+- Its writes (messages, comments, emails) are attributed to Macro's agent acting for the owner. A routine's `dangerouslyOperateAsUser` setting makes them appear written by the owner, with no agent badge: it is set only when the user explicitly asks for the routine to act, send or post as them, never inferred from what the routine does.
+
 
 ## Parameters
 

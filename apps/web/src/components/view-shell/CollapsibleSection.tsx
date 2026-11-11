@@ -1,5 +1,5 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Collapsible, useCollapsibleContext } from '@kobalte/core/collapsible';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {

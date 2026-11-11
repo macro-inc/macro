@@ -2,11 +2,10 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { format } from 'date-fns/format';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -112,8 +111,14 @@ function Fixture() {
 
     if (current.type === 'editing' && current.intent.type === 'immediate') {
       toast.success('Email sent', {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
         actions: [
-          { label: 'Undo', onClick: () => toast.success('Send undone') },
+          {
+            label: 'Undo',
+            icon: ArrowCounterClockwise,
+            onClick: () => toast.success('Send undone'),
+          },
         ],
         duration: 5_000,
       });
@@ -146,17 +151,19 @@ function Fixture() {
       run();
     };
     toastId = toast.success('Email scheduled', {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       subtext: `Sends ${format(sendTime, "EEE, MMM d 'at' h:mm a")}`,
       actions: [
+        {
+          label: 'View message',
+          variant: 'secondary',
+          onClick: dismissThen(() => setView('compose')),
+        },
         {
           label: 'Undo',
           icon: ArrowCounterClockwise,
           onClick: dismissThen(restoreDraft),
-        },
-        {
-          label: 'View message',
-          icon: ArrowSquareOut,
-          onClick: dismissThen(() => setView('compose')),
         },
       ],
       duration: 8_000,
@@ -283,14 +290,18 @@ function Fixture() {
                   />
                 </Show>
                 <div class="ml-auto flex shrink-0 items-center gap-1">
-                  <Button label="Delete draft" size="icon-composer">
-                    <TrashIcon />
+                  <Button
+                    aria-label="Delete draft"
+                    tooltip="Delete draft"
+                    size="icon-md"
+                  >
+                    <TrashIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Attach" size="icon-composer">
-                    <PaperclipIcon />
+                  <Button aria-label="Attach" tooltip="Attach" size="icon-md">
+                    <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Format" size="icon-composer">
-                    <TextAa />
+                  <Button aria-label="Format" tooltip="Format" size="icon-md">
+                    <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                   <div class="shrink-0">
                     <EmailDateSelector
@@ -307,9 +318,8 @@ function Fixture() {
                     appearance="composer"
                     disabled={actionDisabled()}
                     aria-label={actionLabel()}
-                    tooltip={actionLabel()}
+                    tooltip={{ content: actionLabel(), shortcut: 'cmd+enter' }}
                     onClick={submit}
-                    shortcut="cmd+enter"
                   />
                 </div>
               </div>

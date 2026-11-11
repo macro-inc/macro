@@ -1,11 +1,18 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import {
+  MobileCreateMenu,
+  type MobileCreateMenuItem,
+} from '@components/app/mobile/MobileCreateMenu';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
-import ShieldCheck from '@phosphor/shield-check.svg';
-import Warning from '@phosphor/warning.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
@@ -57,6 +64,7 @@ import {
   GateCard,
   RoutingFooter,
   SectionCard,
+  SectionCondition,
   SectionMenu,
 } from '../components/builder/section-card';
 import {
@@ -76,10 +84,10 @@ import type { Box, MeasuredSection } from '../core/drop-target';
 import { placementOf, stepPlacement } from '../core/drop-target';
 import {
   bookingStep,
-  brokenGateColumns,
-  gateColumns,
+  brokenRuleColumns,
   type QuestionPlacement,
   questionNumbers,
+  ruleColumns,
 } from '../core/form-layout';
 import type {
   FormBookingTarget,
@@ -87,6 +95,7 @@ import type {
   FormDetail,
   FormLayout,
   FormSection,
+  GateRules,
   SectionKind,
 } from '../core/form-model';
 import { availabilityLine, formAvailability } from '../core/form-status';
@@ -276,6 +285,43 @@ function BuilderCanvas(
     </Show>
   );
   const [editingRules, setEditingRules] = createSignal<string>();
+  /** The filter editor over the questions before a section, for its gate rules or condition. */
+  const rulesEditor = (
+    sectionId: string,
+    rules: () => GateRules | null,
+    onChange: (rules: GateRules | null) => void
+  ) => (
+    <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
+      {
+        // Rendered once per opening, its props read live: a save must not
+        // remount the editor and drop a condition still being filled.
+        untrack(() =>
+          context.ui.renderConditionEditor({
+            get columns() {
+              return ruleColumns(layout(), sectionId).flatMap(
+                (columnId): FormColumn[] => {
+                  const found = builder.column(columnId);
+                  return found ? [found] : [];
+                }
+              );
+            },
+            get rules() {
+              return rules();
+            },
+            onChange,
+          })
+        )
+      }
+      <Button
+        size="sm"
+        variant="ghost"
+        class="self-end"
+        onClick={() => setEditingRules(undefined)}
+      >
+        Done
+      </Button>
+    </div>
+  );
   const [choosingBooking, setChoosingBooking] = createSignal(false);
   let afterMenuClose: (() => void) | undefined;
   const sectionAddTriggers = new Map<string, HTMLButtonElement>();
@@ -510,7 +556,7 @@ function BuilderCanvas(
     trigger: JSX.Element;
     triggerLabel?: string;
     triggerClass: string;
-    triggerVariant: 'outline' | 'ghost';
+    triggerVariant: 'outline' | 'secondary' | 'ghost';
     selected?: FormBookingTarget;
     onChoose: (target: FormBookingTarget) => void;
   }) => (
@@ -527,6 +573,37 @@ function BuilderCanvas(
       onCreate={context.booking.openSettings}
     />
   );
+
+  const addBooking = () => {
+    const existing = booking();
+    if (existing) revealBooking(existing.id);
+    else setChoosingBooking(true);
+  };
+  // Touch floats these above the dock, in place of the page's New.
+  const addActions = (): MobileCreateMenuItem[] => [
+    {
+      label: 'Section',
+      icon: Plus,
+      disabled: props.detail.tableGone,
+      onSelect: () => addSectionAndFocus('questions'),
+    },
+    {
+      label: 'Gate',
+      icon: ShieldCheck,
+      disabled: props.detail.tableGone,
+      onSelect: () => addSectionAndFocus('gate'),
+    },
+    ...(booking() || context.booking.available()
+      ? [
+          {
+            label: booking() ? 'View meeting link' : 'Meeting link',
+            icon: CalendarCheck,
+            disabled: props.detail.tableGone,
+            onSelect: addBooking,
+          },
+        ]
+      : []),
+  ];
 
   const hiddenColumnRows = () =>
     builder.hiddenColumns().map((hidden) => ({
@@ -569,7 +646,7 @@ function BuilderCanvas(
             databaseLink={
               <>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   class={badgeTriggerClasses({
                     variant: 'outline',
@@ -724,6 +801,14 @@ function BuilderCanvas(
                       onMoveDown={() =>
                         builder.moveSection(sectionId, index() + 1)
                       }
+                      onAddCondition={
+                        section()?.kind === 'questions' &&
+                        !section()?.showWhen &&
+                        editingRules() !== sectionId &&
+                        ruleColumns(layout(), sectionId).length > 0
+                          ? () => setEditingRules(sectionId)
+                          : undefined
+                      }
                       onDelete={() => {
                         const current = section();
                         if (current)
@@ -740,7 +825,7 @@ function BuilderCanvas(
                         <InsertionPoint betweenSections>
                           <Dropdown>
                             <Dropdown.Trigger
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               class="h-6 shrink-0 bg-surface px-2"
                               aria-label={`Insert before ${sectionName(layout(), sectionId)}`}
@@ -785,13 +870,13 @@ function BuilderCanvas(
                                 dragging={drag.isDragging(sectionTarget)}
                                 editingRules={editingRules() === sectionId}
                                 brokenRules={
-                                  brokenGateColumns(layout(), sectionId).length
+                                  brokenRuleColumns(layout(), sectionId).length
                                 }
-                                onRepair={() => builder.repairGate(sectionId)}
+                                onRepair={() => builder.repairRules(sectionId)}
                                 handle={handle()}
                                 menu={menu()}
                                 noQuestionsBefore={
-                                  gateColumns(layout(), sectionId).length === 0
+                                  ruleColumns(layout(), sectionId).length === 0
                                 }
                                 onEditRules={() => setEditingRules(sectionId)}
                                 onTitle={(title) =>
@@ -802,49 +887,17 @@ function BuilderCanvas(
                                     gateMessage,
                                   })
                                 }
-                                ruleEditor={
-                                  <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
-                                    {
-                                      // Rendered once per opening, its props read
-                                      // live: a save must not remount the editor
-                                      // and drop a condition still being filled.
-                                      untrack(() =>
-                                        context.ui.renderConditionEditor({
-                                          get columns() {
-                                            return gateColumns(
-                                              layout(),
-                                              sectionId
-                                            ).flatMap(
-                                              (columnId): FormColumn[] => {
-                                                const found =
-                                                  builder.column(columnId);
-                                                return found ? [found] : [];
-                                              }
-                                            );
-                                          },
-                                          get rules() {
-                                            return current().gateRules;
-                                          },
-                                          onChange: (gateRules) =>
-                                            builder.updateSection(sectionId, {
-                                              gateRules: gateRules ?? {
-                                                conjunction: 'and',
-                                                conditions: [],
-                                              },
-                                            }),
-                                        })
-                                      )
-                                    }
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      class="self-end"
-                                      onClick={() => setEditingRules(undefined)}
-                                    >
-                                      Done
-                                    </Button>
-                                  </div>
-                                }
+                                ruleEditor={rulesEditor(
+                                  sectionId,
+                                  () => current().gateRules,
+                                  (gateRules) =>
+                                    builder.updateSection(sectionId, {
+                                      gateRules: gateRules ?? {
+                                        conjunction: 'and',
+                                        conditions: [],
+                                      },
+                                    })
+                                )}
                               />
                             </Match>
                             <Match
@@ -877,7 +930,7 @@ function BuilderCanvas(
                                       trigger: 'Change',
                                       triggerLabel: 'Change booking link',
                                       triggerClass: 'shrink-0',
-                                      triggerVariant: 'outline',
+                                      triggerVariant: 'secondary',
                                       selected:
                                         current().bookingTarget ?? undefined,
                                       onChoose: (target) =>
@@ -960,6 +1013,47 @@ function BuilderCanvas(
                                 handle={handle()}
                                 menu={menu()}
                                 editors={editors(sectionId, null)}
+                                condition={
+                                  <Show
+                                    when={
+                                      current().showWhen ||
+                                      editingRules() === sectionId
+                                    }
+                                  >
+                                    <SectionCondition
+                                      sentence={rulesSentence(
+                                        current().showWhen,
+                                        builder.columns()
+                                      )}
+                                      editing={editingRules() === sectionId}
+                                      brokenRules={
+                                        brokenRuleColumns(layout(), sectionId)
+                                          .length
+                                      }
+                                      onRepair={() =>
+                                        builder.repairRules(sectionId)
+                                      }
+                                      onEdit={() => setEditingRules(sectionId)}
+                                      onRemove={() =>
+                                        builder.updateSection(sectionId, {
+                                          showWhen: null,
+                                        })
+                                      }
+                                      editor={rulesEditor(
+                                        sectionId,
+                                        () => current().showWhen,
+                                        (rules) =>
+                                          builder.updateSection(sectionId, {
+                                            showWhen:
+                                              rules &&
+                                              rules.conditions.length > 0
+                                                ? rules
+                                                : null,
+                                          })
+                                      )}
+                                    />
+                                  </Show>
+                                }
                                 onTitle={(title) =>
                                   builder.updateSection(sectionId, { title })
                                 }
@@ -1019,52 +1113,68 @@ function BuilderCanvas(
               columns={hiddenColumnRows()}
               onAdd={(columnId) => builder.addExistingColumn(columnId)}
             />
-            <div
-              class="mt-6 flex flex-wrap gap-3"
-              role="group"
-              aria-label="Add to form"
-            >
-              <Button
-                variant="outline"
-                size="md"
-                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
-                disabled={props.detail.tableGone}
-                onClick={() => addSectionAndFocus('questions')}
-              >
-                <Plus class="size-4" />
-                Add section
-              </Button>
-              <Button
-                variant="outline"
-                size="md"
-                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
-                disabled={props.detail.tableGone}
-                onClick={() => addSectionAndFocus('gate')}
-              >
-                <ShieldCheck class="size-4" />
-                Add gate
-              </Button>
-              <Show when={booking() || context.booking.available()}>
-                <Button
-                  variant="outline"
-                  size="md"
-                  class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
-                  disabled={props.detail.tableGone}
-                  onClick={(event) => {
-                    const existing = booking();
-                    if (existing) {
-                      revealBooking(existing.id);
-                    } else {
-                      dialogReturnFocus = event.currentTarget;
-                      setChoosingBooking(true);
-                    }
-                  }}
+            <Show
+              when={!isTouchDevice()}
+              fallback={
+                <FloatRegion
+                  region="accessory"
+                  active={() =>
+                    (props.active ?? true) && !virtualKeyboardVisible()
+                  }
                 >
-                  <CalendarCheck class="size-4" />
-                  {booking() ? 'View meeting link' : 'Add meeting link'}
+                  <div class="flex justify-end px-(--mobile-chrome-gutter)">
+                    <MobileCreateMenu label="Add" items={addActions()} />
+                  </div>
+                </FloatRegion>
+              }
+            >
+              <div
+                class="mt-6 flex flex-wrap gap-3"
+                role="group"
+                aria-label="Add to form"
+              >
+                <Button
+                  variant="secondary"
+                  size="md"
+                  class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
+                  disabled={props.detail.tableGone}
+                  onClick={() => addSectionAndFocus('questions')}
+                >
+                  <Plus class="size-4" />
+                  Add section
                 </Button>
-              </Show>
-            </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
+                  disabled={props.detail.tableGone}
+                  onClick={() => addSectionAndFocus('gate')}
+                >
+                  <ShieldCheck class="size-4" />
+                  Add gate
+                </Button>
+                <Show when={booking() || context.booking.available()}>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    class="h-14 min-w-max flex-1 justify-start gap-2 rounded-xl px-5"
+                    disabled={props.detail.tableGone}
+                    onClick={(event) => {
+                      const existing = booking();
+                      if (existing) {
+                        revealBooking(existing.id);
+                      } else {
+                        dialogReturnFocus = event.currentTarget;
+                        setChoosingBooking(true);
+                      }
+                    }}
+                  >
+                    <CalendarCheck class="size-4" />
+                    {booking() ? 'View meeting link' : 'Add meeting link'}
+                  </Button>
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
         <div class="pointer-events-none absolute inset-y-0 left-4 z-1 hidden w-10 @min-[880px]/builder:block">
@@ -1158,7 +1268,7 @@ function BuilderCanvas(
                   <For each={relationTables()}>
                     {(relation) => (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         class="justify-start"
                         onClick={() => {
                           const current = pending();

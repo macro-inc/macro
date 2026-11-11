@@ -1,9 +1,5 @@
+import { t } from '@app/lib/i18n';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import {
-  getDeletedItems,
-  invalidateDeletedItems,
-  setDeletedItems,
-} from '@queries/storage/deleted';
 import type { ItemType } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import {
@@ -80,17 +76,17 @@ export const useItemOperations = createSingletonRoot(() => {
   );
 
   const copyItem = createCallback(
-    async (args: {
-      itemType: Exclude<ItemType, 'project'>;
-      id: string;
-      name: string;
-    }) => {
+    async (args: { itemType: ItemType; id: string; name: string }) => {
       const id = await copyItemOp(args);
       const success = id !== null;
       if (success) {
         toast.success(`${args.name} copied`);
+      } else if (args.itemType === 'project') {
+        toast.failure(t('entityActions.toastDuplicateFolderFailed'), {
+          subtext: t('entityActions.folderDuplicateLimitHint'),
+        });
       } else {
-        toast.failure('Unable to copy item');
+        toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
       }
       return id;
     }
@@ -167,22 +163,6 @@ export const useItemOperations = createSingletonRoot(() => {
       toastTypeDeterminer: (result) =>
         result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
     });
-
-    // If items have failed to permanently delete, we can't just refetch resources, because items delete so slowly everything that had been successfully deleted will reappear.
-    // So we need to undo our optimistic removal here.
-    if (result.failedItems.length > 0) {
-      await invalidateDeletedItems();
-      const deletedItems = getDeletedItems();
-      setDeletedItems(() => ({
-        items: deletedItems.filter((item) => {
-          return (
-            result.failedItems.some(
-              (failedItem) => failedItem.id === item.id
-            ) || !items.some((argItem) => argItem.id === item.id)
-          );
-        }),
-      }));
-    }
 
     return result;
   });

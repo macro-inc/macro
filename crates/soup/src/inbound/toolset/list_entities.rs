@@ -32,7 +32,10 @@ use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
-use models_soup::{SoupProperty, document::SoupDocumentSubType, item::SoupItem};
+use models_soup::{
+    SoupProperty, agent_session::AgentSessionArchiveCause, document::SoupDocumentSubType,
+    item::SoupItem,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -111,6 +114,28 @@ pub enum ItemType {
     ForeignEntity,
 }
 
+/// Who or what archived an agent session.
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionArchiveCause {
+    /// A person archived it.
+    User,
+    /// Its pull requests merged.
+    PullRequestMerged,
+    /// Its runtime session was closed.
+    RuntimeClosed,
+}
+
+impl From<AgentSessionArchiveCause> for SessionArchiveCause {
+    fn from(cause: AgentSessionArchiveCause) -> Self {
+        match cause {
+            AgentSessionArchiveCause::User => Self::User,
+            AgentSessionArchiveCause::PullRequestMerged => Self::PullRequestMerged,
+            AgentSessionArchiveCause::RuntimeClosed => Self::RuntimeClosed,
+        }
+    }
+}
+
 /// Item returned by the list entities AI tool.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -165,8 +190,9 @@ pub enum EntityItem {
         owner_id: String,
         /// Agent persona id.
         bot_id: Uuid,
-        /// Whether the session is archived.
-        is_archived: bool,
+        /// Who or what archived the session; absent while it is active.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        archived_by: Option<SessionArchiveCause>,
         /// Runtime connection status.
         status: String,
         /// Latest turn state, when available.
@@ -285,7 +311,7 @@ impl EntityItem {
                 name: session.name,
                 owner_id: session.owner_id.to_string(),
                 bot_id: session.bot_id,
-                is_archived: session.is_archived,
+                archived_by: session.archived_by.map(Into::into),
                 status: session.status,
                 turn_state: session.turn_state,
                 repo_url: session.repo_url,
@@ -330,6 +356,9 @@ impl EntityItem {
             SoupItem::Chat(_) => unreachable!("legacy chats are excluded from agent tools"),
             SoupItem::DatabaseRow(_) => {
                 unreachable!("ListEntities tool does not surface DatabaseRow rows")
+            }
+            SoupItem::Harness(_) => {
+                unreachable!("ListEntities tool does not surface runtimes")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -383,7 +412,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::CrmContact(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::AgentSession(_)
-            | SoupItem::DatabaseRow(_) => return false,
+            | SoupItem::DatabaseRow(_)
+            | SoupItem::Harness(_) => return false,
         };
         properties
             .iter()

@@ -60,6 +60,7 @@ export const unsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -67,6 +68,7 @@ export const unsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -105,6 +107,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -112,11 +115,108 @@ export const removeUnsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
 
 export const removeUnsubscribeItemResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Atomically mute or snooze items for the authenticated user.
+ */
+export const unsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'harness',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+  snoozed_until: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('A future resume time. Omit to mute indefinitely.'),
+});
+
+export const unsubscribeItemsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Atomically resume delivery for the authenticated user's items.
+ */
+export const removeUnsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'harness',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+});
+
+export const removeUnsubscribeItemsResponse = zod
   .object({})
   .describe(
     'Empty response is required due to custom fetch forcing `response.json()`'
@@ -215,6 +315,7 @@ export const listTypedNotificationsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -222,6 +323,7 @@ export const listTypedNotificationsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -967,6 +1069,24 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -1067,6 +1187,28 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -2092,6 +2234,102 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2128,6 +2366,50 @@ export const listTypedNotificationsResponse = zod
       .describe('The next page cursor if it exists.'),
   })
   .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Soft-delete multiple user notifications.
+ */
+export const bulkDeleteUserNotificationsV2Body = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as done.
+ */
+export const bulkMarkNotificationsDoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export const bulkMarkNotificationsSeenBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export const bulkMarkNotificationsUndoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -2211,6 +2493,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -2218,6 +2501,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -2963,6 +3247,24 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -3063,6 +3365,28 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -4088,6 +4412,102 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4201,6 +4621,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -4208,6 +4629,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -4953,6 +5375,24 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -5053,6 +5493,28 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -6078,6 +6540,102 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          outcome: zod
+                            .enum(['succeeded', 'failed'])
+                            .describe(
+                              'How a routine run ended, as its notification reports it.'
+                            ),
+                          routineId: zod
+                            .uuid()
+                            .describe('The routine that ran.'),
+                          routineName: zod
+                            .string()
+                            .describe("The routine's name when it ran."),
+                        })
+                        .describe(
+                          "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                        ),
+                      tag: zod.enum(['routine_run_finished']),
+                    })
+                    .describe(
+                      "One of the user's routines finished a run, successfully or not."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -6196,6 +6754,7 @@ export const getTypedNotificationByIdResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -6203,6 +6762,7 @@ export const getTypedNotificationByIdResponse = zod
         'database',
         'database_row',
         'form',
+        'external_chat',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -6882,6 +7442,22 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
+                  isAgent: zod
+                    .boolean()
+                    .optional()
+                    .describe('Whether the invite creates an agent account.'),
+                  reminder: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      'Whether this email reminds the invitee of an invite they have not answered.'
+                    ),
                   role: zod
                     .string()
                     .nullish()
@@ -6970,6 +7546,28 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('A reminder the user set for themselves came due.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  chatName: zod.string().describe("The chat's name."),
+                  messageId: zod
+                    .uuid()
+                    .describe(
+                      'Stable message id; retries use it as their notification id.'
+                    ),
+                  provider: zod
+                    .enum(['whatsapp'])
+                    .describe(
+                      'The messaging service an external chat lives in.'
+                    ),
+                })
+                .describe(
+                  'A live message in an independently shared external chat.'
+                ),
+              tag: zod.enum(['external_chat_message']),
+            })
+            .describe('A live message in a shared external chat.'),
           zod
             .object({
               content: zod
@@ -7918,6 +8516,92 @@ export const getTypedNotificationByIdResponse = zod
             .describe(
               'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
             ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "The attempt to join, which is also this notification's id."
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional requester profile picture URL.'),
+                  })
+                )
+                .describe(
+                  'A person asked to join a channel the recipient participates in.'
+                ),
+              tag: zod.enum(['channel_access_requested']),
+            })
+            .describe(
+              'Someone asked to join a channel the user participates in.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  outcome: zod
+                    .enum(['succeeded', 'failed'])
+                    .describe(
+                      'How a routine run ended, as its notification reports it.'
+                    ),
+                  routineId: zod.uuid().describe('The routine that ran.'),
+                  routineName: zod
+                    .string()
+                    .describe("The routine's name when it ran."),
+                })
+                .describe(
+                  "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed."
+                ),
+              tag: zod.enum(['routine_run_finished']),
+            })
+            .describe(
+              "One of the user's routines finished a run, successfully or not."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agents: zod
+                    .array(
+                      zod
+                        .object({
+                          botId: zod.uuid().describe("The agent's bot id."),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          "One of the recipient's agents that stopped with their runtime access."
+                        )
+                    )
+                    .describe(
+                      "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                    ),
+                  runtimeName: zod.string().describe("The runtime's name."),
+                })
+                .describe(
+                  "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                ),
+              tag: zod.enum(['runtime_access_removed']),
+            })
+            .describe(
+              "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -7942,50 +8626,6 @@ export const getTypedNotificationByIdResponse = zod
         .describe('When the notification was viewed\/seen.'),
     })
   );
-
-/**
- * @summary Soft-delete multiple user notifications.
- */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as done.
- */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as seen.
- */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as not done.
- */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
 
 /**
  * @summary Soft-delete a single user notification.

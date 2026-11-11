@@ -40,6 +40,9 @@ pub struct ScheduledDeliveryAdapter {
     pub s3_client: s3_client::S3,
     pub attachment_bucket: String,
     pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+    pub read_receipts: email::domain::read_receipts::ReadReceiptService<
+        email::outbound::read_receipts_pg::ReadReceiptPgRepository,
+    >,
 }
 
 /// Context obtained only by winning an atomic database claim.
@@ -196,7 +199,10 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                 if let (Some(message_db_id), Some(thread_db_id)) =
                     (message_to_send.db_id, message_to_send.thread_db_id)
                 {
-                    let _ = ctx
+                    agent_correlation::context::scope(
+                        scheduled_message.agent_correlation_id,
+                        async {
+                            let _ = ctx
                         .macro_event_broker
                         .send_event(&EmailMacroEvent::message_sent(MessageSentMetadata {
                             link_id: link.id,
@@ -231,6 +237,9 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                         .inspect_err(
                             |error| tracing::error!(error=?error, "failed to publish email event"),
                         );
+                        },
+                    )
+                    .await;
                 }
 
                 // Cleanup attachments in the background after successful send
@@ -282,7 +291,7 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
     ) -> Result<SentDelivery, SubmissionError> {
         let ids = self
             .email_api
-            .send_prepared(&prepared.provider)
+            .send_prepared(prepared.provider)
             .await
             .map_err(classify_submission_error)?;
         apply_sent_ids(&mut prepared.delivery.message, ids);
@@ -333,7 +342,7 @@ impl ScheduledDeliveryAdapter {
                 .await
                 .context("failed to load scheduled message")?;
         let (parent_message_id, references) =
-            generate_email_threading_headers(&self.db, message.replying_to_id, data.link_id).await;
+            generate_email_threading_headers(&self.db, message.replying_to_id).await;
         let approved = claim
             .delivery
             .approved_snapshot
@@ -371,10 +380,20 @@ impl ScheduledDeliveryAdapter {
             duration_ms = started.elapsed().as_millis() as u64,
             "approved email attachments prepared"
         );
+        // Only the provider copy carries the pixel; sync brings it back later.
+        let mut outgoing = message.clone();
+        outgoing.body_html = self
+            .read_receipts
+            .tracked_html(
+                claim.link.id,
+                data.message_id,
+                outgoing.body_html.as_deref(),
+            )
+            .await;
         tracing::Span::current().record("phase", "mime_and_credentials");
         let started = Instant::now();
         let request = SendRequest {
-            message: message.clone(),
+            message: outgoing,
             from: sender_contact,
             parent_message_id,
             references,
@@ -515,7 +534,8 @@ async fn process_sent_message(
     )
     .await?;
 
-    email_db_client::threads::update::sync_thread_calendar_flag(tx.as_mut(), thread_db_id).await?;
+    email_db_client::threads::update::sync_thread_attachment_flags(tx.as_mut(), thread_db_id)
+        .await?;
 
     Ok(())
 }

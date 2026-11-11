@@ -6,7 +6,7 @@ import {
   DragDropProvider,
   DragOverlay,
 } from '@thisbeyond/solid-dnd';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   createContext,
   createSignal,
@@ -257,7 +257,7 @@ export function Kanban(props: KanbanProps) {
           },
         }}
       >
-        {props.children}
+        <Layer offset={1}>{props.children}</Layer>
       </DragContext.Provider>
       <DragOverlay
         class="pointer-events-none select-none"
@@ -427,7 +427,7 @@ export function KanbanLane(props: {
           droppable.ref(node);
         }}
         class={cn(
-          'relative flex w-72 shrink-0 flex-col rounded-xl border border-edge-frame bg-[color-mix(in_oklch,var(--color-panel)_94%,var(--color-ink))] p-2 transition-colors',
+          'relative flex w-72 shrink-0 flex-col rounded-xl border border-edge-frame bg-inset p-2 transition-colors',
           draggable.isActiveDraggable && 'opacity-35',
           highlighted() && 'ring-2 ring-accent',
           props.class
@@ -497,12 +497,17 @@ export function KanbanCard(props: {
       <article
         ref={draggable.ref}
         class={cn(
-          'group relative rounded-lg border border-edge-muted bg-surface-3 shadow-sm transition-shadow hover:border-edge hover:shadow-md',
+          'group relative rounded-lg border border-transparent bg-surface shadow-sm transition-shadow light-mode:border-edge-frame light-mode:shadow-md not-touch:hover:shadow-md',
           draggable.isActiveDraggable && 'opacity-35',
           props.pending && 'ring-1 ring-ink/20'
         )}
         onMouseDown={(event) => {
-          if (!event.currentTarget.contains(event.target)) {
+          // A secondary press opens the card's menu; it must not restart an
+          // active drag's origin.
+          if (
+            event.button !== 0 ||
+            !event.currentTarget.contains(event.target)
+          ) {
             return;
           }
 

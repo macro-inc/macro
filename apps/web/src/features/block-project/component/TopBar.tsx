@@ -28,8 +28,10 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
@@ -74,6 +76,7 @@ export function TopBar() {
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },
+          { op: 'copy' as const },
           { op: 'moveToProject' as const },
           { op: 'delete' as const },
         ]
@@ -92,8 +95,11 @@ export function TopBar() {
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent({ type: 'project', id, name: name() }),
       condition: () => !isSpecialProject,
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={{ type: 'project', id, name: name() }}
+        />
       ),
     },
     {
@@ -124,9 +130,9 @@ export function TopBar() {
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
                     {tool.buttonComponent ? (
-                      <tool.buttonComponent />
+                      <tool.buttonComponent grouped />
                     ) : (
-                      <ToolButton tool={tool} />
+                      <ToolButton tool={tool} grouped />
                     )}
                   </Show>
                 )}

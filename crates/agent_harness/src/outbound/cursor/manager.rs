@@ -208,6 +208,14 @@ struct RestoredCursorSession {
     last_run: Option<CursorRunId>,
 }
 
+/// The owner's account defaults a session starts on when nothing outranks them.
+struct SessionDefaults {
+    /// The Cursor model id the owner chose for new sessions.
+    model_id: Option<String>,
+    /// The reasoning effort chosen with that model.
+    effort: Option<String>,
+}
+
 impl<Sessions, Keys, Repositories>
     CursorContainerManager<Sessions, Keys, Repositories, NoArtifactStore>
 where
@@ -338,7 +346,7 @@ where
         err,
         fields(agent.session.id = %session.id)
     )]
-    async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
+    async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, SessionDefaults)> {
         // The key is a person's: a session owned by anything else has no
         // Cursor account to run on, and is refused here rather than resolved
         // as though it did.
@@ -365,7 +373,13 @@ where
             tracing::error!(error = %error, session_id = %session.id, "a stored cursor api key is unusable");
             HarnessError::Container("the stored cursor api key is unusable".to_owned())
         })?;
-        Ok((client, config.default_model_id))
+        Ok((
+            client,
+            SessionDefaults {
+                model_id: config.default_model_id,
+                effort: config.default_effort,
+            },
+        ))
     }
 
     /// Wire up one session's in-process agent and return our end of its pipe.
@@ -375,7 +389,7 @@ where
     async fn serve_session(
         &self,
         client: CursorClient,
-        default_model_id: Option<String>,
+        defaults: SessionDefaults,
         session: &AgentSession,
         restore: Option<RestoredCursorSession>,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
@@ -470,12 +484,16 @@ where
                 journal,
                 self.artifacts.clone(),
             )
-            .with_default_model(default_model_id)
+            .with_default_model(defaults.model_id)
+            .with_default_effort(defaults.effort)
             // The session's own model outranks the account default: what its
             // owner picked for it when they opened it, what they switched it
             // to since, or - for a session that never picked - the slug this
             // harness seeded the record with, which resolves to no opinion.
-            .with_host_model(Some(session.model.clone())),
+            .with_host_model(Some(session.model.clone()))
+            .with_image_fetcher(Arc::new(
+                cursor_cloud_agents::outbound::http_prompt_images::HttpPromptImageFetcher::new(),
+            )),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -660,13 +678,12 @@ where
         // opened from the create menu and older rows still reach the refusal
         // here, so "the bot ignored me" stays a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
-        let (client, default_model_id) = self.client_for(&session).await?;
+        let (client, defaults) = self.client_for(&session).await?;
         // No MCP servers pass through here: they ride the ACP protocol
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        self.serve_session(client, default_model_id, &session, None)
-            .await
+        self.serve_session(client, defaults, &session, None).await
     }
 
     async fn resume(
@@ -682,7 +699,7 @@ where
         // agent yet (the next prompt mints one). No acp id at all means the
         // session never opened; serve it fresh, exactly like `spawn`.
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
-        let (client, default_model_id) = self.client_for(&stored).await?;
+        let (client, defaults) = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
                 let external = ExternalSessionRepo::get(&self.sessions, session).await?;
@@ -706,8 +723,7 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        self.serve_session(client, default_model_id, &stored, restore)
-            .await
+        self.serve_session(client, defaults, &stored, restore).await
     }
 
     /// A Cursor session has no container of ours to hold a token: the raw
@@ -734,7 +750,7 @@ where
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
         let agent = CursorAgentId::new(external.external_id);
         match self.client_for(&stored).await {
-            Ok((client, _default_model_id)) => client
+            Ok((client, _defaults)) => client
                 .archive_agent(&agent)
                 .await
                 .map_err(|error| HarnessError::Container(error.to_string()))?,
@@ -804,10 +820,11 @@ where
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[cursor_cloud_agents::domain::prompt_image::CursorPromptImage],
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
+            .create_agent(prompt, repo, open_pull_request, mcp_servers, model, images)
             .await?;
         let summary = self
             .client
@@ -847,8 +864,9 @@ where
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[cursor_cloud_agents::domain::prompt_image::CursorPromptImage],
     ) -> std::result::Result<CursorRunId, rootcause::Report> {
-        self.client.create_run(agent, prompt, model).await
+        self.client.create_run(agent, prompt, model, images).await
     }
 
     async fn list_models(&self) -> std::result::Result<Vec<CursorModel>, rootcause::Report> {

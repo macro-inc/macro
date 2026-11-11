@@ -4,7 +4,7 @@ import type {
 } from '@app/features/sharing/share-delivery/share-delivery';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
-import type { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
 
 /**
  * The Share menu's To field: borderless in the dialog's To row, and a
@@ -12,7 +12,6 @@ import type { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
  */
 export function ShareRecipientField(props: {
   form: ShareForm<RecipientOption>;
-  options: ReturnType<typeof useCombinedRecipients>['all'];
 }) {
   return (
     <RecipientSelector<'user' | 'contact' | 'channel'>
@@ -20,7 +19,7 @@ export function ShareRecipientField(props: {
       setSelectedOptions={props.form.setRecipients}
       selectedOptions={props.form.recipients()}
       triedToSubmit={props.form.triedToSubmit}
-      options={props.options}
+      createSource={useCombinedRecipientSource}
       triggerMode="input"
       focusOnMount
       horizontalScroll={!isMobile()}

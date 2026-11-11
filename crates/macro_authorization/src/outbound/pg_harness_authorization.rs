@@ -37,9 +37,6 @@ pub enum PgHarnessAuthorizationRepoError {
     /// A database operation failed.
     #[error("harness authorization database operation failed")]
     Database(#[from] sqlx::Error),
-    /// Persisted harness ownership data violated its schema invariant.
-    #[error("invalid persisted harness ownership data")]
-    InvalidHarnessOwner,
     /// Persisted user data could not be represented as a Macro user identifier.
     #[error("invalid persisted user email")]
     InvalidUserEmail,
@@ -50,7 +47,6 @@ struct HarnessTokenAuthorizationRow {
     token_id: Uuid,
     harness_id: Uuid,
     owner_user_id: Option<String>,
-    team_id: Option<Uuid>,
     created_by: String,
 }
 
@@ -58,10 +54,10 @@ impl TryFrom<HarnessTokenAuthorizationRow> for HarnessTokenAuthorization {
     type Error = PgHarnessAuthorizationRepoError;
 
     fn try_from(row: HarnessTokenAuthorizationRow) -> Result<Self, Self::Error> {
-        let owner = match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => HarnessAuthorizationOwner::User { user_id },
-            (None, Some(team_id)) => HarnessAuthorizationOwner::Team { team_id },
-            _ => return Err(PgHarnessAuthorizationRepoError::InvalidHarnessOwner),
+        // A row still naming only a team was written by a replica on the previous
+        // release during rollout; it belongs to whoever registered it.
+        let owner = HarnessAuthorizationOwner::User {
+            user_id: row.owner_user_id.unwrap_or_else(|| row.created_by.clone()),
         };
 
         Ok(Self {
@@ -108,7 +104,6 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
                 ht.id AS token_id,
                 h.id AS harness_id,
                 h.owner_user_id,
-                h.team_id,
                 h.created_by
             FROM harness_tokens ht
             JOIN harnesses h ON h.id = ht.harness_id
@@ -124,12 +119,24 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
         row.map(HarnessTokenAuthorization::try_from).transpose()
     }
 
+    /// Records a token's use, at most about once a minute per token.
+    ///
+    /// Every harness-authenticated request calls this, and one token can carry
+    /// tens of requests a second. Rewriting its row each time queues them all on
+    /// the row lock, each holding a connection, so one slow commit stalls every
+    /// request behind it. A recent timestamp is left alone, and a row another
+    /// request is already updating is skipped rather than waited on.
     async fn mark_harness_token_used(&self, token_id: Uuid) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE harness_tokens
             SET last_used_at = now()
-            WHERE id = $1
+            WHERE id = (
+                SELECT id FROM harness_tokens
+                WHERE id = $1
+                  AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
+                FOR UPDATE SKIP LOCKED
+            )
             "#,
             token_id,
         )
@@ -165,21 +172,19 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
         row.map(ResolvedBotActingUser::try_from).transpose()
     }
 
-    async fn user_has_team(&self, fusion_user_id: &str, team_id: Uuid) -> Result<bool, Self::Err> {
-        let has_team = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM team_user
-                WHERE user_id = $1 AND team_id = $2
-            ) AS "has_team!"
-            "#,
-            fusion_user_id,
-            team_id,
+    async fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        macro_user_id: &str,
+    ) -> Result<bool, Self::Err> {
+        let may_use = sqlx::query_scalar!(
+            r#"SELECT harness_can_run($1, $2) AS "may_use!""#,
+            harness_id.as_uuid(),
+            macro_user_id,
         )
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(has_team)
+        Ok(may_use)
     }
 }

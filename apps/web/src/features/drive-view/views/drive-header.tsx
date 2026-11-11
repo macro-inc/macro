@@ -2,6 +2,7 @@ import {
   ListSortDropdown,
   useViewControlHotkeys,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -16,6 +17,7 @@ import { useDriveView } from '../context/drive-context';
 import { DRIVE_SORT_OPTIONS } from '../core/types';
 import { DriveCreateMenu } from '../drive-create-menu';
 import { DriveFilterMenu } from './drive-filter-menu';
+import { DriveFolderPath } from './drive-folder-hierarchy';
 import { DriveMobileTabs } from './drive-mobile-tabs';
 
 export function DriveHeader() {
@@ -55,15 +57,17 @@ export function DriveHeader() {
           title={<DriveBreadcrumbsOutlet aria-label="Drive location" />}
         >
           <Show when={state.value().location.kind === 'tab'}>
-            <HeaderActionGroup label="File filters">
+            <HeaderActionGroup label="File filters" size="md">
               <Suspense>
-                <DriveFilterMenu />
+                <DriveFilterMenu grouped size="icon-md" />
               </Suspense>
             </HeaderActionGroup>
           </Show>
           <Show when={!isRecent()}>
-            <HeaderActionGroup label="File view options">
+            <HeaderActionGroup label="File view options" size="md">
               <ListSortDropdown
+                grouped
+                size="icon-md"
                 label="Sort files"
                 value={state.value().sort}
                 onChange={state.setSort}
@@ -87,17 +91,21 @@ export function DriveHeader() {
       }
     >
       <ViewShell.TopBar>
-        <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+        <ViewSidebar.Title
+          caret={false}
+          class="hidden @max-[720px]/view-shell:flex"
+        >
           Drive
-        </h1>
+        </ViewSidebar.Title>
         <DriveBreadcrumbsOutlet
           aria-label="Drive location"
           class="@max-[720px]/view-shell:hidden"
         />
       </ViewShell.TopBar>
       <ViewShell.Header>
-        <div class="flex min-w-0 flex-col gap-3">
+        <div class="flex min-w-0 flex-col gap-1">
           <DriveMobileTabs />
+          <DriveFolderPath />
         </div>
       </ViewShell.Header>
     </Show>

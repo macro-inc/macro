@@ -6,12 +6,12 @@ export {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from './combinedRecipient';
-export { useContacts } from './contactService';
 export {
   getDisplayName,
   getDisplayNameParts,
   getInitials,
   getInitialsFromName,
+  isAgentAccount,
   seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,

@@ -85,6 +85,9 @@ pub enum ReviewSettlement {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSettlement {
+    /// The workspace the import read.
+    #[serde(default)]
+    pub source: ImportWorkspace,
     /// How the write ended.
     pub outcome: ImportOutcome,
     /// Why it failed, or what went wrong in a completed write.
@@ -92,7 +95,8 @@ pub struct ImportSettlement {
     pub error: Option<String>,
     /// Objects written into Macro.
     pub imported: u32,
-    /// Objects the plan copies, as they are or as task lists.
+    /// Objects the plan copies: as they are or as task lists from Notion,
+    /// projects and issues from Linear or Jira.
     pub planned: u32,
     /// Planned documents.
     pub documents: u32,
@@ -100,11 +104,11 @@ pub struct ImportSettlement {
     pub databases: u32,
     /// Rows those databases hold.
     pub database_rows: u32,
-    /// Planned task lists.
+    /// Planned task lists; issues that become tasks for Linear and Jira.
     pub task_lists: u32,
-    /// Tasks those task lists become.
+    /// Tasks those task lists or issues become.
     pub task_rows: u32,
-    /// Objects left in Notion.
+    /// Objects left in the source workspace.
     pub skipped: u32,
     /// Planned objects that were not written.
     pub not_written: u32,
@@ -126,6 +130,20 @@ pub struct ImportSettlement {
 
 /// Most items an [`ImportSettlement`] lists per kind, keeping it bounded.
 pub const MAX_IMPORT_ITEMS: usize = 50;
+
+/// The workspace an import reads. Events stored before Linear and Jira
+/// imports existed are Notion's.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportWorkspace {
+    /// Notion pages and databases.
+    #[default]
+    Notion,
+    /// Linear projects and issues.
+    Linear,
+    /// Jira projects, epics and issues.
+    Jira,
+}
 
 /// How an approved import's write ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -156,9 +174,12 @@ pub struct ImportItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportPlan {
-    /// Objects to copy as they are.
+    /// The workspace the import reads.
+    #[serde(default)]
+    pub source: ImportWorkspace,
+    /// Objects to copy as they are; projects for Linear and Jira.
     pub copy: u32,
-    /// Data sources whose rows become tasks.
+    /// Data sources whose rows become tasks; issues for Linear and Jira.
     pub task_lists: u32,
     /// Objects to leave in the source workspace.
     pub skipped: u32,

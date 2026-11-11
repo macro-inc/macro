@@ -43,8 +43,11 @@ mod linux_notification;
 mod logging;
 #[cfg(target_os = "macos")]
 mod macos_notification_permission;
+#[cfg(feature = "cef")]
+pub mod screen_capture;
 mod share_target;
 mod staged_upload;
+mod whatsapp_passkey;
 #[cfg(desktop)]
 mod window_state;
 
@@ -130,7 +133,14 @@ type Type = std::sync::OnceLock<
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    run_with(tauri::Builder::default());
+    run_with(tauri::Builder::default(), configured_window);
+}
+
+/// The startup window as configured, for runtimes without extra window options.
+fn configured_window<'a>(
+    window: tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>> {
+    window
 }
 
 /// The runtime type behind the default `tauri::Builder`: wry everywhere, except
@@ -140,10 +150,20 @@ pub type AppRuntime = tauri::Wry;
 #[cfg(feature = "cef")]
 pub type AppRuntime = tauri::DynRuntime;
 
+/// Applies runtime-specific options to each startup window before it is built.
+pub type ConfigureWindow =
+    for<'a> fn(
+        tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>;
+
 /// Runs the app on a builder whose webview runtime is already selected.
-/// `desktop-cef` passes a Chromium builder; every other build calls [`run`].
-pub fn run_with(builder: tauri::Builder<AppRuntime>) {
+/// `desktop-cef` passes a Chromium builder and its window options; every other
+/// build calls [`run`].
+pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: ConfigureWindow) {
     use tracing_subscriber::EnvFilter;
+
+    #[cfg(mobile)]
+    let _ = configure_window;
 
     let diagnostics = diagnostics::Diagnostics::from_launch();
     let recording = diagnostics.is_recording();
@@ -229,8 +249,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         // single instance plugin should always be the first registered
         tracing::debug!("register single instance plugin");
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+            .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
                 tracing::debug!("single instance callback with argv: {argv:?}");
+                desktop::main_window::reveal(app);
             }))
             .plugin(window_state::plugin());
     }
@@ -286,7 +307,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_device_info::init())
-        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_http::init_with_cookie_store_dir(
+            "$APPLOCALDATA",
+        ))
         .plugin(
             tauri_plugin_websocket::Builder::new()
                 .merge_header_callback(Box::new(merge_header_callback))
@@ -364,6 +387,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            whatsapp_passkey::whatsapp_passkey_authenticate,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,
@@ -378,6 +402,12 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             macos_notification_permission::request_macos_notification_permission,
             #[cfg(target_os = "macos")]
             macos_notification_permission::send_macos_notification,
+            #[cfg(feature = "cef")]
+            screen_capture::list_screen_capture_sources,
+            #[cfg(feature = "cef")]
+            screen_capture::request_screen_capture_access,
+            #[cfg(feature = "cef")]
+            screen_capture::allow_screen_capture,
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_init_with_schema,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
@@ -386,11 +416,20 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             graphql_cache_plugin::commands::graphql_cache_watch,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
+            graphql_cache_plugin::commands::graphql_cache_people_context,
+            graphql_cache_plugin::commands::graphql_cache_people_update,
+            graphql_cache_plugin::commands::graphql_cache_people_search,
+            graphql_cache_plugin::commands::graphql_cache_people_resolve_references,
+            graphql_cache_plugin::commands::graphql_cache_people_read_sql,
+            graphql_cache_plugin::commands::graphql_cache_contact_snapshot,
+            graphql_cache_plugin::commands::graphql_cache_contact_reconcile,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
+            graphql_cache_plugin::commands::graphql_cache_entity_filter_resume,
             graphql_cache_plugin::commands::graphql_cache_calendar_range,
             graphql_cache_plugin::commands::graphql_cache_calendar_commit,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
+            graphql_cache_plugin::commands::graphql_cache_hydrate_scoped,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
             graphql_cache_plugin::commands::graphql_cache_inspect_mutations,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
@@ -406,6 +445,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
+            macro_bundle_updater_plugin::inbound::plugin::set_bundle_reload_hold,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
@@ -429,15 +469,19 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             desktop::macrod::macrod_stop,
             #[cfg(desktop)]
             desktop::macrod::macrod_status,
+            #[cfg(desktop)]
+            desktop::pasteboard::stage_desktop_pasteboard_files,
         ])
         .setup(move |app| {
             #[cfg(desktop)]
-            for config in &startup_windows {
-                let navigation = navigation.clone();
-                let handle = app.handle().clone();
-                tauri::WebviewWindowBuilder::from_config(app, config)?
-                    .on_new_window(move |url, _features| navigation.on_new_window(&handle, &url))
-                    .build()?;
+            {
+                let windows = desktop::main_window::StartupWindows::new(
+                    startup_windows,
+                    navigation.clone(),
+                    configure_window,
+                );
+                desktop::main_window::create_all(app.handle(), &windows)?;
+                app.manage(windows);
             }
             #[cfg(desktop)]
             desktop_update::setup(app, recording)?;
@@ -653,6 +697,7 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     let payload = NavigatePayload {
         path: macro_scheme.0.path(),
         query: macro_scheme.0.query().unwrap_or_default(),
+        fragment: macro_scheme.0.fragment(),
     };
     // we send a navigate event instead of calling navigate directly
     // because navigate performs a full browser navigation

@@ -1,3 +1,7 @@
+import {
+  moveAllDayRange,
+  moveTimedRange,
+} from '@app/components/date-time-range/time-range';
 import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
@@ -24,8 +28,6 @@ import {
   eventHasEnded,
   guestEmail,
   initialGuestOptions,
-  moveAllDayRange,
-  moveTimedRange,
   PAST_EVENT_GUESTS_WARNING,
   type SelectedEventEditorGuest,
 } from './event-form-model';
@@ -124,6 +126,7 @@ export interface CreateCalendarEventFormControllerOptions {
   calendarOptions: Accessor<EventEditorCalendarOption[]>;
   /** Override the default account; undefined means wait for it or choose explicitly. */
   defaultCalendarId?: Accessor<string | undefined>;
+  /** Scoped initial guest metadata; the open picker owns personal suggestions. */
   guestOptions: Accessor<EventEditorGuestOption[]>;
   recurrenceTimeZone?: string;
   onChange?: (value: EventEditorInitialValues) => void;

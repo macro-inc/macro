@@ -154,6 +154,29 @@ impl EntityAccessManagementService for NullPort {
     }
 }
 
+impl FiledItemsUnfiler for NullPort {
+    async fn unfile_from_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// Records the folders a trash asked to unfile, failing when told to.
+#[derive(Clone, Default)]
+struct RecordingUnfiler {
+    calls: Arc<Mutex<Vec<Vec<String>>>>,
+    fail: bool,
+}
+
+impl FiledItemsUnfiler for RecordingUnfiler {
+    async fn unfile_from_projects(&self, project_ids: Vec<String>) -> anyhow::Result<()> {
+        self.calls.lock().unwrap().push(project_ids);
+        if self.fail {
+            anyhow::bail!("unfile failed");
+        }
+        Ok(())
+    }
+}
+
 impl ProjectSearchIndexer for NullPort {
     async fn remove_documents(&self, _document_ids: Vec<String>) -> anyhow::Result<()> {
         unreachable!()
@@ -245,6 +268,7 @@ fn mutation_service(
     NullPort,
     RecordingEam,
     RecordingIndexer,
+    NullPort,
     TestEventBroker,
 > {
     mutation_service_with_event_broker(repo, eam, indexer, TestEventBroker::default())
@@ -262,6 +286,7 @@ fn mutation_service_with_event_broker(
     NullPort,
     RecordingEam,
     RecordingIndexer,
+    NullPort,
     TestEventBroker,
 > {
     ProjectServiceImpl::new(
@@ -271,6 +296,7 @@ fn mutation_service_with_event_broker(
         NullPort,
         eam,
         indexer,
+        NullPort,
         None,
         event_broker,
     )
@@ -317,8 +343,16 @@ impl BulkUploadRequestPort for RecordingBulkUpload {
 fn service<D: BulkUploadRequestPort>(
     repo: MockProjectRepo,
     bulk_upload_service: D,
-) -> ProjectServiceImpl<MockProjectRepo, NullPort, D, NullPort, NullPort, NullPort, TestEventBroker>
-{
+) -> ProjectServiceImpl<
+    MockProjectRepo,
+    NullPort,
+    D,
+    NullPort,
+    NullPort,
+    NullPort,
+    NullPort,
+    TestEventBroker,
+> {
     service_with_event_broker(repo, bulk_upload_service, TestEventBroker::default())
 }
 
@@ -326,12 +360,21 @@ pub(super) fn service_with_event_broker<D: BulkUploadRequestPort>(
     repo: MockProjectRepo,
     bulk_upload_service: D,
     event_broker: TestEventBroker,
-) -> ProjectServiceImpl<MockProjectRepo, NullPort, D, NullPort, NullPort, NullPort, TestEventBroker>
-{
+) -> ProjectServiceImpl<
+    MockProjectRepo,
+    NullPort,
+    D,
+    NullPort,
+    NullPort,
+    NullPort,
+    NullPort,
+    TestEventBroker,
+> {
     ProjectServiceImpl::new(
         repo,
         NullPort,
         bulk_upload_service,
+        NullPort,
         NullPort,
         NullPort,
         NullPort,
@@ -795,6 +838,43 @@ async fn create_project_publishes_repository_metadata_after_success() {
     assert_eq!(metadata["name"], "Repository name");
     assert_eq!(metadata["parent_project_id"], parent_id.to_string());
     assert_eq!(metadata["created_at"], expected_created_at);
+}
+
+#[tokio::test]
+async fn a_project_dated_by_contents_starts_never_edited_and_leaves_its_parent_alone() {
+    let parent_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create_project()
+        .withf(|args| args.updated_at == Some(chrono::DateTime::UNIX_EPOCH))
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &Uuid::new_v4().to_string(),
+                    "macro|actor@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified().times(0);
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::default(),
+    );
+
+    service
+        .create_project_dated_by_contents(
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
+            CreateProjectRequest {
+                name: "Imported".to_string(),
+                project_parent_id: Some(parent_id),
+            },
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -1514,6 +1594,53 @@ async fn soft_delete_updates_parent_timestamp_and_publishes_event() {
 }
 
 #[tokio::test]
+async fn soft_delete_unfiles_the_databases_and_forms_in_every_trashed_folder() {
+    for fail in [false, true] {
+        let project_id = Uuid::new_v4();
+        let deleted_ids = vec![project_id.to_string(), Uuid::new_v4().to_string()];
+        let expected_ids = deleted_ids.clone();
+        let mut repo = MockProjectRepo::new();
+        repo.expect_soft_delete_project().return_once(move |_| {
+            Box::pin(async move {
+                Ok(SoftDeleteResult {
+                    project_ids: deleted_ids,
+                    document_ids: Vec::new(),
+                    chat_ids: Vec::new(),
+                })
+            })
+        });
+        let unfiler = RecordingUnfiler {
+            fail,
+            ..Default::default()
+        };
+        let service = ProjectServiceImpl::new(
+            repo,
+            NullPort,
+            RecordingBulkUpload::default(),
+            NullPort,
+            RecordingEam::default(),
+            RecordingIndexer::default(),
+            unfiler.clone(),
+            None,
+            TestEventBroker::default(),
+        );
+
+        // The folder is already in the trash; a failed unfile is logged.
+        let deleted = service
+            .soft_delete_project(
+                mutation_receipt::<OwnerAccessLevel>(project_id, AccessLevel::Owner),
+                basic_project(project_id, None, false),
+                "unused-actor".to_string(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(deleted.project_ids, expected_ids);
+        assert_eq!(*unfiler.calls.lock().unwrap(), vec![expected_ids]);
+    }
+}
+
+#[tokio::test]
 async fn revert_publishes_every_restored_project_in_event() {
     let project_id = Uuid::new_v4();
     let parent_id = Uuid::new_v4();
@@ -1896,6 +2023,7 @@ async fn permanent_delete_runs_external_work_after_committed_purge() {
             events: events.clone(),
             fail: true,
         },
+        NullPort,
         None,
         event_broker,
     );
@@ -1976,6 +2104,7 @@ async fn permanent_delete_sha_failure_publishes_no_event() {
         FailingSha,
         NullPort,
         RecordingIndexer::default(),
+        NullPort,
         None,
         event_broker,
     );
@@ -2204,6 +2333,7 @@ async fn upload_folder_publishes_uploaded_event() {
         NullPort,
         NullPort,
         RecordingIndexer::default(),
+        NullPort,
         None,
         event_broker,
     );
@@ -2319,6 +2449,7 @@ async fn upload_folder_compensates_after_destination_failure() {
         NullPort,
         NullPort,
         NullPort,
+        NullPort,
         None,
         event_broker,
     );
@@ -2361,6 +2492,7 @@ async fn upload_extract_uses_fixed_request_id() {
             fail_document: false,
         },
         extract,
+        NullPort,
         NullPort,
         NullPort,
         NullPort,

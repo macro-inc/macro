@@ -61,7 +61,7 @@ fn ask(level: AccessLevel, revision: Option<i32>) -> RequestAccess {
 async fn upgrades_and_private_state(pool: PgPool) {
     let (s, _) = setup(pool);
     assert!(matches!(
-        s.submit(user("owner"), entity(), ask(AccessLevel::Edit, None))
+        s.submit(user("owner"), entity(), ask(AccessLevel::Edit, None), None)
             .await,
         Err(RequestError::Forbidden)
     ));
@@ -73,12 +73,13 @@ async fn upgrades_and_private_state(pool: PgPool) {
     assert_eq!(outsider.pending_count, 0);
     for level in [AccessLevel::View, AccessLevel::Owner] {
         assert!(matches!(
-            s.submit(user("reader"), entity(), ask(level, None)).await,
+            s.submit(user("reader"), entity(), ask(level, None), None)
+                .await,
             Err(RequestError::InvalidLevel)
         ));
     }
     let request = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None))
+        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None)
         .await
         .unwrap();
     let reader = s.state(user("reader"), entity(), 0).await.unwrap();
@@ -111,7 +112,12 @@ async fn upgrades_and_private_state(pool: PgPool) {
 async fn initial_access_requires_owner_approval_and_supports_cancellation(pool: PgPool) {
     let (s, clock) = setup(pool);
     let first = s
-        .submit(user("outsider"), entity(), ask(AccessLevel::View, None))
+        .submit(
+            user("outsider"),
+            entity(),
+            ask(AccessLevel::View, None),
+            None,
+        )
         .await
         .unwrap();
     let state = s.state(user("outsider"), entity(), 0).await.unwrap();
@@ -163,6 +169,7 @@ async fn initial_access_requires_owner_approval_and_supports_cancellation(pool: 
             user("outsider"),
             entity(),
             ask(AccessLevel::View, Some(cancelled.revision)),
+            None,
         )
         .await
         .unwrap();
@@ -192,11 +199,21 @@ async fn initial_access_requires_owner_approval_and_supports_cancellation(pool: 
 async fn edits_cancel_and_stale_reviews(pool: PgPool) {
     let (s, clock) = setup(pool);
     let first = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Comment, None))
+        .submit(
+            user("reader"),
+            entity(),
+            ask(AccessLevel::Comment, None),
+            None,
+        )
         .await
         .unwrap();
     let replay = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Comment, None))
+        .submit(
+            user("reader"),
+            entity(),
+            ask(AccessLevel::Comment, None),
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(first.revision, replay.revision);
@@ -206,6 +223,7 @@ async fn edits_cancel_and_stale_reviews(pool: PgPool) {
             user("reader"),
             entity(),
             ask(AccessLevel::Edit, Some(first.revision)),
+            None,
         )
         .await
         .unwrap();
@@ -270,7 +288,7 @@ async fn edits_cancel_and_stale_reviews(pool: PgPool) {
 async fn denial_cooldown_applies_to_both_levels(pool: PgPool) {
     let (s, clock) = setup(pool);
     let request = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None))
+        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None)
         .await
         .unwrap();
     let denied = s
@@ -287,8 +305,13 @@ async fn denial_cooldown_applies_to_both_levels(pool: PgPool) {
         .unwrap();
     for level in [AccessLevel::Comment, AccessLevel::Edit] {
         assert!(matches!(
-            s.submit(user("reader"), entity(), ask(level, Some(denied.revision)))
-                .await,
+            s.submit(
+                user("reader"),
+                entity(),
+                ask(level, Some(denied.revision)),
+                None
+            )
+            .await,
             Err(RequestError::Cooldown(_))
         ));
     }
@@ -297,7 +320,8 @@ async fn denial_cooldown_applies_to_both_levels(pool: PgPool) {
         s.submit(
             user("reader"),
             entity(),
-            ask(AccessLevel::Comment, Some(denied.revision))
+            ask(AccessLevel::Comment, Some(denied.revision)),
+            None
         )
         .await
         .is_ok()
@@ -308,20 +332,30 @@ async fn denial_cooldown_applies_to_both_levels(pool: PgPool) {
 async fn requester_cannot_repeat_notifications_by_changing_levels_or_cancelling(pool: PgPool) {
     let (service, clock) = setup(pool);
     let first = service
-        .submit(user("outsider"), entity(), ask(AccessLevel::View, None))
+        .submit(
+            user("outsider"),
+            entity(),
+            ask(AccessLevel::View, None),
+            None,
+        )
         .await
         .unwrap();
     let deadline = clock.now() + chrono::Duration::seconds(60);
     assert_eq!(first.retry_after, Some(deadline));
     let replay = service
-        .submit(user("outsider"), entity(), ask(AccessLevel::View, None))
+        .submit(
+            user("outsider"),
+            entity(),
+            ask(AccessLevel::View, None),
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(replay.revision, first.revision);
     assert_eq!(replay.retry_after, Some(deadline));
     for level in [AccessLevel::Comment, AccessLevel::Edit] {
         assert!(matches!(
-            service.submit(user("outsider"), entity(), ask(level, Some(first.revision))).await,
+            service.submit(user("outsider"), entity(), ask(level, Some(first.revision)), None).await,
             Err(RequestError::Cooldown(until)) if until == deadline
         ));
     }
@@ -340,7 +374,7 @@ async fn requester_cannot_repeat_notifications_by_changing_levels_or_cancelling(
     assert_eq!(cancelled.retry_after, Some(deadline));
     clock.0.fetch_add(59, Ordering::SeqCst);
     assert!(matches!(
-        service.submit(user("outsider"), entity(), ask(AccessLevel::View, Some(cancelled.revision))).await,
+        service.submit(user("outsider"), entity(), ask(AccessLevel::View, Some(cancelled.revision)), None).await,
         Err(RequestError::Cooldown(until)) if until == deadline
     ));
     clock.0.fetch_add(1, Ordering::SeqCst);
@@ -349,6 +383,7 @@ async fn requester_cannot_repeat_notifications_by_changing_levels_or_cancelling(
             user("outsider"),
             entity(),
             ask(AccessLevel::Comment, Some(cancelled.revision)),
+            None,
         )
         .await
         .unwrap();
@@ -362,7 +397,8 @@ async fn requester_cannot_repeat_notifications_by_changing_levels_or_cancelling(
             .submit(
                 user("outsider"),
                 entity(),
-                ask(AccessLevel::Edit, Some(resubmitted.revision))
+                ask(AccessLevel::Edit, Some(resubmitted.revision)),
+                None
             )
             .await,
         Err(RequestError::Cooldown(_))
@@ -382,7 +418,12 @@ async fn requester_cannot_repeat_notifications_by_changing_levels_or_cancelling(
 async fn approval_allows_an_immediate_further_upgrade(pool: PgPool) {
     let (service, _) = setup(pool);
     let first = service
-        .submit(user("outsider"), entity(), ask(AccessLevel::View, None))
+        .submit(
+            user("outsider"),
+            entity(),
+            ask(AccessLevel::View, None),
+            None,
+        )
         .await
         .unwrap();
     let granted = service
@@ -403,6 +444,7 @@ async fn approval_allows_an_immediate_further_upgrade(pool: PgPool) {
             user("outsider"),
             entity(),
             ask(AccessLevel::Edit, Some(granted.revision)),
+            None,
         )
         .await
         .unwrap();
@@ -415,7 +457,7 @@ async fn approval_allows_an_immediate_further_upgrade(pool: PgPool) {
 async fn first_review_wins_and_grants_are_manageable(pool: PgPool) {
     let (s, _) = setup(pool);
     let request = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None))
+        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None)
         .await
         .unwrap();
     let args = || ResolveRequest {
@@ -472,8 +514,8 @@ async fn first_review_wins_and_grants_are_manageable(pool: PgPool) {
 async fn concurrent_duplicate_submissions_have_one_request_and_event(pool: PgPool) {
     let (s, _) = setup(pool);
     let (a, b) = tokio::join!(
-        s.submit(user("reader"), entity(), ask(AccessLevel::Edit, None)),
-        s.submit(user("reader"), entity(), ask(AccessLevel::Edit, None))
+        s.submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None),
+        s.submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None)
     );
     assert_eq!(a.unwrap().id, b.unwrap().id);
     assert_eq!(s.repository.claim_events().await.unwrap().len(), 1);
@@ -483,7 +525,7 @@ async fn concurrent_duplicate_submissions_have_one_request_and_event(pool: PgPoo
 async fn approval_preserves_stronger_access_and_rejects_owner_grants(pool: PgPool) {
     let (s, _) = setup(pool);
     let request = s
-        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None))
+        .submit(user("reader"), entity(), ask(AccessLevel::Edit, None), None)
         .await
         .unwrap();
     assert!(matches!(
@@ -540,7 +582,7 @@ async fn folder_grants_propagate_without_overwriting_direct_child_access(pool: P
         entity_id: Uuid::from_u128(32),
     };
     let request = s
-        .submit(user("reader"), folder, ask(AccessLevel::Edit, None))
+        .submit(user("reader"), folder, ask(AccessLevel::Edit, None), None)
         .await
         .unwrap();
     s.resolve(
@@ -574,6 +616,38 @@ async fn folder_grants_propagate_without_overwriting_direct_child_access(pool: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("document"))]
+async fn recorded_owner_reports_owner_access_over_its_grant_row(pool: PgPool) {
+    sqlx::query!(
+        "UPDATE entity_access SET access_level = 'edit' WHERE source_id = 'macro|owner@requests.test'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (s, _) = setup(pool.clone());
+    let owner = s.state(user("owner"), entity(), 0).await.unwrap();
+    assert_eq!(owner.access_level, Some(AccessLevel::Owner));
+    assert!(owner.can_review);
+    sqlx::query!("DELETE FROM entity_access WHERE source_id = 'macro|owner@requests.test'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        s.state(user("owner"), entity(), 0)
+            .await
+            .unwrap()
+            .access_level,
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        s.state(user("reader"), entity(), 0)
+            .await
+            .unwrap()
+            .access_level,
+        Some(AccessLevel::View)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("document"))]
 async fn bot_sponsor_can_review_without_a_separate_user_grant(pool: PgPool) {
     sqlx::query!("INSERT INTO bots (id, kind, owner_user_id, name, handle) VALUES ('00000000-0000-0000-0000-000000000020', 'owned', 'macro|owner@requests.test', 'Owner bot', 'request-owner')")
         .execute(&pool).await.unwrap();
@@ -588,7 +662,12 @@ async fn bot_sponsor_can_review_without_a_separate_user_grant(pool: PgPool) {
     assert!(state.can_review);
     assert!(state.access_level.is_none());
     let request = service
-        .submit(user("outsider"), entity(), ask(AccessLevel::View, None))
+        .submit(
+            user("outsider"),
+            entity(),
+            ask(AccessLevel::View, None),
+            None,
+        )
         .await
         .unwrap();
     let approved = service
@@ -655,7 +734,12 @@ async fn request_workflow_does_not_acquire_a_second_pool_connection(pool: PgPool
         Some(AccessLevel::View)
     );
     let request = service
-        .submit(user("reader"), entity(), ask(AccessLevel::Comment, None))
+        .submit(
+            user("reader"),
+            entity(),
+            ask(AccessLevel::Comment, None),
+            None,
+        )
         .await
         .unwrap();
     service
@@ -686,7 +770,12 @@ async fn notification_supersession_follows_revisions_when_transaction_times_are_
 ) {
     let (service, clock) = setup(pool.clone());
     let first = service
-        .submit(user("reader"), entity(), ask(AccessLevel::Comment, None))
+        .submit(
+            user("reader"),
+            entity(),
+            ask(AccessLevel::Comment, None),
+            None,
+        )
         .await
         .unwrap();
     clock.0.fetch_add(60, Ordering::SeqCst);
@@ -695,6 +784,7 @@ async fn notification_supersession_follows_revisions_when_transaction_times_are_
             user("reader"),
             entity(),
             ask(AccessLevel::Edit, Some(first.revision)),
+            None,
         )
         .await
         .unwrap();
@@ -724,4 +814,231 @@ async fn notification_supersession_follows_revisions_when_transaction_times_are_
         cancelled_events[0].superseded,
         vec![(second_event.id, vec![user("owner")])]
     );
+}
+
+/// A runtime owned by `owner`, who shares a team with `teammate` but not `outsider`.
+async fn seed_harness(pool: &PgPool) -> ShareEntity {
+    for name in ["owner", "teammate", "outsider"] {
+        let macro_user_id = Uuid::now_v7();
+        let email = format!("{name}@requests.test");
+        let id = user(name);
+        sqlx::query!(
+            r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+            VALUES ($1, $2, $2, $3)"#,
+            macro_user_id,
+            email,
+            format!("stripe_{macro_user_id}"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#,
+            id.as_ref(),
+            email,
+            macro_user_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    let owner = user("owner");
+    let team_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)",
+        team_id,
+        owner.as_ref(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for name in ["owner", "teammate"] {
+        let id = user(name);
+        sqlx::query!(
+            "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member'::team_role)",
+            id.as_ref(),
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    let entity_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO harnesses (id, name, owner_user_id, created_by) VALUES ($1, 'Mac mini', $2, $2)",
+        entity_id,
+        owner.as_ref(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    ShareEntity {
+        entity_type: ShareEntityType::Harness,
+        entity_id,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_runtime_is_shared_only_among_the_owners_teammates(pool: PgPool) {
+    let runtime = seed_harness(&pool).await;
+    let (s, _) = setup(pool);
+
+    // An outsider can neither ask nor be added.
+    assert!(matches!(
+        s.submit(
+            user("outsider"),
+            runtime,
+            ask(AccessLevel::Edit, None),
+            None
+        )
+        .await,
+        Err(RequestError::Forbidden)
+    ));
+    assert!(matches!(
+        s.set_direct_access(
+            user("owner"),
+            runtime,
+            user("outsider"),
+            Some(AccessLevel::Edit)
+        )
+        .await,
+        Err(RequestError::Forbidden)
+    ));
+
+    // Read and User are the only roles on offer.
+    assert!(matches!(
+        s.submit(
+            user("teammate"),
+            runtime,
+            ask(AccessLevel::Comment, None),
+            None
+        )
+        .await,
+        Err(RequestError::InvalidLevel)
+    ));
+
+    // A teammate's request, made by their agent, reaches the owner and grants use.
+    let agent = Uuid::now_v7();
+    let request = s
+        .submit(
+            user("teammate"),
+            runtime,
+            ask(AccessLevel::Edit, None),
+            Some(agent),
+        )
+        .await
+        .unwrap();
+    assert_eq!(request.requested_by_agent, Some(agent));
+    let state = s.state(user("owner"), runtime, 0).await.unwrap();
+    assert!(state.can_review);
+    assert_eq!(state.access_level, Some(AccessLevel::Owner));
+    assert_eq!(
+        state.supported_levels,
+        [AccessLevel::View, AccessLevel::Edit]
+    );
+    assert_eq!(state.requests[0].requested_by_agent, Some(agent));
+
+    s.resolve(
+        user("owner"),
+        runtime,
+        request.id,
+        ResolveRequest {
+            revision: request.revision,
+            granted_level: Some(AccessLevel::Edit),
+        },
+    )
+    .await
+    .unwrap();
+    let state = s.state(user("teammate"), runtime, 0).await.unwrap();
+    assert_eq!(state.access_level, Some(AccessLevel::Edit));
+    assert!(
+        !state.can_review,
+        "holding access is not deciding who else gets it"
+    );
+
+    // The owner can take it back.
+    s.set_direct_access(user("owner"), runtime, user("teammate"), None)
+        .await
+        .unwrap();
+    let state = s.state(user("teammate"), runtime, 0).await.unwrap();
+    assert_eq!(state.access_level, None);
+}
+
+/// Binds an agent owned by `owner` to `runtime`, returning its id.
+async fn bind_agent(
+    pool: &PgPool,
+    runtime: ShareEntity,
+    owner: &str,
+    name: &str,
+    is_coding: bool,
+) -> Uuid {
+    let bot_id = Uuid::now_v7();
+    let owner = user(owner);
+    sqlx::query!(
+        "INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent) VALUES ($1, 'owned', $2, $3, $4, true)",
+        bot_id,
+        owner.as_ref(),
+        name,
+        format!("agent-{bot_id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding) VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, $3)",
+        bot_id,
+        runtime.entity_id,
+        is_coding,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    bot_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn removing_runtime_access_names_the_residents_it_stopped(pool: PgPool) {
+    let runtime = seed_harness(&pool).await;
+    let (s, _) = setup(pool.clone());
+    s.set_direct_access(
+        user("owner"),
+        runtime,
+        user("teammate"),
+        Some(AccessLevel::Edit),
+    )
+    .await
+    .unwrap();
+    let resident = bind_agent(&pool, runtime, "teammate", "Scout", false).await;
+    bind_agent(&pool, runtime, "teammate", "Coder", true).await;
+    s.repository.claim_events().await.unwrap();
+
+    // Lowered to Read: the resident stops, and the event says so.
+    s.set_direct_access(
+        user("owner"),
+        runtime,
+        user("teammate"),
+        Some(AccessLevel::View),
+    )
+    .await
+    .unwrap();
+    let events = s.repository.claim_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].stopped,
+        Some(StoppedResidents {
+            owner: user("teammate"),
+            agents: vec![Resident {
+                bot_id: resident,
+                name: "Scout".to_owned(),
+            }],
+        })
+    );
+
+    // Removing Read stops nothing more.
+    s.set_direct_access(user("owner"), runtime, user("teammate"), None)
+        .await
+        .unwrap();
+    let events = s.repository.claim_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].stopped, None);
 }

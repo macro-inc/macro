@@ -6,7 +6,10 @@ import type { Property } from '@property/types';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
 import { type Accessor, createMemo, Show } from 'solid-js';
 
-/** Inline task badges use their preview's edges; only REST previews fetch separately. */
+/**
+ * Inline task badges use their preview's edges; only REST previews fetch separately.
+ * Status is omitted: the mention's leading `TaskStatusIcon` already shows it.
+ */
 export function InlineTaskProperties(props: {
   taskId: string;
   previewProperties?: PreviewDocumentProperties;
@@ -39,12 +42,6 @@ function RestInlineTaskProperties(props: { taskId: string }) {
 }
 
 function InlineTaskPropertyValues(props: { properties: Accessor<Property[]> }) {
-  const statusOptionId = createMemo(() => {
-    const p = props
-      .properties()
-      .find((p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS);
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
   const priorityOptionId = createMemo(() => {
     const p = props
       .properties()
@@ -58,16 +55,11 @@ function InlineTaskPropertyValues(props: { properties: Accessor<Property[]> }) {
     return p?.valueType === 'ENTITY' ? p.value?.[0]?.entity_id : undefined;
   });
   return (
-    <Show when={statusOptionId() || priorityOptionId() || firstAssigneeId()}>
+    <Show when={priorityOptionId() || firstAssigneeId()}>
       <span
         data-inline-task-properties
         class="inline-flex items-center gap-[0.25em] mx-[0.25em] align-middle relative top-[-0.05em]"
       >
-        <Show when={statusOptionId()}>
-          {(id) => (
-            <PropertyValueIcon optionId={id()} class="size-[0.75em] shrink-0" />
-          )}
-        </Show>
         <Show when={priorityOptionId()}>
           {(id) => (
             <PropertyValueIcon optionId={id()} class="size-[0.75em] shrink-0" />

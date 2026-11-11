@@ -7,9 +7,11 @@ export type MentionBucketId =
   | 'all'
   | 'users'
   | 'documents'
+  | 'externalChats'
+  | 'routines'
   | 'agentSessions'
   | 'channels'
-  | 'companies'
+  | 'crm'
   | 'emails'
   | 'dates'
   | 'openTabs'
@@ -21,6 +23,7 @@ export interface BucketConfig<T extends MentionItem = MentionItem> {
   label: string;
   getData: () => T[];
   getFullCount: () => number;
+  windowKey?: () => string | undefined;
   hasMore?: () => boolean;
   isLoadingMore?: () => boolean;
   loadMore?: () => Promise<void> | void;
@@ -327,7 +330,7 @@ class MentionsMenuController {
     const configs = this.buckets();
     if (!configs) return false;
     const nonEmptyCount = configs.filter(
-      (config) => config.getFullCount() > 0
+      (config) => config.getFullCount() > 0 || config.hasMore?.()
     ).length;
     return nonEmptyCount === 1;
   });
@@ -351,7 +354,9 @@ class MentionsMenuController {
     const currentBins = this.bins();
     const config = this.buckets().find((bucket) => bucket.id === categoryId);
     const abbreviatedCount = currentBins[categoryId] || 0;
-    return (config?.getFullCount() ?? 0) > abbreviatedCount;
+    return (
+      (config?.getFullCount() ?? 0) > abbreviatedCount || !!config?.hasMore?.()
+    );
   }
 
   private computeBins(rawBins: MentionBins, targetItems: number): MentionBins {

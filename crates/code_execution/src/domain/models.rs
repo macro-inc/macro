@@ -31,9 +31,42 @@ pub struct RunEnvironment {
     pub session_id: Option<Uuid>,
     /// Current execution handle made available to the program.
     pub execution_id: Option<Uuid>,
-    /// Explicit Macro SDK service base URLs, also used for Deno's network allowlist.
-    pub hosts: std::collections::BTreeMap<String, String>,
+    /// Where the SDK sends requests and what its links point at.
+    #[serde(flatten)]
+    pub endpoints: SdkEndpoints,
+    /// Set for a program that runs with nobody watching (a routine step)
+    /// instead of an agent's or a person's call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unattended: Option<Unattended>,
 }
+
+/// The deployment's Macro SDK targets, so a program's requests and links stay
+/// in the environment it runs in.
+#[derive(Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkEndpoints {
+    /// Service base URLs, also used for Deno's network allowlist.
+    pub hosts: std::collections::BTreeMap<String, String>,
+    /// The web app origin that `webUrl()` links start with.
+    pub web_app_url: String,
+}
+
+/// How an unattended program runs: its source is TypeScript, and `main`
+/// receives `macro` and `arguments` but never the credential.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unattended {
+    /// Spread into `main`'s argument beside `macro`.
+    pub arguments: serde_json::Map<String, Value>,
+    /// No write runs: each one returns an empty result to the program and is
+    /// reported as skipped, so a run shows what it would have done. Writes
+    /// are every catalog operation that isn't a known read, so an operation
+    /// missing from the catalog is a write.
+    pub dry_run: bool,
+}
+
+/// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.
+pub const RESULT_FRAME_OVERHEAD: usize = 256;
 
 /// Server-owned admission and execution limits.
 #[derive(Debug, Clone)]
@@ -50,8 +83,16 @@ pub struct Limits {
     pub max_frame_bytes: usize,
     /// Combined stdout and stderr budget per execution.
     pub max_output_bytes: usize,
+    /// Largest model-facing result JSON; a larger `data` is replaced by a bounded summary.
+    pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
+    /// CPU time a process may use across its threads before the kernel stops
+    /// it; `None` leaves only the wall-clock deadline.
+    pub max_cpu: Option<Duration>,
+    /// Run processes at a lower scheduling priority than the host, so busy
+    /// background programs yield the CPU to its requests.
+    pub background: bool,
 }
 
 impl Default for Limits {
@@ -63,7 +104,10 @@ impl Default for Limits {
             max_source_bytes: 64 * 1024,
             max_frame_bytes: 256 * 1024,
             max_output_bytes: 2 * 1024 * 1024,
+            max_result_bytes: 64 * 1024,
             max_events: 1024,
+            max_cpu: None,
+            background: false,
         }
     }
 }
@@ -79,7 +123,12 @@ impl Limits {
             || !(1024..=1024 * 1024).contains(&self.max_frame_bytes)
             || self.max_output_bytes < self.max_frame_bytes
             || self.max_output_bytes > 16 * 1024 * 1024
+            || self.max_result_bytes < 512
+            || self.max_result_bytes + RESULT_FRAME_OVERHEAD > self.max_frame_bytes
             || !(2..=65536).contains(&self.max_events)
+            || self
+                .max_cpu
+                .is_some_and(|cpu| cpu < Duration::from_secs(1) || cpu > self.max_duration)
         {
             return Err(AdmissionError::InvalidLimits);
         }
@@ -220,4 +269,37 @@ pub struct ExecutionEvent {
     /// Event payload.
     #[serde(flatten)]
     pub kind: EventKind,
+}
+
+/// One type-checker problem, as the checker reported it. Locations are
+/// `<file>:<line>:<column>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Diagnostic {
+    /// The file it is in, when it is in one of the checked files.
+    pub file: Option<String>,
+    /// The problem with its code, the offending line and its location.
+    pub message: String,
+}
+
+/// A TypeScript module checked together with others.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceFile {
+    /// Its file name: lowercase letters, digits and `_`, ending in `.ts`.
+    pub name: String,
+    /// Its source.
+    pub source: String,
+}
+
+/// The checker couldn't decide whether a program checks.
+#[derive(Debug, thiserror::Error)]
+pub enum CheckError {
+    /// Empty or oversized source.
+    #[error("source must be nonempty and within the configured size limit")]
+    InvalidSource,
+    /// Every checker slot is busy.
+    #[error("type checking is busy; try again later")]
+    Busy,
+    /// The checker process failed or ran out of time.
+    #[error("type checking failed to run")]
+    Internal,
 }

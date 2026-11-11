@@ -186,6 +186,7 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
         let event = IncomingEvent {
             event_id: generate_uuid_v7(),
             schema_version: 1,
+            routine_id: None,
             payload,
         };
         assert_eq!(
@@ -198,5 +199,159 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
             service.ingest(&event).await.unwrap(),
             EventIngestionResult::Admitted { inserted: 0 }
         );
+    }
+}
+
+fn github_delivery(conclusion: &str, sender_type: &str) -> IncomingEvent {
+    let body = json!({
+        "action": "completed",
+        "installation": { "id": 77 },
+        "repository": { "id": 42, "full_name": "macro-inc/macro", "url": "https://api.github.com/x" },
+        "sender": { "login": "octocat", "type": sender_type },
+        "workflow_run": { "name": "CI", "conclusion": conclusion },
+    });
+    let delivery = github::domain::models::GithubWebhookReceived::from_delivery(
+        Some("delivery".to_owned()),
+        "workflow_run".to_owned(),
+        &body,
+    )
+    .unwrap();
+    IncomingEvent {
+        event_id: generate_uuid_v7(),
+        schema_version: 1,
+        routine_id: None,
+        payload: crate::domain::event_trigger::EventPayload::Github(
+            github::broker::GithubWebhookTopicEvent::Received(delivery),
+        ),
+    }
+}
+
+fn failed_ci_routine() -> EventActionConfiguration {
+    EventActionConfiguration {
+        filters: serde_json::from_value(json!([{
+            "events": ["github"],
+            "github": {
+                "events": ["workflow_run"],
+                "actions": ["completed"],
+                "repositories": ["Macro-Inc/macro"],
+            },
+            "match": [
+                { "path": ["workflow_run", "name"], "equals": "CI" },
+                { "path": ["workflow_run", "conclusion"], "equals": "failure" },
+            ],
+        }]))
+        .unwrap(),
+        ..configuration()
+    }
+}
+
+#[tokio::test]
+async fn github_deliveries_run_routines_whose_selector_and_payload_match() {
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![failed_ci_routine()];
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        10.try_into().unwrap(),
+    );
+
+    for (event, inserted) in [
+        (github_delivery("success", "User"), 0),
+        (github_delivery("failure", "Bot"), 0),
+        (github_delivery("failure", "User"), 1),
+    ] {
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted }
+        );
+    }
+    let pending = &repo.0.lock().unwrap().pending;
+    assert!(matches!(
+        pending[0].event.source(),
+        EventSource::Github(delivery) if delivery.installation_id == 77
+    ));
+}
+
+#[tokio::test]
+async fn github_deliveries_need_a_claim_to_the_installation() {
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![failed_ci_routine()];
+    let access = Arc::new(Access::default());
+    *access.denied.lock().unwrap() = true;
+    let service = EventAdmissionService::new(repo.clone(), access, 10.try_into().unwrap());
+
+    assert_eq!(
+        service
+            .ingest(&github_delivery("failure", "User"))
+            .await
+            .unwrap(),
+        EventIngestionResult::Admitted { inserted: 0 }
+    );
+}
+
+#[tokio::test]
+async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent() {
+    let registration: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../../github/app-webhooks.json")).unwrap();
+    for name in registration["default_events"].as_array().unwrap() {
+        let name = name.as_str().unwrap();
+        let repo = Arc::new(Repo::default());
+        repo.0.lock().unwrap().configurations = vec![EventActionConfiguration {
+            filters: serde_json::from_value(json!([{
+                "events": ["github"],
+                "github": { "events": [name], "repositories": ["example/repository"] },
+                "match": [{ "path": ["ref"], "equals": "refs/heads/main" }],
+            }]))
+            .unwrap(),
+            ..configuration()
+        }];
+        let access = Arc::new(Access::default());
+        let service =
+            EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
+        let delivery = github::domain::models::GithubWebhookReceived::from_delivery(
+            Some(format!("delivery-{name}")),
+            name.to_owned(),
+            &json!({
+                "installation": { "id": 77 },
+                "repository": { "id": 42, "full_name": "example/repository" },
+                "ref": "refs/heads/main",
+            }),
+        )
+        .unwrap();
+        let event = IncomingEvent {
+            event_id: generate_uuid_v7(),
+            schema_version: 1,
+            routine_id: None,
+            payload: crate::domain::event_trigger::EventPayload::Github(
+                github::broker::GithubWebhookTopicEvent::Received(delivery),
+            ),
+        };
+
+        *access.denied.lock().unwrap() = true;
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 0 },
+            "{name} must require an installation claim",
+        );
+        *access.denied.lock().unwrap() = false;
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 1 },
+            "{name} must reach its matching routine",
+        );
+        // Replaying the same Kafka record must not run the routine twice.
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 0 },
+        );
+        let pending = &repo.0.lock().unwrap().pending;
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(
+            pending[0].event.source(),
+            EventSource::Github(delivery)
+                if delivery.installation_id == 77
+                    && delivery.event == name
+                    && delivery.payload.as_ref().unwrap()["ref"] == "refs/heads/main"
+        ));
     }
 }

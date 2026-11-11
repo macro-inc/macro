@@ -1,11 +1,12 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
 import { DriveViewSkeleton } from '@app/features/drive-view/drive-view-skeleton';
 import { EmailViewSkeleton } from '@app/features/email-view/email-view-skeleton';
+import { ExternalViewSkeleton } from '@app/features/external-view/external-view-skeleton';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import {
@@ -50,6 +51,7 @@ import {
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
+  EmailComposeRouteView,
   EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
@@ -57,13 +59,14 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsCalendarRouteView,
+  NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
-  RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
   TasksDetailRouteView,
@@ -82,8 +85,12 @@ import {
   WelcomePage,
 } from './pages';
 import {
+  accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentSetupDoneRoute,
+  agentSetupRoute,
+  agentSignupRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -100,9 +107,19 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -111,9 +128,12 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
+  emailComposeRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
+  externalChatRoute,
+  externalRoute,
   foldersRoute,
   formRespondRoute,
   homeCalendarRoute,
@@ -123,6 +143,7 @@ import {
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
+  internalSystemStatusRoute,
   inviteRoute,
   legacyContentRoute,
   loginPopupSuccessRoute,
@@ -130,6 +151,8 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsCalendarRoute,
+  notificationsRoute,
   onboardingRoute,
   prDetailRoute,
   projectDetailRoute,
@@ -160,6 +183,23 @@ import {
   withMeetingShell,
 } from './shells';
 
+const AccountManagerPage = lazyNamed(
+  () => import('@app/features/account-manager/account-manager-page'),
+  'AccountManagerPage'
+);
+const AgentSetupPage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupPage'
+);
+const AgentSetupDonePage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupDonePage'
+);
+const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
+);
+
 const { Router, Route } = SplitRouter;
 
 // Views under appRoute load lazily (lazy-route-views.ts); auth and booking
@@ -167,6 +207,14 @@ const { Router, Route } = SplitRouter;
 const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
   'BookingLinksRouteView'
+);
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+const SystemStatusDashboard = lazyNamed(
+  () => import('@app/features/system-status/views/SystemStatusDashboard'),
+  'SystemStatusDashboard'
 );
 
 /** Debug views stay behind the registry's lazy import. */
@@ -229,6 +277,16 @@ export function AppRouterView() {
       <Route definition={authRoute} component={AuthShell}>
         <Route definition={taskSlugRoute} component={TaskSlugPage} />
         <Route definition={signupRoute} component={SignupPage} />
+        <Route definition={agentSignupRoute} component={AgentSignup} />
+        <Route
+          definition={accountManagerRoute}
+          component={AccountManagerPage}
+        />
+        <Route definition={agentSetupRoute} component={AgentSetupPage} />
+        <Route
+          definition={agentSetupDoneRoute}
+          component={AgentSetupDonePage}
+        />
         <Route
           definition={emailSignupCallbackRoute}
           component={EmailCallback}
@@ -252,6 +310,10 @@ export function AppRouterView() {
         <Route
           definition={internalInviteLinksRoute}
           component={InviteLinksPortal}
+        />
+        <Route
+          definition={internalSystemStatusRoute}
+          component={SystemStatusDashboard}
         />
         <Route definition={teamInviteRoute} component={TeamInviteAcceptance} />
         <Route
@@ -287,7 +349,8 @@ export function AppRouterView() {
         <Route definition={settingsRoute} component={SettingsRouteView} />
         <Route
           definition={routineCreateRoute}
-          component={RoutineCreateRouteView}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
         />
         <Route
           definition={routineDetailRoute}
@@ -336,6 +399,15 @@ export function AppRouterView() {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route
+          definition={notificationsRoute}
+          component={NotificationsRouteView}
+        >
+          <Route
+            definition={notificationsCalendarRoute}
+            component={NotificationsCalendarRouteView}
+          />
+        </Route>
+        <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
@@ -345,6 +417,10 @@ export function AppRouterView() {
           component={MailRouteView}
           loading={EmailViewSkeleton}
         >
+          <Route
+            definition={emailComposeRoute}
+            component={EmailComposeRouteView}
+          />
           <Route
             definition={emailThreadRoute}
             component={EmailDetailRouteView}
@@ -385,6 +461,16 @@ export function AppRouterView() {
           component={BookingLinksRouteView}
         />
         <Route
+          definition={externalRoute}
+          component={ExternalRouteView}
+          loading={ExternalViewSkeleton}
+        >
+          <Route
+            definition={externalChatRoute}
+            component={ExternalChatRouteView}
+          />
+        </Route>
+        <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
           loading={CalendarViewSkeleton}
@@ -406,9 +492,19 @@ export function AppRouterView() {
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
+            <Route definition={crmPipelineItemRoute} />
             <Route definition={crmPipelineRecordRoute} />
+            <Route definition={crmPipelineRecordItemRoute} />
+            <Route definition={crmPipelineRecordFileItemRoute} />
+            <Route definition={crmPipelineRetiredDatabaseRoute} />
+            <Route definition={crmPipelineRetiredRecordDatabasesRoute} />
           </Route>
+          <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
+          <Route definition={crmRecordItemRoute} />
+          <Route definition={crmRecordFileItemRoute} />
+          <Route definition={crmRetiredDatabaseRoute} />
+          <Route definition={crmRetiredRecordDatabasesRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

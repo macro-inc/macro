@@ -9,7 +9,7 @@ impl PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind = 'folder_catalog' AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -34,7 +34,7 @@ impl PgMailboxSync {
         &self,
         lease: &CatalogLease,
         folders: &[MailFolder],
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Option<ImportCompleted>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
@@ -148,8 +148,9 @@ impl PgMailboxSync {
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
-        Self::queue_attachment_recheck(&mut tx, lease.mailbox).await?;
-        tx.commit().await.map_err(db_error)
+        let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(import_completed)
     }
 
     pub(super) async fn release_catalog_lease(

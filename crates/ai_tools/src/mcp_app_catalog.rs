@@ -1,4 +1,6 @@
-//! Pipedream app directory used when an agent pins MCP servers.
+//! Pipedream app directory used when an agent pins MCP servers, and the
+//! connector backends (Pipedream plus Macro Connect) built from the
+//! environment.
 
 use std::sync::Arc;
 
@@ -6,10 +8,15 @@ use anyhow::Context;
 use bots::domain::ports::{BotError, McpAppCatalog};
 use macro_env::Environment;
 use macro_env_var::maybe_env_var;
-use pipedream_mcp::domain::ports::ConnectorDirectory;
+use pipedream_mcp::domain::ports::ConnectRollout;
 use pipedream_mcp::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
+use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
+
+use pipedream_mcp::outbound::dispatch::ConnectorBackends;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 maybe_env_var! {
     struct PipedreamCatalogEnv {
@@ -25,7 +32,149 @@ maybe_env_var! {
         PipedreamApiUrl,
         /// Base URL of the Pipedream MCP server, shared with execution.
         PipedreamMcpUrl,
+        /// Macro's customer key for the Macro Connect API.
+        ConnectCustomerKey,
+        /// PostHog project token; reads the `macro-connect` rollout.
+        PosthogApiKey,
+        /// Regional PostHog origin; defaults to the US origin.
+        PosthogHost,
     }
+}
+
+/// The Macro Connect adapter for `customer_key`, or `None` when the host has
+/// no key (Connect off). Connect sends consent back to the cognition
+/// service's callback page, whichever host builds the adapter.
+pub fn connect_adapter(customer_key: Option<&str>) -> anyhow::Result<Option<Arc<ConnectAdapter>>> {
+    let Some(customer_key) = customer_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let callback_url = url::Url::parse(&format!(
+        "{}/pipedream/mcp/connect/callback",
+        public_url.as_str().trim_end_matches('/')
+    ))
+    .context("Connect callback is not a URL")?;
+    let adapter = ConnectAdapter::new(ConnectConfig {
+        api_url: macro_service_urls::ConnectApiUrl::new()?.to_string(),
+        customer_key: customer_key.to_owned(),
+        callback_url,
+    })
+    .context("building Macro Connect client")?;
+    Ok(Some(Arc::new(adapter)))
+}
+
+/// Pipedream plus Macro Connect when this process has credentials for both
+/// (Connect is optional), otherwise `None`.
+pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
+    let Some(pipedream) = pipedream_client_from_env()? else {
+        return Ok(None);
+    };
+    let env = PipedreamCatalogEnv::new();
+    let connect = connect_adapter(
+        env.connect_customer_key
+            .as_ref()
+            .and_then(|value| value.value()),
+    )?;
+    let mut backends = ConnectorBackends::new(pipedream, connect);
+    if let Some(rollout) = macro_connect_rollout(
+        env.posthog_api_key.as_ref().and_then(|value| value.value()),
+        env.posthog_host.as_ref().and_then(|value| value.value()),
+    )? {
+        backends = backends.with_rollout(rollout);
+    }
+    Ok(Some(Arc::new(backends)))
+}
+
+/// The PostHog flag that puts a user on Macro Connect alone. Keep in sync
+/// with the web flag of the same key.
+pub const MACRO_CONNECT_FLAG: &str = "macro-connect";
+
+/// How long one user's flag answer is reused: every MCP connection asks.
+const ROLLOUT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The `macro-connect` rollout read from PostHog, or `None` without a
+/// PostHog key (nobody on Connect alone). Answers are cached per user for
+/// [`ROLLOUT_TTL`]; a failed read answers `false`, keeping the user on
+/// Pipedream.
+pub fn macro_connect_rollout(
+    api_key: Option<&str>,
+    host: Option<&str>,
+) -> anyhow::Result<Option<ConnectRollout>> {
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, MACRO_CONNECT_FLAG)))
+}
+
+/// The PostHog flag for Canvas artifacts. Keep in sync with the web flag of the
+/// same key.
+pub const CANVAS_ARTIFACTS_FLAG: &str = "enable-canvas-artifacts";
+
+/// The Canvas artifacts rollout read from PostHog, or `None` without a PostHog
+/// key (off for everyone). Answers are cached like [`macro_connect_rollout`], and
+/// a failed read answers `false`.
+pub fn canvas_artifacts_rollout(
+    api_key: Option<&str>,
+    host: Option<&str>,
+) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, CANVAS_ARTIFACTS_FLAG)))
+}
+
+/// [`canvas_artifacts_rollout`] from this process's PostHog configuration.
+pub fn canvas_artifacts_rollout_from_env()
+-> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
+    let env = PipedreamCatalogEnv::new();
+    canvas_artifacts_rollout(
+        env.posthog_api_key.as_ref().and_then(|value| value.value()),
+        env.posthog_host.as_ref().and_then(|value| value.value()),
+    )
+}
+
+fn rollout_from<F>(flags: F, flag: &'static str) -> ConnectRollout
+where
+    F: feature_flags::FeatureFlags + Clone + 'static,
+{
+    type Cache = HashMap<String, (bool, std::time::Instant)>;
+    let cache: Arc<Mutex<Cache>> = Arc::default();
+    Arc::new(move |user_id| {
+        let flags = flags.clone();
+        let cache = cache.clone();
+        Box::pin(async move {
+            let key = user_id.as_ref().to_owned();
+            if let Some((on, at)) = cache.lock().ok().and_then(|cache| cache.get(&key).copied())
+                && at.elapsed() < ROLLOUT_TTL
+            {
+                return on;
+            }
+            let on = match flags.load(&user_id).await {
+                Ok(snapshot) => snapshot.is_enabled(flag),
+                Err(error) => {
+                    tracing::warn!(error = ?error, flag, "could not read a rollout flag; treating it as off");
+                    return false;
+                }
+            };
+            if let Ok(mut cache) = cache.lock() {
+                cache.retain(|_, (_, at)| at.elapsed() < ROLLOUT_TTL);
+                cache.insert(key, (on, std::time::Instant::now()));
+            }
+            on
+        })
+    })
 }
 
 /// A Pipedream client when this process has the credentials, otherwise `None`.
@@ -113,7 +262,7 @@ impl McpAppCatalog for PipedreamMcpAppCatalog {
                 "cannot verify MCP app {slug}: Pipedream is not configured"
             )));
         };
-        match client.retrieve(slug).await {
+        match client.retrieve_app(slug).await {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(error) => {

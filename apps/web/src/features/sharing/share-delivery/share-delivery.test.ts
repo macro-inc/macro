@@ -204,7 +204,7 @@ describe('useShareForm', () => {
             { entity_type: 'agent_session', entity_id: 'session-1' },
           ],
           messageId: 'message-1',
-          trace: expect.anything(),
+          parentSpan: expect.anything(),
         },
       ],
     ]);
@@ -241,12 +241,14 @@ describe('useShareForm', () => {
 
   it('runs each request in the span of its phase', async () => {
     const ranIn: Record<string, string | undefined> = {};
-    mocks.resolvePeopleChannel.mockImplementation(async (_userIds, trace) => {
-      ranIn.lookup = trace.run(() => mocks.activeSpan);
-      return 'dm-1';
-    });
-    mocks.sendToChannel.mockImplementation(async ({ trace }) => {
-      ranIn.post = trace.run(() => mocks.activeSpan);
+    mocks.resolvePeopleChannel.mockImplementation(
+      async (_userIds, parentSpan) => {
+        ranIn.lookup = parentSpan.run(() => mocks.activeSpan);
+        return 'dm-1';
+      }
+    );
+    mocks.sendToChannel.mockImplementation(async ({ parentSpan }) => {
+      ranIn.post = parentSpan.run(() => mocks.activeSpan);
       return { channelId: 'dm-1', navigateToChannel: vi.fn() };
     });
     mocks.changeChannelAccess.mockImplementation(async () => {

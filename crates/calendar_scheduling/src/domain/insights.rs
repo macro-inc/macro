@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 /// Inclusive local dates and optional booking/host filters.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InsightQuery {
@@ -17,6 +18,7 @@ pub struct InsightQuery {
     pub to: NaiveDate,
     /// IANA zone used for dates and hour-of-day grouping.
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: Tz,
     /// Restrict to one booking link; omit for all links.
     pub event_type_id: Option<Uuid>,
@@ -25,6 +27,7 @@ pub struct InsightQuery {
 }
 /// Counts can overlap: a rescheduled event can also be completed or cancelled.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InsightCounts {
@@ -60,6 +63,7 @@ impl InsightCounts {
 }
 /// One complete period of metrics and chart data, with no guest contact information.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InsightPeriod {
@@ -80,6 +84,7 @@ pub struct InsightPeriod {
 }
 /// Current and equally long preceding local-calendar periods.
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BookingInsights {

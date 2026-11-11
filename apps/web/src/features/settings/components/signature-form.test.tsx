@@ -1,8 +1,21 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SignatureForm } from './signature-form';
 
-afterEach(cleanup);
+beforeEach(() =>
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
+);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const baseProps = {
   email: 'alex@gmail.com',
@@ -55,4 +68,13 @@ it('hides Gmail import on mobile or without a handler', () => {
   expect(
     screen.queryByRole('button', { name: 'Import from Gmail' })
   ).toBeNull();
+});
+
+it('says a shared inbox signature applies to everyone who sends from it', () => {
+  render(() => <SignatureForm {...baseProps} mobile={false} shared />);
+  expect(
+    screen.getByText(
+      'Shared inbox. Automatically added to new emails anyone sends from this account.'
+    )
+  ).toBeTruthy();
 });

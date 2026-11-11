@@ -16,7 +16,7 @@ import {
   getReplyAllRecipients,
   getReplyRecipientsFromParent,
 } from '../core/recipient-conversion';
-import type { ReplyType } from '../core/reply-type';
+import { forwardsMessage, type ReplyType } from '../core/reply-type';
 import { getSubjectText } from '../core/subject-text';
 
 export type DraftFormAttachment =
@@ -124,9 +124,24 @@ export function createEmailFormState(
 
   // The inbox this compose sends from. Defaults to the inbox that owns the
   // thread/draft; the user can change it via the "from" selector.
-  const [selectedInboxId, setSelectedInboxId] = createSignal<
-    string | undefined
-  >((draft ?? replyingTo)?.link_id ?? undefined);
+  const [chosenInboxId, setSelectedInboxId] = createSignal<string | undefined>(
+    draft?.link_id ?? undefined
+  );
+  // A thread shared with the viewer sits in its owner's inbox, which the viewer
+  // cannot send from; that default yields to the composer's own-inbox fallback.
+  const replyInboxId = () => {
+    const inboxId = replyingTo?.link_id;
+    return context.inboxes().some((inbox) => inbox.id === inboxId)
+      ? inboxId
+      : undefined;
+  };
+  const selectedInboxId = () => chosenInboxId() ?? replyInboxId();
+  // The inbox a reply to a shared thread actually sends from, so recipients
+  // are judged against that inbox's addresses.
+  const sharedReplyInboxId = () =>
+    replyingTo
+      ? (context.primaryInboxId?.() ?? context.inboxes()[0]?.id)
+      : undefined;
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
@@ -140,8 +155,7 @@ export function createEmailFormState(
     context
       .inboxes()
       .find(
-        (inbox) =>
-          inbox.id === (selectedInboxId() ?? (draft ?? replyingTo)?.link_id)
+        (inbox) => inbox.id === (selectedInboxId() ?? sharedReplyInboxId())
       );
   const senderEmail = () => {
     const choice = senderChoice();
@@ -157,21 +171,26 @@ export function createEmailFormState(
     ].filter((address): address is string => !!address);
   const [recipientsEdited, setRecipientsEdited] = createSignal(false);
 
-  const draftContainsAppendedReply = (message = draft) => {
+  const decodedBody = (message?: EmailMessage) => {
     const encoded = message?.body_html_sanitized;
-    if (!encoded) return false;
-    const decodedHtml = decodeBase64Utf8(encoded);
+    return encoded ? decodeBase64Utf8(encoded) : undefined;
+  };
+
+  const draftContainsAppendedReply = (message = draft) => {
+    const decodedHtml = decodedBody(message);
     if (!decodedHtml) return false;
     const parsed = new DOMParser().parseFromString(decodedHtml, 'text/html');
 
     return parsed.body.querySelector('div.macro_quote') !== null;
   };
 
+  const defaultReplyType = (): ReplyType =>
+    (replyingTo?.to.length ?? 0) + (replyingTo?.cc.length ?? 0) > 1
+      ? 'reply-all'
+      : 'reply';
+
   const getInitialState = () => {
-    const replyType =
-      (replyingTo?.to.length ?? 0) + (replyingTo?.cc.length ?? 0) > 1
-        ? 'reply-all'
-        : 'reply';
+    const replyType = defaultReplyType();
 
     let initialSubject = draft?.subject;
 
@@ -346,6 +365,12 @@ export function createEmailFormState(
     setEditRevision((revision) => revision + 1);
   };
 
+  // No draft field records whether it is a forward; only its body does.
+  const restoredReplyType = (bodyHtml: string | undefined): ReplyType => {
+    if (bodyHtml && forwardsMessage(bodyHtml)) return 'forward';
+    return state.replyType === 'forward' ? defaultReplyType() : state.replyType;
+  };
+
   const reset = (next: EmailFormState) => {
     setState(reconcile(next));
     const recipients = state.recipients;
@@ -364,6 +389,7 @@ export function createEmailFormState(
       setSenderChoice({ email: message.from?.email });
       setRecipientsEdited(true);
       setState({
+        replyType: restoredReplyType(decodedBody(message)),
         subject: message.subject ?? '',
         recipients: {
           to: message.to.map(convertContactInfoToEmailRecipient),
@@ -380,6 +406,10 @@ export function createEmailFormState(
           ...state.recipients.bcc,
         ])
       );
+    },
+    /** Match the kind to a body loaded into the editor, keeping recipients. */
+    restoreReplyType(bodyHtml: string) {
+      setState('replyType', restoredReplyType(bodyHtml));
     },
     replyAppended: () => state.withQuotedText,
     setReplyAppended: (next: boolean) => setState('withQuotedText', next),

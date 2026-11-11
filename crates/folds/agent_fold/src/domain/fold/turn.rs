@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 
-use super::convert::{deserialize_params, user_content_part};
+use super::convert::{deserialize_params, same_attachment, user_content_part};
 use super::state::{Changed, FoldState, Turn};
 
 impl FoldState {
@@ -26,6 +26,13 @@ impl FoldState {
             && let Some(message) = self.messages.last_mut()
             && matches!(message.author, Author::User { .. })
         {
+            if message
+                .parts
+                .iter()
+                .any(|existing| same_attachment(existing, &part))
+            {
+                return None;
+            }
             match part {
                 MessagePart::Text { text } => match message.parts.get_mut(0) {
                     Some(MessagePart::Text { text: held }) => held.push_str(&text),
@@ -36,7 +43,7 @@ impl FoldState {
             }
             return Some(Changed::updated(self.messages.len() - 1));
         }
-        self.close_turn(Some(StopReason::EndTurn));
+        self.close_turn(Some(StopReason::EndTurn), None);
         self.begin_turn_without_prompt();
         let id = self.open_turn().id;
         let message = self.messages.len();
@@ -50,6 +57,26 @@ impl FoldState {
             posted_at: None,
         });
         Some(Changed::new(message))
+    }
+
+    /// Add an image fetched after the prompt was sent onto that prompt.
+    ///
+    /// The same URI already on the message is left alone: a resource link and
+    /// the image frame fetched from it are one picture.
+    pub(super) fn append_prompt_attachment(&mut self, part: MessagePart) -> Option<Changed> {
+        let turn_id = self.turn.as_ref()?.id;
+        let message = self.messages.iter().position(|message| {
+            message.id == turn_id && matches!(message.author, Author::User { .. })
+        })?;
+        if self.messages[message]
+            .parts
+            .iter()
+            .any(|existing| same_attachment(existing, &part))
+        {
+            return None;
+        }
+        self.messages[message].parts.push(part);
+        Some(Changed::updated(message))
     }
 
     /// Handle a `session/prompt`: emit the user's message, open a turn.
@@ -67,13 +94,13 @@ impl FoldState {
         // this: the runtime's own response closes its turn, in log order.
         let closed =
             if self.speculative && self.turn.as_ref().is_some_and(|turn| turn.stop_requested) {
-                self.close_turn(Some(StopReason::Cancelled))
+                self.close_turn(Some(StopReason::Cancelled), None)
             } else {
                 // A second prompt without an intervening response means the
                 // previous turn never got one. Its agent message is already in
                 // `messages` and already reads `stop: None`, so there is nothing
                 // left to report.
-                let closed = self.close_turn(None);
+                let closed = self.close_turn(None, None);
                 debug_assert!(
                     closed.is_none(),
                     "closing a turn without a stop reason changes nothing"
@@ -121,7 +148,14 @@ impl FoldState {
                 }
                 match user_content_part(block) {
                     Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
-                    Some(part) => attachments.push(part),
+                    Some(part)
+                        if !attachments
+                            .iter()
+                            .any(|existing| same_attachment(existing, &part)) =>
+                    {
+                        attachments.push(part)
+                    }
+                    Some(_) => {}
                     None => {}
                 }
             }
@@ -197,6 +231,7 @@ impl FoldState {
         &mut self,
         response_id: &RequestId,
         value: Option<&serde_json::Value>,
+        logged_at: Option<DateTime<Utc>>,
     ) -> Option<Changed> {
         let stop = value
             .and_then(|value| value.get("stopReason"))
@@ -238,7 +273,7 @@ impl FoldState {
             }
             self.append_text(remaining);
         }
-        self.close_turn(stop).map(|changed| {
+        self.close_turn(stop, logged_at).map(|changed| {
             if new_message {
                 Changed::new(changed.message)
             } else {
@@ -256,7 +291,12 @@ impl FoldState {
     /// an agent message that exists: here the agent message is created if
     /// need be, so the failure has somewhere to live and the turn is
     /// unambiguously over.
-    pub(super) fn fail_turn(&mut self, response_id: &RequestId, error: &Error) -> Option<Changed> {
+    pub(super) fn fail_turn(
+        &mut self,
+        response_id: &RequestId,
+        error: &Error,
+        logged_at: Option<DateTime<Utc>>,
+    ) -> Option<Changed> {
         let closes_the_open_turn = self
             .turn
             .as_ref()
@@ -277,6 +317,7 @@ impl FoldState {
             message: error.message.clone(),
             notice: FailureNotice::from_error_data(error.data.as_ref()),
         });
+        self.messages[agent].posted_at = self.finished_at(logged_at);
         Some(changed)
     }
 
@@ -290,7 +331,14 @@ impl FoldState {
     /// forever. That is a stop pressed before the first chunk - a first
     /// prompt spends ~10s creating the Cursor agent - which answers
     /// `session/prompt` with `cancelled` and nothing to stamp it on.
-    pub(super) fn close_turn(&mut self, stop: Option<StopReason>) -> Option<Changed> {
+    ///
+    /// `logged_at` is when the log stored the frame that ended the turn; it
+    /// becomes the reply's `posted_at`.
+    pub(super) fn close_turn(
+        &mut self,
+        stop: Option<StopReason>,
+        logged_at: Option<DateTime<Utc>>,
+    ) -> Option<Changed> {
         let Some(stop) = stop else {
             // Nothing to record, so nothing to mint a message for.
             self.turn = None;
@@ -306,7 +354,14 @@ impl FoldState {
             None => self.mint_agent_message(turn.id),
         };
         self.messages[message].stop = Some(stop);
+        self.messages[message].posted_at = self.finished_at(logged_at);
         Some(changed)
+    }
+
+    /// When a reply finished, from the frame that ended it. A runtime replays
+    /// history on load, so a replayed ending is as old as the load: unknown.
+    fn finished_at(&self, logged_at: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+        if self.replaying { None } else { logged_at }
     }
 
     /// Mint the agent message a turn never opened, so a stop reason has

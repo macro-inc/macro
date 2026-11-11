@@ -119,7 +119,7 @@ impl ConnectionRepo for MockConnectionRepo {
         &self,
         _entity: &EntityConnection<'_>,
         _timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity> {
+    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
         unimplemented!()
     }
     async fn update_user_connection_last_ping(
@@ -438,14 +438,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
-    let project_tool_context = ai_tools::build_project_tool_context(
-        pool.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
-
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         pool.clone(),
         &document_tool_context,
@@ -459,6 +451,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_service.clone(),
         ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = ai_tools::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
     );
     let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
         &databases_tool_context,
@@ -495,12 +495,20 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::FormsToolConfig {
             app_origin: "https://macro.test".into(),
             editing_worker_url: "http://localhost:8933".into(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                "test-internal-api-key".to_string(),
+                "http://localhost:0".to_string(),
+            ),
         },
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
+        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -543,6 +551,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
@@ -582,6 +591,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        web_search_provider: std::sync::Arc::new(web_search::outbound::tavily::TavilyClient::new(
+            &web_search::outbound::tavily::TavilyApiKey::new_unset(),
+        )),
         admission: admission.clone(),
         recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -594,8 +606,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let (import_service, onboarding_service, mcp_selector) = {
         let mcp_key =
             mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
-        let mcp_repo =
-            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+        let mcp_repo = mcp_client::outbound::NativeServerStore::new(
+            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+            None,
+        );
         let creator = ai_tools::ToolEntityCreator {
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
@@ -610,6 +624,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     properties_service.clone(),
                 ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
+            initiative_service: tool_service_context.initiative_tool_context.service.clone(),
             project_service: tool_service_context.project_tool_context.service.clone(),
             databases_service: tool_service_context.databases_tool_context.service.clone(),
             document_service: document_tool_context.service.clone(),
@@ -648,11 +663,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (import_service, onboarding_service, mcp_selector)
     };
 
-    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
-    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        memory_repo,
+    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+        pool.clone(),
         tool_service_context.clone(),
-        all_tools,
     ));
 
     let usage_service = Arc::new(
@@ -714,8 +727,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+
         decisions: Arc::new(jev::domain::decisions::DecisionServiceImpl::<
-            jev::domain::JevClassifier<jev::outbound::TypesafeJev>,
+            jev::domain::JevClassifier<jev::outbound::SystemOneJev>,
         >::new(None, admission.clone())),
         tool_free_completions: Arc::new(
             crate::cognition::service::structured_completion::ToolFreeCompletionService::new(
@@ -806,6 +820,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_stream_registry: crate::cognition::service::ai_stream_registry::AiStreamRegistry::new(
             Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url")),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
+            },
+        },
         granola_sync: None,
         pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
@@ -818,8 +837,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));
             let mcp_key = mcp_client::domain::models::AesKey::try_from(vec![0u8; 32])
                 .expect("valid test key");
-            let mcp_repo =
-                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+            let mcp_repo = mcp_client::outbound::NativeServerStore::new(
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+                None,
+            );
             let mcp_state_store =
                 mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
             let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(

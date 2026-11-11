@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
-    agent_session::{AgentPullRequestState, SoupAgentSession},
+    agent_session::{AgentPullRequestState, AgentSessionArchiveCause, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
@@ -24,15 +24,14 @@ use models_soup::{
         SoupLabelType, SoupMessageListVisibility,
     },
     foreign_entity::SoupForeignEntity,
+    harness::SoupHarness,
     initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
 };
 use predicate_index::RecordKey;
 use serde_json::Value;
-use soup::domain::models::{
-    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
-};
+use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::GroupedResponse};
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
 
@@ -218,18 +217,34 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GroupedSoup<E> {
-    /// Construct grouped GraphQL Soup bins from the domain grouping model.
-    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+    /// Construct GraphQL bins from the shared grouped response and cursor policy.
+    pub fn from_response(response: GroupedResponse) -> Self {
         Self {
-            bins: groups
-                .into_bins()
-                .map(|(key, bin)| GraphqlSoupBin {
-                    key,
-                    total_count: bin.group_total_size(),
-                    next_cursor: bin.next_cursor().map(ToOwned::to_owned),
-                    items: bin
-                        .into_items()
-                        .map(|item| GraphqlSoupEntity::new(item.map_extra(|_| ())))
+            bins: response
+                .groups
+                .into_iter()
+                .map(|group| GraphqlSoupBin {
+                    label: (group.label != group.key).then_some(group.label),
+                    key: group.key,
+                    total_count: group.total_count as usize,
+                    display_order: group.display_order,
+                    next_cursor: group.next_cursor,
+                    items: group
+                        .item_ids
+                        .iter()
+                        .filter_map(|id| response.items.get(id).map(|item| (id, item)))
+                        .map(|(id, item)| {
+                            GraphqlSoupEntity::new_from_enriched_with_projection(
+                                SoupProjectionHydration {
+                                    item: item.clone(),
+                                    document_server_facts: response
+                                        .document_server_facts
+                                        .get(id)
+                                        .cloned(),
+                                    sort_key: None,
+                                },
+                            )
+                        })
                         .collect(),
                 })
                 .collect(),
@@ -242,8 +257,14 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
+    /// Display text for a group whose key alone does not identify it client
+    /// side, limited to what the viewer can read. Null when the client labels
+    /// the key itself or the viewer cannot read the entity behind it.
+    label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
+    /// Stored option order or calendar bucket order, when available.
+    display_order: Option<i32>,
     /// Opaque cursor for the next page in this bin, if one exists.
     next_cursor: Option<String>,
     /// Items in this bin, ordered by their index within the group.
@@ -294,6 +315,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
+            Self::Harness(entity) => entity.2 = score,
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -315,7 +337,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::CrmContact(_)
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
-            | Self::DatabaseRow(_) => {}
+            | Self::DatabaseRow(_)
+            | Self::Harness(_) => {}
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -448,6 +471,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     AgentSession(GraphqlSoupAgentSession<E>),
     /// Database row entity.
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
+    /// Paired runtime, listed only by attention feeds.
+    Harness(GraphqlSoupHarness<E>),
     /// Removed reminder entity, never constructed.
     Reminder(GraphqlSoupReminder<E>),
 }
@@ -477,6 +502,7 @@ where
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
                 GraphqlSoupEntityType::DatabaseRow => GraphqlSoupDatabaseRow::<E>::type_name(),
+                GraphqlSoupEntityType::Harness => GraphqlSoupHarness::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -599,6 +625,12 @@ where
                     model_entity::EntityType::DatabaseRow.with_entity_string(item.id.to_string()),
                 );
                 Self::DatabaseRow(GraphqlSoupDatabaseRow(item, edges, None))
+            }
+            SoupItem::Harness(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Harness.with_entity_string(item.id.to_string()),
+                );
+                Self::Harness(GraphqlSoupHarness(item, edges, None))
             }
         }
     }
@@ -1148,8 +1180,87 @@ impl<E: SoupEntityEdges> GraphqlSoupDatabaseRow<E> {
     }
 }
 
+/// GraphQL paired runtime entity.
+pub struct GraphqlSoupHarness<E: SoupEntityEdges>(SoupHarness, E, Option<f64>);
+
+/// A paired runtime (a macrod machine). Only attention feeds list it, for
+/// the access notifications filed under it; it opens in Settings → Machines.
+#[Object(name = "GraphqlSoupHarness")]
+impl<E: SoupEntityEdges> GraphqlSoupHarness<E> {
+    /// The harness identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Harness
+    }
+
+    /// Server-only projection facts are unavailable for runtimes.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// The machine's name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common runtime metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The machine's name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The principal identifier of the owner: a user or a team.
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.principal_id()
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// Common entity edges.
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
 /// GraphQL agent session entity.
 pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
+
+impl<E: SoupEntityEdges> GraphqlSoupAgentSession<E> {
+    /// Whether the session is archived, for adapters that must not return archived sessions.
+    pub fn archived(&self) -> bool {
+        self.0.archived_by.is_some()
+    }
+}
 
 /// Last synchronized state of a session's linked GitHub pull request.
 #[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
@@ -1171,6 +1282,27 @@ impl From<AgentPullRequestState> for GraphqlAgentPullRequestState {
             AgentPullRequestState::Draft => Self::Draft,
             AgentPullRequestState::Closed => Self::Closed,
             AgentPullRequestState::Merged => Self::Merged,
+        }
+    }
+}
+
+/// Who or what archived an agent session.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlAgentSessionArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
+impl From<AgentSessionArchiveCause> for GraphqlAgentSessionArchiveCause {
+    fn from(cause: AgentSessionArchiveCause) -> Self {
+        match cause {
+            AgentSessionArchiveCause::User => Self::User,
+            AgentSessionArchiveCause::PullRequestMerged => Self::PullRequestMerged,
+            AgentSessionArchiveCause::RuntimeClosed => Self::RuntimeClosed,
         }
     }
 }
@@ -1224,8 +1356,20 @@ where
     }
 
     /// Whether the session is archived and read-only.
+    #[graphql(deprecation = "Use archivedBy. Remove after 2026-12-03.")]
     async fn is_archived(&self) -> bool {
-        self.0.is_archived
+        self.0.archived_by.is_some()
+    }
+
+    /// Who or what archived the session, or null while it is active. An archived session is
+    /// read-only.
+    async fn archived_by(&self) -> Option<GraphqlAgentSessionArchiveCause> {
+        self.0.archived_by.map(Into::into)
+    }
+
+    /// When the session was archived, or null while it is active.
+    async fn archived_at(&self) -> Option<String> {
+        self.0.archived_at.map(|at| at.to_rfc3339())
     }
 
     /// The principal identifier of the owner.
@@ -2619,6 +2763,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
+    GraphqlSoupHarness,
     GraphqlSoupReminder,
 );
 

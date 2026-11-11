@@ -70,19 +70,27 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
     public_mcp: Router,
+    correlation: Option<agent_correlation::inbound::CorrelationState>,
     listening: Option<tokio::sync::watch::Sender<bool>>,
     cognition: Router,
+    universal_input: Router,
     scheduling: Router,
     preview: Router,
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
     capabilities: Router,
+    mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
+    session_tasks: Router,
+    updates: Router,
+    auto_archive: Router,
+    work_registrations: Router,
     tool_approvals: Router,
     app_connections: Router,
     code_executions: Router,
+    activity: Router,
     notifications: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
@@ -90,6 +98,15 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
 impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
 {
+    /// Validate and propagate signed invocation attribution across every mounted API.
+    pub fn with_agent_correlation(
+        mut self,
+        state: agent_correlation::inbound::CorrelationState,
+    ) -> Self {
+        self.correlation = Some(state);
+        self
+    }
+
     /// Group the independently constructed route states for the HTTP server.
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
@@ -101,6 +118,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         changes: AgentChangesRouterState<Changes, Access, Auth>,
     ) -> Self {
         Self {
+            correlation: None,
             read,
             control,
             create,
@@ -110,17 +128,24 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             public_mcp: Router::new(),
             listening: None,
             cognition: Router::new(),
+            universal_input: Router::new(),
             scheduling: Router::new(),
             preview: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
             capabilities: Router::new(),
+            mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
+            session_tasks: Router::new(),
+            updates: Router::new(),
+            auto_archive: Router::new(),
+            work_registrations: Router::new(),
             tool_approvals: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
+            activity: Router::new(),
             notifications: Router::new(),
             changes,
         }
@@ -150,6 +175,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach the crate-owned Command K inference router.
+    pub fn with_universal_input(mut self, router: Router) -> Self {
+        self.universal_input = router;
+        self
+    }
+
     /// Attach routine APIs with their existing scheduling middleware.
     pub fn with_scheduling(mut self, router: Router) -> Self {
         self.scheduling = router;
@@ -168,6 +199,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach the composer's Auto mode choice.
+    pub fn with_mode_choice(mut self, router: Router) -> Self {
+        self.mode_choice = router;
+        self
+    }
+
     /// Attach owner-only agent conversation routes.
     pub fn with_conversations(mut self, router: Router) -> Self {
         self.conversations = router;
@@ -175,6 +212,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 
     /// Attach session-authorized code execution records.
+    /// Attach the session-authorized activity history.
+    pub fn with_activity(mut self, router: Router) -> Self {
+        self.activity = router;
+        self
+    }
+
     pub fn with_code_executions(mut self, router: Router) -> Self {
         self.code_executions = router;
         self
@@ -201,6 +244,30 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes associating pull requests with sessions.
     pub fn with_pull_requests(mut self, router: Router) -> Self {
         self.pull_requests = router;
+        self
+    }
+
+    /// Attach the route linking a session to the Macro task it works on.
+    pub fn with_session_tasks(mut self, router: Router) -> Self {
+        self.session_tasks = router;
+        self
+    }
+
+    /// Attach the route listing the caller's sessions waiting for them or stalled.
+    pub fn with_updates(mut self, router: Router) -> Self {
+        self.updates = router;
+        self
+    }
+
+    /// Attach the caller's auto-archive defaults and per-session choices.
+    pub fn with_auto_archive(mut self, router: Router) -> Self {
+        self.auto_archive = router;
+        self
+    }
+
+    /// Attach the routes registering sessions as the caller's work.
+    pub fn with_work_registrations(mut self, router: Router) -> Self {
+        self.work_registrations = router;
         self
     }
 
@@ -265,6 +332,7 @@ where
     Models: AgentModelsService,
     Changes: AgentChanges,
 {
+    let correlation = states.correlation.clone();
     let listening = states.listening.clone();
     let public_mcp = states.public_mcp.clone();
     let cognition = states.cognition.clone();
@@ -293,6 +361,14 @@ where
             "/agent-harness/api-doc/openapi.json",
             swagger::ApiDoc::openapi(),
         ));
+
+    let app = match correlation {
+        Some(state) => app.layer(axum::middleware::from_fn_with_state(
+            state,
+            agent_correlation::inbound::propagate,
+        )),
+        None => app,
+    };
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -332,9 +408,12 @@ where
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
         .merge(states.pull_requests)
+        .merge(states.session_tasks)
+        .merge(states.updates)
         .merge(states.tool_approvals)
         .merge(states.app_connections)
         .merge(states.code_executions)
+        .merge(states.activity)
         .merge(states.notifications)
         .merge(agent_changes_router(states.changes));
     Router::new()
@@ -342,12 +421,16 @@ where
         .merge(tool_actions)
         .merge(agent_sandbox_size_router(states.read.clone()))
         .merge(agent_coding_preferences_router(states.read))
+        .merge(states.auto_archive)
+        .merge(states.work_registrations)
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
         .merge(states.capabilities)
+        .merge(states.mode_choice)
         .merge(states.conversations)
+        .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

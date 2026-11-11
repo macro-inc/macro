@@ -9,7 +9,11 @@ import type { ChannelsGroup } from '../../../types';
 import { channelGroup } from '../../../utils';
 import type { useChannelCalls } from './useChannelCalls';
 
-const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
+const CHANNEL_GROUPS: ChannelsGroup[] = [
+  'team_channels',
+  'channels',
+  'direct_messages',
+];
 
 type ChannelActivityTarget = {
   channelId: string;
@@ -24,7 +28,9 @@ type ChannelActivityTarget = {
 
 export function useChannelRailActivity(
   channels: Accessor<readonly ChannelEntity[]>,
-  calls: ReturnType<typeof useChannelCalls>
+  calls: ReturnType<typeof useChannelCalls>,
+  /** Track favorites outside the lists without adding them to section counts. */
+  additionalChannels: Accessor<readonly ChannelEntity[]> = () => []
 ) {
   const notificationSource = useGlobalNotificationSource();
   const [activityTargets, setActivityTargets] = createStore<
@@ -44,6 +50,7 @@ export function useChannelRailActivity(
     const unreadChannelIds = new Set<string>();
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
+      team_channels: 0,
       channels: 0,
       direct_messages: 0,
     };
@@ -55,7 +62,13 @@ export function useChannelRailActivity(
       created_at: DateValue;
     }[] = [];
     const legacyChannelIds = new Set<string>();
-    for (const channel of channels()) {
+    const notificationChannels = new Map(
+      [...additionalChannels(), ...channels()].map((channel) => [
+        channel.id,
+        channel,
+      ])
+    );
+    for (const channel of notificationChannels.values()) {
       if (channel.unreadNotifications === undefined) {
         legacyChannelIds.add(channel.id);
         continue;

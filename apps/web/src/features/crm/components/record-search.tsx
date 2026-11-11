@@ -1,10 +1,10 @@
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import PlusIcon from '@phosphor/plus.svg';
 import { Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { PropertyIcon } from '../../database/components/property-icon';
-import type { Pipeline } from '../core/pipeline';
+import type { PipelineRecordType } from '../core/pipeline';
 import { type RecordOption, recordDetail } from '../core/pipeline-record';
 
 /** A search result row: a record to pick, or the search itself as a record to create. */
@@ -16,7 +16,7 @@ const MAX_RESULTS = 50;
 
 /** Find a company or contact by name or detail, or start a new one from the search. */
 export function RecordSearch(props: {
-  recordType: Pipeline['recordType'];
+  recordType: PipelineRecordType;
   options: RecordOption[];
   loading: boolean;
   /** Mount the menu here, e.g. a modal dialog's content, which hides body portals. */

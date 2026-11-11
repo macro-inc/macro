@@ -18,10 +18,20 @@ to the browser via `inbound/wasm`.
 
 - `src/domain/fold.rs`: the fold itself — read its module doc first; it's
   total by design (see "Why this cannot fail") and never errors on read.
+- `src/domain/fold/convert.rs` + `turn.rs`: map image blocks into attachments,
+  using source URLs or inline data; attach live image chunks to the user prompt
+  and deduplicate attachments by URI during replay.
 - `src/domain/model/segment/code_execution.rs`: expands internal code receipts
   into SDK activity rows for conversation snapshots, independent of harness.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
+- `src/domain/model/segment.rs`: activity rows for conversations. A row's
+  `card` is what its step put in front of the person; only the call the
+  harness presents for `execution.views.present` (`view_<id>`) carries one.
+- `src/domain/fold/tool_call.rs`: `view_detail` folds `DisplayResults` and
+  the presented `PresentView` to `ToolDetail::View`, the `dynamic_ui::View`
+  their result carries, decoded. Their arguments are the model's, streamed
+  undecoded, and are never read.
 - `src/domain/log.rs`: the raw log vocabulary folds consume.
 - `src/domain/ports.rs`: `FoldedMessageRepo`, the driving port services call
   directly — there is no HTTP adapter; only the browser gets `inbound/wasm`.
@@ -49,13 +59,16 @@ to the browser via `inbound/wasm`.
 - Add a new message/event kind: `src/domain/log.rs` (raw shape) →
   `src/domain/fold.rs` (fold logic) → `src/domain/model.rs` (renderable type)
   → `src/inbound/wire.rs` if the browser needs it → `cargo run -p agent_fold
-  --bin export_types` to regenerate the TypeScript contract.
+  --bin agent_fold_types` to regenerate the TypeScript contract.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
 
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations
 aligned; recovery must never guess the answer from another turn.
+
+`_macro/review_updated` frames project each review's newest saved revision
+into `SessionMetadata.reviewRevisions`; they never touch messages or the turn.
 
 Notification log frames open system turns without user messages. Their events
 project into `SessionMetadata.notifications`, separate from message search and
@@ -66,15 +79,24 @@ keep deserialization compatible with existing flat rows. Exact `<noop/>` is buff
 turns without tool activity; lifecycle still reports the turn ending. User turns
 and tool-bearing turns preserve the literal text.
 
+Claude Code injects background-task reports (`<task-notification>`) as user
+turns. `claude_fold` copies the transcript's `origin` to
+`_meta.claudeCode.origin`; only that tag makes a user chunk a
+`TaskNotification` agent part in the open turn. Untagged text, even identical
+XML, stays a prompt.
+
 Server-added invocation context is marked by the protocol’s block metadata.
 Omit those blocks from user messages, including replay; preserve unmarked text
 even when it contains agent-context tags.
+
+Terminal failures remain `TurnState::Failed` until a new turn starts; the existing
+session projection carries that state to list rows without loading transcripts.
 
 ## Checks
 
 - `cargo test -p agent_fold`.
 - After changing `inbound/wire.rs` or exported `domain/model.rs` types:
-  `cargo run -p agent_fold --bin export_types` and commit the regenerated
+  `cargo run -p agent_fold --bin agent_fold_types` and commit the regenerated
   TypeScript: the web client's copy and the SDK's
   `packages/sdk/generated/agent-fold/`, which types
   `AgentSession.foldedLog()`.
@@ -85,6 +107,10 @@ even when it contains agent-context tags.
   returned as an error — `fold` must stay total (see `domain/fold.rs` docs).
 - `scripts/sanitize_recording.py` strips real-session fixtures before they
   land under `fixtures/real/`; never commit an unsanitized recording.
+- A user-issued `set_model` closes the open turn so later agent output gets
+  a new turn id and sorts below the control line. A `set_model` with no
+  `user_id` is the session applying its own model (create/resume) and draws
+  no line. `set_config_option` (mode, effort) does not split a turn.
 
 ## Related
 

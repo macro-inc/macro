@@ -24,7 +24,7 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
@@ -32,6 +32,9 @@ import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
+import type { AccountManagerDecision } from './generated/schemas/accountManagerDecision';
+import type { AccountManagerGrant } from './generated/schemas/accountManagerGrant';
+import type { AccountManagersList } from './generated/schemas/accountManagersList';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
@@ -51,11 +54,17 @@ import type { CalendarMentionPreviewRequest } from './generated/schemas/calendar
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
+import type { CardPosition } from './generated/schemas/cardPosition';
+import type { ChannelAccessDecision } from './generated/schemas/channelAccessDecision';
+import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
+import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
+import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
+import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
@@ -70,6 +79,7 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
+import type { CreateCrmTeamContactRequest } from './generated/schemas/createCrmTeamContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
@@ -85,6 +95,7 @@ import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequ
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
+import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
@@ -140,6 +151,7 @@ import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutO
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -153,19 +165,24 @@ import type { RenameChannelLabelRequest } from './generated/schemas/renameChanne
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
+import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
+import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
 import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StageRequirement } from './generated/schemas/stageRequirement';
 import type { StorageRows } from './generated/schemas/storageRows';
 import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
@@ -263,6 +280,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
   };
 }
 
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
+}
+
 export async function getDocumentPermissionToken(
   documentId: string
 ): Promise<string> {
@@ -324,10 +351,16 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
+/** Who owns a registered harness: always one person. */
+export type HarnessOwner = { type: 'user'; user_id: string };
+
+/** An agent living on a runtime. */
+export type HarnessResident = {
+  bot_id: string;
+  name: string;
+  owner_user_id?: string | null;
+  team_id?: string | null;
+};
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
@@ -336,6 +369,10 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
+  /** The viewer's role. Only `owner` and `user` can run agents on it. */
+  access: 'owner' | 'user' | 'read' | 'none';
+  /** Teams it is a team machine for: their every member is a user of it. */
+  shared_team_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -433,8 +470,21 @@ export const storageServiceClient = {
     dssFetch<PipelineResponse[]>('/crm/pipelines', { method: 'GET' }),
   getCrmPipeline: (id: string) =>
     dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
+  getCrmPipelineStageRequirements: (id: string) =>
+    dssFetch<StageRequirement[]>(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'GET',
+    }),
+  setCrmPipelineStageRequirement: (id: string, rule: StageRequirement) =>
+    dssFetch(`/crm/pipelines/${id}/stage-requirements`, {
+      method: 'PUT',
+      body: JSON.stringify(rule),
+    }),
   getCrmPipelineTable: (id: string) =>
     dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
+  getCrmPipelineViewPositions: (id: string, viewId: string) =>
+    dssFetch<CardPosition[]>(`/crm/pipelines/${id}/views/${viewId}/positions`, {
+      method: 'GET',
+    }),
   getCrmPipelineRows: (id: string, after?: string) =>
     dssFetch<StorageRows>(
       `/crm/pipelines/${id}/rows${after ? `?after=${encodeURIComponent(after)}` : ''}`,
@@ -691,6 +741,8 @@ export const storageServiceClient = {
       group_by: PostGroupedSoupAstInitialRequest['group_by'];
       per_group_limit?: number | null;
       sort_method?: GroupedSoupSort;
+      sort_property_definition_id?: string | null;
+      sort_direction?: PostGroupedSoupAstInitialRequest['sort_direction'];
     };
     body: PostSoupAstRequest;
     signal?: AbortSignal;
@@ -701,6 +753,8 @@ export const storageServiceClient = {
       mode: 'initial',
       group_by: args.params.group_by,
       sort_method: args.params.sort_method,
+      sort_property_definition_id: args.params.sort_property_definition_id,
+      sort_direction: args.params.sort_direction,
       ...(args.params.per_group_limit != null && {
         per_group_limit: args.params.per_group_limit,
       }),
@@ -720,6 +774,8 @@ export const storageServiceClient = {
       group_key: string;
       limit?: number | null;
       sort_method?: GroupedSoupSort;
+      sort_property_definition_id?: string | null;
+      sort_direction?: PostGroupedSoupAstGroupPageRequest['sort_direction'];
     };
     body: PostSoupAstRequest;
   }) {
@@ -733,6 +789,8 @@ export const storageServiceClient = {
       mode: 'group_page',
       group_by: args.params.group_by,
       sort_method: args.params.sort_method,
+      sort_property_definition_id: args.params.sort_property_definition_id,
+      sort_direction: args.params.sort_direction,
       group_key: args.params.group_key,
       ...(args.params.limit != null && { limit: args.params.limit }),
     } satisfies PostGroupedSoupAstRequest;
@@ -822,6 +880,34 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
+  },
+
   async getHarnessPairing(args: { code: string }) {
     return (
       await dssFetch<HarnessPairing>(
@@ -845,6 +931,16 @@ export const storageServiceClient = {
           body: JSON.stringify(request),
         }
       )
+    ).map((result) => result);
+  },
+
+  async patchHarness(args: { harness_id: string } & PatchHarnessRequest) {
+    const { harness_id, ...request } = args;
+    return (
+      await dssFetch<Harness>(`/harnesses/${harness_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
     ).map((result) => result);
   },
 
@@ -921,6 +1017,52 @@ export const storageServiceClient = {
     return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
       method: 'DELETE',
     });
+  },
+
+  async listAccountManagers() {
+    return (
+      await dssFetch<AccountManagersList>(`/account-managers`, {
+        method: 'GET',
+      })
+    ).map((result) => result.grants);
+  },
+
+  async getAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'GET' }
+    );
+  },
+
+  async requestAccountManager(args: RequestAccountManagerBody) {
+    return await dssFetch<AccountManagerGrant>(`/account-managers`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async respondToAccountManagerRequest(args: {
+    id: string;
+    decision: AccountManagerDecision;
+  }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}/response`,
+      { method: 'POST', body: JSON.stringify({ decision: args.decision }) }
+    );
+  },
+
+  async claimAccountManagerToken(args: { id: string }) {
+    return await dssFetch<ClaimedAccountManagerToken>(
+      `/account-managers/${encodeURIComponent(args.id)}/token`,
+      { method: 'POST' }
+    );
+  },
+
+  async revokeAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'DELETE' }
+    );
   },
 
   async listUserApiKeys() {
@@ -1098,6 +1240,46 @@ export const storageServiceClient = {
     return await dssFetch(`/channels/join/${args.join_code}`, {
       method: 'POST',
     });
+  },
+
+  async getMyChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequestState>(
+      `/channels/${args.channel_id}/access-requests/mine`
+    );
+  },
+
+  async requestChannelAccess(args: WithChannelId) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/mine`,
+      { method: 'PUT' }
+    );
+  },
+
+  async cancelChannelAccessRequest(args: WithChannelId) {
+    return await dssFetch(`/channels/${args.channel_id}/access-requests/mine`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getChannelAccessRequest(args: WithChannelId & { request_id: string }) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}`
+    );
+  },
+
+  async resolveChannelAccessRequest(
+    args: WithChannelId & {
+      request_id: string;
+      decision: ChannelAccessDecision;
+    }
+  ) {
+    return await dssFetch<ChannelAccessRequest>(
+      `/channels/${args.channel_id}/access-requests/${args.request_id}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision: args.decision }),
+      }
+    );
   },
 
   async leaveChannel(args: WithChannelId) {
@@ -1641,6 +1823,24 @@ export const storageServiceClient = {
   /**
    * Gets the team-share state of a document (resolved against the owner's team).
    */
+  /** When to use a skill; `description` is absent for older skills. */
+  async getSkillDescription(args: { documentId: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`
+    );
+  },
+
+  /** Sets when to use a skill: one line starting "Use when". */
+  async setSkillDescription(args: { documentId: string; description: string }) {
+    return await dssFetch<SkillDescriptionBody>(
+      `/documents/${args.documentId}/skill_description`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ description: args.description }),
+      }
+    );
+  },
+
   async getDocumentTeamShare(args: { documentId: string }) {
     return await dssFetch<DocumentTeamShareResponse>(
       `/documents/${args.documentId}/team_share`
@@ -2615,37 +2815,54 @@ export const storageServiceClient = {
   },
 
   channelLabels: {
-    async preview(rule: ChannelLabelRule, signal?: AbortSignal) {
-      return await dssFetch<SmartTagPreview>('/channel-labels/preview', {
-        method: 'POST',
-        body: JSON.stringify(rule),
-        signal,
-      });
+    async preview(
+      rule: ChannelLabelRule,
+      signal?: AbortSignal,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch<SmartTagPreview>(
+        `/channel-labels/preview${scope ? `?scope=${scope}` : ''}`,
+        { method: 'POST', body: JSON.stringify(rule), signal }
+      );
     },
-    /** Every label of the caller's team; `channelIds` is limited to channels the caller is in. */
-    async list() {
-      return await dssFetch<ChannelLabelsList>('/channel-labels');
+    /** Omitted scope selects the caller's team when available, otherwise personal labels. */
+    async list(scope?: ChannelLabelScopeSelection) {
+      return await dssFetch<ChannelLabelsList>(
+        `/channel-labels${scope ? `?scope=${scope}` : ''}`
+      );
     },
-    async create(params: CreateChannelLabelRequest) {
-      return await dssFetch<ChannelLabel>('/channel-labels', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-    },
-    async rename(labelId: string, params: RenameChannelLabelRequest) {
+    async create(
+      params: CreateChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
       return await dssFetch<ChannelLabel>(
-        `/channel-labels/${encodeURIComponent(labelId)}`,
+        `/channel-labels${scope ? `?scope=${scope}` : ''}`,
+        { method: 'POST', body: JSON.stringify(params) }
+      );
+    },
+    async rename(
+      labelId: string,
+      params: RenameChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch<ChannelLabel>(
+        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
         { method: 'PATCH', body: JSON.stringify(params) }
       );
     },
-    async remove(labelId: string) {
-      return await dssFetch(`/channel-labels/${encodeURIComponent(labelId)}`, {
-        method: 'DELETE',
-      });
-    },
-    async setChannelLabel(channelId: string, params: SetChannelLabelRequest) {
+    async remove(labelId: string, scope?: ChannelLabelScopeSelection) {
       return await dssFetch(
-        `/channel-labels/channels/${encodeURIComponent(channelId)}`,
+        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
+        { method: 'DELETE' }
+      );
+    },
+    async setChannelLabel(
+      channelId: string,
+      params: SetChannelLabelRequest,
+      scope?: ChannelLabelScopeSelection
+    ) {
+      return await dssFetch(
+        `/channel-labels/channels/${encodeURIComponent(channelId)}${scope ? `?scope=${scope}` : ''}`,
         { method: 'PUT', body: JSON.stringify(params) }
       );
     },
@@ -2754,6 +2971,29 @@ export const storageServiceClient = {
       }
     );
   },
+  async createTeamContact(body: CreateCrmTeamContactRequest) {
+    return await dssFetch<CrmContactResponse>('/crm/contacts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async listCrmBlockedDomains() {
+    return await dssFetch<CrmBlockedDomainResponse[]>('/crm/blocked-domains', {
+      method: 'GET',
+    });
+  },
+  async blockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'PUT' }
+    );
+  },
+  async unblockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'DELETE' }
+    );
+  },
   async getContact({ contactId }: { contactId: string }) {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
@@ -2789,6 +3029,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async setContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async setContactCompany({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactCompanyRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
   },
   async setContactHidden({
     contactId,

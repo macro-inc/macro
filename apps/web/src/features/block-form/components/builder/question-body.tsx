@@ -1,4 +1,4 @@
-import CheckSquare from '@phosphor/check-square.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { FormColumn, FormOption } from '../../core/form-model';
 import type { QuestionTypeId } from '../../core/question-types';
@@ -69,6 +69,9 @@ export function QuestionPreview(props: {
       </Match>
       <Match when={props.type === 'date'}>
         <FauxField>Month, day, year</FauxField>
+      </Match>
+      <Match when={props.type === 'date-range'}>
+        <FauxField>Start date – end date</FauxField>
       </Match>
       <Match when={props.type === 'url'}>
         <FauxField>https://</FauxField>

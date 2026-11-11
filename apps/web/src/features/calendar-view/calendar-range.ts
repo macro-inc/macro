@@ -1,4 +1,4 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { parseLocalDate } from '@core/util/local-date';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,

@@ -1,4 +1,3 @@
-import CodeIcon from '@phosphor/code.svg';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -7,7 +6,6 @@ import type {
 import { For, Show } from 'solid-js';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
 import { LiveToolGroup } from '../../views/LiveToolGroup';
-import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
@@ -22,7 +20,9 @@ export function CodeExecutionToolCall(props: {
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
-  const errorVisible = () =>
+  // The error text is written for the agent, which reads it and retries; the
+  // person watching only sees that the program ended badly.
+  const ended = () =>
     Boolean(
       props.error &&
         (props.record?.status !== 'running' ||
@@ -36,10 +36,9 @@ export function CodeExecutionToolCall(props: {
 
   return (
     <div class="min-w-0" data-code-execution={props.record?.executionId}>
-      <Show when={activity().length === 0 || errorVisible()}>
+      <Show when={activity().length === 0 || ended()}>
         <ToolCard
           title="Workspace activity"
-          icon={<CodeIcon />}
           status={props.common.status}
           muted={props.common.muted}
           trailing={
@@ -50,12 +49,7 @@ export function CodeExecutionToolCall(props: {
                 ? 'Working in your workspace…'
                 : undefined)
           }
-          hasContent={errorVisible()}
-        >
-          <Show when={errorVisible()}>
-            <p class="mt-2 text-ink-muted">{props.error}</p>
-          </Show>
-        </ToolCard>
+        />
       </Show>
       <Show when={activity().length > 0}>
         <LiveToolGroup
@@ -156,30 +150,16 @@ function RecordedCall(props: {
         : undefined,
   });
   return (
-    <Show
-      when={
-        props.call.name === 'DisplayResults' &&
-        props.call.status === 'completed'
-      }
-      fallback={
-        <MacroToolCall
-          detail={{
-            kind: 'macro',
-            input: props.call.input,
-            output: props.call.output,
-            error: props.call.error ?? null,
-          }}
-          common={common()}
-          context={props.context}
-          grouped={false}
-        />
-      }
-    >
-      <DisplayResultsToolCall
-        input={props.call.input}
-        error={props.call.error}
-        common={common()}
-      />
-    </Show>
+    <MacroToolCall
+      detail={{
+        kind: 'macro',
+        input: props.call.input,
+        output: props.call.output,
+        error: props.call.error ?? null,
+      }}
+      common={common()}
+      context={props.context}
+      grouped={false}
+    />
   );
 }

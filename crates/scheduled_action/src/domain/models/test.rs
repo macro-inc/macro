@@ -3,31 +3,45 @@ use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
+use routine_program::{AgentStep, RoutineProgram};
+
 use super::{
-    ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, MAX_ACTION_TIME,
-    ResolvedTaskTarget, RoutineModelId, RunVisibility, Schedule, ScheduledAction, TaskTargetError,
-    UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionKind, MAX_ACTION_TIME,
+    ResolvedTaskTarget, RunVisibility, Schedule, ScheduledAction, TaskTargetError,
 };
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
 
 #[test]
-fn both_request_representations_normalize_to_the_same_configuration() {
-    let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
-        "schedule":"0 0 9 * * *", "timezone":"UTC"});
-    let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+fn create_and_update_bodies_normalize_to_the_same_configuration() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
         "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
     let stored = ScheduledAction {
         enabled: false,
         ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
     };
-    for input in [legacy, canonical] {
-        let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
-        let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
-        let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
-        let update = serde_json::to_value(update.into_configuration(&stored)).unwrap();
-        assert_eq!(create, update);
-        assert_eq!(create["trigger"]["type"], "cron");
+    let create: ActionConfiguration = serde_json::from_value(input.clone()).unwrap();
+    let update: ActionConfigurationUpdate = serde_json::from_value(input).unwrap();
+    let create = serde_json::to_value(create).unwrap();
+    let update = serde_json::to_value(update.into_configuration(&stored)).unwrap();
+    assert_eq!(create, update);
+    assert_eq!(create["trigger"]["type"], "cron");
+}
+
+/// The cron-only body that predates `trigger` is no longer accepted.
+#[test]
+fn top_level_schedules_are_rejected() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "schedule":"0 0 9 * * *", "timezone":"UTC"});
+    for error in [
+        serde_json::from_value::<ActionConfiguration>(input.clone())
+            .unwrap_err()
+            .to_string(),
+        serde_json::from_value::<ActionConfigurationUpdate>(input)
+            .unwrap_err()
+            .to_string(),
+    ] {
+        assert!(error.starts_with("unknown field `schedule`"), "{error}");
     }
 }
 
@@ -40,10 +54,10 @@ fn updates_may_omit_activation_but_creates_may_not() {
             enabled,
             ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
         };
-        let update: UpdateScheduledAction = serde_json::from_value(input.clone()).unwrap();
+        let update: ActionConfigurationUpdate = serde_json::from_value(input.clone()).unwrap();
         assert_eq!(update.into_configuration(&stored).enabled, enabled);
     }
-    assert!(serde_json::from_value::<CreateScheduledAction>(input).is_err());
+    assert!(serde_json::from_value::<ActionConfiguration>(input).is_err());
 }
 
 /// Runs start unlisted unless a create says otherwise, and an update that
@@ -52,19 +66,17 @@ fn updates_may_omit_activation_but_creates_may_not() {
 fn run_visibility_defaults_to_unlisted_and_omitting_it_keeps_the_stored_value() {
     let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
         "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
-    let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
-        "schedule":"0 0 9 * * *", "timezone":"UTC"});
     let with = |visibility: &str| {
         let mut input = canonical.clone();
         input["run_visibility"] = json!(visibility);
         input
     };
     let create = |input: serde_json::Value| {
-        ActionConfiguration::from(serde_json::from_value::<CreateScheduledAction>(input).unwrap())
+        serde_json::from_value::<ActionConfiguration>(input)
+            .unwrap()
             .run_visibility
     };
     assert_eq!(create(canonical.clone()), RunVisibility::Unlisted);
-    assert_eq!(create(legacy.clone()), RunVisibility::Unlisted);
     assert_eq!(create(with("listed")), RunVisibility::Listed);
 
     let stored = ScheduledAction {
@@ -72,90 +84,112 @@ fn run_visibility_defaults_to_unlisted_and_omitting_it_keeps_the_stored_value() 
         ..action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).unwrap())
     };
     let update = |input: serde_json::Value| {
-        serde_json::from_value::<UpdateScheduledAction>(input)
+        serde_json::from_value::<ActionConfigurationUpdate>(input)
             .unwrap()
             .into_configuration(&stored)
             .run_visibility
     };
     assert_eq!(update(canonical.clone()), RunVisibility::Listed);
-    assert_eq!(update(legacy), RunVisibility::Listed);
     assert_eq!(update(with("unlisted")), RunVisibility::Unlisted);
-    assert!(serde_json::from_value::<CreateScheduledAction>(with("hidden")).is_err());
+    assert!(serde_json::from_value::<ActionConfiguration>(with("hidden")).is_err());
 }
 
+/// A five-field cron is what most callers write first; the rejection must say
+/// which format is expected.
 #[test]
-fn mixed_representations_are_rejected_even_when_the_values_agree() {
+fn rejected_schedules_explain_the_cron_format_for_create_and_update() {
     let input = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
-        "schedule":"0 0 9 * * *", "timezone":"UTC",
-        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
-    assert!(serde_json::from_value::<CreateScheduledAction>(input.clone()).is_err());
-    assert!(serde_json::from_value::<UpdateScheduledAction>(input).is_err());
+        "trigger":{"type":"cron", "schedule":"*/10 * * * *", "timezone":"UTC"}});
+    for error in [
+        serde_json::from_value::<ActionConfiguration>(input.clone())
+            .unwrap_err()
+            .to_string(),
+        serde_json::from_value::<ActionConfigurationUpdate>(input)
+            .unwrap_err()
+            .to_string(),
+    ] {
+        assert_eq!(
+            error,
+            "cron schedule `*/10 * * * *` has 5 fields; use 6 or 7 \
+             (second minute hour day-of-month month day-of-week [year]), \
+             e.g. `0 */10 * * * *` for every ten minutes"
+        );
+    }
 }
 
 #[test]
-fn legacy_task_round_trips_without_changing_instructions() {
-    let payload = json!({
+fn rejected_requests_name_the_missing_field() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{},
+        "trigger":{"type":"cron", "schedule":"0 */10 * * * *", "timezone":"UTC"}});
+    assert_eq!(
+        serde_json::from_value::<ActionConfiguration>(input)
+            .unwrap_err()
+            .to_string(),
+        "missing field `enabled`"
+    );
+}
+
+/// The single agent step a stored task resolves to.
+fn agent_step(payload: serde_json::Value) -> AgentStep {
+    RoutineProgram::from_task(&payload).unwrap().agent_steps()[0].clone()
+}
+
+#[test]
+fn legacy_tasks_keep_their_model_target_and_instructions() {
+    let step = agent_step(json!({
         "model": "claude-sonnet-4-5",
-        "prompt": "stored system instructions",
+        "prompt": "",
         "user_prompt": "stored user instructions",
-    });
-    let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
-    let ResolvedTaskTarget::Model { model } = task.resolve_target().unwrap() else {
+    }));
+    let ResolvedTaskTarget::Model { model } = ResolvedTaskTarget::of(&step).unwrap() else {
         panic!("expected a model target");
     };
-    assert_eq!(model.as_str(), "claude-sonnet-4-5");
-    assert_eq!(task.prompt, "stored system instructions");
-    assert_eq!(task.user_prompt, "stored user instructions");
-    assert_eq!(serde_json::to_value(task).unwrap(), payload);
+    assert_eq!(model, "claude-sonnet-4-5");
+    assert_eq!(step.instructions, "stored user instructions");
     assert_eq!(serde_json::to_value(ActionKind::Agent).unwrap(), "Agent");
 }
 
 #[test]
-fn agent_task_resolves_persona_default_or_explicit_model_override() {
+fn agent_steps_resolve_persona_default_or_explicit_model_override() {
     let bot_id = generate_uuid_v7();
     for model in [None, Some("runtime-specific/unlisted-model")] {
         let mut payload = json!({
-            "agent": { "bot_id": bot_id },
-            "prompt": "stored system instructions",
-            "user_prompt": "stored user instructions",
+            "steps": [{ "type": "agent", "agent": { "bot_id": bot_id }, "instructions": "go" }],
         });
         if let Some(model) = model {
-            payload["model"] = json!(model);
+            payload["steps"][0]["model"] = json!(model);
         }
-        let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
+        let step = agent_step(payload);
         let ResolvedTaskTarget::Agent {
             bot_id: resolved_bot,
             model: resolved_model,
-        } = task.resolve_target().unwrap()
+        } = ResolvedTaskTarget::of(&step).unwrap()
         else {
             panic!("expected an agent target");
         };
         assert_eq!(resolved_bot.as_uuid(), bot_id);
-        assert_eq!(resolved_model.map(RoutineModelId::as_str), model);
-        assert_eq!(serde_json::to_value(task).unwrap(), payload);
+        assert_eq!(resolved_model, model);
     }
 }
 
 #[test]
 fn null_model_uses_agent_default_and_null_agent_uses_model() {
-    let task: AgentTask = serde_json::from_value(json!({
+    let step = agent_step(json!({
         "agent": { "bot_id": generate_uuid_v7() }, "model": null,
         "prompt": "system", "user_prompt": "user",
-    }))
-    .unwrap();
+    }));
     assert!(matches!(
-        task.resolve_target().unwrap(),
+        ResolvedTaskTarget::of(&step).unwrap(),
         ResolvedTaskTarget::Agent { model: None, .. }
     ));
 
-    let task: AgentTask = serde_json::from_value(json!({
+    let step = agent_step(json!({
         "agent": null, "model": "custom-model",
         "prompt": "system", "user_prompt": "user",
-    }))
-    .unwrap();
+    }));
     assert!(matches!(
-        task.resolve_target().unwrap(),
-        ResolvedTaskTarget::Model { model } if model.as_str() == "custom-model"
+        ResolvedTaskTarget::of(&step).unwrap(),
+        ResolvedTaskTarget::Model { model } if model == "custom-model"
     ));
 }
 
@@ -169,7 +203,7 @@ fn malformed_bot_ids_are_rejected_even_with_a_model() {
         json!({}),
     ] {
         assert!(
-            serde_json::from_value::<AgentTask>(json!({
+            RoutineProgram::from_task(&json!({
                 "agent": agent, "model": "valid-model",
                 "prompt": "system", "user_prompt": "user",
             }))
@@ -181,22 +215,33 @@ fn malformed_bot_ids_are_rejected_even_with_a_model() {
 #[test]
 fn supplied_model_must_be_nonblank_for_both_target_forms() {
     for model in ["", " ", "\t\n", "\u{2003}"] {
-        assert_eq!(
-            RoutineModelId::try_from(model.to_string()),
-            Err(TaskTargetError::BlankModel)
-        );
         for agent in [json!(null), json!({ "bot_id": generate_uuid_v7() })] {
-            assert!(
-                serde_json::from_value::<AgentTask>(json!({
-                    "agent": agent, "model": model,
-                    "prompt": "system", "user_prompt": "user",
-                }))
-                .is_err()
+            // A single-agent task with a blank model doesn't parse.
+            let task = json!({
+                "agent": agent, "model": model,
+                "prompt": "system", "user_prompt": "user",
+            });
+            assert!(RoutineProgram::from_task(&task).is_err());
+            // An agent step with one parses, then has no target.
+            let step = AgentStep {
+                model: Some(model.to_owned()),
+                agent: serde_json::from_value(agent).unwrap(),
+                instructions: "user".to_owned(),
+            };
+            assert_eq!(
+                ResolvedTaskTarget::of(&step),
+                Err(TaskTargetError::BlankModel)
             );
         }
     }
-    let model = RoutineModelId::try_from(" custom/model ".to_string()).unwrap();
-    assert_eq!(model.as_str(), " custom/model ", "do not rewrite model IDs");
+    let step = agent_step(json!({ "model": " custom/model ", "prompt": "", "user_prompt": "u" }));
+    assert_eq!(
+        ResolvedTaskTarget::of(&step),
+        Ok(ResolvedTaskTarget::Model {
+            model: " custom/model "
+        }),
+        "do not rewrite model IDs"
+    );
 }
 
 #[test]
@@ -205,8 +250,10 @@ fn missing_target_never_uses_stored_instructions_as_a_model() {
         let mut payload = fields;
         payload["prompt"] = json!("claude-sonnet-4-5");
         payload["user_prompt"] = json!("instructions");
-        let task: AgentTask = serde_json::from_value(payload).unwrap();
-        assert_eq!(task.resolve_target(), Err(TaskTargetError::MissingTarget));
+        assert_eq!(
+            ResolvedTaskTarget::of(&agent_step(payload)),
+            Err(TaskTargetError::MissingTarget)
+        );
     }
 }
 
@@ -235,6 +282,9 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         next_run_at: Some(next_run_at),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
+        suggestion_id: None,
+        description: String::new(),
     }
 }
 

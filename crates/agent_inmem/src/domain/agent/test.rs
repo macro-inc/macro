@@ -56,6 +56,41 @@ impl TurnEngine for CancelledEngine {
     }
 }
 
+/// A turn whose model spoke, thought, then called a tool the loop refused.
+struct UnknownToolEngine;
+
+impl TurnEngine for UnknownToolEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(3);
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::Content(
+                    "I'm checking your access on that project.".into(),
+                )))
+                .await;
+            let _ = parts
+                .send(Ok(StreamPart::Thinking("Read the project next.".into())))
+                .await;
+            let unknown = PromptError::UnknownToolCall {
+                tool_name: "ReadInitiative".to_owned(),
+                available_tools: vec!["LoadTools".to_owned()],
+                allowed_tools: vec!["LoadTools".to_owned()],
+                chat_history: Box::default(),
+            };
+            let error = agent::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
+}
+
 /// Drive the served agent as a scripted ACP client: initialize, open a
 /// session, then hand the connection to `scenario`.
 async fn with_agent<Engine, Out>(
@@ -142,6 +177,8 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -833,6 +870,155 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
             serde_json::json!({"macro": {"toolName": "ReadContent"}}),
             serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
             serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
+        ]
+    );
+}
+
+/// The tool frames of a turn, one line each: what a reader of the log sees
+/// happen to its calls.
+fn tool_frames(notifications: &[SessionNotification]) -> Vec<String> {
+    let status = |status: Option<ToolCallStatus>| {
+        status.map_or_else(
+            || "-".to_owned(),
+            |status| {
+                serde_json::to_value(status)
+                    .expect("a status serializes")
+                    .to_string()
+            },
+        )
+    };
+    let input = |input: Option<&serde_json::Value>| {
+        input.map_or_else(|| "-".to_owned(), serde_json::Value::to_string)
+    };
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(format!(
+                "open {} {} {} {}",
+                call.tool_call_id.0,
+                call.title,
+                status(Some(call.status)),
+                input(call.raw_input.as_ref())
+            )),
+            SessionUpdate::ToolCallUpdate(update) => Some(format!(
+                "update {} {} {}",
+                update.tool_call_id.0,
+                status(update.fields.status),
+                input(update.fields.raw_input.as_ref())
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A call the model is still writing opens `pending` at once, is peeked at
+/// as its arguments stream - at most once per window, so a burst of
+/// fragments is one peek - and starts under the same id once finished.
+#[tokio::test]
+async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"query\":\"road".into(),
+        },
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "map\"}".into(),
+        },
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(
+        tool_frames(&notifications),
+        vec![
+            r#"open call-1 NameSearch "pending" -"#,
+            r#"update call-1 - {"query":"road"}"#,
+            r#"update call-1 "in_progress" {"query":"roadmap"}"#,
+            r#"update call-1 "completed" -"#,
+        ]
+    );
+    let open = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(call),
+            _ => None,
+        })
+        .expect("the call opened");
+    assert_eq!(
+        open.meta.clone().map(serde_json::Value::Object),
+        Some(serde_json::json!({"macro": {"toolName": "NameSearch"}})),
+        "the fold reads the tool's name from the opening frame"
+    );
+}
+
+/// A turn that ends while the model is still writing a call closes the
+/// call's row as failed, and the call - which never ran - stays out of the
+/// history the next turn is built from.
+#[tokio::test]
+async fn a_call_the_turn_ends_while_writing_closes_and_stays_out_of_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Content("On it.".into()),
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "CreateDocument".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"title\":\"Pl".into(),
+        },
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["write it up", "again"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let frames = tool_frames(&notifications);
+    assert_eq!(
+        frames[..3],
+        [
+            r#"open call-1 CreateDocument "pending" -"#.to_owned(),
+            r#"update call-1 - {"title":"Pl"}"#.to_owned(),
+            r#"update call-1 "failed" -"#.to_owned(),
+        ]
+    );
+    assert_eq!(
+        engine.requests()[1].messages,
+        vec![
+            "write it up".to_owned(),
+            "On it.".to_owned(),
+            "again".to_owned()
         ]
     );
 }
@@ -1555,6 +1741,30 @@ async fn engine_cancellation_is_not_rendered_as_an_error_message() {
     );
 }
 
+/// A failed turn's reply is what a channel thread posts, so it says the turn
+/// failed in words; the raw error is the prompt's.
+#[tokio::test]
+async fn a_failed_turn_says_so_without_the_raw_error() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(UnknownToolEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "link these tasks"))
+                .block_task()
+                .await
+        })
+        .await;
+
+    assert_eq!(
+        spoken(&notifications),
+        format!("I'm checking your access on that project.\n\n{TURN_FAILED_REPLY}")
+    );
+    let error = response.expect_err("the turn failed");
+    assert!(
+        format!("{error:?}").contains("UnknownToolCall"),
+        "{error:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_prompt_for_an_unknown_session_is_refused() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
@@ -1665,6 +1875,8 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1722,6 +1934,8 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1812,6 +2026,8 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1917,6 +2133,8 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -2416,11 +2634,7 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
             || format!("{error:?}").contains("produced nothing"),
         "got {error:?}"
     );
-    assert!(
-        spoken(&notifications).contains("produced nothing"),
-        "got {:?}",
-        spoken(&notifications)
-    );
+    assert_eq!(spoken(&notifications), TURN_FAILED_REPLY);
 }
 
 /// An engine whose turn waits on a person for twice the idle timeout - the

@@ -24,7 +24,7 @@ export function PillButton(props: PillButtonProps) {
   const subtle = () => props.tone === 'subtle';
   return (
     <Button
-      variant={subtle() ? 'outline' : 'cta'}
+      variant={subtle() ? 'secondary' : 'primary'}
       size="md"
       class={cn(
         'py-1',

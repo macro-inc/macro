@@ -3,14 +3,14 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { invalidateContacts } from '@core/user/contactService';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { Span } from '@macro-inc/observability';
+import type { TraceContext } from '@macro-inc/observability';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -23,10 +23,12 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
+  /** An entity owner may need to authorize the resolved DM/channel before sending. */
+  beforeSend?: (channelId: string) => Promise<void>;
   /** Reuse one id across retries of the same message, so the server stores one copy. */
   messageId?: string;
   /** The span the channel lookup and the post join. */
-  trace?: Pick<Span, 'run'>;
+  parentSpan?: TraceContext;
 };
 
 type NavigationOptions = {
@@ -59,7 +61,9 @@ export function useSendMessageToPeople() {
   ) {
     const senderId = userId();
     if (!senderId) return;
-    const sent = await sendMessage
+    const { navigate } = args;
+    await args.beforeSend?.(channelId);
+    const messageResponse = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
         message: {
@@ -69,14 +73,13 @@ export function useSendMessageToPeople() {
         },
         senderId,
         optimisticId: args.messageId ?? newMessageId(),
-        trace: args.trace,
+        parentSpan: args.parentSpan,
       })
-      .catch(() => undefined);
-    if (!sent) return;
-    const messageId = sent.id;
+      .catch(() => null);
+    if (!messageResponse) return;
 
     fireAndForget(invalidateListChannels(), 'messages');
-    fireAndForget(invalidateContacts(), 'messages');
+    requestContactRefresh();
 
     const navigateToChannel = async () => {
       replaceSplit({
@@ -84,35 +87,35 @@ export function useSendMessageToPeople() {
           type: 'channel',
           id: channelId,
         },
-        mergeHistory: args.navigate?.mergeHistory,
+        mergeHistory: navigate?.mergeHistory,
       });
       const handle = await orchestrator.getBlockHandle(channelId);
       await handle?.goToLocationFromParams({
-        [CHANNEL_PARAMS.message]: messageId,
+        [CHANNEL_PARAMS.message]: messageResponse.id,
       });
     };
 
-    if (args.navigate?.navigate) {
+    if (navigate?.navigate) {
       await navigateToChannel();
     }
 
-    return { channelId, messageId, navigateToChannel };
+    return { channelId, messageResponse, navigateToChannel };
   }
 
   async function resolvePeopleChannel(
     users: readonly string[],
-    trace?: Pick<Span, 'run'>
+    parentSpan?: TraceContext
   ): Promise<string | undefined> {
     try {
       const result =
         users.length === 1
           ? await getOrCreateDmMutation.mutateAsync({
               recipient_id: users[0],
-              trace,
+              parentSpan,
             })
           : await getOrCreatePrivateChannelMutation.mutateAsync({
               recipients: [...users],
-              trace,
+              parentSpan,
             });
       return result.channel_id;
     } catch (err) {
@@ -123,7 +126,7 @@ export function useSendMessageToPeople() {
   }
 
   async function sendToUsers(args: SendToUsersArgs) {
-    const channelId = await resolvePeopleChannel(args.users, args.trace);
+    const channelId = await resolvePeopleChannel(args.users, args.parentSpan);
     if (channelId === undefined) return;
     return sendAndNavigateToChannel(channelId, args);
   }

@@ -15,29 +15,31 @@ Cream slab typography adds 45 to the base font weight; utility-class slab text
 uses weight 360, and the Tasks founder heading uses 445.
 Slab display copy uses warm near-black (`#1d1c1a`) in the cream palette.
 
-Public calls to action use the shared `site-nav-start` treatment: warm white,
-soft pill corners, a fine border, and a 2px arrow shift on hover. `Book a demo` is a
-soft grey secondary action; the header's `Open app` uses a warm-white fill with
-near-black text, a fine border, and no arrow. Its fill fades with the header label during
-the footer transition. As it lands in the footer, the same link reveals the
-original wider white pill, glass rim, and arrow. It follows the existing scroll
-animation and fits within phone widths. Its header label fades out completely
-before the footer presentation fades in, so the two labels never overlap.
-The homepage primary adds a subtle satin gradient and inset edge, a quieter
-18px arrow, and a 1px hover lift; it remains a single link.
-Feedback uses 140ms CSS transitions, respects reduced motion, and does not
-track the pointer. Mobile header actions retain 44px touch targets. The homepage scroll cue is a
-16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
+Every page's HTML starts with a visually hidden notice telling AI agents to use
+`/app/signup/agent` (`#agent-signup-notice`, in both `index.html` and `start.html`,
+which builds the homepage). It stays in the
+accessibility tree and page text, because that is what agents read; do not hide it
+with `display: none`.
+
+Public calls to action use the shared `site-nav-start` treatment: a raised white
+pill with a one-pixel glass rim and a soft highlight that follows the pointer.
+`Book a demo` is the quieter cream secondary pill with the same highlight. The
+homepage hero's `Get Started` and every feature page's hero `Get started` use the
+same primary pill. The header's `Sign Up` is that pill with an arrow; it travels
+into the closing space on the homepage. Its link keeps the header footprint while
+`.site-nav-open-face` paints the pill, so the landed button can render at native
+size. The homepage scroll cue reads "Explore" beside a 20px arrow, inset 48px
+from the bottom while respecting safe areas.
 
 The homepage keeps the original colored constellation and grainy demo backdrop,
-with “with Macro” in the unification heading. The original sample workspace is
+with “with one system” in the unification heading. The original sample workspace is
 embedded at `/demo?embedded=true`; shared UI fixes and corrected sample names
 remain in place. Compact arrows and dots sit above the original, fuller captions
 at the bottom of the frame. Slide selection is manual: arrows, dots, caption
 swipes, and page-level left/right keys. There is no timed cycling or oversized
 side-arrow treatment. The existing scroll entrance, reduced-motion behavior,
-and interaction boundary remain. The primary button keeps its larger satin
-finish but has no looping glimmer. Cream typography from PR #8299 is preserved.
+and interaction boundary remain. The primary button has no looping glimmer.
+Cream typography from PR #8299 is preserved.
 
 The homepage feature sections retain the original centered headings, descriptions,
 conversations, and demos, with rules beside the descriptions. The CRM section
@@ -224,7 +226,7 @@ Verified direct installer URLs remain usable while loading and if the API fails;
 update these fallbacks in `desktopDownloads.ts` when retiring older installers.
 The separate “All releases” link opens GitHub, with the selected installer's
 release version displayed beneath it.
-The page hides the header's Open app action, has no web-app download option,
+The page hides the header's Sign Up action, has no web-app download option,
 and has no header/footer navigation entry.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
@@ -465,6 +467,24 @@ and check the record interactions at both desktop and mobile widths.
 FAQ answers and the always-visible comparison are rendered in the initial HTML.
 The CRM comparison appears above the FAQ, using the shared product table styling.
 Retain FAQ class markers so prerendering emits matching FAQPage structured data.
+
+## Tutorial videos
+
+Product heroes put **Watch demo** beside Get started (`ProductHero`'s
+`tutorial`, and the Email hero); the Agents page's Bring your own agent
+section also has one for MacroD. It opens `TutorialVideoDialog`: the app's
+Block tutorial, paused behind the app's play pill (play disc, presenter, "Watch
+demo · m:ss") until the visitor presses it. Escape and the backdrop close it,
+and focus returns to the button. Titles and lengths in
+`core/tutorial-videos.ts` copy the app's `tutorials` messages; change both
+together.
+
+The videos and posters live once, in `public/video/tutorials/` (mp4s through
+Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
+them from there, including Blocks without a page here (Home, Drive, Calendar,
+Scheduling, Spreadsheets, Databases, Canvas). Replacing a video keeps its
+name; the deploy's `--size-only` sync skips a same-size file, and CloudFront
+caches videos for a day.
 
 ## Paid-social landing page
 
@@ -994,15 +1014,17 @@ mounted. Chat and Docs retain equal-width source panes; when a pane would be
 narrower than 240px, they use the existing single-pane navigation. Verify opening
 and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
-`HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
+`HomepageClosing` for the bottom Sign Up CTA and the shared feature heading styles.
 
-Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
-`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
-It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
-header-to-list gap. Channels and DMs scroll independently. Verify search,
-section collapse, Threads navigation, and opening a mentioned source after
-switching channels. Message text uses the app's 15px/24px reading size; dark
-surface and edge tokens are frozen from `apps/web/src/index.css`.
+Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
+All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
+controls, 32px section headers, and a 4px header-to-list gap. It is not the current
+app's sidebar parity target: `channels-view/components/rail/ExpandedChannelsRail.tsx`
+uses Favorites, Team channels, and custom sections in one scrolling list, with a
+sticky collapsible DM panel and no view tabs. Verify the demo's search, section
+collapse, thread navigation, and opening a mentioned source after switching
+channels. Message text uses the app's 15px/24px reading size; dark surface and edge
+tokens are frozen from `apps/web/src/index.css`.
 
 Keep Merge/Merged and Open session actions in the shared agent chip at the same
 24px height and pill radius, with touch resizing disabled for both.
@@ -1059,10 +1081,10 @@ footer rule. The homepage document frame is 420px tall below 700px because its
 version-history band is hidden there; avoid retaining empty desktop fade space
 between the document and its Learn more links.
 
-The travelling Open app CTA switches to native footer dimensions, text, and SVG
+The travelling Sign Up CTA switches its face to native dimensions, text, and SVG
 sizes after its landing transition settles, removing the compositor scale to
 avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
-restores compact dimensions before the header reappears; keep one app link.
+restores header dimensions before the header reappears; keep one app link.
 
 The landing-page CRM illustration has a transparent outer frame with no
 decorative rim in either palette. Keep the inner CRM window surface and shadow.
@@ -1075,7 +1097,8 @@ dimensions. The production product checks hold scripts and verify styled heroes
 and correctly sized logos before releasing them.
 
 The homepage uses a silent dark unification MP4 and its clean opening frame as
-Open Graph media. Keep the image free of navigation and CTA buttons. The video
+Open Graph media. Keep the image free of navigation and CTA buttons, and keep
+the headline above the bottom quarter, where X overlays its title label. The video
 ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
 and retain earlier files for cached previews. Keep video homepage-only, with
 `og:type=website`, the matching `og:image`, and an

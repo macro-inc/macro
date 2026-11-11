@@ -2,19 +2,21 @@ import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { Client, OperationResult } from '@urql/core';
 import type { Result } from 'neverthrow';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
   NotificationUpdatesDocument,
   type NotificationUpdatesSubscription,
   SoupUpdatesDocument,
+  type SoupUpdatesSubscription,
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
@@ -46,6 +48,7 @@ const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([
   1013, // try again later
   1014, // bad gateway
   4408, // connection initialisation timeout
+  4499, // terminated by the client, as a socket that stopped answering
   4504, // connection acknowledgement timeout
 ]);
 
@@ -111,6 +114,81 @@ export function waitToRetryGraphqlSoupWebSocket(
   });
 }
 
+/** How long a socket checked by {@link createGraphqlSoupWebSocketLiveness} has to answer. */
+export const GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS = 5_000;
+
+type LivenessSocket = { readonly readyState: number; send(data: string): void };
+
+/** graphql-ws reports the socket it built with `webSocketImpl` as `unknown`. */
+function isLivenessSocket(value: unknown): value is LivenessSocket {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'readyState' in value &&
+    typeof value.readyState === 'number' &&
+    'send' in value &&
+    typeof value.send === 'function'
+  );
+}
+
+/**
+ * Pings the connected socket when the app returns to the foreground or
+ * regains connectivity, and terminates it when the server does not answer.
+ *
+ * A phone that sleeps with the app open can wake to a socket the network
+ * dropped without a close frame. It still reads as open, so graphql-ws never
+ * reconnects it: subscriptions hear nothing, and nothing that refetches on a
+ * reconnect runs. Terminating it lets graphql-ws reconnect, and the reconnect
+ * tells every follower to refetch what it missed.
+ */
+export function createGraphqlSoupWebSocketLiveness(terminate: () => void): {
+  connected(socket: unknown): void;
+  pong(received: boolean): void;
+  closed(): void;
+} {
+  let socket: LivenessSocket | undefined;
+  let stopListening: (() => void) | undefined;
+  let waiting:
+    | { timeout: ReturnType<typeof setTimeout>; span: Span }
+    | undefined;
+
+  const settle = (outcome: 'answered' | 'closed' | 'terminated') => {
+    if (!waiting) return;
+    clearTimeout(waiting.timeout);
+    waiting.span.setAttr('websocket.outcome', outcome);
+    waiting.span.end();
+    waiting = undefined;
+  };
+  const check = () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN || waiting) return;
+    const span = Telemetry.span('graphql_soup.websocket.liveness_check');
+    socket.send(JSON.stringify({ type: 'ping' }));
+    waiting = {
+      span,
+      timeout: setTimeout(() => {
+        settle('terminated');
+        terminate();
+      }, GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS),
+    };
+  };
+
+  return {
+    connected(next) {
+      socket = isLivenessSocket(next) ? next : undefined;
+      stopListening ??= onReconnectOpportunity(check);
+    },
+    pong(received) {
+      if (received) settle('answered');
+    },
+    closed() {
+      socket = undefined;
+      settle('closed');
+      stopListening?.();
+      stopListening = undefined;
+    },
+  };
+}
+
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */
 export function buildGraphqlSoupWebSocketUrl(
   dssHost: string,
@@ -169,7 +247,7 @@ type NotificationPatchListener = (patch: GraphqlNotificationPatch) => void;
 
 const notificationPatchListeners = new Set<NotificationPatchListener>();
 
-/** Subscribes to typed notification patches received from GraphQL. */
+/** Subscribes to live notification receipt, without waiting for persistence. */
 export function subscribeToGraphqlNotificationPatches(
   listener: NotificationPatchListener
 ): () => void {
@@ -177,8 +255,18 @@ export function subscribeToGraphqlNotificationPatches(
   return () => notificationPatchListeners.delete(listener);
 }
 
-function publishNotificationPatch(patch: GraphqlNotificationPatch): void {
-  for (const listener of notificationPatchListeners) listener(patch);
+export function publishNotificationPatch(
+  patch: GraphqlNotificationPatch,
+  span: Pick<Span, 'error'>
+): void {
+  for (const listener of notificationPatchListeners) {
+    try {
+      listener(patch);
+    } catch (error) {
+      span.error(error);
+      Telemetry.error(error, { surface: 'graphql-notifications' });
+    }
+  }
 }
 
 const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
@@ -288,13 +376,22 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 result as OperationResult<ActivityUpdatesSubscription>
               );
             }
+            if (document === SoupUpdatesDocument && result.data != null) {
+              fireAndForget(
+                revalidateCallListsForSoupUpdates(
+                  (result.data as SoupUpdatesSubscription).soupUpdates
+                ),
+                'graphql-soup-subscriptions'
+              );
+            }
             if (
               document === NotificationUpdatesDocument &&
               result.data != null
             ) {
               const patch = (result.data as NotificationUpdatesSubscription)
                 .notificationUpdates;
-              publishNotificationPatch(patch);
+              // Cache-dependent channel reconciliation stays behind persistence;
+              // notificationReceiptExchange already dispatched the live event.
               const metadata = normalizedCacheResultMetadata(result);
               fireAndForget(
                 channelHandler.onPatch(

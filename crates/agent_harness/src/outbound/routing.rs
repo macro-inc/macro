@@ -8,7 +8,9 @@
 //!
 //! `spawn` routes on the bot the command names. `resume` and `teardown` get
 //! only a session id, so they read the session's bot from the repo — the same
-//! key, recovered from the same durable row that spawn wrote it to.
+//! key, recovered from the same durable row that spawn wrote it to. External
+//! sessions have no provider here: teardown is a no-op for them, and every
+//! other operation refuses.
 
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
@@ -140,8 +142,21 @@ where
             AgentKind::CodexCloud => self.codex.teardown(session).await,
             AgentKind::Cursor => self.cursor.teardown(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => self.sandbox.teardown(session).await,
-            AgentKind::External => Err(external_is_unroutable()),
+            // Its operator hosts the runtime, so no provider holds anything to
+            // release; refusing here would leave the session undeletable.
+            AgentKind::External => Ok(()),
         }
+    }
+
+    /// Only the in-process runtime holds memory an idle session can give
+    /// back, and it sits behind the sandbox slot; sending every session there
+    /// saves a row read per release.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        self.sandbox.release_idle(session).await
+    }
+
+    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
+        self.sandbox.idle_release_is_lossless(session).await
     }
 
     // Sized sandboxes are a sandboxed-coder concept: the effect table is the
@@ -170,9 +185,9 @@ where
 }
 
 /// The trigger gate never routes external bots here — their operators host
-/// their runtimes — so an external kind reaching a provider decision means a
-/// corrupt session row or a broken gate, and refusing loudly beats picking a
-/// provider that cannot serve it.
+/// their runtimes — so an external kind reaching a provider decision other
+/// than teardown means a corrupt session row or a broken gate, and refusing
+/// loudly beats picking a provider that cannot serve it.
 fn external_is_unroutable() -> HarnessError {
     HarnessError::Container(
         "this session requires a provider outside the sandbox/Cursor router".to_owned(),

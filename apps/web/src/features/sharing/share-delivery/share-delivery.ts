@@ -114,7 +114,7 @@ function useAppShareDeliveryContext(
         mentions: [],
         attachments: attached.map(toAttachment),
         messageId,
-        trace: span,
+        parentSpan: span,
       });
       return sent
         ? ok({ open: sent.navigateToChannel })

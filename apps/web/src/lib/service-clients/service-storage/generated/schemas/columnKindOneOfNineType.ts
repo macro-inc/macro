@@ -10,5 +10,5 @@ export type ColumnKindOneOfNineType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnKindOneOfNineType = {
-  link: 'link',
+  date_range: 'date_range',
 } as const;

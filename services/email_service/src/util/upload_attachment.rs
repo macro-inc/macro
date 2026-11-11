@@ -2,6 +2,7 @@ use crate::outbound::email_api::GmailApi;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
@@ -28,7 +29,7 @@ mod test;
 #[derive(Error, Debug)]
 pub enum UploadAttachmentError {
     #[error("Gmail API rate limit exceeded")]
-    RateLimited,
+    RateLimited(EmailApiError),
 
     #[error("Failed to fetch attachment data from Gmail: {0}")]
     GmailFetchFailed(EmailApiError),
@@ -52,6 +53,11 @@ pub enum UploadAttachmentError {
 
     #[error("Failed to create document record in DSS: {0}")]
     DssCreateFailed(String),
+
+    /// The attachment row was deleted before DSS could link it, e.g. a
+    /// superseded draft revision. There is nothing left to import.
+    #[error("Attachment was deleted before it could be imported")]
+    AttachmentDeleted,
 
     #[error("DSS response did not include a presigned URL")]
     PresignedUrlMissing,
@@ -161,8 +167,23 @@ async fn upload_media_attachment(
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(skip(ctx, attachment_data))]
 async fn upload_document_attachment(
+    ctx: &AttachmentStorageContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> Result<String, UploadAttachmentError> {
+    // A deleted attachment is an expected outcome, not a failure.
+    store_document_attachment(ctx, args, attachment_data)
+        .await
+        .inspect_err(|error| {
+            if !matches!(error, UploadAttachmentError::AttachmentDeleted) {
+                tracing::error!(error = %error, "document attachment upload failed");
+            }
+        })
+}
+
+async fn store_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
@@ -213,7 +234,7 @@ async fn fetch_gmail_attachment_data(
         .get_attachment(link.id, &p.email_provider_id, &p.provider_attachment_id)
         .await
         .map_err(|error| match error {
-            EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited,
+            error @ EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited(error),
             // Preserve the provider error so API handlers can map it to the
             // right status instead of collapsing everything to 500.
             error => UploadAttachmentError::GmailFetchFailed(error),
@@ -317,7 +338,12 @@ async fn create_dss_document_record(
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .map_err(|e| UploadAttachmentError::DssCreateFailed(e.to_string()))
+        .map_err(|e| match e {
+            CreateDocumentInternalError::EmailAttachmentNotFound => {
+                UploadAttachmentError::AttachmentDeleted
+            }
+            e => UploadAttachmentError::DssCreateFailed(e.to_string()),
+        })
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.
@@ -389,7 +415,11 @@ fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentPropert
         }),
         // TODO: companies support
         companies: None,
-        sender: macro_user_id(p, &p.attachment_metadata.sender_email),
+        sender: p
+            .attachment_metadata
+            .sender_email
+            .as_deref()
+            .and_then(|email| macro_user_id(p, email)),
         recipients: Some(
             p.recipient_emails
                 .iter()

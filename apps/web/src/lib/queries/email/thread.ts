@@ -7,8 +7,8 @@ import {
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -16,11 +16,11 @@ import type {
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
+import { markGraphqlEmailThreadUnread } from '@service-storage/graphql-email-read-state';
 import {
-  markGraphqlEmailThreadSeen,
-  markGraphqlEmailThreadUnread,
-} from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -31,13 +31,14 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import {
-  getActiveGraphqlSoupRevalidations,
+  getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { updateEmailThreadState } from './cache-cleanup';
+import { invalidateEmailFolderQueries } from './folder-cache';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -48,6 +49,7 @@ import {
   type EmailArchiveDisposition,
 } from './integration';
 import { emailKeys } from './keys';
+import { type MarkThreadAsSeenParams, markEmailThreadSeen } from './read-state';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
@@ -176,7 +178,11 @@ export async function threadCanBeMarkedNotDone(
   if (isFeatureEnabled(enableGraphqlSoup)) return true;
   const result = await fetchAndCacheThread(threadId);
   if (result.isErr()) return true;
-  return result.value.thread.latest_inbound_message_ts != null;
+  const { thread } = result.value;
+  return (
+    thread.has_received_mail !== false &&
+    thread.latest_inbound_message_ts != null
+  );
 }
 
 export type ThreadQueryData = {
@@ -325,62 +331,13 @@ export function useThreadQuery<TData = ThreadQueryData>(
   };
 }
 
-type MarkThreadAsSeenParams = {
-  threadId: string;
-  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
-  linkId?: string;
-};
-
-/**
- * Optimistically update soup queries when marking as seen.
- * Note: We intentionally don't update the thread messages cache here.
- * Doing so triggers Suspense boundaries which unmount/remount the email view,
- * causing scroll position to reset. The is_read property isn't used in the
- * email view anyway - only the soup/list view needs it.
- */
-function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
-  if (isFeatureEnabled(enableGraphqlSoup)) return;
-  optimisticUpdateSoupEntity({
-    tag: 'emailThread',
-    data: { id: params.threadId, isRead: true },
-    frecency_score: 0,
-  });
-}
-
-/**
- * Mutation to mark a thread as seen.
- */
+/** Mutation wrapper for the shared optimistic thread read operation. */
 export function useMarkThreadAsSeenMutation(
   callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: MarkThreadAsSeenParams) => {
-      if (isFeatureEnabled(enableGraphqlSoup)) {
-        const disposition = await markGraphqlEmailThreadSeen(
-          getGraphqlSoupClient(),
-          params.threadId,
-          getActiveGraphqlSoupRevalidations()
-        );
-        if (disposition === 'committed')
-          await refreshActiveGraphqlSoupQueries();
-        return;
-      }
-      await throwOnErr(() =>
-        emailClient.markThreadAsSeen(
-          { thread_id: params.threadId },
-          params.linkId
-        )
-      );
-    },
-    ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
-      {
-        onMutate: threadSeenOnMutate,
-        // Note: We intentionally don't invalidate thread messages in onSuccess.
-        // The optimistic update already sets isRead in soup, and invalidating
-        // thread messages triggers Suspense which resets scroll position.
-      },
-      callbacks
-    ),
+    mutationFn: markEmailThreadSeen,
+    ...withCallbacks<void, Error, MarkThreadAsSeenParams>({}, callbacks),
   }));
 }
 
@@ -393,7 +350,7 @@ type MarkThreadAsUnreadParams = {
 /**
  * Optimistically flip the soup row to unread. The thread messages cache is
  * intentionally left alone for the same Suspense/scroll-reset reason as
- * threadSeenOnMutate.
+ * markEmailThreadSeen.
  */
 function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
   if (isFeatureEnabled(enableGraphqlSoup)) return;
@@ -413,12 +370,14 @@ export function useMarkThreadAsUnreadMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getUnmaintainedGraphqlSoupRevalidations()
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -431,7 +390,10 @@ export function useMarkThreadAsUnreadMutation(
       );
     },
     ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
-      { onMutate: threadUnreadOnMutate },
+      {
+        onMutate: threadUnreadOnMutate,
+        onSettled: () => invalidateEmailFolderQueries(),
+      },
       callbacks
     ),
   }));
@@ -443,7 +405,7 @@ type ArchiveThreadParams = {
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
   /** Suppress the success toast, e.g. for a send-triggered archive where the
-   *  "Email sent" toast (with its undo-send action) is already up and this
+   *  send toast (with its undo-send action) is already up and this
    *  toast's own Undo would reverse only the archive, not the send. */
   silent?: boolean;
   /** Receives the undo handle once the archive is pushed onto the undo
@@ -797,6 +759,8 @@ export async function blockSenderWithToast(
   }
 
   toast.success('Sender block queued', {
+    dismissStyle: 'icon',
+    actionLayout: 'inline',
     subtext: `Applying the rule for ${senderEmail}`,
     actions: [
       {
@@ -846,6 +810,8 @@ async function upsertSenderFilterWithToast(
   invalidateAllSoup();
 
   toast.success(`Sender marked as ${label}`, {
+    dismissStyle: 'icon',
+    actionLayout: 'inline',
     subtext: `Messages from ${senderEmail} will appear in ${label}`,
     actions: [
       {

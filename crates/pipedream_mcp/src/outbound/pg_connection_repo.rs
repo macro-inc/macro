@@ -1,9 +1,12 @@
-use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::{AppConnections, ConnectionStore};
+use crate::domain::models::{
+    ConnectionProvider, ConnectorOverlay, MacroUserIdStr, PipedreamConnection,
+};
+use crate::domain::ports::{AppConnections, ConnectionStore, ConnectorOverlays};
 use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
 
-/// Postgres-backed [`ConnectionStore`] over the `pipedream_mcp_connections` table.
+/// Postgres-backed [`ConnectionStore`] over the `pipedream_mcp_connections` table,
+/// and [`ConnectorOverlays`] over `mcp_overlays`.
 ///
 /// Rows hold no secrets: Pipedream owns the OAuth grants, we persist only
 /// the app, its display name, and the Pipedream account ID.
@@ -26,12 +29,13 @@ impl ConnectionStore for PgConnectionRepo {
     async fn save(&self, record: &PipedreamConnection) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
-            INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id, enabled)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id, enabled, provider)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, app_slug) DO UPDATE SET
                 server_name = EXCLUDED.server_name,
                 account_id = EXCLUDED.account_id,
                 enabled = EXCLUDED.enabled,
+                provider = EXCLUDED.provider,
                 updated_at = NOW()
             "#,
             record.user_id.as_ref(),
@@ -39,6 +43,7 @@ impl ConnectionStore for PgConnectionRepo {
             record.server_name,
             record.account_id,
             record.enabled,
+            record.provider.as_str(),
         )
         .execute(&self.pool)
         .await?;
@@ -53,9 +58,11 @@ impl ConnectionStore for PgConnectionRepo {
     ) -> Result<Option<PipedreamConnection>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT user_id, app_slug, server_name, account_id, enabled
+            SELECT user_id, app_slug, server_name, account_id, enabled, provider
             FROM pipedream_mcp_connections
             WHERE user_id = $1 AND app_slug = $2
+                AND (provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $2))
             "#,
             user_id.as_ref(),
             app_slug,
@@ -70,6 +77,7 @@ impl ConnectionStore for PgConnectionRepo {
                 row.server_name,
                 row.account_id,
                 row.enabled,
+                row.provider,
             )
         })
         .transpose()
@@ -98,9 +106,11 @@ impl ConnectionStore for PgConnectionRepo {
     ) -> Result<Vec<PipedreamConnection>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, app_slug, server_name, account_id, enabled
-            FROM pipedream_mcp_connections
+            SELECT user_id, app_slug, server_name, account_id, enabled, provider
+            FROM pipedream_mcp_connections c
             WHERE user_id = $1
+                AND (c.provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = c.app_slug))
             ORDER BY server_name
             "#,
             user_id.as_ref(),
@@ -116,6 +126,7 @@ impl ConnectionStore for PgConnectionRepo {
                     row.server_name,
                     row.account_id,
                     row.enabled,
+                    row.provider,
                 )
             })
             .collect()
@@ -130,9 +141,11 @@ impl AppConnections for PgConnectionRepo {
     ) -> anyhow::Result<Vec<PipedreamConnection>> {
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, app_slug, server_name, account_id, enabled
+            SELECT user_id, app_slug, server_name, account_id, enabled, provider
             FROM pipedream_mcp_connections
             WHERE app_slug = $1 AND enabled
+                AND (provider = 'connect'
+                    OR NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $1))
             "#,
             app_slug,
         )
@@ -147,9 +160,33 @@ impl AppConnections for PgConnectionRepo {
                     row.server_name,
                     row.account_id,
                     row.enabled,
+                    row.provider,
                 )
             })
             .collect()
+    }
+}
+
+impl ConnectorOverlays for PgConnectionRepo {
+    #[tracing::instrument(skip(self), err)]
+    async fn overlays(&self) -> anyhow::Result<Vec<ConnectorOverlay>> {
+        Ok(sqlx::query_as!(
+            ConnectorOverlay,
+            "SELECT app_slug, server_url FROM mcp_overlays ORDER BY app_slug"
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn overlay(&self, app_slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
+        Ok(sqlx::query_as!(
+            ConnectorOverlay,
+            "SELECT app_slug, server_url FROM mcp_overlays WHERE app_slug = $1",
+            app_slug,
+        )
+        .fetch_optional(&self.pool)
+        .await?)
     }
 }
 
@@ -159,6 +196,7 @@ fn to_record(
     server_name: String,
     account_id: String,
     enabled: bool,
+    provider: String,
 ) -> anyhow::Result<PipedreamConnection> {
     let user_id = MacroUserIdStr::parse_from_str(&user_id)?.into_owned();
     Ok(PipedreamConnection {
@@ -167,5 +205,9 @@ fn to_record(
         server_name,
         account_id,
         enabled,
+        provider: ConnectionProvider::parse(&provider)?,
     })
 }
+
+#[cfg(test)]
+mod test;

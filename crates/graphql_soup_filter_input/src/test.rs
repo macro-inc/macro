@@ -6,6 +6,45 @@ use serde_json::{Value, json};
 
 use super::*;
 
+#[test]
+fn open_date_ranges_materialize_without_invented_boundaries() {
+    let ast = materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+        "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+        "value": {"dateRange": {"end": "2026-10-21T00:00:00+05:30"}}
+    }}}))
+    .unwrap();
+    assert!(
+        matches!(ast.properties_filter.as_deref(), Some(Expr::Literal(PropertiesLiteral {
+        value: PropertyMatchValue::DateRange(range), ..
+    })) if range.start.is_none() && range.end.unwrap().to_rfc3339() == "2026-10-20T18:30:00+00:00")
+    );
+    assert!(
+        materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+            "value": {"dateRange": {"start": "invalid"}}
+        }}}))
+        .is_err()
+    );
+}
+
+#[test]
+fn document_missing_dates_preserve_negation() {
+    let ast =
+        materialize_graphql_filter(json!({"documentFilter": {"not": {"literal": {"property": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+            "value": {"dateRange": {}}
+        }}}}}))
+        .unwrap();
+    assert!(matches!(
+        ast.document_filter.as_deref(),
+        Some(Expr::Not(inner)) if matches!(inner.as_ref(),
+            Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+                value: PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange { start: None, end: None }), ..
+            }))
+        )
+    ));
+}
+
 fn generated_filter_fixture() -> Value {
     serde_json::from_str(include_str!("../fixtures/generated-soup-filter.json")).unwrap()
 }
@@ -122,9 +161,17 @@ fn property_entity_type_conversion_rejects_unsupported_variants() {
         })
     };
 
-    let error = materialize_graphql_filter(property_filter(json!("CALL_RECORD"))).unwrap_err();
+    let error = materialize_graphql_filter(property_filter(json!("CONTACT"))).unwrap_err();
     assert!(matches!(error, MaterializeError::Conversion(_)));
 
+    let calls = materialize_graphql_filter(property_filter(json!("CALL_RECORD"))).unwrap();
+    assert!(matches!(
+        calls.properties_filter.as_deref(),
+        Some(Expr::Literal(PropertiesLiteral {
+            entity_type: Some(PropertyEntityType::CallRecord),
+            ..
+        }))
+    ));
     let ast = materialize_graphql_filter(property_filter(Value::Null)).unwrap();
     let Some(Expr::Literal(literal)) = ast.properties_filter.as_deref() else {
         panic!("expected property literal")
@@ -142,6 +189,7 @@ fn initiative_filters_materialize_for_browser_and_server() {
         json!({"nameContains": "Launch"}),
         json!({"dueBefore": "2026-10-01T00:00:00Z"}),
         json!({"dueAfter": "2026-09-01T00:00:00Z"}),
+        json!({"notificationState": "UNSEEN"}),
     ] {
         let value = json!({"initiativeFilter": {"literal": literal}});
         let ast = materialize_graphql_filter(value.clone()).unwrap();
@@ -187,6 +235,33 @@ fn initiative_property_filters_preserve_entity_scope() {
             ..
         }))
     ));
+}
+
+#[test]
+fn database_row_include_materializes_and_false_is_rejected() {
+    let input = json!({"databaseRowFilter": {"literal": {"include": true}}});
+    let ast = materialize_graphql_filter(input.clone()).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Include))
+    );
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(graphql.into_ast().unwrap()).unwrap()
+    );
+    assert!(
+        materialize_graphql_filter(json!({
+            "databaseRowFilter": {"literal": {"include": false}}
+        }))
+        .is_err()
+    );
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .database_row_filter
+            .is_none()
+    );
 }
 
 #[test]
@@ -347,4 +422,48 @@ fn contacts_are_opt_in_and_normalize_full_email_filters() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn activity_association_accepts_only_true() {
+    let ast = materialize_graphql_filter(json!({"crmAssociation": {"activity": true}})).unwrap();
+    assert_eq!(ast.crm_association, Some(CrmAssociation::Activity));
+    assert_eq!(
+        serde_json::to_value(CrmAssociation::Activity).unwrap(),
+        json!("activity")
+    );
+    assert!(materialize_graphql_filter(json!({"crmAssociation": {"activity": false}})).is_err());
+}
+
+#[test]
+fn email_subject_is_trimmed_and_blank_subjects_are_rejected() {
+    let ast = materialize_graphql_filter(
+        json!({"emailFilter": {"tree": {"literal": {"subject": " FYI "}}}}),
+    )
+    .unwrap();
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::Subject(query))) if query.as_str() == "FYI"
+    ));
+
+    assert!(
+        materialize_graphql_filter(
+            json!({"emailFilter": {"tree": {"literal": {"subject": "  "}}}})
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn email_attachment_kinds_materialize() {
+    use item_filters::ast::email::AttachmentKind;
+
+    let ast = materialize_graphql_filter(
+        json!({"emailFilter": {"tree": {"literal": {"attachment": "PDF"}}}}),
+    )
+    .unwrap();
+    assert!(matches!(
+        ast.email_filter.tree.as_deref(),
+        Some(Expr::Literal(EmailLiteral::Attachment(AttachmentKind::Pdf)))
+    ));
 }

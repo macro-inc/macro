@@ -13,6 +13,7 @@ import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import { openExternalUrl } from '@core/util/url';
+import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import type {
   FoldedMessage,
   MessagePart,
@@ -43,13 +44,14 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
-import { PromptFooter } from './PromptFooter';
+import { PromptFooter, ReplyFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { type ToolUsePart, toolUsedAfter } from './parts/shared';
+import { TaskNotificationPart } from './parts/TaskNotificationPart';
 import { TextPart } from './parts/TextPart';
 import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
@@ -78,8 +80,14 @@ function AgentMessagePart(props: {
       <Match when={props.part.kind === 'text' && props.part}>
         {(part) => (
           <TextPart
-            text={part().text}
+            text={
+              props.message.author.kind === 'user'
+                ? stripAgentContext(part().text)
+                : part().text
+            }
             inFlight={props.inFlight}
+            hideIncompleteXml={props.message.author.kind === 'agent'}
+            accentMentions={props.message.author.kind === 'agent'}
             observeRender={
               props.message.author.kind === 'agent'
                 ? (element) =>
@@ -114,8 +122,7 @@ function AgentMessagePart(props: {
             part={part()}
             context={{
               sessionId: props.message.agentSessionId,
-              // Turn and side identify a message within its session.
-              messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
+              messageId: `${props.message.agentSessionId}:${props.message.key}`,
               partIndex: props.index,
               inFlight: props.inFlight,
               followedBy: toolUsedAfter(props.message.parts, props.index),
@@ -134,6 +141,9 @@ function AgentMessagePart(props: {
       </Match>
       <Match when={props.part.kind === 'control' && props.part}>
         {(part) => <ControlPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'task_notification' && props.part}>
+        {(part) => <TaskNotificationPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'elicitation' && props.part}>
         {(part) => <ElicitationPart part={part()} turn={props.message.turn} />}
@@ -220,6 +230,24 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       () => false
     )
     .otherwise(() => true);
+}
+
+/**
+ * When a finished agent reply was sent, for the line under it. A turn stopped
+ * before the agent said anything leaves only an empty placeholder reply,
+ * which has nothing to put a time under unless it failed.
+ */
+function replySentAt(message: FoldedMessage): string | undefined {
+  if (message.author.kind !== 'agent' || message.postedAt === null) {
+    return undefined;
+  }
+
+  const placeholder = message.parts.every(
+    (part) => part.kind === 'text' && part.text.trim() === ''
+  );
+  if (placeholder && message.stop?.kind !== 'failed') return undefined;
+
+  return message.postedAt;
 }
 
 /**
@@ -316,9 +344,9 @@ function UserMessage(props: { message: FoldedMessage }) {
           postedAt={props.message.postedAt ?? undefined}
           onOpen={
             origin()?.destination
-              ? () => {
+              ? (options) => {
                   const destination = origin()?.destination;
-                  if (destination) openOrigin(destination);
+                  if (destination) openOrigin(destination, options);
                 }
               : undefined
           }
@@ -409,6 +437,9 @@ export function Message(props: {
                 )}
               </Show>
             )}
+          </Show>
+          <Show when={!inFlight() && replySentAt(props.message)}>
+            {(sentAt) => <ReplyFooter sentAt={sentAt()} />}
           </Show>
         </div>
       }

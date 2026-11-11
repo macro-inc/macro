@@ -4,7 +4,6 @@ import type {
   Schema,
 } from '@core/database-sql/generated/types';
 import type { DatabaseSqlQueryCapabilities } from '@queries/database-sql/create-database-sql-query';
-import { databaseCompletionRequest } from '@service-cognition/database-query-prompt';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
 import { CombinedError, createClient, type Exchange } from '@urql/core';
@@ -20,7 +19,7 @@ import {
 
 afterEach(() => vi.useRealTimers());
 describe('query schema', () => {
-  it('carries the pre-quoted SQL names and relation metadata into the prompt', () => {
+  it('preserves pre-quoted SQL names and relation metadata for question generation', () => {
     const detail: DatabaseDetail = {
       database: {
         id: 'db',
@@ -28,6 +27,7 @@ describe('query schema', () => {
         owner_id: 'owner',
         created_at: '',
         trashed_at: null,
+        project_id: null,
       },
       grant: 'owner',
       tables: [
@@ -103,23 +103,6 @@ describe('query schema', () => {
         writable: false,
       },
     });
-    const request = databaseCompletionRequest({
-      prompt: 'Show contacts and their projects',
-      sql: '',
-      schema,
-    });
-    expect(
-      JSON.parse(request.prompt).schema.tables[1].columns[0].relation
-    ).toEqual(schema.tables[1].columns[0].relation);
-    expect(request.additional_instructions).toContain(
-      'registered QueryDatabase tool reference'
-    );
-    expect(request.additional_instructions).toContain(
-      'sqlName values are those names already quoted for SQL'
-    );
-    expect(request.additional_instructions).not.toMatch(
-      /json_each|strftime|junction|readSqlName|SQLite/
-    );
   });
 });
 
@@ -178,7 +161,11 @@ function engine(count: () => number, offline: () => boolean = () => false) {
   const read: DatabaseSqlQueryCapabilities = {
     client: () => client,
     cacheHost: () => undefined,
-    people: async () => [],
+    account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+    describe: async (catalog) => ({
+      readTables: catalog.tables.map((table) => table.id),
+      columns: [],
+    }),
     catalog: async (schema, scope) => {
       builds.push({ schema, scope });
       return catalog;
@@ -226,6 +213,7 @@ const workspace: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'edit',
   tables: [

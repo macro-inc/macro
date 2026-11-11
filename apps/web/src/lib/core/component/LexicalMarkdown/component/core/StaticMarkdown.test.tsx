@@ -1,4 +1,6 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
+import { PENDING_REPLY_TEXT } from '@macro-inc/lexical-core';
+import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -215,6 +217,27 @@ describe('display-only markdown previews', () => {
   });
 });
 
+describe('agent reply pending markers', () => {
+  it('shows a running agent reply as the working line and keeps other placeholders', () => {
+    const pending = composeAgentChatReply({
+      sessionId: '00000000-0000-4000-8000-00000000f01d',
+      link: false,
+      body: { kind: 'pending' },
+    });
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown
+          markdown={`${pending}\n\nAlso <m-await>{"awaitId":"db","text":"Creating database…","inline":true}</m-await>`}
+        />
+      </StaticMarkdownContext>
+    ));
+    expect(rendered.getByRole('status').textContent).toContain('Thinking');
+    expect(rendered.queryByText(PENDING_REPLY_TEXT)).toBeNull();
+    expect(rendered.getByText('Creating database…')).toBeTruthy();
+    rendered.unmount();
+  });
+});
+
 describe('static pull request mentions', () => {
   it.each([
     [
@@ -286,5 +309,33 @@ describe('static markdown citations', () => {
     expect(rendered.container.textContent).toBe('second resolved');
     vi.mocked(replaceCitations).mockReset();
     rendered.unmount();
+  });
+});
+
+describe('static markdown ordered lists', () => {
+  it('keeps a non-1 start on the rendered list', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown markdown="6. Reply to item six" lazy={false} />
+      </StaticMarkdownContext>
+    ));
+    const list = rendered.container.querySelector('ol');
+    expect(list?.getAttribute('start')).toBe('6');
+    expect(list?.style.counterReset).toBe('static-md-counter-1 5');
+    rendered.unmount();
+  });
+
+  it('previews an account manager card as text in a single line', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown
+          markdown='<m-account-manager-request>{"id":"019a4f2e-7c1b-7d3a-9e2f-3b1c8d5a6f70"}</m-account-manager-request>'
+          singleLine
+        />
+      </StaticMarkdownContext>
+    ));
+
+    expect(rendered.container.textContent).toBe('Account manager request');
+    expect(rendered.queryByRole('button')).toBeNull();
   });
 });

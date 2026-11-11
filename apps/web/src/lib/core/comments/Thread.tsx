@@ -7,10 +7,10 @@ import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { MessageThreadById } from '@core/messages/MessageThread';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import Check from '@icon/system/regular/check.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import Check from '@phosphor/check.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
 import { usePatchThreadMutation } from '@queries/messages/mutations';
 import { Button, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
@@ -186,7 +186,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   variant="ghost"
                   onClick={() => setResolved(false)}
                 >
-                  <ArrowCounterClockwise />
+                  <ArrowCounterClockwise class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                   Reopen
                 </Button>
               </Show>
@@ -204,7 +204,7 @@ export function ThreadBody(props: ThreadBodyProps) {
                   context.setActiveThread(null);
                 }}
               >
-                <Check />
+                <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                 Resolve
               </Button>
             </div>
@@ -300,7 +300,7 @@ export function ThreadCard(props: {
   return (
     <Layer depth={2}>
       <div
-        data-comment-thread
+        data-comment-thread={String(props.comment.threadId)}
         // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
         // pointer-events: none vs. all inside the .pdfOverlayInner div.
         class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"

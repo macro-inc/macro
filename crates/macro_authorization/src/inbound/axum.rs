@@ -7,6 +7,7 @@ mod internal;
 mod macro_authorization;
 mod optional;
 mod policy;
+mod program;
 mod user;
 mod user_api_key;
 
@@ -24,7 +25,9 @@ use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use rootcause::Report;
 
-use crate::{MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication};
+use crate::{
+    CredentialOrigin, MacroAuthorization, MacroAuthorizationError, MacroUserAuthentication,
+};
 
 pub use bot::{
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
@@ -40,13 +43,14 @@ pub use internal::{
 pub use macro_authorization::MacroAuthorizationExtractor;
 pub use optional::OptionalMacroAuthorizationExtractor;
 pub use policy::{
-    ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy, BotOnly, HarnessOnly,
-    InternalAuthorization, InternalEntity, InternalOnly, UserBotOrHarness,
-    UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
+    AccountHolderOrInternal, ActingUser, ActingUserAuthorization, AnyPrincipal,
+    AuthorizationPolicy, BotOnly, HarnessOnly, InternalAuthorization, InternalEntity, InternalOnly,
+    UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
     UserOrBotAuthorization, UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization,
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
+pub use program::{CODE_EXECUTION_HEADER, is_agent_run};
 pub use user_api_key::USER_API_KEY_HEADER;
 
 /// The authenticated entity responsible for a request.
@@ -134,6 +138,7 @@ impl<Svc> Clone for MacroAuthorizationState<Svc> {
 
 pub(super) fn authenticated_user(
     user_context: UserContext,
+    origin: CredentialOrigin,
 ) -> Result<MacroUserAuthentication, MacroAuthorizationRejection> {
     let macro_user_id = MacroUserIdStr::parse_from_str(&user_context.user_id)
         .map(CowLike::into_owned)
@@ -143,7 +148,9 @@ pub(super) fn authenticated_user(
         })?;
 
     Ok(MacroUserAuthentication {
+        origin,
         agent_id: None,
+        agent_via: None,
         macro_user_id,
         user_context,
     })

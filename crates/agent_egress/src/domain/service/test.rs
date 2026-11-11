@@ -4,6 +4,7 @@ use crate::domain::model::{
     McpServerListing, McpServerSlug, ProxyBody, RepoSlug, SessionGrant, UpstreamCall,
     UpstreamCredential,
 };
+use bot_id::BotId;
 use http::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
@@ -51,6 +52,7 @@ impl StubSessions {
         Self(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
+            agent: BotId::TEST_A,
             repo: Some(session_repo()),
             mcp_servers: servers,
             prompter: None,
@@ -67,6 +69,15 @@ impl SessionAuthority for StubSessions {
         self.0
             .clone()
             .map_err(|()| EgressError::Unauthenticated("unknown session token"))
+    }
+
+    async fn authorize_session(
+        &self,
+        _session: AgentSessionId,
+    ) -> Result<SessionGrant, EgressError> {
+        self.0
+            .clone()
+            .map_err(|()| EgressError::Unauthenticated("unknown session"))
     }
 }
 
@@ -89,6 +100,8 @@ enum Knowledge {
 /// Records who it was asked about, and answers with a fixed upstream.
 struct SpyCredentials {
     asked: Mutex<Vec<(String, String)>>,
+    /// The agent each resolution was attributed to.
+    agents: Mutex<Vec<BotId>>,
     known: Knowledge,
     url: String,
     scope: HeaderMap,
@@ -103,6 +116,7 @@ impl SpyCredentials {
     fn at(url: &str) -> Self {
         Self {
             asked: Mutex::default(),
+            agents: Mutex::default(),
             known: Knowledge::Connected,
             url: url.to_owned(),
             scope: HeaderMap::new(),
@@ -156,6 +170,7 @@ impl SpyCredentials {
     fn empty() -> Self {
         Self {
             asked: Mutex::default(),
+            agents: Mutex::default(),
             known: Knowledge::Unknown,
             url: String::new(),
             scope: HeaderMap::new(),
@@ -170,8 +185,11 @@ impl McpCredentials for SpyCredentials {
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
+        self.agents.lock().expect("lock").push(agent);
         let slug = match destination {
             McpDestination::Connected(slug) => slug.clone(),
             McpDestination::Preview => unreachable!("preview must never resolve owner credentials"),
@@ -885,6 +903,7 @@ async fn a_session_owned_outside_macro_is_proxied_with_its_owners_credentials() 
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: visitor.clone(),
+            agent: BotId::TEST_A,
             repo: None,
             mcp_servers: Vec::new(),
             prompter: None,
@@ -1197,6 +1216,7 @@ async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credenti
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
+            agent: BotId::TEST_A,
             repo: None,
             mcp_servers: Vec::new(),
             prompter: None,
@@ -1298,6 +1318,9 @@ struct RecordingApprovals {
         )>,
     >,
     withdrawn: Mutex<Vec<serde_json::Value>>,
+    held_in_process: Mutex<Vec<crate::domain::approval::InProcessCall>>,
+    /// How an in-process hold is answered; nobody answering expires it.
+    answer: Mutex<Option<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus>>,
 }
 
 impl OwnerApprovals for RecordingApprovals {
@@ -1319,6 +1342,19 @@ impl OwnerApprovals for RecordingApprovals {
     ) -> Result<(), EgressError> {
         self.withdrawn.lock().unwrap().push(request_id.clone());
         Ok(())
+    }
+
+    async fn hold_in_process(
+        &self,
+        call: crate::domain::approval::InProcessCall,
+    ) -> Result<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus, EgressError>
+    {
+        self.held_in_process.lock().unwrap().push(call);
+        Ok(self
+            .answer
+            .lock()
+            .unwrap()
+            .unwrap_or(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Expired))
     }
 }
 

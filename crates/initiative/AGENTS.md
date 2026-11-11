@@ -16,7 +16,11 @@ properties, and activity.
 - `src/outbound/pg_initiative_repo.rs` (+ `create.rs`, `list.rs`, `members.rs`,
   `share.rs`): the Postgres adapter, split by operation.
 - `src/inbound/toolset/`: AI toolset surface (lifecycle, reads, sharing).
-- `src/inbound/axum_router/`: REST surface (create/get/list/update/delete).
+- `src/inbound/axum_router/`: REST surface (create/get/list/update/delete, the
+  filtered `page` with properties and progress, and the `description` read), plus
+  `activity.rs`, `GET /initiatives/{id}/activity` over
+  `InitiativeHistory::read_range` with its own router state; `ReadInitiativeActivity`
+  shares `read_range`.
 - `fixtures/initiative_test_data.sql`: seed data for repo tests.
 
 ## Scope
@@ -49,3 +53,8 @@ properties, and activity.
 
 - Rules: `.agents/rules/rust/architecture.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+`create_imported` is the trusted workspace-import creation path: it accepts a
+ledger-derived id and complete source markdown. It checks attribution and owner
+before reusing an existing project, and repairs property initialization on replay.
+Interactive creation keeps its existing generated ids and description limits.

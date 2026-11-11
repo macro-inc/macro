@@ -35,6 +35,28 @@ pub trait EgressService: Send + Sync {
     ) -> impl Future<Output = Result<ProxyResponse, EgressError>> + Send;
 }
 
+/// MCP exchanges for an in-process caller, such as a code execution's
+/// connected-app route, that authorized its request against the session
+/// itself rather than presenting the session's token.
+pub trait SessionMcpExchange: Send + Sync {
+    /// The session's grant, read by id. Refuses a closed session.
+    fn session_grant(
+        &self,
+        session: crate::domain::model::AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionGrant, EgressError>> + Send;
+
+    /// One `tools/list` or `tools/call` on a connected app or custom server
+    /// as `user`, an account the caller already settled the call may spend.
+    /// Returns the MCP `result` payload.
+    fn exchange_as(
+        &self,
+        grant: &crate::domain::model::SessionGrant,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        request: serde_json::Value,
+    ) -> impl Future<Output = Result<serde_json::Value, EgressError>> + Send;
+}
+
 /// The service, over its ports.
 ///
 /// Held tool calls are refused until [`Self::with_owner_approvals`] says how
@@ -131,7 +153,7 @@ where
     Forward: Forwarder + 'static,
     Approvals: OwnerApprovals,
 {
-    #[tracing::instrument(skip_all, err, fields(
+    #[tracing::instrument(skip_all, fields(
         destination = ?target,
         method = %request.method(),
         session = tracing::field::Empty,
@@ -139,6 +161,27 @@ where
         upstream_status = tracing::field::Empty,
     ))]
     async fn proxy(
+        &self,
+        token: &SessionToken,
+        target: EgressTarget,
+        request: ProxyRequest,
+    ) -> Result<ProxyResponse, EgressError> {
+        self.authorize_and_forward(token, target, request)
+            .await
+            .inspect_err(log_proxy_error)
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority + 'static,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder + 'static,
+    Approvals: OwnerApprovals,
+{
+    async fn authorize_and_forward(
         &self,
         token: &SessionToken,
         target: EgressTarget,
@@ -225,7 +268,12 @@ where
             ) => {
                 let (call, answer): (UpstreamCall, Option<Answer>) = match self
                     .credentials
-                    .resolve(&grant.owner, destination)
+                    .resolve(
+                        &grant.owner,
+                        grant.agent,
+                        grant.session.as_uuid(),
+                        destination,
+                    )
                     .await?
                 {
                     McpResolution::Connected(call) => (call, None),
@@ -444,6 +492,19 @@ where
         }
 
         Ok(response)
+    }
+}
+
+/// Logs a failed proxy call in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps a closed
+/// session at INFO: ending a session revokes its egress, and the session's MCP
+/// clients still make a last reconnect or `DELETE` after it closes. Every other
+/// refusal or failure stays at ERROR.
+fn log_proxy_error(error: &EgressError) {
+    match error {
+        EgressError::SessionClosed => tracing::info!(error = %error),
+        _ => tracing::error!(error = %error),
     }
 }
 

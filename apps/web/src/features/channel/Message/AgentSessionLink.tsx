@@ -1,9 +1,9 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import { cn } from '@ui';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { splitMessageContent } from './agent-session-link';
-import { useMessage } from './context';
+import { useCollapseLongContent, useMessage } from './context';
 
 type AgentSessionLinkProps = {
   class?: string;
@@ -18,31 +18,52 @@ type AgentSessionLinkProps = {
 export function AgentSessionLink(props: AgentSessionLinkProps) {
   const message = useMessage();
   const layout = useSplitLayout();
+  // Comment cards are the narrow host. The labeled chip takes a line of its
+  // own there; the agent card's icon button fits the sender line.
+  const compact = useCollapseLongContent();
   const link = () => splitMessageContent(message()).link;
+
+  const open = (sessionId: string, event: MouseEvent) => {
+    event.stopPropagation();
+    layout?.openWithSplit(
+      { type: 'agent', id: sessionId },
+      { activate: true, preferNewSplit: true }
+    );
+  };
 
   return (
     <Show when={link()}>
       {(link) => (
-        <button
-          type="button"
-          class={cn(
-            'inline-flex shrink-0 items-center gap-1 rounded-full',
-            'bg-surface px-2 py-0.5 text-xs leading-none text-ink-muted',
-            'transition-colors hover:bg-hover hover:text-ink',
-            props.class
-          )}
-          title="Open the agent session this message came from"
-          onClick={(event) => {
-            event.stopPropagation();
-            layout?.openWithSplit(
-              { type: 'agent', id: link().sessionId },
-              { activate: true, preferNewSplit: true }
-            );
-          }}
+        <Show
+          when={compact}
+          fallback={
+            <button
+              type="button"
+              class={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-full',
+                'bg-surface px-2 py-0.5 text-xs leading-none text-ink-muted',
+                'transition-colors hover:bg-hover hover:text-ink',
+                props.class
+              )}
+              title="Open the agent session this message came from"
+              onClick={(event) => open(link().sessionId, event)}
+            >
+              Open Session
+              <ArrowUpRightIcon class="size-3" aria-hidden="true" />
+            </button>
+          }
         >
-          Open Session
-          <ArrowUpRightIcon class="size-3" aria-hidden="true" />
-        </button>
+          <Button
+            variant="secondary"
+            size="icon-sm"
+            class={cn('bg-transparent font-normal', props.class)}
+            aria-label="Open session"
+            title="Open the agent session this message came from"
+            onClick={(event: MouseEvent) => open(link().sessionId, event)}
+          >
+            <ArrowUpRightIcon class="size-3" aria-hidden="true" />
+          </Button>
+        </Show>
       )}
     </Show>
   );

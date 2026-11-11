@@ -1,16 +1,18 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
   graphqlEnabled: true,
+  cacheEnabled: true,
   markSeen: vi.fn(),
   updateLabel: vi.fn(),
   getLabels: vi.fn(),
   legacyPatch: vi.fn(),
   graphqlMutation: vi.fn(),
   refresh: vi.fn(),
+  refetch: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
@@ -32,7 +34,7 @@ vi.mock('../client', () => ({
 }));
 vi.mock('../soup/cache', () => ({
   optimisticUpdateSoupEntity: mocks.legacyPatch,
-  refetchSoupEntity: vi.fn(),
+  refetchSoupEntity: mocks.refetch,
 }));
 vi.mock('../soup/graphql/active-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../soup/graphql/active-queries')>()),
@@ -55,6 +57,7 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
+  graphqlCacheEnabled: () => mocks.cacheEnabled,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
@@ -65,7 +68,9 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
+import { markEmailThreadSeen } from './read-state';
 import {
   trackExternalThreadArchive,
   useMarkThreadAsSeenMutation,
@@ -90,6 +95,7 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.graphqlEnabled = true;
+  mocks.cacheEnabled = true;
   mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
   mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -138,6 +144,20 @@ describe('email read state with GraphQL Soup', () => {
     'propagates isRead=$read before the request settles (GraphQL=$graphql)',
     async ({ read, graphql }) => {
       mocks.graphqlEnabled = graphql;
+      const folderKeys = ['spam', 'trash'].map(
+        (emailView) =>
+          soupKeys.astItems({
+            params: {},
+            body: { emailView },
+            transport: 'rest',
+          }).queryKey
+      );
+      const allKey = soupKeys.astItems({
+        params: {},
+        body: { emailView: 'all' },
+      }).queryKey;
+      for (const key of [...folderKeys, allKey])
+        client.setQueryData(key, { pages: [] });
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -208,7 +228,11 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+      // Shared-cache lists stay local; isolated folder previews need a new read.
+      expect(mocks.refresh).not.toHaveBeenCalled();
+      for (const key of folderKeys)
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
     }
   );
 
@@ -273,16 +297,40 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
+      expect(mocks.refresh).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
+    'refreshes lists only without the normalized cache',
+    async (useMutation) => {
+      mocks.cacheEnabled = false;
+      mocks.graphqlMutation.mockReturnValue({
+        toPromise: async () => ({
+          data: {
+            markEmailThreadSeen: { id: 'thread', isRead: true },
+            markEmailThreadUnread: { id: 'thread', isRead: false },
+          },
+        }),
+      });
+      const mutation = mountEmailMutation(useMutation, client);
+      await mutation.mutateAsync({ threadId: 'thread' });
       expect(mocks.refresh).toHaveBeenCalledOnce();
     }
   );
 
   it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
-    'queues membership revalidation without refetching over offline optimism',
+    'queues an offline write that reads only unmaintained lists on replay',
     async (useMutation) => {
       const variables = { input: { initial: { limit: 50 } } };
-      const unregister = registerGraphqlSoupRevalidations(() => [
-        { document: SoupDocument, variables },
+      const grouped = { input: { initial: { limit: 20 } } };
+      const unregisterMaintained = registerGraphqlSoupRevalidations(
+        () => [{ document: SoupDocument, variables }],
+        undefined,
+        () => true
+      );
+      const unregisterGrouped = registerGraphqlSoupRevalidations(() => [
+        { document: SoupDocument, variables: grouped },
       ]);
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => ({
@@ -297,20 +345,69 @@ describe('email read state with GraphQL Soup', () => {
       try {
         const mutation = mountEmailMutation(useMutation, client);
         await mutation.mutateAsync({ threadId: 'thread' });
+        // Replay commits the record, which the maintained list reads; only
+        // the list the cache cannot keep current is read again.
         expect(
           mocks.graphqlMutation.mock.calls[0][2].optimisticMutation
             .revalidations
-        ).toEqual([
-          {
-            document: SoupDocument,
-            variables,
-          },
-        ]);
+        ).toEqual([{ document: SoupDocument, variables: grouped }]);
         expect(mocks.refresh).not.toHaveBeenCalled();
         expect(mocks.markSeen).not.toHaveBeenCalled();
       } finally {
-        unregister();
+        unregisterMaintained();
+        unregisterGrouped();
       }
     }
   );
+});
+
+describe('row-open email read operation', () => {
+  it('patches the REST row synchronously, preserves inbox targeting and refreshes only the failed thread', async () => {
+    mocks.graphqlEnabled = false;
+    const folderKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'spam' },
+      transport: 'rest',
+    }).queryKey;
+    const allKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'all' },
+    }).queryKey;
+    client.setQueryData(folderKey, { pages: [] });
+    client.setQueryData(allKey, { pages: [] });
+    const pending = Promise.withResolvers<ReturnType<typeof ok<void>>>();
+    mocks.markSeen.mockReturnValueOnce(pending.promise);
+    const request = markEmailThreadSeen({
+      threadId: 'thread',
+      linkId: 'secondary-inbox',
+    });
+    expect(mocks.legacyPatch).toHaveBeenCalledExactlyOnceWith({
+      tag: 'emailThread',
+      data: { id: 'thread', isRead: true },
+      frecency_score: 0,
+    });
+    expect(mocks.markSeen).toHaveBeenCalledExactlyOnceWith(
+      { thread_id: 'thread' },
+      'secondary-inbox'
+    );
+    pending.resolve(ok(undefined));
+    await request;
+    expect(mocks.refetch).not.toHaveBeenCalled();
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+
+    client.setQueryData(folderKey, { pages: [] });
+    mocks.markSeen.mockResolvedValueOnce(
+      err([{ code: 'NETWORK', message: 'offline' }])
+    );
+    await expect(
+      markEmailThreadSeen({ threadId: 'thread', linkId: 'secondary-inbox' })
+    ).rejects.toThrow('offline');
+    expect(mocks.refetch).toHaveBeenCalledExactlyOnceWith(
+      'thread',
+      'emailThread'
+    );
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+  });
 });

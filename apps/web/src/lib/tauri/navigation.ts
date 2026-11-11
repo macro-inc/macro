@@ -1,3 +1,4 @@
+import { handleGithubLinkCallback } from '@core/auth/authorize-github';
 import { handlePipedreamCallback } from '@core/pipedream/connect-callback';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getNativeMobilePlatform } from '@core/util/platform';
@@ -13,6 +14,7 @@ import { registerMacroLinkInterceptor } from './macroLinkInterceptor';
 type NavigateEvent = {
   path: string;
   query: string;
+  fragment?: string;
 };
 
 /// this must be used as a child of router
@@ -27,6 +29,7 @@ export function useTauriNavigationEffect() {
 
     const unlisten = listen<NavigateEvent>('navigate', (ev) => {
       if (handlePipedreamCallback(ev.payload.path, ev.payload.query)) return;
+      if (handleGithubLinkCallback(ev.payload.path)) return;
       if (ev.payload.path === '/notification') {
         const notificationId = new URLSearchParams(ev.payload.query).get(
           'notificationId'
@@ -42,9 +45,9 @@ export function useTauriNavigationEffect() {
         }
         return;
       }
-      const path = ev.payload.query
-        ? `${ev.payload.path}?${ev.payload.query}`
-        : ev.payload.path;
+      const query = ev.payload.query ? `?${ev.payload.query}` : '';
+      const fragment = ev.payload.fragment ? `#${ev.payload.fragment}` : '';
+      const path = `${ev.payload.path}${query}${fragment}`;
       if (
         getNativeMobilePlatform() === 'android' &&
         ev.payload.path !== '/login'

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useNavigate, usePaneHistory } from '@app/lib/split-router';
 import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -5,8 +6,8 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import SplitIcon from '@phosphor/square-half.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import SplitIcon from '@icon/system/regular/square-half.svg';
 import { createEffect, onMount } from 'solid-js';
 import type { ProjectDetail } from './core/project';
 import { type ProjectRoute, projectRouteId } from './core/route';
@@ -96,12 +97,20 @@ async function settleProjectSubmission(
       { referredFrom: null, preferNewSplit }
     );
   toast.success('Project created', {
+    dismissStyle: 'icon',
     actions: [
-      { label: 'Open', icon: ArrowSquareOutIcon, onClick: () => open(false) },
       {
-        label: 'Open (New Split)',
+        label: t('entityActions.toastOpenSplit'),
         icon: SplitIcon,
+        trailingIcon: true,
+        variant: 'secondary',
         onClick: () => open(true),
+      },
+      {
+        label: t('entityActions.open'),
+        icon: ArrowSquareOutIcon,
+        trailingIcon: true,
+        onClick: () => open(false),
       },
     ],
   });

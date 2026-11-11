@@ -155,7 +155,7 @@ vi.mock('@app/signal/splitLayout', () => {
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
-vi.mock('@block-md/component/ComposeTask', () => ({
+vi.mock('@app/features/task-composer/compose-task', () => ({
   ComposeTask: (props: {
     composerContext?: {
       key: string;
@@ -573,10 +573,13 @@ describe('pane create context registration', () => {
 
   it('isolates snapshots from mutable provider values', () => {
     const context = mountCreateContext(() => 'pane');
-    const preset = crmTaskComposerContext({ type: 'company', id: 'acme' });
+    const preset = {
+      ...crmTaskComposerContext({ type: 'company', id: 'acme' }),
+      visiblePropertyIds: ['existing-property'],
+    };
     state.unregister.push(context.register('pane', () => ({ task: preset })));
     const snapshot = context.snapshot('task');
-    preset.visiblePropertyIds?.push('new-property');
+    preset.visiblePropertyIds.push('new-property');
     expect(snapshot?.visiblePropertyIds).not.toContain('new-property');
   });
 

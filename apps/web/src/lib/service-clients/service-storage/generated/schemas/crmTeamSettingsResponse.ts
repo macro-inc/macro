@@ -12,8 +12,8 @@ import type { CrmTeamSettingsResponseLegacyStageIds } from './crmTeamSettingsRes
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
-except the `crm_enabled` killswitch, which is managed via
-`PATCH /team/crm` on the auth service).
+except the retired `crm_enabled` flag). Email contribution consent and
+exclusions are managed separately through `/crm/email-privacy`.
  */
 export interface CrmTeamSettingsResponse {
   /** Stage option ids counting as closed deals; absent = the client
@@ -25,6 +25,9 @@ falls back to its label heuristic. */
   delete_records_role: CrmPermissionRole;
   /** Who can change the deal stage set in CRM settings. */
   edit_stages_role: CrmPermissionRole;
+  /** Whether email sync keeps personal-provider addresses (gmail.com
+etc.) out of the CRM. */
+  exclude_personal_emails: boolean;
   /** System stage option id to team stage option id for seeded stages. */
   legacy_stage_ids: CrmTeamSettingsResponseLegacyStageIds;
   /** Who can move deals out of a closed stage. */

@@ -867,7 +867,7 @@ describe('sending', () => {
     );
     const id = newMessageId();
     let inSpan = false;
-    const trace = {
+    const parentSpan = {
       run: <T,>(operation: () => T): T => {
         inSpan = true;
         try {
@@ -894,7 +894,7 @@ describe('sending', () => {
       message: { content: id },
       senderId: 'macro|a@example.com',
       optimisticId: id,
-      trace,
+      parentSpan,
     });
 
     expect(requests).toEqual([

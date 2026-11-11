@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -5,21 +6,29 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { defaultSelectionData } from '@core/component/LexicalMarkdown/plugins';
+import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '@core/component/LexicalMarkdown/plugins/media';
 import {
   NODE_TRANSFORM,
   type NodeTransformType,
 } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { fileSelector } from '@core/directive/fileSelector';
-import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
-import TextAa from '@phosphor/text-aa.svg';
-import Trash from '@phosphor/trash.svg';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import ImageIcon from '@icon/system/regular/image.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
+import { CreateEventButton } from '../components/create-event-button';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { MobileComposeActions } from '../components/mobile-compose-actions';
 import { useCompose } from '../context/compose-context';
+import { useComposeHotkeyScope } from '../context/compose-hotkey-scope';
+import { proposesMeeting } from '../core/meeting-intent';
+import { createWrittenText } from '../primitives/written-text';
 
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
@@ -28,6 +37,30 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
+  const writtenText = createWrittenText(() => props.editor?.());
+  const createEvent = () => {
+    const recipients = ctx.recipients();
+    return (
+      ctx.calendarEvents?.open({
+        subject: ctx.subject(),
+        guests: [...recipients.to, ...recipients.cc].map(
+          (recipient) => recipient.data.email
+        ),
+        text: writtenText(),
+      }) ?? false
+    );
+  };
+  const hotkeyScope = useComposeHotkeyScope();
+  if (hotkeyScope && ctx.calendarEvents) {
+    registerHotkey({
+      hotkey: 'b',
+      scopeId: hotkeyScope,
+      description: () => t('commands.createEventFromEmail'),
+      keyDownHandler: createEvent,
+      hotkeyToken: TOKENS.email.createEvent,
+      condition: () => !!ctx.calendarEvents?.enabled() && !ctx.disabled(),
+    });
+  }
 
   return (
     <Show when={props.inline || !ctx.isMobile()} fallback={<MobileToolbar />}>
@@ -48,16 +81,18 @@ export function EmailComposeToolbar(props: {
         <div class="flex shrink-0 items-center gap-1">
           <Show when={ctx.hasDraft()}>
             <Button
+              variant="ghost"
               onClick={ctx.onDelete}
               tooltip="Delete draft"
-              size="icon-composer"
-              disabled={ctx.disabled()}
+              size="icon-md"
+              disabled={ctx.deleteDisabled?.() ?? ctx.disabled()}
             >
-              <Trash />
+              <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Show when={!ctx.hideAttachments}>
             <Button
+              variant="ghost"
               ref={(el) =>
                 fileSelector(el, () => ({
                   multiple: true,
@@ -65,20 +100,49 @@ export function EmailComposeToolbar(props: {
                 }))
               }
               tooltip="Attach"
-              size="icon-composer"
+              size="icon-md"
               disabled={ctx.disabled()}
             >
-              <PaperclipIcon />
+              <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            </Button>
+          </Show>
+          {/* Inline drafts send without waiting for inline media uploads. */}
+          <Show when={props.editor && !props.inline}>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                props
+                  .editor?.()
+                  ?.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, {
+                    mediaType: 'image',
+                    constrainedMediaDimensions: { width: 542, height: 542 },
+                  })
+              }
+              aria-label="Insert image"
+              tooltip="Insert image"
+              size="icon-md"
+              disabled={ctx.disabled()}
+            >
+              <ImageIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
+            variant="ghost"
             tooltip="Format"
-            size="icon-composer"
+            size="icon-md"
             disabled={ctx.disabled()}
             onClick={() => setShowFormatRibbon(!showFormatRibbon())}
           >
-            <TextAa />
+            <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
+          <Show when={ctx.calendarEvents?.enabled()}>
+            <CreateEventButton
+              suggested={proposesMeeting(writtenText())}
+              shortcut={hotkeyScope ? 'b' : undefined}
+              disabled={ctx.disabled()}
+              onClick={createEvent}
+            />
+          </Show>
           <Show when={ctx.scheduleEnabled}>
             <div class="shrink-0">
               <EmailDateSelector
@@ -98,11 +162,12 @@ export function EmailComposeToolbar(props: {
             onClick={() => ctx.onSend()}
             disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
             pending={ctx.isSending()}
-            tooltip={
-              ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()
-            }
+            tooltip={{
+              content:
+                ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel(),
+              shortcut: 'cmd+enter',
+            }}
             aria-label={ctx.schedule.actionLabel()}
-            shortcut="cmd+enter"
           />
         </div>
       </div>

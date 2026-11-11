@@ -2,9 +2,12 @@ use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
+use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
-    ContactsOutboxService, ContactsRepository, ContactsService,
+    ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
+    ContactsService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,6 +16,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::instrument;
 
+/// Bounded name enrichment of the viewer's contact graph.
+pub mod directory;
+/// Realtime fan-out of a user's picture change to their contacts.
+pub mod picture_fanout;
 #[cfg(test)]
 mod test;
 
@@ -91,6 +98,33 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
     }
 }
 
+impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(name = "contacts.lookup", skip_all, fields(count = lookup.ids().len() as i64), err)]
+    async fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.lookup_contact_ids(viewer, lookup).await
+    }
+
+    #[tracing::instrument(name = "contacts.page", skip_all, fields(limit = i64::from(limit.get()), has_cursor = after.is_some()), err)]
+    async fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.repository.contact_id_page(viewer, after, limit).await
+    }
+}
+
+/// How many relationships go in one contacts message. SQS rejects message
+/// bodies over 256 KB, which a mailbox's whole contact list can exceed.
+const CONNECTIONS_PER_MESSAGE: usize = 500;
+
 /// Queue-backed implementation of [`ContactsIngress`].
 ///
 /// Serialises complete-graph or explicit-relationship messages and publishes
@@ -113,9 +147,14 @@ impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
         &self,
         connections: Vec<ContactConnection>,
     ) -> Result<(), Report> {
-        self.queue
-            .publish_connections(ContactConnections::new(connections))
-            .await
+        // Each message is upserted on its own, so a retry after a partial
+        // publish only repeats upserts.
+        for chunk in connections.chunks(CONNECTIONS_PER_MESSAGE) {
+            self.queue
+                .publish_connections(ContactConnections::new(chunk.to_vec()))
+                .await?;
+        }
+        Ok(())
     }
 }
 

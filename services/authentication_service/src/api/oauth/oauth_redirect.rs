@@ -1,6 +1,10 @@
+use crate::api::webhooks::user::create_user_webhook::{
+    mark_sso_signup_as_agent, revert_unconfirmed_agent,
+};
 use crate::api::{
     context::ApiContext,
     login::sso::{SsoState, is_allowed_original_url, redact_original_url_for_logging},
+    oauth2::ConsentFailure,
     utils::{
         append_signed_up_param_if_new_user, create_access_token_cookie,
         create_refresh_token_cookie, default_redirect_url, generate_session_code,
@@ -62,13 +66,22 @@ pub async fn handler(
     let code = match params.code {
         Some(c) => c,
         None => {
+            let failure = ConsentFailure::classify(
+                params.error.as_deref(),
+                params.error_description.as_deref(),
+            );
             tracing::warn!(
                 auth_handoff_failure = "missing_code",
+                outcome = failure.as_str(),
                 error = ?params.error,
                 error_reason = ?params.error_reason,
                 error_description = ?params.error_description,
                 "oauth redirect received without code",
             );
+            let state = params.state.and_then(|state| state.decode().ok());
+            if let Some(url) = sign_in_failure_url(state.as_ref(), failure) {
+                return Ok(html_redirect(&url).into_response());
+            }
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -144,32 +157,42 @@ pub async fn handler(
 
     let decoded_user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args);
 
-    if let Some(state) = state.as_ref()
+    let just_signed_up = match decoded_user_id.as_ref() {
+        Ok(user_id) => {
+            append_signed_up_param_if_new_user(
+                &ctx.macro_cache_client,
+                user_id.email_str(),
+                &mut redirect_url,
+            )
+            .await
+        }
+        Err(_) => false,
+    };
+
+    let agent_signup = state.as_ref().is_some_and(|state| state.is_agent);
+    if let Ok(user_id) = decoded_user_id.as_ref() {
+        if just_signed_up && agent_signup {
+            mark_sso_signup_as_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+        }
+        // A provider just verified this address, so a person is signing in,
+        // unless they came through the agent signup page.
+        if !just_signed_up && !agent_signup {
+            revert_unconfirmed_agent(&ctx, user_id.as_ref(), user_id.email_str()).await;
+        }
+    }
+
+    // Only a brand-new account counts as referred: an existing user who signs
+    // in through a referral link earns the referrer nothing.
+    if just_signed_up
+        && let Ok(user_id) = decoded_user_id.as_ref()
+        && let Some(state) = state.as_ref()
         && let Some(referral_code) = state.referral_code.as_ref()
     {
-        let user_id = decoded_user_id.as_ref().map_err(|e| {
-            tracing::error!(
-                auth_handoff_failure = "referral_jwt_decode_failed",
-                error=?e,
-                "unable to decode access token while tracking referral"
-            );
-            InnerErr::InvalidJwtError.into_response()
-        })?;
-
         let _ = ctx
             .referral_service
             .track_referral(user_id, &ReferralCode(referral_code.clone()))
             .await
-            .inspect_err(|e| tracing::error!(error=?e, "unable to complete referral for user"));
-    }
-
-    if let Ok(user_id) = decoded_user_id.as_ref() {
-        append_signed_up_param_if_new_user(
-            &ctx.macro_cache_client,
-            user_id.email_str(),
-            &mut redirect_url,
-        )
-        .await;
+            .inspect_err(|e| tracing::error!(error=?e, "unable to track referral for new user"));
     }
 
     // Set cookies
@@ -185,8 +208,6 @@ pub async fn handler(
 enum InnerErr {
     #[error("{0}")]
     Serde(#[from] serde_json::Error),
-    #[error("invalid jwt")]
-    InvalidJwtError,
     #[error("Macro Cache Err {0}")]
     MacroCacheErr(anyhow::Error),
     #[error("Failed to parse url {0}")]
@@ -198,13 +219,6 @@ enum InnerErr {
 impl IntoResponse for InnerErr {
     fn into_response(self) -> Response {
         match self {
-            InnerErr::InvalidJwtError => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "failed to deserialize jwt".into(),
-                }),
-            )
-                .into_response(),
             InnerErr::Serde(_error) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -289,6 +303,30 @@ async fn get_redirect_url(
     .await?;
 
     Ok(res)
+}
+
+/// The query param that tells the app why a provider sign-in came back without
+/// a code, so it can offer email sign-in instead of a dead end.
+const SSO_ERROR_PARAM: &str = "sso_error";
+
+/// Sends a sign-in that came back without a code to the page that started it,
+/// with the reason. `None` when there is no allowed page to return to.
+fn sign_in_failure_url(state: Option<&SsoState>, failure: ConsentFailure) -> Option<Url> {
+    let mut url = state?.original_url.clone()?;
+    // Re-validate: the state is client-visible and may be forged.
+    if !is_allowed_original_url(&url) {
+        return None;
+    }
+    let kept: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(key, _)| key != SSO_ERROR_PARAM)
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(kept)
+        .append_pair(SSO_ERROR_PARAM, failure.as_str());
+    Some(url)
 }
 
 /// given an input url, attaches a session code as a query param if required.

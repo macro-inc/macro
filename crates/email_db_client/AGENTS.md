@@ -45,6 +45,15 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 ## Gotchas
 
+- Thread attachment flags (`has_calendar_attachment`, `has_pdf_attachment`,
+  `has_image_attachment`, `has_document_attachment`) back the CalendarOnly and
+  Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
+  wherever a message's attachments change or a message is deleted; the MIME
+  prefixes in `threads/update.rs` mirror the web client's attachment filters.
+- Undated provider drafts use creation time for All Mail eligibility; spam/junk
+  and trash remain excluded, including the timestamp override for synced Macro
+  drafts. Keep ingestion, recomputation, and cached projections aligned.
+
 - Message deletion may return `Deferred` while an accepted send owns the row; reconcile retained deletions under the message lock and compare both provider identity and draft generation.
 - Resolve provider deletions with `get_simple_message_by_provider_and_link_for_update` inside the deletion transaction; retain the message lock through cleanup and deletion so Send completion or Undo cannot invalidate the snapshot.
 
@@ -53,9 +62,43 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 - Forwarded-attachment delivery reads preserve `source_link_id` from the original
   message; the destination draft inbox is only the query access scope.
+- `insert_message_with_tx` leaves labels with an unexpired
+  `email_gmail_pending_label_writes` marker, and the read and starred flags
+  they drive, in their local state when it re-syncs a stored message. Given a
+  `ResyncSnapshot` from before the Gmail fetch, it changes only labels where
+  Gmail disagrees with that snapshot, so a write made during the fetch stays.
+- `email_gmail_pending_label_writes` keeps one row per write on a message's
+  label, newest by `seq` (staging order, which write ids need not follow).
+  Only the newest row's write sends; older ones wait while a newer row hasn't
+  expired, so abandoning a write can put the label back for the newest older
+  write whose row hasn't expired (`label_present`) or the state before it
+  (`label_present_before`, passed on by older writes given up). Code that
+  stages, confirms or abandons a Gmail label write takes
+  `lock_thread_label_writes` for its threads first.
+- The mailbox purge (`links::delete`) is bound by storage latency: a
+  500-message batch reads about as many pages as its rows, TOAST and child
+  rows occupy, so its time tracks per-read latency. A covering
+  `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap
+  reads into the DELETE; it was benchmarked and rejected. A restarted purge
+  rescans the dead index entries the earlier run left until vacuum can remove
+  them.
+- SQLx can't see that a column read through a `LEFT JOIN` inside a `LATERAL`
+  subquery can be NULL and types it non-null from the table. Alias such
+  columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
+  nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
+- A query that claims rows (`upload_claimed_at`) must return every row it
+  claims: read optional columns such as the sender through a `LEFT JOIN`. A
+  claimed attachment the caller never sees is never uploaded, and the Outlook
+  projection waits on its claim forever.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
+- A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
+  thread in the inbox only when `email_threads.has_received_mail` is true.
+  `recompute_thread_metadata` and the email crate's
+  `thread_mail_projections_by_ids` restate this rule; change both together.
 
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.

@@ -50,6 +50,8 @@ State ownership, reactivity, and async error handling.
 
 ## Solid patterns
 
+- Use `Switch`/`Match` for mutually exclusive render states instead of nested `Show` fallbacks.
+
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems
   (DOM APIs, third-party libs). If you're using it to derive state or trigger
   updates, use a derived signal or wrap the setter instead.
@@ -62,6 +64,7 @@ State ownership, reactivity, and async error handling.
   expensive. Cheap derivations (() => a() + b()) don't need it regardless of
   subscriber count.
 - Before rolling your own reactive utility, check solid-primitives first.
+- Never store `Set` or `Map` in signals; use arrays for small selections and reactive collections for keyed data.
 - Never read a solid-query `query.data` unguarded from a component body or an
   eager `createMemo`. `data` is a resource read: while the query is pending it
   suspends the caller's nearest `<Suspense>`, which detaches and re-attaches

@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { inEnglish } from '@app/lib/i18n';
 import { enableProjects } from '@core/constant/featureFlags';
 import type {
   EntityItem,
@@ -21,7 +22,6 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type CreateProjectCommandItem,
   newProjectCommand,
-  type ProjectCommandItem,
 } from './project-items';
 import { useEntitySearch } from './queries/entity-search';
 import { getCommandLastUsedAt } from './recency';
@@ -72,10 +72,10 @@ type CommandMenuItem =
   | CommandItem
   | SearchItem
   | AskAiItem
-  | ProjectCommandItem
   | CreateProjectCommandItem;
 
 export type PaginationControls = {
+  windowKey?: Accessor<string | undefined>;
   hasMore: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
@@ -84,6 +84,8 @@ export type PaginationControls = {
 /** CRM contacts matching a typed query, beyond those Quick Access holds. */
 export type CommandContactSource = PaginationControls & {
   contacts: Accessor<CrmContactEntity[]>;
+  /** Exact personal-contact resolution for this bounded CRM window. */
+  users?: Accessor<UserItem[]>;
   isLoading: Accessor<boolean>;
   error: Accessor<Error | undefined>;
 };
@@ -143,6 +145,15 @@ function makeAskAiItem(query: string): AskAiItem {
   };
 }
 
+function commandKey(command: CommandWithInfo): string {
+  const description = inEnglish(() =>
+    typeof command.description === 'function'
+      ? command.description()
+      : command.description
+  );
+  return description.replaceAll(' ', '-');
+}
+
 /**
  * Helper to convert commands to CommandItem format.
  * Deduplicates commands by description since commands with multiple hotkeys
@@ -160,11 +171,7 @@ function commandsToItems(
 ): CommandItem[] {
   const seen = new Set<string>();
   const dedupedCommands = commands.filter((command) => {
-    const description =
-      typeof command.description === 'function'
-        ? command.description()
-        : command.description;
-    const id = description.replaceAll(' ', '-');
+    const id = commandKey(command);
     if (seen.has(id)) {
       return false;
     }
@@ -179,7 +186,8 @@ function commandsToItems(
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
     const keywords = command.keywords?.join(' ') ?? '';
-    const id = `command-${description.replaceAll(' ', '-')}`;
+    // Persisted recency keys stay English so they survive a language change.
+    const id = `command-${commandKey(command)}`;
     const lastUsedAt = getCommandLastUsedAt(id);
 
     return {
@@ -380,6 +388,7 @@ export function useCommandItems(
     excludeEmails: true,
     contactDiscovery: options?.contactDiscovery,
   });
+  const projectsFlag = useFeatureFlag(enableProjects);
   const categoryItems = (): CommandMenuItem[] => {
     if (
       commandScopeCommands().length > 0 ||
@@ -398,7 +407,7 @@ export function useCommandItems(
     const items = entities.items();
     return [
       ...items,
-      ...(entities.projectsEnabled() && categoryFilter() === 'projects'
+      ...(projectsFlag().enabled && categoryFilter() === 'projects'
         ? [newProjectCommand]
         : []),
     ];
@@ -458,6 +467,7 @@ export function useCommandItems(
   return {
     items: filteredItems,
     isLoadingEntities: entities.isLoadingEntities,
+    isSettling: entities.isSettling,
     pagination: entities.pagination,
   };
 }

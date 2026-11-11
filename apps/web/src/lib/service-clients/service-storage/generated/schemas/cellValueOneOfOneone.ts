@@ -5,15 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CellValueOneOfOneoneType } from './cellValueOneOfOneoneType';
-import type { OptionRef } from './optionRef';
 
 /**
- * Options of a select or tag column; at most one for a single-valued
-column.
+ * Complete http or https URLs; at most one for a single-valued column.
  */
 export type CellValueOneOfOneone = {
   type: CellValueOneOfOneoneType;
-  /** Options of a select or tag column; at most one for a single-valued
-column. */
-  value: OptionRef[];
+  /** Complete http or https URLs; at most one for a single-valued column. */
+  value: string[];
 };

@@ -161,6 +161,7 @@ fn started_event() -> CallTopicEvent {
 
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
@@ -801,6 +802,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
         ),
         (
             MessageTopicEvent::Patched(MessagePatchedMetadata {
+                completed_reply: None,
                 parent: channel.clone(),
                 message_id: MESSAGE_ID,
                 thread_id: None,
@@ -1255,6 +1257,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
         ),
         (
             PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                inherited_from_project: None,
                 entity_property_id: ENTITY_PROPERTY_ID,
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,
@@ -1262,6 +1265,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 actor_user_id: actor_user_id.clone(),
                 actor: None,
                 on_behalf_of: None,
+                source: None,
                 value: None,
                 previous_value: None,
                 updated_at: Utc::now(),

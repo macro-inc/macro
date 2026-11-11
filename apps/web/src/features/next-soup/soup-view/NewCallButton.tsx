@@ -3,15 +3,15 @@ import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
 import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
@@ -19,7 +19,6 @@ import { createSignal } from 'solid-js';
 export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = createSignal(false);
-  const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
   >([]);
@@ -105,7 +104,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                  <XIcon />
+                  <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   New Call
@@ -113,7 +112,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
               </div>
               <div class="flex flex-col p-4 gap-4">
                 <RecipientSelector<'user' | 'contact' | 'channel'>
-                  options={destinationOptions}
+                  createSource={useCombinedRecipientSource}
                   selectedOptions={selectedOptions()}
                   setSelectedOptions={setSelectedOptions}
                   placeholder="To: Macro users or email addresses"
@@ -123,7 +122,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="strong"
+                    variant="primary"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

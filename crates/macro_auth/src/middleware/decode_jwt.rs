@@ -1,7 +1,12 @@
 #[cfg(test)]
 mod agent_test;
+#[cfg(test)]
+mod fusionauth_access_token_test;
 
-use std::sync::OnceLock;
+use std::{
+    sync::OnceLock,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
@@ -53,6 +58,18 @@ impl JwtValidationArgs {
             macro_api_token_issuer,
             macro_api_token_public_key,
         })
+    }
+
+    /// Build an isolated Macro JWT verifier with fixture keys.
+    #[cfg(feature = "testing")]
+    pub fn testing_macro_token(issuer: &'static str, public_key: &'static str) -> Self {
+        Self {
+            macro_api_token_issuer: MacroApiTokenIssuer::Comptime(issuer),
+            macro_api_token_public_key: LocalOrRemoteSecret::Local(
+                MacroApiTokenPublicKey::Comptime(public_key),
+            ),
+            ..Self::new_testing()
+        }
     }
 
     #[cfg(feature = "testing")]
@@ -164,6 +181,42 @@ pub fn decode_macro_access_token_allow_expired(
         .into_owned();
 
     Ok(macro_user_id)
+}
+
+#[derive(serde::Deserialize)]
+struct FusionAuthAccessToken {
+    iat: u64,
+}
+
+/// Checks that a token was issued by FusionAuth for this application (signature, audience and
+/// issuer) without checking expiry or the Macro claims, and returns when it was issued.
+/// FusionAuth still issues an access token when the JWT populate lambda fails, just without
+/// those claims.
+pub fn validate_fusionauth_access_token_allow_expired(
+    access_token: &str,
+    args: &JwtValidationArgs,
+) -> Result<SystemTime, MacroAuthError> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&[args.audience.as_ref()]);
+    validation.set_issuer(&[args.issuer.as_ref()]);
+    validation.set_required_spec_claims(&["exp", "aud", "iss"]);
+    validation.validate_exp = false;
+
+    let token = decode::<FusionAuthAccessToken>(
+        access_token,
+        &DecodingKey::from_secret(args.jwt_secret.as_ref().as_bytes()),
+        &validation,
+    )
+    .map_err(|e| MacroAuthError::JwtValidationFailed {
+        details: e.to_string(),
+    })?
+    .claims;
+
+    UNIX_EPOCH
+        .checked_add(Duration::from_secs(token.iat))
+        .ok_or_else(|| MacroAuthError::JwtValidationFailed {
+            details: "iat is out of range".to_string(),
+        })
 }
 
 fn validate_macro_access_token_inner(
@@ -390,7 +443,11 @@ CwIDAQAB
         });
 
         let claims = MacroApiToken {
+            agent_correlation_id: None,
+            agent_session_id: None,
             agent_id: None,
+            agent_via: None,
+            routine_id: None,
             exp: now + 3600, // Token expires in 1 hour
             iss: issuer.to_string(),
             fusion_user_id: fusionauth_id.to_string(),

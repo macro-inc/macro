@@ -4,23 +4,188 @@ icon: "brain"
 description: "Personal and team-level memory across mail, messages, tasks, docs and connectors."
 ---
 
-ChatGPT and Claude create memory over your chats. Macro creates memory over everything you and your team are working on: email, messages, tasks, docs, calls, and anything you've connected via MCP. There's not too much to document here because it all runs in the background with limited configurability.
+ChatGPT and Claude create memory over your chats. Macro creates memory over everything you and your team are working on: email, messages, tasks, docs, calls, and anything you've connected via MCP. It runs in the background.
 
-<Frame>
-  <img
-    src="/images/unified-memory-diagram.svg"
-    alt="Diagram of Macro's blocks — email, messages, tasks, docs, calls, files, canvas, and pull requests — all feeding one unified memory that agents read and write"
-  />
-</Frame>
+<svg className="memory-net" viewBox="0 0 920 500" role="img" aria-label="A graph of linked points.">
+  <g className="memory-net-lines" fill="none" stroke="currentColor" strokeWidth="1.25">
+      <path d="M538.6 206.3 L627.2 251.6" />
+      <path d="M571.2 254.9 L627.2 251.6" />
+      <path d="M710.6 206.7 L627.2 251.6" />
+      <path d="M706.7 268.3 L710.6 206.7" />
+      <path d="M699.6 134.6 L710.6 206.7" />
+      <path d="M585.8 324.2 L627.2 251.6" />
+      <path d="M548.8 142.2 L538.6 206.3" />
+      <path d="M635.8 157.6 L699.6 134.6" />
+      <path d="M587.0 196.9 L548.8 142.2" />
+      <path d="M660.6 187.4 L627.2 251.6" />
+      <path d="M636.4 335.7 L627.2 251.6" />
+      <path d="M533.5 282.4 L627.2 251.6" />
+      <path d="M629.0 84.6 L635.8 157.6" />
+      <path d="M666.5 226.6 L635.8 157.6" />
+      <path d="M680.7 315.7 L627.2 251.6" />
+      <path d="M627.2 251.6 L706.7 268.3" />
+      <path d="M660.6 187.4 L710.6 206.7" />
+      <path d="M635.8 157.6 L627.2 251.6" />
+      <path d="M527.4 424.9 L539.0 359.9" />
+      <path d="M563.2 291.3 L539.0 359.9" />
+      <path d="M489.3 472.0 L527.4 424.9" />
+      <path d="M631.3 285.0 L563.2 291.3" />
+      <path d="M605.3 366.7 L539.0 359.9" />
+      <path d="M427.6 467.2 L489.3 472.0" />
+      <path d="M505.1 309.0 L539.0 359.9" />
+      <path d="M531.5 239.8 L563.2 291.3" />
+      <path d="M460.2 368.2 L505.1 309.0" />
+      <path d="M587.7 420.0 L539.0 359.9" />
+      <path d="M486.3 246.6 L563.2 291.3" />
+      <path d="M462.9 306.9 L539.0 359.9" />
+      <path d="M652.7 426.1 L587.7 420.0" />
+      <path d="M505.1 309.0 L531.5 239.8" />
+      <path d="M415.1 369.0 L392.6 433.1" />
+      <path d="M366.0 319.4 L415.1 369.0" />
+      <path d="M338.8 469.9 L392.6 433.1" />
+      <path d="M317.1 355.5 L366.0 319.4" />
+      <path d="M399.0 279.0 L366.0 319.4" />
+      <path d="M289.7 324.7 L366.0 319.4" />
+      <path d="M401.8 239.4 L366.0 319.4" />
+      <path d="M497.2 355.7 L415.1 369.0" />
+      <path d="M338.9 408.3 L392.6 433.1" />
+      <path d="M324.9 282.5 L317.1 355.5" />
+      <path d="M455.6 410.4 L392.6 433.1" />
+      <path d="M447.5 334.6 L497.2 355.7" />
+      <path d="M455.6 410.4 L447.5 334.6" />
+      <path d="M399.0 279.0 L324.9 282.5" />
+      <path d="M278.3 232.1 L310.5 230.3" />
+      <path d="M283.2 280.7 L310.5 230.3" />
+      <path d="M209.4 237.0 L283.2 280.7" />
+      <path d="M300.5 150.0 L310.5 230.3" />
+      <path d="M257.5 179.5 L278.3 232.1" />
+      <path d="M376.0 186.7 L310.5 230.3" />
+      <path d="M236.4 272.9 L310.5 230.3" />
+      <path d="M247.3 107.6 L300.5 150.0" />
+      <path d="M357.3 229.9 L278.3 232.1" />
+      <path d="M260.3 319.1 L310.5 230.3" />
+      <path d="M355.4 281.2 L278.3 232.1" />
+      <path d="M257.5 179.5 L310.5 230.3" />
+      <path d="M278.3 232.1 L283.2 280.7" />
+      <path d="M446.6 176.4 L411.0 120.1" />
+      <path d="M479.1 141.9 L411.0 120.1" />
+      <path d="M408.4 40.5 L411.0 120.1" />
+      <path d="M365.1 157.9 L411.0 120.1" />
+      <path d="M314.0 100.8 L365.1 157.9" />
+      <path d="M459.6 76.0 L411.0 120.1" />
+      <path d="M301.0 44.4 L314.0 100.8" />
+      <path d="M411.1 201.9 L411.0 120.1" />
+      <path d="M362.3 73.1 L411.0 120.1" />
+      <path d="M339.7 133.1 L411.0 120.1" />
+      <path d="M301.0 44.4 L362.3 73.1" />
+      <path d="M339.7 133.1 L362.3 73.1" />
+      <path d="M521.5 44.8 L536.9 84.7" />
+      <path d="M584.2 103.2 L521.5 44.8" />
+      <path d="M478.3 102.8 L521.5 44.8" />
+      <path d="M515.5 156.1 L536.9 84.7" />
+      <path d="M580.0 28.0 L536.9 84.7" />
+      <path d="M479.0 207.9 L515.5 156.1" />
+      <path d="M587.5 168.0 L584.2 103.2" />
+      <path d="M468.0 38.4 L536.9 84.7" />
+      <path d="M584.2 103.2 L536.9 84.7" />
+      <path d="M627.2 251.6 L539.0 359.9" />
+      <path d="M539.0 359.9 L392.6 433.1" />
+      <path d="M392.6 433.1 L310.5 230.3" />
+      <path d="M310.5 230.3 L411.0 120.1" />
+      <path d="M411.0 120.1 L536.9 84.7" />
+      <path d="M536.9 84.7 L627.2 251.6" />
+      <path d="M538.6 206.3 L283.2 280.7" />
+      <path d="M563.2 291.3 L446.6 176.4" />
+  </g>
+  <g className="memory-net-dots" fill="currentColor">
+      <path d="M565.8 254.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M580.4 324.2a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M581.6 196.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M631.0 335.7a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M528.1 282.4a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M623.6 84.6a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M661.1 226.6a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M675.3 315.7a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M625.9 285.0a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M599.9 366.7a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M422.2 467.2a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M454.8 368.2a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M480.9 246.6a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M457.5 306.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M647.3 426.1a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M333.4 469.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M284.3 324.7a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M396.4 239.4a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M333.5 408.3a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M204.0 237.0a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M370.6 186.7a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M231.0 272.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M241.9 107.6a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M351.9 229.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M254.9 319.1a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M350.0 281.2a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M473.7 141.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M403.0 40.5a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M454.2 76.0a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M405.7 201.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M472.9 102.8a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M574.6 28.0a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M473.6 207.9a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M582.1 168.0a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M462.6 38.4a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0 -10.8 0" />
+      <path d="M700.3 268.3a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M693.1 134.6a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M542.3 142.2a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M654.1 187.4a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M520.9 424.9a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M482.9 472.0a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M525.1 239.8a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M581.3 420.0a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M310.7 355.5a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M392.6 279.0a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M490.8 355.7a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M318.5 282.5a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M449.2 410.4a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M441.0 334.6a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M294.1 150.0a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M251.0 179.5a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M440.2 176.4a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M358.7 157.9a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M307.6 100.8a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M294.6 44.4a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M333.3 133.1a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M509.1 156.1a6.4 6.4 0 1 0 12.9 0a6.4 6.4 0 1 0 -12.9 0" />
+      <path d="M531.1 206.3a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M497.7 309.0a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M407.6 369.0a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M354.8 73.1a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M514.0 44.8a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M576.8 103.2a7.5 7.5 0 1 0 14.9 0a7.5 7.5 0 1 0 -14.9 0" />
+      <path d="M702.2 206.7a8.5 8.5 0 1 0 17.0 0a8.5 8.5 0 1 0 -17.0 0" />
+      <path d="M627.3 157.6a8.5 8.5 0 1 0 17.0 0a8.5 8.5 0 1 0 -17.0 0" />
+      <path d="M274.7 280.7a8.5 8.5 0 1 0 17.0 0a8.5 8.5 0 1 0 -17.0 0" />
+      <path d="M553.7 291.3a9.5 9.5 0 1 0 19.0 0a9.5 9.5 0 1 0 -19.0 0" />
+      <path d="M356.4 319.4a9.5 9.5 0 1 0 19.0 0a9.5 9.5 0 1 0 -19.0 0" />
+      <path d="M268.8 232.1a9.5 9.5 0 1 0 19.0 0a9.5 9.5 0 1 0 -19.0 0" />
+      <path d="M382.1 433.1a10.5 10.5 0 1 0 21.1 0a10.5 10.5 0 1 0 -21.1 0" />
+      <path d="M525.3 84.7a11.6 11.6 0 1 0 23.1 0a11.6 11.6 0 1 0 -23.1 0" />
+      <path d="M614.6 251.6a12.6 12.6 0 1 0 25.2 0a12.6 12.6 0 1 0 -25.2 0" />
+      <path d="M526.4 359.9a12.6 12.6 0 1 0 25.2 0a12.6 12.6 0 1 0 -25.2 0" />
+      <path d="M297.9 230.3a12.6 12.6 0 1 0 25.2 0a12.6 12.6 0 1 0 -25.2 0" />
+      <path d="M398.4 120.1a12.6 12.6 0 1 0 25.2 0a12.6 12.6 0 1 0 -25.2 0" />
+  </g>
+</svg>
 
-Every night, Macro refreshes this memory from the day's activity. When you ask an agent "what's the latest status of project alamo?", it answers from the most recent emails, messages, tasks, docs, and call transcripts. You don't have to point it at anything.
+Every night, Macro refreshes this memory from the day's activity. It is a background profile of you: your role, what you are working on, and how you like to work. That profile is given to the agent at the start of a conversation.
+
+Memory is the background, and it is the smaller part of how an agent knows your workspace. That background is why the agent already knows how you work at the start of a conversation, and why a search can go straight to the question. Search and tool calls are how it finds a current fact. The agent searches email, messages, tasks, docs, and call transcripts, then reads the thing it found. That result is live. The nightly summary is already a day old, and it leaves out anything you would look up on the spot. See [Search](/product/search).
 
 ### Personal vs. team memory
 
 Every Macro user has a personal memory built from their own work. If you're on a team, there's also a shared team-level memory:
 
 - **Tasks** are added to team memory by default, so everyone can see what others are working on.
-- **Calls** are recorded, transcribed, and shared to team memory by default. You can opt out per call (see [Calls](/product/calls)), in which case the call goes to your personal memory only.
+- **Calls** started from a channel are recorded, transcribed, and shared with the team by default. Uncheck **Share with team** to keep one off the team. Standalone calls stay with the people on the call. See [Calls](/product/calls).
 - **Emails** are auto-shared with the team where it makes sense, for example in the CRM module.
 
-This is what makes agents in Macro different from a personal chat assistant: they remember what your whole team has been doing, not just your own chat history.
+On a team, that background includes work the team has shared. When you ask about something specific, the agent still searches and reads the Blocks themselves.

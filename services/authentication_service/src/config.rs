@@ -317,13 +317,9 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
-        // Temporarily open Develop signups even when Doppler disables the bypass.
-        // Remove this override to restore the configured allowlist policy.
-        let bypass_allowlist =
-            self.development_bypass_signup_allowlist || matches!(environment, Environment::Develop);
         resolve_signup_policy(
             environment,
-            bypass_allowlist,
+            self.development_bypass_signup_allowlist,
             &self.development_signup_allowlist_json,
         )
     }

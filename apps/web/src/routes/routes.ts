@@ -11,12 +11,20 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  CRM_RETIRED_DATABASES_ROUTE_IDS,
+  crmItemBlockType,
+  crmItemParams,
+  crmItemStateSchema,
   crmPipelineParams,
   crmPipelineReference,
   crmRecordClaim,
+  crmRecordFileItemParams,
+  crmRecordItemParams,
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
+  crmRetiredDatabaseParams,
+  crmRetiredRecordDatabasesParams,
   crmViewReference,
 } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
@@ -31,6 +39,7 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
+import { parseProjectRoute } from '@app/features/projects/core/route';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -105,6 +114,35 @@ export const signupRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Signup for an AI agent: Google or email only, then its SDK token. */
+export const agentSignupRoute = defineRoute({
+  id: 'agent-signup',
+  path: 'signup/agent',
+  externalSearch: '*',
+});
+
+/** A new agent's SDK token and first steps, as a markdown page. */
+export const agentSetupRoute = defineRoute({
+  id: 'agent-setup',
+  path: 'agent-setup',
+  externalSearch: '*',
+});
+
+/** Confirms an agent saved its token, then opens the app. */
+export const agentSetupDoneRoute = defineRoute({
+  id: 'agent-setup-done',
+  path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
+/** The one-time link in an account manager approval message. */
+export const accountManagerRoute = defineRoute({
+  id: 'account-manager',
+  path: 'account-manager/:grantId',
+  params: z.object({ grantId: z.string().uuid() }),
+  externalSearch: '*',
+});
+
 export const emailSignupCallbackRoute = defineRoute({
   id: 'email-signup-callback',
   path: EMAIL_SIGNUP_CALLBACK_PATH,
@@ -163,6 +201,13 @@ export const inviteRoute = defineRoute({
 export const internalInviteLinksRoute = defineRoute({
   id: 'internal-invite-links',
   path: 'internal/invite-links',
+  externalSearch: '*',
+});
+
+/** Macro staff only: set the status banner every user sees. */
+export const internalSystemStatusRoute = defineRoute({
+  id: 'internal-system-status',
+  path: 'internal/status',
   externalSearch: '*',
 });
 
@@ -313,11 +358,15 @@ export const settingsRoute = defineRoute({
   externalSearch: ['pair', 'createAgent'],
 });
 
+// The Agents list and its conversations share one workspace mount, so picking
+// a conversation swaps the pane beside the sidebar instead of rebuilding both.
+const AGENTS_WORKSPACE_MOUNT = 'agents-workspace';
+
 export const agentsRoute = defineRoute({
   id: 'agents',
   path: 'agents/:id',
   params: z.object({ id: z.string() }),
-  remountKey: ({ id }) => id,
+  mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'agent', id }),
   search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
@@ -327,7 +376,7 @@ export const codersRoute = defineRoute({
   id: 'coders',
   path: 'coders/:id',
   params: z.object({ id: z.string() }),
-  remountKey: ({ id }) => id,
+  mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'agent', id }),
   search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
@@ -338,7 +387,7 @@ export const agentChatsRoute = defineRoute({
   path: 'agents/chat/:id',
   aliases: ['agent-chats/:id'],
   params: z.object({ id: z.string() }),
-  remountKey: ({ id }) => id,
+  mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'chat', id }),
   search: [changesSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'chat'),
@@ -459,6 +508,22 @@ export const activityRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const notificationsRoute = defineRoute({
+  id: 'view-notifications',
+  path: 'notifications',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'notifications' }),
+});
+
+/** The Calendar view inline in Notifications, at the Calendar route's own period path and search. */
+export const notificationsCalendarRoute = defineRoute({
+  id: 'notifications-calendar',
+  path: 'calendar/:period',
+  params: calendarPeriodParams,
+  serializeParams: ({ period }) => ({ period: calendarPeriodPath(period) }),
+  search: [CALENDAR_SEARCH_NAMESPACE],
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
@@ -469,7 +534,7 @@ export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
   aliases: ['routine/new', 'automation/new'],
-  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+  claim: () => ({ namespace: 'component', id: 'routines' }),
 });
 
 export const routineDetailRoute = defineRoute({
@@ -485,9 +550,18 @@ export const routineDetailRoute = defineRoute({
 export const agentsViewRoute = defineRoute({
   id: 'view-agents',
   path: 'agents',
+  mountKey: AGENTS_WORKSPACE_MOUNT,
   search: '*' as const,
   externalSearch: ['createAgent'],
   claim: () => ({ namespace: 'component', id: 'agents' }),
+});
+
+/** A new email, composed beside the list on desktop. */
+export const emailComposeRoute = defineRoute({
+  id: 'mail-compose',
+  path: 'new',
+  // Each open is a fresh composer, even in a Mail view already composing.
+  remountKey: (_params, { entryId }) => entryId,
 });
 
 export const emailThreadRoute = defineRoute({
@@ -578,6 +652,23 @@ export const reviewsSplitRoute = defineRoute({
   search: [reviewsTabSearch.namespace],
 });
 
+/** A shareable external chat (any provider) in External's main pane, with no channel or legacy block. */
+export const externalChatRoute = defineRoute({
+  id: 'external-chat',
+  path: 'chat/:chatId',
+  params: z.object({ chatId: z.string().uuid() }),
+  remountKey: ({ chatId }) => chatId,
+  claim: ({ chatId }) => ({ namespace: 'external-chat', id: chatId }),
+});
+
+/** External: outside messaging accounts (WhatsApp) linked into Macro. */
+export const externalRoute = defineRoute({
+  id: 'view-external',
+  path: 'external',
+  // A WhatsApp pairing handed off to Macro desktop, by id only.
+  externalSearch: ['whatsappPairing'],
+});
+
 export const bookingLinksRoute = defineRoute({
   id: 'view-booking-links',
   path: 'scheduling',
@@ -652,6 +743,79 @@ export const crmPipelineRecordRoute = defineRoute({
   toReference: crmRecordReference,
 });
 
+/** An item opened from a Customers activity view or record section. */
+export const crmItemRoute = defineRoute({
+  id: 'companies-item',
+  path: ':itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmItemParams,
+  state: crmItemStateSchema,
+  claim: (params) => ({
+    namespace: 'block',
+    id: `${driveDocumentBlockType(crmItemBlockType(params))}:${params.itemId}`,
+  }),
+  toReference: (params) =>
+    uuidRouteReference(params.itemId, crmItemBlockType(params)),
+});
+
+export const crmPipelineItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-pipeline-item',
+});
+
+/** A typed record section already identifies the selected item's renderer. */
+export const crmRecordItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-item',
+  path: ':recordType/:recordId/:section/:itemId',
+  params: crmRecordItemParams,
+});
+
+export const crmPipelineRecordItemRoute = defineRoute({
+  ...crmRecordItemRoute,
+  id: 'companies-pipeline-record-item',
+});
+
+export const crmRecordFileItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-file-item',
+  path: ':recordType/:recordId/:section?/:itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmRecordFileItemParams,
+});
+
+export const crmPipelineRecordFileItemRoute = defineRoute({
+  ...crmRecordFileItemRoute,
+  id: 'companies-pipeline-record-file-item',
+});
+
+/** A database opened from the retired Customers Databases view; redirects to it. */
+export const crmRetiredDatabaseRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.database,
+  path: 'database/:databaseId',
+  params: crmRetiredDatabaseParams,
+  toReference: ({ databaseId }) => uuidRouteReference(databaseId, 'database'),
+});
+
+export const crmPipelineRetiredDatabaseRoute = defineRoute({
+  ...crmRetiredDatabaseRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineDatabase,
+});
+
+/** A record's retired Databases section, or a database opened from it; redirects. */
+export const crmRetiredRecordDatabasesRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.record,
+  path: ':recordType/:recordId/databases/:databaseId?',
+  params: crmRetiredRecordDatabasesParams,
+  toReference: ({ recordType, recordId, databaseId }) =>
+    databaseId
+      ? uuidRouteReference(databaseId, 'database')
+      : uuidRouteReference(recordId, recordType),
+});
+
+export const crmPipelineRetiredRecordDatabasesRoute = defineRoute({
+  ...crmRetiredRecordDatabasesRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineRecord,
+});
+
 export const crmPipelineRoute = defineRoute({
   id: 'companies-pipeline',
   path: 'pipeline/:pipelineId',
@@ -705,9 +869,7 @@ const debugComponentIds = [
         'md',
         'data',
         'chat',
-        'chat-attachment',
         'chat-tool',
-        'http-stream',
         'static-markdown-stream',
         'resize',
         'notifications-playground',
@@ -719,6 +881,7 @@ const debugComponentIds = [
         'dynamic-ui',
         'agent-ui',
         'agent-replay',
+        'agent-progress',
         'agent-changes-ui',
         'diff-view-ui',
       ]
@@ -784,6 +947,14 @@ export const legacyContentRoute = defineRoute({
       namespace: 'block',
       id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
     };
+  },
+  toReference: ({ type, id }) => {
+    const project = type === 'component' ? parseProjectRoute(id) : undefined;
+    // A project mention opens the project, not one of its discussions.
+    if (project?.discussionId) return;
+    return project
+      ? uuidRouteReference(project.id, 'initiative')
+      : uuidRouteReference(id, type);
   },
 });
 

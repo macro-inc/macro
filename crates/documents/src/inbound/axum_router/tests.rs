@@ -53,7 +53,14 @@ use super::{
     create_document::create_document_internal_handler, documents_router,
 };
 
+#[cfg(feature = "ai_tools")]
+mod design_files;
+#[cfg(feature = "ai_tools")]
+mod presentation;
 mod sync_content;
+mod upload_file;
+#[cfg(feature = "ai_tools")]
+mod word_document;
 use crate::{
     domain::{
         content::DocumentContent,
@@ -147,6 +154,17 @@ struct FakeDocumentService {
     get_text_calls: Mutex<Vec<String>>,
     document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
+    created_documents: Mutex<Vec<CreatedDocumentCall>>,
+    upload_url: Mutex<Option<String>>,
+    /// The file type documents report; PDF when unset.
+    file_type: Mutex<Option<FileType>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CreatedDocumentCall {
+    document_name: String,
+    file_type: Option<FileType>,
+    project_id: Option<Uuid>,
 }
 
 impl FakeDocumentService {
@@ -235,7 +253,14 @@ impl DocumentService for FakeDocumentService {
                 .unwrap_or_else(|| {
                     Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid")
                 }),
-            file_type: Some("pdf".to_string()),
+            file_type: Some(
+                self.file_type
+                    .lock()
+                    .unwrap()
+                    .unwrap_or(FileType::Pdf)
+                    .as_str()
+                    .to_string(),
+            ),
             sub_type: None,
             branched_from_id: None,
             branched_from_version_id: None,
@@ -249,7 +274,7 @@ impl DocumentService for FakeDocumentService {
         &self,
         _user_id: &str,
     ) -> Result<Option<String>, DocumentError> {
-        unimplemented!()
+        Ok(None)
     }
 
     async fn get_document_by_team_slug(
@@ -329,7 +354,7 @@ impl DocumentService for FakeDocumentService {
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        _document: NewDocument,
+        document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.create_calls
@@ -338,8 +363,22 @@ impl DocumentService for FakeDocumentService {
             .push(CreateDocumentCall {
                 principal: principal.clone(),
             });
+        self.created_documents
+            .lock()
+            .expect("created documents lock poisoned")
+            .push(CreatedDocumentCall {
+                document_name: document.document_name,
+                file_type: document.file_type,
+                project_id: document.project_id,
+            });
 
-        Ok(create_document_response(principal.owner()))
+        let mut response = create_document_response(principal.owner());
+        response.document_response.presigned_url = self
+            .upload_url
+            .lock()
+            .expect("upload url lock poisoned")
+            .clone();
+        Ok(response)
     }
 
     async fn import_email_attachment(
@@ -414,6 +453,8 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -493,6 +534,34 @@ impl DocumentService for FakeDocumentService {
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
     }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
 }
 
 impl DocumentContentEventService for FakeDocumentService {
@@ -561,7 +630,7 @@ impl DocumentCreationService for FakeDocumentService {
         _document_id: &str,
         _content: DocumentContent,
     ) -> Result<(), DocumentError> {
-        panic!("unexpected set_document_content call")
+        Ok(())
     }
 
     async fn cleanup_created_document(&self, _document_id: &str) {
@@ -640,6 +709,7 @@ struct DocumentAccessCall {
 struct FakeEntityAccessService {
     team_info: Arc<Mutex<Option<UserTeamInfo>>>,
     deny_document_access: Arc<Mutex<bool>>,
+    denied_entity_type: Arc<Mutex<Option<EntityType>>>,
     document_access_calls: Arc<Mutex<Vec<DocumentAccessCall>>>,
 }
 
@@ -648,6 +718,7 @@ impl Default for FakeEntityAccessService {
         Self {
             team_info: Arc::new(Mutex::new(None)),
             deny_document_access: Arc::new(Mutex::new(false)),
+            denied_entity_type: Arc::new(Mutex::new(None)),
             document_access_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -663,6 +734,11 @@ impl FakeEntityAccessService {
             .deny_document_access
             .lock()
             .expect("document access result lock poisoned") = true;
+    }
+
+    /// Deny access to every entity of one type, granting the rest.
+    fn deny_access_to(&self, entity_type: EntityType) {
+        *self.denied_entity_type.lock().unwrap() = Some(entity_type);
     }
 
     fn document_access_calls(&self) -> Vec<DocumentAccessCall> {
@@ -695,6 +771,7 @@ impl EntityAccessService for FakeEntityAccessService {
             .deny_document_access
             .lock()
             .expect("document access result lock poisoned")
+            || *self.denied_entity_type.lock().unwrap() == Some(entity_type)
         {
             return Err(AccessError::Unauthorized);
         }
@@ -863,6 +940,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(JWT_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -901,7 +987,9 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -964,6 +1052,44 @@ fn test_router_with(
     FakeEntityAccessService,
     FakeAuthorizationService,
 ) {
+    let (state, document_service, access_service, authorization_service) =
+        test_state(non_user_owners);
+    (
+        router_for(state),
+        document_service,
+        access_service,
+        authorization_service,
+    )
+}
+
+#[cfg(feature = "ai_tools")]
+fn canvas_routes(worker_url: &str) -> super::CanvasRouteDeps {
+    super::CanvasRouteDeps {
+        worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                worker_url.to_string(),
+            ),
+        ),
+        admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+        recorder: Arc::new(ai_usage::NoOpUsageRecorder),
+        artifacts: Arc::new(|_| Box::pin(async { false })),
+        images: Arc::new(FakeCanvasImages::default()),
+    }
+}
+
+type TestState =
+    DocumentRouterState<FakeDocumentService, FakeEntityAccessService, FakeAuthorizationService>;
+
+/// Router state whose file stores and upstream services are unreachable;
+/// file-document tests replace them.
+fn test_state(
+    non_user_owners: NonUserOwners,
+) -> (
+    TestState,
+    Arc<FakeDocumentService>,
+    FakeEntityAccessService,
+    FakeAuthorizationService,
+) {
     let pool = PgPoolOptions::new()
         .connect_lazy("postgres://postgres:postgres@localhost/documents-router-test")
         .expect("test database URL should be valid");
@@ -1002,10 +1128,91 @@ fn test_router_with(
         task_dedup_service,
         lexical_client,
         creator,
+        #[cfg(feature = "ai_tools")]
+        ai_editing: Arc::new(crate::domain::ai_editing::AiEditingService::new(
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
+        #[cfg(feature = "ai_tools")]
+        editing_worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                "http://localhost/unused-editing-worker".to_string(),
+            ),
+        ),
+        #[cfg(feature = "ai_tools")]
+        messages: Arc::new(messages::domain::api::MockMessageServiceApi::new()),
+        spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+        )),
+        #[cfg(feature = "ai_tools")]
+        canvas: canvas_routes("http://localhost/unused-editing-worker"),
+        #[cfg(feature = "ai_tools")]
+        spreadsheet_ai_edit: Arc::new(crate::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            "unused-jwt-secret".to_string(),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
+        #[cfg(feature = "ai_tools")]
+        presentations: Arc::new(crate::domain::presentation::PresentationService::new(
+            Arc::new(crate::domain::presentation::NoPresentationFiles),
+        )),
+        #[cfg(feature = "ai_tools")]
+        word_documents: Arc::new(crate::domain::word_document::WordDocumentService::new(
+            document_service.clone(),
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(SyncServiceClient::new(
+                "unused-internal-key".to_string(),
+                "http://localhost/sync".to_string(),
+            )),
+            Arc::new(crate::domain::word_document::NoWordDocumentFiles),
+            "unused-jwt-secret".to_string(),
+        )),
+        #[cfg(feature = "ai_tools")]
+        designs: Arc::new(crate::domain::design::DesignService::new(Arc::new(
+            crate::domain::design::NoDesignFiles,
+        ))),
+        #[cfg(feature = "ai_tools")]
+        photoshop_documents: Arc::new(crate::domain::photoshop::PhotoshopService::new(Arc::new(
+            crate::domain::photoshop::NoPhotoshopFiles,
+        ))),
+        #[cfg(feature = "ai_tools")]
+        illustrator_documents: Arc::new(crate::domain::illustrator::IllustratorService::new(
+            Arc::new(crate::domain::illustrator::NoIllustratorFiles),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };
-    let router = documents_router::<
+    (
+        state,
+        document_service,
+        access_service,
+        authorization_service,
+    )
+}
+
+fn router_for(state: TestState) -> Router {
+    documents_router::<
         FakeDocumentService,
         FakeEntityAccessService,
         FakeAuthorizationService,
@@ -1041,14 +1248,7 @@ fn test_router_with(
             >,
         ),
     )
-    .with_state(state);
-
-    (
-        router,
-        document_service,
-        access_service,
-        authorization_service,
-    )
+    .with_state(state)
 }
 
 fn create_request() -> Builder {
@@ -1527,6 +1727,7 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
         "/create_snippet",
         "/create_skill",
         "/copy-source/copy",
+        "/upload?fileName=notes.txt",
     ] {
         for authenticate in callers {
             let (router, document_service, _access_service, _authorization_service) = test_router();
@@ -1753,5 +1954,337 @@ async fn canvas_creation_requires_project_edit_access_before_metadata_creation()
     assert_eq!(
         access.document_access_calls()[0].entity_type,
         EntityType::Project
+    );
+}
+
+#[tokio::test]
+async fn a_skill_without_a_use_when_description_is_rejected_before_it_is_created() {
+    for description in ["", "Drafts release notes", "Use when one\nand two"] {
+        let (router, document_service, _access_service, _authorization_service) = test_router();
+        let request =
+            with_jwt(Request::post("/create_skill").header("content-type", "application/json"))
+                .body(Body::from(
+                    json!({ "skillName": "Release notes", "description": description }).to_string(),
+                ))
+                .expect("request should build");
+
+        assert_eq!(
+            send_status(&router, request).await,
+            StatusCode::BAD_REQUEST,
+            "{description:?}"
+        );
+        assert!(document_service.create_calls().is_empty());
+    }
+}
+
+#[cfg(feature = "ai_tools")]
+#[derive(Default)]
+struct FakeCanvasImages(Mutex<Vec<(String, String, Vec<u8>)>>);
+
+#[cfg(feature = "ai_tools")]
+#[async_trait]
+impl crate::domain::canvas::CanvasImageStore for FakeCanvasImages {
+    async fn save_png(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        name: &str,
+        png: Vec<u8>,
+    ) -> anyhow::Result<crate::domain::canvas::StoredCanvasImage> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((owner.to_string(), name.to_owned(), png));
+        Ok(crate::domain::canvas::StoredCanvasImage {
+            file_id: "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+            url: "https://static.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+        })
+    }
+}
+
+/// An editing worker on a local port that answers each `/canvas` call with the
+/// next canned `(status, body)` and records the requests it got.
+#[cfg(feature = "ai_tools")]
+async fn stub_canvas_worker(answers: Vec<(u16, Value)>) -> (String, Arc<Mutex<Vec<Value>>>) {
+    let requests: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let answers = Arc::new(Mutex::new(answers.into_iter()));
+    let seen = requests.clone();
+    let app = Router::new().route(
+        "/canvas",
+        axum::routing::post(move |axum::Json(body): axum::Json<Value>| {
+            let seen = seen.clone();
+            let answers = answers.clone();
+            async move {
+                seen.lock().unwrap().push(body);
+                let (status, body) = answers.lock().unwrap().next().unwrap();
+                (StatusCode::from_u16(status).unwrap(), axum::Json(body))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{address}"), requests)
+}
+
+#[cfg(feature = "ai_tools")]
+fn canvas_request(path: &str, body: Value) -> Request<Body> {
+    Request::post(format!("/{RESOLVED_DOCUMENT_ID}/canvas/{path}"))
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+#[cfg(feature = "ai_tools")]
+fn canvas_router(worker_url: &str) -> (Router, Arc<FakeDocumentService>) {
+    let (mut state, documents, _, _) = test_state(NonUserOwners::Disabled);
+    state.canvas = canvas_routes(worker_url);
+    *documents.file_type.lock().unwrap() = Some(FileType::Canvas);
+    (router_for(state), documents)
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_scene_reads_the_live_scene_for_the_caller_without_a_bot() {
+    let (worker, requests) = stub_canvas_worker(vec![(
+        200,
+        json!({
+            "canvas": "{\"rootId\":\"root\",\"items\":[{\"id\":\"box\"}],\"revision\":\"r1\"}",
+            "operationsApplied": 0,
+            "summary": "Read the current canvas.",
+        }),
+    )])
+    .await;
+    let (router, _) = canvas_router(&worker);
+
+    let (status, body) = send(
+        &router,
+        canvas_request("scene", json!({ "itemIds": ["box"], "format": "scene" })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "revision": "r1",
+            "scene": { "rootId": "root", "items": [{ "id": "box" }], "revision": "r1" },
+        })
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests[0]["request"],
+        json!({ "action": "read", "itemIds": ["box"], "format": "scene" })
+    );
+    let token = requests[0]["documentToken"].as_str().unwrap();
+    let claims: Value = macro_sync_service_jwt::decode(token, "unused-jwt-secret").unwrap();
+    assert_eq!(claims["access_level"], "view");
+    assert_eq!(claims["user_id"], JWT_USER_ID);
+    assert!(claims.get("actor").is_none_or(Value::is_null));
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_routes_refuse_other_document_types_before_the_worker() {
+    let (worker, requests) = stub_canvas_worker(vec![]).await;
+    let (router, documents) = canvas_router(&worker);
+    *documents.file_type.lock().unwrap() = Some(FileType::Md);
+
+    let (status, body) = send(&router, canvas_request("scene", json!({}))).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "invalid_request");
+    assert!(requests.lock().unwrap().is_empty());
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_edits_say_whether_a_failed_batch_committed_anything() {
+    let (worker, requests) = stub_canvas_worker(vec![
+        (
+            200,
+            json!({
+                "canvas": "{\"items\":[],\"revision\":\"r2\",\"textLayout\":[]}",
+                "operationsApplied": 1,
+                "summary": "Applied 1 acknowledged Canvas operations.",
+            }),
+        ),
+        (
+            409,
+            json!({ "error": "Canvas revision changed.", "outcome": "conflict" }),
+        ),
+        (
+            422,
+            json!({ "error": "Item box no longer exists.", "outcome": "rejected" }),
+        ),
+        (
+            502,
+            json!({ "error": "Canvas write acknowledgement was lost." }),
+        ),
+    ])
+    .await;
+    let (router, _) = canvas_router(&worker);
+    let batch = json!({
+        "expectedRevision": "a".repeat(64),
+        "code": "editor.move(['box'],0,20)",
+        "snippets": { "label": "Ready" },
+    });
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["operationsApplied"], 1);
+    assert_eq!(body["revision"], "r2");
+    assert_eq!(body["scene"]["textLayout"], json!([]));
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        body,
+        json!({ "error": "revision_conflict", "message": "Canvas revision changed." })
+    );
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        body,
+        json!({ "error": "edit_rejected", "message": "Item box no longer exists." })
+    );
+
+    let (status, body) = send(&router, canvas_request("edits", batch)).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert_eq!(body["error"], "edit_failed");
+
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests[0]["request"],
+        json!({
+            "action": "apply",
+            "expectedRevision": "a".repeat(64),
+            "code": "editor.move(['box'],0,20)",
+            "snippets": { "label": "Ready" },
+        })
+    );
+    let token = requests[0]["documentToken"].as_str().unwrap();
+    let claims: Value = macro_sync_service_jwt::decode(token, "unused-jwt-secret").unwrap();
+    assert_eq!(claims["access_level"], "edit");
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_render_keeps_the_png_as_the_callers_static_file() {
+    let (worker, _) = stub_canvas_worker(vec![(
+        200,
+        json!({
+            "render": {
+                "revision": "r1",
+                "clock": {},
+                "crop": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 80.0 },
+                "width": 200,
+                "height": 160,
+                "objects": [{ "id": "box", "bounds": { "x": 0.0, "y": 0.0, "width": 10.0, "height": 10.0 } }],
+                "unavailable": [],
+                "textLayout": [],
+                "modelMedia": [{ "type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo=" }],
+            },
+            "canvas": null,
+            "operationsApplied": 0,
+            "summary": "Rendered an immutable Canvas snapshot.",
+        }),
+    )])
+    .await;
+    let images = Arc::new(FakeCanvasImages::default());
+    let mut canvas = canvas_routes(&worker);
+    canvas.images = images.clone();
+    let (mut state, documents, _, _) = test_state(NonUserOwners::Disabled);
+    state.canvas = canvas;
+    *documents.file_type.lock().unwrap() = Some(FileType::Canvas);
+    let router = router_for(state);
+
+    let (status, body) = send(
+        &router,
+        canvas_request("render", json!({ "itemIds": ["box"] })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "fileId": "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e",
+            "url": "https://static.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e",
+            "revision": "r1",
+            "crop": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 80.0 },
+            "width": 200,
+            "height": 160,
+            "objects": [{ "id": "box", "bounds": { "x": 0.0, "y": 0.0, "width": 10.0, "height": 10.0 } }],
+            "unavailable": [],
+            "textLayout": [],
+        })
+    );
+    let saved = images.0.lock().unwrap();
+    assert_eq!(saved[0].0, JWT_USER_ID);
+    assert_eq!(saved[0].2, b"\x89PNG\r\n\x1a\n");
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_ai_edit_refuses_when_the_editor_applied_nothing_and_asked_back() {
+    let (worker, requests) = stub_canvas_worker(vec![
+        (
+            200,
+            json!({
+                "operationsApplied": 0,
+                "summary": "Need more detail.",
+                "clarification": "Which of the two boxes?",
+                "usage": [],
+            }),
+        ),
+        (
+            200,
+            json!({
+                "operationsApplied": 2,
+                "summary": "Moved one box.",
+                "clarification": "Which colour for the other?",
+                "usage": [],
+            }),
+        ),
+    ])
+    .await;
+    let (router, _) = canvas_router(&worker);
+    let instructions = json!({ "instructions": "Line the boxes up." });
+
+    let (status, body) = send(&router, canvas_request("ai-edit", instructions.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        body,
+        json!({ "error": "edit_refused", "message": "Which of the two boxes?" })
+    );
+
+    let (status, body) = send(&router, canvas_request("ai-edit", instructions)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "operationsApplied": 2,
+            "summary": "Moved one box.",
+            "clarification": "Which colour for the other?",
+        })
+    );
+    assert_eq!(
+        requests.lock().unwrap()[0]["request"],
+        json!({ "action": "edit", "instructions": "Line the boxes up." })
+    );
+}
+
+#[tokio::test]
+async fn missing_email_attachment_is_a_coded_not_found() {
+    let response =
+        axum::response::IntoResponse::into_response(DocumentError::EmailAttachmentNotFound);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body["code"],
+        model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
     );
 }

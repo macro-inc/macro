@@ -113,6 +113,25 @@ export const FILTER_TARGETS = {
       backend: 'Bcc',
       formatValue: (value) => ({ Complete: value }),
     },
+    // Exact domain of the address, e.g. `acme.com` (not `mail.acme.com`).
+    emailSenderDomain: {
+      backend: 'Sender',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailRecipientDomain: {
+      backend: 'Recipient',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailCcDomain: {
+      backend: 'Cc',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    emailBccDomain: {
+      backend: 'Bcc',
+      formatValue: (value) => ({ Domain: value }),
+    },
+    // Case-insensitive substring of any message subject; 1-200 characters.
+    emailSubject: { backend: 'Subject' },
     emailSeen: { backend: 'Read', domain: [true, false] },
     emailDone: {
       backend: 'InboxVisible',
@@ -126,6 +145,10 @@ export const FILTER_TARGETS = {
     emailImportance: { backend: 'Importance', domain: [true, false] },
     emailShared: { backend: 'Shared' },
     emailCalendarOnly: { backend: 'CalendarOnly', domain: [true, false] },
+    emailAttachment: {
+      backend: 'Attachment',
+      domain: ['pdf', 'image', 'document'],
+    },
     emailUpdatedAt: { backend: 'ua', compile: 'dateRange' },
   },
 
@@ -187,6 +210,25 @@ export const FILTER_TARGETS = {
     folderCreatedAt: { backend: 'ca', compile: 'dateRange' },
     folderUpdatedAt: { backend: 'ua', compile: 'dateRange' },
     projectId: { backend: 'pid' },
+  },
+
+  // if — initiatives (task projects). Opt-in server-side: a query that says
+  // nothing about them gets none, so this is not an entity target and
+  // `confine` never nil-fills it; any literal here, a notification state
+  // included, is what opts them in.
+  if: {
+    initiativeId: { backend: 'id' },
+    initiativeSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    initiativeDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
+    includeInitiatives: { backend: 'inc', compile: 'unit' },
   },
 
   // callf — calls
@@ -286,11 +328,17 @@ type FilterTargetsMeta = {
     emailRecipientAddress: string[];
     emailCcAddress: string[];
     emailBccAddress: string[];
+    emailSenderDomain: string[];
+    emailRecipientDomain: string[];
+    emailCcDomain: string[];
+    emailBccDomain: string[];
+    emailSubject: string;
     emailSeen: boolean;
     emailDone: boolean;
     emailImportance: boolean;
     emailShared: 'exclude' | 'include' | 'only';
     emailCalendarOnly: boolean;
+    emailAttachment: 'pdf' | 'image' | 'document';
     emailUpdatedAt: DateRangeFilter;
   };
 
@@ -336,6 +384,14 @@ type FilterTargetsMeta = {
     folderCreatedAt: DateRangeFilter;
     folderUpdatedAt: DateRangeFilter;
     projectId: string[];
+  };
+
+  // if — initiatives (task projects)
+  if: {
+    initiativeId: string[];
+    initiativeSeen: boolean;
+    initiativeDone: boolean;
+    includeInitiatives: boolean;
   };
 
   // callf — calls
@@ -424,6 +480,7 @@ export const TARGETS: Target[] = [
   'cthf',
   'cf',
   'pf',
+  'if',
   'callf',
   'fef',
   'ghprf',
@@ -438,7 +495,7 @@ export type FieldKey = {
   [T in Target]: FieldsForTarget<T>;
 }[Target];
 
-export type EntityTarget = Exclude<Target, 'propf' | 'ghprf'>;
+export type EntityTarget = Exclude<Target, 'propf' | 'ghprf' | 'if'>;
 
 export const ENTITY_TARGETS: EntityTarget[] = [
   'df',

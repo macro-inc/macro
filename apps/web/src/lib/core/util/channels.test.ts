@@ -1,3 +1,5 @@
+import { Telemetry } from '@macro-inc/observability';
+import { contactRefreshRevision } from '@queries/contacts/refresh';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { useSendMessageToPeople } from './channels';
 import { ThrownResultError } from './result';
@@ -21,7 +23,6 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
-vi.mock('@core/user/contactService', () => ({ invalidateContacts: vi.fn() }));
 vi.mock('@queries/channel/channels', () => ({
   invalidateListChannels: vi.fn(),
 }));
@@ -40,42 +41,94 @@ beforeEach(() => {
   mocks.send.mockResolvedValue({ id: 'message' });
 });
 
-it.each([
-  { users: ['recipient'], channelId: 'resolved-dm' },
-  { users: ['recipient', 'other'], channelId: 'resolved-group' },
-])(
-  'resolves $users to $channelId and posts the attachments there',
-  async ({ users, channelId }) => {
-    const { resolvePeopleChannel, sendToUsers } = useSendMessageToPeople();
-
-    const resolved = await resolvePeopleChannel(users);
-    const sent = await sendToUsers({
+it.each([['recipient'], ['recipient', 'other']])(
+  'authorizes the resolved destination before sending to %j',
+  async (...users) => {
+    const { sendToUsers } = useSendMessageToPeople();
+    const order: string[] = [];
+    const grant = vi.fn(async () => {
+      order.push('grant');
+    });
+    mocks.send.mockImplementation(async () => {
+      order.push('message');
+      return { id: 'message' };
+    });
+    const refreshBeforeSend = contactRefreshRevision();
+    await sendToUsers({
       users,
       content: '',
       mentions: [],
       attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
+      beforeSend: grant,
     });
-
-    expect([resolved, sent?.channelId]).toEqual([channelId, channelId]);
-    expect(mocks.send.mock.calls[0][0]).toMatchObject({
-      parent: { type: 'channel', id: channelId },
-      message: {
-        attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
-      },
-    });
+    expect(contactRefreshRevision()).toBe(refreshBeforeSend + 1);
+    expect(order).toEqual(['grant', 'message']);
+    expect(grant).toHaveBeenCalledWith(
+      users.length === 1 ? 'resolved-dm' : 'resolved-group'
+    );
+    expect(mocks.send.mock.calls[0][0].message.attachments).toEqual([
+      { entity_type: 'initiative', entity_id: 'project' },
+    ]);
   }
 );
 
+it('does not post an attachment when its destination grant fails', async () => {
+  const { sendToChannel } = useSendMessageToPeople();
+  const refreshBeforeSend = contactRefreshRevision();
+  await expect(
+    sendToChannel({
+      channelId: 'channel',
+      content: '',
+      mentions: [],
+      attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
+      beforeSend: async () => {
+        throw new Error('Only owner');
+      },
+    })
+  ).rejects.toThrow('Only owner');
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(contactRefreshRevision()).toBe(refreshBeforeSend);
+});
+
+it('does not schedule contact refresh when message delivery fails', async () => {
+  mocks.send.mockRejectedValue(new Error('unavailable'));
+  const refreshBeforeSend = contactRefreshRevision();
+  const { sendToChannel } = useSendMessageToPeople();
+  expect(
+    await sendToChannel({
+      channelId: 'channel',
+      content: 'Message',
+      mentions: [],
+    })
+  ).toBeUndefined();
+  expect(contactRefreshRevision()).toBe(refreshBeforeSend);
+});
+
+it.each([
+  { users: ['recipient'], channelId: 'resolved-dm' },
+  { users: ['recipient', 'other'], channelId: 'resolved-group' },
+])('resolves $users to $channelId', async ({ users, channelId }) => {
+  const { resolvePeopleChannel } = useSendMessageToPeople();
+
+  expect(await resolvePeopleChannel(users)).toBe(channelId);
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
 it('hands the caller span to the channel lookup and the post', async () => {
-  const trace = { run: <T>(operation: () => T) => operation() };
+  const parentSpan = Telemetry.captureContext();
   const { resolvePeopleChannel, sendToUsers } = useSendMessageToPeople();
 
-  await resolvePeopleChannel(['recipient', 'other'], trace);
-  await sendToUsers({ users: ['recipient'], content: '', mentions: [], trace });
+  await resolvePeopleChannel(['recipient', 'other'], parentSpan);
+  await sendToUsers({
+    users: ['recipient'],
+    content: '',
+    mentions: [],
+    parentSpan,
+  });
 
-  expect(mocks.group.mock.calls[0][0].trace).toBe(trace);
-  expect(mocks.direct.mock.calls[0][0].trace).toBe(trace);
-  expect(mocks.send.mock.calls[0][0].trace).toBe(trace);
+  expect(mocks.group.mock.calls[0][0].parentSpan).toBe(parentSpan);
+  expect(mocks.direct.mock.calls[0][0].parentSpan).toBe(parentSpan);
+  expect(mocks.send.mock.calls[0][0].parentSpan).toBe(parentSpan);
 });
 
 it('resolves a failed lookup to nothing and posts nothing', async () => {
@@ -112,7 +165,6 @@ it('posts under a supplied id and opens the stored message', async () => {
   await sent?.navigateToChannel();
 
   expect(postedIds()).toEqual(['planned-1']);
-  expect(sent?.messageId).toBe('server-1');
   expect(mocks.goTo.mock.calls).toEqual([[{ message: 'server-1' }]]);
 });
 

@@ -196,9 +196,9 @@ pub async fn apply(
 
 /// Print one login link per persona.
 pub(super) fn print_login_links(spec: &ScenarioSpec) {
-    let frontend_port = crate::config::FrontendPort::new()
+    let proxy_port = crate::config::ProxyPort::new()
         .map(|port| port.to_string())
-        .unwrap_or_else(|| "3000".to_string());
+        .unwrap_or_else(|| "8090".to_string());
     for (key, user) in &spec.users {
         // Per-persona hostnames get separate cookie jars, so each of these
         // can hold its own live session in ordinary tabs of one browser.
@@ -207,7 +207,7 @@ pub(super) fn print_login_links(spec: &ScenarioSpec) {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         {
             println!(
-                "  {key}: http://{key}.localhost:{frontend_port}/app/login?email={}",
+                "  {key}: https://{key}.localhost:{proxy_port}/app/login?email={}",
                 user.email
             );
         } else {
@@ -287,6 +287,7 @@ async fn seed_teams(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
             sql_string(&spec.user_id(&team.owner)),
             sql_string(&format!("sub_seed_{}_{key}", spec.scenario)),
             (team.members.len() + 1).to_string(),
+            "true".to_string(),
         ]
     }));
 
@@ -320,7 +321,7 @@ async fn seed_teams(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
 
     let statements = vec![
         format!(
-            "INSERT INTO team (id, name, owner_id, subscription_id, seat_count) VALUES\n  {team_values}"
+            "INSERT INTO team (id, name, owner_id, subscription_id, seat_count, paying) VALUES\n  {team_values}"
         ),
         format!("INSERT INTO team_user (user_id, team_id, team_role) VALUES\n  {member_values}"),
         format!("INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES\n  {crm_values}"),

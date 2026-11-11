@@ -5,7 +5,6 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
@@ -14,18 +13,32 @@ import {
   isChannelThreadEntity,
 } from '@entity';
 import {
+  registerChannelListNotificationRefresh,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
+import { fetchAllChannels } from '@queries/channel/channels';
+
+export {
+  channelsByIdsQueryArgs,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
+
+import { queryReadyGate } from '@queries/gate';
+import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
+  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
-import { channelHasMessages, isDirectMessage } from './utils';
+import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
@@ -66,13 +79,20 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: channelHasMessages,
   },
+  team_channels: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    filters: defineQueryFilters({
+      include: { channelType: ['team'], channelIsParticipant: [true] },
+    }),
+    matches: isTeamChannel,
+  },
   channels: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
+      exclude: { channelType: ['direct_message', 'team'] },
     }),
-    matches: (channel) => !isDirectMessage(channel),
+    matches: (channel) => !isDirectMessage(channel) && !isTeamChannel(channel),
   },
   direct_messages: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
@@ -115,53 +135,34 @@ export function filterChannelsForScope(
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
 
-/**
- * Fetch specific channels by id, for labelled channels the paginated Channels
- * source has not reached yet. Page through the requested IDs independently
- * of the main list so broad smart tags include all their matched channels.
- */
-export function channelsByIdsQueryArgs(
-  channelIds: readonly string[]
-): SoupAstItemsQueryArgs {
-  return {
-    params: {
-      ...CHANNELS_QUERY_PARAMS,
-      limit: Math.min(500, Math.max(1, channelIds.length)),
-      sort_method: 'created_at',
-    },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [...channelIds] },
-        })
-      )
-    ),
-  };
-}
+/** Resolve full built-in membership without changing the rail's loaded pages. */
+export async function fetchChannelGroupIds(
+  group: ChannelsGroup,
+  excludedIds: readonly string[],
+  signal?: AbortSignal
+): Promise<string[]> {
+  const excluded = new Set(excludedIds);
+  const channels = await fetchAllChannels(signal);
+  const members = channels.filter((channel) => {
+    if (!channel.is_participant || excluded.has(channel.id)) {
+      return false;
+    }
 
-export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    // Rail rows need only bounded unread evidence, like the channel lists.
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-    })
-  );
-  // Drive the external paginated query until all requested matches are loaded.
-  createEffect(() => {
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error ||
-      !query.hasNextPage
-    )
-      return;
-    fireAndForget(query.fetchNextPage(), 'channels-view');
+    if (group === 'team_channels') {
+      return channel.channel_type === 'team';
+    }
+
+    if (group === 'direct_messages') {
+      return channel.channel_type === 'direct_message';
+    }
+
+    return (
+      channel.channel_type !== 'team' &&
+      channel.channel_type !== 'direct_message'
+    );
   });
-  return query;
+
+  return [...new Set(members.map((channel) => channel.id))];
 }
 
 /**
@@ -176,15 +177,15 @@ export function resolveReferencedChannels(
   previous: ChannelEntity[],
   lookup: {
     isEnabled: boolean;
-    isLoading: boolean;
+    isPending: boolean;
     error: unknown;
-    entities: readonly EntityData[] | undefined;
+    data: { entities: readonly EntityData[] } | undefined;
   }
 ): ChannelEntity[] {
-  if (!lookup.isEnabled || lookup.isLoading || lookup.error || !lookup.entities)
+  if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
     return previous;
 
-  return lookup.entities.filter(isChannelEntity);
+  return lookup.data.entities.filter(isChannelEntity);
 }
 
 export function deduplicateChannels(
@@ -217,22 +218,6 @@ export function resolveSelectedChannel(
         isChannelEntity(entity) && entity.id === selectedChannelId
     )
   );
-}
-
-function sortChannels(
-  channels: readonly ChannelEntity[],
-  sort: ChannelListSort
-): ChannelEntity[] {
-  const sortDate = (channel: ChannelEntity) =>
-    sort === 'created_at'
-      ? channel.createdAt
-      : sort === 'viewed_at'
-        ? channel.viewedAt
-        : channel.updatedAt;
-
-  return channels
-    .slice()
-    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
 }
 
 /**
@@ -339,6 +324,7 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
+  registerChannelListNotificationRefresh(query);
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 
@@ -381,6 +367,11 @@ export function useChannelsSources(
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
+    team_channels: useChannelsDataSource(
+      'team_channels',
+      () => enabled('team_channels'),
+      () => sortBy('team_channels')
+    ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),

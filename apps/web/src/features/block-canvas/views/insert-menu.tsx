@@ -1,7 +1,8 @@
+import CodeIcon from '@icon/system/regular/code.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Popover } from '@kobalte/core/popover';
-import ImageIcon from '@phosphor/image.svg';
-import LinkIcon from '@phosphor/link.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createSignal, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { CanvasInsertRadialMenu } from '../components/insert-radial-menu';
@@ -14,6 +15,8 @@ export function CanvasInsertMenu(props: {
   location: CanvasInsertLocation;
   onSelect: (asset: CanvasAsset, mode: CanvasInsertMode) => void;
   onFiles: (files: File[]) => void;
+  /** Absent while artifacts are off for this user. */
+  onArtifact?: () => void;
   onClose: () => void;
   onRestoreFocus: () => void;
 }) {
@@ -72,6 +75,7 @@ export function CanvasInsertMenu(props: {
                       center={props.location.screen}
                       onMedia={() => setMode('media')}
                       onReference={() => setMode('reference')}
+                      onArtifact={props.onArtifact}
                       onUpload={() => uploadInput?.click()}
                     />
                   </Popover.Content>
@@ -107,6 +111,13 @@ export function CanvasInsertMenu(props: {
                   <Dropdown.Item onSelect={() => setMode('reference')}>
                     <LinkIcon class="size-4" /> Reference
                   </Dropdown.Item>
+                  <Show when={props.onArtifact}>
+                    {(onArtifact) => (
+                      <Dropdown.Item onSelect={onArtifact()}>
+                        <CodeIcon class="size-4" /> Artifact
+                      </Dropdown.Item>
+                    )}
+                  </Show>
                 </Dropdown.Group>
               </Dropdown.Content>
             </Dropdown>

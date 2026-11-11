@@ -1,10 +1,14 @@
-import { ListFilterDropdown } from '@app/components/view-shell';
+import {
+  ListFilterDropdown,
+  ListSortDropdown,
+} from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ColumnsIcon from '@phosphor/columns.svg';
-import { Button } from '@ui';
+import ColumnsIcon from '@icon/system/regular/columns.svg';
+import { ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
+import { EMAIL_FOCUS_SORT_OPTIONS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
 import { EmailInboxMenu } from './EmailInboxSelector';
@@ -17,21 +21,26 @@ export type EmailControlsProps = {
 
 export function EmailControls(props: EmailControlsProps) {
   const filters = useEmailFilters();
-  const { readingPane, setReadingPane } = useEmailView();
+  const { state, setFocusSort, readingPane, setReadingPane } = useEmailView();
 
   return (
     <>
       <div class="contents @max-[640px]/split-header:hidden">
-        <HeaderActionGroup label="Email filters">
-          <EmailInboxMenu />
-          <div class="relative shrink-0">
+        <HeaderActionGroup label="Email filters" size="md">
+          <EmailInboxMenu grouped />
+          <div class="relative flex shrink-0 items-center">
             <ListFilterDropdown
+              grouped
+              size="icon-md"
               label="Filter email"
               open={props.filterOpen}
               onOpenChange={props.onFilterOpenChange}
               groups={filters.groups()}
               isSelected={filters.isSelected}
+              selectedIds={filters.selectedIds}
+              isGroupActive={filters.isGroupActive}
               onSelectionChange={filters.setSelected}
+              onGroupSelectionChange={filters.setGroupSelection}
               onClear={filters.clear}
             />
             <Show when={filters.activeCount() > 0}>
@@ -42,19 +51,36 @@ export function EmailControls(props: EmailControlsProps) {
           </div>
         </HeaderActionGroup>
       </div>
-      <HeaderActionGroup label="Email view options">
+      <HeaderActionGroup label="Email view options" size="md">
+        <Show when={state.tab === 'focus'}>
+          <ListSortDropdown
+            grouped
+            size="icon-md"
+            label="Sort Focus"
+            value={state.focusSort}
+            options={EMAIL_FOCUS_SORT_OPTIONS}
+            onChange={setFocusSort}
+          />
+        </Show>
         <Show when={!isTouchDevice()}>
-          <Button
+          <ButtonGroup.Button
+            aria-label={
+              readingPane() ? 'Hide reading pane' : 'Show reading pane'
+            }
+            tooltip={{
+              content: readingPane()
+                ? 'Hide reading pane'
+                : 'Show reading pane',
+              hotkey: TOKENS.email.toggleReadingPane,
+            }}
             variant="ghost"
             size="icon-md"
-            label={readingPane() ? 'Hide reading pane' : 'Show reading pane'}
-            hotkey={TOKENS.email.toggleReadingPane}
             aria-pressed={readingPane()}
             class={readingPane() ? 'text-ink' : 'text-ink-muted'}
             onClick={() => setReadingPane(!readingPane())}
           >
             <ColumnsIcon class="size-4" />
-          </Button>
+          </ButtonGroup.Button>
         </Show>
       </HeaderActionGroup>
     </>

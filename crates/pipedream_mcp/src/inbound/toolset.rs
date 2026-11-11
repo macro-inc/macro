@@ -1,7 +1,10 @@
 //! Thin AI adapter for connector discovery.
 
 use crate::domain::{
-    ports::{ConnectionStore, ConnectorCapabilities, ConnectorDirectory},
+    ports::{
+        ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
+        OverlayConnections,
+    },
     service::discovery::{ConnectorDiscovery, DiscoveryRequest, DiscoveryResult},
 };
 use ai_toolset::{
@@ -14,12 +17,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Dependencies for the discovery tool.
-pub struct ConnectorToolContext<D, S> {
+pub struct ConnectorToolContext<D, S, N> {
     /// Domain service, constructed by the host.
-    pub service: Arc<ConnectorDiscovery<D, S>>,
+    pub service: Arc<ConnectorDiscovery<D, S, N>>,
 }
 
-impl<D, S> Clone for ConnectorToolContext<D, S> {
+impl<D, S, N> Clone for ConnectorToolContext<D, S, N> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -39,7 +42,7 @@ pub struct DiscoverConnectors {
 }
 
 /// Discovery metadata and optional markup for a user-controlled auth flow.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct DiscoverConnectorsResponse {
     /// Catalog or capability results.
     pub result: DiscoveryResult,
@@ -52,15 +55,18 @@ impl ToolAnnotated for DiscoverConnectors {
 }
 
 #[async_trait]
-impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore>
-    AsyncTool<ConnectorToolContext<D, S>> for DiscoverConnectors
+impl<D, S, N> AsyncTool<ConnectorToolContext<D, S, N>> for DiscoverConnectors
+where
+    D: ConnectorDirectory + ConnectorCapabilities,
+    S: ConnectionStore + ConnectorOverlays,
+    N: OverlayConnections,
 {
     type Output = DiscoverConnectorsResponse;
 
     #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
-        context: ServiceContext<ConnectorToolContext<D, S>>,
+        context: ServiceContext<ConnectorToolContext<D, S, N>>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
         let result = context
@@ -71,6 +77,14 @@ impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore>
                 description: error.to_string(),
                 internal_error: error,
             })?;
+        Ok(DiscoverConnectorsResponse::from(result))
+    }
+}
+
+impl From<DiscoveryResult> for DiscoverConnectorsResponse {
+    /// Offer connect markup only for an unconnected app whose inspected tools
+    /// could do something.
+    fn from(result: DiscoveryResult) -> Self {
         let connect_markup = match &result {
             DiscoveryResult::Inspect {
                 app,
@@ -83,9 +97,9 @@ impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore>
             }
             _ => None,
         };
-        Ok(DiscoverConnectorsResponse {
+        Self {
             result,
             connect_markup,
-        })
+        }
     }
 }

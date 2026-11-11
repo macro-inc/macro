@@ -3,7 +3,7 @@ import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform } from '@core/util/platform';
-import { useUserNamesQuery } from '@queries/auth';
+import { useUserNames } from '@queries/auth';
 import { invalidateActiveCallQueries } from '@queries/call/call';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { notificationServiceClient } from '@service-notification/client';
@@ -12,6 +12,7 @@ import { raceTimeout } from '@solid-primitives/promise';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
 import { createEffect, createMemo, on, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
+import { requestIosMicrophonePermission } from './microphone-access';
 import { isNativeCallEnabled } from './native-call-platform';
 import {
   type NativeCallSnapshot,
@@ -73,7 +74,13 @@ async function unregisterVoipForLogout(): Promise<void> {
 }
 
 type VoipTokenPayload = { token: string };
-type CallAnsweredPayload = { channelId: string; nativeMedia?: boolean };
+type CallAnsweredPayload = {
+  channelId: string;
+  nativeMedia?: boolean;
+  callId?: string;
+  /** When CallKit fulfilled the answer, epoch ms. */
+  answeredAtMs?: number;
+};
 type CallEndedPayload = { callId: string };
 type DrawerOpenedPayload = { channelId: string };
 type ParticipantIdentitiesPayload = { identities: string[] };
@@ -104,7 +111,25 @@ type GetActiveCallStateResponse = {
 type GetPendingAnsweredCallResponse = {
   channelId: string | null;
   nativeMedia?: boolean | null;
+  callId?: string | null;
+  answeredAtMs?: number | null;
 };
+
+/**
+ * How old a CallKit answer can be when the webview handles it. Answers reach
+ * JS late when the webview was suspended or cold-started; past this, the call
+ * may already be over or left, and joining it would be unprompted.
+ */
+const ANSWERED_CALL_MAX_AGE_MS = 60_000;
+
+/** One CallKit answer: its call when native names it, else its channel. */
+function answeredCallIdentity(
+  answer: Pick<CallAnsweredPayload, 'channelId' | 'nativeMedia' | 'callId'>
+): string {
+  return answer.callId
+    ? `call:${answer.callId.toLowerCase()}`
+    : `${answer.channelId}:${answer.nativeMedia ?? false}`;
+}
 
 type NativeCallChannelMetadata = {
   channelId: string;
@@ -116,14 +141,11 @@ type NativeCallChannelTitleSyncValue =
   | null
   | undefined;
 
-type NativeParticipantDisplayNames =
-  | { isPending: true }
-  | {
-      isPending: false;
-      displayNames: Record<string, string>;
-      fetchedNameCount: number;
-      errors: unknown[];
-    };
+type NativeParticipantDisplayNames = {
+  displayNames: Record<string, string>;
+  fetchedNameCount: number;
+  errors: unknown[];
+};
 
 function refreshActiveCallQueriesAfterLeave() {
   void invalidateActiveCallQueries().catch((err) =>
@@ -352,10 +374,25 @@ export function useCallKitSetup() {
     }
 
     const handleCallAnswered = (
-      { channelId, nativeMedia }: CallAnsweredPayload,
+      { channelId, nativeMedia, callId, answeredAtMs }: CallAnsweredPayload,
       source: 'channel' | 'pending' = 'channel'
     ) => {
-      const answeredCallKey = `${channelId}:${nativeMedia ?? false}`;
+      const ageMs =
+        answeredAtMs === undefined ? undefined : Date.now() - answeredAtMs;
+      if (ageMs !== undefined && ageMs > ANSWERED_CALL_MAX_AGE_MS) {
+        console.info('[callkit] ignoring stale answered call', {
+          channelId,
+          callId,
+          ageMs,
+          source,
+        });
+        return;
+      }
+      const answeredCallKey = answeredCallIdentity({
+        channelId,
+        nativeMedia,
+        callId,
+      });
       const now = Date.now();
       if (
         lastHandledAnsweredCall?.key === answeredCallKey &&
@@ -393,20 +430,31 @@ export function useCallKitSetup() {
       invoke<GetPendingAnsweredCallResponse>(
         'plugin:call-kit|get_pending_answered_call'
       )
-        .then(({ channelId, nativeMedia }) => {
+        .then(({ channelId, nativeMedia, callId, answeredAtMs }) => {
           console.info('[callkit] drained pending answered call', {
             channelId,
             nativeMedia,
+            callId,
           });
           if (!channelId) return;
           if (
-            handled?.channelId === channelId &&
-            (handled.nativeMedia ?? false) === (nativeMedia ?? false)
+            handled &&
+            answeredCallIdentity(handled) ===
+              answeredCallIdentity({
+                channelId,
+                nativeMedia: nativeMedia ?? false,
+                callId: callId ?? undefined,
+              })
           ) {
             return;
           }
           handleCallAnswered(
-            { channelId, nativeMedia: nativeMedia ?? false },
+            {
+              channelId,
+              nativeMedia: nativeMedia ?? false,
+              callId: callId ?? undefined,
+              answeredAtMs: answeredAtMs ?? undefined,
+            },
             'pending'
           );
         })
@@ -690,7 +738,7 @@ function useCallKitParticipantDisplayNameSync() {
     uniqueParticipantIds(nativeParticipantIds())
   );
 
-  const participantUserNameQueries = useUserNamesQuery({
+  const participantUserNames = useUserNames({
     userIds: participantIds,
     enabled: () => participantIds().length > 0,
   });
@@ -700,26 +748,21 @@ function useCallKitParticipantDisplayNameSync() {
       const ids = participantIds();
       if (ids.length === 0) return undefined;
 
-      const isPending = participantUserNameQueries.some(
-        (query) => query.isPending
-      );
-      if (isPending) return { isPending: true };
-
-      const fetchedNames = participantUserNameQueries
-        .map((query) => query.data)
+      const names = participantUserNames();
+      // Pending/current-scope gaps must publish fallbacks too: otherwise native
+      // metadata would keep a previous account's private labels while fetching.
+      const fetchedNames = names
+        .map((entry) => entry.name)
         .filter((name): name is UserName => Boolean(name));
 
       return {
-        isPending: false,
         displayNames: buildParticipantDisplayNames(
           ids,
           fallbackParticipantDisplayNames(ids),
           fetchedNames
         ),
         fetchedNameCount: fetchedNames.length,
-        errors: participantUserNameQueries
-          .filter((query) => query.isError)
-          .map((query) => query.error),
+        errors: names.flatMap((entry) => (entry.error ? [entry.error] : [])),
       };
     }
   );
@@ -727,7 +770,6 @@ function useCallKitParticipantDisplayNameSync() {
   createEffect(
     on(participantDisplayNames, (displayNameData) => {
       if (!displayNameData) return;
-      if (displayNameData.isPending) return;
 
       const channelId = nativeCall.activeChannelId();
       const nativeParticipantIds = nativeCall.participantIdentities();
@@ -869,11 +911,19 @@ export async function endCallKitCall(): Promise<void> {
 
 const pendingAndroidJoins = new Map<string, string>();
 
-/** Pause ring resolution before the join API marks this user as answered. */
+/**
+ * Ask for the microphone, and on Android pause ring resolution, before the
+ * join API marks this user as answered.
+ */
 export async function prepareNativeCallJoin(
   channelId: string
 ): Promise<() => Promise<void>> {
-  if (!isNativeCallEnabled() || !isPlatform('android')) return async () => {};
+  if (!isNativeCallEnabled()) return async () => {};
+  if (isPlatform('ios')) {
+    await requestIosMicrophonePermission();
+    return async () => {};
+  }
+  if (!isPlatform('android')) return async () => {};
   const { lease } = await invoke<{ lease: string }>(
     'plugin:call-kit|prepare_join',
     { channelId }

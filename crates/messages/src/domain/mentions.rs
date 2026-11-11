@@ -72,6 +72,8 @@ pub enum MessageReferenceKind {
     CrmContact,
     /// An automation reference; recognized separately from message authorization support.
     Automation,
+    /// An external chat added to Macro.
+    ExternalChat,
 }
 impl MessageReferenceKind {
     /// Normalize reference aliases from editors and Markdown extractors.
@@ -94,6 +96,7 @@ impl MessageReferenceKind {
             "crm_company" => Self::CrmCompany,
             "crm_contact" => Self::CrmContact,
             "automation" => Self::Automation,
+            "external_chat" => Self::ExternalChat,
             _ => return None,
         })
     }

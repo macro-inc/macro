@@ -76,6 +76,12 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unreachable!()
     }
+    async fn last_runs(
+        &self,
+        _: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
+        unreachable!()
+    }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
         unreachable!()
     }
@@ -98,7 +104,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         id: Some(macro_uuid::generate_uuid_v7()),
         owner,
         name: config.name,
-        next_run_at: next_run(&config.trigger).unwrap(),
+        next_run_at: next_run(&config.trigger, now, |_| false).unwrap(),
         trigger: config.trigger,
         kind: config.kind,
         created_at: now,
@@ -109,6 +115,9 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         claimed: None,
         enabled: true,
         run_visibility: config.run_visibility,
+        template_id: None,
+        suggestion_id: None,
+        description: String::new(),
     }
 }
 

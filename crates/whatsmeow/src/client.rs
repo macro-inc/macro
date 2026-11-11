@@ -44,6 +44,7 @@ use crate::pair_code::PairClientType;
 use crate::signal::{CurveSignatures, SignalProtocol};
 use crate::socket::{FrameEvent, FrameSocket, NoiseEvent, NoiseSocket, SocketError, URL};
 use crate::store::{Device, StoreError};
+use crate::telemetry::ConnectReason;
 use crate::types::events::{Disconnected, Event};
 use crate::types::{AddressingMode, DEFAULT_USER_SERVER, HIDDEN_USER_SERVER, Jid};
 use crate::util::keys::new_key_pair;
@@ -376,6 +377,14 @@ pub struct Client {
     /// Cancelled when the client is dropped or shut down (Go's
     /// `BackgroundEventCtx`).
     pub(crate) background: CancellationToken,
+
+    /// Macro addition: the span that was current when [`Client::connect`]
+    /// was called. Connection spans, reconnects and received nodes nest
+    /// under it.
+    pub(crate) connection_parent: Mutex<tracing::Span>,
+    /// Macro addition: the `whatsmeow.connect.login` span between the
+    /// handshake and the server's `success` or `failure`.
+    pub(crate) pending_login: Mutex<Option<tracing::Span>>,
 }
 
 /// Locks a std mutex, ignoring poisoning: every guarded value is replaced
@@ -437,6 +446,8 @@ impl Client {
             server_time_offset: AtomicI64::new(0),
             tasks: TaskTracker::new(),
             background: CancellationToken::new(),
+            connection_parent: Mutex::new(tracing::Span::none()),
+            pending_login: Mutex::new(None),
         })
     }
 
@@ -450,7 +461,40 @@ impl Client {
     where
         Task: Future<Output = ()> + Send + 'static,
     {
-        self.tasks.spawn(task);
+        // Macro addition: background work stays in the caller's trace.
+        self.tasks.spawn(task.in_current_span());
+    }
+
+    /// Macro addition: the span connection work nests under.
+    pub(crate) fn connection_parent(&self) -> tracing::Span {
+        lock(&self.connection_parent).clone()
+    }
+
+    /// Macro addition: a `whatsmeow.connect` span under the connection's
+    /// parent span.
+    fn connect_span(&self, reason: ConnectReason, attempt: u32) -> tracing::Span {
+        tracing::info_span!(
+            parent: &self.connection_parent(),
+            "whatsmeow.connect",
+            reason = reason.as_str(),
+            attempt,
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        )
+    }
+
+    /// Macro addition: ends the pending login span with an outcome.
+    pub(crate) fn finish_login_span(
+        &self,
+        outcome: &'static str,
+        failed: bool,
+    ) -> Option<tracing::Span> {
+        let span = lock(&self.pending_login).take()?;
+        span.record("outcome", outcome);
+        if failed {
+            crate::telemetry::mark_error(&span);
+        }
+        Some(span)
     }
 
     /// Spawns `dispatch_event` in the background (Go's `go cli.dispatchEvent`).
@@ -503,8 +547,27 @@ impl Client {
     /// Connects to the WhatsApp web websocket. After connecting, the client
     /// either logs in with the stored device or emits [`Event::Qr`] to pair a
     /// new one.
-    #[tracing::instrument(name = "whatsmeow.connect", skip_all, err)]
     pub async fn connect(self: &Arc<Self>) -> Result<(), ClientError> {
+        *lock(&self.connection_parent) = tracing::Span::current();
+        self.connect_with_reason(ConnectReason::Initial).await
+    }
+
+    /// Macro addition: [`Client::connect`] in a `whatsmeow.connect` span
+    /// recording why it connects.
+    pub(crate) async fn connect_with_reason(
+        self: &Arc<Self>,
+        reason: ConnectReason,
+    ) -> Result<(), ClientError> {
+        let span = self.connect_span(reason, 0);
+        let result = self.connect_untraced().instrument(span.clone()).await;
+        if let Err(error) = &result {
+            tracing::warn!(parent: &span, error = %error, "connect failed");
+        }
+        crate::telemetry::record_result(&span, &result);
+        result
+    }
+
+    async fn connect_untraced(self: &Arc<Self>) -> Result<(), ClientError> {
         let mut state = self.socket.write().await;
         let result = self.unlocked_connect(&mut state).await;
         drop(state);
@@ -516,7 +579,7 @@ impl Client {
             tracing::error!(error = %error, "initial connection failed but reconnecting in background");
             self.spawn_dispatch(Event::Disconnected(Disconnected));
             let client = Arc::clone(self);
-            self.spawn(async move { client.auto_reconnect().await });
+            self.spawn(async move { client.auto_reconnect(ConnectReason::ConnectFailed).await });
             return Ok(());
         }
         result
@@ -552,7 +615,19 @@ impl Client {
         }
 
         self.reset_expected_disconnect();
-        let (frame_socket, frames) = self.config.dialer.dial().await?;
+        let dial_span = tracing::info_span!(
+            "whatsmeow.connect.dial",
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let dialed = self
+            .config
+            .dialer
+            .dial()
+            .instrument(dial_span.clone())
+            .await;
+        crate::telemetry::record_result(&dial_span, &dialed);
+        let (frame_socket, frames) = dialed?;
         let (noise_key, client_payload) = {
             let store = self.store.read().await;
             let payload = store.get_client_payload().map_err(|error| {
@@ -567,7 +642,12 @@ impl Client {
                 return Err(error);
             }
         };
-        let (noise_socket, noise_events) = match do_handshake(
+        let handshake_span = tracing::info_span!(
+            "whatsmeow.connect.handshake",
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let handshake = do_handshake(
             frame_socket.clone(),
             frames,
             &new_key_pair(),
@@ -575,14 +655,23 @@ impl Client {
             &client_payload,
             self.signatures(),
         )
-        .await
-        {
+        .instrument(handshake_span.clone())
+        .await;
+        crate::telemetry::record_result(&handshake_span, &handshake);
+        let (noise_socket, noise_events) = match handshake {
             Ok(result) => result,
             Err(error) => {
                 frame_socket.close(None).await;
                 return Err(error.into());
             }
         };
+        // Ended by the server's `success` or `failure` node, or a disconnect.
+        *lock(&self.pending_login) = Some(tracing::info_span!(
+            "whatsmeow.connect.login",
+            outcome = tracing::field::Empty,
+            failure_reason = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        ));
         let noise_socket = Arc::new(noise_socket);
         let connection = CancellationToken::new();
         let (queue_sender, queue_receiver) = mpsc::channel(HANDLER_QUEUE_SIZE);
@@ -591,22 +680,34 @@ impl Client {
         state.connection = Some(connection.clone());
         state.handler_queue_wait = Some(close_wait_receiver);
 
+        // Macro addition: the connection's loops run under the caller's span,
+        // not the connect span, so received nodes nest under the caller.
+        let parent = self.connection_parent();
         let client = Arc::clone(self);
         let reader_connection = connection.clone();
-        self.spawn(async move {
-            client
-                .read_loop(noise_socket, noise_events, queue_sender, reader_connection)
-                .await;
-        });
+        self.spawn(
+            async move {
+                client
+                    .read_loop(noise_socket, noise_events, queue_sender, reader_connection)
+                    .await;
+            }
+            .instrument(parent.clone()),
+        );
         let client = Arc::clone(self);
         let keepalive_connection = connection.clone();
-        self.spawn(async move { client.keep_alive_loop(keepalive_connection).await });
+        self.spawn(
+            async move { client.keep_alive_loop(keepalive_connection).await }
+                .instrument(parent.clone()),
+        );
         let client = Arc::clone(self);
-        self.spawn(async move {
-            client
-                .handler_queue_loop(connection, queue_receiver, close_wait_sender)
-                .await;
-        });
+        self.spawn(
+            async move {
+                client
+                    .handler_queue_loop(connection, queue_receiver, close_wait_sender)
+                    .await;
+            }
+            .instrument(parent),
+        );
         Ok(())
     }
 
@@ -651,13 +752,19 @@ impl Client {
         {
             state.socket = None;
             self.clear_response_waiters(&xml_stream_end_node());
+            self.finish_login_span("disconnected", true);
             if !self.is_expected_disconnect()
                 && (self.force_auto_reconnect.swap(false, Ordering::SeqCst) || remote)
             {
                 tracing::debug!("emitting Disconnected event");
                 self.spawn_dispatch(Event::Disconnected(Disconnected));
+                let reason = if remote {
+                    ConnectReason::NetworkDrop
+                } else {
+                    ConnectReason::ForcedReset
+                };
                 let client = Arc::clone(self);
-                self.spawn(async move { client.auto_reconnect().await });
+                self.spawn(async move { client.auto_reconnect(reason).await });
             } else if remote {
                 tracing::debug!("on_disconnect called, but it was expected, so not emitting event");
             } else {
@@ -685,14 +792,16 @@ impl Client {
     /// Boxed with an explicit `Send` bound: reconnecting calls back into
     /// `connect`, whose tasks can start another reconnect, and the compiler
     /// can't infer `Send` through that cycle.
-    pub(crate) fn auto_reconnect(self: Arc<Self>) -> BoxFuture<'static, ()> {
-        Box::pin(self.auto_reconnect_inner())
+    /// `reason` (a Macro addition) labels the reconnect's spans.
+    pub(crate) fn auto_reconnect(self: Arc<Self>, reason: ConnectReason) -> BoxFuture<'static, ()> {
+        Box::pin(self.auto_reconnect_inner(reason))
     }
 
-    async fn auto_reconnect_inner(self: Arc<Self>) {
+    async fn auto_reconnect_inner(self: Arc<Self>, reason: ConnectReason) {
         if !self.config.enable_auto_reconnect || self.store.read().await.id.is_none() {
             return;
         }
+        tracing::info!(parent: &self.connection_parent(), reason = reason.as_str(), "connection lost, reconnecting");
         loop {
             let errors = self.auto_reconnect_errors.fetch_add(1, Ordering::SeqCst);
             let delay = Duration::from_secs(u64::from(errors) * 2);
@@ -708,7 +817,12 @@ impl Client {
                 }
                 () = tokio::time::sleep(delay) => {}
             }
-            match self.connect_inner().await {
+            let span = self.connect_span(reason, errors + 1);
+            let result = self.connect_inner().instrument(span.clone()).await;
+            if !matches!(result, Err(ClientError::AlreadyConnected)) {
+                crate::telemetry::record_result(&span, &result);
+            }
+            match result {
                 Err(ClientError::AlreadyConnected) => {
                     tracing::debug!(
                         "connect said we're already connected after autoreconnect sleep"
@@ -935,13 +1049,16 @@ impl Client {
             let tag = node.tag.clone();
             let client = Arc::clone(&self);
             let start = tokio::time::Instant::now();
-            let mut handler = self.tasks.spawn(async move {
-                client.handle_node(node).await;
-                let duration = start.elapsed();
-                if duration > Duration::from_secs(5) {
-                    tracing::warn!(duration = ?duration, "node handling took long");
+            let mut handler = self.tasks.spawn(
+                async move {
+                    client.handle_node(node).await;
+                    let duration = start.elapsed();
+                    if duration > Duration::from_secs(5) {
+                        tracing::warn!(duration = ?duration, "node handling took long");
+                    }
                 }
-            });
+                .in_current_span(),
+            );
             for _ in 0..10 {
                 tokio::select! {
                     _ = &mut handler => continue 'nodes,

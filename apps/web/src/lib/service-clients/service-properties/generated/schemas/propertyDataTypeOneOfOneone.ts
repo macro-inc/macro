@@ -6,13 +6,13 @@
  */
 
 import type { PropertyDataTypeOneOfOneoneType } from './propertyDataTypeOneOfOneoneType';
-import type { SelectStringOption } from './selectStringOption';
+import type { SelectNumberOption } from './selectNumberOption';
 
 /**
- * Select property with string options.
+ * Select property with numeric options.
  */
 export type PropertyDataTypeOneOfOneone = {
   multi: boolean;
-  options: SelectStringOption[];
+  options: SelectNumberOption[];
   type: PropertyDataTypeOneOfOneoneType;
 };

@@ -21,8 +21,8 @@ use serde_json::json;
 use system_properties::SystemPropertyKey;
 use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextMessage, ContextPerson, ContextThread,
-    DiscussionContext, DiscussionSurface, EmailSnapshot, ReplyTarget, RoutineEvent, TaskSnapshot,
-    TranscriptLine,
+    DiscussionContext, DiscussionSurface, EmailSnapshot, PullRequestChange, ReplyTarget,
+    RoutineEvent, TaskSnapshot, TranscriptLine,
 };
 
 use super::super::{ChannelMessage, EventContent, MAX_TRANSCRIPT_CHARS};
@@ -70,6 +70,9 @@ fn segment(speaker_id: &str, content: &str, minute: u32) -> CallRecordTranscript
 
 fn ended_call(transcript: Vec<CallRecordTranscriptSegment>) -> CallRecord {
     CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::parse_str(CALL_ID).unwrap(),
+        },
         call_id: Uuid::parse_str(CALL_ID).unwrap(),
         channel_id: Some(Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0000000c4a77").unwrap()),
         room_name: Some("room".into()),
@@ -331,7 +334,53 @@ fn a_task_status_change_carries_the_task_as_it_reads_now() {
                 }],
                 project: None,
             },
+            pull_request: None,
         }
+    );
+}
+
+#[test]
+fn a_status_change_from_a_pull_request_names_it_and_who_acted() {
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
+        "event_name": "task.status_changed",
+        "entity_id": "01928f3e-6a2b-7c3d-8e4f-000000007a5c",
+        "message_id": null,
+        "change_source": {
+            "type": "github_pull_request",
+            "url": "https://github.com/my-org/my-repo/pull/42",
+            "account": { "id": "444", "login": "someone-else" },
+        },
+    }))
+    .unwrap();
+    let content = EventContent::Document {
+        document: DocumentBasic {
+            document_id: "01928f3e-6a2b-7c3d-8e4f-000000007a5c".into(),
+            document_name: "Login page crashes on Safari".into(),
+            owner: Owner::User(MacroUserIdStr::parse_from_str("macro|dana@example.com").unwrap()),
+            file_type: Some("md".into()),
+            sub_type: Some(DocumentSubType::Task),
+            branched_from_id: None,
+            branched_from_version_id: None,
+            document_family_id: None,
+            project_id: None,
+            deleted_at: None,
+        },
+        properties: Vec::new(),
+        markdown: None,
+    };
+
+    let RoutineEvent::TaskStatusChanged { pull_request, .. } =
+        routine_event(&event, content).unwrap()
+    else {
+        panic!("expected a task status change");
+    };
+    assert_eq!(
+        pull_request,
+        Some(PullRequestChange {
+            url: "https://github.com/my-org/my-repo/pull/42".into(),
+            github_login: "someone-else".into(),
+        })
     );
 }
 
@@ -430,6 +479,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
     .unwrap();
     let at = |minute| Utc.with_ymd_and_hms(2026, 10, 8, 14, minute, 0).unwrap();
     let prompt = Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: prompt_id,
         parent: MessageParent::Channel(channel_id),
         thread_id: Some(root_id),
@@ -438,6 +488,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
         imported_author: None,
         bot_profile: None,
         mentions: Vec::new(),
+        triggered_via: None,
         triggered_by: None,
         content: "Still broken on Safari 17, can someone look?".into(),
         created_at: at(4),
@@ -465,6 +516,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     deleted_at: None,
                 },
                 root: Message {
+                    kind: messages::domain::models::MessageKind::Message,
                     id: root_id,
                     parent: MessageParent::Channel(channel_id),
                     thread_id: None,
@@ -473,6 +525,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     imported_author: None,
                     bot_profile: None,
                     mentions: Vec::new(),
+                    triggered_via: None,
                     triggered_by: None,
                     content: "Login crashes on Safari".into(),
                     created_at: at(1),
@@ -484,6 +537,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                 },
                 replies: vec![
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: answer_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -492,6 +546,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                         imported_author: None,
                         bot_profile: None,
                         mentions: Vec::new(),
+                        triggered_via: None,
                         triggered_by: None,
                         content: "Fixed in #812".into(),
                         created_at: at(2),
@@ -502,6 +557,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                         reactions: Vec::new(),
                     },
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: deleted_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -510,6 +566,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                         imported_author: None,
                         bot_profile: None,
                         mentions: Vec::new(),
+                        triggered_via: None,
                         triggered_by: None,
                         content: "oops".into(),
                         created_at: at(3),
@@ -521,6 +578,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     },
                     prompt,
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: later_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -529,6 +587,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                         imported_author: None,
                         bot_profile: None,
                         mentions: Vec::new(),
+                        triggered_via: None,
                         triggered_by: None,
                         content: "Looking".into(),
                         created_at: at(5),
@@ -552,6 +611,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
         routine_event(&event, content).unwrap(),
         RoutineEvent::ChannelMessagePosted {
             discussion: DiscussionContext {
+                agent_request: None,
                 surface: DiscussionSurface::Channel {
                     id: channel_id,
                     name: Some("eng".into()),
@@ -568,6 +628,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                             author: ana.clone(),
                             content: "Login crashes on Safari".into(),
                             posted_at: at(1),
+                            attachments: Vec::new(),
                         },
                         ContextMessage {
                             id: answer_id,
@@ -578,12 +639,14 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                             },
                             content: "Fixed in #812".into(),
                             posted_at: at(2),
+                            attachments: Vec::new(),
                         },
                         ContextMessage {
                             id: prompt_id,
                             author: ana,
                             content: "Still broken on Safari 17, can someone look?".into(),
                             posted_at: at(4),
+                            attachments: Vec::new(),
                         },
                     ],
                     messages_omitted: false,

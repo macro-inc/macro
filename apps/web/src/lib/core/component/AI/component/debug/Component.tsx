@@ -1,15 +1,12 @@
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
-import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { MODEL_PRETTYNAME, MODEL_PROVIDER } from '@core/component/AI/constant';
 import { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
+import LockIcon from '@icon/system/regular/lock-simple.svg?component-solid';
 
-import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
-import { subscribe } from '@service-connection/stream';
 import { Button, cn } from '@ui';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import {
   ChatInputProvider,
   ChatProvider,
@@ -43,10 +40,8 @@ export default function Debug() {
           <ChatMarkdownArea />
           <ChatModelSelector />
           <ChatInputBox />
-          <ChatInputBoxConnected />
           <StreamMessages />
           <StaticMessages />
-          <FullChat />
           <ProviderFailureChat />
           <FreeProviderFailureChat />
           <ToolCallRender />
@@ -101,10 +96,13 @@ function ChatInputBoxInner() {
     <Item label="Chat input - not connected to backend">
       <div class="size-full">
         <div class="flex gap-2 py-2">
-          <Button onClick={() => input.setIsGenerating(true)} variant="accent">
+          <Button onClick={() => input.setIsGenerating(true)} variant="primary">
             Generate
           </Button>
-          <Button onClick={() => input.setIsGenerating(false)} variant="accent">
+          <Button
+            onClick={() => input.setIsGenerating(false)}
+            variant="primary"
+          >
             Stop
           </Button>
         </div>
@@ -112,53 +110,6 @@ function ChatInputBoxInner() {
           editor={editor}
           onSend={(request) => console.log('request', request)}
         />
-      </div>
-    </Item>
-  );
-}
-
-function ChatInputBoxConnected() {
-  return (
-    <ChatInputProvider>
-      <ChatInputBoxConnectedInner />
-    </ChatInputProvider>
-  );
-}
-
-function ChatInputBoxConnectedInner() {
-  const editor = buildChatEditor();
-
-  const [_gen, setGen] = createSignal(false);
-  const onSend = async (input: ChatSendInput) => {
-    const response = await cognitionApiServiceClient.sendStreamChatMessage({
-      content: input.content,
-      model: input.model,
-      attachments: input.attachments.length > 0 ? input.attachments : undefined,
-      toolset: input.toolset,
-    });
-    if (response.isErr()) {
-      console.log('error sending message', response);
-      return;
-    }
-    const { stream_id, chat_id } = response.value;
-    const connectionStream = subscribe('chat', chat_id, stream_id);
-    if (!connectionStream) {
-      console.log('no connection stream');
-      return;
-    }
-    setGen(true);
-    createEffect(() => {
-      const items = connectionStream.data();
-      const latest = items.at(-1);
-      if (latest) console.log(JSON.stringify(latest, null, 2));
-      if (connectionStream.isDone()) setGen(false);
-    });
-  };
-
-  return (
-    <Item label="Chat input - connected (console)">
-      <div class="size-full">
-        <ChatInput editor={editor} onSend={onSend} />
       </div>
     </Item>
   );
@@ -215,84 +166,6 @@ function StaticMessages() {
         </Item>
       </ChatProvider>
     </ChatInputProvider>
-  );
-}
-
-function FullChat() {
-  return (
-    <ChatInputProvider>
-      <ChatProvider chatId="debug" messages={[]}>
-        <FullChatInner />
-      </ChatProvider>
-    </ChatInputProvider>
-  );
-}
-
-function FullChatInner() {
-  const chat = useChatContext();
-  const editor = buildChatEditor();
-  const [_isGen, setIsGen] = createSignal(false);
-  const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
-
-  const onSend = async (input: ChatSendInput) => {
-    chat.setMessages((p) => [
-      ...p,
-      {
-        attachments: input.attachments,
-        content: input.content,
-        role: 'user',
-        id: '',
-      },
-    ]);
-    const response = await cognitionApiServiceClient.sendStreamChatMessage({
-      content: input.content,
-      model: input.model,
-      chat_id: chat.chatId(),
-      attachments: input.attachments.length > 0 ? input.attachments : undefined,
-      toolset: input.toolset,
-    });
-    if (response.isErr()) {
-      console.log('error sending message', response);
-      return;
-    }
-    const { stream_id, chat_id } = response.value;
-    const connectionStream = subscribe('chat', chat_id, stream_id);
-    if (!connectionStream) {
-      console.log('no connection stream');
-      return;
-    }
-    const chatStream: ChatMessageStream = {
-      data: connectionStream.data,
-      isDone: connectionStream.isDone,
-      id: () => ({ stream_id, entity_id: chat_id, entity_type: 'chat' }),
-    };
-    console.log('set stream');
-    chat.setStream(chatStream);
-    setIsGen(true);
-    createEffect(() => {
-      if (connectionStream.isDone()) {
-        console.log('stream done');
-        setIsGen(false);
-      }
-    });
-    createEffect(() => {
-      console.log('stream', JSON.stringify(connectionStream.data(), null, 2));
-    });
-  };
-
-  return (
-    <Item label="Input and messages - connected">
-      <div data-chat-scroll class="size-full min-h-0 max-h-100 overflow-y-auto">
-        <StreamStatus stream={debugStream} />
-        <ChatMessages />
-        <ChatInput
-          editor={editor}
-          chatId={chat.chatId()}
-          onSend={onSend}
-          onStop={() => {}}
-        />
-      </div>
-    </Item>
   );
 }
 
@@ -471,7 +344,7 @@ function ProviderFailureDemoBody(props: {
             if (e.key === 'Enter') send();
           }}
         />
-        <Button variant="accent" onClick={send}>
+        <Button variant="primary" onClick={send}>
           Send
         </Button>
       </div>
@@ -678,10 +551,10 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <Button onClick={startStream} variant="accent">
+        <Button onClick={startStream} variant="primary">
           Stream
         </Button>
-        <Button onClick={() => setIsPaused((p) => !p)} variant="accent">
+        <Button onClick={() => setIsPaused((p) => !p)} variant="primary">
           {isPaused() ? 'Resume' : 'Pause'}
         </Button>
         <label class="flex items-center gap-x-1 text-xs">
@@ -701,7 +574,7 @@ function TableStreamInner() {
           Raw
         </label>
         <Button
-          variant="accent"
+          variant="primary"
           onClick={() => {
             setStream(undefined);
             setRawText('');

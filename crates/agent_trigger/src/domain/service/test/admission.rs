@@ -112,7 +112,7 @@ async fn explicit_mentions_and_reply_targets_route_without_admission() {
 #[tokio::test]
 async fn admitted_inference_uses_the_sender_and_does_not_retry_a_failed_judge() {
     for outcome in [
-        Ok(true),
+        Ok(vec![0.9]),
         Err(AgentSessionError::Unknown(anyhow::anyhow!(
             "provider failed"
         ))),

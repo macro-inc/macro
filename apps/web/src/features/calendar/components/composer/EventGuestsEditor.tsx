@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { type IUser, idToEmail, recipientEntityMapper } from '@core/user';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button } from '@ui';
 import { type Accessor, createMemo, For, type JSX, Show } from 'solid-js';
@@ -14,9 +14,13 @@ export function guestDisplayName(guest: SelectedEventEditorGuest) {
   return ('name' in guest.data && guest.data.name) || guest.data.email;
 }
 
+function guestKey(guest: SelectedEventEditorGuest): string {
+  return `macro|${guestEmail(guest).toLowerCase()}`;
+}
+
 function guestToUser(guest: SelectedEventEditorGuest): IUser {
   return {
-    id: guest.id,
+    id: guestKey(guest),
     email: guestEmail(guest),
     name: guestDisplayName(guest),
   };
@@ -25,12 +29,15 @@ function guestToUser(guest: SelectedEventEditorGuest): IUser {
 function guestFromId(
   id: string,
   options: EventEditorGuestOption[],
-  known: SelectedEventEditorGuest[]
+  known: SelectedEventEditorGuest[],
+  picked: SelectedEventEditorGuest | undefined
 ): SelectedEventEditorGuest {
-  const option = options.find((guest) => guest.id === id);
-  if (option) return option;
-  const prior = known.find((guest) => guest.id === id);
+  const key = id.toLowerCase();
+  const prior = known.find((guest) => guestKey(guest) === key);
   if (prior) return prior;
+  if (picked && guestKey(picked) === key) return picked;
+  const option = options.find((guest) => guestKey(guest) === key);
+  if (option) return option;
   return recipientEntityMapper('custom')({
     id,
     email: idToEmail(id),
@@ -45,13 +52,19 @@ export function EventGuestRow(props: {
 }) {
   return (
     <div class="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-ink touch:min-h-11">
-      <UserIcon id={props.guest.id} size="sm" isDeleted={false} suppressClick />
+      <UserIcon
+        id={props.guest.id}
+        name={guestDisplayName(props.guest)}
+        size="sm"
+        isDeleted={false}
+        suppressClick
+      />
       <div class="min-w-0 flex-1 truncate text-sm">
         {guestDisplayName(props.guest)}
         <Show when={guestDisplayName(props.guest) !== guestEmail(props.guest)}>
-          <span class="ml-[0.5em] text-ink-muted">
-            {guestEmail(props.guest)}
-          </span>
+          {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+          {' '}
+          <span class="text-ink-muted">{guestEmail(props.guest)}</span>
         </Show>
       </div>
       {props.children}
@@ -60,29 +73,32 @@ export function EventGuestRow(props: {
 }
 
 /**
- * The composer's guest picker: team and contact suggestions plus any typed
+ * The composer's guest picker: bounded personal search and scoped extras plus any typed
  * address, which joins only once its "Add" row is chosen. `excluded` guests
  * are neither offered nor toggled.
  */
 export function EventGuestPicker(props: {
+  /** Explicit event/host data, never a personal-directory catalog. */
   options: Accessor<EventEditorGuestOption[]>;
   selected: SelectedEventEditorGuest[];
   excluded?: SelectedEventEditorGuest[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 }) {
   const known = () => [...(props.excluded ?? []), ...props.selected];
   const users = createMemo((): IUser[] => {
     const byId = new Map<string, IUser>();
     for (const guest of [...props.options(), ...known()]) {
-      byId.set(guest.id, guestToUser(guest));
+      byId.set(guestKey(guest), guestToUser(guest));
     }
     return [...byId.values()];
   });
   const excludedIds = createMemo(
-    (): ReadonlySet<string> =>
-      new Set((props.excluded ?? []).map((guest) => guest.id))
+    (): ReadonlySet<string> => new Set((props.excluded ?? []).map(guestKey))
   );
+  let picked: SelectedEventEditorGuest | undefined;
 
   return (
     <PropertyEntitySelector
@@ -90,14 +106,28 @@ export function EventGuestPicker(props: {
         isMultiSelect: true,
         placeholder: 'Add guests...',
         specificEntityType: 'USER',
-        users,
+        additionalUsers: users,
         excludedIds,
         allowCustomEmail: true,
+        fillHeight: props.fillHeight,
       }}
-      selectedOptions={() => new Set(props.selected.map((guest) => guest.id))}
+      selectedOptions={() => new Set(props.selected.map(guestKey))}
+      onUserSelected={(user, custom) => {
+        picked = custom
+          ? recipientEntityMapper('custom')({
+              id: user.id,
+              email: user.email,
+              invalid: false,
+            })
+          : recipientEntityMapper('user')(user);
+      }}
       setSelectedOptions={(ids) => {
+        const current = picked;
+        picked = undefined;
         props.onChange(
-          [...ids].map((id) => guestFromId(id, props.options(), known()))
+          [...ids].map((id) =>
+            guestFromId(id, props.options(), known(), current)
+          )
         );
       }}
       onClose={props.onClose}
@@ -118,6 +148,8 @@ export function AddOnlyGuestsEditor(props: {
   onClose: () => void;
   /** Controls shown on each added guest, before its remove button. */
   addedControls?: (guest: SelectedEventEditorGuest) => JSX.Element;
+  /** What the added people are, for assistive technology. */
+  addedLabel?: string;
 }) {
   return (
     <div class="flex min-h-0 flex-col">
@@ -130,24 +162,28 @@ export function AddOnlyGuestsEditor(props: {
       />
       <div class="flex min-h-0 flex-col overflow-y-auto p-1.5">
         <Show when={props.added.length > 0}>
-          <ul aria-label="New guests" class="flex flex-col">
+          <ul
+            aria-label={props.addedLabel ?? 'New guests'}
+            class="flex flex-col"
+          >
             <For each={props.added}>
               {(guest) => (
                 <li>
                   <EventGuestRow guest={guest}>
                     {props.addedControls?.(guest)}
                     <Button
-                      label={`Remove ${guestDisplayName(guest)}`}
+                      aria-label={`Remove ${guestDisplayName(guest)}`}
+                      tooltip={`Remove ${guestDisplayName(guest)}`}
                       variant="ghost"
                       size="icon-sm"
-                      class="shrink-0 text-ink-muted [&_svg]:size-3.5"
+                      class="shrink-0 text-ink-muted"
                       onClick={() =>
                         props.onAddedChange(
                           props.added.filter((added) => added.id !== guest.id)
                         )
                       }
                     >
-                      <XIcon />
+                      <XIcon class="size-3.5 shrink-0" />
                     </Button>
                   </EventGuestRow>
                 </li>

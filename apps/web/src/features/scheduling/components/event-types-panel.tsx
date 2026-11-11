@@ -8,18 +8,18 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import External from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Link from '@icon/system/regular/link.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Timer from '@icon/system/regular/timer.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import External from '@phosphor/arrow-square-out.svg';
-import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
-import Copy from '@phosphor/copy.svg';
-import Dots from '@phosphor/dots-three.svg';
 import Globe from '@phosphor/globe-simple.svg';
-import Link from '@phosphor/link.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Timer from '@phosphor/timer.svg';
-import Trash from '@phosphor/trash.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { Badge, Button, cn, Dropdown, ToggleSwitch } from '@ui';
 import { batch, createSignal, For, type JSX, Show } from 'solid-js';
@@ -40,6 +40,8 @@ export function EventTypesPanel(props: {
   onDelete: (event: EventType) => void;
   onCopy: (event: EventType) => void;
   link: (event: EventType) => string;
+  /** Pinned above the links, such as the scheduling tutorial row. */
+  listStart?: JSX.Element;
 }) {
   const [localSearch, setSearch] = createSignal('');
   const search = () => (props.search ?? localSearch()).trim();
@@ -190,6 +192,7 @@ export function EventTypesPanel(props: {
           class="mb-3 max-w-md"
         />
       </Show>
+      {props.listStart}
       <div>
         <For
           each={filtered()}
@@ -391,12 +394,15 @@ export function EventTypesPanel(props: {
                       </Badge>
                       <Dropdown>
                         <Dropdown.Trigger
+                          aria-label={`Options for ${event.title}`}
+                          tooltip={{
+                            content: `Options for ${event.title}`,
+                            disabled: true,
+                          }}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Options for ${event.title}`}
                           class="shrink-0 touch:hidden"
                           disabled={props.saving}
-                          tooltipDisabled
                         >
                           <Dots class="size-4" />
                         </Dropdown.Trigger>
@@ -427,7 +433,7 @@ export function EventTypesPanel(props: {
                         Keep
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         disabled={props.saving}
                         onClick={() => props.onDelete(event)}
                       >

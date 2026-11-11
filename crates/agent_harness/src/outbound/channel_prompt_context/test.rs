@@ -58,12 +58,14 @@ fn posted(
     minute: i64,
 ) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(id),
         parent: parent.clone(),
         thread_id: thread.map(Uuid::from_u128),
         sender_id: channel_sender::ChannelSender::new_from_user(
             MacroUserIdStr::try_from_email(email).unwrap(),
         ),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

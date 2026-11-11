@@ -12,7 +12,11 @@ use sha2::{Digest, Sha256};
 use url::Url;
 use uuid::Uuid;
 
-use super::{OutlookApiClientRepository, transport::invalid_response, wire::Page};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire::Page,
+};
 use crate::domain::{models::*, ports::MailboxDraftClient};
 
 #[cfg(test)]
@@ -138,7 +142,8 @@ struct Upload {
 
 impl OutlookApiClientRepository {
     fn upload_url(&self, value: &UploadUrl) -> Result<Url, EmailApiError> {
-        let url = Url::parse(value.expose()).map_err(|_| invalid_response())?;
+        let url =
+            Url::parse(value.expose()).map_err(|_| invalid_response("upload URL is not a URL"))?;
         let allowed = url.scheme() == "https"
             && url.port_or_known_default() == Some(443)
             && matches!(
@@ -168,16 +173,20 @@ impl OutlookApiClientRepository {
             .upload_url
             .map(UploadUrl::new)
             .or_else(|| previous_url.cloned())
-            .ok_or_else(invalid_response)?;
+            .ok_or_else(|| invalid_response("upload session has no uploadUrl"))?;
         self.upload_url(&url)?;
         // Outlook requires sequential ranges. Multiple holes are not silently skipped.
         let [range] = upload.next_expected_ranges.as_slice() else {
-            return Err(invalid_response());
+            return Err(invalid_response(
+                "upload session nextExpectedRanges is not one range",
+            ));
         };
         let start = range
             .split_once('-')
             .map_or(range.as_str(), |(start, _)| start);
-        let next_offset = start.parse().map_err(|_| invalid_response())?;
+        let next_offset = start
+            .parse()
+            .map_err(|_| invalid_response("upload session range start is not a number"))?;
         Ok(AttachmentUploadSession {
             url,
             expires_at: upload.expiration_date_time,
@@ -219,7 +228,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let mut seen = HashSet::new();
         loop {
             if !seen.insert(url.to_string()) {
-                return Err(invalid_response());
+                return Err(invalid_response("draft lookup pages repeat"));
             }
             let page: Page<Draft> = self.get(token, url).await?;
             for draft in page.value {
@@ -237,15 +246,38 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         token: &AccessToken,
         request: &DraftRequest,
     ) -> Result<ProviderDraft, EmailApiError> {
-        let (url, body) = if let Some(parent) = &request.reply_to {
-            (
-                self.endpoint(&["me", "messages", parent.as_str(), "createReply"])?,
-                json!({"message":draft_body(request)?}),
-            )
-        } else {
-            (self.endpoint(&["me", "messages"])?, draft_body(request)?)
+        let body = draft_body(request)?;
+        let standalone = self.endpoint(&["me", "messages"])?;
+        let response = match &request.reply_to {
+            Some(parent) => {
+                let url = self.endpoint(&["me", "messages", parent.as_str(), "createReply"])?;
+                let reply = json!({"message": &body});
+                match self
+                    .graph_request(token, Method::POST, url, Some(&reply), None)
+                    .await
+                {
+                    Ok(response) => response,
+                    // Graph refuses native replies to some parent items. The standalone
+                    // draft still carries the RFC reply headers that thread it.
+                    Err(failure)
+                        if failure.status == Some(StatusCode::BAD_REQUEST)
+                            && failure.code.as_deref() == Some("ErrorInvalidOperation") =>
+                    {
+                        tracing::warn!(
+                            graph_request_id = failure.request_id.as_deref(),
+                            "Microsoft Graph refused a native reply, creating a standalone draft"
+                        );
+                        self.request(token, Method::POST, standalone, Some(&body))
+                            .await?
+                    }
+                    Err(failure) => return Err(failure.error),
+                }
+            }
+            None => {
+                self.request(token, Method::POST, standalone, Some(&body))
+                    .await?
+            }
         };
-        let response = self.request(token, Method::POST, url, Some(&body)).await?;
         written_json::<Draft>(response)
             .await?
             .try_into()
@@ -315,7 +347,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let mut seen = HashSet::new();
         loop {
             if !seen.insert(url.to_string()) {
-                return Err(invalid_response());
+                return Err(invalid_response("draft attachment pages repeat"));
             }
             let page: Page<Attachment> = self.get(token, url).await?;
             for attachment in page.value {
@@ -426,7 +458,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
         let response = self
             .gated_request(self.client.get(self.upload_url(url)?))
             .await?;
-        let value = response.json().await.map_err(|_| invalid_response())?;
+        let value = read_json(response).await?;
         self.upload_checkpoint(value, Some(url))
     }
 
@@ -439,7 +471,7 @@ impl MailboxDraftClient for OutlookApiClientRepository {
     ) -> Result<UploadProgress, EmailApiError> {
         let end = offset
             .checked_add(bytes.len() as u64)
-            .ok_or_else(invalid_response)?;
+            .ok_or_else(|| invalid_response("upload range overflows"))?;
         if bytes.is_empty()
             || bytes.len() >= MAX_RANGE_SIZE
             || total > MAX_ATTACHMENT_SIZE as u64
@@ -469,7 +501,9 @@ impl MailboxDraftClient for OutlookApiClientRepository {
             .upload_checkpoint(written_json(response).await?, Some(url))
             .map_err(uncertain_write)?;
         if checkpoint.next_offset > total {
-            return Err(uncertain_write(invalid_response()));
+            return Err(uncertain_write(invalid_response(
+                "upload checkpoint passes the end of the file",
+            )));
         }
         Ok(UploadProgress::Continue(checkpoint))
     }
@@ -559,10 +593,7 @@ fn recipients(contacts: Option<&[ContactInfo]>) -> Vec<Value> {
 async fn written_json<T: serde::de::DeserializeOwned>(
     response: Response,
 ) -> Result<T, EmailApiError> {
-    response
-        .json()
-        .await
-        .map_err(|_| uncertain_write(invalid_response()))
+    read_json(response).await.map_err(uncertain_write)
 }
 
 fn uncertain_write(_: EmailApiError) -> EmailApiError {

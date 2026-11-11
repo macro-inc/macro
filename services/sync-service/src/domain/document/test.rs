@@ -284,7 +284,7 @@ fn session_attribution_uses_the_verified_human_or_agent_identity() {
     );
     assert_eq!(long_user.len(), 260);
     assert_eq!(
-        DocumentAttribution::from_session_claims(None, Some(long_user.clone()))
+        DocumentAttribution::from_session_claims(None, Some(long_user.clone()), None)
             .unwrap()
             .unwrap()
             .actor,
@@ -293,23 +293,81 @@ fn session_attribution_uses_the_verified_human_or_agent_identity() {
 
     let user = "macro|editor@example.com".to_string();
     assert_eq!(
-        DocumentAttribution::from_session_claims(None, Some(user.clone())).unwrap(),
+        DocumentAttribution::from_session_claims(None, Some(user.clone()), None).unwrap(),
         Some(DocumentAttribution {
+            agent_correlation_id: None,
             actor: user.clone(),
             on_behalf_of: None
         })
     );
     assert_eq!(
-        DocumentAttribution::from_session_claims(Some("bot|agent".into()), Some(user.clone()))
-            .unwrap(),
+        DocumentAttribution::from_session_claims(
+            Some("bot|agent".into()),
+            Some(user.clone()),
+            None
+        )
+        .unwrap(),
         Some(DocumentAttribution {
+            agent_correlation_id: None,
             actor: "bot|agent".into(),
             on_behalf_of: Some(user)
         })
     );
     assert_eq!(
-        DocumentAttribution::from_session_claims(None, None).unwrap(),
+        DocumentAttribution::from_session_claims(None, None, None).unwrap(),
         None
     );
-    assert!(DocumentAttribution::from_session_claims(None, Some("x".repeat(1025))).is_err());
+    assert!(DocumentAttribution::from_session_claims(None, Some("x".repeat(1025)), None).is_err());
+}
+
+#[test]
+fn writing_peers_are_the_peers_with_operations_in_the_blob() {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(11).unwrap();
+    doc.get_text("content").insert(0, "imported").unwrap();
+    doc.commit();
+    doc.set_peer_id(22).unwrap();
+    doc.get_text("content").insert(0, "edited ").unwrap();
+    doc.commit();
+    let snapshot = doc.export(ExportMode::Snapshot).unwrap();
+    assert_eq!(writing_peers(&snapshot).unwrap(), [11, 22]);
+
+    let seen = doc.oplog_vv();
+    doc.set_peer_id(33).unwrap();
+    doc.get_text("content").insert(0, "more ").unwrap();
+    doc.commit();
+    let update = doc
+        .export(ExportMode::Updates {
+            from: Cow::Owned(seen),
+        })
+        .unwrap();
+    assert_eq!(writing_peers(&update).unwrap(), [33]);
+
+    assert!(writing_peers(b"not a loro blob").is_err());
+}
+
+#[test]
+fn persisted_editor_metadata_distinguishes_invocations_by_the_same_actor() {
+    let first = uuid::Uuid::from_u128(1);
+    let second = uuid::Uuid::from_u128(2);
+    let one = DocumentAttribution::from_session_claims(
+        Some("bot|agent".into()),
+        Some("macro|actor@example.com".into()),
+        Some(first),
+    )
+    .unwrap()
+    .unwrap();
+    let two = DocumentAttribution::from_session_claims(
+        Some("bot|agent".into()),
+        Some("macro|actor@example.com".into()),
+        Some(second),
+    )
+    .unwrap()
+    .unwrap();
+    let editors = std::collections::BTreeSet::from([one.clone(), two, one.clone()]);
+    assert_eq!(editors.len(), 2);
+    assert_eq!(
+        serde_json::to_value(one).unwrap()["agent_correlation_id"],
+        first.to_string()
+    );
 }

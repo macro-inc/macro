@@ -59,11 +59,13 @@ export function MessageContainer(props: MessageContainerProps) {
 
   // Touch replies open full screen, so a saved one would otherwise be invisible.
   const touchDraft = () =>
-    isTouchDevice() && context.permissions().isOwner ? draftChild() : undefined;
+    isTouchDevice() && context.permissions().canReply
+      ? draftChild()
+      : undefined;
 
   const showInlineReplyArea = createMemo(
     () =>
-      context.permissions().isOwner &&
+      context.permissions().canReply &&
       (showInlineReplyInput() || showDesktopLastReplyControls())
   );
 
@@ -102,6 +104,8 @@ export function MessageContainer(props: MessageContainerProps) {
       renderInvitation={rendering.renderInvitation}
       renderAvatar={rendering.renderAvatar}
       renderOperation={rendering.renderOperation}
+      readReceipt={rendering.readReceipt?.(props.message)}
+      showReadReceiptPixel={rendering.showReadReceiptPixel?.(props.message)}
       viewerEmail={threadContext.viewerEmail()}
       isTouch={threadContext.isTouch()}
       isPersonal={isPersonalMessage(
@@ -132,8 +136,9 @@ export function MessageContainer(props: MessageContainerProps) {
       onFocus={scrollFocusedCardIntoView}
       onOpenAttachment={rendering.openAttachment}
       onDownloadAttachment={rendering.downloadAttachment}
+      hiddenActions={context.permissions().isOwner ? undefined : ['forward']}
       onReply={
-        context.permissions().isOwner
+        context.permissions().canReply
           ? (replyType) =>
               openEmailReplyComposerForMessage({
                 ctx: context,

@@ -27,11 +27,12 @@ types.
 
 - Depends on: `macro_user_id`, `mention_utils`, `model-entity`, `model_owner`,
   `models_pagination`, `notification`, `invite_email`.
-- Used by: `agent_harness`, `ai_tools`, `authentication_service`,
+- Used by: `agent_harness`, `ai_tools`, `attention_feed`, `authentication_service`,
   `calendar_events`, `channels`, `complete_graph`, `document_cognition_service`,
   `document_storage_service`, `email_formatting`, `email_service`, `github`,
   `graphql_notification`, `graphql_work_feed`, `messages`, `notification_db_client`,
-  `notification_service`, `properties`, `reminders`, `teams`, `work_feed`.
+  `notification_inbox`, `notification_service`, `properties`, `reminders`, `teams`,
+  `work_feed`.
 
 ## Recipes
 
@@ -42,6 +43,8 @@ types.
 ## Checks
 
 - `cargo test -p model_notifications` (`SQLX_OFFLINE` unset).
+
+- `external_chat_message` carries the provider, chat name and message id for external chat navigation; its body names the provider.
 
 ## Related
 

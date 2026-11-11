@@ -19,19 +19,28 @@ use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 const INTERNAL_KEY: &str = "routine-test-internal";
-const OPERATIONS: [&str; 5] = ["validate", "prepare", "prompt", "status", "cancel"];
+const OPERATIONS: [&str; 7] = [
+    "validate", "prepare", "prompt", "status", "cancel", "delete", "activity",
+];
 
 #[derive(Clone)]
 struct Credentials;
 
 impl JwtValidator for Credentials {
-    fn validate(&self, _: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: OWNER.into(),
-            fusion_user_id: "fusion-owner".into(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        _: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: OWNER.into(),
+                fusion_user_id: "fusion-owner".into(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -66,7 +75,9 @@ impl HarnessAuthorizer for Credentials {
                 user_id: OWNER.into(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id: MacroUserIdStr::try_from(OWNER).unwrap(),
                 user_context: model_user::UserContext {
                     user_id: OWNER.into(),
@@ -141,6 +152,21 @@ impl RoutineSessions for ServiceSpy {
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.record("cancel", command)
+    }
+
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.record("delete", command)
+    }
+
+    async fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<crate::domain::routines::RoutineActivity, RoutineSessionError> {
+        self.record("activity", command)?;
+        Ok(crate::domain::routines::RoutineActivity {
+            tool_calls: 3,
+            turns: 1,
+        })
     }
 }
 

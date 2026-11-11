@@ -20,19 +20,29 @@ import {
   type ReadFilter,
   useSoupView,
 } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
-import { useContacts } from '@queries/contacts/contacts';
-import { type ButtonVariant, cn, Dropdown, Tooltip } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type ButtonVariant,
+  cn,
+  Dropdown,
+  Tooltip,
+} from '@ui';
 import {
   type Accessor,
   batch,
@@ -53,7 +63,8 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from './filter-menu';
-import type { SearchableOption } from './searchable-multi-select';
+
+export { buildContactLabel } from '@app/features/soup/assignee-picker';
 
 import { useTagFilter } from './tag-filter';
 
@@ -63,47 +74,67 @@ export type { FilterCategory, FilterOption } from './filter-categories';
 const HOME_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
-    label: 'Type',
-    labelPlural: 'Types',
+    get label() {
+      return t('viewMenus.type');
+    },
+    get labelPlural() {
+      return t('viewMenus.types');
+    },
     options: [
       {
         id: 'document',
-        label: 'Docs',
+        get label() {
+          return t('viewMenus.docs');
+        },
         icon: () => <EntityIcon targetType="md" size="xs" />,
       },
       {
         id: 'agent',
-        label: 'Agents',
+        get label() {
+          return t('viewMenus.agents');
+        },
         icon: () => <EntityIcon targetType="chat" size="xs" />,
       },
       {
         id: 'people',
-        label: 'People',
+        get label() {
+          return t('viewMenus.people');
+        },
         icon: () => <EntityIcon targetType="direct_message" size="xs" />,
       },
       {
         id: 'teams',
-        label: 'Teams',
+        get label() {
+          return t('viewMenus.teams');
+        },
         icon: () => <EntityIcon targetType="channel" size="xs" />,
       },
       {
         id: 'task',
-        label: 'Tasks',
+        get label() {
+          return t('viewMenus.tasks');
+        },
         icon: () => <EntityIcon targetType="task" size="xs" />,
       },
       {
         id: 'email',
-        label: 'Mail',
+        get label() {
+          return t('viewMenus.mail');
+        },
         icon: () => <EntityIcon targetType="email" size="xs" />,
       },
       {
         id: 'file',
-        label: 'Files',
+        get label() {
+          return t('viewMenus.files');
+        },
         icon: () => <EntityIcon targetType="files" size="xs" />,
       },
       {
         id: 'github-pr',
-        label: 'GitHub PRs',
+        get label() {
+          return t('viewMenus.githubPrs');
+        },
         icon: () => <EntityIcon targetType="githubPullRequest" size="xs" />,
       },
     ],
@@ -122,34 +153,68 @@ const isInboxTypeFilterId = (id: string) => {
 const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'status',
-    label: 'Status',
-    labelPlural: 'Statuses',
+    get label() {
+      return t('viewMenus.status');
+    },
+    get labelPlural() {
+      return t('viewMenus.statuses');
+    },
     options: [
-      { id: 'unread', label: 'Unread' },
-      { id: 'read', label: 'Read' },
-      { id: 'not-done', label: 'Not Done' },
-      { id: 'done', label: 'Done' },
+      {
+        id: 'unread',
+        get label() {
+          return t('viewMenus.unread');
+        },
+      },
+      {
+        id: 'read',
+        get label() {
+          return t('viewMenus.read');
+        },
+      },
+      {
+        id: 'not-done',
+        get label() {
+          return t('viewMenus.notDone');
+        },
+      },
+      {
+        id: 'done',
+        get label() {
+          return t('viewMenus.done');
+        },
+      },
     ],
     multiple: true,
   },
   {
     id: 'attachment',
-    label: 'Attachments',
-    labelPlural: 'Attachments',
+    get label() {
+      return t('viewMenus.attachments');
+    },
+    get labelPlural() {
+      return t('viewMenus.attachments');
+    },
     options: [
       {
         id: 'attachment-pdf',
-        label: 'PDFs',
+        get label() {
+          return t('viewMenus.pdfs');
+        },
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
         id: 'attachment-image',
-        label: 'Images',
+        get label() {
+          return t('viewMenus.images');
+        },
         icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'attachment-document',
-        label: 'Documents',
+        get label() {
+          return t('viewMenus.documents');
+        },
         icon: () => <EntityIcon targetType="files" size="xs" />,
       },
     ],
@@ -157,9 +222,20 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   },
   {
     id: 'calendar',
-    label: 'Calendar',
-    labelPlural: 'Calendar',
-    options: [{ id: 'has-calendar-invite', label: 'Has Calendar Invite' }],
+    get label() {
+      return t('viewMenus.calendar');
+    },
+    get labelPlural() {
+      return t('viewMenus.calendar');
+    },
+    options: [
+      {
+        id: 'has-calendar-invite',
+        get label() {
+          return t('viewMenus.hasCalendarInvite');
+        },
+      },
+    ],
     multiple: false,
   },
 ];
@@ -167,12 +243,18 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
 const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'status',
-    label: 'Status',
-    labelPlural: 'Statuses',
+    get label() {
+      return t('viewMenus.status');
+    },
+    get labelPlural() {
+      return t('viewMenus.statuses');
+    },
     options: [
       {
         id: 'task-not-started',
-        label: 'Not Started',
+        get label() {
+          return t('viewMenus.notStarted');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.STATUS.NOT_STARTED}
@@ -182,7 +264,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-in-progress',
-        label: 'In Progress',
+        get label() {
+          return t('viewMenus.inProgress');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS}
@@ -192,7 +276,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-in-review',
-        label: 'In Review',
+        get label() {
+          return t('viewMenus.inReview');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.STATUS.IN_REVIEW}
@@ -202,7 +288,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-completed',
-        label: 'Completed',
+        get label() {
+          return t('viewMenus.completed');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.STATUS.COMPLETED}
@@ -212,7 +300,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-canceled',
-        label: 'Canceled',
+        get label() {
+          return t('viewMenus.canceled');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.STATUS.CANCELED}
@@ -225,12 +315,18 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   },
   {
     id: 'priority',
-    label: 'Priority',
-    labelPlural: 'Priorities',
+    get label() {
+      return t('viewMenus.priority');
+    },
+    get labelPlural() {
+      return t('viewMenus.priorities');
+    },
     options: [
       {
         id: 'task-urgent',
-        label: 'Urgent',
+        get label() {
+          return t('viewMenus.urgent');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.URGENT}
@@ -240,7 +336,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-high-priority',
-        label: 'High Priority',
+        get label() {
+          return t('viewMenus.highPriority');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.HIGH}
@@ -250,7 +348,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-medium-priority',
-        label: 'Medium Priority',
+        get label() {
+          return t('viewMenus.mediumPriority');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.MEDIUM}
@@ -260,7 +360,9 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'task-low-priority',
-        label: 'Low Priority',
+        get label() {
+          return t('viewMenus.lowPriority');
+        },
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.LOW}
@@ -268,7 +370,12 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
           />
         ),
       },
-      { id: 'task-no-priority', label: 'No Priority' },
+      {
+        id: 'task-no-priority',
+        get label() {
+          return t('viewMenus.noPriority');
+        },
+      },
     ],
     multiple: true,
   },
@@ -282,8 +389,12 @@ const COMPANIES_FILTER_CATEGORIES: FilterCategory[] = [];
 const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
-    label: 'Type',
-    labelPlural: 'Types',
+    get label() {
+      return t('viewMenus.type');
+    },
+    get labelPlural() {
+      return t('viewMenus.types');
+    },
     options: [
       {
         id: 'doc-markdown',
@@ -292,27 +403,37 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'doc-canvas',
-        label: 'Canvas',
+        get label() {
+          return t('viewMenus.canvas');
+        },
         icon: () => <EntityIcon targetType="canvas" size="xs" />,
       },
       {
         id: 'doc-spreadsheet',
-        label: 'Spreadsheet',
+        get label() {
+          return t('viewMenus.spreadsheet');
+        },
         icon: () => <EntityIcon targetType="spreadsheet" size="xs" />,
       },
       {
         id: 'file-code',
-        label: 'Code',
+        get label() {
+          return t('viewMenus.code');
+        },
         icon: () => <EntityIcon targetType="code" size="xs" />,
       },
       {
         id: 'file-image',
-        label: 'Images',
+        get label() {
+          return t('viewMenus.images');
+        },
         icon: () => <EntityIcon targetType="image" size="xs" />,
       },
       {
         id: 'file-pdf',
-        label: 'PDFs',
+        get label() {
+          return t('viewMenus.pdfs');
+        },
         icon: () => <EntityIcon targetType="pdf" size="xs" />,
       },
       {
@@ -322,38 +443,36 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
       },
       {
         id: 'file-video',
-        label: 'Videos',
+        get label() {
+          return t('viewMenus.videos');
+        },
         icon: () => <EntityIcon targetType="video" size="xs" />,
       },
       {
         id: 'doc-snippet',
-        label: 'Snippets',
+        get label() {
+          return t('viewMenus.snippets');
+        },
         icon: () => <EntityIcon targetType="snippet" size="xs" />,
       },
       {
         id: 'doc-skill',
-        label: 'Skills',
+        get label() {
+          return t('viewMenus.skills');
+        },
         icon: () => <EntityIcon targetType="skill" size="xs" />,
       },
       {
         id: 'file-other',
-        label: 'Other',
+        get label() {
+          return t('viewMenus.other');
+        },
         icon: () => <EntityIcon targetType="files" size="xs" />,
       },
     ],
     multiple: true,
   },
 ];
-
-export function buildContactLabel(
-  contact: { id: string; name?: string | null },
-  currentUserId: string | undefined
-): string {
-  if (contact.id === currentUserId) {
-    return contact.name ? `${contact.name} (me)` : 'Me';
-  }
-  return contact.name || contact.id;
-}
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   home: HOME_FILTER_CATEGORIES,
@@ -372,6 +491,7 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
 };
 
 interface UnifiedFilterDropdownProps {
+  grouped?: boolean;
   /** View-specific refinements alongside the shared filters. */
   children?: JSX.Element;
   /** Optional controlled open state */
@@ -387,9 +507,24 @@ interface UnifiedFilterDropdownProps {
 }
 
 const READ_FILTER_OPTIONS: { id: ReadFilter; label: string }[] = [
-  { id: 'unread', label: 'Unread' },
-  { id: 'read', label: 'Read' },
-  { id: 'all', label: 'All' },
+  {
+    id: 'unread',
+    get label() {
+      return t('viewMenus.unread');
+    },
+  },
+  {
+    id: 'read',
+    get label() {
+      return t('viewMenus.read');
+    },
+  },
+  {
+    id: 'all',
+    get label() {
+      return t('viewMenus.all');
+    },
+  },
 ];
 
 /** Single-select read/unread/all submenu for the inbox. */
@@ -399,7 +534,7 @@ const ReadStatusSubmenu = (props: {
 }) => {
   return (
     <FilterSubmenu
-      label="Status"
+      label={t('viewMenus.status')}
       active={props.value !== 'all'}
       options={READ_FILTER_OPTIONS}
       isSelected={(id) => props.value === id}
@@ -413,9 +548,17 @@ export const UnifiedFilterDropdown = (
   props: UnifiedFilterDropdownProps = {}
 ) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
+  const [assigneeOpen, setAssigneeOpen] = createSignal(false);
+  const [createdByOpen, setCreatedByOpen] = createSignal(false);
   const open = () => props.open?.() ?? internalOpen();
   const setOpen = (v: boolean) => {
     setInternalOpen(v);
+    if (!v) {
+      setAssigneeOpen(false);
+      setCreatedByOpen(false);
+      assigneePicker.onOpenChange(false);
+      createdBySource.setSearch('');
+    }
     props.onOpenChange?.(v);
   };
   const panel = useSplitPanelOrThrow();
@@ -428,7 +571,6 @@ export const UnifiedFilterDropdown = (
     readFilter,
     setReadFilter,
   } = useSoupView();
-  const contacts = useContacts();
   const userId = useUserId();
   const selectFilters = useSoupView().extensions?.selectFilters ?? [];
 
@@ -522,41 +664,10 @@ export const UnifiedFilterDropdown = (
     }
   };
 
-  // Assignee options for tasks view
-  const assigneeOptions = createMemo((): SearchableOption[] => {
-    const currentUserId = userId();
-    const noAssigneeOption: SearchableOption = {
-      id: NO_ASSIGNEE,
-      label: 'Unassigned',
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
 
   const handleAssigneeChange = (ids: string[]) => {
     const current = assigneeFilter();
@@ -617,31 +728,10 @@ export const UnifiedFilterDropdown = (
     () => queryFilters.state.include.documentOwnerId ?? []
   );
 
-  const createdByOptions = createMemo((): SearchableOption[] => {
-    const currentUserId = userId();
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [...(meOption ? [meOption] : []), ...otherContactOptions];
-  });
+  const createdBySource = useContactFilterOptions(
+    createdByIds,
+    () => open() && createdByOpen() && showCreatedByFilter()
+  );
 
   const handleCreatedByChange = (ids: string[]) => {
     const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
@@ -661,7 +751,7 @@ export const UnifiedFilterDropdown = (
   registerHotkey({
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
-    description: 'Open filter menu',
+    description: () => t('viewMenus.openFilterMenu'),
     hotkeyToken: TOKENS.soup.filter,
     keyDownHandler: () => {
       setOpen(true);
@@ -694,6 +784,11 @@ export const UnifiedFilterDropdown = (
     return undefined;
   };
 
+  const triggerSize = () => {
+    if (!props.hideLabel) return 'sm';
+    return props.grouped ? 'icon-sm' : 'icon-md';
+  };
+
   return (
     <Show
       when={
@@ -713,16 +808,21 @@ export const UnifiedFilterDropdown = (
           <Switch>
             <Match when={props.customTrigger}>{props.customTrigger}</Match>
             <Match when={true}>
-              <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
+              <Tooltip
+                label={t('viewMenus.filter')}
+                hotkey={TOKENS.soup.filter}
+              >
                 <Dropdown.Trigger
-                  variant={props.variant ?? 'outline'}
-                  size={props.hideLabel ? 'icon-md' : 'sm'}
-                  depth={2}
-                  aria-label={props.hideLabel ? 'Filter' : undefined}
+                  as={props.grouped ? ButtonGroup.Button : Button}
+                  variant={props.variant ?? 'secondary'}
+                  size={triggerSize()}
+                  aria-label={
+                    props.hideLabel ? t('viewMenus.filter') : undefined
+                  }
                 >
-                  <FilterIcon />
+                  <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   <Show when={!props.hideLabel}>
-                    <span>Filter</span>
+                    <span>{t('viewMenus.filter')}</span>
                   </Show>
                 </Dropdown.Trigger>
               </Tooltip>
@@ -751,11 +851,11 @@ export const UnifiedFilterDropdown = (
                   <Show when={isDocumentsView() && showTagsFilter()}>
                     <SearchableFilterSubmenu
                       onSelectionComplete={() => setOpen(false)}
-                      label="Tags"
+                      label={t('viewMenus.tags')}
                       options={tagFilter.options}
                       activeIds={tagFilter.activeIds}
                       onChange={tagFilter.onChange}
-                      placeholder="Filter by tag..."
+                      placeholder={t('viewMenus.filterByTag')}
                     />
                   </Show>
 
@@ -777,22 +877,34 @@ export const UnifiedFilterDropdown = (
                   <Show when={isTasksView()}>
                     <SearchableFilterSubmenu
                       onSelectionComplete={() => setOpen(false)}
-                      label="Assignee"
-                      options={assigneeOptions}
+                      label={t('viewMenus.assignee')}
+                      options={assigneePicker.options}
+                      open={assigneeOpen}
+                      onOpenChange={(value) => {
+                        setAssigneeOpen(value);
+                        assigneePicker.onOpenChange(value);
+                      }}
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
-                      placeholder="Search assignees..."
+                      placeholder={assigneePicker.placeholder()}
+                      footer={<AssigneePickerStatus picker={assigneePicker} />}
                     />
                   </Show>
 
                   <Show when={showCreatedByFilter()}>
                     <SearchableFilterSubmenu
                       onSelectionComplete={() => setOpen(false)}
-                      label="Created by"
-                      options={createdByOptions}
+                      label={t('viewMenus.createdBy')}
+                      source={createdBySource}
+                      options={createdBySource.options}
+                      open={createdByOpen}
+                      onOpenChange={(value) => {
+                        setCreatedByOpen(value);
+                        if (!value) createdBySource.setSearch('');
+                      }}
                       activeIds={createdByIds}
                       onChange={handleCreatedByChange}
-                      placeholder="Search creators..."
+                      placeholder={t('viewMenus.searchCreators')}
                     />
                   </Show>
 
@@ -835,11 +947,11 @@ export const UnifiedFilterDropdown = (
             <Show when={!isDocumentsView() && showTagsFilter()}>
               <SearchableFilterSubmenu
                 onSelectionComplete={() => setOpen(false)}
-                label="Tags"
+                label={t('viewMenus.tags')}
                 options={tagFilter.options}
                 activeIds={tagFilter.activeIds}
                 onChange={tagFilter.onChange}
-                placeholder="Filter by tag..."
+                placeholder={t('viewMenus.filterByTag')}
               />
             </Show>
             {props.children}

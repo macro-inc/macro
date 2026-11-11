@@ -7,6 +7,7 @@
 
 /**
  * The person column each signed-in submission names its respondent in;
-`null` once deleted.
+`null` once deleted, and on a form created anonymous. An anonymous
+form never writes it.
  */
 export type FormRespondentColumnId = string | null;

@@ -6,6 +6,7 @@ mod contacts;
 mod drafts;
 mod invitations;
 mod messages;
+mod route;
 mod rules;
 mod sync;
 mod transport;
@@ -22,7 +23,10 @@ use url::Url;
 use crate::domain::models::EmailApiError;
 use crate::domain::{
     models::MailboxAccess,
-    ports::{MailboxRejectedTokenRefresh, MailboxRequestGate, ScopedMailboxRepository},
+    ports::{
+        MailboxRejectedTokenRefresh, MailboxRequestCount, MailboxRequestGate,
+        ScopedMailboxRepository,
+    },
 };
 use std::sync::Arc;
 
@@ -57,7 +61,8 @@ impl OutlookApiClientRepository {
     }
     /// Build a public-cloud Graph adapter with redirects and automatic retries disabled.
     pub fn new() -> Result<Self, EmailApiError> {
-        let root = Url::parse(GRAPH_ROOT).map_err(|_| transport::invalid_response())?;
+        let root = Url::parse(GRAPH_ROOT)
+            .map_err(|_| transport::invalid_response("Graph root is not a URL"))?;
         Self::with_root(root)
     }
 
@@ -84,6 +89,12 @@ impl OutlookApiClientRepository {
     #[cfg(test)]
     fn for_test(root: &str) -> Self {
         Self::with_root(Url::parse(root).unwrap()).unwrap()
+    }
+}
+
+impl MailboxRequestCount for OutlookApiClientRepository {
+    async fn admitted_requests(&self, mailbox: MailboxAccess) -> Option<u64> {
+        self.gate.as_ref()?.admitted(mailbox).await
     }
 }
 

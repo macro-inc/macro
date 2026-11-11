@@ -4,26 +4,11 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateReviewExecutionId } from './createReviewExecutionId';
-import type { ReviewKind } from './reviewKind';
+import type { CreateReviewAllOf } from './createReviewAllOf';
+import type { CreateReviewAllOfTwo } from './createReviewAllOfTwo';
 
 /**
- * Review creation. Drafts are validated by the action's owning adapter.
+ * Review creation. Decoding it validates every draft; creating a review only
+presents the drafts, and the account holder acts separately.
  */
-export interface CreateReview {
-  /** One to one hundred independent drafts. Email: {subject, body: Markdown,
-to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
-replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
-time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
-timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
-endDate: exclusive ISO date}, description?, location?, attendees?:
-[{email, isOptional?}]}. Import: exactly one draft {source: "notion"},
-presenting the plan ImportFromNotion staged.
-Creating any review only presents these drafts; the user acts separately. */
-  drafts: unknown[];
-  executionId?: CreateReviewExecutionId;
-  /** Existing UI and action to use. */
-  kind: ReviewKind;
-  /** Stack label. */
-  title: string;
-}
+export type CreateReview = CreateReviewAllOf & CreateReviewAllOfTwo;

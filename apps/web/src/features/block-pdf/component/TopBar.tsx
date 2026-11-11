@@ -25,16 +25,18 @@ import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { useCopyLink } from '@core/util/useCopyLink';
 import IconShared from '@icon/share.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import Printer from '@icon/system/regular/printer.svg';
 import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';
@@ -141,8 +143,9 @@ export function TopBar() {
           name: fileName(),
           fileType,
         }),
-      buttonComponent: () => (
+      buttonComponent: (control) => (
         <ChatWithAgentButton
+          grouped={control.grouped}
           entity={{
             type: 'document',
             id: documentId,

@@ -9,6 +9,9 @@ use crm::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
+    email_privacy::{
+        EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
+    },
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
@@ -28,6 +31,31 @@ const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 #[derive(Clone)]
 struct FakeCrm;
 
+impl EmailPrivacyService for FakeCrm {
+    async fn contribution_mailbox(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Option<EmailContributionMailbox>, CrmError> {
+        panic!("unexpected contribution_mailbox call")
+    }
+
+    async fn email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected email_privacy call")
+    }
+
+    async fn change_email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: EmailPrivacyChange,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected change_email_privacy call")
+    }
+}
+
 impl CrmService for FakeCrm {
     async fn resolve_association(
         &self,
@@ -42,6 +70,7 @@ impl CrmService for FakeCrm {
                 vec![CONTACT, SIBLING_CONTACT],
             )),
             CrmAssociation::Contact(CONTACT) => Ok(CrmRecordAssociation::contact(CONTACT)),
+            CrmAssociation::Activity => Ok(CrmRecordAssociation::default()),
             CrmAssociation::Company(_) => Err(CrmError::CompanyNotFoundForTeam),
             CrmAssociation::Contact(_) => Err(CrmError::ContactNotFoundForTeam),
         }
@@ -79,6 +108,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.depopulate_contact")
     }
 
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
+        unimplemented!("FakeCrm.has_depopulate_target")
+    }
+
     async fn link_contact_pairs_with_sources(
         &self,
         _pairs: &[(uuid::Uuid, String)],
@@ -102,7 +139,7 @@ impl CrmService for FakeCrm {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("FakeCrm.create_company")
     }
@@ -111,7 +148,7 @@ impl CrmService for FakeCrm {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("FakeCrm.create_contact")
     }
@@ -146,6 +183,26 @@ impl CrmService for FakeCrm {
         _hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("FakeCrm.set_contact_hidden")
+    }
+
+    async fn set_contact_email(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _email: &str,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
+    async fn set_contact_company(
+        &self,
+        _access: &crm::domain::auth::CrmContactReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _company_id: uuid::Uuid,
+    ) -> Result<crm::domain::model::CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
     }
 
     async fn set_contact_name(
@@ -229,6 +286,31 @@ impl CrmService for FakeCrm {
         _patch: CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         unimplemented!("FakeCrm.update_team_settings")
+    }
+
+    async fn create_team_contact(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _name: &str,
+        _email: Option<&str>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!("FakeCrm.create_team_contact")
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<Vec<crm::domain::model::CrmBlockedDomain>, CrmError> {
+        unimplemented!("FakeCrm.list_blocked_domains")
+    }
+
+    async fn set_domain_blocked(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+        _blocked: bool,
+    ) -> Result<String, CrmError> {
+        unimplemented!("FakeCrm.set_domain_blocked")
     }
 }
 

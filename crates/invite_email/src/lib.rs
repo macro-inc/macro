@@ -34,6 +34,24 @@ use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+const DISPLAY_NAME_MAX_CHARS: usize = 64;
+
+/// Puts an untrusted display name on one line and caps it. Returns `None` when nothing
+/// printable is left.
+fn single_line_name(raw: Option<&str>) -> Option<String> {
+    let words: Vec<&str> = raw?
+        .split(|c: char| c.is_whitespace() || c.is_control())
+        .filter(|word| !word.is_empty())
+        .collect();
+    let capped: String = words
+        .join(" ")
+        .chars()
+        .take(DISPLAY_NAME_MAX_CHARS)
+        .collect();
+    let name = capped.trim_end();
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
 /// Wrapper for the referral code to make it type safe
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -106,12 +124,11 @@ impl NotificationExtEmail for InviteToMacro {
             .as_deref()
             .or(self.sender_email.as_deref())
             .unwrap_or("A Macro user");
-        EmailContent {
-            subject: format!("{} has invited you to join Macro", sender),
-            body: self
-                .render()
+        EmailContent::new(
+            format!("{} has invited you to join Macro", sender),
+            self.render()
                 .expect("InviteToMacro template render failed in format_email"),
-        }
+        )
     }
 
     fn rate_limit_config() -> RateLimitConfig {
@@ -146,6 +163,13 @@ pub struct ChannelInviteMetadata {
     /// Older notification payloads retain channel-invitation wording.
     #[serde(default)]
     pub is_direct_message: bool,
+    /// Stable DM message identity used while building the email delivery key.
+    /// The serialized email bundle carries the key; notification metadata does not.
+    #[serde(skip)]
+    pub message_id: Option<Uuid>,
+    /// Destination used while building a separate email retry key per recipient.
+    #[serde(skip)]
+    pub email_recipient: Option<MacroUserIdStr<'static>>,
     /// Message content to show in the invite email, when the invite was triggered by a message.
     #[serde(default)]
     pub message_content: Option<String>,
@@ -196,16 +220,16 @@ impl NotificationTitle for ChannelInviteMetadata {
 impl NotificationExtEmail for ChannelInviteMetadata {
     fn format_email(&self) -> EmailContent {
         let sender = self.sender_display();
-        EmailContent {
-            subject: if self.is_direct_message {
-                format!("{sender} sent you a message on Macro")
-            } else {
-                format!("{sender} has invited you to join #{}", self.channel_name)
-            },
-            body: self
-                .render()
+        let subject = if self.is_direct_message {
+            format!("{sender} sent you a message on Macro")
+        } else {
+            format!("{sender} has invited you to join #{}", self.channel_name)
+        };
+        EmailContent::new(
+            subject,
+            self.render()
                 .expect("ChannelInviteMetadata template render failed in format_email"),
-        }
+        )
     }
 
     fn rate_limit_config() -> RateLimitConfig {
@@ -216,6 +240,14 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     }
 
     fn rate_limit_key(&self) -> RateLimitKey {
+        if self.is_direct_message
+            && let Some(message_id) = self.message_id
+        {
+            return RateLimitKey::builder(&Self::TYPE_NAME)
+                .append(&message_id)
+                .append(&self.email_recipient)
+                .finish();
+        }
         RateLimitKey::builder(&Self::TYPE_NAME)
             .append(&self.invited_by)
             .append(&self.channel_name)
@@ -293,6 +325,19 @@ pub struct InviteToTeamMetadata {
     /// What the invitee gets by joining, as the team stood when the invite was sent.
     #[serde(default, alias = "invitee_plan")]
     pub invitee_plan: InviteePlan,
+
+    /// Whether this email reminds the invitee of an invite they have not answered.
+    #[serde(default)]
+    pub reminder: bool,
+
+    /// Whether the invite creates an agent account.
+    #[serde(default)]
+    pub is_agent: bool,
+
+    /// The inviter's display name, when they have set one. It is user-provided, so it is shown
+    /// on one line, capped, and escaped; the email falls back to the inviter's address.
+    #[serde(default, alias = "inviter_name")]
+    pub inviter_name: Option<String>,
 }
 
 /// What a team invitee gets by joining.
@@ -316,15 +361,57 @@ impl InviteToTeamMetadata {
         let env = Environment::new_or_prod();
 
         let mut url = frontend_host(env);
-        url.set_path("/app/team-invite");
-        url.query_pairs_mut()
-            .append_pair("id", &self.team_invite_id.to_string());
+        let invite_id = self.team_invite_id.to_string();
+        if self.is_agent {
+            url.set_path("/app/signup/agent");
+            url.query_pairs_mut().append_pair("team_invite", &invite_id);
+        } else {
+            url.set_path("/app/team-invite");
+            url.query_pairs_mut().append_pair("id", &invite_id);
+        }
 
         url
     }
 
-    fn inviter(&self) -> &str {
+    fn inviter_email(&self) -> &str {
         self.invited_by.email_str()
+    }
+
+    fn inviter_display_name(&self) -> Option<String> {
+        single_line_name(self.inviter_name.as_deref())
+    }
+
+    /// The inviter's name, or their address when they have not set one.
+    fn inviter(&self) -> String {
+        self.inviter_display_name()
+            .unwrap_or_else(|| self.inviter_email().to_owned())
+    }
+
+    /// The plain-text alternative to the HTML body. It mirrors the HTML's copy.
+    fn text_body(&self) -> String {
+        let inviter = match self.inviter_display_name() {
+            Some(name) => format!("{name} ({})", self.inviter_email()),
+            None => self.inviter_email().to_owned(),
+        };
+        let team = &self.team_name;
+        let plan = match self.invitee_plan {
+            InviteePlan::Premium => format!(
+                "Pro is included: {team} covers your seat, so you get every AI model and agent at no cost to you."
+            ),
+            InviteePlan::Free => format!(
+                "Free to join: there's nothing to pay. Accept the invite to start working with {team} in Macro."
+            ),
+        };
+        let url = self.invite_url();
+
+        format!(
+            "{inviter} invited you to the {team} team on Macro. Macro brings your documents, \
+             tasks, and conversations together in one place.\n\n\
+             {plan}\n\n\
+             Accept the invite by signing in or signing up with this email address:\n\
+             {url}\n\n\
+             Not expecting this invite? You can ignore this email.\n"
+        )
     }
 
     /// Names the team on the button unless the name would crowd it.
@@ -345,21 +432,28 @@ impl NotificationExtEmail for InviteToTeamMetadata {
     fn format_email(&self) -> EmailContent {
         EmailContent {
             subject: format!(
-                "{} invited you to join {} on Macro",
+                "{}{} invited you to join {} on Macro",
+                if self.reminder { "Reminder: " } else { "" },
                 self.inviter(),
                 self.team_name
             ),
             body: self
                 .render()
                 .expect("InviteToTeamMetadata template render failed in format_email"),
+            text: Some(self.text_body()),
+            // An address as a display name reads as spoofing to mail filters, so an inviter
+            // without a name leaves Macro's own sender name in place.
+            from_name: self.inviter_display_name(),
+            reply_to: Some(EmailStr(self.invited_by.email_part()).into_owned()),
         }
     }
 
     fn rate_limit_config() -> RateLimitConfig {
-        const TWO_DAYS: u64 = 24 * 2;
+        // Long enough to stop repeat mail to one address, short enough that an
+        // inviter can resend when someone says the email never came.
         RateLimitConfig {
             max_count: 1,
-            window: Duration::from_hours(TWO_DAYS),
+            window: Duration::from_hours(1),
         }
     }
 

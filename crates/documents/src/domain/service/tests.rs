@@ -158,7 +158,13 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -2188,6 +2194,7 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
 struct RecordingUploadUrlPort {
     copies: Arc<Mutex<Vec<(String, String)>>>,
     deletions: Arc<Mutex<Vec<String>>>,
+    uploads: Arc<Mutex<Vec<(String, String)>>>,
     fail_delete: bool,
 }
 
@@ -2201,10 +2208,14 @@ impl PresignedUploadUrlPort for RecordingUploadUrlPort {
     }
     async fn put_document_storage_presigned_url(
         &self,
-        _key: &str,
-        _sha: &str,
+        key: &str,
+        sha: &str,
         _content_type: ContentType,
     ) -> anyhow::Result<String> {
+        self.uploads
+            .lock()
+            .unwrap()
+            .push((key.to_string(), sha.to_string()));
         Ok(String::new())
     }
 
@@ -2431,6 +2442,7 @@ fn new_document(file_type: FileType) -> NewDocument {
         team_id: None,
         share_with_team: false,
         created_at: None,
+        updated_at: None,
         sub_type: None,
         skip_history: false,
         initial_link_share: InitialLinkShare::EntityDefault,
@@ -2776,7 +2788,13 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -2931,6 +2949,100 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
         DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     );
     assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+/// Imports an attachment that reuses `metadata`, whose content is `content`,
+/// and returns the response with the uploads it signed.
+async fn reimport_email_document(
+    metadata: DocumentMetadata,
+    content: DocumentContent,
+    file_type: FileType,
+) -> (CreateDocumentResponseData, Vec<(String, String)>) {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_import_email_attachment_document()
+        .returning(move |_, _| {
+            Box::pin(std::future::ready(Ok(EmailImportRepoOutcome::Reused(
+                metadata.clone(),
+            ))))
+        });
+    repo.expect_set_document_content().times(0);
+    repo.expect_get_persisted_document_content()
+        .return_once(|_| Box::pin(std::future::ready(Ok(Some(content)))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let uploads = RecordingUploadUrlPort::default();
+    let service = DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        uploads.clone(),
+        TestTaskPropertiesPort,
+        TestConnectionService::default(),
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let args = ImportEmailAttachmentRepoArgs {
+        email_attachment_id: uuid::Uuid::from_u128(9),
+        owner: test_user(),
+        document: new_document(file_type),
+    };
+    let response = crate::domain::ports::DocumentService::import_email_attachment(&service, args)
+        .await
+        .unwrap();
+    let signed = uploads.uploads.lock().unwrap().clone();
+    (response, signed)
+}
+
+fn pending_email_document(file_type: &str, sha: &str) -> (DocumentMetadata, DocumentContent) {
+    let mut metadata = make_test_metadata();
+    metadata.file_type = Some(file_type.to_string());
+    metadata.sha = Some(sha.to_string());
+    (
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    )
+}
+
+#[tokio::test]
+async fn reusing_a_pending_email_document_signs_its_upload_again() {
+    let (metadata, content) = pending_email_document("pdf", "sha");
+    let key = build_cloud_storage_bucket_document_key(&metadata.owner, "doc-1", 1);
+    // The attachment's own declared type must not change the signed content type.
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Txt).await;
+
+    assert!(response.document_response.presigned_url.is_some());
+    assert_eq!(response.content_type, "application/pdf");
+    assert_eq!(response.file_type.as_deref(), Some("pdf"));
+    assert_eq!(signed, [(key, "sha".to_string())]);
+}
+
+#[tokio::test]
+async fn different_bytes_cannot_replace_a_pending_email_document() {
+    let (metadata, content) = pending_email_document("pdf", "other-sha");
+    let (response, signed) = reimport_email_document(metadata, content, FileType::Pdf).await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
+}
+
+#[tokio::test]
+async fn reusing_a_converting_docx_does_not_sign_an_upload() {
+    let (metadata, _) = pending_email_document("docx", "sha");
+    let (response, signed) = reimport_email_document(
+        metadata,
+        DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
+        FileType::Docx,
+    )
+    .await;
+
+    assert!(response.document_response.presigned_url.is_none());
+    assert!(signed.is_empty());
 }
 
 #[tokio::test]
@@ -3721,4 +3833,82 @@ async fn native_canvas_location_uses_sync_without_an_object_url() {
         result,
         LocationResponseV3::SyncServiceContent { .. }
     ));
+}
+
+#[tokio::test]
+async fn a_document_with_its_own_dates_dates_its_folder_by_them() {
+    let created_at = chrono::DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let updated_at = chrono::DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_update_project_modified().times(0);
+    repo.expect_extend_project_dates()
+        .withf(move |project_id, created, updated| {
+            project_id == "00000000-0000-0000-0000-000000000009"
+                && *created == created_at
+                && *updated == updated_at
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    document.created_at = Some(created_at);
+    document.updated_at = Some(updated_at);
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_document_without_dates_marks_its_folder_updated_now() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_extend_project_dates().times(0);
+    repo.expect_update_project_modified()
+        .withf(|project_id| project_id == "00000000-0000-0000-0000-000000000009")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
 }

@@ -4,14 +4,14 @@ import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
+import NewTab from '@icon/system/regular/arrow-square-out.svg';
+import Check from '@icon/system/regular/check-circle.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Link from '@icon/system/regular/link.svg';
+import Trash from '@icon/system/regular/link-break.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import LinkText from '@icon/system/regular/text-t.svg';
 import { mergeRegister } from '@lexical/utils';
-import NewTab from '@phosphor/arrow-square-out.svg';
-import Check from '@phosphor/check-circle.svg';
-import Copy from '@phosphor/copy.svg';
-import Link from '@phosphor/link.svg';
-import Trash from '@phosphor/link-break.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import LinkText from '@phosphor/text-t.svg';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { Button, Surface } from '@ui';
 import {
@@ -450,11 +450,11 @@ export function FloatingLinkMenu(props: {
               <div class="flex items-center gap-0.5 ease-in-out">
                 <Button
                   onClick={openInNewTab}
-                  variant="accent"
+                  variant="primary"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >
-                  <NewTab />
+                  <NewTab class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleEditClick}
@@ -462,7 +462,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Edit link"
                 >
-                  <Pencil />
+                  <Pencil class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={copyLink}
@@ -470,7 +470,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Copy link"
                 >
-                  <Copy />
+                  <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleUnlink}
@@ -478,7 +478,7 @@ export function FloatingLinkMenu(props: {
                   size="icon-sm"
                   tooltip="Remove link"
                 >
-                  <Trash />
+                  <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </div>
@@ -518,12 +518,13 @@ export function FloatingLinkMenu(props: {
           >
             <Button
               onClick={handleSubmit}
-              variant="cta"
+              variant="primary"
               size="sm"
               tooltip="Apply link changes"
               disabled={!pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText}
             >
-              <Check /> Apply
+              <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Apply
             </Button>
           </div>
         </MenuWrapper>

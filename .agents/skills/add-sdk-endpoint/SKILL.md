@@ -14,8 +14,9 @@ Every generated endpoint must either have a call site under `src/` or be listed 
 
 ## 0. Find it
 
-Not in `generated/` yet? `bun run sync-specs && bun run generate` (or ask the user to
-run `just update-generated` if the Rust spec changed locally — it rebuilds apps/web).
+After a local Rust API change, regenerate its web contract from the repository
+root with `bun run --cwd apps/web gen-api <service-name>` before running
+`bun run sync-specs && bun run generate` here.
 
 `just coverage` lists `UNCOVERED <service>.<endpoint>`.
 
@@ -53,7 +54,14 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    - every generated call goes through `unwrap()`
    - cursor lists → `paginate()` → `AsyncGenerator`; search → `entitySearch(...)`
    - camelCase + `undefined` on the SDK side even when the wire is snake_case/nullable
-   - TSDoc every public member. No `any`.
+   - TSDoc every public member. No `any`. End each public method's TSDoc with its
+     MCP hint tag (`@readonly`, `@write`, `@send`, `@destructive`; `packages/sdk-mcp/AGENTS.md`)
+     and update that package's tool snapshots (`bunx vitest run -u` there).
+   - an entity with its own page in the app gets `webUrl()`, built from
+     `this.client.webAppUrl` and the route the web app's copy-link action uses
+     (`/app/agent/<id>`, not the entity type when they differ), plus a
+     `toJSON()` override adding `url: this.webUrl()`. Agents hand these links
+     to users; without one they guess the route.
 5. **New service?** Only when the endpoint's service isn't reachable from
    `MacroClient` yet — per *service*, not per entity; a new entity needs none of this.
    Wire the `Sdk` into `src/utils/client.ts`, a host into `src/config.ts`, and an

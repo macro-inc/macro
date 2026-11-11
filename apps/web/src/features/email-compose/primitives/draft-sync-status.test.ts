@@ -15,28 +15,38 @@ const draft: LocalDraft = {
   acknowledgedRevision: 0,
   content: { subject: 'Keep this' },
   attachments: [],
-  status: 'deleting',
+  status: 'delete-failed',
   updatedAt: 1,
   latestAttemptId: 'delete',
-  queuedAttemptId: 'old-save',
+  queuedAttemptId: 'delete',
 };
 
-it('offers retry discard when a crash interrupted deletion before admission', async () => {
+it('reports a failed discard, not one still on its way to the server', async () => {
   const context = createComposeContext();
+  const [local, setLocal] = createSignal(draft);
+  let changed = () => {};
   context.drafts.saveLocalDraft = vi.fn();
   context.drafts.readDraft = vi.fn(async () => ({
-    local: draft,
+    local: local(),
     persistence: 'queued' as const,
   }));
+  context.drafts.watchDrafts = (callback) => {
+    changed = callback;
+    return () => {};
+  };
   const recover = vi.fn(async () => {});
   context.drafts.recoverSynchronization = recover;
   const discard = vi.fn(async () => {
     expect(recover).toHaveBeenCalledOnce();
+    // The retried delete waits for the queue to admit it.
+    setLocal({ ...draft, status: 'deleting', queuedAttemptId: undefined });
+    changed();
   });
   const status = createRoot((dispose) => {
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),
@@ -50,6 +60,7 @@ it('offers retry discard when a crash interrupted deletion before admission', as
   });
   status.retry();
   await vi.waitFor(() => expect(discard).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(status.state()).toBeUndefined());
 });
 
 it('shows a failed status read without throwing into the composer error boundary', async () => {
@@ -62,6 +73,7 @@ it('shows a failed status read without throwing into the composer error boundary
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),
@@ -96,6 +108,7 @@ it('stays silent once a failed save recovers', async () => {
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: disk,
       retry,
@@ -125,6 +138,7 @@ it('offers retry for server failures while newer edits remain saved locally', as
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saving',
       retry: vi.fn(),
@@ -139,7 +153,7 @@ it('offers retry for server failures while newer edits remain saved locally', as
 it('keeps local edits visible with an actionable synchronization status during recovery', async () => {
   const context = createComposeContext();
   const [availability, setAvailability] = createSignal<
-    'unavailable' | 'recovering' | 'ready'
+    'unavailable' | 'recovering' | 'recovery-required' | 'ready'
   >('unavailable');
   context.drafts.syncAvailability = availability;
   context.drafts.saveLocalDraft = vi.fn();
@@ -151,6 +165,7 @@ it('keeps local edits visible with an actionable synchronization status during r
     disposers.push(dispose);
     return createDraftSyncStatus({
       drafts: context.drafts,
+      connectivity: context.connectivity,
       draftId: () => 'draft',
       localSaveState: () => 'saved',
       retry: vi.fn(),
@@ -165,6 +180,8 @@ it('keeps local edits visible with an actionable synchronization status during r
   expect(status.state()?.action).toBe('retry');
   setAvailability('recovering');
   expect(status.state()?.action).toBeUndefined();
+  setAvailability('recovery-required');
+  expect(status.state()?.action).toBe('reload');
   setAvailability('ready');
   expect(status.state()).toBeUndefined();
 });

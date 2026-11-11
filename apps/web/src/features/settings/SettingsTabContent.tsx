@@ -6,6 +6,7 @@ import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
 import { Usage } from '../usage/usage';
 import { Account } from './Account';
+import { AccountManagers } from './AccountManagers';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
 import { AgentSettings } from './AgentSettings';
@@ -21,7 +22,6 @@ import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { TeamPage } from './Team';
-import { TeamConnections } from './TeamConnections';
 import { TeamGeneral } from './TeamGeneral';
 import { TeamMembers } from './TeamMembers';
 
@@ -55,6 +55,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />
       </Show>
+      <Show when={isCurrentTab('Account Managers')}>
+        <AccountManagers />
+      </Show>
       <Show when={isCurrentTab('Notifications')}>
         <Notifications />
       </Show>
@@ -75,9 +78,6 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Team Members')}>
         <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
-      </Show>
-      <Show when={isCurrentTab('Team Connections')}>
-        <TeamPage>{(team) => <TeamConnections team={team} />}</TeamPage>
       </Show>
       <Show when={isCurrentTab('Tags')}>
         <Tags />

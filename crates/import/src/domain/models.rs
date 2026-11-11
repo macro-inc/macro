@@ -43,6 +43,8 @@ mod test;
 pub enum ImportSource {
     /// Linear issues, imported as Macro tasks.
     Linear,
+    /// Jira Cloud issues and projects.
+    Jira,
     /// Notion pages, imported as Macro markdown documents.
     Notion,
     /// Slack channels, recreated as Macro channels.
@@ -50,10 +52,21 @@ pub enum ImportSource {
 }
 
 impl ImportSource {
+    /// Display name of the connected provider.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear",
+            Self::Jira => "Jira",
+            Self::Notion => "Notion",
+            Self::Slack => "Slack",
+        }
+    }
+
     /// All import sources.
-    pub fn all() -> [ImportSource; 3] {
+    pub fn all() -> [ImportSource; 4] {
         [
             ImportSource::Linear,
+            ImportSource::Jira,
             ImportSource::Notion,
             ImportSource::Slack,
         ]
@@ -63,6 +76,7 @@ impl ImportSource {
     pub fn pipedream_app_slugs(self) -> &'static [&'static str] {
         match self {
             ImportSource::Linear => &["linear"],
+            ImportSource::Jira => &["jira"],
             ImportSource::Notion => &["notion"],
             // Keep the canonical fallback from docs/runbooks/slack-live-channel-import.md
             // until live verification supports switching to `slack_v2`.
@@ -82,6 +96,7 @@ impl ImportSource {
     pub fn mcp_server_url(self) -> &'static str {
         match self {
             ImportSource::Linear => "https://mcp.linear.app/mcp",
+            ImportSource::Jira => "https://mcp.atlassian.com/v1/mcp",
             ImportSource::Notion => "https://mcp.notion.com/mcp",
             ImportSource::Slack => "https://mcp.slack.com/mcp",
         }
@@ -92,6 +107,7 @@ impl ImportSource {
     pub fn default_kind(self) -> ImportKind {
         match self {
             ImportSource::Linear => ImportKind::Issue,
+            ImportSource::Jira => ImportKind::JiraIssue,
             ImportSource::Notion => ImportKind::Page,
             ImportSource::Slack => ImportKind::Channel,
         }
@@ -101,7 +117,7 @@ impl ImportSource {
     /// fixed — importers have latitude on content, never on shape.
     pub fn entity_type(self) -> &'static str {
         match self {
-            ImportSource::Linear => "task",
+            ImportSource::Linear | ImportSource::Jira => "task",
             ImportSource::Notion => "md",
             ImportSource::Slack => "channel",
         }
@@ -117,7 +133,7 @@ impl ImportSource {
             return None;
         }
         Some(match self {
-            ImportSource::Linear => raw.to_string(),
+            ImportSource::Linear | ImportSource::Jira => raw.to_string(),
             // Page ids survive renames; URLs don't. Accept either and store
             // the id whenever one is present.
             ImportSource::Notion => notion_page_id(raw).unwrap_or_else(|| raw.to_string()),
@@ -149,6 +165,7 @@ impl ImportSource {
     Serialize,
     Deserialize,
     JsonSchema,
+    specta::Type,
     ToSchema,
     strum::EnumString,
     strum::AsRefStr,
@@ -170,6 +187,12 @@ pub enum ImportKind {
     DataSource,
     /// One row of a Notion data source.
     Row,
+    /// A Jira issue.
+    JiraIssue,
+    /// A Jira project.
+    JiraProject,
+    /// A Jira epic grouping.
+    JiraEpic,
     /// A Slack channel.
     Channel,
 }
@@ -181,6 +204,9 @@ impl ImportKind {
             ImportKind::Issue | ImportKind::Project | ImportKind::Document => ImportSource::Linear,
             ImportKind::Page | ImportKind::Database | ImportKind::DataSource | ImportKind::Row => {
                 ImportSource::Notion
+            }
+            ImportKind::JiraIssue | ImportKind::JiraProject | ImportKind::JiraEpic => {
+                ImportSource::Jira
             }
             ImportKind::Channel => ImportSource::Slack,
         }
@@ -253,6 +279,7 @@ pub enum Initiator {
     Deserialize,
     ToSchema,
     JsonSchema,
+    specta::Type,
     strum::EnumString,
     strum::AsRefStr,
 )]
@@ -750,7 +777,7 @@ pub fn validate_metadata(
     metadata: serde_json::Value,
 ) -> Result<serde_json::Value, serde_json::Error> {
     match source {
-        ImportSource::Linear => {
+        ImportSource::Linear | ImportSource::Jira => {
             serde_json::to_value(serde_json::from_value::<LinearIssueMeta>(metadata)?.capped())
         }
         ImportSource::Notion => {
@@ -766,7 +793,7 @@ pub fn validate_metadata(
 /// prompts, and tool responses).
 pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> String {
     let field = match source {
-        ImportSource::Linear | ImportSource::Notion => "title",
+        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => "title",
         ImportSource::Slack => "name",
     };
     metadata
@@ -875,7 +902,17 @@ pub struct ImportRun {
 
 /// What a planning run has found in the source so far.
 #[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    specta::Type,
+    ToSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct ScanCounts {
@@ -896,7 +933,9 @@ pub struct ImportState {
 }
 
 /// One object a workspace import report calls out.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionReportItem {
     /// The ledger row.
@@ -914,9 +953,20 @@ pub struct NotionReportItem {
 }
 
 /// Where a Notion workspace import stands.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionImportReport {
+    /// Provider items skipped because they were unreadable, or optional features unavailable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    /// Tracker issues in the plan.
+    #[serde(default)]
+    pub issues: u32,
+    /// Tracker groups written as Macro projects.
+    #[serde(default)]
+    pub projects: u32,
     /// The run's state: `running` while planning, `ready` once a plan is
     /// staged, `importing` while writing, `completed`, `failed`, or
     /// `dismissed` when cancelled. Absent before the first run.

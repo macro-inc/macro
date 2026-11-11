@@ -9,24 +9,26 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
-import { useChatInputContext } from '@core/component/AI/context';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import type { Model } from '@core/component/AI/types';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import IconShared from '@icon/share.svg';
-import ChatDebugIcon from '@phosphor/chat-text.svg';
+import ChatDebugIcon from '@icon/system/regular/chat-text.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {
+  model: Model;
   showStreamDebug?: Accessor<boolean>;
   toggleStreamDebug?: () => void;
 }) {
   const blockId = useBlockId();
-  const input = useChatInputContext();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
@@ -54,7 +56,6 @@ export function TopBar(props: {
         ]
       : []),
     { op: 'rename' },
-    { op: 'copy' },
     { op: 'moveToProject' },
     { op: 'delete' },
   ];
@@ -74,7 +75,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel
-          icon={<ProviderIcon model={input.model()} class="size-4 shrink-0" />}
+          icon={<ProviderIcon model={props.model} class="size-4 shrink-0" />}
           fallbackName={DEFAULT_CHAT_NAME}
           lockRename={false}
         />

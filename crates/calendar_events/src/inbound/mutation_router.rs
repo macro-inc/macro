@@ -17,7 +17,8 @@ use axum::{
     routing::{get, patch, post, put},
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal, is_agent_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -424,6 +425,9 @@ pub enum CalendarMutationErrorCode {
     /// run did not name the inbox of the copy it changes, or named another
     /// copy's; the message lists each copy's inbox, role and id.
     CopyChoiceRequired,
+    /// An agent's program asked to create an event the user has not seen;
+    /// it must present a review or quote the user's approval.
+    ConfirmationRequired,
 }
 
 /// HTTP error body returned by calendar mutation endpoints.
@@ -459,15 +463,24 @@ impl From<CopyRefusal> for CalendarMutationApiError {
     }
 }
 
-/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
-/// authenticated SDK request a program makes, in agent sessions and for
-/// public MCP clients alike.
-const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
+/// Why an agent's program may not create an event here: a person has to see
+/// it first, as with the `CreateCalendarEvent` tool.
+const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calendar event without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'calendar', ...}) and return the review's reference. In a channel or document thread, write the event out, ask whether to create it, and only after the user replies approving it call macro.calendar.createConfirmed with their reply quoted in userConfirmation.";
 
-/// Whether a request comes from an agent's program rather than a person in
-/// the app: a code-mode run, or a token carrying an agent's attribution.
-fn is_agent_run(agent_attributed: bool, headers: &HeaderMap) -> bool {
-    agent_attributed || headers.contains_key(CODE_EXECUTION_HEADER)
+/// Refuse an agent run's create (see [`is_agent_run`]); a person in the app
+/// creates from the composer, which is their confirmation.
+fn refuse_program_create(
+    agent_attributed: bool,
+    headers: &HeaderMap,
+) -> Result<(), CalendarMutationApiError> {
+    if is_agent_run(agent_attributed, headers) {
+        return Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::ConfirmationRequired,
+            message: PROGRAM_CREATE_REFUSAL.to_owned(),
+            status: StatusCode::FORBIDDEN,
+        });
+    }
+    Ok(())
 }
 
 /// Make an agent run name the copy it changes when the meeting is on several
@@ -547,7 +560,9 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
             CalendarMutationError::AlreadyOnCalendar => (
                 StatusCode::CONFLICT,
                 CalendarMutationErrorCode::AlreadyOnCalendar,
-                "this event is already on one of your calendars".to_string(),
+                "This meeting is already on one of your calendars, so it can't be added to \
+                 another one."
+                    .to_string(),
             ),
             CalendarMutationError::JoinRequestOpen => (
                 StatusCode::CONFLICT,
@@ -642,7 +657,7 @@ impl From<CreateEventWithMacroCallError> for CalendarMutationApiError {
         (status = 201, description = "The created calendar event", body = CalendarEvent),
         (status = 400, description = "Invalid event fields", body = CalendarMutationApiError),
         (status = 401, description = "Authentication required"),
-        (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
+        (status = 403, description = "Calendar is read-only or needs reauthorization, or an agent's program asked to create without a review or confirmation", body = CalendarMutationApiError),
         (status = 409, description = "No writable calendar or the provider rejected the event", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure, or the Macro call could not be created", body = CalendarMutationApiError),
     )
@@ -650,6 +665,7 @@ impl From<CreateEventWithMacroCallError> for CalendarMutationApiError {
 pub async fn create_calendar_event<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Json(request): Json<CreateCalendarEventRequest>,
 ) -> Result<(StatusCode, Json<CalendarEvent>), CalendarMutationApiError>
 where
@@ -657,6 +673,7 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
+    refuse_program_create(user.authorization.user.agent_id.is_some(), &headers)?;
     let draft = CalendarEventDraft {
         idempotency_key: request.idempotency_key,
         title: request.title,
@@ -1014,7 +1031,7 @@ where
     Ok(Json(event))
 }
 
-/// Request body adding a channel-shared event to the requester's calendar.
+/// Request body adding a shared event to the requester's calendar.
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyCalendarEventRequest {

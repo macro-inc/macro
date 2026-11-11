@@ -7,10 +7,11 @@ import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import { EMAIL_TAB_IDS } from '../constants';
-import type { EmailTab } from '../types';
+import type { EmailTab, EmailViewConditions } from '../types';
 import {
   buildEmailQuery,
   type EmailQueryContext,
+  type EmailSavedViewScope,
   emailViewForTab,
 } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
@@ -165,6 +166,9 @@ describe('buildEmailQuery', () => {
       ['shared', 'all'],
       ['archived', 'all'],
       ['all', 'all'],
+      ['focus', 'all'],
+      ['spam', 'spam'],
+      ['trash', 'trash'],
     ]);
 
     for (const tab of EMAIL_TAB_IDS) {
@@ -173,6 +177,26 @@ describe('buildEmailQuery', () => {
       );
     }
   });
+
+  it.each(['spam', 'trash'] as const)(
+    'keeps %s in its provider folder with inbox and alias scope',
+    (tab) => {
+      const args = buildEmailQuery(
+        contextFor({
+          tab,
+          inboxIds: ['inbox-a'],
+          aliasFilter: {
+            inboxId: 'inbox-a',
+            emailAddress: 'alias@example.com',
+          },
+        })
+      );
+      expect(args.transport).toBe('rest');
+      expect(args.body.emailView).toBe(tab);
+      expect(serialize(args.body.ef)).toContain('inbox-a');
+      expect(serialize(args.body.ef)).toContain('alias@example.com');
+    }
+  );
 
   it('confines every non-email target to nothing', () => {
     const { body } = buildEmailQuery(contextFor());
@@ -279,13 +303,111 @@ describe('buildEmailQuery', () => {
     );
   });
 
-  it('leaves attachment facets to the client', () => {
+  it('leaves attachment facets to the client on built-in tabs', () => {
     const plain = buildEmailQuery(contextFor()).body;
     const withAttachments = buildEmailQuery(
       contextFor({ facets: { attachments: ['attachment-pdf'] } })
     ).body;
 
     expect(withAttachments).toEqual(plain);
+  });
+
+  describe('saved views', () => {
+    const scope = (
+      overrides: Partial<EmailViewConditions> = {}
+    ): EmailSavedViewScope => ({
+      conditions: {
+        participants: [],
+        participantFields: ['from', 'to', 'cc'],
+        subject: [],
+        starred: false,
+        ...overrides,
+      },
+    });
+
+    it('matches any chosen person in any chosen field over GraphQL', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          savedView: scope({
+            participants: [
+              { type: 'address', email: 'Me@Example.com' },
+              { type: 'domain', domain: 'example.org' },
+            ],
+            participantFields: ['to', 'cc'],
+          }),
+        })
+      );
+      const tree = serialize(
+        makeGraphqlSoupInput(args).initial?.filters?.emailFilter
+      );
+
+      expect(args.transport).toBe('graphql');
+      expect(args.body.emailView).toBe('all');
+      for (const direction of ['recipient', 'cc']) {
+        expect(tree).toContain(
+          serialize({
+            literal: { [direction]: { complete: 'me@example.com' } },
+          })
+        );
+        expect(tree).toContain(
+          serialize({ literal: { [direction]: { domain: 'example.org' } } })
+        );
+      }
+      expect(tree).not.toContain('sender');
+      expect(tree).toContain(serialize({ literal: { shared: 'EXCLUDE' } }));
+    });
+
+    it('matches nothing for people of a kind it does not know, not every thread', () => {
+      const unknown = JSON.parse('{"type":"team","id":"later"}');
+      const args = buildEmailQuery(
+        contextFor({ savedView: scope({ participants: [unknown] }) })
+      );
+
+      expect(serialize(args.body.ef)).toContain(
+        serialize({ l: { ThreadId: NIL } })
+      );
+    });
+
+    it('sends subjects, recency, starred, and attachments to the server', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          facets: { attachments: ['attachment-pdf', 'attachment-document'] },
+          savedView: {
+            ...scope({ subject: ['FYI', 'Heads up'], starred: true }),
+            receivedSince: '2026-10-27T00:00:00.000Z',
+          },
+        })
+      );
+      const ef = serialize(args.body.ef);
+
+      expect(ef).toContain(serialize({ l: { Subject: 'FYI' } }));
+      expect(ef).toContain(serialize({ l: { Subject: 'Heads up' } }));
+      expect(ef).toContain(serialize({ l: { Attachment: 'pdf' } }));
+      expect(ef).toContain(serialize({ l: { Attachment: 'document' } }));
+      expect(ef).toContain('2026-10-27T00:00:00.000Z');
+      expect(args.body.favorites_only).toBe(true);
+    });
+
+    it('keeps 100 people below the ingress recursion limit', () => {
+      const participants = Array.from({ length: 100 }, (_, index) => ({
+        type: 'address' as const,
+        email: `person${index}@example.com`,
+      }));
+      const args = buildEmailQuery(
+        contextFor({
+          savedView: scope({
+            participants,
+            participantFields: ['from', 'to', 'cc', 'bcc'],
+          }),
+        })
+      );
+      const depth = (node: unknown): number =>
+        node && typeof node === 'object'
+          ? 1 + Math.max(0, ...Object.values(node).map(depth))
+          : 0;
+
+      expect(depth(args.body.ef)).toBeLessThan(40);
+    });
   });
 
   it('refines by selected tags as a property filter', () => {
@@ -320,6 +442,17 @@ describe('buildEmailQuery', () => {
 
 describe('buildEmailSearchRequest', () => {
   const search = { query: 'invoice', matchType: 'partial' as const };
+
+  it.each(['spam', 'trash'] as const)(
+    'fails closed for %s even with retained IDs',
+    (tab) => {
+      expect(
+        buildEmailSearchRequest(contextFor({ tab }), search, [
+          'retained-thread',
+        ]).body.filters?.email_filters?.email_thread_ids
+      ).toEqual([NIL]);
+    }
+  );
 
   const requestFor = (overrides: Partial<EmailQueryContext> = {}) => {
     const { body } = buildEmailSearchRequest(contextFor(overrides), search);

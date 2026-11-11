@@ -107,8 +107,91 @@ async fn finds_valid_token_owner_and_marks_usage(pool: PgPool) {
     assert!(last_used_at.is_some());
 }
 
+/// The token's last use as Unix seconds, so tests compare stored values exactly.
+async fn last_used_at(pool: &PgPool, token_id: Uuid) -> Option<f64> {
+    sqlx::query_scalar!(
+        r#"SELECT EXTRACT(EPOCH FROM last_used_at)::float8 AS "last_used_at" FROM harness_tokens WHERE id = $1"#,
+        token_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn set_last_used_ago(pool: &PgPool, token_id: Uuid, seconds: f64) {
+    sqlx::query!(
+        r#"
+        UPDATE harness_tokens
+        SET last_used_at = now() - make_interval(secs => $2)
+        WHERE id = $1
+        "#,
+        token_id,
+        seconds,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_owned_harness_reports_its_team(pool: PgPool) {
+async fn a_use_within_the_last_minute_is_not_rewritten(pool: PgPool) {
+    let (_, token_id) = insert_harness_token(&pool, Some(USER_ID), None, false).await;
+    set_last_used_ago(&pool, token_id, 10.0).await;
+    let before = last_used_at(&pool, token_id).await;
+    let repo = PgHarnessAuthorizationRepo::new(pool.clone());
+
+    repo.mark_harness_token_used(token_id).await.unwrap();
+
+    assert_eq!(last_used_at(&pool, token_id).await, before);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_use_older_than_a_minute_is_refreshed(pool: PgPool) {
+    let (_, token_id) = insert_harness_token(&pool, Some(USER_ID), None, false).await;
+    set_last_used_ago(&pool, token_id, 120.0).await;
+    let before = last_used_at(&pool, token_id)
+        .await
+        .expect("seeded timestamp");
+    let repo = PgHarnessAuthorizationRepo::new(pool.clone());
+
+    repo.mark_harness_token_used(token_id).await.unwrap();
+
+    let after = last_used_at(&pool, token_id)
+        .await
+        .expect("refreshed timestamp");
+    assert!(after > before);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_token_row_another_request_is_updating_does_not_block_the_request(pool: PgPool) {
+    let (_, token_id) = insert_harness_token(&pool, Some(USER_ID), None, false).await;
+    // Another request's update holds the row lock until its transaction ends.
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query!(
+        r#"SELECT id FROM harness_tokens WHERE id = $1 FOR UPDATE"#,
+        token_id
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .unwrap();
+    // A waiting update fails after a second instead of hanging the test.
+    let options = pool
+        .connect_options()
+        .as_ref()
+        .clone()
+        .options([("lock_timeout", "1s")]);
+    let impatient = PgPool::connect_with(options).await.unwrap();
+    let repo = PgHarnessAuthorizationRepo::new(impatient);
+
+    repo.mark_harness_token_used(token_id)
+        .await
+        .expect("marking a token used must not wait for another request's row lock");
+
+    holder.rollback().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn row_naming_only_a_team_belongs_to_its_registrant(pool: PgPool) {
     insert_user(&pool).await;
     let team_id = Uuid::new_v4();
     sqlx::query!(
@@ -127,7 +210,12 @@ async fn team_owned_harness_reports_its_team(pool: PgPool) {
         .await
         .unwrap()
         .expect("valid token");
-    assert_eq!(token.owner, HarnessAuthorizationOwner::Team { team_id });
+    assert_eq!(
+        token.owner,
+        HarnessAuthorizationOwner::User {
+            user_id: USER_ID.to_string()
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -183,7 +271,7 @@ async fn resolves_users_by_macro_identifier(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn checks_current_team_membership(pool: PgPool) {
+async fn may_use_harness_follows_its_team_grant(pool: PgPool) {
     insert_user(&pool).await;
     let team_id = Uuid::new_v4();
     sqlx::query!(
@@ -205,8 +293,38 @@ async fn checks_current_team_membership(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
+    let (harness_id, _) =
+        insert_harness_token(&pool, Some("macro|owner@example.com"), None, false).await;
+    let harness = HarnessId::new_from_uuid(harness_id);
+    let repo = PgHarnessAuthorizationRepo::new(pool.clone());
+    assert!(
+        !repo
+            .user_may_use_harness(harness, FUSION_USER_ID)
+            .await
+            .unwrap()
+    );
 
-    let repo = PgHarnessAuthorizationRepo::new(pool);
-    assert!(repo.user_has_team(FUSION_USER_ID, team_id).await.unwrap());
-    assert!(!repo.user_has_team("someone-else", team_id).await.unwrap());
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'edit')
+        "#,
+        harness_id,
+        team_id.to_string(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        repo.user_may_use_harness(harness, FUSION_USER_ID)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .user_may_use_harness(harness, "macro|someone-else@example.com")
+            .await
+            .unwrap()
+    );
 }

@@ -5,6 +5,7 @@
   "macro.agent_sessions",
   "macro.bots",
   "macro.calendar",
+  "macro.call_notifications",
   "macro.calls",
   "macro.channels",
   "macro.chats",
@@ -14,6 +15,7 @@
   "macro.example",
   "macro.forms",
   "macro.github_pull_requests",
+  "macro.github_webhooks",
   "macro.initiatives",
   "macro.mentions",
   "macro.messages",
@@ -22,5 +24,6 @@
   "macro.properties",
   "macro.soup",
   "macro.teams",
+  "macro.users",
   "macro.webhooks"
 ]

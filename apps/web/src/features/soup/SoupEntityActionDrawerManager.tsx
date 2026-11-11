@@ -1,6 +1,6 @@
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareDrawer';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import {
@@ -25,7 +25,9 @@ import {
 function ConfiguredSoupEntityActionDrawer() {
   const panel = useSplitPanelOrThrow();
   const drawerState = useSoupEntityActionDrawer();
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups } = createSoupEntityActions({
+    markDoneDelegate: () => drawerState?.entry()?.markDoneDelegate?.(),
+  });
   const [projectTasks, setProjectTasks] = createSignal<string[]>();
 
   if (!drawerState) {
@@ -40,8 +42,10 @@ function ConfiguredSoupEntityActionDrawer() {
     const content = panel.handle.content();
     return buildActionGroups(entry.list, [entry.entity], {
       viewContext: entry.viewContext,
-      viewedProjectId: viewedProjectIdFromContent(content),
+      viewedProjectId:
+        entry.viewedProjectId ?? viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
+      createActionNavigationHandler: entry.createActionNavigationHandler,
       openProjectPicker: () => {
         const ids = [entry.entity.id];
         drawerState.close();

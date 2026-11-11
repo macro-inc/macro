@@ -1,5 +1,6 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import {
   createSignal,
@@ -69,9 +70,9 @@ export function OwnerSettingsSection(props: {
   }
   const pageShare = () => (
     <CopyButton
-      variant="outline"
+      aria-label="Copy link"
+      variant="secondary"
       size="md"
-      label="Copy link"
       tooltip={
         source.profile()?.revision
           ? undefined
@@ -163,6 +164,14 @@ export function OwnerSettingsSection(props: {
                 )}
               </Show>
               <EventTypesPanel
+                listStart={
+                  // Booking rows lead with their toggle; the inset puts the
+                  // row's play icon and label over each link's icon and title,
+                  // while the row's hover still spans the list.
+                  <div class="[--tutorial-row-inset:1.5rem]">
+                    <TutorialRow tutorial="scheduling" />
+                  </div>
+                }
                 owner={scope()}
                 search={props.search ?? ''}
                 events={p().eventTypes}

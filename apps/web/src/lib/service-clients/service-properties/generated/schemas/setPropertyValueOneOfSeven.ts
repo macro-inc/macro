@@ -7,9 +7,9 @@
 import type { SetPropertyValueOneOfSevenType } from './setPropertyValueOneOfSevenType';
 
 /**
- * String/text value
+ * Numeric value
  */
 export type SetPropertyValueOneOfSeven = {
   type: SetPropertyValueOneOfSevenType;
-  value: string;
+  value: number;
 };

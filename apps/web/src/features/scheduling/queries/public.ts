@@ -1,7 +1,7 @@
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { BookingRejectedError } from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
@@ -24,13 +24,75 @@ function validateReceipt(receipt: BookingReceipt): BookingReceipt {
   return receipt;
 }
 
-export function usePublicProfileQuery(id: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: schedulingKeys.publicProfile(id()).queryKey,
+function publicProfileQueryOptions(id: string) {
+  return queryOptions({
+    queryKey: schedulingKeys.publicProfile(id).queryKey,
     queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.profile(id()))).profile,
+      (await throwOnErr(() => schedulingClient.profile(id))).profile,
     retry: false,
-  }));
+  });
+}
+
+export function usePublicProfileQuery(id: Accessor<string>) {
+  return useQuery(() => publicProfileQueryOptions(id()));
+}
+
+function slotsQueryOptions(
+  profile: string,
+  event: string,
+  date: string,
+  timeZone: string
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.slots(profile, event, `${date}:${timeZone}`)
+      .queryKey,
+    staleTime: 0,
+    retry: false,
+    queryFn: async () =>
+      (
+        await throwOnErr(() =>
+          schedulingClient.slots(profile, event, date, timeZone)
+        )
+      ).slots,
+  });
+}
+
+function receiptQueryOptions(id: string, token: string) {
+  return queryOptions({
+    queryKey: schedulingKeys.receipt(id, token).queryKey,
+    queryFn: async () =>
+      validateReceipt(
+        await throwOnErr(() => schedulingClient.receipt(id, token))
+      ),
+    retry: false,
+    gcTime: 0,
+    refetchInterval: (q) =>
+      q.state.data?.booking.status === 'processing' ||
+      q.state.data?.booking.status === 'failed'
+        ? 5000
+        : false,
+  });
+}
+
+function replacementSlotsQueryOptions(
+  id: string,
+  token: string,
+  date: string,
+  timeZone: string
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.replacementSlots(id, token, date, timeZone)
+      .queryKey,
+    queryFn: async () =>
+      (
+        await throwOnErr(() =>
+          schedulingClient.replacementSlots(id, token, date, timeZone)
+        )
+      ).slots,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
 }
 
 export function createPublicBookingSource() {
@@ -70,18 +132,7 @@ export function createPublicBookingSource() {
   }));
   return {
     slots: (profile: string, event: string, date: string, timeZone: string) =>
-      queryClient.fetchQuery({
-        queryKey: schedulingKeys.slots(profile, event, `${date}:${timeZone}`)
-          .queryKey,
-        staleTime: 0,
-        retry: false,
-        queryFn: async () =>
-          (
-            await throwOnErr(() =>
-              schedulingClient.slots(profile, event, date, timeZone)
-            )
-          ).slots,
-      }),
+      queryClient.fetchQuery(slotsQueryOptions(profile, event, date, timeZone)),
     book: (profile: string, event: string, request: BookingRequest) =>
       book.mutateAsync({ profile, event, request }),
   };
@@ -91,20 +142,7 @@ export function createBookingReceiptSource(
   id: Accessor<string>,
   token: Accessor<string>
 ) {
-  const receipt = useQuery(() => ({
-    queryKey: schedulingKeys.receipt(id(), token()).queryKey,
-    queryFn: async () =>
-      validateReceipt(
-        await throwOnErr(() => schedulingClient.receipt(id(), token()))
-      ),
-    retry: false,
-    gcTime: 0,
-    refetchInterval: (q) =>
-      q.state.data?.booking.status === 'processing' ||
-      q.state.data?.booking.status === 'failed'
-        ? 5000
-        : false,
-  }));
+  const receipt = useQuery(() => receiptQueryOptions(id(), token()));
   const cancel = useMutation(() => ({
     mutationFn: () =>
       throwOnErr(() => schedulingClient.cancelPublic(id(), token())),
@@ -126,18 +164,8 @@ export function createBookingReceiptSource(
       await receipt.refetch();
     },
     replacementSlots: (date: string, timeZone: string) =>
-      queryClient.fetchQuery({
-        queryKey: schedulingKeys.replacementSlots(id(), token(), date, timeZone)
-          .queryKey,
-        queryFn: async () =>
-          (
-            await throwOnErr(() =>
-              schedulingClient.replacementSlots(id(), token(), date, timeZone)
-            )
-          ).slots,
-        staleTime: 0,
-        gcTime: 0,
-        retry: false,
-      }),
+      queryClient.fetchQuery(
+        replacementSlotsQueryOptions(id(), token(), date, timeZone)
+      ),
   };
 }

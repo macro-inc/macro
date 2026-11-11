@@ -24,6 +24,21 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * What an agent needs to start using the SDK.
+ */
+export type AgentSetupResponse = {
+    /**
+     * The agent's API key. Shown only here; repeating setup revokes it.
+     */
+    api_key: string;
+    /**
+     * Whether joining the inviting team failed. The invite stays pending:
+     * repeating setup tries again, and the invite link works after confirming.
+     */
+    team_join_failed: boolean;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -57,8 +72,9 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadMonthlyBudget = {
     /**
-     * Reloads paid, pending, or failed with an invoice that can still collect.
-     * Customer cents; manual credit purchases do not count.
+     * Reloads and one-time card purchases paid, pending, or failed with an
+     * invoice that can still collect. Customer cents; Checkout purchases do
+     * not count.
      */
     committed_cents: number;
     /**
@@ -329,10 +345,30 @@ export type CreatePortalSessionRequest = {
     returnUrl: string;
 };
 
+export type CreateProfilePictureUploadRequest = {
+    /**
+     * Mime type of the image.
+     */
+    content_type: string;
+    /**
+     * File name, such as `avatar.png`.
+     */
+    file_name: string;
+    /**
+     * Exact size of the image in bytes. Storage rejects a body of any other size.
+     */
+    size_bytes: number;
+};
+
 /**
  * The request body to create a new team
  */
 export type CreateTeamRequest = {
+    /**
+     * Whether colleagues who sign up with the owner's work email domain join
+     * the team automatically. Ignored for generic email providers.
+     */
+    allow_domain_join?: boolean;
     /**
      * The name of the team
      */
@@ -379,6 +415,73 @@ export type CreditCheckoutResponse = {
 };
 
 /**
+ * Request body for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseRequestBody = {
+    /**
+     * One of the catalog's credit packs, cents.
+     */
+    amountCents: number;
+};
+
+/**
+ * Response for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseResponse = {
+    /**
+     * Amount charged, cents: the requested pack, unless an earlier declined
+     * purchase that Stripe collected in the meantime was booked instead.
+     */
+    amountCents: number;
+    snapshot?: null | UsageSnapshot;
+    /**
+     * Whether the card on file paid.
+     */
+    status: CreditPurchaseStatus;
+};
+
+/**
+ * The monthly credit limit that applies to this user's one-time purchases.
+ */
+export type CreditPurchaseSnapshot = {
+    /**
+     * Charged this month so far, including charges that may still collect.
+     */
+    committed_cents: number;
+    /**
+     * Most credits charged to the card on file per UTC calendar month, from
+     * automatic reloads and one-time purchases together, in customer cents.
+     * `null` when the payer set no limit; team members always have one.
+     */
+    monthly_limit_cents?: number | null;
+    /**
+     * Start of the next UTC calendar month.
+     */
+    resets_at: string;
+};
+
+/**
+ * How a one-time credit purchase charged to the card on file ended.
+ */
+export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required' | 'authentication_required';
+
+/**
+ * The status every user sees, without who set it.
+ */
+export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
+    /**
+     * When it was set; absent when no status was ever set. Clients keep the
+     * newest status they have seen, whether fetched or pushed.
+     */
+    updatedAt?: string | null;
+};
+
+/**
  * What settings needs to render the Cursor connection.
  *
  * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
@@ -390,6 +493,12 @@ export type CreditCheckoutResponse = {
  * that cannot reach KMS does not start.
  */
 export type CursorApiKeyStatus = {
+    /**
+     * The reasoning effort those sessions start on, as the value of the
+     * default model's effort parameter (e.g. `high`). `None` means the
+     * model's own default; never set without `default_model_id`.
+     */
+    defaultEffort?: string | null;
     /**
      * The Cursor model id this user's sessions start on, when they have
      * chosen one. `None` means the deployment default is in effect — the
@@ -446,10 +555,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -616,6 +729,10 @@ export type GetLegacyUserPermissionsResponse = {
      * Whether the user has trialed through stripe
      */
     hasTrialed: boolean;
+    /**
+     * Whether this is an agent account rather than a person
+     */
+    isAgent: boolean;
     /**
      * The user's license status
      */
@@ -924,6 +1041,13 @@ export type GithubPullRequestReview = {
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
 
 /**
+ * Whether a pull request is open or closed, as a user sets it. Merging is a
+ * separate action, so unlike `GithubPullRequestStatus` there is no merged
+ * state.
+ */
+export type GithubPullRequestState = 'open' | 'closed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
@@ -1129,6 +1253,17 @@ export type InviteToTeamRequest = {
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;
+    /**
+     * Invite these addresses as agents: an address with no account signs up
+     * as an agent and joins the team when it first signs in.
+     */
+    is_agent?: boolean;
+    /**
+     * The team the caller means to invite to. Invites always go to the
+     * caller's current team; when this names another team, nothing is sent
+     * and the request answers 409.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -1144,6 +1279,11 @@ export type JoinTeamByInviteLinkResponse = {
      */
     team_id: string;
 };
+
+/**
+ * A language the app's interface is available in, as a BCP 47 tag.
+ */
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt-PT' | 'sv' | 'da' | 'nb' | 'fi' | 'pl' | 'ru' | 'ja' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'hi' | 'id' | 'vi' | 'th';
 
 /**
  * Defines who can access an item through its share link.
@@ -1205,6 +1345,12 @@ export type PasswordlessRequest = {
      */
     email: string;
     /**
+     * Create an agent account if this address has no account yet. Otherwise
+     * `true` has no effect, and `false` reverts an agent flag nobody has proven:
+     * see `revert_unconfirmed_agent`.
+     */
+    is_agent?: boolean;
+    /**
      * The redirect uri to redirect to after login
      */
     redirect_uri: string;
@@ -1227,40 +1373,35 @@ export type PasswordlessStartedResponse = {
  */
 export type PatchTeamCrmSettingsRequest = {
     /**
-     * On a disabled → enabled transition, whether to backfill the CRM
-     * from members' existing email history. Ignored when disabling.
+     * Retained for compatibility and ignored. Email backfill requires
+     * each member's explicit consent through CRM email privacy settings.
      */
     backfill?: boolean;
     /**
-     * The desired CRM state for the team.
+     * Legacy compatibility flag. True is a no-op; false is rejected.
      */
     enabled: boolean;
 };
 
 /**
- * Response for `PATCH /team/crm`. Reports both the resulting state
- * and whether this call changed it; for the enable-flip case it also
- * reports the backfill fan-out tallies.
+ * Compatibility response for `PATCH /team/crm`. CRM records are always
+ * available; this endpoint does not enroll mailboxes or backfill emails.
  */
 export type PatchTeamCrmSettingsResponse = {
     /**
-     * Number of members for whom a `PopulateCrmForUser` message was
-     * enqueued. Non-zero only on a disabled → enabled transition;
-     * per-user enqueue failures are logged and swallowed.
+     * Always zero: mailbox contributions require individual consent.
      */
     backfill_enqueued: number;
     /**
-     * Number of members whose enqueue failed (and was swallowed).
-     * Non-zero only on a disabled → enabled transition.
+     * Always zero: this endpoint does not enqueue backfills.
      */
     backfill_failed: number;
     /**
-     * True if this call flipped the value (false → true or true →
-     * false). False if the team was already at the requested state.
+     * Always false: the legacy command does not change availability.
      */
     changed: boolean;
     /**
-     * The resulting `crm_enabled` value after the call.
+     * Always true: CRM records are available to team members.
      */
     enabled: boolean;
 };
@@ -1280,6 +1421,7 @@ export type PatchTeamMemberPlanRequest = {
  */
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
+    language?: null | Language;
     /**
      * The new name for the team
      */
@@ -1357,6 +1499,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Monthly automatic reload limit a payer on this plan starts from,
+     * cents. Absent for plans that cannot reload.
+     */
+    auto_reload_default_monthly_limit_cents?: number | null;
+    /**
      * Included AI per seat per period, in cents at provider cost. For the
      * free plan this is its monthly hard cap.
      */
@@ -1419,6 +1566,20 @@ export type ProfilePictureQueryParams = {
     url: string;
 };
 
+/**
+ * Where to upload a new profile picture, and the file id to set afterwards.
+ */
+export type ProfilePictureUpload = {
+    /**
+     * Id to pass to `PUT /user/profile_picture/file` once uploaded.
+     */
+    file_id: string;
+    /**
+     * Expiring URL to `PUT` the image bytes to.
+     */
+    upload_url: string;
+};
+
 export type ProfilePictures = {
     pictures: Array<UserProfilePicture>;
 };
@@ -1463,14 +1624,26 @@ export type PutCursorApiKeyRequest = {
 };
 
 /**
- * The model the user chose for their sessions.
+ * The model the user chose for their sessions, and its effort.
  */
 export type PutCursorDefaultModelRequest = {
+    /**
+     * The value of the model's reasoning-effort parameter (e.g. `high`), or
+     * `null` for the model's own default. Ignored without a model.
+     */
+    effort?: string | null;
     /**
      * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
      * fall back to the deployment default.
      */
     modelId?: string | null;
+};
+
+export type PutProfilePictureFileRequest = {
+    /**
+     * Id of an image the caller uploaded to static file storage.
+     */
+    file_id: string;
 };
 
 export type PutUserNameQueryParams = {
@@ -1537,6 +1710,16 @@ export type ScheduledSeatPlan = {
 export type SeatPlan = 'premium' | 'max';
 
 /**
+ * Response for the domain notice endpoint.
+ */
+export type SendDomainNoticeResponse = {
+    /**
+     * How many colleagues were emailed by this call.
+     */
+    sent: number;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1594,11 +1777,62 @@ export type SetGithubPullRequestDraftResponse = {
     pullRequest?: null | EnrichedGithubPullRequest;
 };
 
+/**
+ * A request to close one pull request, or reopen it, on the user's behalf.
+ */
+export type SetGithubPullRequestStateRequest = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+    /**
+     * `closed` closes the pull request; `open` reopens it.
+     */
+    state: GithubPullRequestState;
+};
+
+/**
+ * Response body for a pull request that was closed or reopened.
+ */
+export type SetGithubPullRequestStateResponse = {
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * Whether the pull request is now open or closed.
+     */
+    state: GithubPullRequestState;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
      */
     idp_id: string;
+};
+
+/**
+ * One status a staff member set. The newest is the current status.
+ */
+export type StatusUpdate = SystemStatus & {
+    /**
+     * When it was set.
+     */
+    createdAt: string;
+    /**
+     * UUIDv7, so ids sort by creation.
+     */
+    id: string;
+    /**
+     * The staff member who set it.
+     */
+    userId: string;
 };
 
 /**
@@ -1623,6 +1857,35 @@ export type SubscriptionStatus = {
 };
 
 /**
+ * The platform status. Only the non-operational statuses carry a message.
+ */
+export type SystemStatus = {
+    status: 'operational';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'degraded';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'major_outage';
+};
+
+/**
+ * Recent status updates, newest first.
+ */
+export type SystemStatusHistory = {
+    /**
+     * The updates.
+     */
+    updates: Array<StatusUpdate>;
+};
+
+/**
  * The Team struct
  */
 export type Team = {
@@ -1637,8 +1900,8 @@ export type Team = {
      */
     auto_join_domain?: string | null;
     /**
-     * Whether the CRM is enabled for this team (from `team_crm_settings`;
-     * `false` when no row exists).
+     * CRM record availability, always true for teams. This compatibility
+     * field does not indicate whether any mailbox contributes emails.
      */
     crm_enabled: boolean;
     default_link_share?: null | LinkShare;
@@ -1649,6 +1912,7 @@ export type Team = {
      */
     enterprise: boolean;
     id: string;
+    language?: null | Language;
     name: string;
     owner_id: string;
     slug: string;
@@ -1674,6 +1938,10 @@ export type TeamInviteDetails = {
      * The user who sent the invitation
      */
     invited_by: string;
+    /**
+     * Whether the invite creates an agent account
+     */
+    is_agent: boolean;
     /**
      * When the invite was last sent
      */
@@ -1868,6 +2136,26 @@ export type UpdateOverageRequest = {
 };
 
 /**
+ * What kind of upstream failure a 502 or 503 reports, for clients that
+ * branch on it.
+ */
+export type UpstreamErrorCode = 'upstream_unavailable' | 'upstream_rate_limited' | 'upstream_invalid_response';
+
+/**
+ * The body of a 502 or 503 caused by a third-party service.
+ */
+export type UpstreamErrorResponse = {
+    /**
+     * The kind of failure.
+     */
+    code: UpstreamErrorCode;
+    /**
+     * What failed and what to do about it, written for the user.
+     */
+    message: string;
+};
+
+/**
  * The payer's current-period position, as shown in Billing settings and used
  * by the gate.
  */
@@ -1886,6 +2174,7 @@ export type UsageSnapshot = {
      * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
+    credit_purchase?: null | CreditPurchaseSnapshot;
     /**
      * Shared payer credits already applied to this period, in customer cents.
      */
@@ -1956,6 +2245,14 @@ export type UsageSnapshot = {
     used_cents: number;
 };
 
+/**
+ * The interface language a user picked for themselves. `None` follows their
+ * team's language, else their browser's.
+ */
+export type UserLanguage = {
+    language?: null | Language;
+};
+
 export type UserLinkResponse = {
     /**
      * Whether or not a link exists for the given idp
@@ -1966,6 +2263,10 @@ export type UserLinkResponse = {
 export type UserName = {
     first_name?: string | null;
     id: string;
+    /**
+     * Whether this is an agent account rather than a person.
+     */
+    is_agent?: boolean;
     last_name?: string | null;
 };
 
@@ -2174,6 +2475,47 @@ export type CreateAiCreditCheckoutResponses = {
 };
 
 export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type PurchaseAiCreditsData = {
+    body: CreditPurchaseRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/purchase';
+};
+
+export type PurchaseAiCreditsErrors = {
+    /**
+     * Invalid pack or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Over the monthly credit limit, or an earlier purchase is still processing
+     */
+    409: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type PurchaseAiCreditsError = PurchaseAiCreditsErrors[keyof PurchaseAiCreditsErrors];
+
+export type PurchaseAiCreditsResponses = {
+    /**
+     * Purchase outcome and updated position
+     */
+    200: CreditPurchaseResponse;
+};
+
+export type PurchaseAiCreditsResponse = PurchaseAiCreditsResponses[keyof PurchaseAiCreditsResponses];
 
 export type UpdateAiBillingOverageData = {
     body: UpdateOverageRequest;
@@ -2570,6 +2912,8 @@ export type SetGithubPullRequestDraftErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
@@ -2592,6 +2936,8 @@ export type EnrichGithubPullRequestsErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type EnrichGithubPullRequestsError = EnrichGithubPullRequestsErrors[keyof EnrichGithubPullRequestsErrors];
@@ -2626,6 +2972,8 @@ export type MergeGithubPullRequestErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
@@ -2655,6 +3003,8 @@ export type GetGithubPullRequestMergeabilityErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
@@ -2664,6 +3014,41 @@ export type GetGithubPullRequestMergeabilityResponses = {
 };
 
 export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
+
+export type SetGithubPullRequestStateData = {
+    body: SetGithubPullRequestStateRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/state';
+};
+
+export type SetGithubPullRequestStateErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
+};
+
+export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
+
+export type SetGithubPullRequestStateResponses = {
+    200: SetGithubPullRequestStateResponse;
+};
+
+export type SetGithubPullRequestStateResponse2 = SetGithubPullRequestStateResponses[keyof SetGithubPullRequestStateResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -2864,7 +3249,7 @@ export type RefreshErrors = {
     400: string;
     401: string;
     /**
-     * Refresh already in progress for this user
+     * Refresh already in progress for this user, or the access token lacks the Macro claims and was issued too recently to refresh
      */
     429: string;
     500: string;
@@ -2914,6 +3299,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
@@ -2935,6 +3321,8 @@ export type DeleteGithubLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type DeleteGithubLinkError = DeleteGithubLinkErrors[keyof DeleteGithubLinkErrors];
@@ -2962,6 +3350,8 @@ export type InitGithubLinkErrors = {
     401: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type InitGithubLinkError = InitGithubLinkErrors[keyof InitGithubLinkErrors];
@@ -2984,6 +3374,8 @@ export type CheckGithubLinkStatusErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type CheckGithubLinkStatusError = CheckGithubLinkStatusErrors[keyof CheckGithubLinkStatusErrors];
@@ -3181,6 +3573,10 @@ export type SsoLoginData = {
          * **OPTIONAL**. If the user opened a link with a referral code.
          */
         referral_code: string;
+        /**
+         * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
+         */
+        is_agent: boolean;
     };
     url: '/login/sso';
 };
@@ -3477,6 +3873,71 @@ export type SessionLoginResponses = {
 
 export type SessionLoginResponse = SessionLoginResponses[keyof SessionLoginResponses];
 
+export type GetSystemStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type GetSystemStatusErrors = {
+    500: ErrorResponse;
+};
+
+export type GetSystemStatusError = GetSystemStatusErrors[keyof GetSystemStatusErrors];
+
+export type GetSystemStatusResponses = {
+    200: CurrentSystemStatus;
+};
+
+export type GetSystemStatusResponse = GetSystemStatusResponses[keyof GetSystemStatusResponses];
+
+export type SetSystemStatusData = {
+    body: SystemStatus;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type SetSystemStatusErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * The body is not a valid status
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type SetSystemStatusError = SetSystemStatusErrors[keyof SetSystemStatusErrors];
+
+export type SetSystemStatusResponses = {
+    200: StatusUpdate;
+};
+
+export type SetSystemStatusResponse = SetSystemStatusResponses[keyof SetSystemStatusResponses];
+
+export type ListSystemStatusHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status/history';
+};
+
+export type ListSystemStatusHistoryErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSystemStatusHistoryError = ListSystemStatusHistoryErrors[keyof ListSystemStatusHistoryErrors];
+
+export type ListSystemStatusHistoryResponses = {
+    200: SystemStatusHistory;
+};
+
+export type ListSystemStatusHistoryResponse = ListSystemStatusHistoryResponses[keyof ListSystemStatusHistoryResponses];
+
 export type DeleteTeamData = {
     body?: never;
     path?: never;
@@ -3606,6 +4067,27 @@ export type PatchTeamCrmSettingsResponses = {
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
 
+export type SendTeamDomainNoticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain-notice';
+};
+
+export type SendTeamDomainNoticeErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
+
+export type SendTeamDomainNoticeResponses = {
+    200: SendDomainNoticeResponse;
+};
+
+export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
+
 export type InviteToTeamData = {
     body: InviteToTeamRequest;
     path?: never;
@@ -3617,6 +4099,10 @@ export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -3760,13 +4246,24 @@ export type DeleteTeamInviteHandlerResponses = {
 export type GetTeamInvitesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The team the caller means to list. Invites are always read from the
+         * caller's current team; when this names another team, the request
+         * answers 409.
+         */
+        team_id?: string;
+    };
     url: '/team/invites';
 };
 
 export type GetTeamInvitesErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -3945,6 +4442,34 @@ export type GetUserInvitesResponses = {
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
 
+export type AgentSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/agent_setup';
+};
+
+export type AgentSetupErrors = {
+    401: string;
+    /**
+     * The account is not an agent
+     */
+    403: ErrorResponse;
+    /**
+     * Setup is already confirmed
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AgentSetupError = AgentSetupErrors[keyof AgentSetupErrors];
+
+export type AgentSetupResponses = {
+    200: AgentSetupResponse;
+};
+
+export type AgentSetupResponse2 = AgentSetupResponses[keyof AgentSetupResponses];
+
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
     path?: never;
@@ -4006,6 +4531,52 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type GetUserLanguageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type GetUserLanguageErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetUserLanguageError = GetUserLanguageErrors[keyof GetUserLanguageErrors];
+
+export type GetUserLanguageResponses = {
+    200: UserLanguage;
+};
+
+export type GetUserLanguageResponse = GetUserLanguageResponses[keyof GetUserLanguageResponses];
+
+export type PutUserLanguageData = {
+    body: UserLanguage;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type PutUserLanguageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutUserLanguageError = PutUserLanguageErrors[keyof PutUserLanguageErrors];
+
+export type PutUserLanguageResponses = {
+    /**
+     * Language updated
+     */
+    204: void;
+};
+
+export type PutUserLanguageResponse = PutUserLanguageResponses[keyof PutUserLanguageResponses];
 
 export type GetLegacyUserPermissionsData = {
     body?: never;
@@ -4202,6 +4773,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4212,6 +4787,70 @@ export type PutProfilePictureResponses = {
 };
 
 export type PutProfilePictureResponse = PutProfilePictureResponses[keyof PutProfilePictureResponses];
+
+export type CreateProfilePictureUploadData = {
+    body: CreateProfilePictureUploadRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type CreateProfilePictureUploadErrors = {
+    /**
+     * Not a supported image type, or empty
+     */
+    400: ErrorResponse;
+    401: string;
+    /**
+     * The image is larger than 16 MB
+     */
+    413: ErrorResponse;
+    /**
+     * Too many uploads this hour
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateProfilePictureUploadError = CreateProfilePictureUploadErrors[keyof CreateProfilePictureUploadErrors];
+
+export type CreateProfilePictureUploadResponses = {
+    200: ProfilePictureUpload;
+};
+
+export type CreateProfilePictureUploadResponse = CreateProfilePictureUploadResponses[keyof CreateProfilePictureUploadResponses];
+
+export type PutProfilePictureFileData = {
+    body: PutProfilePictureFileRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type PutProfilePictureFileErrors = {
+    /**
+     * The file is not a supported image
+     */
+    400: ErrorResponse;
+    401: string;
+    /**
+     * The caller has no such file
+     */
+    404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutProfilePictureFileError = PutProfilePictureFileErrors[keyof PutProfilePictureFileErrors];
+
+export type PutProfilePictureFileResponses = {
+    200: EmptyResponse;
+};
+
+export type PutProfilePictureFileResponse = PutProfilePictureFileResponses[keyof PutProfilePictureFileResponses];
 
 export type PostProfilePicturesData = {
     body: GetProfilePicturesRequestBody;

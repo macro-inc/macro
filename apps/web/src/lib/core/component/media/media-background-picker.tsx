@@ -1,8 +1,8 @@
 import type { BackgroundEffect } from '@core/media/background-effect';
-import CaretDown from '@phosphor/caret-down.svg';
-import Image from '@phosphor/image.svg';
-import Prohibit from '@phosphor/prohibit.svg';
-import Upload from '@phosphor/upload-simple.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Image from '@icon/system/regular/image.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
+import Upload from '@icon/system/regular/upload-simple.svg';
 import { Dropdown, SingleSelectCheck } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 

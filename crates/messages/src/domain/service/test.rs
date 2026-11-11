@@ -1,9 +1,11 @@
 use super::*;
 use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 mod call_retries;
+mod call_roots;
 mod event_posts;
 mod guest_chat;
 mod initiative;
@@ -21,6 +23,8 @@ struct Repo {
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
+    call_thread: Option<CallThreadFacts>,
+    call_statuses: HashMap<Uuid, CallEntryStatus>,
 }
 
 impl Repo {
@@ -32,6 +36,17 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        Ok(self.call_thread.clone())
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        _: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        Ok(self.call_statuses.clone())
+    }
+
     async fn document_file_type(&self, _: &str) -> Result<Option<String>, MessageError> {
         Ok(self.file_type.clone())
     }
@@ -244,6 +259,7 @@ fn fixture() -> Repo {
     let user = "macro|author@example.com";
     Repo {
         message: Message {
+            kind: MessageKind::Message,
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
@@ -254,6 +270,7 @@ fn fixture() -> Repo {
             imported_author: Some(ImportedAuthor {
                 name: "External PDF author".into(),
             }),
+            triggered_via: None,
             triggered_by: None,
             content: "root".into(),
             created_at: Utc::now(),
@@ -284,6 +301,8 @@ fn fixture() -> Repo {
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
+        call_thread: None,
+        call_statuses: HashMap::new(),
     }
 }
 
@@ -697,7 +716,7 @@ async fn inaccessible_references_are_rejected_before_persistence() {
 #[tokio::test]
 async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     let service = MessageService::new(fixture(), Events::default());
-    let mentions = [SimpleMention {
+    let mentions = vec![SimpleMention {
         entity_type: "user".into(),
         entity_id: "macro|unshared@example.com".into(),
     }];
@@ -706,12 +725,12 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     service
         .validate_references(
             &access("macro|author@example.com", "doc", AccessLevel::Comment),
-            &mentions,
+            mentions.clone(),
             &[],
         )
         .await
         .unwrap();
-    let invalid = [SimpleMention {
+    let invalid = vec![SimpleMention {
         entity_type: "user".into(),
         entity_id: "arbitrary-string".into(),
     }];
@@ -719,7 +738,7 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
         service
             .validate_references(
                 &access("macro|author@example.com", "doc", AccessLevel::Comment),
-                &invalid,
+                invalid,
                 &[]
             )
             .await,
@@ -777,6 +796,7 @@ impl MessageReferenceAccess for ReferenceAccess {
 #[tokio::test]
 async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
     for (tag, entity_type) in [
+        ("channel", EntityType::Channel),
         ("form", EntityType::Form),
         ("thread", EntityType::EmailThread),
         ("email", EntityType::EmailThread),
@@ -791,7 +811,8 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 allowed,
                 checked: Arc::default(),
             };
-            let service = MessageService::new(repo.clone(), Events::default())
+            let events = Events::default();
+            let service = MessageService::new(repo.clone(), events.clone())
                 .with_references(references.clone());
             let mut input = post_input();
             input.mentions = vec![SimpleMention {
@@ -811,18 +832,25 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 )
                 .await;
             for result in [posted, edited] {
+                let message = result.unwrap();
                 if allowed {
-                    let message = result.unwrap();
                     assert_eq!(message.mentions[0].entity_type, tag);
                 } else {
-                    assert!(
-                        matches!(result, Err(MessageError::Forbidden)),
-                        "{tag}: {result:?}"
-                    );
+                    assert!(message.mentions.is_empty(), "{tag}: {message:?}");
                 }
             }
-            assert_eq!(repo.creates.lock().unwrap().len(), usize::from(allowed));
-            assert_eq!(repo.edits.lock().unwrap().len(), usize::from(allowed));
+            // Delivery shares and notifies from the event's mentions, so an unviewable
+            // mention must never reach it.
+            for event in events.0.lock().unwrap().iter() {
+                let (MessageChange::Posted { mentions, .. }
+                | MessageChange::Edited { mentions, .. }) = &event.change
+                else {
+                    panic!("expected post or edit");
+                };
+                assert_eq!(mentions.len(), usize::from(allowed), "{tag}");
+            }
+            assert_eq!(repo.creates.lock().unwrap().len(), 1);
+            assert_eq!(repo.edits.lock().unwrap().len(), 1);
             assert_eq!(
                 *references.checked.lock().unwrap(),
                 vec![(entity_type, Uuid::from_u128(30).to_string()); 2]
@@ -902,10 +930,14 @@ async fn a_group_remains_one_authored_reference_and_resolves_current_recipients_
         entity_type: "document".into(),
         entity_id: "private".into(),
     };
-    assert!(matches!(
-        service.post(channel_access(), input.clone()).await,
-        Err(MessageError::Forbidden)
-    ));
+    assert_eq!(
+        service
+            .post(channel_access(), input.clone())
+            .await
+            .unwrap()
+            .mentions,
+        input.mentions[..1]
+    );
     input.mentions = vec![
         SimpleMention {
             entity_type: "user".into(),
@@ -917,7 +949,7 @@ async fn a_group_remains_one_authored_reference_and_resolves_current_recipients_
         service.post(channel_access(), input).await,
         Err(MessageError::Invalid("too many message references"))
     ));
-    assert_eq!(repo.creates.lock().unwrap().len(), 1);
+    assert_eq!(repo.creates.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1140,12 +1172,26 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
         input.attribution = MessageAttribution::Unprompted;
         assert!(
             service
-                .post(receipt(), input)
+                .post(receipt(), input.clone())
                 .await
                 .unwrap()
                 .triggered_by
                 .is_none()
         );
+        input.attribution = MessageAttribution::ActingUserVia {
+            client: "Claude Code".into(),
+        };
+        service.post(receipt(), input).await.unwrap();
+        {
+            let creates = repo.creates.lock().unwrap();
+            let via = creates.last().unwrap();
+            assert_eq!(
+                via.triggered_by.as_deref(),
+                Some("macro|author@example.com")
+            );
+            assert_eq!(via.triggered_via.as_deref(), Some("Claude Code"));
+            assert!(creates[0].triggered_via.is_none());
+        }
         service
             .patch(
                 receipt(),
@@ -1169,7 +1215,7 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             }
         ));
         assert!(matches!(
-            events[2].change,
+            events[3].change,
             MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..
@@ -1285,6 +1331,17 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        self.inner.call_thread_facts(id).await
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        self.inner.call_entry_statuses(ids).await
+    }
+
     async fn document_file_type(&self, id: &str) -> Result<Option<String>, MessageError> {
         self.inner.document_file_type(id).await
     }
@@ -1566,15 +1623,17 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         entity_type: "agent_session".into(),
         entity_id: Uuid::from_u128(10).to_string(),
     });
-    assert!(matches!(
+    assert_eq!(
         service
             .post(
                 access("macro|author@example.com", "doc", AccessLevel::Comment),
-                input,
+                input.clone(),
             )
-            .await,
-        Err(MessageError::Forbidden)
-    ));
+            .await
+            .unwrap()
+            .mentions,
+        input.mentions[..2]
+    );
     assert_eq!(
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]

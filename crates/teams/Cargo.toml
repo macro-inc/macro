@@ -21,7 +21,6 @@ axum = [
   "dep:axum",
   "dep:macro_authorization",
   "dep:model-error-response",
-  "dep:model_user",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -37,6 +36,7 @@ backfill_binary = [
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = [
+  "model_user/sqlx",
   "dep:analytics_client",
   "dep:contacts",
   "dep:entity_access_db_utils",
@@ -100,7 +100,7 @@ tokio = { workspace = true, optional = true }
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
+model_user = { path = "../model_user" }
 utoipa = { workspace = true, optional = true }
 
 # Notification dependencies (for ports)

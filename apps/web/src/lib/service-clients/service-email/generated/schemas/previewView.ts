@@ -14,6 +14,8 @@ export type PreviewView =
   | 'drafts'
   | 'starred'
   | 'all'
+  | 'spam'
+  | 'trash'
   | 'important'
   | 'other'
   | string;

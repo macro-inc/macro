@@ -1,8 +1,11 @@
 use async_graphql::{Enum, ID, InputObject};
+use attention_feed::domain::models::{FeedKey, FeedPosition, FeedRevision};
 use work_feed::domain::models::{
-    WorkFeedDoneTarget, WorkFeedItemKey, WorkFeedItemType, WorkFeedMode, WorkFeedPosition,
-    WorkFeedQuery, WorkFeedRevision, WorkFeedScope,
+    WorkFeedDoneTarget, WorkFeedItemState, WorkFeedItemType, WorkFeedMode, WorkFeedQuery,
+    WorkFeedScope,
 };
+
+use crate::objects::GraphqlWorkFeedItemState;
 
 #[cfg(test)]
 mod test;
@@ -38,12 +41,16 @@ impl From<GraphqlWorkFeedMode> for WorkFeedMode {
 #[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
 #[graphql(name = "WorkFeedItemType")]
 pub enum GraphqlWorkFeedItemType {
-    /// Documents and tasks.
+    /// Documents other than tasks.
     Document,
+    /// Tasks.
+    Task,
     /// AI chats.
     Chat,
-    /// Projects.
+    /// Projects (folders).
     Project,
+    /// Task projects (initiatives).
+    Initiative,
     /// Email threads.
     Email,
     /// Channel activity outside a dedicated thread item.
@@ -56,20 +63,25 @@ pub enum GraphqlWorkFeedItemType {
     PullRequest,
     /// Agent sessions.
     AgentSession,
+    /// Paired runtimes, through their access notifications.
+    Runtime,
 }
 
 impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
     fn from(value: GraphqlWorkFeedItemType) -> Self {
         match value {
             GraphqlWorkFeedItemType::Document => Self::Document,
+            GraphqlWorkFeedItemType::Task => Self::Task,
             GraphqlWorkFeedItemType::Chat => Self::Chat,
             GraphqlWorkFeedItemType::Project => Self::Project,
+            GraphqlWorkFeedItemType::Initiative => Self::Initiative,
             GraphqlWorkFeedItemType::Email => Self::Email,
             GraphqlWorkFeedItemType::Channel => Self::Channel,
             GraphqlWorkFeedItemType::ChannelThread => Self::ChannelThread,
             GraphqlWorkFeedItemType::CalendarEvent => Self::CalendarEvent,
             GraphqlWorkFeedItemType::PullRequest => Self::PullRequest,
             GraphqlWorkFeedItemType::AgentSession => Self::AgentSession,
+            GraphqlWorkFeedItemType::Runtime => Self::Runtime,
         }
     }
 }
@@ -107,10 +119,14 @@ impl WorkFeedScopeInput {
 pub struct WorkFeedInput {
     /// Which items the feed shows.
     pub scope: Option<WorkFeedScopeInput>,
+    /// Only items in this state: `UNSEEN` or `SEEN`. Subscriptions and undo
+    /// place items in every state, so an item seen while it is shown stays
+    /// until the page is fetched again.
+    pub state: Option<GraphqlWorkFeedItemState>,
     /// Page size; defaults to 50, capped at 100.
     pub limit: Option<i32>,
     /// Opaque cursor from the previous page's `nextCursor`; absent for the
-    /// first page. Send it with the same scope.
+    /// first page. Send it with the same scope and state.
     pub cursor: Option<String>,
 }
 
@@ -121,11 +137,22 @@ impl WorkFeedInput {
             graphql_common::parse_limit(self.limit, DEFAULT_WORK_FEED_LIMIT, MAX_WORK_FEED_LIMIT)?;
         let after = self
             .cursor
-            .map(|cursor| WorkFeedPosition::decode(&cursor))
+            .map(|cursor| FeedPosition::decode(&cursor))
             .transpose()
             .map_err(|_| async_graphql::Error::new("invalid work feed cursor"))?;
+        let state = match self.state {
+            None => None,
+            Some(GraphqlWorkFeedItemState::Unseen) => Some(WorkFeedItemState::Unseen),
+            Some(GraphqlWorkFeedItemState::Seen) => Some(WorkFeedItemState::Seen),
+            Some(GraphqlWorkFeedItemState::Done) => {
+                return Err(async_graphql::Error::new(
+                    "work feed pages hold only unseen and seen items",
+                ));
+            }
+        };
         Ok(WorkFeedQuery {
             scope: self.scope.unwrap_or_default().into_scope(),
+            state,
             limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
             after,
         })
@@ -160,11 +187,11 @@ impl MarkWorkFeedItemsDoneInput {
         self.items
             .into_iter()
             .map(|item| {
-                let key = WorkFeedItemKey::parse(&item.id)
+                let key = FeedKey::parse(&item.id)
                     .map_err(|_| async_graphql::Error::new("invalid work feed item id"))?;
                 let revision = item
                     .revision
-                    .map(|revision| WorkFeedRevision::decode(&revision))
+                    .map(|revision| FeedRevision::decode(&revision))
                     .transpose()
                     .map_err(|_| async_graphql::Error::new("invalid work feed revision"))?;
                 Ok(WorkFeedDoneTarget { key, revision })

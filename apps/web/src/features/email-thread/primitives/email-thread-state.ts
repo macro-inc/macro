@@ -79,6 +79,9 @@ export type EmailThreadState = {
   thread: Accessor<EmailThread | undefined>;
   permissions: Accessor<{
     isOwner: boolean;
+    /** Owners, and recipients the thread was shared with at edit access,
+     *  who reply from their own inbox. */
+    canReply: boolean;
   }>;
 
   query: {
@@ -110,6 +113,9 @@ export type EmailThreadState = {
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
   markThreadRead: () => boolean;
+  /** True when a sender other than the viewer exists for the sender actions
+   *  to target. False on a thread the viewer sent alone. */
+  canActOnSender: Accessor<boolean>;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -350,7 +356,13 @@ export function createEmailThreadState(
         setReplyRequest(undefined);
       },
     },
-    permissions: () => ({ isOwner: selected()?.access_level === 'owner' }),
+    permissions: () => {
+      const accessLevel = selected()?.access_level;
+      return {
+        isOwner: accessLevel === 'owner',
+        canReply: accessLevel === 'owner' || accessLevel === 'edit',
+      };
+    },
     initialLoadComplete: hasHandledTarget,
     onInitialDataLoad,
     isScrollingToMessage,

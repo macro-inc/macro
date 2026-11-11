@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bot_id::BotId;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
@@ -12,6 +12,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
+use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -28,7 +29,17 @@ impl Schedule {
     /// Parse a cron expression in the 6-/7-field format required by the `cron`
     /// crate (`sec min hour dom mon dow [year]`).
     pub fn from_cron(cron: String) -> Result<Self> {
-        CronSchedule::from_str(&cron).map_err(anyhow::Error::from)?;
+        let fields = cron.split_whitespace().count();
+        if !(6..=7).contains(&fields) {
+            bail!(
+                "cron schedule `{cron}` has {fields} fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+        if let Err(error) = CronSchedule::from_str(&cron) {
+            bail!("invalid cron schedule `{cron}`: {error}");
+        }
         Ok(Self(cron))
     }
 
@@ -100,64 +111,39 @@ impl From<RunVisibility> for SessionVisibility {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct AgentTask {
-    /// Required for model targets; overrides the persona default for agent targets.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<RoutineModelId>,
-    /// Absent when using Macro's agent-session runtime with a selected model.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<AgentTaskAgent>,
-    pub prompt: String,
-    pub user_prompt: String,
-}
-
-/// A persona selection, independent of its runtime and current default model.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
-pub struct AgentTaskAgent {
-    #[schema(value_type = String, format = Uuid)]
-    pub bot_id: BotId,
-}
-
-/// A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
-#[serde(try_from = "String")]
-pub struct RoutineModelId(String);
-
-impl TryFrom<String> for RoutineModelId {
-    type Error = TaskTargetError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.trim().is_empty() {
-            return Err(TaskTargetError::BlankModel);
-        }
-        Ok(Self(value))
-    }
-}
-
-impl RoutineModelId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 /// Validated execution choice. Callers must not fall back from an agent to a model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedTaskTarget<'a> {
     Model {
-        model: &'a RoutineModelId,
+        model: &'a str,
     },
     Agent {
         bot_id: BotId,
         /// None means use the selected persona's default at execution time.
-        model: Option<&'a RoutineModelId>,
+        model: Option<&'a str>,
     },
 }
 
 impl<'a> ResolvedTaskTarget<'a> {
+    /// Resolve an agent step's target once. A supplied model must be nonblank.
+    pub fn of(step: &'a AgentStep) -> Result<Self, TaskTargetError> {
+        let model = match step.model.as_deref() {
+            Some(model) if model.trim().is_empty() => return Err(TaskTargetError::BlankModel),
+            model => model,
+        };
+        match (step.agent, model) {
+            (Some(agent), model) => Ok(Self::Agent {
+                bot_id: BotId::new_from_uuid(agent.bot_id),
+                model,
+            }),
+            (None, Some(model)) => Ok(Self::Model { model }),
+            (None, None) => Err(TaskTargetError::MissingTarget),
+        }
+    }
+
     /// Use the same Macro runtime as the new AI composer for model selections.
     /// Explicit agent selections keep their own runtime and optional model override.
-    pub fn session_target(self) -> (BotId, Option<&'a RoutineModelId>) {
+    pub fn session_target(self) -> (BotId, Option<&'a str>) {
         match self {
             Self::Model { model } => (bot_id::MACRO_NEW_BOT_ID, Some(model)),
             Self::Agent { bot_id, model } => (bot_id, model),
@@ -173,83 +159,79 @@ pub enum TaskTargetError {
     MissingTarget,
 }
 
-impl AgentTask {
-    /// Resolve target policy once, without interpreting either prompt as configuration.
-    pub fn resolve_target(&self) -> Result<ResolvedTaskTarget<'_>, TaskTargetError> {
-        match (&self.agent, &self.model) {
-            (Some(agent), model) => Ok(ResolvedTaskTarget::Agent {
-                bot_id: agent.bot_id,
-                model: model.as_ref(),
-            }),
-            (None, Some(model)) => Ok(ResolvedTaskTarget::Model { model }),
-            (None, None) => Err(TaskTargetError::MissingTarget),
-        }
-    }
-}
+/// Longest description a routine or template can carry.
+pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 
-/// Canonical client configuration. Ownership and execution state are server-owned.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+/// Client configuration, the create body. Ownership and execution state are
+/// server-owned.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub enabled: bool,
     /// Omitted by clients that predate the setting; runs then start unlisted.
     #[serde(default)]
     pub run_visibility: RunVisibility,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
 }
 
-/// Deprecated cron-only input, accepted during the compatibility rollout.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LegacyActionConfiguration {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
+/// What saving a routine would find wrong, without saving it: the answer to
+/// `POST /scheduled-actions/check`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    /// Whether saving it would succeed: no problems and no failing steps.
+    pub ok: bool,
+    /// Why saving it would fail, other than its code, for its author.
+    pub problems: Vec<String>,
+    /// Code steps that don't type-check against Macro's SDK.
+    pub steps: Vec<CheckedStepProblems>,
+    /// The routine as saving would store it: code steps named and the SDK
+    /// their code checks against stamped.
+    pub routine: ActionConfiguration,
 }
 
-impl From<LegacyActionConfiguration> for ActionConfiguration {
-    fn from(input: LegacyActionConfiguration) -> Self {
-        Self {
-            name: input.name,
-            trigger: ActionTrigger::Cron {
-                schedule: input.schedule,
-                timezone: input.timezone,
-            },
-            kind: input.kind,
-            task: input.task,
-            enabled: input.enabled,
-            run_visibility: RunVisibility::default(),
-        }
-    }
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
 }
 
-/// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum CreateScheduledAction {
-    Canonical(ActionConfiguration),
-    Legacy(LegacyActionConfiguration),
+/// A code step that doesn't type-check.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedStepProblems {
+    /// Its place among the routine's steps, from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// What the type checker reports, first problems first.
+    pub problems: Vec<String>,
 }
 
-/// Canonical configuration replacement. Activation has its own endpoint, so
-/// omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
-/// it too, so clients that predate the setting do not reset it.
+/// Configuration replacement, the update body. Activation has its own endpoint, so
+/// omitting `enabled` keeps the stored value; omitting `run_visibility` or
+/// `description` keeps them too, so clients that predate them do not reset them.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfigurationUpdate {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     /// Still sent by clients deployed before the activation endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -257,42 +239,25 @@ pub struct ActionConfigurationUpdate {
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_visibility: Option<RunVisibility>,
+    /// An empty string clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
-/// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum UpdateScheduledAction {
-    Canonical(ActionConfigurationUpdate),
-    Legacy(LegacyActionConfiguration),
-}
-
-impl UpdateScheduledAction {
+impl ActionConfigurationUpdate {
     /// The replacement configuration, keeping the stored values of fields
     /// the input omits.
     pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
-        match self {
-            Self::Canonical(input) => ActionConfiguration {
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled.unwrap_or(stored.enabled),
-                run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
-            },
-            Self::Legacy(input) => ActionConfiguration {
-                run_visibility: stored.run_visibility,
-                ..input.into()
-            },
-        }
-    }
-}
-
-impl From<CreateScheduledAction> for ActionConfiguration {
-    fn from(input: CreateScheduledAction) -> Self {
-        match input {
-            CreateScheduledAction::Canonical(input) => input,
-            CreateScheduledAction::Legacy(input) => input.into(),
+        ActionConfiguration {
+            name: self.name,
+            trigger: self.trigger,
+            kind: self.kind,
+            task: self.task,
+            enabled: self.enabled.unwrap_or(stored.enabled),
+            run_visibility: self.run_visibility.unwrap_or(stored.run_visibility),
+            description: self
+                .description
+                .unwrap_or_else(|| stored.description.clone()),
         }
     }
 }
@@ -308,8 +273,69 @@ pub enum ActionPolicyError {
     EventManagementDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
+    #[error("connect GitHub before enabling a GitHub trigger")]
+    GithubNotLinked,
+    #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
+    DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
+}
+
+/// A routine's finished runs, as code reads them: its last run and its last
+/// successful one. Runs a trigger's condition skipped don't count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunHistory {
+    /// When the last finished run started, and whether it succeeded.
+    pub previous: Option<(DateTime<Utc>, bool)>,
+    /// When the last successful run started.
+    pub last_succeeded_at: Option<DateTime<Utc>>,
+}
+
+/// What started a run, for its page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RunStart {
+    /// One of its schedules came due.
+    Schedule {
+        /// The cron expression.
+        schedule: String,
+        /// Its IANA time zone.
+        timezone: String,
+    },
+    /// An event it watches happened.
+    Event {
+        /// The event's name, e.g. `email.message_received`.
+        event: String,
+        /// The item the event is about.
+        entity_id: Option<String>,
+    },
+    /// Its owner started it by hand.
+    Manual {
+        /// Who started it.
+        by: String,
+    },
+}
+
+/// What the run page says about a run: what started it, when it counts as
+/// happening, and since when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct RunInfo {
+    /// When the run counts as happening: its trigger's time.
+    pub at: DateTime<Utc>,
+    /// The IANA time zone code reads `at` in, when the run had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+    /// What started it.
+    pub started_by: RunStart,
+    /// When the routine's previous finished run started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_at: Option<DateTime<Utc>>,
+    /// Who its code steps' writes were attributed to; absent when it had no
+    /// code steps, and on runs recorded before this was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_acts_as: Option<routine_program::CodeIdentity>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -332,7 +358,7 @@ pub struct ScheduledAction {
     pub configuration_revision: ConfigurationRevision,
     /// Event publication boundary; absent for cron actions.
     pub event_activated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
     /// Next cron firing, absent for event-triggered actions.
@@ -342,6 +368,18 @@ pub struct ScheduledAction {
     pub enabled: bool,
     /// Whether the action's runs are listed in Home and the Agents list.
     pub run_visibility: RunVisibility,
+    /// The shared template this routine was activated from, if any.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub template_id: Option<Uuid>,
+    /// The routine suggestion it was saved from, if any: a plain pointer
+    /// that stays after the suggestion is replaced.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
 }
 
 impl ScheduledAction {
@@ -398,6 +436,18 @@ pub struct ExecutionResult {
     /// Present when an event trigger's condition stopped the run from starting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<ConditionResult>,
+    /// What each step that ran did, in order: decisions, tool calls, the agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schema(value_type = Vec<Object>)]
+    pub steps: Vec<StepRecord>,
+    /// The routine configuration the run used. Step paths only name the same
+    /// steps in that configuration; a later edit can put another step there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<i64>)]
+    pub configuration_revision: Option<ConfigurationRevision>,
+    /// What started the run and when, for runs of programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<RunInfo>,
 }
 
 impl ExecutionResult {
@@ -407,7 +457,22 @@ impl ExecutionResult {
             resource,
             error,
             condition: None,
+            steps: Vec::new(),
+            configuration_revision: None,
+            run: None,
         }
+    }
+
+    pub fn with_steps(mut self, steps: Vec<StepRecord>, revision: ConfigurationRevision) -> Self {
+        self.steps = steps;
+        self.configuration_revision = Some(revision);
+        self
+    }
+
+    /// What started the run and when.
+    pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
+        self.run = run;
+        self
     }
 
     /// A run its trigger's condition kept from starting. No agent ran.
@@ -465,6 +530,15 @@ pub struct InProgressExecution {
     /// Absent only in responses from legacy workers.
     #[serde(default)]
     pub resource: Option<ExecutionResource>,
+}
+
+/// A routine as its list shows it.
+#[derive(Debug, Clone)]
+pub struct ListedAction {
+    pub action: ScheduledAction,
+    /// Its latest finished run, so lists can flag failures and say what it
+    /// did; None until it has finished one.
+    pub last_run: Option<ActionExecutionRecord>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

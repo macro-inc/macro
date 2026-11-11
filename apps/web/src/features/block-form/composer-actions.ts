@@ -4,8 +4,8 @@
  */
 import type { Action } from '@core/component/LexicalMarkdown/plugins/actions/types';
 import { ActionCategory } from '@core/component/LexicalMarkdown/plugins/actions/types';
-import ChartBar from '@phosphor/chart-bar.svg';
-import ClipboardText from '@phosphor/clipboard-text.svg';
+import ChartBar from '@icon/system/regular/chart-bar.svg';
+import ClipboardText from '@icon/system/regular/clipboard-text.svg';
 
 /** `/poll`, for a composer that can send: the poll posts as soon as it is made. */
 export function createPollAction(sendMessage: () => void): Action {

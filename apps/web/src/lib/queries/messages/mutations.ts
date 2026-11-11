@@ -5,7 +5,7 @@ import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -402,14 +402,15 @@ export function newMessageId(): string {
 }
 
 type SendMessageParams = {
+  parentSpan?: TraceContext;
   parent: MessageParent;
   message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
   /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
-  /** The mutation awaits before its request, so a caller's span is passed in. */
-  trace?: Pick<Span, 'run'>;
+  /** Called once the optimistic message is in the timeline. */
+  onOptimisticInsert?: () => void;
 };
 
 type SendMessageContext = {
@@ -433,12 +434,11 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
-      const traced = <T>(request: () => T): T =>
-        vars.trace ? vars.trace.run(request) : request();
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
+      const parent = vars.parentSpan ?? Telemetry.captureContext();
       try {
-        return await traced(() =>
+        return await parent.run(() =>
           entityMessagesClient.post(vars.parent, {
             ...vars.message,
             id: vars.optimisticId,
@@ -448,7 +448,7 @@ export function useSendMessageMutation(
       } catch (error) {
         // A resend after a lost response finds its id already stored.
         if (!thrownResultErrorHasCode(error, 'CONFLICT')) throw error;
-        return traced(() =>
+        return parent.run(() =>
           entityMessagesClient.get(vars.parent, vars.optimisticId)
         );
       }
@@ -472,6 +472,7 @@ export function useSendMessageMutation(
             optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
+          vars.onOptimisticInsert?.();
           const updatedAt =
             vars.parent.type === 'channel'
               ? optimisticUpdateSoupItemUpdatedAt(
@@ -556,7 +557,8 @@ export function useSendMessageMutation(
           );
         },
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

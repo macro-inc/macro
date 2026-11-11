@@ -10,5 +10,5 @@ export type SqlCellOneOfOneoneType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SqlCellOneOfOneoneType = {
-  entities: 'entities',
+  options: 'options',
 } as const;

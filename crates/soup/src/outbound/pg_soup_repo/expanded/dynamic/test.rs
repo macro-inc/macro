@@ -3,6 +3,27 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 #[test]
+fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
+    let nil = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
+    let real = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::from_u128(1)));
+    assert!(project_filter_is_impossible(Some(&nil)));
+    assert!(project_filter_is_impossible(Some(&Expr::and(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::or(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::is_not(nil))));
+    assert!(!project_filter_is_impossible(Some(&real)));
+    assert!(!project_filter_is_impossible(Some(&Expr::val(
+        ProjectLiteral::ProjectId(Uuid::nil())
+    ))));
+    assert!(!project_filter_is_impossible(None));
+}
+
+#[test]
 fn grouped_access_shape() {
     let filter = EntityFilterAst::mock_empty();
     let grouping = GroupingConfig {
@@ -10,17 +31,22 @@ fn grouped_access_shape() {
         group_key: None,
         per_group_limit: None,
     };
+    let sort = SimpleSortMethod::ViewedUpdated.into();
     let (builder, _) = build_grouped_query(
         &filter,
         false,
         &grouping,
-        SimpleSortMethod::ViewedUpdated,
-        &mut DocumentIdArrays::starting_at(11),
+        sort,
+        &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
     );
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
-        assert!(candidates.contains(&access_semi_join(id, entity_type)));
+        assert!(candidates.contains(&bound_access_semi_join(
+            id,
+            entity_type,
+            source_ids_slot(sort, true)
+        )));
     }
     assert!(candidates.contains("cp.left_at IS NULL"));
     assert!(candidates.contains("event.owner_id = $1"));
@@ -43,6 +69,7 @@ fn grouped_candidate_sort_shape() {
                 field: GroupByField::Property {
                     property_definition_id: SystemPropertyKey::ASSIGNEES_UUID,
                     entity_type: Some("TASK".to_string()),
+                    bucketing: None,
                 },
                 group_key,
                 per_group_limit: None,
@@ -51,8 +78,8 @@ fn grouped_candidate_sort_shape() {
                 &filter,
                 true,
                 &grouping,
-                sort,
-                &mut DocumentIdArrays::starting_at(11),
+                sort.into(),
+                &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
             let sql = builder.sql();
             let (candidates, rest) = sql.split_once("GroupedItems AS").unwrap();
@@ -70,8 +97,8 @@ fn grouped_candidate_sort_shape() {
                 )));
             }
             assert!(candidates.contains("LEFT JOIN document_sub_type dt"));
-            assert!(candidates.contains("fa.id IS NULL AND ("));
-            assert!(candidates.contains("(all_items.sort_ts, all_items.id::text) < ($4, $5)"));
+            assert!(candidates.contains("fa.id IS NULL AND TRUE"));
+            assert!(rest.contains("(sort_ts, id::text) < ($4, $5)"));
             assert_eq!(rest.matches("LEFT JOIN \"UserHistory\"").count(), 3);
             assert!(rest.contains("COUNT(*) OVER (PARTITION BY"));
             assert!(rest.contains("ORDER BY t.sort_ts DESC, t.id DESC"));
@@ -81,6 +108,182 @@ fn grouped_candidate_sort_shape() {
             assert_eq!(
                 rest.contains("row_in_group <= 10"),
                 grouping.group_key.is_none()
+            );
+        }
+    }
+}
+
+#[test]
+fn flat_timestamp_top_clauses_remain_lightweight() {
+    let filter = EntityFilterAst::mock_empty();
+    for sort in [
+        SimpleSortMethod::CreatedAt,
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::ViewedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
+        let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), false));
+        let query = build_query(&filter, false, sort.into(), &mut arrays);
+        let top = query.sql().split("Combined AS").next().unwrap();
+        assert!(!top.contains("JOIN document_sub_type"));
+        assert!(!top.contains("property_entity_type"));
+        assert!(!top.contains("as project_id"));
+        assert!(!top.contains("FROM calendar_events"));
+        assert!(!top.contains("sort_parameters"));
+    }
+    let property = DynamicSort::Property {
+        property_definition_id: SystemPropertyKey::DUE_DATE_UUID,
+        direction: SoupSortDirection::Asc,
+    };
+    let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(property, false));
+    let query = build_query(&filter, false, property, &mut arrays);
+    let top = query.sql().split("Combined AS").next().unwrap();
+    assert!(top.contains("LEFT JOIN document_sub_type"));
+    assert!(top.contains("THEN 'TASK'::property_entity_type"));
+    assert!(!top.contains("as project_id"));
+    assert!(!query.sql().contains("FROM calendar_events"));
+}
+#[test]
+fn property_queries_hoist_definition_and_option_lookups() {
+    let filter = EntityFilterAst::mock_empty();
+    let grouping = GroupingConfig {
+        field: GroupByField::Property {
+            property_definition_id: SystemPropertyKey::STATUS_UUID,
+            entity_type: None,
+            bucketing: None,
+        },
+        group_key: None,
+        per_group_limit: None,
+    };
+    for sort in [
+        DynamicSort::Timestamp(SimpleSortMethod::UpdatedAt),
+        DynamicSort::Property {
+            property_definition_id: SystemPropertyKey::DUE_DATE_UUID,
+            direction: SoupSortDirection::Asc,
+        },
+    ] {
+        let (query, _) = build_grouped_query(
+            &filter,
+            false,
+            &grouping,
+            sort,
+            &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
+        );
+        let sql = query.sql();
+        assert!(!sql.contains("JOIN property_definitions"));
+        assert_eq!(sql.matches("JOIN property_options po_group").count(), 1);
+        assert!(!sql.contains("SELECT po.display_order"));
+        assert!(sql.contains("CASE WHEN po_group.id IS NOT NULL"));
+        assert!(sql.contains("po_group.display_order::double precision"));
+        assert_eq!(
+            sql.contains("TopItems AS MATERIALIZED ("),
+            matches!(sort, DynamicSort::Property { .. }),
+        );
+        if matches!(sort, DynamicSort::Property { .. }) {
+            assert!(sql.contains("LEFT JOIN entity_properties ep_sort"));
+            assert!(
+                sql.contains("SELECT data_type FROM property_definitions WHERE id = $11::uuid")
+            );
+            assert!(sql.contains("LEFT JOIN LATERAL (SELECT (CASE"));
+        }
+    }
+}
+
+#[test]
+fn option_sorts_build_one_uncorrelated_option_map() {
+    let filter = EntityFilterAst::mock_empty();
+    let grouping = GroupingConfig {
+        field: GroupByField::EntityType,
+        group_key: None,
+        per_group_limit: None,
+    };
+    let sort = DynamicSort::Property {
+        property_definition_id: SystemPropertyKey::STATUS_UUID,
+        direction: SoupSortDirection::Asc,
+    };
+    for grouped in [false, true] {
+        let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, grouped));
+        let query = if grouped {
+            build_grouped_query(&filter, false, &grouping, sort, &mut arrays).0
+        } else {
+            build_query(&filter, false, sort, &mut arrays)
+        };
+        let parameter = if grouped { 11 } else { 9 };
+        let sql = query.sql();
+        assert_eq!(
+            sql.matches("jsonb_object_agg(po.id::text, po.display_order)")
+                .count(),
+            1
+        );
+        assert!(sql.contains(&format!(
+            "FROM property_options po WHERE po.property_definition_id = ${parameter}::uuid"
+        )));
+        assert!(!sql.contains("po.property_definition_id = ep_sort.property_definition_id"));
+    }
+}
+
+#[test]
+fn task_only_filters_omit_redundant_namespace_joins() {
+    let task = Expr::val(DocumentLiteral::SubType(DocumentSubType::Task));
+    let id = Expr::val(DocumentLiteral::Id(Uuid::from_u128(1)));
+    assert!(!document_filter_is_task_only(None));
+    for (filter, expected) in [
+        (task.clone(), true),
+        (Expr::and(task.clone(), id.clone()), true),
+        (Expr::and(id.clone(), task.clone()), true),
+        (
+            Expr::or(task.clone(), Expr::and(task.clone(), id.clone())),
+            true,
+        ),
+        (Expr::or(task.clone(), id), false),
+        (Expr::is_not(task.clone()), false),
+        (Expr::is_not(Expr::is_not(task.clone())), false),
+        (
+            Expr::and(task, Expr::val(DocumentLiteral::Importance(true))),
+            true,
+        ),
+    ] {
+        assert_eq!(document_filter_is_task_only(Some(&filter)), expected);
+        let needs_task_joins = document_filter_needs_task_property_joins(Some(&filter));
+        let filter = EntityFilterAst {
+            document_filter: Some(Arc::new(filter)),
+            ..EntityFilterAst::mock_empty()
+        };
+        let sort = DynamicSort::Property {
+            property_definition_id: SystemPropertyKey::DUE_DATE_UUID,
+            direction: SoupSortDirection::Asc,
+        };
+        let grouping = GroupingConfig {
+            field: GroupByField::Property {
+                property_definition_id: SystemPropertyKey::STATUS_UUID,
+                entity_type: None,
+                bucketing: None,
+            },
+            group_key: None,
+            per_group_limit: None,
+        };
+        let flat = build_query(
+            &filter,
+            false,
+            sort,
+            &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
+        );
+        let (grouped, _) = build_grouped_query(
+            &filter,
+            false,
+            &grouping,
+            sort,
+            &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, true)),
+        );
+        for query in [&flat, &grouped] {
+            let top = query.sql().split(") all_items").next().unwrap();
+            assert_eq!(
+                top.contains("LEFT JOIN document_sub_type dt"),
+                !expected || needs_task_joins
+            );
+            assert_eq!(
+                top.contains("'TASK'::property_entity_type as property_entity_type"),
+                expected
             );
         }
     }
@@ -137,6 +340,10 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         ..EntityFilterAst::mock_empty()
     };
+    let owner = sqlx::query_scalar!(r#"SELECT owner FROM "Document" WHERE id = $1"#, &ids[0])
+        .fetch_one(&pool)
+        .await?;
+    let source_ids = fetch_user_source_ids(&mut *pool.acquire().await?, &owner).await?;
     for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
         for (label, filter, field, group_key) in [
             (
@@ -157,6 +364,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 GroupByField::Property {
                     property_definition_id: SystemPropertyKey::ASSIGNEES_UUID,
                     entity_type: None,
+                    bucketing: None,
                 },
                 None,
             ),
@@ -181,11 +389,11 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 &filter,
                 false,
                 &grouping,
-                sort,
-                &mut DocumentIdArrays::starting_at(11),
+                sort.into(),
+                &mut DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), true)),
             );
-            // Dynamic AST/grouping SQL cannot use a compile-time macro. Mirror
-            // production's positional binds, including unused reserved slots.
+            // Dynamic AST/grouping SQL cannot use a compile-time macro.
+            // Mirror the production timestamp query's ten fixed parameters and source ids.
             let sql = format!(
                 "EXPLAIN (ANALYZE, BUFFERS, VERBOSE, FORMAT JSON) {}",
                 builder.sql()
@@ -205,7 +413,8 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                     .bind(SystemPropertyKey::STATUS_UUID)
                     .bind(SystemPropertyKey::ASSIGNEES_UUID)
                     .bind(grouping.group_key.clone())
-                    .bind(entity_type.clone());
+                    .bind(entity_type.clone())
+                    .bind(&source_ids);
                 let plan = query.persistent(false).fetch_one(&pool).await?;
                 println!("EXPLAIN {label} {sort} repetition={repetition}: {plan}");
             }
@@ -221,7 +430,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         !build_query(
             &filter,
             false,
-            SimpleSortMethod::UpdatedAt,
+            SimpleSortMethod::UpdatedAt.into(),
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -234,7 +443,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         !build_query(
             &filter,
             false,
-            SimpleSortMethod::UpdatedAt,
+            SimpleSortMethod::UpdatedAt.into(),
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -244,7 +453,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     let query = build_query(
         &filter,
         false,
-        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::UpdatedAt.into(),
         &mut DocumentIdArrays::starting_at(9),
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
@@ -261,4 +470,39 @@ fn initiative_name_literals_are_escaped_and_not_like_patterns() {
     let sql = build_initiative_filter(Some(&expr));
     assert!(sql.contains("'O''Reilly_%'"));
     assert!(sql.contains("strpos("));
+}
+
+mod property_sort;
+
+#[test]
+fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
+    use item_filters::NotificationState::{Done, Seen, Unseen};
+    let state = |state| Expr::val(DocumentLiteral::NotificationState(state));
+    let inbox = || Expr::or(state(Unseen), state(Seen));
+    let strip = |expr: &Expr<DocumentLiteral>| {
+        strip_notification_conjunction(expr, |literal| match literal {
+            DocumentLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
+            _ => None,
+        })
+    };
+
+    // The unread feed: `(unseen OR seen) AND unseen` needs only the unseen witness.
+    let (predicate, rest) = strip(&Expr::and(inbox(), state(Unseen))).unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(rest.is_none());
+
+    let (predicate, rest) = strip(&Expr::and(
+        Expr::and(state(Unseen), Expr::val(DocumentLiteral::Importance(true))),
+        inbox(),
+    ))
+    .unwrap();
+    assert_eq!(predicate, NotificationPredicate::state(Unseen));
+    assert!(matches!(
+        rest,
+        Some(Expr::Literal(DocumentLiteral::Importance(true)))
+    ));
+
+    // Neither side implies the other: different rows may witness each.
+    assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
+    assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
 }

@@ -27,7 +27,9 @@
 [] Fix noops in `ai_tools`
 [] Make an infra file for tools that configures tools the same everywhere they're needed
 [] Real unified list for history
-[] Sharing / permissions
+[~] Sharing / permissions
+  [x] Share a routine as a template; activate it as your own routine
+  [] AI-suggested variable fills, template versions, detach
 [] Mention menu
 [] Delete schedules
   [] right click menu on unified list

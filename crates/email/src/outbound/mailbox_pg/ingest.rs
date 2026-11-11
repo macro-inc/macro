@@ -15,6 +15,7 @@ impl MailboxIngest for PgMailboxSync {
             folder_id,
             tags,
             version,
+            ..
         } = snapshot;
         let mut message = content.message;
         if message.link_id != lease.mailbox.link_id
@@ -34,7 +35,7 @@ impl MailboxIngest for PgMailboxSync {
                 addresses,
             )
             .await
-            .map_err(|_| MailboxError::Persistence)?;
+            .map_err(wrapped_db_error)?;
         let mut tx = self.db.begin().await.map_err(db_error)?;
         let active = sqlx::query!(r#"
             SELECT id FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3
@@ -202,9 +203,10 @@ impl MailboxIngest for PgMailboxSync {
                 lease.mailbox.link_id,
                 recipients,
                 false,
+                None,
             )
             .await
-            .map_err(|_| MailboxError::Persistence)?;
+            .map_err(wrapped_db_error)?;
         }
         let mut state_json = serde_json::to_value(&state).map_err(|_| MailboxError::Persistence)?;
         if !message.is_sent && shadow.as_ref().is_some_and(|s| s.delete_requested) {
@@ -244,16 +246,16 @@ impl MailboxIngest for PgMailboxSync {
         )
         .await
         .map_err(db_error)?;
-        email_db_client::threads::update::sync_thread_calendar_flag(&mut tx, thread_id)
+        email_db_client::threads::update::sync_thread_attachment_flags(&mut tx, thread_id)
             .await
-            .map_err(|_| MailboxError::Persistence)?;
+            .map_err(wrapped_db_error)?;
         email_db_client::messages::replying_to_id::update_thread_messages_replying_to(
             &mut tx,
             thread_id,
             lease.mailbox.link_id,
         )
         .await
-        .map_err(|_| MailboxError::Persistence)?;
+        .map_err(wrapped_db_error)?;
         let payload = serde_json::json!({
             "kind":"message", "message_id":message_id,"thread_id":thread_id,
             "provider_id":lease.provider_id.as_str(),"is_import":lease.is_import,

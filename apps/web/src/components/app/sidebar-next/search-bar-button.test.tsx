@@ -5,7 +5,6 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchRailButton } from './search-bar-button';
 
@@ -38,14 +37,12 @@ vi.mock('@app/signal/splitLayout', () => ({
 vi.mock('@components/app/app-sidebar/sidebar', () => ({
   navigateToSidebarView: mocks.navigate,
 }));
-vi.mock('@components/app/split-layout/layout', () => ({
+vi.mock('../split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: vi.fn() }),
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@ui/components/Hotkey', () => ({ Hotkey: () => null }));
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@ui', async () => ({
   ...(await import('@ui/utils/classname')),
   ...(await import('@ui/utils/menuKeyboardNavigation')),

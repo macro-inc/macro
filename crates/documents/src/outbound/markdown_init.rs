@@ -182,13 +182,13 @@ where
                 let sync_service_client = Arc::clone(&self.sync_service_client);
                 let document_id = document_id.to_owned();
                 let snapshot = loro_snapshot.to_vec();
-                tokio::spawn(async move {
+                tokio::spawn(agent_correlation::context::capture(async move {
                     if let Err(error) =
                         initialize_with_retry(&*sync_service_client, &document_id, &snapshot).await
                     {
                         tracing::error!(error=?error, %document_id, "failed to initialize sync service from snapshot");
                     }
-                });
+                }));
             }
         }
 

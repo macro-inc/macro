@@ -75,12 +75,29 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
 
+    /// The newest inbox messages, newest first, without attachment metadata,
+    /// for a quick look at a mailbox before it has synchronized.
+    fn recent_inbox_messages(
+        &self,
+        token: &AccessToken,
+        link_id: Uuid,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> impl Future<Output = Result<Vec<MailboxMessage>, EmailApiError>> + Send;
+
     /// Fetch decoded attachment bytes, including attached messages where supported.
     fn attachment(
         &self,
         token: &AccessToken,
         message_id: &ProviderId,
         attachment_id: &ProviderId,
+    ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+
+    /// Fetch a message's original RFC 822 bytes.
+    fn mime(
+        &self,
+        token: &AccessToken,
+        message_id: &ProviderId,
     ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
 }
 
@@ -226,6 +243,12 @@ pub trait MailboxDraftClient: Send + Sync + 'static {
         bytes: &[u8],
     ) -> impl Future<Output = Result<crate::domain::models::UploadProgress, EmailApiError>> + Send;
 }
+/// Reads how many requests a mailbox's request gate admitted.
+pub trait MailboxRequestCount: Send + Sync + 'static {
+    /// Requests admitted for the mailbox's sync generation, when known.
+    fn admitted_requests(&self, mailbox: MailboxAccess)
+    -> impl Future<Output = Option<u64>> + Send;
+}
 /// Binds request accounting to the same mailbox as credential acquisition.
 pub trait ScopedMailboxRepository: Clone + Send + Sync + 'static {
     /// Return a request-scoped clone; credentials remain supplied separately.
@@ -247,6 +270,12 @@ pub trait MailboxRequestGate: Send + Sync + 'static {
         permit: uuid::Uuid,
         retry_after: Option<std::time::Duration>,
     ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    /// Requests admitted for this mailbox's sync generation, or `None` when
+    /// the count is unavailable.
+    fn admitted(
+        &self,
+        mailbox: MailboxAccess,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>>;
 }
 
 /// Settings capabilities which require explicit rule ownership and bounded cleanup.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   groupCalendarInvitations,
+  invitationCanBeAdded,
   invitationDisplayTitle,
   invitationSchedule,
   safeInvitationUrl,
@@ -46,6 +47,37 @@ describe('saved invitation presentation', () => {
     expect(groups).toHaveLength(2);
     expect(groups[0].primary).toBe(invitationFixture);
     expect(groups[0].related).toEqual([override]);
+  });
+  it('adds only a whole shared event with a readable time and recorded recurrence', () => {
+    const shared = invitationFixtures.shared;
+    expect(invitationCanBeAdded(shared)).toBe(true);
+    expect(
+      invitationCanBeAdded({
+        ...invitationFixtures.allDay,
+        method: 'publish',
+        recurrence: [],
+      })
+    ).toBe(true);
+    expect(invitationCanBeAdded(invitationFixture)).toBe(false);
+    expect(invitationCanBeAdded({ ...shared, status: 'CANCELLED' })).toBe(
+      false
+    );
+    expect(
+      invitationCanBeAdded({
+        ...shared,
+        recurrence_id_raw: 'RECURRENCE-ID:20260924T170000Z',
+      })
+    ).toBe(false);
+    expect(invitationCanBeAdded({ ...shared, recurrence: undefined })).toBe(
+      false
+    );
+    expect(
+      invitationCanBeAdded({
+        ...invitationFixtures.floating,
+        method: 'publish',
+        recurrence: [],
+      })
+    ).toBe(false);
   });
   it('drops unsupported cache payloads and unsafe action URLs', () => {
     expect(decodeCalendarInvitations([{}])).toBeUndefined();

@@ -1,4 +1,5 @@
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import { createSearchParamsCodec } from '@app/lib/split-router';
 import {
   previewBlockTarget,
   previewCalendarTarget,
@@ -9,7 +10,8 @@ import {
   homeCalendarNavigation,
   homePreviewNavigation,
 } from '../home/home-preview-navigation';
-import { homePreviewTarget } from '../home/home-route';
+import { homePreviewLegacyTarget, homePreviewTarget } from '../home/home-route';
+import { homeProjectSearch } from '../home/home-route-schema';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -47,7 +49,12 @@ const operationMocks = vi.hoisted(() => {
   });
   return {
     graphql: false,
-    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
+    archive: vi.fn(
+      async (_args: {
+        id: string;
+        value: boolean;
+      }): Promise<'committed' | 'queued'> => 'committed'
+    ),
     doneOverride: vi.fn((_ids: readonly string[], _done: boolean | undefined) =>
       Object.assign(vi.fn(), { release: vi.fn() })
     ),
@@ -89,6 +96,9 @@ vi.mock('@notifications', async (importOriginal) => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+  // Settle each thread through the per-thread mock, as the bulk request does.
+  archiveEmailThreads: (ids: string[], value: boolean) =>
+    Promise.allSettled(ids.map((id) => operationMocks.archive({ id, value }))),
 }));
 vi.mock('@core/util/url', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/url')>()),
@@ -308,6 +318,113 @@ describe('agent session search navigation', () => {
     expect(getBlockHandle).not.toHaveBeenCalled();
     expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
+});
+
+describe('project rows', () => {
+  const projectId = '01a1899a-b629-7e50-8e65-079fca623856';
+  const entity: EntityData = {
+    type: 'initiative',
+    id: projectId,
+    name: 'Roadmap',
+    ownerId: 'owner',
+  };
+
+  it.each(['unseen', 'seen'] as const)(
+    'keeps a %s discussion target in the Home preview URL and touch fallback',
+    (state) => {
+      const notification: UnifiedNotification = {
+        id: 'project-comment-notification',
+        entity_id: projectId,
+        entity_type: 'initiative',
+        sender_id: null,
+        state,
+        created_at: '2026-10-01T12:00:00Z',
+        updated_at: '2026-10-01T12:00:00Z',
+        sent: true,
+        viewed_at: null,
+        notification_event_type: 'initiative_discussion',
+        notification_metadata: {
+          tag: 'initiative_discussion',
+          content: {
+            projectName: 'Roadmap',
+            owner: 'owner',
+            reason: 'reply',
+            messageId: 'reply',
+            threadId: 'root',
+            text: 'Update',
+          },
+        },
+      };
+      const selection = { ...entity, notifications: () => [notification] };
+      const navigation = homePreviewNavigation(selection);
+      const project = createSearchParamsCodec(homeProjectSearch).parse(
+        navigation.search.project ?? {}
+      ).value;
+      const search = {
+        channel: { messageId: '', threadId: '' },
+        document: { commentId: '' },
+        project,
+      };
+      expect(homePreviewTarget(navigation.params, search)).toMatchObject({
+        blockType: 'initiative',
+        blockId: projectId,
+        params: { section: 'overview', discussionId: 'reply' },
+      });
+      expect(homePreviewLegacyTarget(navigation.params, search)).toMatchObject({
+        type: 'initiative',
+        id: projectId,
+        entryMetadata: { search: { project: { discussionId: ['reply'] } } },
+      });
+      expect(
+        homePreviewNavigation({
+          ...selection,
+          notificationDisplayCutoff: '2026-10-02T12:00:00Z',
+        }).search.project?.discussionId
+      ).toEqual(['']);
+      expect(
+        homePreviewNavigation({
+          ...selection,
+          notifications: () => [{ ...notification, state: 'done' }],
+        }).search.project?.discussionId
+      ).toEqual(['']);
+    }
+  );
+
+  it.each([false, true])(
+    'opens a project through its Tasks-hosted identity (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'opened' }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        }),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(entity, { openInNewSplit });
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        {
+          type: 'initiative',
+          id: projectId,
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              {
+                id: 'tasks-project',
+                params: { projectId, section: 'overview' },
+              }
+            ),
+            search: { tasks: { tab: ['projects'] } },
+          },
+          params: undefined,
+        },
+        expect.objectContaining({
+          preferNewSplit: openInNewSplit,
+          allowDuplicate: false,
+        })
+      );
+    }
+  );
 });
 
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
@@ -1849,6 +1966,7 @@ describe('getChannelEntityTarget', () => {
     'pdf-detail',
     'agent-detail',
     'call-detail',
+    'project',
   ])('clears stale %s targets on ordinary Home navigation', (namespace) => {
     const navigation = homePreviewNavigation({ type: 'channel', id: 'other' });
     expect(Object.hasOwn(navigation.search, namespace)).toBe(true);

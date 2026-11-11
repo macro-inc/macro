@@ -40,7 +40,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 export type GenericErrorResponse = {
     /**
@@ -208,6 +208,27 @@ export type BatchSendMessageHandlerResponses = {
 };
 
 export type BatchSendMessageHandlerResponse = BatchSendMessageHandlerResponses[keyof BatchSendMessageHandlerResponses];
+
+export type BroadcastMessageHandlerData = {
+    body: SendMessageBody;
+    path?: never;
+    query?: never;
+    url: '/message/broadcast';
+};
+
+export type BroadcastMessageHandlerErrors = {
+    401: string;
+    500: string;
+};
+
+export type BroadcastMessageHandlerError = BroadcastMessageHandlerErrors[keyof BroadcastMessageHandlerErrors];
+
+export type BroadcastMessageHandlerResponses = {
+    /**
+     * Broadcast accepted
+     */
+    202: unknown;
+};
 
 export type SendMessageHandlerData = {
     body: SendMessageBody;

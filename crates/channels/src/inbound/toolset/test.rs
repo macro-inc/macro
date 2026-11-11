@@ -80,6 +80,7 @@ impl RecordingMessages {
         reactions: Vec<messages::domain::models::CountedReaction>,
     ) -> messages::domain::models::Message {
         messages::domain::models::Message {
+            kind: messages::domain::models::MessageKind::Message,
             id,
             parent: messages::domain::models::MessageParent::parse("channel", channel_id).unwrap(),
             thread_id: None,
@@ -91,6 +92,7 @@ impl RecordingMessages {
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: None,
             content: "stored".to_string(),
             created_at: chrono::Utc::now(),
@@ -148,6 +150,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             _ => Sender::new_from_user(user_id()),
         };
         let message = messages::domain::models::Message {
+            kind: messages::domain::models::MessageKind::Message,
             id: Uuid::new_v4(),
             parent,
             thread_id: input.thread_id,
@@ -156,6 +159,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: access
                 .acting_user_id()
                 .map(|user| user.as_ref().to_string()),
