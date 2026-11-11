@@ -333,6 +333,7 @@ fn actual_session_seed_rebinds_native_presence_and_original_cleanup_stays_valid(
     assert_eq!(count.load(Ordering::SeqCst), 1);
 }
 
+mod application;
 mod reported_failure;
 
 #[test]
@@ -375,3 +376,4 @@ fn actual_key_event_presence_distinguishes_keyboard_from_programmatic_enter() {
     assert_eq!(*calls.lock().unwrap(), vec![true, false]);
 }
 mod control;
+mod retirement;

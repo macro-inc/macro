@@ -64,3 +64,10 @@ pub fn unregister(scope: u64, handle: u64) -> Result<(), JsValue> {
     run(scope, Operation::Unregister(handle))?;
     Ok(())
 }
+
+/// Request observation retirement from the exact current callback metadata scope.
+/// The native epilogue performs retirement after callback/model borrows end.
+#[wasm_bindgen(js_name=requestRetireViewObservation)]
+pub fn request_retire(owner: u64, invocation: u64, scope: u64) -> Result<(), JsValue> {
+    request_retire_current(owner, invocation, scope).map_err(host::error)
+}

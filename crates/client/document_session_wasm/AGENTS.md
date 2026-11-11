@@ -272,10 +272,10 @@ consume actual Diff and IO before resolving the first reported original cause.
 Keep other causes separately available; caught nested slots can yield no lease.
 No AggregateError, string matching, fabricated receipt or cause substitution.
 
-A real new Machine input invalidates prior leases through readonly current;
+A real new Machine input or authorized rejected-DOM-text replacement invalidates prior leases through readonly current;
 retired causes retain their original ordinals for diagnosis and must never filter
 a newer packet. Pure getters/takeOutput/takeFailure do not invalidate leases.
-Pending metadata blocks local input and JS listeners until every FIFO record is
+Reject pending/faulted local metadata before overwriting even an invalid-DOM-text correction packet. Pending metadata blocks local input and JS listeners until every FIFO record is
 taken; undefined proves metadata queue empty only, never IO or admission ACK.
 Keep the caller's runSync busy/queue guard through actual output consumption.
 Sticky encoding/identity faults retain original causes then throw on the getter,

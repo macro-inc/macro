@@ -462,7 +462,9 @@ impl EditorSurface {
             _ => None,
         };
         self.history_selection.prepare(self.selection_cursors());
-        if let Some(capture) = &self.follow_up_errors { capture.clear(); }
+        if let Some(capture) = &self.follow_up_errors {
+            capture.clear();
+        }
         let result = self.core.apply(input, HistoryTime(now.mono.0));
         // Run KeyDown and routed command listeners through the model first. Its
         // snapshot history is disabled here; only an unhandled successful route
@@ -537,7 +539,12 @@ impl EditorSurface {
         match result {
             Ok(output) => {
                 self.handled = output.handled;
-                Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
+                Self::output(
+                    output,
+                    view,
+                    self.reported_errors.as_deref(),
+                    self.follow_up_errors.as_deref(),
+                );
             }
             Err(error) => {
                 if let (Some(first), Some(last)) = (error.committed.first(), error.committed.last())
@@ -547,7 +554,9 @@ impl EditorSurface {
                     chain.full_reconcile = true;
                     view.push(ViewEffect::Diff(chain.diff(&DiffOptions::default())?));
                 }
-                if let Some(observer) = &self.reported_errors { observer.reported(&error.error, view.len()); }
+                if let Some(observer) = &self.reported_errors {
+                    observer.reported(&error.error, view.len());
+                }
                 view.push(ViewEffect::Error(SessionError::Model(error.error)));
             }
         }
@@ -662,8 +671,15 @@ impl EditorSurface {
                 .and_then(|selection| p.cursor(doc, self.core.state(), selection))
         });
     }
-    fn output(output: Output, view: &mut Vec<ViewEffect>, observer: Option<&dyn ReportedModelErrorObserver>, capture: Option<&reported_errors::Capture>) {
-        let failures = capture.map(reported_errors::Capture::take).unwrap_or_default();
+    fn output(
+        output: Output,
+        view: &mut Vec<ViewEffect>,
+        observer: Option<&dyn ReportedModelErrorObserver>,
+        capture: Option<&reported_errors::Capture>,
+    ) {
+        let failures = capture
+            .map(reported_errors::Capture::take)
+            .unwrap_or_default();
         let mut tags = Vec::new();
         for tag in output.commits.iter().flat_map(|commit| commit.tags.iter()) {
             let tag = tag.to_string();
@@ -689,11 +705,17 @@ impl EditorSurface {
         }
         let mut failures = failures.into_iter().peekable();
         for (index, effect) in output.effects.into_iter().enumerate() {
-            if matches!(effect, Effect::RemoteNodesCreated(_)) { continue; }
-            if failures.peek().is_some_and(|(reported, _)| *reported == index)
+            if matches!(effect, Effect::RemoteNodesCreated(_)) {
+                continue;
+            }
+            if failures
+                .peek()
+                .is_some_and(|(reported, _)| *reported == index)
                 && let Some((_, cause)) = failures.next()
                 && let Some(observer) = observer
-            { observer.reported(cause.as_ref(), view.len()); }
+            {
+                observer.reported(cause.as_ref(), view.len());
+            }
             view.push(ViewEffect::Editor(effect));
         }
     }
@@ -732,7 +754,9 @@ impl EditorSurface {
         if !self.focused {
             tags.insert(UpdateTag::SkipDomSelection);
         }
-        if let Some(capture) = &self.follow_up_errors { capture.clear(); }
+        if let Some(capture) = &self.follow_up_errors {
+            capture.clear();
+        }
         let output = self
             .core
             .apply(
@@ -765,7 +789,12 @@ impl EditorSurface {
         } else {
             false
         };
-        Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
+        Self::output(
+            output,
+            view,
+            self.reported_errors.as_deref(),
+            self.follow_up_errors.as_deref(),
+        );
         if popped.as_ref().is_some_and(Vec::is_empty) {
             let input = if self.config.mode == EditorMode::Headless {
                 Input::Command {
@@ -781,12 +810,19 @@ impl EditorSurface {
                     change: None,
                 }
             };
-            if let Some(capture) = &self.follow_up_errors { capture.clear(); }
+            if let Some(capture) = &self.follow_up_errors {
+                capture.clear();
+            }
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
                 .map_err(|error| SessionError::Model(error.error))?;
-            Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
+            Self::output(
+                output,
+                view,
+                self.reported_errors.as_deref(),
+                self.follow_up_errors.as_deref(),
+            );
             if self.focused {
                 view.push(ViewEffect::Editor(Effect::SetViewSelection {
                     selection: ViewSelection::None,
@@ -829,12 +865,19 @@ impl EditorSurface {
                     change: None,
                 }
             };
-            if let Some(capture) = &self.follow_up_errors { capture.clear(); }
+            if let Some(capture) = &self.follow_up_errors {
+                capture.clear();
+            }
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
                 .map_err(|error| SessionError::Model(error.error))?;
-            Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
+            Self::output(
+                output,
+                view,
+                self.reported_errors.as_deref(),
+                self.follow_up_errors.as_deref(),
+            );
             // SelectionFromView says the host already installed its input. Here it
             // only restores the model, so explicitly deliver the final cursor to a focused view.
             if self.focused {

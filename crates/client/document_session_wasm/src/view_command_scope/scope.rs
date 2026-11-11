@@ -20,6 +20,7 @@ pub(super) enum Value {
 pub(super) trait Current {
     fn id(&self) -> Id;
     fn generation(&self) -> u32;
+    fn request_retire(&self, owner: u64, invocation: u64) -> Result<(), BoundaryError>;
     fn execute(&self, operation: Operation) -> Result<Value, BoundaryError>;
 }
 scoped_tls_hkt::scoped_thread_local!(pub(super) static CURRENT: for<'a> &'a (dyn Current + 'a));
@@ -51,6 +52,23 @@ impl Current for Scope<'_, '_> {
     fn generation(&self) -> u32 {
         self.generation
     }
+    fn request_retire(&self, owner: u64, invocation: u64) -> Result<(), BoundaryError> {
+        if owner != self.invocation.registry.owner.raw() || invocation != self.invocation.id.raw() {
+            return Err(BoundaryError::Invalid("view retirement authority mismatch"));
+        }
+        if !INVOCATION.is_set()
+            || !INVOCATION.with(|current| {
+                current.id == self.invocation.id
+                    && current.registry.owner == self.invocation.registry.owner
+            })
+            || self.invocation.registry.lock()?.epoch != self.invocation.epoch
+        {
+            return Err(BoundaryError::Invalid("view retirement invocation expired"));
+        }
+        // Retirement is a metadata intent. Never reborrow the transaction/session.
+        self.invocation.retire_view.set(true);
+        Ok(())
+    }
     fn execute(&self, operation: Operation) -> Result<Value, BoundaryError> {
         if self.invocation.registry.lock()?.epoch != self.invocation.epoch {
             return Err(BoundaryError::Invalid("view command binding expired"));
@@ -78,6 +96,23 @@ pub(super) fn execute_current(scope: u64, operation: Operation) -> Result<Value,
             return Err(BoundaryError::Invalid("view command scope is not current"));
         }
         current.execute(operation)
+    })
+}
+pub(super) fn request_retire_current(
+    owner: u64,
+    invocation: u64,
+    scope: u64,
+) -> Result<(), BoundaryError> {
+    if !CURRENT.is_set() {
+        return Err(BoundaryError::Invalid("view command scope expired"));
+    }
+    CURRENT.with(|current| {
+        if current.id().raw() != scope {
+            return Err(BoundaryError::Invalid(
+                "view retirement scope is not current",
+            ));
+        }
+        current.request_retire(owner, invocation)
     })
 }
 fn execute(
