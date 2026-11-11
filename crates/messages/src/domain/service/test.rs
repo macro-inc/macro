@@ -100,6 +100,12 @@ impl MessageRepository for Repo {
             message.deleted_at.get_or_insert_with(Utc::now);
             message.content.clear();
         }
+        if let Some(message) = message.as_mut()
+            && self.deletes.lock().unwrap().contains(&message.id)
+        {
+            message.deleted_at.get_or_insert_with(Utc::now);
+            message.content.clear();
+        }
         Ok(message)
     }
     async fn get_by_client_message_id(
@@ -164,6 +170,12 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command
+            .canonical_root_id
+            .is_some_and(|root| self.torn_down(root))
+        {
+            return Err(MessageError::NotFound);
+        }
         if command.input.id == Some(self.message.id)
             || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
         {

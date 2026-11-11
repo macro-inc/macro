@@ -351,6 +351,56 @@ async fn guest_mutations_require_ownership_and_publish_changes() {
 }
 
 #[tokio::test]
+async fn deleting_guest_root_preserves_member_replies_and_allows_new_posts() {
+    let (mut repo, events, _, call, guest) = setup();
+    repo.message.sender_id = ChannelSender::new_from_guest(guest);
+    repo.message.guest_name = Some("Visitor".into());
+    let mut member_reply = repo.message.clone();
+    member_reply.id = Uuid::now_v7();
+    member_reply.thread_id = Some(call);
+    member_reply.sender_id =
+        ChannelSender::try_from("macro|author@example.com".to_owned()).unwrap();
+    member_reply.content = "Member reply".into();
+    repo.replies = vec![member_reply.clone()];
+    let service = GuestChatService::new(
+        Arc::new(MessageService::new(repo.clone(), events.clone())),
+        Arc::new(Authorizer { call, guest }),
+    );
+
+    service
+        .delete_message(call, "active-session", call)
+        .await
+        .unwrap();
+
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![call]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    assert!(matches!(
+        &events.0.lock().unwrap()[0].change,
+        MessageChange::MessageDeleted { message } if message.id == call
+    ));
+    let thread = service.read_thread(call, "active-session").await.unwrap();
+    let thread = thread.thread.unwrap();
+    assert!(thread.root.deleted_at.is_some());
+    assert_eq!(thread.replies.len(), 1);
+    assert_eq!(thread.replies[0].id, member_reply.id);
+    assert_eq!(thread.replies[0].content, "Member reply");
+
+    let posted = service
+        .post_message(
+            call,
+            "active-session",
+            GuestChatPost {
+                id: Uuid::now_v7(),
+                content: "New reply".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(posted.content, "New reply");
+    assert_eq!(repo.creates.lock().unwrap()[0].canonical_root_id, Some(call));
+}
+
+#[tokio::test]
 async fn guest_posts_request_the_canonical_call_root() {
     let (repo, events, service, call, _) = setup();
     for content in ["first", "reply"] {

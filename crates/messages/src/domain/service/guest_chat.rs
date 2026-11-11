@@ -635,29 +635,17 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
         }
-        if current.thread_id.is_none() {
-            let state = self.messages.repo.delete_thread(&parent, id).await?;
-            self.messages
-                .publish(MessageEvent {
-                    parent,
-                    actor: actor.as_ref().to_owned(),
-                    nonce: None,
-                    change: MessageChange::ThreadUpdated { state },
-                })
-                .await;
-        } else {
-            let message = self.messages.repo.delete(&parent, id).await?;
-            self.messages
-                .publish_message(
-                    actor,
-                    None,
-                    &message,
-                    MessageChange::MessageDeleted {
-                        message: message.clone(),
-                    },
-                )
-                .await;
-        }
+        let message = self.messages.repo.delete(&parent, id).await?;
+        self.messages
+            .publish_message(
+                actor,
+                None,
+                &message,
+                MessageChange::MessageDeleted {
+                    message: message.clone(),
+                },
+            )
+            .await;
         Ok(())
     }
 
