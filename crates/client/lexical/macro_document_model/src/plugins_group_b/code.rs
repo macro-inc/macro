@@ -1,6 +1,7 @@
 //! Code commands and scoped selection; token painting remains exclusively in the view.
 use super::*;
 mod navigation;
+mod normalize;
 use crate::nodes::{CustomCodeNode, create_custom_code_node, set_custom_code};
 use lexical_rich_nodes::code::{CodeNode, indent::*};
 
@@ -32,7 +33,13 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
     ))))
 }
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    builder.plugin(Code)
+    builder
+        .plugin(Code)
+        .transform::<CodeNode>(normalize::normalize)
+        .transform_each(
+            normalize::text,
+            TransformScope::Types(&["text", "code-highlight"]),
+        )
 }
 static COMMANDS: [CommandRegistration; 8] = [
     CommandRegistration {

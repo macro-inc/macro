@@ -290,11 +290,22 @@ fn code_transform_normalizes_programmatic_nested_insertions_and_keeps_source_car
     assert_eq!(caret.focus, caret.anchor);
 
     let before = editor.state().to_json()?;
+    let children_before = editor.state().view().children_keys(first)?;
+    let selection_before = editor.state().selection().cloned();
     let (_, commit) = editor.update(|tx| tx.mark_dirty(first))?;
-    assert!(
-        commit.changes.mutations.is_empty(),
-        "a second normalization pass must not write"
+    // mark_dirty clones its requested record. The normalizer must add no
+    // mutations, child replacement, or selection changes on this second pass.
+    assert_eq!(
+        commit
+            .changes
+            .mutations
+            .iter()
+            .map(|(key, mutation)| (*key, *mutation))
+            .collect::<Vec<_>>(),
+        vec![(first, Mutation::Updated)]
     );
+    assert_eq!(editor.state().view().children_keys(first)?, children_before);
+    assert_eq!(editor.state().selection(), selection_before.as_ref());
     assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
