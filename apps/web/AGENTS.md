@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope.
+
 - Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.
 
 - Validate native USER menu wiring with the real settled input and shared mention renderer in `editing/browser-test/user-mentions.browser.e2e.ts`; keep remaining mention kinds and service tracking as explicit coverage gaps.
