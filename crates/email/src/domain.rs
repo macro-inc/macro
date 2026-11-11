@@ -17,6 +17,8 @@ pub mod invitation_extraction;
 pub mod invitation_import;
 #[cfg(feature = "calendar_invitations")]
 pub mod invitation_resolution;
+#[cfg(feature = "calendar_invitations")]
+pub mod invitations;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 /// Optimistic message-label batches and provider-write compensation.

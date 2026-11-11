@@ -18,6 +18,9 @@ tools — hexagonal, heavily feature-gated.
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
   and settings patches.
+- `src/domain/invitations.rs` (feature `calendar_invitations`): composes saved
+  invitation resolution and import with their snapshot and calendar ports;
+  HTTP handlers pass only the authorized thread receipt and request values.
 - `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
   deletion order, the already-missing-file rule, and delivery disposition.
 - `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed
