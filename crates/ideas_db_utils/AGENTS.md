@@ -2,15 +2,16 @@
 
 ## What it is
 
-Transactional helpers for the `idea` tables, for writes that commit with
-another crate's: routine suggestions (`crates/scheduled_action`) keep,
-dismiss, retire and save a drafted suggestion together with its routine idea;
+Transactional helpers for the `suggestion` tables, for writes that commit
+with another crate's: routine suggestions (`crates/scheduled_action`) keep,
+dismiss, retire and save a drafted suggestion together with its `routine`
+suggestion;
 the `ideas` crate's repository shares the lock, limit and change-log helpers.
 
 ## Scope
 
-- Owns: the shared SQL for `idea`, `idea_routine`, `idea_target` and ideas'
-  `suggestion_change` rows written inside other crates' transactions.
+- Owns: the shared SQL for `suggestion`, `suggestion_routine`,
+  `suggestion_target` and their `suggestion_change` rows written inside other crates' transactions.
 - Not here: rules for what may be written → `crates/ideas` (limits are passed
   in from `ideas::domain::service`).
 
