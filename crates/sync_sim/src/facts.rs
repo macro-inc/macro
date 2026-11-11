@@ -376,6 +376,15 @@ pub enum Fact {
         /// Callback owning the write.
         callback: u64,
     },
+    /// Actual storage confirmation for a callback, independent of request duplication.
+    ServerWritesDurable {
+        /// Document whose storage was confirmed.
+        doc: DocIx,
+        /// Callback that issued the confirmed writes.
+        callback: u64,
+        /// Confirmed write generation for that callback.
+        generation: u64,
+    },
     /// Actual native output-gate proof for every released binary/text send.
     GateReleased {
         /// Document.

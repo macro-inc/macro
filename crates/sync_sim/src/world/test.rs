@@ -2,6 +2,8 @@ use super::*;
 use bebop::{Record, SliceWrapper};
 use doc_sync_core::SyncDoc;
 
+mod partial_duplicates;
+
 #[test]
 fn duplicate_multi_frame_updates_are_two_complete_fifo_messages() {
     let mut sim = Sim::new(SimConfig {

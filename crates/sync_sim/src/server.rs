@@ -42,6 +42,7 @@ pub(crate) enum Input {
 pub(crate) struct Callback {
     pub index: u64,
     pub effects: Vec<Effect>,
+    pub queued: Vec<Effect>,
     pub generation: u64,
     pub blocking: bool,
     pub updates: Vec<String>,
@@ -202,8 +203,10 @@ impl SimServer {
         if let Input::Runtime(ServerInput::Binary { socket, bytes }) = &input {
             let sniffer = self.sniffers.entry(socket.clone()).or_default();
             if let Ok(Some(message)) = sniffer.push(bytes)
-                && let Ok(sync_protocol::FromPeer::PeerUpdate { id, updates }) =
-                    sync_protocol::FromPeer::deserialize(&message)
+                && let Ok(
+                    sync_protocol::FromPeer::PeerUpdate { id, updates }
+                    | sync_protocol::FromPeer::PeerCommentUpdate { id, updates },
+                ) = sync_protocol::FromPeer::deserialize(&message)
             {
                 let ranges = updates
                     .iter()
@@ -211,6 +214,7 @@ impl SimServer {
                     .collect::<Result<Vec<_>, _>>();
                 if let Ok(ranges) = ranges {
                     received = Some((
+                        socket.clone(),
                         id.to_string(),
                         ranges.into_iter().flatten().collect::<Vec<_>>(),
                     ));
@@ -369,6 +373,7 @@ impl SimServer {
         self.busy_until = self
             .busy_until
             .saturating_add(u64::try_from(self.ports.busy_for().as_millis()).unwrap_or(u64::MAX));
+        let queued = self.ports.take_queued_sends();
         let mut updates = Vec::new();
         let mut written = Vec::new();
         for (key, value, generation) in self.ports.take_completed_puts() {
@@ -405,17 +410,25 @@ impl SimServer {
                 Err(failure) => error = Some(failure),
             }
         }
-        if let Some((update, ranges)) = received {
+        if let Some((socket, update, ranges)) = received {
             facts.push(Fact::ServerReceived {
                 doc: self.doc,
                 callback: index,
                 update: update.clone(),
                 spans: ranges.clone(),
             });
-            let stored = ranges
-                .iter()
-                .all(|range| crate::invariants::ranges_cover(&written, range));
-            if stored {
+            let acknowledged = match queued_acknowledgment(&queued, &socket, &update) {
+                Ok(acknowledged) => acknowledged,
+                Err(failure) => {
+                    error = Some(failure);
+                    false
+                }
+            };
+            // A successful enqueue means the real Room accepted the complete
+            // request, even when some or all ranges were already durable. The
+            // separate physical completion facts must still prove durability.
+            if acknowledged {
+                // Observe application progress separately from storage receipts.
                 let live = match self.live_state() {
                     Ok((vv, _)) => vv,
                     Err(failure) => {
@@ -431,7 +444,9 @@ impl SimServer {
                     spans: ranges,
                     pending,
                 });
-                updates.push(update);
+                if !written.is_empty() {
+                    updates.push(update);
+                }
             } else if error.is_none() && !crashed {
                 facts.push(Fact::UpdateRefused {
                     update,
@@ -461,6 +476,7 @@ impl SimServer {
         Callback {
             index,
             effects,
+            queued,
             generation,
             blocking,
             updates,
@@ -632,6 +648,32 @@ impl SimServer {
             active_peers_without_ai,
         })
     }
+}
+
+fn queued_acknowledgment(
+    queued: &[Effect],
+    socket: &WebSocketId,
+    update: &str,
+) -> Result<bool, Failure> {
+    let mut frames = sync_protocol::framing::Reassembler::default();
+    for effect in queued {
+        if effect.operation != "send" || effect.value["socket"].as_str() != Some(socket.as_str()) {
+            continue;
+        }
+        let frame = Vec::<u8>::deserialize(&effect.value["frame"])
+            .map_err(|error| Failure::new("server_ack_observation", error))?;
+        let message = frames
+            .push(&frame)
+            .map_err(|error| Failure::new("server_ack_observation", error))?;
+        if let Some(message) = message
+            && let Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) =
+                sync_protocol::FromRemote::deserialize(&message)
+            && id == update
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn finish_direct<T, E: std::fmt::Display>(

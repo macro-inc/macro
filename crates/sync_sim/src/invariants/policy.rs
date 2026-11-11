@@ -41,7 +41,8 @@ pub fn quiet(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
-/// Released room acknowledgments follow durable writes and successful peer mapping.
+/// Released ACKs require the actual decoded request, ordered attempt, physical
+/// completion and successful mapping; no final VV or ACK supplies durability.
 pub fn core_acks_after_writes(outcome: &Outcome) -> Result<(), Failure> {
     let mut groups = BTreeMap::new();
     for port in &outcome.server_ports {
@@ -50,12 +51,68 @@ pub fn core_acks_after_writes(outcome: &Outcome) -> Result<(), Failure> {
             .or_insert_with(Vec::new)
             .push(&port.effect);
     }
-    // Activated duplicate suppression intentionally issues no new operation put.
-    // Bind prior coverage to actual decoded requests, physical row receipts and
-    // their observed durability completion, never to the eventual final VV.
+    let mut attempts = BTreeMap::new();
+    let mut puts = BTreeSet::new();
+    for ((doc, callback), effects) in groups {
+        let mut written = BTreeSet::new();
+        let mut mapped = BTreeSet::new();
+        let mut frames = BTreeMap::<String, sync_protocol::framing::Reassembler>::new();
+        for effect in effects {
+            if matches!(
+                effect.operation.as_str(),
+                "storage.put" | "storage.operation.put"
+            ) && let Some(key) = effect.value["key"].as_str()
+                && key.starts_with("o/")
+            {
+                written.insert(key.to_owned());
+                puts.insert((doc, callback, key.to_owned()));
+            }
+            if effect.operation == "peers.map_unowned" {
+                mapped.extend(
+                    effect.value["peers"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|peer| peer.as_str().and_then(|peer| peer.parse::<u64>().ok())),
+                );
+            }
+            if effect.operation != "connections.send_binary" {
+                continue;
+            }
+            let frame: Vec<u8> = serde_json::from_value(effect.value["frame"].clone())
+                .map_err(|error| Failure::new("core_acks_after_writes", error))?;
+            let socket = effect.value["socket"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let message = frames
+                .entry(socket)
+                .or_default()
+                .push(&frame)
+                .map_err(|error| Failure::new("core_acks_after_writes", error))?;
+            if let Some(message) = message
+                && let Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) =
+                    sync_protocol::FromRemote::deserialize(&message)
+                && attempts
+                    .insert(
+                        (doc, callback, id.to_owned()),
+                        (written.clone(), mapped.clone()),
+                    )
+                    .is_some()
+            {
+                return Err(Failure::new(
+                    "core_acks_after_writes",
+                    "ambiguous ACK attempt",
+                ));
+            }
+        }
+    }
     let mut requests = BTreeMap::new();
-    let mut routes = BTreeMap::new();
+    let mut rows = BTreeMap::<_, Vec<_>>::new();
+    let mut receipts = Vec::new();
     let mut seeds = Vec::new();
+    let mut directories = Vec::new();
+    let mut logical_completions = BTreeMap::new();
     for (index, event) in outcome.events.iter().enumerate() {
         match &event.fact {
             Fact::ServerReceived {
@@ -64,16 +121,50 @@ pub fn core_acks_after_writes(outcome: &Outcome) -> Result<(), Failure> {
                 update,
                 spans,
             } => {
-                if routes
-                    .insert((*callback, update.as_str()), *doc)
-                    .is_some_and(|prior| prior != *doc)
+                if requests
+                    .insert((*callback, update.as_str()), (*doc, index, spans))
+                    .is_some()
                 {
                     return Err(Failure::new(
                         "core_acks_after_writes",
-                        "ambiguous request route",
+                        "ambiguous decoded request",
                     ));
                 }
-                requests.insert((*doc, *callback, update.as_str()), spans);
+            }
+            Fact::PendingStored {
+                doc,
+                callback,
+                key,
+                spans,
+                generation,
+                complete,
+                ..
+            } => {
+                rows.entry((*doc, *callback)).or_default().push((
+                    key,
+                    spans,
+                    *generation,
+                    *complete,
+                ));
+            }
+            Fact::ServerWritesDurable {
+                doc,
+                callback,
+                generation,
+            } => {
+                for (key, spans, required, complete) in
+                    rows.get(&(*doc, *callback)).into_iter().flatten()
+                {
+                    if *complete
+                        && required <= generation
+                        && puts.contains(&(*doc, *callback, (*key).clone()))
+                    {
+                        receipts.push((index, *doc, *callback, *key, *spans));
+                    }
+                }
+            }
+            Fact::ServerDurable { update, callback } => {
+                logical_completions.insert((*callback, update.as_str()), index);
             }
             Fact::ServerSeed { doc, vv } => seeds.push((
                 index,
@@ -86,194 +177,133 @@ pub fn core_acks_after_writes(outcome: &Outcome) -> Result<(), Failure> {
                     })
                     .collect::<Vec<_>>(),
             )),
+            Fact::DirectoryState {
+                doc,
+                callback,
+                mapped,
+            } => directories.push((index, *doc, *callback, mapped)),
             _ => {}
         }
     }
-    let mut prior_receipts = BTreeMap::<DocIx, Vec<_>>::new();
-    let mut rows = BTreeMap::<_, Vec<IdSpan>>::new();
-    for (index, event) in outcome.events.iter().enumerate() {
-        if let Fact::PendingStored {
-            doc,
-            callback,
-            spans,
-            ..
-        } = &event.fact
-        {
-            rows.entry((*doc, *callback))
-                .or_default()
-                .extend(spans.clone());
+    // Start from every actual release. Scanning only attempted port calls can
+    // accidentally pass when all actual ACKs were skipped by a bad correlation.
+    for (ack_index, event) in outcome.events.iter().enumerate() {
+        let Fact::AckSent { update, callback } = &event.fact else {
+            continue;
+        };
+        let Some((doc, received_at, ranges)) = requests.get(&(*callback, update.as_str())) else {
+            return Err(Failure::new(
+                "core_acks_after_writes",
+                format!("{update}: ACK has no decoded request"),
+            ));
+        };
+        if *received_at >= ack_index {
+            return Err(Failure::new(
+                "core_acks_after_writes",
+                format!("{update}: decoded request follows its ACK"),
+            ));
         }
-        if let Fact::ServerDurable { update, callback } = &event.fact
-            && let Some(doc) = routes.get(&(*callback, update.as_str()))
-            && let Some(spans) = requests.get(&(*doc, *callback, update.as_str()))
-            && rows
-                .get(&(*doc, *callback))
-                .is_some_and(|stored| spans.iter().all(|span| ranges_cover(stored, span)))
+        let Some((written, proposed)) = attempts.get(&(*doc, *callback, update.clone())) else {
+            return Err(Failure::new(
+                "core_acks_after_writes",
+                format!("{update}: ACK has no matching attempted frame"),
+            ));
+        };
+        let fresh = rows
+            .get(&(*doc, *callback))
+            .is_some_and(|rows| !rows.is_empty());
+        if fresh
+            && logical_completions
+                .get(&(*callback, update.as_str()))
+                .is_none_or(|at| *at >= ack_index)
         {
-            prior_receipts
-                .entry(*doc)
-                .or_default()
-                .push((index, *callback, (*spans).clone()));
+            return Err(Failure::new(
+                "core_acks_after_writes",
+                format!("{update}: callback writes were not completed before ACK"),
+            ));
         }
-    }
-    let mut prior_mapped = BTreeMap::<DocIx, BTreeSet<u64>>::new();
-    for ((doc, callback), effects) in groups {
-        let successful = outcome
-            .events
+        let mut covered = Vec::new();
+        for (at, target, origin, key, spans) in &receipts {
+            if *at < ack_index && target == doc && (*origin != *callback || written.contains(*key))
+            {
+                covered.extend((*spans).clone());
+            }
+        }
+        for (at, target, spans) in &seeds {
+            if *at < ack_index && target == doc {
+                covered.extend(spans.clone());
+            }
+        }
+        let mut mapped = BTreeSet::new();
+        for (at, target, origin, peers) in &directories {
+            if target != doc || *at >= ack_index {
+                continue;
+            }
+            if *at < *received_at {
+                mapped.extend(peers.iter().copied());
+            } else if *origin == *callback {
+                mapped.extend(peers.iter().copied().filter(|peer| proposed.contains(peer)));
+            }
+        }
+        if !ranges
             .iter()
-            .find_map(|event| match &event.fact {
-                Fact::DirectoryState {
-                    doc: target,
-                    callback: at,
-                    mapped,
-                } if *target == doc && *at == callback => {
-                    Some(mapped.iter().copied().collect::<BTreeSet<_>>())
-                }
-                _ => None,
-            })
-            .unwrap_or_default();
-        let mut written = Vec::new();
-        let mut mapped = prior_mapped.get(&doc).cloned().unwrap_or_default();
-        for effect in effects {
-            if matches!(
-                effect.operation.as_str(),
-                "storage.put" | "storage.operation.put"
-            ) && effect.value["key"]
-                .as_str()
-                .is_some_and(|key| key.starts_with("o/"))
-                && let Some(key) = effect.value["key"].as_str()
-            {
-                for event in &outcome.events {
-                    if let Fact::PendingStored {
-                        doc: target,
-                        callback: at,
-                        key: stored,
-                        spans,
-                        ..
-                    } = &event.fact
-                        && *target == doc
-                        && *at == callback
-                        && stored == key
-                    {
-                        written.extend(spans.clone());
-                    }
-                }
-            }
-            if effect.operation == "peers.map_unowned" {
-                for peer in effect.value["peers"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|peer| peer.as_str().and_then(|peer| peer.parse::<u64>().ok()))
-                {
-                    if successful.contains(&peer) {
-                        mapped.insert(peer);
-                    }
-                }
-            }
-            if effect.operation != "connections.send_binary" {
-                continue;
-            }
-            let frame: Vec<u8> = serde_json::from_value(effect.value["frame"].clone())
-                .map_err(|e| Failure::new("core_acks_after_writes", e))?;
-            let Some(message) = frame.get(1..) else {
-                continue;
-            };
-            if let Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) =
-                sync_protocol::FromRemote::deserialize(message)
-            {
-                // Port effects include attempted ACKs discarded by a crash
-                // behind the output gate. Those promise no durability: a
-                // duplicate can depend on another still-unconfirmed write.
-                // Check every actual release, never treat an attempt as one.
-                let Some(ack_index) = outcome.events.iter().position(|event|matches!(&event.fact,Fact::AckSent {update,callback:at} if update==id && *at==callback)) else { continue };
-                let ranges = requests.get(&(doc, callback, id)).copied().or_else(|| {
-                    outcome.events.iter().find_map(|event| match &event.fact {
-                        Fact::ServerApplied { update, spans, .. } if update == id => Some(spans),
-                        _ => None,
-                    })
-                });
-                let mut covered = written.clone();
-                for (at, origin, spans) in prior_receipts.get(&doc).into_iter().flatten() {
-                    if *at < ack_index && *origin != callback {
-                        covered.extend(spans.clone());
-                    }
-                }
-                for (at, route, spans) in &seeds {
-                    if *at < ack_index && *route == doc {
-                        covered.extend(spans.clone());
-                    }
-                }
-                let peers_mapped = ranges
-                    .is_some_and(|ranges| ranges.iter().all(|range| mapped.contains(&range.peer)));
-                // The real core caches mapped peers. A prior successful mapping is
-                // valid evidence; requiring a redundant D1 write would reject M9's cache.
-                let wrote_all = ranges
-                    .is_some_and(|ranges| ranges.iter().all(|range| ranges_cover(&covered, range)));
-                if !wrote_all || !peers_mapped {
-                    return Err(Failure::new(
-                        "core_acks_after_writes",
-                        format!(
-                            "{id} ack precedes durable-op put or successful mapping in callback{callback}"
-                        ),
-                    ));
-                }
-            }
+            .all(|span| ranges_cover(&covered, span) && mapped.contains(&span.peer))
+        {
+            return Err(Failure::new(
+                "core_acks_after_writes",
+                format!(
+                    "{update} ack precedes durable-op put or successful mapping in callback{callback}"
+                ),
+            ));
         }
-        prior_mapped.insert(doc, successful);
     }
     Ok(())
 }
-/// New writes require their own durable completion; duplicates require prior real
-/// coverage and their current output gate, including any archive-repair writes.
+
+/// Every actual ACK requires both physical receipts and its own confirmed gate;
+/// a logical completion alone cannot bypass either check.
 pub fn gate_releases_after_durable(outcome: &Outcome) -> Result<(), Failure> {
-    let mut durable = BTreeSet::new();
-    let receipts = core_acks_after_writes(outcome);
+    for event in &outcome.events {
+        if let Fact::GateReleased {
+            required,
+            confirmed,
+            ..
+        } = &event.fact
+            && required > confirmed
+        {
+            return Err(Failure::new(
+                "gate_releases_after_durable",
+                "send released before an earlier write became durable",
+            ));
+        }
+    }
+    core_acks_after_writes(outcome)
+        .map_err(|error| Failure::new("gate_releases_after_durable", error.detail))?;
     for (index, event) in outcome.events.iter().enumerate() {
-        match &event.fact {
-            Fact::GateReleased {
-                required,
-                confirmed,
+        let Fact::AckSent { update, callback } = &event.fact else {
+            continue;
+        };
+        let route = outcome.events.iter().find_map(|event| match &event.fact {
+            Fact::ServerReceived {
+                doc,
+                callback: origin,
+                update: id,
                 ..
-            } if required > confirmed => {
-                return Err(Failure::new(
-                    "gate_releases_after_durable",
-                    "send released before an earlier write became durable",
-                ));
-            }
-            Fact::ServerDurable { update, callback } => {
-                durable.insert((update.clone(), *callback));
-            }
-            Fact::AckSent { update, callback } => {
-                if !durable.contains(&(update.clone(), *callback)) {
-                    let route = outcome.events.iter().find_map(|event| match &event.fact {
-                        Fact::ServerReceived {
-                            doc,
-                            callback: at,
-                            update: id,
-                            ..
-                        } if id == update && at == callback => Some(*doc),
-                        _ => None,
-                    });
-                    let prior_only=route.is_some_and(|doc| {
-                        let wrote_new=outcome.events.iter().any(|event|matches!(&event.fact,Fact::PendingStored{doc:target,callback:at,..} if *target==doc && at==callback));
-                        // World emits this exact proof immediately before each
-                        // actual ACK release. A held ACK keeps its request's
-                        // callback, while the confirming drain can run under a
-                        // later callback; never join those identities by equality.
-                        let released=index.checked_sub(1).and_then(|at|outcome.events.get(at)).is_some_and(|event|matches!(&event.fact,Fact::GateReleased{doc:target,required,confirmed,..} if *target==doc && required<=confirmed));
-                        !wrote_new && released && receipts.is_ok()
-                    });
-                    if prior_only {
-                        continue;
-                    }
-                    return Err(Failure::new(
-                        "gate_releases_after_durable",
-                        format!("{update} ack escaped callback{callback}'s durability gate"),
-                    ));
-                }
-            }
-            _ => {}
+            } if origin == callback && id == update => Some(*doc),
+            _ => None,
+        });
+        let released = index
+            .checked_sub(1)
+            .and_then(|at| outcome.events.get(at))
+            .is_some_and(|event| {
+                matches!(&event.fact, Fact::GateReleased { doc, required, confirmed, .. }
+                if Some(*doc) == route && required <= confirmed)
+            });
+        if !released {
+            return Err(Failure::new(
+                "gate_releases_after_durable",
+                format!("{update} ack escaped callback{callback}'s durability gate"),
+            ));
         }
     }
     Ok(())

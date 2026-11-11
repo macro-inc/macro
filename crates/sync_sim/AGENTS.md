@@ -311,3 +311,16 @@ hostile safety profiles and requires bounded, complete physical storage before
 existing durability/receipt invariants can admit an oversized update. The large
 form story exercises actual fragmentation, hibernation and exact cold replay;
 mutation controls must reject missing, unbounded and checksum-inconsistent proof.
+
+Classify duplicate and partially duplicate requests from successful real ACK
+enqueues, not from an all-ranges-new write proxy. Record every actual storage
+confirmation as ServerWritesDurable with document, issuing callback and generation;
+the queued ACK itself never supplies physical durability. Drain successful enqueue
+observations once per callback and preserve the original gate/source correlation.
+
+Check every actual AckSent against an earlier decoded ServerReceived, its ordered
+attempted frame, complete physical pending rows, matching puts, confirmed generation
+and successful peer mapping. Prior rows and initialized snapshots may cover
+duplicates; current rows still require their own completion. Both ACK and gate
+queries reject missing, late, wrong-document/callback/generation physical proof
+even when logical ServerDurable remains. Preserve every strict negative control.

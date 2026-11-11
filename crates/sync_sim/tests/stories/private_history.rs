@@ -66,7 +66,7 @@ fn read_only_private_history_seed357() {
     config.session.snapshot_interval = Some(doc_sync_core::Millis(5000));
     config.session.presence_timeout = doc_sync_core::WallDuration(5000);
     config.session.presence_refresh = Some(doc_sync_core::Millis(3000));
-    let outcome = Sim::new(config).run(&[
+    let script = [
         Step::Open(OpenSpec {
             client: ClientName("client0".into()),
             profile: ProfileName("profile0".into()),
@@ -743,9 +743,14 @@ fn read_only_private_history_seed357() {
         Step::Run(Millis(32)),
         Step::ReopenCrashed,
         Step::Settle,
-    ]);
-    if let Err(failures) = invariants::check_all(&outcome) {
-        panic!("{failures:#?}");
+    ];
+    for activated in [false, true] {
+        let mut config = config.clone();
+        config.server_operation_archive_writes = activated;
+        let outcome = Sim::new(config).run(&script);
+        if let Err(failures) = invariants::check_all(&outcome) {
+            panic!("activated={activated}: {failures:#?}");
+        }
+        outcome.check_replay().unwrap();
     }
-    outcome.check_replay().unwrap();
 }

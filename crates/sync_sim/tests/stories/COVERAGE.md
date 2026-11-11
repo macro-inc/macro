@@ -227,7 +227,8 @@ early initialization are negative controls.
 History selection: editor_undo::redo_restores_the_selection_after_the_original_split_commit checks the committed split caret after redo; a deliberately damaged observed selection must fail redo_restores_selection. Remote cursor transformations and Android composition-newline tapes are owning document_session literals.
 
 `private_history::read_only_private_history_seed357` retains the complete causal
-history/revocation workload with every invariant and replay check. The core
+history/revocation workload with every invariant and replay check in both writer
+activation modes. The core
 `recovery_history` control independently proves failed private recovery resumes
 when actual server history arrives, including duplicate history and a failed
 ordinary reset in between. It checks throttling, no idle retry loop, unchanged

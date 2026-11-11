@@ -113,9 +113,14 @@ impl Sim {
                         .collect::<Vec<_>>();
                     let completed = keys
                         .into_iter()
-                        .filter_map(|generation| server.completions.remove(&generation))
+                        .filter_map(|generation| {
+                            server
+                                .completions
+                                .remove(&generation)
+                                .map(|completed| (generation, completed))
+                        })
                         .collect::<Vec<_>>();
-                    for (_, blocking, _) in &completed {
+                    for (_, (_, blocking, _)) in &completed {
                         if *blocking {
                             server.pending_durable = server.pending_durable.saturating_sub(1);
                         }
@@ -125,12 +130,17 @@ impl Sim {
                 } else {
                     return Ok(());
                 };
-                for (callback, _, updates) in completed {
+                for (generation, (callback, _, updates)) in completed {
+                    self.emit(Fact::ServerWritesDurable {
+                        doc,
+                        callback,
+                        generation,
+                    });
                     for update in updates {
                         self.emit(Fact::ServerDurable { update, callback });
                     }
                 }
-                self.server_effects(doc, callback, effects)?;
+                self.server_effects(doc, callback, effects, Vec::new())?;
             }
             Pending::Alarm(doc, generation) => {
                 if self
@@ -395,6 +405,7 @@ impl Sim {
         let Callback {
             index,
             effects,
+            queued,
             generation,
             blocking,
             updates,
@@ -430,7 +441,7 @@ impl Sim {
             }
         }
         if crashed {
-            self.server_effects(doc, index, effects)?;
+            self.server_effects(doc, index, effects, queued)?;
             if let Some(server) = self.servers.get_mut(&doc) {
                 server.ports.recover();
                 server.evict();
@@ -464,7 +475,7 @@ impl Sim {
         }
         // Register this callback before delivering its outputs: a successful close
         // can synchronously enter another callback with a newer write generation.
-        self.server_effects(doc, index, effects)?;
+        self.server_effects(doc, index, effects, queued)?;
         self.schedule_alarm(doc);
         Ok(())
     }
@@ -485,16 +496,12 @@ impl Sim {
         doc: DocIx,
         callback: u64,
         effects: Vec<Effect>,
+        queued: Vec<Effect>,
     ) -> Result<(), Failure> {
         let closes = self
             .servers
             .get(&doc)
             .map(|server| server.ports.take_completed_closes())
-            .unwrap_or_default();
-        let queued = self
-            .servers
-            .get(&doc)
-            .map(|server| server.ports.take_queued_sends())
             .unwrap_or_default();
         for effect in queued {
             if effect.operation != "send" {
