@@ -176,9 +176,13 @@ Inline Tags property rows retain their compact treatment.
 Compose `PropertyRowActions.Root`, `.Remove`, and `.Pin` through children, in
 that order, so the trash sits left of the pin. When the panel supports an action
 a row cannot take, the action renders an empty slot of the same size, keeping
-every row's pin in one column. Multi-value layouts and collections accept JSX children,
-not action render callbacks. Each collection row owns one saving signal shared
-with its collection editor and row actions.
+every row's pin in one column. Rows with an add button (multi-value layouts and
+collections) wrap the layout in `PropertyRowActions.Provider` and pass `.Remove`
+and `.Pin` as the `actionsBeforeAdd` and `actionsAfterAdd` JSX slots, so the row
+reads trash, add, pin and the add button sits next to the pin. A collection's
+add button stays one element when its first item arrives, because an open picker
+is anchored to it. Each collection row owns one saving signal shared with its
+collection editor and row actions.
 
 ## Side-panel header actions
 

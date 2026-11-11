@@ -386,32 +386,31 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                     )}
                   >
                     {(property) => (
-                      <EntityCollectionProperty
-                        entityId={props.entityId}
-                        loading={isLoading()}
-                        onSave={savePropertyValues}
-                        onRefresh={refreshCollection}
-                        property={property()}
+                      <PropertyRowActions.Provider
                         saving={saving}
+                        onRefresh={refetch}
+                        canRemoveFromEntity={
+                          !defaultPinnedDefinitionIds().has(
+                            property().propertyDefinitionId
+                          )
+                        }
+                        property={property()}
+                        onRemovePendingProperty={removePendingProperty}
+                        onPropertyPinned={
+                          props.onPropertyPinned ? pinProperty : undefined
+                        }
                       >
-                        <PropertyRowActions.Root
-                          saving={saving}
-                          onRefresh={refetch}
-                          canRemoveFromEntity={
-                            !defaultPinnedDefinitionIds().has(
-                              property().propertyDefinitionId
-                            )
-                          }
+                        <EntityCollectionProperty
+                          entityId={props.entityId}
+                          loading={isLoading()}
+                          onSave={savePropertyValues}
+                          onRefresh={refreshCollection}
                           property={property()}
-                          onRemovePendingProperty={removePendingProperty}
-                          onPropertyPinned={
-                            props.onPropertyPinned ? pinProperty : undefined
-                          }
-                        >
-                          <PropertyRowActions.Remove />
-                          <PropertyRowActions.Pin />
-                        </PropertyRowActions.Root>
-                      </EntityCollectionProperty>
+                          saving={saving}
+                          actionsBeforeAdd={<PropertyRowActions.Remove />}
+                          actionsAfterAdd={<PropertyRowActions.Pin />}
+                        />
+                      </PropertyRowActions.Provider>
                     )}
                   </Show>
                 );
@@ -633,21 +632,20 @@ function SidePanelPropertyRow(props: {
                     />
                   </Match>
                   <Match when={isMultiValueRow()}>
-                    <MultiValue
-                      property={property()}
-                      getEmptyLabel={props.getEmptyLabel}
+                    <PropertyRowActions.Provider
+                      canRemoveFromEntity={props.canRemoveFromEntity}
+                      canPinPendingProperty={props.canPinPendingProperty}
+                      property={props.property}
+                      onRemovePendingProperty={props.onRemovePendingProperty}
+                      onPropertyPinned={props.onPropertyPinned}
                     >
-                      <PropertyRowActions.Root
-                        canRemoveFromEntity={props.canRemoveFromEntity}
-                        canPinPendingProperty={props.canPinPendingProperty}
-                        property={props.property}
-                        onRemovePendingProperty={props.onRemovePendingProperty}
-                        onPropertyPinned={props.onPropertyPinned}
-                      >
-                        <PropertyRowActions.Remove />
-                        <PropertyRowActions.Pin />
-                      </PropertyRowActions.Root>
-                    </MultiValue>
+                      <MultiValue
+                        property={property()}
+                        getEmptyLabel={props.getEmptyLabel}
+                        actionsBeforeAdd={<PropertyRowActions.Remove />}
+                        actionsAfterAdd={<PropertyRowActions.Pin />}
+                      />
+                    </PropertyRowActions.Provider>
                   </Match>
                 </Switch>
                 <PropertyNS.PopoverEditor
@@ -826,7 +824,10 @@ function UserStackPill(props: {
 function MultiValue(props: {
   property: Property;
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
-  children: JSX.Element;
+  /** Row actions shown before the add button; the trash goes here. */
+  actionsBeforeAdd: JSX.Element;
+  /** Row actions shown after the add button; the pin goes here. */
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -849,9 +850,11 @@ function MultiValue(props: {
         <Show
           when={!isEntity()}
           fallback={
-            <NonUserEntityValue property={props.property}>
-              {props.children}
-            </NonUserEntityValue>
+            <NonUserEntityValue
+              property={props.property}
+              actionsBeforeAdd={props.actionsBeforeAdd}
+              actionsAfterAdd={props.actionsAfterAdd}
+            />
           }
         >
           <div class="flex flex-wrap items-center gap-1.5">
@@ -885,7 +888,8 @@ function MultiValue(props: {
                 </Layer>
               )}
             />
-            <div class="flex shrink-0 items-center">
+            <div class="flex shrink-0 items-center gap-0.5">
+              {props.actionsBeforeAdd}
               <Show when={!isReadOnly() && hasValue(props.property)}>
                 <Button
                   type="button"
@@ -901,7 +905,7 @@ function MultiValue(props: {
                   <Plus class="size-4" />
                 </Button>
               </Show>
-              {props.children}
+              {props.actionsAfterAdd}
             </div>
           </div>
         </Show>
@@ -912,7 +916,8 @@ function MultiValue(props: {
 
 function NonUserEntityValue(props: {
   property: Property;
-  children: JSX.Element;
+  actionsBeforeAdd: JSX.Element;
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -947,7 +952,8 @@ function NonUserEntityValue(props: {
           />
         )}
       </For>
-      <div class="flex shrink-0 items-center">
+      <div class="flex shrink-0 items-center gap-0.5">
+        {props.actionsBeforeAdd}
         <Show
           when={!isReadOnly()}
           fallback={
@@ -974,7 +980,7 @@ function NonUserEntityValue(props: {
             </Button>
           </Show>
         </Show>
-        {props.children}
+        {props.actionsAfterAdd}
       </div>
     </div>
   );

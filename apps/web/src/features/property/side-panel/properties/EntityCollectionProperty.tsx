@@ -49,7 +49,10 @@ export function EntityCollectionProperty(props: {
   property: Property;
   onSave: (property: Property, values: PropertyApiValues) => Promise<void>;
   saving: Signal<boolean>;
-  children: JSX.Element;
+  /** Row actions shown before the add button; the trash goes here. */
+  actionsBeforeAdd: JSX.Element;
+  /** Row actions shown after the add button; the pin goes here. */
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const [isSaving, setIsSaving] = props.saving;
@@ -141,9 +144,9 @@ export function EntityCollectionProperty(props: {
         onSave={saveProperty}
         property={displayedProperty()}
         saving={props.saving}
-      >
-        {props.children}
-      </EntityCollectionPropertyBody>
+        actionsBeforeAdd={props.actionsBeforeAdd}
+        actionsAfterAdd={props.actionsAfterAdd}
+      />
       <PropertyNS.PopoverEditor
         entitySelfFilter={{
           entityType: ctx.entityType,
@@ -166,7 +169,8 @@ function EntityCollectionPropertyBody(props: {
   ) => Promise<void>;
   property: Property;
   saving: Signal<boolean>;
-  children: JSX.Element;
+  actionsBeforeAdd: JSX.Element;
+  actionsAfterAdd: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -252,7 +256,10 @@ function EntityCollectionPropertyBody(props: {
           <DropIcon class="size-3.5 shrink-0" aria-hidden="true" />
         </Show>
       </span>
-      <div class="flex min-w-0 items-center">
+      {/* The add button stays one element when the first item arrives, since
+          an open picker is anchored to it; only the trash moves. */}
+      <div class="flex min-w-0 items-center gap-0.5">
+        <Show when={hasItems()}>{props.actionsBeforeAdd}</Show>
         <Show when={!isReadOnly()}>
           <Button
             type="button"
@@ -260,7 +267,6 @@ function EntityCollectionPropertyBody(props: {
             size={hasItems() ? 'icon-xs' : 'xs'}
             class={cn(
               'text-ink-extra-muted not-data-disabled:focus-visible:text-ink',
-              hasItems() && 'ml-auto',
               isDragging() && 'invisible'
             )}
             aria-label={`Add ${props.property.displayName}`}
@@ -274,8 +280,14 @@ function EntityCollectionPropertyBody(props: {
             <Show when={!hasItems()}>{t('common.add')}</Show>
           </Button>
         </Show>
-        <div class={cn('flex shrink-0 items-center', !hasItems() && 'ml-auto')}>
-          {props.children}
+        <div
+          class={cn(
+            'flex shrink-0 items-center gap-0.5',
+            !hasItems() && 'ml-auto'
+          )}
+        >
+          <Show when={!hasItems()}>{props.actionsBeforeAdd}</Show>
+          {props.actionsAfterAdd}
         </div>
       </div>
       <div class="col-span-2 min-w-0">
