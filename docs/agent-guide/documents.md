@@ -2891,10 +2891,14 @@ the card opened leave the body expanded. In that card, Open session is the
 icon-only button from a narrow agent card, so the label does not take a line
 of its own. Channels keep the labeled chip. Short comments, the phone drawer,
 the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
-pushes the cards below it down (past the end of a short document if needed),
-and no card starts above the top of the document. Check this with a long
+pushes the cards below it down (past the end of a short document if needed).
+In Markdown the selected card stays beside its highlighted text, as in Google
+Docs: the cards above it move up, past the top of the document when they do
+not fit, and with nothing selected the stack starts at the first comment. A
+Word card never starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
-above and below it.
+above and below it, and by selecting the last of a dozen comments on
+consecutive lines.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown

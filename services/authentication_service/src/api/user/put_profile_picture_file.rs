@@ -9,6 +9,9 @@ use rate_limit::domain::{
     ports::RateLimitService,
 };
 
+use super::profile_picture_change::{
+    picture_changed_metadata, publish_picture_changed, throttle_set,
+};
 use crate::api::{
     context::{ApiContext, AuthorizationService},
     middleware::rate_limit::RATE_LIMIT_ENABLED,
@@ -220,12 +223,17 @@ pub async fn create_upload_handler(
         (status = 400, body = ErrorResponse, description = "The file is not a supported image"),
         (status = 401, body = String),
         (status = 404, body = ErrorResponse, description = "The caller has no such file"),
+        (status = 429, body = ErrorResponse, description = "Picture changed less than a second ago"),
         (status = 500, body = ErrorResponse),
     ),
 )]
 #[tracing::instrument(
     skip_all,
-    fields(user_id = %authorization.authorization.user.macro_user_id, file_id = %req.file_id),
+    fields(
+        user_id = %authorization.authorization.user.macro_user_id,
+        file_id = %req.file_id,
+        rate_limited = tracing::field::Empty,
+    ),
 )]
 pub async fn handler(
     State(ctx): State<ApiContext>,
@@ -234,6 +242,12 @@ pub async fn handler(
 ) -> Result<Json<EmptyResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let file_id = uuid::Uuid::parse_str(&req.file_id)
         .map_err(|_| error(StatusCode::BAD_REQUEST, "invalid file id"))?;
+
+    throttle_set(
+        &ctx,
+        authorization.authorization.user.macro_user_id.as_ref(),
+    )
+    .await?;
 
     let metadata = ctx
         .static_file_service_client
@@ -273,6 +287,15 @@ pub async fn handler(
             "unable to update profile picture",
         )
     })?;
+
+    publish_picture_changed(
+        &ctx,
+        picture_changed_metadata(
+            authorization.authorization.user.macro_user_id.clone(),
+            Some(file_id.to_string()),
+            &url,
+        ),
+    );
 
     Ok(Json(EmptyResponse {}))
 }

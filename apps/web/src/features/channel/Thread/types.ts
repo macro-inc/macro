@@ -90,6 +90,8 @@ export type ThreadProps = {
   monorail?: boolean;
   /** Flat chat surfaces do not draw thread connector rails. */
   hideRail?: boolean;
+  /** Render replies with root-message headers, without changing thread ownership. */
+  repliesAsRoots?: boolean;
   /** Draws the root as something other than a message, such as a call's row. */
   rootSlot?: () => JSX.Element;
   /** Collapse to the indicator alone rather than previewing replies. */

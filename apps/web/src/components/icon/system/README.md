@@ -2,9 +2,11 @@
 
 Original SVG drawings for Macro's interface. The source of truth is the SVG
 files in this directory. These drawings were authored on a blank coordinate
-grid; no Apple, OpenAI, Linear, or Phosphor vector paths were imported or traced.
-SF Symbols and ChatGPT were visual references for optical balance and clarity,
-not asset sources. The icons have no platform font or native symbol dependency.
+grid, except `regular/speaker-slash.svg`, which retains Phosphor's regular
+geometry and MIT notice for the recording mute state. No Apple, OpenAI, or
+Linear vector paths were imported or traced. SF Symbols and ChatGPT were visual
+references for optical balance and clarity, not asset sources. The icons have
+no platform font or native symbol dependency.
 
 Apple's design guidance informs optical balance, not asset reuse. Do not import,
 trace, or modify SF Symbols exports or templates for this cross-platform set.

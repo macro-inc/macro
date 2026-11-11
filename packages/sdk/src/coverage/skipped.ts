@@ -115,7 +115,6 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'pollCodexLogin',
-  'postProfilePictures',
   'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
