@@ -33,10 +33,10 @@ a background tab; adding Shift also switches to it. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
-An inline preview in a background tab stays open there, so selecting its entity
-from another tab switches to that tab with the entity showing. A tab that opens
-onto an entity another tab already holds shows its list instead, without moving
-you or showing a toast.
+The same entity can be open in several tabs. Selecting or opening something a
+background tab shows opens it in the current tab, with no toast and no switch,
+and each tab keeps its own instance, scroll, and history. Within one tab an
+entity still has one split: opening it again focuses that split.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -1770,8 +1770,10 @@ including when the detail closes.
 Resetting a split clears its previous history and starts at the default view;
 after opening another item, Back returns to that default view.
 
-Entity content can be open in only one split or inline preview/detail view at a
-time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+Within one tab (or the whole layout when desktop tabs are off), entity content
+can be open in only one split or inline preview/detail view at a time. Desktop
+tabs each hold their own instance. Shell components may have duplicate splits
+when `allowDuplicate` is enabled.
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.
