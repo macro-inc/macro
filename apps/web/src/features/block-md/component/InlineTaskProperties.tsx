@@ -103,7 +103,7 @@ export function InlineTaskProperties() {
   // Property assignment IDs arrive from the server; persist each requested pin
   // to the editor once its assignment exists and the editor is ready.
   createEffect(() => {
-    if (pendingPins().size === 0 || !state.editor.md.editor) return;
+    if (pendingPins().size === 0 || !pins.ready()) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
       pins.pin(property.propertyId, titleProperties());

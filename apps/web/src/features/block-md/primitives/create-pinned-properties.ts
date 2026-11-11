@@ -87,6 +87,8 @@ export function createPinnedProperties(
   };
   return {
     ids,
+    /** Whether a document body is mounted to read and store pins. */
+    ready: () => store() !== undefined,
     pin: (id: string, properties: readonly Property[] = []) =>
       update(id, properties, true),
     unpin: (

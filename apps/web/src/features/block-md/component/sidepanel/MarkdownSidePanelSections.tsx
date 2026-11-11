@@ -241,7 +241,7 @@ function PropertiesSectionContent(props: {
       pinnedPropertyIds={pins.ids}
       defaultTitlePropertyDefinitionIds={defaultTitlePropertyDefinitionIds}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
-      onPropertyPinned={mdData.editor ? pins.pin : undefined}
+      onPropertyPinned={pins.ready() ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
       renderSection={props.renderSection}
