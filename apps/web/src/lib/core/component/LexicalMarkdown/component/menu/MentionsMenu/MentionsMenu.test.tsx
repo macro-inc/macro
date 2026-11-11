@@ -338,6 +338,45 @@ it.each([false, true])(
   }
 );
 
+it('picks the row for the typed term on an Enter pressed inside the debounce', async () => {
+  vi.useFakeTimers();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ben: IUser = {
+    id: 'macro|ben@macro.com',
+    name: 'Ben Ortiz',
+    email: 'ben@macro.com',
+  };
+  const ana: IUser = {
+    id: 'macro|ana@macro.com',
+    name: 'Ana Ruiz',
+    email: 'ana@macro.com',
+  };
+  const menu = createMenuOperations();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ben, ana]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  menu.openMenu();
+  menu.setSearchTerm('Ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  expect(menu.isOpen()).toBe(false);
+
+  // A key typed straight after Enter goes to the editor, not to a search
+  // still waiting on the debounce.
+  menu.setSearchTerm('Ana!');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(onPick).toHaveBeenCalledOnce();
+});
+
 it('closes the mobile menu on the first Escape', () => {
   mocks.mobile = true;
   Element.prototype.scrollIntoView = vi.fn();

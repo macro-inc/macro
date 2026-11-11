@@ -3,7 +3,13 @@ import {
   debounce as solidDebounce,
   throttle as solidThrottle,
 } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
@@ -13,14 +19,23 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 /**
- * Create a debounced view of a signal.
+ * Create a debounced view of a signal. `flush` applies the source's current
+ * value now instead of after the delay.
  */
-export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
+export function debouncedDependent<T>(
+  source: () => T,
+  delay = 300
+): Accessor<T> & { flush: () => void } {
   const [debounced, setDebounced] = createSignal(source());
   const schedule = solidDebounce((v: T) => setDebounced(() => v), delay);
   createEffect(() => schedule(source()));
   onCleanup(() => schedule.clear());
-  return debounced;
+  return Object.assign(debounced, {
+    flush: () => {
+      schedule.clear();
+      setDebounced(() => untrack(source));
+    },
+  });
 }
 
 /**
