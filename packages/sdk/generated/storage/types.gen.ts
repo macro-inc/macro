@@ -6855,7 +6855,7 @@ export type DocumentMarkdownFailure = {
 /**
  * Error code of a body read or write that did not complete.
  */
-export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'document_too_large' | 'read_failed' | 'write_failed';
 
 /**
  * A body write that landed, or found the body already reading that way.
@@ -29165,6 +29165,10 @@ export type GetDocumentMarkdownErrors = {
      */
     404: unknown;
     /**
+     * The document exceeds the snapshot limit
+     */
+    413: DocumentMarkdownFailure;
+    /**
      * The body could not be read
      */
     502: DocumentMarkdownFailure;
@@ -29211,6 +29215,10 @@ export type WriteDocumentMarkdownErrors = {
      * The document changed since the revision was read; nothing was written
      */
     409: DocumentMarkdownFailure;
+    /**
+     * The document or the new body exceeds the snapshot limit; nothing was written
+     */
+    413: DocumentMarkdownFailure;
     /**
      * The write failed and may have applied
      */

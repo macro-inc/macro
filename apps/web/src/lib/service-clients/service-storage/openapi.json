@@ -15009,6 +15009,16 @@
           "404": {
             "description": "Document not found"
           },
+          "413": {
+            "description": "The document exceeds the snapshot limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownFailure"
+                }
+              }
+            }
+          },
           "502": {
             "description": "The body could not be read",
             "content": {
@@ -15078,6 +15088,16 @@
           },
           "409": {
             "description": "The document changed since the revision was read; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownFailure"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The document or the new body exceeds the snapshot limit; nothing was written",
             "content": {
               "application/json": {
                 "schema": {
@@ -35701,7 +35721,12 @@
       "DocumentMarkdownFailureCode": {
         "type": "string",
         "description": "Error code of a body read or write that did not complete.",
-        "enum": ["revision_conflict", "read_failed", "write_failed"]
+        "enum": [
+          "revision_conflict",
+          "document_too_large",
+          "read_failed",
+          "write_failed"
+        ]
       },
       "DocumentMarkdownWritten": {
         "type": "object",
