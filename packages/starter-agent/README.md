@@ -41,7 +41,6 @@ to `state/memory/identity/identity.md`.
 | `tools`     | Its credentials, by name                                                | nothing                             |
 | `secrets`   | The team's vault: search, copy a field or TOTP code to the clipboard, create and update, request access; never a value | the `enable-agent-vault` flag on the team; `xclip` and `timeout` on the computer |
 | `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | nothing (speech is Macro's gateway) |
-| `screen`    | Show a browser on a call                                                | the screen service running          |
 | `browser`   | Its own browser on its screen: open, read, click, type, paste a vault secret into a login form, screenshot | `chromium` on the computer, `DISPLAY` |
 
 An area whose credentials are missing stays quiet: nothing fails, and the

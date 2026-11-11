@@ -1,13 +1,15 @@
 /**
- * The worker of a share's frame feed (`share-feed.ts`): frame cutting and
- * decoding stay off the call's thread.
- *
- * The screencast sends a JPEG only when the page changes, so a static page
- * sends one. The newest JPEG is written to ffmpeg again at the target rate,
- * which keeps the track alive and its rate steady.
+ * The worker of a share's frame feed (`share-feed.ts`): ffmpeg captures the
+ * desktop, and frames are cut here, off the call's thread.
  */
-import { cleanEnv, frameBytes } from '../../screen/screen.ts';
-import { decoderArgv, type FromWorker, ToWorker } from './share-feed.ts';
+import {
+  captureArgv,
+  captureEnv,
+  cutFrames,
+  desktop,
+  frameBytes,
+} from './desktop.ts';
+import { type FromWorker, ToWorker } from './share-feed.ts';
 
 // Bun's types don't say this module is a worker.
 declare const self: Worker;
@@ -15,60 +17,28 @@ declare const self: Worker;
 const tell = (message: FromWorker, transfer: ArrayBuffer[] = []): void =>
   self.postMessage(message, transfer);
 
-const state: {
-  stopped: boolean;
-  newest?: Uint8Array;
-  timer?: ReturnType<typeof setInterval>;
-  end?: () => void;
-} = { stopped: false };
+const state: { stopped: boolean; end?: () => void } = { stopped: false };
 
-const decode = async (
+const capture = async (
   start: Extract<ToWorker, { kind: 'start' }>
 ): Promise<void> => {
-  const child = Bun.spawn([...decoderArgv(start)], {
-    // The call's process carries LiveKit's library path, which kills a nix ffmpeg.
-    env: cleanEnv(process.env, ''),
-    stdin: 'pipe',
+  const child = Bun.spawn([...captureArgv(desktop(start.display), start)], {
+    env: captureEnv(process.env),
+    stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'ignore',
   });
-  state.end = () => {
-    child.kill();
-    void Promise.resolve(child.stdin.end()).catch(() => {});
-  };
+  state.end = () => child.kill();
   tell({ kind: 'started', pid: child.pid });
-  state.timer = setInterval(() => {
-    if (state.newest === undefined || state.stopped) return;
-    try {
-      child.stdin.write(state.newest);
-      void Promise.resolve(child.stdin.flush()).catch(() => {});
-    } catch {
-      state.stopped = true;
-    }
-  }, 1000 / start.fps);
-  const size = frameBytes(start);
-  const frame = new Uint8Array(size);
-  let filled = 0;
   try {
-    for await (const chunk of child.stdout) {
+    for await (const frame of cutFrames(child.stdout, frameBytes(start))) {
       if (state.stopped) break;
-      let at = 0;
-      while (at < chunk.length) {
-        const take = Math.min(size - filled, chunk.length - at);
-        frame.set(chunk.subarray(at, at + take), filled);
-        filled += take;
-        at += take;
-        if (filled === size) {
-          const out = frame.slice().buffer;
-          tell({ kind: 'frame', data: out }, [out]);
-          filled = 0;
-        }
-      }
+      const out = frame.slice().buffer;
+      tell({ kind: 'frame', data: out }, [out]);
     }
   } catch (error) {
     tell({ kind: 'error', error: String(error) });
   } finally {
-    clearInterval(state.timer);
     tell({ kind: 'end' });
   }
 };
@@ -76,13 +46,9 @@ const decode = async (
 self.addEventListener('message', ({ data }) => {
   const told = ToWorker.safeParse(data);
   if (!told.success) return;
-  const message = told.data;
-  if (message.kind === 'stop') {
+  if (told.data.kind === 'stop') {
     state.stopped = true;
-    clearInterval(state.timer);
     state.end?.();
     tell({ kind: 'end' });
-  } else if (message.kind === 'jpeg') {
-    if (!state.stopped) state.newest = new Uint8Array(message.data);
-  } else void decode(message);
+  } else void capture(told.data);
 });

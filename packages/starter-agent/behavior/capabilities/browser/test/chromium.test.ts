@@ -6,11 +6,14 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium, type Running } from '@macro-inc/muppet/utilities/browser';
+import {
+  asTab,
+  chromium,
+  type Running,
+} from '@macro-inc/muppet/utilities/browser';
 import { type Browser, chromium as playwright } from 'playwright-core';
 import { passthrough } from '../../../agent/claude.ts';
 import { step } from '../browse.ts';
-import { asTab } from '../context.ts';
 
 const available = Bun.which('chromium') !== null;
 const port = 9437;

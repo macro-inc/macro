@@ -193,19 +193,9 @@ export type PlaceInput = {
 };
 export type PlaceOutcome = PlaceVerdict & { readonly id?: string };
 
-/** What the brain can do with the screen on a call. Each returns the line the brain reads back. */
-export type DriveAction = {
-  readonly action: 'navigate' | 'scroll' | 'click' | 'type' | 'back' | 'read';
-  readonly url?: string;
-  readonly text?: string;
-  readonly selector?: string;
-  readonly x?: number;
-  readonly y?: number;
-};
 export type CallShare = {
   readonly tools: {
-    readonly share_screen: (url: string) => Promise<string>;
-    readonly drive_screen: (action: DriveAction) => Promise<string>;
+    readonly share_screen: (url?: string) => Promise<string>;
     readonly stop_share: () => Promise<string>;
   };
   /** The call is ending: stop without saying so. */

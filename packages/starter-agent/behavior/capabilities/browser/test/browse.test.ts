@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
+import type { Tab } from '@macro-inc/muppet/utilities/browser';
 import type { Trace } from '../../../agent/claude.ts';
-import { hostOf, mostText, type Step, step, type Tab } from '../browse.ts';
+import { hostOf, mostText, type Step, step } from '../browse.ts';
 
 /** A tab that records what was done to it. */
 const fakeTab = (page = 'Hello') => {
@@ -31,6 +32,9 @@ const fakeTab = (page = 'Hello') => {
     },
     screenshot: async (path) => {
       done.push(`screenshot ${path}`);
+    },
+    fullscreen: async () => {
+      done.push('fullscreen');
     },
   };
   return { tab, done };

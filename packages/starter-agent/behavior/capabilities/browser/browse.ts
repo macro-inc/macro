@@ -4,27 +4,8 @@
  * host and the outcome; never a page's content, a selector's text or a full
  * URL, which can carry tokens.
  */
+import type { Tab, Target } from '@macro-inc/muppet/utilities/browser';
 import type { Trace } from '../../agent/claude.ts';
-
-/** The tab the agent is working in, in its own browser. */
-export type Tab = {
-  readonly goto: (url: string) => Promise<void>;
-  readonly url: () => string;
-  readonly title: () => Promise<string>;
-  /** The text of the page, or of the first element matching `selector`. */
-  readonly text: (selector?: string) => Promise<string>;
-  readonly click: (target: Target) => Promise<void>;
-  /** Replaces what's in the field with `text`. */
-  readonly fill: (selector: string, text: string) => Promise<void>;
-  /** Focuses the field and pastes the clipboard into it. */
-  readonly paste: (selector: string) => Promise<void>;
-  /** A key or chord, e.g. `Enter`, `Control+A`. */
-  readonly press: (key: string) => Promise<void>;
-  readonly screenshot: (path: string) => Promise<void>;
-};
-
-/** By CSS selector, or else the link or button with this exact text. */
-export type Target = { readonly selector: string } | { readonly text: string };
 
 export type Step =
   | { readonly kind: 'open'; readonly url: string }
@@ -37,7 +18,8 @@ export type Step =
     }
   | { readonly kind: 'paste'; readonly selector: string }
   | { readonly kind: 'press'; readonly key: string }
-  | { readonly kind: 'screenshot'; readonly path: string };
+  | { readonly kind: 'screenshot'; readonly path: string }
+  | { readonly kind: 'fullscreen' };
 
 /** Where the tab is after a step, and what it read. */
 export type Stepped = {
@@ -105,6 +87,9 @@ const run = async (tab: Tab, action: Step): Promise<string | undefined> => {
       return undefined;
     case 'screenshot':
       await tab.screenshot(action.path);
+      return undefined;
+    case 'fullscreen':
+      await tab.fullscreen();
       return undefined;
   }
 };

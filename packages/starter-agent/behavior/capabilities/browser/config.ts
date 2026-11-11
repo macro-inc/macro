@@ -1,27 +1,29 @@
 /**
- * The agent's browser's settings: its port, its program and where it keeps
- * its profile. Nothing else in the area names a port or a path.
+ * The agent's browser's settings: where it answers, and where screenshots go.
+ * Nothing else in the area names a port or a path.
  */
 import type { State } from '../../context/state.ts';
 
 /** The owner of the browser's state directories. */
 export const owner = 'browser';
 
+/**
+ * The DevTools port of the computer's Chromium (the image's
+ * `macro-agent-browser` service), on loopback only.
+ */
+export const browserPort = 9223;
+
 export type BrowserConfig = {
-  /** Its DevTools port, on loopback only. The screen area's share browser is on 9335. */
-  readonly port: number;
-  /** The program, by the name the image has on PATH. */
-  readonly executable: string;
-  /** Its profile: private, never committed, and it keeps the agent's logins. */
-  readonly profile: string;
+  /** Where its DevTools answer. */
+  readonly endpoint: string;
   /** Where screenshots go unless a path is given. */
   readonly screenshots: string;
 };
 
-/** Its DevTools port. */
-export const browserPort = 9336;
-const profileDirectory = 'profile';
 const screenshotsDirectory = 'screenshots';
+
+/** Where a browser's DevTools answer. Loopback only. */
+export const cdpAddress = (port: number): string => `http://127.0.0.1:${port}`;
 
 export const browserConfig = ({
   state,
@@ -30,11 +32,6 @@ export const browserConfig = ({
   readonly state: Pick<State, 'private'>;
   readonly join: (...parts: readonly string[]) => string;
 }): BrowserConfig => ({
-  port: browserPort,
-  executable: 'chromium',
-  profile: join(state.private(owner), profileDirectory),
+  endpoint: cdpAddress(browserPort),
   screenshots: join(state.private(owner), screenshotsDirectory),
 });
-
-/** Where the browser's DevTools answer. Loopback only. */
-export const cdpAddress = (port: number): string => `http://127.0.0.1:${port}`;

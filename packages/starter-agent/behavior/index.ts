@@ -20,8 +20,6 @@ import { laterContext } from './capabilities/later/context.ts';
 import { laterCapabilities } from './capabilities/later/index.ts';
 import { peopleContext } from './capabilities/people/context.ts';
 import { peopleCapabilities } from './capabilities/people/index.ts';
-import { screenContext } from './capabilities/screen/context.ts';
-import { screenCapabilities } from './capabilities/screen/index.ts';
 import { secretsContext } from './capabilities/secrets/context.ts';
 import { secretsCapabilities } from './capabilities/secrets/index.ts';
 import { toolsContext } from './capabilities/tools/context.ts';
@@ -74,7 +72,6 @@ export const assistant = (
   });
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
-  const screen = screenContext(base);
   const browser = browserContext(base);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
   return behavior()
@@ -103,8 +100,6 @@ export const assistant = (
     .use(callsEvents)
     .use(callsCapabilities)
     .use(callsHandlers(callsEvents))
-    .use(screen)
-    .use(screenCapabilities)
     .use(browser)
     .use(browserCapabilities)
     .use(secrets)
