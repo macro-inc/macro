@@ -271,6 +271,13 @@ export function registerEvents(view: EditorView): {
     root.addEventListener(name, wrapped);
     listeners.push(() => root.removeEventListener(name, wrapped));
   }
+  // Source input reads the model NodeSelection; the browser's caret beside it
+  // was never admitted.
+  function inputSelection(): ViewSelection {
+    return view.selection().selection.kind === 'node'
+      ? { kind: 'keep' }
+      : readSelection(view);
+  }
   function command(
     command: number,
     text = '',
@@ -295,9 +302,7 @@ export function registerEvents(view: EditorView): {
         a,
         b: Number(clearComposition),
         text,
-        selection: selectionMessage(
-          completion?.selection ?? readSelection(view)
-        ),
+        selection: selectionMessage(completion?.selection ?? inputSelection()),
         target,
         characterTarget: target,
       }),
@@ -626,7 +631,7 @@ export function registerEvents(view: EditorView): {
     )
       return;
     event.preventDefault();
-    const selection = readSelection(view);
+    const selection = inputSelection();
     if (type.startsWith('delete')) {
       const backward = type.endsWith('Backward');
       const word = type.includes('Word'),
