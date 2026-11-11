@@ -74,6 +74,7 @@ async function serve(page: Page) {
           path,
           body: request.postData() ? request.postDataJSON() : undefined,
         });
+      if (path.endsWith('/harnesses')) return reply([net.mine]);
       if (path.endsWith('/harnesses/directory'))
         return reply([net.mine, net.theirs]);
       if (path.endsWith('/residents')) return reply(net.residents);
@@ -269,4 +270,60 @@ test('requests access from Teammates’ runtimes', async ({ page }) => {
   ).toBeVisible();
   await expect(row).toContainText('Your access: Requested');
   expect(net.writes.at(-1)?.body).toMatchObject({ requestedLevel: 'edit' });
+});
+
+test('approves from Pending requests with one click, without remounting rows', async ({
+  page,
+}) => {
+  const net = await serve(page);
+  const reads: number[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'GET' &&
+      new URL(request.url()).pathname.endsWith(
+        `/entities/harness/${MINE}/access-requests`
+      )
+    )
+      reads.push(Date.now());
+  });
+  await page.goto('/');
+  const row = page.locator('[data-pending-request="incoming"]');
+  await expect(row).toContainText('bob@example.com');
+
+  // Tag the row and record every time it is replaced.
+  await page.evaluate(() => {
+    const log: string[] = [];
+    const ids = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-pending-request]')]
+        .map((element) => {
+          element.dataset.instId ||= String(log.length + Math.random());
+          return element.dataset.instId;
+        })
+        .join(',');
+    let last = ids();
+    new MutationObserver(() => {
+      const next = ids();
+      if (next !== last) log.push(next);
+      last = next;
+    }).observe(document.body, { childList: true, subtree: true });
+    Object.assign(window, { remounts: log });
+  });
+  const settledReads = reads.length;
+  // A settled section stays put: watch it for two seconds.
+  await page.waitForTimeout(2000);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { remounts: string[] }).remounts
+    )
+  ).toEqual([]);
+  // No refetch loop: a settled section reads its machine only on refreshes.
+  expect(reads.length - settledReads).toBeLessThanOrEqual(2);
+
+  const clicked = Date.now();
+  await press(page, row.getByRole('button', { name: 'Approve' }));
+  await expect(row).toBeHidden();
+  expect(Date.now() - clicked).toBeLessThan(1000);
+  expect(
+    net.writes.filter((write) => write.path.endsWith('/resolve'))
+  ).toHaveLength(1);
 });
