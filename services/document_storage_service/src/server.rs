@@ -969,6 +969,9 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_sender.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        )),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -977,6 +980,7 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let sender = webhook_stream_sender;
+        let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
@@ -986,6 +990,7 @@ async fn run_server() -> anyhow::Result<()> {
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
                         &sender,
+                        &workspace_resolver,
                     ) => result,
                 };
 

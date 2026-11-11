@@ -77,14 +77,24 @@ pub(crate) fn message_stream_candidate(
     })
 }
 
+/// `team_workspace_ids` are the user's team workspaces (resolved once per
+/// event by the consumer); the user and their contacts are matched per
+/// subscriber through [`StreamAudience::ContactsOf`].
 pub(crate) fn user_stream_candidate(
     event: &Event<UserTopicEvent>,
+    team_workspace_ids: Vec<String>,
 ) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
     let (normalized, user_id) = normalized_user_event(event)?;
+    let mut audiences = vec![StreamAudience::ContactsOf {
+        user_id: user_id.to_string(),
+    }];
+    audiences.extend(
+        team_workspace_ids
+            .into_iter()
+            .map(|workspace_id| StreamAudience::Workspace { workspace_id }),
+    );
     Ok(StreamCandidateEvent {
-        audience: StreamAudience::Workspace {
-            workspace_id: user_id.to_string(),
-        },
+        audience: StreamAudience::Any(audiences),
         event: normalized,
     })
 }

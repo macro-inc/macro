@@ -378,6 +378,13 @@ pub(crate) fn normalized_channel_event(
     ))
 }
 
+/// The user a user fact is about.
+pub(crate) fn user_event_subject(event: &Event<UserTopicEvent>) -> MacroUserIdStr<'static> {
+    match &event.event {
+        UserTopicEvent::PictureChanged(metadata) => metadata.user_id.clone(),
+    }
+}
+
 /// Normalize one user fact. The entity is the user whose profile changed, and
 /// they are also the only audience.
 pub(crate) fn normalized_user_event(
