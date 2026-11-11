@@ -18,6 +18,9 @@ export function resolvePoint(
   if (key === null) return null;
   const node = view.node(key);
   if (!node) return null;
+  // Pinned $internalResolveSelectionPoint: a DOM text position belongs only to
+  // a TextNode; text inside a decorator or unmanaged scaffolding is no point.
+  if (dom.nodeType === 3 && node.kind !== 'text') return null;
   if (node.kind === 'text') {
     const text = textLeaf(view.getElementByKey(key));
     const textOffset =

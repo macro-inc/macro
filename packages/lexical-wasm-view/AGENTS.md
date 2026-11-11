@@ -76,6 +76,8 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - Materialize deferred programmatic application payloads in the guarded `inputSettled` factory entry; use current native read facts, submit a real command even for a no-op, keep DOM events out, and retain native action rechecks.
 - Await `SessionPort.inputSettled` only outside native dispatcher callbacks; distinguish completed-unhandled, opaque error and closed cancellation, preserve synchronous admission/outer errors, and use only synchronous issued operations inside callbacks.
 
+Resolve a DOM text position only to a TextNode; text inside a decorator or unmanaged scaffolding is no point (pinned $internalResolveSelectionPoint), so clicking a chip leaves no model selection.
+
 Keep a published NodeSelection through every keydown, beforeinput and selectionchange, as pinned $internalCreateSelection does; only a primary mouse pointerdown outside a decorator lets the next selectionchange admit a DOM range. The DOM range cannot represent it.
 
 Assert direct child types when testing rich insertion into code, since nested blocks can preserve the same visible text.
