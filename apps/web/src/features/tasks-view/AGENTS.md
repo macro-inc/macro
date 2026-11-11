@@ -87,6 +87,7 @@ Run from `apps/web`:
 - `bun run type-check`
 - Bounded filters/planner browser regression: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts task-filters.browser.e2e.ts` (synthetic transport, real controls and reference reader).
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
+- Per-tab capture/restore and saved-view draft browser regression (desktop/phone): `bunx playwright test --config src/features/tasks-view/browser-test/tab-restore/playwright.config.ts`.
 
 ## Related
 
