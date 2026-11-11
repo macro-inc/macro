@@ -194,7 +194,7 @@ export const landDepsOf = async (
   context: Needs,
   repository: Repository
 ): Promise<LandDeps> => {
-  const { config, heartbeat, disk, log, shell } = context;
+  const { heartbeat, disk, log, shell } = context;
   const run = asAgent(context);
   const tokened = await hasGithub(context);
   const url =

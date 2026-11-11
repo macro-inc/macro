@@ -1,10 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  agentEnvironment,
-  githubToken,
-  noIdentity,
-  sessionMarker,
-} from '../identity.ts';
+import { agentEnvironment, githubToken, sessionMarker } from '../identity.ts';
 
 const config = { identity: { name: 'Ada', email: 'agent@example.com' } };
 const credentials = (stored: Readonly<Record<string, string>>) => ({

@@ -34,6 +34,63 @@ const handler = (fetch: (request: Request) => Promise<Response>) =>
     equal: constantTimeEqual,
   });
 
+describe('relayHandler: Anthropic', () => {
+  const anthropicHandler = (fetch: (request: Request) => Promise<Response>) =>
+    relayHandler({
+      targets: { storage: 'https://macro.example/dss' },
+      capability,
+      apiKey,
+      fetch,
+      equal: constantTimeEqual,
+      anthropic: {
+        url: 'https://egress.example/brain/anthropic',
+        token: apiKey,
+      },
+    });
+
+  test('Claude presents the capability as its bearer token, and the gateway gets the real one', async () => {
+    const macro = upstream();
+    const response = await anthropicHandler(macro.fetch)(
+      new Request('http://127.0.0.1:1/anthropic/v1/messages?beta=true', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${capability}`,
+          'x-api-key': 'ignored',
+          'anthropic-version': '2023-06-01',
+        },
+        body: '{}',
+      })
+    );
+    expect(response.status).toBe(201);
+    const [sent] = macro.seen;
+    expect(sent?.url).toBe(
+      'https://egress.example/brain/anthropic/v1/messages?beta=true'
+    );
+    expect(sent?.headers.get('authorization')).toBe(`Bearer ${apiKey}`);
+    expect(sent?.headers.get('x-api-key')).toBeNull();
+    expect(sent?.headers.get('anthropic-version')).toBe('2023-06-01');
+  });
+
+  test('a wrong bearer, or no Anthropic gateway, is refused', async () => {
+    const macro = upstream();
+    const wrong = await anthropicHandler(macro.fetch)(
+      new Request('http://127.0.0.1:1/anthropic/v1/messages', {
+        method: 'POST',
+        headers: { authorization: 'Bearer nope' },
+      })
+    );
+    expect(wrong.status).toBe(401);
+    const none = await handler(macro.fetch)(
+      new Request('http://127.0.0.1:1/anthropic/v1/messages', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    expect(none.status).toBe(404);
+    expect(macro.seen).toEqual([]);
+  });
+});
+
 describe('relayHandler', () => {
   test('forwards a call to the real host with the real key, and nothing of the caller’s auth', async () => {
     const macro = upstream();

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { childEnvironment, claudeAccess } from '../children.ts';
+import {
+  anthropicUpstream,
+  childEnvironment,
+  claudeAccess,
+} from '../children.ts';
 
 const parent = {
   PATH: '/run/current-system/sw/bin',
@@ -39,23 +43,40 @@ describe('childEnvironment', () => {
 });
 
 describe('claudeAccess', () => {
-  test('in Macro-credits mode, exactly the three gateway keys', () => {
-    expect(
-      claudeAccess({
+  const relay = { url: 'http://127.0.0.1:41234', token: 'capability' };
+
+  test('in Macro-credits mode, Claude reaches the gateway through the relay, never with the real token', () => {
+    const access = claudeAccess(
+      {
         MACRO_API_KEY: 'mak_secret',
         ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
         ANTHROPIC_AUTH_TOKEN: 'mak_secret',
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         CLAUDE_CODE_OAUTH_TOKEN: 'never',
-      })
-    ).toEqual({
-      ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
-      ANTHROPIC_AUTH_TOKEN: 'mak_secret',
+      },
+      relay
+    );
+    expect(access).toEqual({
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:41234/anthropic',
+      ANTHROPIC_AUTH_TOKEN: 'capability',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     });
+    expect(JSON.stringify(access)).not.toContain('mak_secret');
   });
 
   test('without them, nothing: the claude wrapper signs in itself', () => {
-    expect(claudeAccess({ MACRO_API_KEY: 'mak_secret' })).toEqual({});
+    expect(claudeAccess({ MACRO_API_KEY: 'mak_secret' }, relay)).toEqual({});
+  });
+});
+
+describe('anthropicUpstream', () => {
+  test('is the gateway and its token in Macro-credits mode, and nothing otherwise', () => {
+    expect(
+      anthropicUpstream({
+        ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
+        ANTHROPIC_AUTH_TOKEN: 'mak_secret',
+      })
+    ).toEqual({ url: 'https://egress/brain/anthropic', token: 'mak_secret' });
+    expect(anthropicUpstream({ MACRO_API_KEY: 'mak_secret' })).toBeUndefined();
   });
 });
