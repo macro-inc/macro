@@ -21910,11 +21910,41 @@ export type UserDocumentsResponse = {
     total: number;
 };
 
+/**
+ * Metadata for [`UserTopicEvent::PictureChanged`].
+ */
+export type UserPictureChangedMetadata = {
+    /**
+     * Static file id of the new picture; `None` when it is not a static file
+     * (set by URL) or the picture was removed.
+     */
+    file_id?: string | null;
+    /**
+     * URL of the new picture; `None` when the picture was removed.
+     */
+    url?: string | null;
+    /**
+     * User whose profile picture changed.
+     */
+    user_id: MacroUserIdStr;
+};
+
 export type UserPinsResponse = {
     /**
      * The pins returned from the query
      */
     recent: Array<PinnedItem>;
+};
+
+/**
+ * A user's profile picture changed or was removed.
+ */
+export type UserTopicEvent = {
+    event_type: 'user.picture_changed';
+    /**
+     * A user's profile picture changed or was removed.
+     */
+    metadata: UserPictureChangedMetadata;
 };
 
 export type UserViewsResponse = {
@@ -22316,7 +22346,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.

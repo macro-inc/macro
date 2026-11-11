@@ -23,13 +23,15 @@ code, not in its prompt.
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
   them.
-- `src/context.rs`: async context (`Attribution`: correlation, routine, and the
-  validated session and its scope: `current_session`, `current_scope`);
-  capture before spawning, scope each message. `current_routine()` feeds
+- `src/context.rs`: async context (`Attribution`: correlation, routine, the
+  display verb sent with a correlated SDK call, and the validated session and
+  its scope: `current_session`, `current_scope`); capture before spawning,
+  scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
   on routine writes.
+- `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` scopes both the validated correlation and the signed routine).
+  (`propagate` scopes the validated correlation, its verb and the signed routine).
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
@@ -49,6 +51,9 @@ code, not in its prompt.
 - `scope` sets only a correlation and clears any routine; use
   `scope_attribution` to carry both. A bare `tokio::spawn` drops both; wrap
   request work in `capture`.
+- Read `x-macro-sdk-verb` only after signed correlation validation; unknown
+  verbs are absent, a verb never outlives its correlation, and it grants no
+  authority.
 - Do not check session state: accepted work can complete after a session ends.
 - A scope is matched against the request path: the SDK's path, alone or
   under one gateway service prefix (`SERVICE_PREFIXES`). Never match by
