@@ -1,0 +1,37 @@
+apps/web/src/features/meetings/views/meeting-media-setup.tsx
+  s_f17810de71e8e2::t_c89a08b1e2c243 22
+  s_f17810de71e8e2::t_1836c838f730b6 215-218
+apps/web/src/features/meetings/browser/meeting-media.test.ts
+  s_f17810de71e8e2::t_545543aa19c757 2,19-26
+  s_f17810de71e8e2::t_af9d2f91b03b67 27
+apps/web/src/features/meetings/primitives/meeting-media.ts
+  s_f17810de71e8e2::t_d345389eaee9b6 19-23,95,119,147-151,251,380-381
+apps/web/src/features/meetings/browser/meeting-media.ts
+  s_f17810de71e8e2::t_36d7022af62233 2
+  s_f17810de71e8e2::t_974de299ed1f8e 14-25,39-44,46-61
+  s_f17810de71e8e2::t_b6f512f77ccf0f 45
+apps/web/src/features/meetings/components/microphone-level-meter.tsx
+  s_f17810de71e8e2::t_b6f512f77ccf0f 8-11
+  s_f17810de71e8e2::t_ba02d4c42b6ea6 32-36
+  s_f17810de71e8e2::t_a018d66a84ac86 1-7,12-31,37-46
+apps/web/src/features/meetings/primitives/meeting-media.test.ts
+  s_f17810de71e8e2::t_545543aa19c757 73-107
+apps/web/src/features/meetings/components/microphone-level-meter.test.tsx
+  s_f17810de71e8e2::t_b6f512f77ccf0f 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fd748643c3efc9851e858ae521554bd63b8ff06a",
+  "prompts": {},
+  "sessions": {
+    "s_f17810de71e8e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35079398-e3be-49e4-944f-52f62315e070",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
