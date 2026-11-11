@@ -28,6 +28,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: mocks.source,
+  useOptionalGlobalNotificationSource: mocks.source,
 }));
 vi.mock('@queries/channel/notifications', () => ({
   createChannelNotificationsQuery: mocks.query,

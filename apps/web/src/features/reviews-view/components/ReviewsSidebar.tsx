@@ -6,6 +6,7 @@ import {
 } from '@app/components/view-shell';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
@@ -339,6 +340,7 @@ export function ReviewsSidebar(props: {
         </ViewSidebar.Primary>
       </Show>
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="reviews" />
         <ViewSidebar.Nav aria-label="Pull request views">
           <For each={REVIEWS_SCOPES}>
             {(scope) => {

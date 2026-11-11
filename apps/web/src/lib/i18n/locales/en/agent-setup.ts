@@ -22,7 +22,7 @@ export default {
   macrodApprove:
     'Wait for the pairing event and read its code, then approve it with the SDK. The log shows a running event once macrod connects. If it shows a fatal event instead, such as an expired code, fix the cause and run the start commands again:',
   macrodNext:
-    'To start sessions on this runtime from Macro, add an agent that uses it in Settings → Agents. macrod service doesn’t update itself: to update, run the install command again, then run the start commands again.',
+    'To start sessions on this computer from Macro, add an agent that uses it in Settings → Agents. macrod service doesn’t update itself: to update, run the install command again, then run the start commands again.',
   macrodDocs: 'macrod setup guide, including Windows',
   macrodSource: 'macrod source code',
   anotherToken: '4. Need another token later?',

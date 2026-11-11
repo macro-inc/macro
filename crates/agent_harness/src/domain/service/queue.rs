@@ -961,6 +961,7 @@ where
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         self.authorize_action(&command).await?;
+        self.authorize_runtime(session_id, &command).await?;
         let action_id = command.id;
         if let Some(store) = &self.external_replies
             && store
@@ -1012,7 +1013,7 @@ where
                     command.id,
                     command.actor.clone(),
                     None,
-                    *failure,
+                    (*failure).into(),
                 )
                 .await;
             }
@@ -1332,7 +1333,7 @@ where
 
     /// Load the durable queue the first time this process handles the session,
     /// so a later persist cannot wipe waiting actions this replica never saw.
-    async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
         if self.hydrated.contains(&session_id) {
             return Ok(());
         }
@@ -1454,6 +1455,36 @@ where
                         self.requeue_claimed(session_id, entry).await?;
                         return Err(error.into());
                     }
+                }
+            }
+
+            // Access can be removed while a prompt waits. One that may no
+            // longer run is refused rather than delivered, and the next
+            // entry dispatches in its place. Refusing is safe to repeat, so a
+            // failure puts the entry back for the next attempt.
+            let refusal = self
+                .runtime_refusal(session_id, &entry.action, entry.actor.as_ref())
+                .await;
+            let refused = match refusal {
+                Ok(None) => Ok(false),
+                Ok(Some(reason)) => self
+                    .refuse_prompt(
+                        session_id,
+                        entry.action_id,
+                        entry.announce.as_ref(),
+                        entry.actor.clone(),
+                        &reason,
+                    )
+                    .await
+                    .map(|()| true),
+                Err(error) => Err(error),
+            };
+            match refused {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    self.requeue_claimed(session_id, entry).await?;
+                    return Err(error);
                 }
             }
 

@@ -24,6 +24,28 @@ import {
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
 
+it('validates guarded hydration without stripping or weakening its scope', () => {
+  const request = {
+    id: 1,
+    kind: 'hydrate',
+    query: '{ user { id } }',
+    data: {},
+    hydrationScope: {
+      identity: 'viewer',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    },
+  };
+  expect(isCacheRequest(request)).toBe(true);
+  for (const hydrationScope of [
+    { identity: 'viewer' },
+    { ...request.hydrationScope, storageGeneration: 'bad' },
+    { ...request.hydrationScope, identity: '' },
+    null,
+  ]) {
+    expect(isCacheRequest({ ...request, hydrationScope })).toBe(false);
+  }
+});
+
 const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
@@ -873,10 +895,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t11'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t12'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t11'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t12'
     );
   });
 

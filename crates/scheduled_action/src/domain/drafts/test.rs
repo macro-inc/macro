@@ -384,8 +384,13 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         panic!("one session per draft");
     };
     assert_eq!(prepared.visibility, SessionVisibility::Hidden);
-    // The person's own session, never a routine's run.
+    // The person's own session, never a routine's run, billed as their
+    // agent session usage.
     assert_eq!(prepared.source, SessionSource::User);
+    assert_eq!(
+        prepared.billing,
+        agent_session::domain::model::SessionBilling::Billable
+    );
     assert_eq!(
         prepared.origin,
         trigger_context::TriggerOrigin::Requested { by: owner() }

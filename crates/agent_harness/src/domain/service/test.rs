@@ -12,6 +12,7 @@ mod owned_purge;
 mod permission_refresh;
 mod presentation;
 mod quota;
+mod runtime_access;
 mod user_cleanup;
 mod warm;
 
@@ -300,12 +301,23 @@ type TestHarness = AgentHarnessService<
 
 /// Bot-to-harness bindings for tests: every bot maps to the harness sharing
 /// its uuid, so tests attach runtimes by [`harness_for_bot`].
+/// Runtime access is unknown (every turn may run) until a test sets `facts`.
 #[derive(Clone, Default)]
-struct MirrorBindings;
+struct MirrorBindings {
+    facts: Arc<Mutex<Option<crate::domain::model::RuntimeAccessFacts>>>,
+}
 
 impl crate::domain::ports::HarnessBindings for MirrorBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
         Ok(Some(harness_for_bot(bot)))
+    }
+
+    async fn access_facts(
+        &self,
+        _bot: BotId,
+        _actor: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeAccessFacts>> {
+        Ok(self.facts.lock().unwrap().clone())
     }
 
     /// Mirrored too: an ACP session id that is a session's own id names it.
@@ -595,7 +607,7 @@ fn harness_with_journal_and_policy(
         ),
         containers.clone(),
         announcer.clone(),
-        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        TestConnections::new(MirrorBindings::default(), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
         egress,
@@ -665,6 +677,13 @@ fn harness() -> TestBench {
 
 /// A second replica on the same durable store — a process restart.
 fn harness_sharing_repo(repo: InMemoryAgentSessionRepo) -> TestHarness {
+    harness_sharing_repo_with_bindings(repo, MirrorBindings::default())
+}
+
+fn harness_sharing_repo_with_bindings(
+    repo: InMemoryAgentSessionRepo,
+    bindings: MirrorBindings,
+) -> TestHarness {
     let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
     let lifecycle = RecordingLifecyclePublisher::new();
     let runtimes = RuntimeRegistry::new();
@@ -681,7 +700,7 @@ fn harness_sharing_repo(repo: InMemoryAgentSessionRepo) -> TestHarness {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        TestConnections::new(bindings, Arc::clone(&runtimes)),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -829,6 +848,7 @@ async fn disconnected_session_of(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -3315,7 +3335,10 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         ),
         containers.clone(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        TestConnections::new(
+            MirrorBindings::default(),
+            RuntimeRegistry::<ContainerSender>::new(),
+        ),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -3346,6 +3369,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: None,
             repo_url: None,
@@ -3595,6 +3619,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: None,
             repo_url: None,
@@ -3633,6 +3658,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -3704,6 +3730,7 @@ async fn open_managed_session_refuses_a_bot_owner() {
 
     let error = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             repo_url: None,
@@ -3898,7 +3925,10 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        TestConnections::new(
+            MirrorBindings::default(),
+            RuntimeRegistry::<ContainerSender>::new(),
+        ),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -3937,7 +3967,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
 #[tokio::test]
 async fn unmanaged_external_session_forwards_to_its_remote_harness() {
     let repo = InMemoryAgentSessionRepo::new();
-    let runtimes = TestConnections::new(MirrorBindings, RuntimeRegistry::new());
+    let runtimes = TestConnections::new(MirrorBindings::default(), RuntimeRegistry::new());
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
         None,
@@ -4503,6 +4533,7 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4560,6 +4591,7 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
     let (service, repo, containers, _, _) = harness();
     let action_id = AgentActionId::mint();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4692,6 +4724,7 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 async fn a_chosen_model_is_the_session_model_from_creation() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4724,6 +4757,7 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
 async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
     let (service, _, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4765,6 +4799,7 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
 async fn a_managed_persona_profile_applies_unless_overridden() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4804,6 +4839,7 @@ async fn a_managed_persona_profile_applies_unless_overridden() {
 async fn a_managed_persona_profile_is_used_when_nothing_overrides_it() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4851,6 +4887,7 @@ async fn a_repository_without_a_persona_opens_as_cursor() {
         "https://github.com/macro-inc/macro",
     ])));
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: Some("https://github.com/macro-inc/macro".into()),
@@ -4887,6 +4924,7 @@ async fn a_repository_without_a_persona_opens_as_cursor() {
 async fn a_cursor_managed_session_is_always_stamped_cursor() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         repo_url: None,
@@ -4940,6 +4978,7 @@ async fn a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name() {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         id: None,
         owner: model_owner::Owner::User(sender()),

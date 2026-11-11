@@ -33,6 +33,7 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
@@ -229,6 +230,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Share the caller's referral link and email invites to join Macro. */
   readonly referrals: ReferralNamespace;
 
+  /** Saved views: named filter definitions shown in a surface's sidebar, such as Email. */
+  readonly savedViews: SavedViewsNamespace;
+
   readonly tasks: TaskNamespace;
 
   /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
@@ -295,6 +299,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.savedViews = new SavedViewsNamespace(client);
     this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
@@ -308,6 +313,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /**
    * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
    * auth, `macro|<email>` for user auth — fetched once and cached.
+   *
+   * @readonly
    */
   myPrincipalId(): Promise<string> {
     return this._client.myPrincipalId();
@@ -315,7 +322,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Clone of this SDK acting on behalf of `user` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
-   * since a user token always acts as its own user. */
+   * since a user token always acts as its own user.
+   *
+   * @readonly
+   * @mcp-exclude Returns a new SDK client, which an MCP result cannot carry.
+   */
   requestedAs(user: User): Macro<T> {
     return new Macro({ ...this.opts, requestedAs: user.id });
   }
@@ -528,6 +539,10 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export {
+  SavedView,
+  type SavedViewConfig,
+} from './entities/saved-views/saved-view';
 export type { SearchOn, SearchOpts } from './entities/search/options';
 export type {
   SearchOptions,

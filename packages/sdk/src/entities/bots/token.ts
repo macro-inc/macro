@@ -54,7 +54,12 @@ export class BotToken extends MacroEntity<BotTokenRecord> {
   /** Creation time. */
   readonly createdAt = this.field('created_at');
 
-  /** Revoke the token; requests using it fail from now on. */
+  /**
+   * Revoke the token; requests using it fail from now on.
+   *
+   * @destructive
+   * @idempotent
+   */
   async revoke(): Promise<void> {
     await this.mutate((c) =>
       c.storage.revokeBotToken({

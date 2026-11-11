@@ -318,6 +318,41 @@ pub enum SessionVisibility {
     Hidden,
 }
 
+/// Whether an in-process session's turns are billed to its owner. Stored as
+/// `agent_session.billing`, set by whoever opens the session and fixed for
+/// its life. Either way the turns are admitted and their usage recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionBilling {
+    /// Billed as the owner's agent session usage: every session unless its
+    /// opener chose otherwise.
+    #[default]
+    Billable,
+    /// Recorded but never billed: background work the owner didn't ask for
+    /// turn by turn.
+    NonBillable,
+}
+
+impl SessionBilling {
+    /// Whether this is the default, billed to the owner.
+    #[must_use]
+    pub fn is_billable(&self) -> bool {
+        *self == Self::Billable
+    }
+}
+
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
@@ -365,6 +400,8 @@ pub struct CreateAgentSessionParams {
     /// What opened the session, written with the session's row. `Unknown`
     /// writes nothing: an unclaimed warm session has no cause yet.
     pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    pub billing: SessionBilling,
 }
 
 /// Who or what archived a session.

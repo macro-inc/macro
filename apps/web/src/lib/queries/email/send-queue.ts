@@ -26,32 +26,20 @@ import {
 } from './send-telemetry';
 
 export type { EmailSendIntent } from './send-intent';
+export { emailSendMatchesDraft, settledSendAttempt } from './send-intent';
 
-import { type EmailSendIntent, usableEmailSendIntents } from './send-intent';
-
-export function settledSendAttempt(intent: EmailSendIntent) {
-  return (
-    intent.response?.cancelEmailSend?.attempt ??
-    intent.response?.sendEmailMessage?.attempt
-  );
-}
+import {
+  type EmailSendIntent,
+  emailSendMatchesDraft,
+  settledSendAttempt,
+  usableEmailSendIntents,
+} from './send-intent';
 
 /** A pending cancellation never unlocks an attempted send without confirmation. */
 export function emailSendLocked(intent: EmailSendIntent): boolean {
   if (intent.locallyCancelled && !intent.metadata.requiresServerConfirmation)
     return false;
   return settledSendAttempt(intent)?.status !== 'CANCELLED';
-}
-
-export function emailSendMatchesDraft(
-  intent: EmailSendIntent,
-  draftId: string
-): boolean {
-  return (
-    intent.resolvedDraftId === draftId ||
-    intent.metadata.payload.input.message.draftId === draftId ||
-    settledSendAttempt(intent)?.message?.id === draftId
-  );
 }
 
 export async function readEmailSendIntents(): Promise<EmailSendIntent[]> {
