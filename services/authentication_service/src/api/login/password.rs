@@ -1,6 +1,6 @@
 use crate::api::{
     context::ApiContext,
-    utils::{create_access_token_cookie, create_refresh_token_cookie},
+    utils::{create_access_token_cookie, create_refresh_token_cookie, record_login_audit},
 };
 use axum::{
     Json,
@@ -109,6 +109,8 @@ pub async fn handler(
             }
         }
     };
+
+    record_login_audit(&ctx, &access_token).await?;
 
     cookies.add(create_access_token_cookie(&access_token));
     cookies.add(create_refresh_token_cookie(&refresh_token));

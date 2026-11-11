@@ -479,6 +479,8 @@ pub enum FileTypeUpdate {
 
 /// Arguments for editing a document in the repository.
 pub struct EditDocumentRepoArgs {
+    /// Authenticated actor, used only for the credential-free audit row.
+    pub actor_id: String,
     /// The document ID to edit.
     pub document_id: String,
     /// New document name (None = no change).

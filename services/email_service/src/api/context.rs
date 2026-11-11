@@ -160,6 +160,8 @@ pub(crate) struct ApiContext {
         >,
     >,
     pub mailbox_initializer: Arc<MailboxInitializer>,
+    /// Rejects new mailbox initialization after a team-admin disable.
+    pub member_access: Arc<dyn enterprise::domain::MemberAccess>,
     pub read_receipts: crate::composition::ReadReceipts,
     pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
     pub invitation_resolver: Arc<

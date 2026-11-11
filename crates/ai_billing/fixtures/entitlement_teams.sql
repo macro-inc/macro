@@ -3,14 +3,18 @@ VALUES
     ('b1111111-1111-1111-1111-111111111111', 'paid-owner@example.com', 'paid-owner@example.com', 'cus_paid_owner'),
     ('b2222222-2222-2222-2222-222222222222', 'paid-member@example.com', 'paid-member@example.com', 'cus_paid_member'),
     ('b3333333-3333-3333-3333-333333333333', 'canceled-owner@example.com', 'canceled-owner@example.com', 'cus_canceled_owner'),
-    ('b4444444-4444-4444-4444-444444444444', 'canceled-member@example.com', 'canceled-member@example.com', 'cus_canceled_member');
+    ('b4444444-4444-4444-4444-444444444444', 'canceled-member@example.com', 'canceled-member@example.com', 'cus_canceled_member'),
+    ('b5555555-5555-5555-5555-555555555555', 'enterprise-owner@example.com', 'enterprise-owner@example.com', 'cus_enterprise_owner'),
+    ('b6666666-6666-6666-6666-666666666666', 'enterprise-member@example.com', 'enterprise-member@example.com', 'cus_enterprise_member');
 
 INSERT INTO "User" ("id", "email", "name", "stripeCustomerId", "macro_user_id")
 VALUES
     ('macro|paid-owner@example.com', 'paid-owner@example.com', 'Paid Owner', NULL, 'b1111111-1111-1111-1111-111111111111'),
     ('macro|paid-member@example.com', 'paid-member@example.com', 'Paid Member', NULL, 'b2222222-2222-2222-2222-222222222222'),
     ('macro|canceled-owner@example.com', 'canceled-owner@example.com', 'Canceled Owner', NULL, 'b3333333-3333-3333-3333-333333333333'),
-    ('macro|canceled-member@example.com', 'canceled-member@example.com', 'Canceled Member', 'cus_canceled_member', 'b4444444-4444-4444-4444-444444444444');
+    ('macro|canceled-member@example.com', 'canceled-member@example.com', 'Canceled Member', 'cus_canceled_member', 'b4444444-4444-4444-4444-444444444444'),
+    ('macro|enterprise-owner@example.com', 'enterprise-owner@example.com', 'Enterprise Owner', NULL, 'b5555555-5555-5555-5555-555555555555'),
+    ('macro|enterprise-member@example.com', 'enterprise-member@example.com', 'Enterprise Member', NULL, 'b6666666-6666-6666-6666-666666666666');
 
 -- The canceled team keeps the id of its ended subscription, as the Stripe
 -- webhook leaves it.
@@ -19,9 +23,14 @@ VALUES
     ('11111111-1111-1111-1111-111111111111', 'paid', 'macro|paid-owner@example.com', 'sub_paid', 2, true),
     ('22222222-2222-2222-2222-222222222222', 'canceled', 'macro|canceled-owner@example.com', 'sub_canceled', 2, false);
 
+INSERT INTO team (id, name, owner_id, seat_count, paying, enterprise)
+VALUES ('33333333-3333-3333-3333-333333333333', 'enterprise', 'macro|enterprise-owner@example.com', 2, false, true);
+
 INSERT INTO team_user (team_id, user_id, team_role)
 VALUES
     ('11111111-1111-1111-1111-111111111111', 'macro|paid-owner@example.com', 'owner'),
     ('11111111-1111-1111-1111-111111111111', 'macro|paid-member@example.com', 'member'),
     ('22222222-2222-2222-2222-222222222222', 'macro|canceled-owner@example.com', 'owner'),
-    ('22222222-2222-2222-2222-222222222222', 'macro|canceled-member@example.com', 'member');
+    ('22222222-2222-2222-2222-222222222222', 'macro|canceled-member@example.com', 'member'),
+    ('33333333-3333-3333-3333-333333333333', 'macro|enterprise-owner@example.com', 'owner'),
+    ('33333333-3333-3333-3333-333333333333', 'macro|enterprise-member@example.com', 'member');

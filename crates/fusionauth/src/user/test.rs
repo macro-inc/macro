@@ -1,7 +1,7 @@
 use std::{borrow::Cow, net::IpAddr};
 
 use serde_json::json;
-use wiremock::matchers::{body_json, method, path};
+use wiremock::matchers::{body_json, method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
@@ -46,6 +46,40 @@ fn expected_body() -> serde_json::Value {
             "username": null
         }
     })
+}
+
+#[tokio::test]
+async fn deactivate_user_soft_deletes_without_hard_delete() {
+    let server = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/user/member-fusion-id"))
+        .and(query_param_is_missing("hardDelete"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    client(server.uri())
+        .deactivate_user("member-fusion-id")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn reactivate_user_uses_reactivate_route() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/api/user/member-fusion-id"))
+        .and(query_param("reactivate", "true"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    client(server.uri())
+        .reactivate_user("member-fusion-id")
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

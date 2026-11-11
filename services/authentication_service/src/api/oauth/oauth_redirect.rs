@@ -8,7 +8,7 @@ use crate::api::{
     utils::{
         append_signed_up_param_if_new_user, create_access_token_cookie,
         create_refresh_token_cookie, default_redirect_url, generate_session_code,
-        spawn_first_inbox_provision,
+        record_login_audit, spawn_first_inbox_provision,
     },
 };
 use axum::{
@@ -117,6 +117,8 @@ pub async fn handler(
             return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
         }
     };
+
+    record_login_audit(&ctx, &access_token).await?;
 
     let write_db = async |code: &SessionCode| {
         ctx.macro_cache_client

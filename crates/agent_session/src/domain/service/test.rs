@@ -59,6 +59,54 @@ fn fixture() -> Fixture {
     }
 }
 
+struct DisabledMember;
+
+impl enterprise::domain::AgentSessionAdmission for DisabledMember {
+    async fn ensure_allowed(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _preset_id: &str,
+    ) -> enterprise::domain::Result<()> {
+        Err(enterprise::domain::EnterpriseError::MemberDisabled)
+    }
+}
+
+#[tokio::test]
+async fn disabled_member_cannot_start_a_new_agent_session() {
+    let fx = fixture();
+    let service = fx.service.with_session_admission(Arc::new(DisabledMember));
+    let id = AgentSessionId::new();
+    let params = CreateAgentSessionParams {
+        billing: Default::default(),
+        origin: trigger_context::TriggerOrigin::Unknown,
+        purpose: crate::domain::model::SessionPurpose::Standalone,
+        repo_branch: None,
+        id,
+        owner_id: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+        ),
+        bot_id: BotId::TEST_A,
+        thread_id: None,
+        originating_message_id: None,
+        model: "test-model".to_string(),
+        harness: "opencode".to_string(),
+        repo_url: None,
+        workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
+        instructions: None,
+        mcp_servers: crate::domain::model::AgentMcpServers::OwnerConnections,
+        egress_token_hash: None,
+    };
+
+    assert!(matches!(
+        service.create_session(params).await,
+        Err(AgentSessionError::Enterprise(
+            enterprise::domain::EnterpriseError::MemberDisabled
+        ))
+    ));
+    assert!(fx.repo.get(id).await.is_err());
+}
+
 #[tokio::test]
 async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
     let fx = fixture();

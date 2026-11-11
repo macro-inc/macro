@@ -150,6 +150,13 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .merge(enterprise::inbound::enterprise_router(
+            enterprise::inbound::EnterpriseRouterState {
+                service: state.enterprise.clone(),
+                entity_access_service: state.entity_access_service.clone(),
+                authorization_state: state.authorization_state.clone(),
+            },
+        ))
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(
                 teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {

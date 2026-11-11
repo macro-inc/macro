@@ -393,6 +393,9 @@ async fn run_server() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        member_access: Arc::new(enterprise::domain::MemberAccessService::new(
+            enterprise::outbound::PgEnterpriseRepository::new(db.clone()),
+        )),
         mailbox_initializer: Arc::new(
             email::domain::mailbox::initialization::MailboxInitializationService::new(
                 crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),

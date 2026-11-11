@@ -595,6 +595,19 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 .context("failed to record the agent session in the owner's history")?;
         }
 
+        // Axiom: the session row, preset id (`harness`), and audit commit together.
+        enterprise::audit::append(
+            &mut transaction,
+            &enterprise::audit::AuditRecord::new(
+                &owner_user,
+                enterprise::audit::AuditAction::AgentSessionStart,
+                id.to_string(),
+                enterprise::audit::AuditResult::Success,
+            ),
+        )
+        .await
+        .context("audit agent session create")?;
+
         transaction
             .commit()
             .await

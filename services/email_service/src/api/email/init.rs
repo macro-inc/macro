@@ -36,6 +36,8 @@ mod test;
 #[derive(Debug, Error, AsRefStr)]
 pub enum InitError {
     #[error(transparent)]
+    Enterprise(#[from] enterprise::domain::EnterpriseError),
+    #[error(transparent)]
     MailboxInitialization(InitializationError),
     #[error("User is already initialized")]
     AlreadyInitialized,
@@ -85,6 +87,10 @@ pub struct InitErrorCodeResponse {
 impl InitError {
     fn status_code(&self) -> StatusCode {
         match self {
+            InitError::Enterprise(enterprise::domain::EnterpriseError::MemberDisabled) => {
+                StatusCode::FORBIDDEN
+            }
+            InitError::Enterprise(_) => StatusCode::INTERNAL_SERVER_ERROR,
             InitError::MailboxInitialization(error) => match error {
                 InitializationError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
                 InitializationError::InvalidAttempt => StatusCode::BAD_REQUEST,
@@ -214,6 +220,10 @@ pub async fn handler(
     query: Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
+    // Axiom: a completed admin disable refuses every new init path before mailbox work begins.
+    ctx.member_access
+        .ensure_active(&authorization.authorization.user.macro_user_id)
+        .await?;
     if let Some(attempt) = query.link_id {
         let request = InitializeMailbox {
             attempt,

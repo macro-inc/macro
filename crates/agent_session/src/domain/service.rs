@@ -494,6 +494,18 @@ pub trait AgentSessionService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+struct UnrestrictedAgentSessions;
+
+impl enterprise::domain::AgentSessionAdmission for UnrestrictedAgentSessions {
+    async fn ensure_allowed(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _preset_id: &str,
+    ) -> enterprise::domain::Result<()> {
+        Ok(())
+    }
+}
+
 /// Agent session service backed by one durable repository and local actors.
 ///
 /// `R` is the persistence adapter implementing both [`AgentSessionRepo`] and
@@ -520,6 +532,7 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// Where lifecycle facts go - renames, from here; everything else from
     /// the harness. Erased for the same reason as the observer.
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    session_admission: Arc<dyn enterprise::domain::AgentSessionAdmission>,
     active: Arc<ActiveSessions>,
     /// This service's identity in the session-management lease. Minted at
     /// construction: a restarted process is a new replica, and its claims
@@ -566,12 +579,23 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             lifecycle_publisher,
             tool_catalog: Arc::new(NoOpToolCatalog),
             view_access: Arc::new(NoInheritedSessionAccess),
+            session_admission: Arc::new(UnrestrictedAgentSessions),
             active: Arc::new(DashMap::new()),
             replica,
             tasks: TaskTracker::new(),
             cancellation: CancellationToken::new(),
             lifecycle: Arc::new(Mutex::new(())),
         }
+    }
+
+    /// Enforce member lifecycle and team runtime policy before any session is persisted.
+    #[must_use]
+    pub fn with_session_admission(
+        mut self,
+        session_admission: Arc<dyn enterprise::domain::AgentSessionAdmission>,
+    ) -> Self {
+        self.session_admission = session_admission;
+        self
     }
 
     /// Replace the no-op tool catalog with one that lists a session's MCP
@@ -907,6 +931,9 @@ where
     }
 
     async fn create_session(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
+        self.session_admission
+            .ensure_allowed(session_owner_user(&params.owner_id)?, &params.harness)
+            .await?;
         params.purpose.for_creation(
             false,
             params.thread_id.is_some() || params.originating_message_id.is_some(),

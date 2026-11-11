@@ -16,6 +16,7 @@ mod coding_agents;
 mod config;
 mod containers;
 mod conversation_admission;
+mod enterprise_policy;
 mod external_session_requests;
 mod harness_bindings;
 mod internal_mcp;
@@ -403,6 +404,8 @@ async fn run() -> anyhow::Result<()> {
     // and the agent session log stream.
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the shared Redis client")?;
+    let session_admission: Arc<dyn enterprise::domain::AgentSessionAdmission> =
+        Arc::new(enterprise_policy::runtime_policy(pool.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -439,7 +442,8 @@ async fn run() -> anyhow::Result<()> {
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
-    );
+    )
+    .with_session_admission(session_admission.clone());
 
     // Sessions with a command admitted but not yet resolved - shared with
     // every provider whose idle reaper closes a session's transport on its
@@ -1042,6 +1046,7 @@ async fn run() -> anyhow::Result<()> {
         lifecycle_publisher.clone(),
         replica,
     )
+    .with_session_admission(session_admission.clone())
     .with_tool_catalog(Arc::clone(&tool_catalog));
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
@@ -1671,6 +1676,7 @@ async fn run() -> anyhow::Result<()> {
             lifecycle_publisher,
             ReplicaId::mint(),
         )
+        .with_session_admission(session_admission)
         .with_view_access(Arc::new(
             agent_session::domain::audience::EntityAccessSessionView::new((*entity_access).clone()),
         )),

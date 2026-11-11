@@ -14,6 +14,9 @@ pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Enterprise member or runtime policy refused the start.
+    #[error(transparent)]
+    Enterprise(#[from] enterprise::domain::EnterpriseError),
     /// Invalid session activity paging input.
     #[error("{0}")]
     InvalidActivityQuery(&'static str),

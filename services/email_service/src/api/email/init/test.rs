@@ -70,6 +70,13 @@ async fn missing_email_link_is_not_unrecorded(pool: PgPool) {
 }
 
 #[tokio::test]
+async fn disabled_member_init_is_forbidden() {
+    let response =
+        InitError::Enterprise(enterprise::domain::EnterpriseError::MemberDisabled).into_response();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn no_gmail_grant_is_a_coded_400() {
     let response = InitError::NoGmailGrant.into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);

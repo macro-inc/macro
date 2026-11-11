@@ -90,6 +90,7 @@ entity_access = { path = "../../crates/entity_access" }
 entity_registry = { path = "../../crates/entity_registry/entity_registry", features = [
   "postgres",
 ] }
+enterprise = { path = "../../crates/enterprise", features = ["inbound", "outbound"] }
 foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
 feature_flags = { path = "../../crates/feature_flags" }
@@ -107,6 +108,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "outbound",
   "service",
 ] }
+harnesses = { path = "../../crates/harnesses", features = ["outbound", "ports"] }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

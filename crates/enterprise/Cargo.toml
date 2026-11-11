@@ -1,0 +1,36 @@
+[package]
+name = "enterprise"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+outbound = ["dep:sqlx"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model-error-response = { path = "../model-error-response", optional = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
