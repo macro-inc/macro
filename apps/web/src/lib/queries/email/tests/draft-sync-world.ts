@@ -5,6 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { IDBFactory } from 'fake-indexeddb';
 import { vi } from 'vitest';
+import { createLocks } from './draft-sync-locks';
 import { createQueue } from './draft-sync-queue';
 import { createServer, Refusal, wait } from './draft-sync-server';
 import { ACCOUNT, INBOX, never, SENDER } from './draft-sync-shared';
@@ -222,6 +223,11 @@ async function boot(world: WorldCore) {
     '@app/features/email-compose/primitives/draft-sync-status'
   );
 
+  // The queue runner tells whether another page is alive by its Web Lock.
+  Object.defineProperty(navigator, 'locks', {
+    value: world.locks.forPage(page),
+    configurable: true,
+  });
   const host = world.queue.connect(page);
   runtime.host = host;
   const lifecycle = drafts.localDraftQueueLifecycle(host);
@@ -602,6 +608,7 @@ async function boot(world: WorldCore) {
         }
       }
       host.dispose();
+      world.locks.release(page);
       fireAndForget(
         quietly(drafts.localDraftStore.close()),
         'draft-sync-world'
@@ -616,6 +623,7 @@ type WorldCore = {
   events: WorldEvent[];
   offline: boolean;
   localStallMs: number;
+  locks: ReturnType<typeof createLocks>;
   activity(): void;
 };
 
@@ -643,6 +651,7 @@ export async function createDraftSyncWorld() {
     events: [],
     offline: false,
     localStallMs: 0,
+    locks: createLocks(),
     activity: active,
   };
 
@@ -725,6 +734,7 @@ export async function createDraftSyncWorld() {
       page.kill();
       await quiesce();
       vi.useRealTimers();
+      Reflect.deleteProperty(navigator, 'locks');
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
       vi.resetModules();

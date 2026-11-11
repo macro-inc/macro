@@ -1,4 +1,4 @@
-import { QUEUE_LEASE_MS } from '@graphql-cache/exchange/mutation-queue-runner';
+import { QUEUE_REQUEST_TIMEOUT_MS } from '@graphql-cache/exchange/mutation-queue-runner';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDraftSyncWorld,
@@ -12,6 +12,9 @@ import {
  * the server ends up with what the user did, and the user was told about a
  * failure only when one needs their action.
  */
+
+/** Long enough for a reloaded page's lease to be given back and the queue to drain. */
+const RELOAD_RECOVERY_MS = QUEUE_REQUEST_TIMEOUT_MS + 30_000;
 
 let world: DraftSyncWorld;
 beforeEach(async () => {
@@ -373,8 +376,8 @@ describe('discarding a draft', () => {
     await world.advance(500);
     world.server.state.latencyMs = 20;
     await world.reload();
-    // The old page's request holds the queue's lease until it expires.
-    await world.advance(QUEUE_LEASE_MS + 60_000);
+    // The old page's lease is given back once its request has timed out.
+    await world.advance(RELOAD_RECOVERY_MS);
 
     await expectDiscarded(draftId);
     expectQuiet();
@@ -442,7 +445,29 @@ describe('reloading the page', () => {
     expectQuiet();
   });
 
-  it('finishes a save that the reload interrupted, then syncs newer edits', async () => {
+  it('gives back the lease a reloaded page left once its request has timed out', async () => {
+    world.server.state.latencyMs = 200;
+    const composer = world.page.compose();
+    composer.type('On the wire during the reload');
+    await world.advance(600);
+    const draftId = composer.draftId()!;
+    world.server.state.latencyMs = 20;
+    const page = await world.reload();
+    const reopened = await world.settle(page.reopen(draftId));
+    reopened.type('Typed after the reload');
+
+    // Not yet: the old page's request could still reach the server.
+    await world.advance(QUEUE_REQUEST_TIMEOUT_MS - 10_000);
+    expect(world.server.draft(draftId)?.body).toBe(
+      'On the wire during the reload'
+    );
+    // Well before the five-minute lease would have run out.
+    await world.advance(20_000);
+    await expectSynced(draftId, 'Typed after the reload');
+    expectQuiet();
+  });
+
+  it('never lets a newer save overtake the one a reloaded page left on the wire', async () => {
     world.server.state.latencyMs = 5_000;
     const composer = world.page.compose();
     composer.type('On the wire during the reload');
@@ -453,7 +478,7 @@ describe('reloading the page', () => {
     const page = await world.reload();
     const reopened = await world.settle(page.reopen(draftId));
     reopened.type('On the wire during the reload, then edited');
-    await world.advance(QUEUE_LEASE_MS + 60_000);
+    await world.advance(RELOAD_RECOVERY_MS);
 
     await expectSynced(draftId, 'On the wire during the reload, then edited');
     expect(world.server.drafts()).toHaveLength(1);
@@ -471,7 +496,8 @@ describe('reloading the page', () => {
     world.offline = false;
     world.server.state.fault = undefined;
     await world.reload();
-    await world.advance(QUEUE_LEASE_MS + 60_000);
+    // The save's own retry backoff, not a lease, decides when it goes out.
+    await world.advance(RELOAD_RECOVERY_MS);
 
     await expectSynced(draftId, 'Queued offline');
     expectQuiet();

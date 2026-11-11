@@ -48,6 +48,7 @@ export function createQueue(activity: () => void) {
   const entries: QueueEntry[] = [];
   const listeners = new Set<(settlement: MutationSettlement) => void>();
   let next = 0;
+  let pages = 0;
 
   const confirms = (entry: QueueEntry) =>
     (entry.args.identityBindings ?? []).some(
@@ -363,7 +364,8 @@ export function createQueue(activity: () => void) {
       };
     const affected = { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     const host = {
-      clientId: 'page',
+      // Each page is its own queue runner, as each tab is.
+      clientId: `page-${++pages}`,
       currentRevision: answer(() => INITIAL_CACHE_REVISION),
       currentStorageGeneration: answer(
         () => '00000000-0000-4000-8000-000000000001'
