@@ -10,6 +10,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { Telemetry } from '@macro-inc/observability/core';
 import { guards } from '../../../agent/guards/index.ts';
 import type { Base } from '../../../context/index.ts';
 import type { Work } from '../../../contracts.ts';
@@ -24,9 +25,8 @@ import {
 import {
   type CallsPaths,
   callsPaths,
-  deepgramKey,
   joinCapability,
-  noVoice,
+  voiceFile,
 } from '../config.ts';
 import { eventLog, trackRecorder } from '../events.ts';
 import type { CallPeople, JoinPorts, Outbound } from '../join.ts';
@@ -34,6 +34,7 @@ import type { IdList } from '../ledger.ts';
 import type { CallApi } from '../macro.ts';
 import { callScreen } from '../session.ts';
 import type { MakeShare, Placed, PlaceInput, PlaceOutcome } from '../types.ts';
+import { parseVoice } from '../voices.ts';
 import type { WorkingTime } from '../working.ts';
 import { callDisk } from './disk.ts';
 import type { Live } from './voiceLive.ts';
@@ -106,7 +107,8 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
       process.env.NODE_ENV ??= 'production';
       const { live } = await import('./voiceLive.ts');
       return live({
-        credentials: base.credentials,
+        relay: await base.relay(),
+        voice: parseVoice(await disk.read(join(config.root, voiceFile))),
         name: config.identity.name,
         time,
       });
@@ -123,7 +125,10 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
         identity: () => readIdentity(base).catch(() => undefined),
         briefing: () => briefing({ disk, shell, config, state, join }),
         environment: async () =>
-          brainEnvironment(process.env, await base.environment()),
+          brainEnvironment(process.env, {
+            ...(await base.relayed()),
+            ...(await base.environment()),
+          }),
         guards,
         work: needs.work,
         place: needs.place,
@@ -152,11 +157,11 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
   return {
     join: {
       name: config.identity.name,
+      trace: base.trace,
       api: needs.api,
-      // Calls can't hear without it: the join fails at once, before any token request.
+      // Calls hear and speak through the relay: the join fails at once without it, before any token request.
       secrets: async () => {
-        if (!(await base.credentials.has(deepgramKey)))
-          throw new Error(noVoice);
+        await base.relay();
         await base.macro();
       },
       outbound: needs.outbound,
@@ -203,7 +208,8 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
       brain,
       livekit,
     },
-    exit: (code) => process.exit(code),
+    // Its spans go out before it does.
+    exit: (code) => void Telemetry.flush().finally(() => process.exit(code)),
     ownProcess: () => process.argv.includes(joinCapability),
     brain,
     livekit,

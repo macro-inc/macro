@@ -46,14 +46,13 @@ export type VoiceContext = Base & { readonly voice: Voice };
  * nobody came, on SIGTERM or SIGINT, when asked to hang up, and on SIGUSR2
  * after saying the line in the leave file for its pid.
  *
- * Needs DEEPGRAM_API_KEY: without it the join fails at once.
  *
  * Exit codes: 0 when the call is over (or was already), 1 for a failure worth
  * retrying, and 76-80 for Macro's refusals (in another call, already
  * connected, rate limited, refused, programmatic calls off).
  */
 export const joinCall = async (
-  { voice }: VoiceContext,
+  { voice, trace }: VoiceContext,
   input: {
     readonly kind: JoinKind;
     readonly id: string;
@@ -71,7 +70,14 @@ export const joinCall = async (
     throw new Error(
       `${joinCapability} runs only as its own process, started by the calls watcher`
     );
-  const outcome = await join(voice.join, input);
+  const outcome = await trace('calls.join', async (span) => {
+    span.set('call.id', input.callId ?? input.id);
+    span.set('call.kind', input.kind);
+    span.set('call.uninvited', input.uninvited !== undefined);
+    const outcome = await join(voice.join, input);
+    span.set('call.exit_code', outcome.code);
+    return outcome;
+  });
   voice.exit(outcome.code);
   return outcome;
 };
@@ -90,7 +96,6 @@ export const joinCall = async (
  * plus 4 s.
  *
  * Returns, per recording, the lines you would have been asked, in order.
- * Needs DEEPGRAM_API_KEY.
  */
 export const replayCall = async (
   { voice, disk, clock, join: path }: VoiceContext,

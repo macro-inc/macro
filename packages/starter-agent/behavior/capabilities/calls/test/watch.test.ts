@@ -8,7 +8,7 @@ import {
   type Tries,
   type World,
 } from '../arbiter.ts';
-import { after, callsPaths, noVoice, placePrefix } from '../config.ts';
+import { after, callsPaths, placePrefix } from '../config.ts';
 import { running } from '../context/processes.ts';
 import type { JoinInput } from '../join.ts';
 import type { CallApi } from '../macro.ts';
@@ -16,7 +16,6 @@ import type { AskRow, NewAskRow, NewPlaceRow, Placed } from '../types.ts';
 import {
   followCalls,
   identify,
-  idleMs,
   joinInput,
   type LeaveSignal,
   leaveKillMs,
@@ -216,66 +215,28 @@ test('call events wake the watcher; the stream is reopened every minute, and aft
   expect(sleeps).toEqual([streamRefreshMs, 1000, 1000, 2000]);
 });
 
-// --- The readings, with and without the speech key. ---
+// --- The readings. ---
 
-test('without the speech key the watcher reads nothing and yields nothing, says so once, and starts when the key appears', async () => {
-  const waits: number[] = [];
+test('a read that fails is logged and tried again at the next poll', async () => {
   const logged: object[] = [];
+  const waits: number[] = [];
   let reads = 0;
-  let ready = false;
   const next = { ms: 0 };
   const readings = worlds({
-    ready: async () => ready,
-    read: async () => {
-      reads += 1;
-      return base();
-    },
-    pulse: {
-      wait: async (ms) => {
-        waits.push(ms);
-        // Three idle minutes, then the key is added.
-        if (waits.length === 3) ready = true;
-      },
-    },
-    next,
-    log: (entry) => void logged.push(entry),
-  });
-  const first = await readings.next();
-  expect(first.done).toBe(false);
-  expect(waits).toEqual([idleMs, idleMs, idleMs]);
-  expect(reads).toBe(1);
-  expect(logged).toEqual([{ calls: 'off', why: noVoice }, { calls: 'on' }]);
-  expect(next.ms).toBe(pollMs);
-  expect(noVoice).toContain('DEEPGRAM_API_KEY');
-  expect(noVoice).toContain('setCredential');
-});
-
-test('a key check that throws counts as no key, and a read that fails is logged and tried again at the next poll', async () => {
-  const logged: object[] = [];
-  let checks = 0;
-  let reads = 0;
-  const readings = worlds({
-    ready: async () => {
-      checks += 1;
-      if (checks === 1) throw new Error('no secrets file');
-      return true;
-    },
     read: async () => {
       reads += 1;
       if (reads === 1) throw new Error('macro down');
       return base();
     },
-    pulse: { wait: async () => undefined },
-    next: { ms: 0 },
+    pulse: { wait: async (ms) => void waits.push(ms) },
+    next,
     log: (entry) => void logged.push(entry),
   });
   expect((await readings.next()).done).toBe(false);
   expect(reads).toBe(2);
-  expect(logged).toEqual([
-    { calls: 'off', why: noVoice },
-    { calls: 'on' },
-    { read_error: 'Error: macro down' },
-  ]);
+  expect(waits).toEqual([pollMs]);
+  expect(next.ms).toBe(pollMs);
+  expect(logged).toEqual([{ read_error: 'Error: macro down' }]);
 });
 
 // --- A tick, against fakes. ---

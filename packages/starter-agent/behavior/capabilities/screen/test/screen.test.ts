@@ -79,10 +79,16 @@ test("the browser's sound goes to one private sink, which a share records", () =
   ]);
 });
 
-test('a leaked library path never reaches the nix binaries', () => {
+test('the screen programs get the baseline on their display, and no library path or credentials', () => {
   // A session's LD_LIBRARY_PATH made ffmpeg and Chromium die on GLIBC_2.43.
   const env = cleanEnv(
-    { LD_LIBRARY_PATH: '/old/lib', LD_PRELOAD: 'x.so', HOME: '/h' },
+    {
+      LD_LIBRARY_PATH: '/old/lib',
+      LD_PRELOAD: 'x.so',
+      HOME: '/h',
+      MUPPET_CREDENTIALS_FILE: '/run/agent.env',
+      DISPLAY: ':1',
+    },
     ':96'
   );
   expect(env).toEqual({ HOME: '/h', DISPLAY: ':96' });

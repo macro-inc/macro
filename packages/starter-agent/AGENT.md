@@ -93,8 +93,8 @@ your owner to tell you. Until they do: plain and brief.
 
 ## Calls
 
-You can be on Macro calls with your voice, if your owner has given you the
-speech credentials (the calls area's docs say which). You answer when a call
+You can be on Macro calls with your voice: the one your owner chose in
+Macro's agent settings (`config/voice.json`). You answer when a call
 rings you or is live in a DM with you; other calls you join when you are
 asked onto them or your owner has listed the channel (`alwaysJoinCalls`). You
 are in one call at a time.

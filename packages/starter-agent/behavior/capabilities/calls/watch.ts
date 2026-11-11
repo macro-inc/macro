@@ -28,7 +28,6 @@ import {
   type CallsPaths,
   elapsed,
   joinCapability,
-  noVoice,
   placePrefix,
 } from './config.ts';
 import { JoinInput } from './join.ts';
@@ -47,8 +46,6 @@ export const leaveKillMs = 17_000;
 export const noticeMs = 2000;
 /** The stream of call events is reopened this often: the SDK doesn't say when one has gone quiet. */
 export const streamRefreshMs = 60_000;
-/** While calls are off for want of a speech key, how often the watcher looks for it again. */
-export const idleMs = 60_000;
 
 export type LeaveSignal = 'SIGUSR2' | 'SIGTERM' | 'SIGKILL';
 
@@ -666,34 +663,20 @@ export const followCalls = async ({
 
 /** What the watcher's reading of the world runs on. */
 export type WorldPorts = {
-  /** Whether calls can run: the speech key is there. Asked before every read. */
-  readonly ready: () => Promise<boolean>;
   readonly read: () => Promise<World>;
   readonly pulse: Pick<Pulse, 'wait'>;
   /** How long to sleep after a reading; the handler's tick sets it before this resumes. */
   readonly next: { ms: number };
-  /** For the log: calls going off or on, and reads that failed. */
+  /** For the log: reads that failed. */
   readonly log: (entry: object) => void;
 };
 
 /**
- * The world, read again every few seconds and sooner when woken. Without
- * the speech key nothing is read and nothing is yielded, so the watcher
- * joins nothing it couldn't hear: it says so once in the log and looks
- * again every minute, so a key added later turns calls on without a
- * restart. A read that fails is logged and tried again at the next poll.
+ * The world, read again every few seconds and sooner when woken. A read
+ * that fails is logged and tried again at the next poll.
  */
 export async function* worlds(ports: WorldPorts): AsyncGenerator<World> {
-  let off = false;
   for (;;) {
-    if (!(await ports.ready().catch(() => false))) {
-      if (!off) ports.log({ calls: 'off', why: noVoice });
-      off = true;
-      await ports.pulse.wait(idleMs);
-      continue;
-    }
-    if (off) ports.log({ calls: 'on' });
-    off = false;
     const read = await ports.read().catch((error: unknown) => {
       ports.log({ read_error: String(error) });
       return undefined;

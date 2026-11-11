@@ -5,6 +5,7 @@
  */
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { z } from 'zod';
+import { childEnvironment } from '../../context/children.ts';
 import type { Disk } from '../../context/disk.ts';
 import type { Started } from '../../context/shell.ts';
 import { cdpAddress, type ScreenConfig } from './config.ts';
@@ -16,17 +17,15 @@ export const frameBytes = ({ width, height }: Size): number =>
   (width * height * 3) / 2;
 
 /**
- * Whatever launched us can leak a library path (the flake's shell sets one
- * for LiveKit, and this machine's agents carry another): a nix binary then
- * loads the wrong glibc and dies. Chromium and ffmpeg both did, on GLIBC_2.43.
+ * A child's baseline environment on a display, and nothing else of ours:
+ * that also keeps out a leaked library path (the image sets one for LiveKit),
+ * which makes a nix binary load the wrong glibc and die. Chromium and ffmpeg
+ * both did, on GLIBC_2.43.
  */
 export const cleanEnv = (
   env: Readonly<Record<string, string | undefined>>,
   display: string
-): Record<string, string | undefined> => {
-  const { LD_LIBRARY_PATH: _path, LD_PRELOAD: _preload, ...rest } = env;
-  return { ...rest, DISPLAY: display };
-};
+): Record<string, string> => childEnvironment(env, { DISPLAY: display });
 
 /** The system's fontconfig plus our pinned fonts. */
 export const fontsConf = (

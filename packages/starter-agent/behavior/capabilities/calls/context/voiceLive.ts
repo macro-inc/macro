@@ -13,11 +13,8 @@ import {
   inference,
   initializeLogger,
   llm,
-  tts,
   voice,
 } from '@livekit/agents';
-import * as deepgram from '@livekit/agents-plugin-deepgram';
-import * as inworld from '@livekit/agents-plugin-inworld';
 import {
   AudioFrame,
   AudioStream,
@@ -29,9 +26,7 @@ import {
   TrackKind,
   type TrackPublication,
 } from '@livekit/rtc-node';
-import type { Credentials } from '../../../context/credentials.ts';
 import type { Brain } from '../brain.ts';
-import { deepgramKey, inworldKey } from '../config.ts';
 import type { CallKit, CallSession, SessionNeeds } from '../join.ts';
 import type { ReplaySession } from '../replay.ts';
 import { replaySpeakers } from '../replay.ts';
@@ -45,15 +40,9 @@ import {
 } from '../room.ts';
 import { addressing, agentTurns, logSession, type Turns } from '../session.ts';
 import type { Emit } from '../types.ts';
-import {
-  fallbackSpec,
-  hearingOptions,
-  needsFallback,
-  parseTts,
-  sessionOptions,
-  voiceSpec,
-} from '../voices.ts';
+import { sessionOptions, type Voice } from '../voices.ts';
 import { clipFrameMs, clipFrames, type WorkingTime } from '../working.ts';
+import { gatewayStt, gatewayTts, type SpeechRelay } from './speech.ts';
 
 /**
  * The session won't reply without an LLM object. Replies come from
@@ -251,7 +240,9 @@ export const roomFeed = (room: Room): RoomFeed<Track> => ({
 });
 
 export type LiveNeeds = {
-  readonly credentials: Pick<Credentials, 'get'>;
+  /** The relay the speech sockets open on: this process holds no key. */
+  readonly relay: SpeechRelay;
+  readonly voice: Voice;
   /** The agent's name, which speech-to-text is told so it spells it right. */
   readonly name: string;
   readonly time: WorkingTime;
@@ -272,46 +263,21 @@ export type Live = CallKit & {
 const defaultLogLevel = 'warn';
 
 export const live = ({
-  credentials,
+  relay,
+  voice: spoken,
   name,
   time,
   logLevel = defaultLogLevel,
 }: LiveNeeds): Live => {
   initializeLogger({ pretty: false, level: logLevel });
 
-  const makeTts = async (spec: string): Promise<tts.TTS> => {
-    const parsed = parseTts(spec);
-    if (parsed.vendor === 'deepgram')
-      return new deepgram.TTS({
-        apiKey: await credentials.get(deepgramKey),
-        model: parsed.model,
-      });
-    return new inworld.TTS({
-      apiKey: await credentials.get(inworldKey),
-      model: parsed.model,
-      voice: parsed.voice,
-    });
-  };
-
-  /** The voice; one from another vendor falls back to Deepgram on an outage or an empty balance, rather than silence. */
-  const makeVoice = async (): Promise<tts.TTS> =>
-    needsFallback(voiceSpec)
-      ? new tts.FallbackAdapter({
-          ttsInstances: [await makeTts(voiceSpec), await makeTts(fallbackSpec)],
-        })
-      : makeTts(voiceSpec);
-
   /** The session every call runs. Without a voice it only listens, as a replay and a listener do. */
   const makeSession = async (
     options = { voice: true }
   ): Promise<voice.AgentSession> =>
     new voice.AgentSession({
-      stt: new deepgram.STT({
-        apiKey: await credentials.get(deepgramKey),
-        model: hearingOptions.model,
-        keyterm: [name],
-      }),
-      ...(options.voice ? { tts: await makeVoice() } : {}),
+      stt: gatewayStt(relay, name),
+      ...(options.voice ? { tts: gatewayTts(relay, spoken) } : {}),
       llm: new ClaudeCodeLlm(),
       vad: new inference.VAD(),
       ...sessionOptions,

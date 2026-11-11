@@ -2,7 +2,7 @@
  * Placing calls, being asked onto one, leaving one, and reading one back.
  */
 import type { Base } from '../../../context/index.ts';
-import { callsPaths, deepgramKey, noVoice, placePrefix } from '../config.ts';
+import { callsPaths, placePrefix } from '../config.ts';
 import type { LedgerPorts } from '../context/ledgers.ts';
 import { formatReport, readEvents, resolveCall } from '../report.ts';
 import { filled } from './filled.ts';
@@ -11,11 +11,6 @@ type Context = Base & { readonly ledgers: LedgerPorts };
 
 /** A Macro message, by its channel and its id. */
 type MessageRef = { readonly channelId: string; readonly id: string };
-
-/** Calls need a voice: without its key nothing is queued, so nothing waits on a join that can't happen. */
-const needVoice = async ({ credentials }: Base): Promise<void> => {
-  if (!(await credentials.has(deepgramKey))) throw new Error(noVoice);
-};
 
 /**
  * Rings someone in Macro, or refuses and says why.
@@ -36,8 +31,7 @@ const needVoice = async ({ credentials }: Base): Promise<void> => {
  *
  * Never anyone who said not to be called. The same person at most once an
  * hour and three times a day, except on your owner's order. You ring for
- * 40 s, then hang up and leave one DM saying why. Throws if calls have no
- * speech key yet.
+ * 40 s, then hang up and leave one DM saying why.
  *
  * If `ok` is false the call was refused: `rule` names the rule and `why` says
  * it in a line you can pass on.
@@ -55,7 +49,6 @@ export const placeCall = async (
   }
 ) => {
   filled(who, 'who');
-  await needVoice(context);
   const outcome = await context.ledgers.place({
     target: who,
     reason: why,
@@ -105,8 +98,7 @@ export const noCall = async (
  * If `recorded` is true, the call system weighs it against the call you're on
  * and answers them itself, with one line, within seconds: don't answer it
  * yourself. If false, nothing was recorded and `why` says so: usually there
- * is no live call there, so answer normally. Throws if calls have no speech
- * key yet.
+ * is no live call there, so answer normally.
  */
 export const askOntoCall = async (
   context: Context,
@@ -125,7 +117,6 @@ export const askOntoCall = async (
   why?: string;
   text: string;
 }> => {
-  await needVoice(context);
   const outcome = await context.ledgers.ask({
     message: { channel: message.channelId, id: message.id },
     channel: channelId,
