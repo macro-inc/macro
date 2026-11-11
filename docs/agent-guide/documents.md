@@ -3309,3 +3309,9 @@ to type `@`, choose a supplied user by keyboard and pointer, verify the rendered
 mention, close a query with Escape, and close the installation with the picker
 open. This bounded USER stage does not verify other mention sources or backend
 tracking. Keep those gaps explicit when reporting editor acceptance.
+
+
+Include the hosted factory controls when changing native overlay startup: open
+before first projection, verify one real query after hydration, inject an invalid
+optional-menu reply and confirm ordinary typing still works. Keep test transport
+same-origin and fail external request attempts rather than contacting production.

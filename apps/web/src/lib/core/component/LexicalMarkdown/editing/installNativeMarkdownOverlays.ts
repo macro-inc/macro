@@ -1,4 +1,5 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   type Component,
@@ -28,7 +29,8 @@ export function installNativeMarkdownOverlays(
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
   const [renderActive, setRenderActive] = createSignal(true);
-  const alive = () => renderActive() && view.isMounted;
+  const [mentionsAvailable, setMentionsAvailable] = createSignal(true);
+  const alive = () => renderActive() && mentionsAvailable() && view.isMounted;
   let Overlays: Component | undefined;
   const listeners = createNativeListenerScope();
   listeners.add(() => {
@@ -46,14 +48,28 @@ export function installNativeMarkdownOverlays(
     if (options.mentions) {
       const menu = createMenuOperations();
       const source = options.mentions;
-      listeners.add(registerNativeMentionSearch(view, menu));
-      Overlays = () =>
-        createComponent(NativeUserMentionsOverlay, {
-          view,
-          menu,
-          source,
-          alive,
-        });
+      const unavailable = (error: unknown) => {
+        setMentionsAvailable(false);
+        try {
+          Telemetry.error(error, { surface: 'native-mention-menu' });
+        } catch {
+          // Optional menu failure must not tear down the document or its overlays.
+        }
+      };
+      try {
+        listeners.add(registerNativeMentionSearch(view, menu, unavailable));
+        if (mentionsAvailable()) {
+          Overlays = () =>
+            createComponent(NativeUserMentionsOverlay, {
+              view,
+              menu,
+              source,
+              alive,
+            });
+        }
+      } catch (error) {
+        unavailable(error);
+      }
     }
   } catch (error) {
     disposed = true;

@@ -64,3 +64,19 @@ close with the shared Escape controller, and dispose visible UI and listeners.
 These supplied-user checks do not establish service discovery, tracking delivery,
 other mention kinds or installed-app acceptance. The final native catalog must
 retain every Source section, condition and mobile ordering.
+
+
+The hosted fixture mode uses the actual `createRustEditorSession` app factory.
+It installs before the first projection, supplies a genuine optimistic seed,
+waits for durable seed arbitration and full reconciliation, then observes actual
+settled authoring. Controls distinguish absent generation from a malformed real
+query reply, including deferred failure and disposal before first projection.
+A failed optional menu must leave ordinary document editing available.
+
+This suite selects the supported same-origin backend configuration. User profile
+pictures receive a local `{pictures: []}` response. Only the analytics transport
+URLs in the actual providers module are rewritten: Google tag/manager scripts,
+Meta events and the pixel image load emitted local static assets. The real
+analytics and menu providers remain mounted; analytics delivery is outside this
+cohort. Every other external HTTP/WebSocket attempt is aborted and fails the
+USER fixture, including production hosts. Record these rewrites with evidence.

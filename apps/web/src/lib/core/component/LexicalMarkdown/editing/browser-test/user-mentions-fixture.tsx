@@ -5,17 +5,24 @@ import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { UserContextProvider } from '@core/context/user';
+import { createRustEditorSession } from '@core/document-session/create-editor-session';
 import initialize, * as nativeModule from '@core/document-session/wasm/document_session_wasm.js';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { EntityProvider } from '@entity';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  EditorInputMsg,
+  SessionInputMsg,
+} from '@macro-inc/collaboration/session/abi.generated';
+import { emptyInput } from '@macro-inc/collaboration/session/input';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
   registerMacroDecoratorViews,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
+import { NOOP_SPAN } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { $createParagraphNode, $getRoot } from 'lexical';
@@ -34,6 +41,7 @@ import { mentionsPlugin } from '../../plugins/mentions/mentionsPlugin';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import { theme } from '../../theme';
 import { installNativeMarkdownOverlays } from '../installNativeMarkdownOverlays';
+import type { NativeMarkdownOverlayInstallation } from '../nativeOverlayPorts';
 import { createNativeUserMentionMenuHost } from '../overlay-hosts/native-user-mention-menu';
 
 initializeLexical();
@@ -58,6 +66,12 @@ function element(id: string) {
 }
 declare global {
   interface Window {
+    nativeUserMenuBoot?: {
+      generationAtInstall: number | null;
+      queriesAtInstall: number;
+      queryCount: number;
+      overlaysAtInstall: boolean;
+    };
     nativeUserMenu?: {
       capture(): {
         engine: string;
@@ -148,55 +162,115 @@ function NativeFixture() {
   const context = createNativeUserMentionContext(theme);
   const root = element('body');
   const owner = getOwner() ?? undefined;
-  const runtime = mountLocalSessionView(
-    root,
-    registerMacroDecoratorViews(
-      registerMacroElementViews(createBuiltinRegistry()),
-      createNativeUserMentionViews(context)
-    ),
-    {
-      namespace: 'user-menu-integration',
-      theme,
-      editable: true,
-      preset: 'rich',
-      owner,
-      onError(error) {
-        throw error;
+  const boot: NonNullable<Window['nativeUserMenuBoot']> = {
+    generationAtInstall: null,
+    queriesAtInstall: 0,
+    queryCount: 0,
+    overlaysAtInstall: false,
+  };
+  window.nativeUserMenuBoot = boot;
+  const params = new URLSearchParams(location.search);
+  const invalidSnapshot = params.has('invalidSnapshot');
+  const closeBeforeProjection = params.has('closeBeforeProjection');
+  let completed: NativeMarkdownOverlayInstallation | undefined;
+  const install = (
+    view: Parameters<typeof installNativeMarkdownOverlays>[0]
+  ) => {
+    if (params.get('invalidSnapshot') === 'immediate') view.port.initialize();
+    boot.generationAtInstall = view.mirror.keyGeneration;
+    const query = view.port.query.bind(view.port);
+    view.port.query = (request) => {
+      const reply = query(request);
+      if (
+        request.kind === 9 &&
+        JSON.parse(request.text ?? '{}').name === 'group-a.search-query'
+      ) {
+        boot.queryCount++;
+        if (invalidSnapshot) return { ...reply, text: 'null' };
+      }
+      return reply;
+    };
+    const installed = installNativeMarkdownOverlays(view, {
+      canEdit: () => true,
+      mentions: {
+        sourceDocumentId: 'user-menu-fixture',
+        disableMentionTracking: true,
+        users,
+        entities,
+        portalScope: 'global',
       },
-    },
-    {
-      viewEngine: 1,
-      viewOs: 0,
-      nativeCommands: nativeModule,
-      create: (config, now, wall) =>
-        nativeModule.EditorSession.createMacroWithNamespace(
-          ABI_MAJOR,
-          config,
-          now,
-          wall,
-          'user-menu-integration'
-        ),
-    }
+    });
+    boot.queriesAtInstall = boot.queryCount;
+    boot.overlaysAtInstall = installed.Overlays !== undefined;
+    completed = installed;
+    if (closeBeforeProjection) installed.dispose();
+    return installed;
+  };
+  const registry = registerMacroDecoratorViews(
+    registerMacroElementViews(createBuiltinRegistry()),
+    createNativeUserMentionViews(context)
   );
-  const installed = installNativeMarkdownOverlays(runtime.view, {
-    canEdit: () => true,
-    mentions: {
-      sourceDocumentId: 'user-menu-fixture',
-      disableMentionTracking: true,
-      users,
-      entities,
-      portalScope: 'global',
+  const view = {
+    namespace: 'user-menu-integration',
+    theme,
+    editable: true,
+    preset: 'rich' as const,
+    owner,
+    onError(error: unknown) {
+      throw error;
+    },
+  };
+  const runtime =
+    engine === 'hosted'
+      ? createRustEditorSession({
+          module: nativeModule,
+          root,
+          registry,
+          view,
+          installOverlays: install,
+          documentId: crypto.randomUUID(),
+          user: 'fixture-user',
+          access: 2,
+          authorization: {
+            async token() {
+              return { token: 'fixture-token', access: 2 };
+            },
+            subscribe(callback) {
+              const subscribers = new Set([callback]);
+              return () => {
+                subscribers.delete(callback);
+              };
+            },
+          },
+          viewEngine: 1,
+          viewOs: 0,
+          span: NOOP_SPAN,
+          onStatus() {},
+        })
+      : mountLocalSessionView(root, registry, view, {
+          viewEngine: 1,
+          viewOs: 0,
+          nativeCommands: nativeModule,
+          create: (config, now, wall) =>
+            nativeModule.EditorSession.createMacroWithNamespace(
+              ABI_MAJOR,
+              config,
+              now,
+              wall,
+              'user-menu-integration'
+            ),
+        });
+  if (engine !== 'hosted') install(runtime.view);
+  const installed = completed;
+  if (!installed) throw new Error('Missing actual installation handle');
+  const plainState = JSON.stringify({
+    root: {
+      type: 'root',
+      version: 1,
+      children: [{ type: 'paragraph', version: 1, children: [] }],
     },
   });
-  runtime.port.setState(
-    JSON.stringify({
-      root: {
-        type: 'root',
-        version: 1,
-        children: [{ type: 'paragraph', version: 1, children: [] }],
-      },
-    })
-  );
+  let releaseInitial: (() => void) | undefined;
   const state = () => runtime.executor.session.serializedState();
   const publish = () => {
     element('live-state').textContent = state();
@@ -210,6 +284,8 @@ function NativeFixture() {
   let closing: Promise<void> | undefined;
   const close = () => {
     if (closing) return closing;
+    releaseInitial?.();
+    releaseInitial = undefined;
     installed.dispose();
     context.dispose();
     release();
@@ -264,12 +340,37 @@ function NativeFixture() {
     close,
   };
   const Overlays = installed.Overlays;
-  if (!Overlays)
-    throw new Error('Missing actual native user-menu installation');
-  onMount(ready);
-  return <Dynamic component={Overlays} />;
+  if (engine === 'hosted') {
+    // Durable startup arbitrates its winning seed after real IndexedDB loading.
+    // Author only after that actual full projection, then observe real completion.
+    releaseInitial = runtime.view.onCommit((commit) => {
+      if (!commit.fullReconcile) return;
+      releaseInitial?.();
+      releaseInitial = undefined;
+      fireAndForget(
+        runtime.port
+          .inputSettled(EditorInputMsg.fromEditorSetState({ json: plainState }))
+          .then((result) => {
+            if (result.status === 'error') throw result.error;
+            if (result.status === 'success' && !closing) ready();
+          }),
+        'native-user-menu-fixture-author'
+      );
+    });
+    runtime.executor.run(() =>
+      runtime.executor.session.input(
+        SessionInputMsg.encode(emptyInput(1)),
+        runtime.executor.now(),
+        Date.now()
+      )
+    );
+  } else {
+    runtime.port.setState(plainState);
+    onMount(ready);
+  }
+  return Overlays ? <Dynamic component={Overlays} /> : null;
 }
-if (engine === 'native') await initialize();
+if (engine !== 'source') await initialize();
 
 render(
   () => (
@@ -281,10 +382,10 @@ render(
               <EmailLinksContextProvider>
                 <ChannelsContextProvider>
                   <QuickAccessProvider>
-                    {engine === 'native' ? (
-                      <NativeFixture />
-                    ) : (
+                    {engine === 'source' ? (
                       <SourceFixture />
+                    ) : (
+                      <NativeFixture />
                     )}
                   </QuickAccessProvider>
                 </ChannelsContextProvider>
