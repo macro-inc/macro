@@ -226,6 +226,7 @@ pub struct EditorBuilder {
     pub(crate) initial_state: Option<SerializedEditorState>,
     table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     vtables: Vec<NodeVTable>,
+    state_export_orders: HashMap<TypeId, &'static [&'static str]>,
     mode: EditorMode,
     keys: KeySource,
     view_host: ViewHost,
@@ -254,6 +255,7 @@ impl EditorBuilder {
             initial_state: None,
             table_selection_hooks: None,
             vtables: vec![],
+            state_export_orders: HashMap::default(),
             mode,
             keys: KeySource::PerEditor,
             view_host: ViewHost::HEADLESS,
@@ -284,6 +286,12 @@ impl EditorBuilder {
     /// Register a node type in builder order.
     pub fn node<Node: NodeType>(mut self) -> Self {
         self.vtables.push(Node::Kind::vtable());
+        self
+    }
+    /// Emit existing nested state keys after unlisted keys in this order.
+    /// This changes export order only, without declaring, parsing or reading keys.
+    pub fn state_export_order<Node: NodeType>(mut self, keys: &'static [&'static str]) -> Self {
+        self.state_export_orders.insert(TypeId::of::<Node>(), keys);
         self
     }
     /// Leave class static transforms to an external runtime while retaining
@@ -461,6 +469,11 @@ impl EditorBuilder {
                 replaced_by: None,
                 state_layout: StateLayout {
                     entries: v.required.clone(),
+                    export_order: self
+                        .state_export_orders
+                        .get(&v.type_id)
+                        .copied()
+                        .unwrap_or(&[]),
                 },
                 has_language_field: v.language,
                 flags: None,
