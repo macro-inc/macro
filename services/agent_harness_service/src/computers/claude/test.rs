@@ -177,8 +177,14 @@ async fn computer_route_access(
         );
     }
     let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    // The repo mock expects no login write; harnessd records every request.
+    let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
+        harnessd_protocol::Response::SignedOut {
+            agent: harnessd_protocol::AgentProvider::Claude,
+        }
+    }));
     let harnessd = crate::computers::harnessd::Harnessd::new(
-        Arc::new(crate::computers::harnessd::NoFleet),
+        transport.clone(),
         Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
         Arc::clone(&harnesses),
     );
@@ -312,6 +318,8 @@ async fn computer_route_access(
         .await
         .unwrap();
     assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    // Every request above was refused before reaching the computer.
+    assert!(transport.requests.lock().unwrap().is_empty());
     shutdown.cancel();
     tasks.close();
     tasks.wait().await;
