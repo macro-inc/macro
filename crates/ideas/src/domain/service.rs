@@ -130,7 +130,6 @@ where
         self
     }
 
-
     /// Run background prompt ideas in `sessions`, as agent `agent`. Without
     /// it, accepting one fails.
     pub fn with_runs(mut self, sessions: Arc<dyn RunSessions>, agent: Uuid) -> Self {
