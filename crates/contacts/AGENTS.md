@@ -18,6 +18,7 @@ and kept in sync via the connection gateway.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
 - `src/inbound/worker.rs`: SQS worker that ingests contact-affecting events.
+- `src/domain/service/picture_fanout.rs`, `src/inbound/user_picture_consumer.rs`, `src/outbound/picture_gateway.rs` (`picture-fanout` feature): `macro.users` `user.picture_changed` → pages the user's contacts (≤500/page via `contact_id_page`, never the full list) and sends gateway message `user_picture_changed` `{"user_id"}` to each page (self included). The consumer (group `contacts-user-picture`) batches records for 250ms/100 records and fans out once per user per batch; failures retry 3× then are logged and skipped (realtime is best-effort). Hosted in `document_storage_service`; Kafka IAM is cluster-wide, so no infra change.
 - `src/outbound/repository.rs`: Postgres adapter; `src/outbound/gateway.rs`
   notifies the connection gateway of graph changes.
 
