@@ -143,6 +143,14 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+- Every address a contact is known by is a row in `crm_contact_emails`, stored
+  trimmed and lowercased. `crm_contacts.email` is the primary address, and a
+  trigger records it in that table. Find a contact by address through
+  `crm_contact_emails` (sync, teardown, email scope, thread access, call
+  linking); read `crm_contacts.email` only to display the primary. The
+  activity scope still reads the primary: joining every contact of a team to
+  its addresses costs a probe per contact, so give that query its own plan
+  before widening it.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.hidden,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at\n            FROM crm_contacts ct\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ct.email = LOWER($1)\n              AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            LIMIT 2\n            ",
+  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.hidden,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at\n            FROM crm_contact_emails ce\n            JOIN crm_contacts ct ON ct.id = ce.contact_id\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ce.email = LOWER($1)\n              AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            LIMIT 2\n            ",
   "describe": {
     "columns": [
       {
@@ -68,5 +68,5 @@
       false
     ]
   },
-  "hash": "547a904d56bdbc5e54109a0232b8675bdf7e71a2184fba9ab5d38ec6a740bc70"
+  "hash": "f618ad9bb309b60d0375d1d7a5ebaf5003754611f6c002736a3f878d44718765"
 }

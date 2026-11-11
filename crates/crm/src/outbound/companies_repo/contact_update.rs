@@ -126,8 +126,10 @@ impl CompaniesRepositoryImpl {
         // whole team, including archived records, without exposing restricted ones.
         let duplicates = sqlx::query!(
             r#"SELECT ct.hidden OR COALESCE(co.hidden, FALSE) AS "hidden!"
-               FROM crm_contacts ct LEFT JOIN crm_companies co ON co.id = ct.company_id
-               WHERE ct.team_id = $1 AND LOWER(ct.email) = $2 AND ct.id <> $3"#,
+               FROM crm_contact_emails ce
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               LEFT JOIN crm_companies co ON co.id = ct.company_id
+               WHERE ce.email = $2 AND ct.team_id = $1 AND ct.id <> $3"#,
             team_id,
             email,
             contact_id,

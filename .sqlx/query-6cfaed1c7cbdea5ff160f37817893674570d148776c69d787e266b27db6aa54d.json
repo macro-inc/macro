@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ct.hidden OR COALESCE(co.hidden, FALSE) AS \"hidden!\"\n               FROM crm_contact_emails ce\n               JOIN crm_contacts ct ON ct.id = ce.contact_id\n               LEFT JOIN crm_companies co ON co.id = ct.company_id\n               WHERE ce.email = $2 AND ct.team_id = $1 AND ct.id <> $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hidden!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6cfaed1c7cbdea5ff160f37817893674570d148776c69d787e266b27db6aa54d"
+}
