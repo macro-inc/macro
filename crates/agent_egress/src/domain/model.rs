@@ -30,6 +30,9 @@ use crate::domain::error::EgressError;
 pub use agent_fold::domain::log::AgentSessionId;
 pub use agent_session::domain::model::TurnPrompter;
 
+mod artifacts;
+pub use artifacts::{ARTIFACTS_PATH, ArtifactEndpoint};
+
 #[cfg(test)]
 mod test;
 
@@ -756,6 +759,9 @@ pub enum EgressTarget {
         /// Which of the three smart-HTTP routes.
         endpoint: GitEndpoint,
     },
+    /// One of Macro's artifact endpoints, called as the person who prompted
+    /// the turn.
+    Artifacts(ArtifactEndpoint),
 }
 
 impl EgressTarget {
@@ -767,6 +773,7 @@ impl EgressTarget {
             Self::McpServer(McpDestination::Connected(slug)) => slug.as_str().to_owned(),
             Self::McpServer(McpDestination::Custom(key)) => format!("custom {key}"),
             Self::GitHubGit { endpoint } => format!("git {}", endpoint.path_and_query()),
+            Self::Artifacts(endpoint) => endpoint.path(),
         }
     }
 }

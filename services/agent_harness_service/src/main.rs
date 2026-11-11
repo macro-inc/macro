@@ -43,6 +43,7 @@ use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::approval::ToolApprovalService;
 use agent_egress::domain::service::EgressServiceImpl;
+use agent_egress::outbound::artifact_calls::StorageArtifactCalls;
 use agent_egress::outbound::custom_mcp::WithCustomMcp;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
@@ -153,8 +154,8 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{
-    AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
+    AgentHarnessEgressUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl,
+    McpServiceUrl, StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::NativeServerStore;
@@ -618,6 +619,20 @@ async fn run() -> anyhow::Result<()> {
         .with_owner_approvals(Arc::clone(&tool_approvals))
         .with_actor_mcp(Arc::new(
             agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new()?,
+        ))
+        // macrod's PublishArtifact: the artifact endpoints, as the person who
+        // prompted the turn, with a token signed the way Macro's MCP one is.
+        .with_artifacts(Arc::new(
+            StorageArtifactCalls::new(
+                MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                &DocumentStorageServiceUrl::new()?.parse_url()?,
+                matches!(config.environment, Environment::Local),
+            )
+            .context("the artifact upstream is misconfigured")?,
         )),
     );
 

@@ -39,10 +39,13 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 ratatui = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+# `macrod mcp artifacts`, the stdio MCP server macrod adds to each session.
+rmcp = { workspace = true, features = ["transport-io"] }
 rootcause = { workspace = true }
 # The gateway dial is `wss` on every deployment but a local stack, and
 # tokio-tungstenite's rustls feature selects no crypto provider.
 rustls = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -88,6 +91,8 @@ windows-sys = { workspace = true, features = [
 zip = { workspace = true }
 
 [dev-dependencies]
+# Stand-in for the agent egress in the artifact publishing tests.
+axum = { workspace = true }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }

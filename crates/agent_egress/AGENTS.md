@@ -19,6 +19,8 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `Forwarder`.
 - `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
   `github_tokens.rs`: the credential resolvers.
+- `src/outbound/artifact_calls.rs`: `/artifacts` (macrod's `PublishArtifact`)
+  → the document storage service's artifact endpoints, as the turn's prompter.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
 - `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
   `tools/list`/`tools/call` on a connected app or custom server for a caller
@@ -60,6 +62,12 @@ returns an actionable tool error; never fall back to another account.
 Actor selection covers executable tool calls; initialization and other non-tool
 MCP methods retain their existing owner proxy behavior. Git and preview egress
 retain their existing session/repository identities.
+
+`/artifacts` forwards only `POST /artifacts`, `GET /artifacts/{id}`, and
+`POST /artifacts/{id}/uploads|versions` (`ArtifactEndpoint`), rebuilt onto
+`DocumentStorageServiceUrl` without the query. It acts as the turn's prompter
+(`TurnPrompter::acting_user`), never the owner on someone else's behalf, so it
+needs no approval; a turn with no acting user is refused (`NoActingUser`, 403).
 
 ## Checks
 

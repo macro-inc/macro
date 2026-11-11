@@ -12,6 +12,7 @@ use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
+use crate::artifacts::LocalServer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
@@ -49,11 +50,17 @@ impl Runtime {
         handoffs: Handoffs,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
+        let local_server = LocalServer::current(&macro_api.web_url)
+            .inspect_err(|error| {
+                tracing::warn!(error = %error, "macrod's own MCP server is unavailable: its executable has no path");
+            })
+            .ok();
         let task = tokio::spawn(serve(
             macro_api.gateway_url(),
             credentials.token.clone(),
             harness,
             cwd.to_owned(),
+            local_server,
             tap,
             turns,
             connected_tx,
@@ -100,6 +107,7 @@ async fn serve(
     token: String,
     harness: Harness,
     cwd: PathBuf,
+    local_server: Option<LocalServer>,
     tap: Option<LineTap>,
     turns: ActiveTurns,
     connected: watch::Sender<bool>,
@@ -123,6 +131,7 @@ async fn serve(
                 match harness::bridge(
                     &harness,
                     &cwd,
+                    local_server.clone(),
                     channel,
                     tap.clone(),
                     &turns,
