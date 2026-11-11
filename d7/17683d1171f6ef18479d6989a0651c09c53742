@@ -1,0 +1,23 @@
+.github/kafka-cluster-topics.json
+  s_ac5ba988135993::t_1d586e84ff9d7f 27
+crates/macro_event_topics/src/lib.rs
+  s_ac5ba988135993::t_30c31ae3185aab 103-104
+crates/macro_event_topics/src/test.rs
+  s_ac5ba988135993::t_3fd065e619b13d 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d717683d1171f6ef18479d6989a0651c09c53742",
+  "prompts": {},
+  "sessions": {
+    "s_ac5ba988135993": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66a515c4-ca56-4c3e-b8a3-31cdb7a48bb6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
