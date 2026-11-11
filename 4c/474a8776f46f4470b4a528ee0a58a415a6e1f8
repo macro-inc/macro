@@ -1,0 +1,21 @@
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.tsx
+  s_8ba3abc09a12f6::t_0321d5433ec064 46-54,57-58
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.focus.test.tsx
+  s_8ba3abc09a12f6::t_914f30e13a83dd 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4c474a8776f46f4470b4a528ee0a58a415a6e1f8",
+  "prompts": {},
+  "sessions": {
+    "s_8ba3abc09a12f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b4ce68f3-1533-42e5-9a73-f8b66ee6fee4",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
