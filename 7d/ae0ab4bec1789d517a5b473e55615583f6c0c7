@@ -1,0 +1,1007 @@
+.agents/skills/query-review/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-136
+apps/web/src/features/channel/Call/tests/call-controls.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 2,4-14,29-33,39,74-85,104-110,150-310
+apps/web/src/lib/analytics/analytics.ts
+  s_c6a08203850d89::t_2de4e132c3899f 17,162
+crates/scheduled_action/src/inbound/axum_router/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 538,550,913,917,1114-1165
+crates/complete_graph/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 119
+crates/activity/src/domain/realtime.rs
+  s_c6a08203850d89::t_2de4e132c3899f 20,141,147,152,156-161,205-213
+apps/web/src/features/block-agent/ui/ToolApprovalCard.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 60-79
+apps/web/src/features/channel/Call/primitives/create-call-mini-player.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-358
+apps/web/src/features/channel/Thread/types.ts
+  s_c6a08203850d89::t_2de4e132c3899f 99-100
+apps/web/src/features/command/queries/entity-search.ts
+  s_c6a08203850d89::t_2de4e132c3899f 9,135-138,148-149
+apps/web/src/features/command/useCommandItems.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 22-28
+crates/agent_harness/src/domain/service/test/notifications.rs
+  s_c6a08203850d89::t_2de4e132c3899f 387
+crates/agent_session/src/outbound/notifications.rs
+  s_c6a08203850d89::t_2de4e132c3899f 128
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 368-371
+apps/web/src/components/ui/components/Slider.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 8-10,52,58-59
+apps/web/src/features/channel/Call/views/ActiveCallPopover.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-139
+apps/web/native-commands.json
+  s_c6a08203850d89::t_2de4e132c3899f 80,88,94
+crates/macro_db_client/migrations/20261110150953_add_activity_agent_session_id.sql
+  s_c6a08203850d89::t_2de4e132c3899f 1-29
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobileActions.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-40
+docs/agent-guide/navigation.md
+  s_c6a08203850d89::t_2de4e132c3899f 81-92,1081-1083
+apps/web/src/components/app/sidebar-next/return-to-call-button.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3,6,8-22,27,30-39,42-43,45,50-83,85-93,98
+apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-408
+apps/web/src/features/block-call/component/CallRecording/CallRecordingRoot.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-11
+apps/web/src/features/block-agent/component/Block.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,10,17,56-76,121-122,176,179-184,194-201,210-213,237
+apps/web/src/features/channel/Call/primitives/use-call-speaking.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-49
+crates/agent_egress/src/domain/service/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1304,1461-1510
+  s_c6a08203850d89::t_e305292141bc26 1511
+crates/agent_harness/src/domain/service/open.rs
+  s_c6a08203850d89::t_2de4e132c3899f 607
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-10
+crates/agent_session/src/inbound/axum_router/activity.rs
+  s_c6a08203850d89::t_2de4e132c3899f 83-84,94
+apps/web/src/features/channels-view/components/rail/ChannelLiveCallBadge.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-54
+services/authentication_service/Cargo.toml
+  s_c6a08203850d89::t_2de4e132c3899f 213
+services/authentication_service/src/api/oauth/oauth_redirect.rs
+  s_c6a08203850d89::t_2de4e132c3899f 254-255,258-273,347-351
+apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-100
+crates/agent_egress/src/domain/service.rs
+  s_c6a08203850d89::t_2de4e132c3899f 383-389,408-411,422
+crates/scheduled_action/src/domain/service.rs
+  s_c6a08203850d89::t_2de4e132c3899f 640-644
+crates/agent_correlation/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 14-18,20,40-42
+services/authentication_service/src/api.rs
+  s_c6a08203850d89::t_2de4e132c3899f 53-54
+apps/web/src/features/channel/Call/tests/livekit-js-call-controller.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 14-18,25-40,182-542
+  s_c6a08203850d89::t_516b922885ebdb 543
+apps/web/src/components/ui/components/Tooltip.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 170-204
+apps/web/src/features/command/useCommandItems.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 35-41
+apps/web/src/features/channel/Call/components/MutedForYouBadge.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-24
+.agents/agents/db-reviewer.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-39
+apps/web/src/features/channel/Call/chat/CallChatHistory.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,9,14-20,26,31,52,59-67,117-118,120,124-125,129,139
+apps/web/src/features/channel/Call/primitives/call-hotkeys.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-140
+apps/web/src/features/channel/Call/core/call-mini-player.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-199
+apps/web/src/features/channels-view/components/ChannelsMobileView.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 15-16,43,47,64-66,167-179,341-351
+crates/agent_session/src/domain/ports.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1301-1303
+apps/web/src/features/channel/Message/Content.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,104-109,121-123
+crates/agent_session/src/inbound/axum_router/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1464,1596-1638
+  s_c6a08203850d89::t_305f012fe7d9f2 1639
+services/agent_harness_service/src/main.rs
+  s_c6a08203850d89::t_2de4e132c3899f 845-868,1844
+tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
+  s_c6a08203850d89::t_2de4e132c3899f 24,201,282
+crates/agent_harness/src/domain/service/warm.rs
+  s_c6a08203850d89::t_2de4e132c3899f 227,405
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-424
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobilePlayback.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-45
+apps/web/src/routes/routes.ts
+  s_c6a08203850d89::t_2de4e132c3899f 50-55,242-286,288,310,326,342,358,371,380,423,434,445,457,471,479,519,556,563,571,579,588,597,611,622,640,654,661,675,686,702,709,716,730,738,748,761,774,782,794,805,817,837,910,923,931,942,1011-1013
+apps/web/tauri/callkit_plugin/ios/Sources/CallKitPlugin.swift
+  s_c6a08203850d89::t_2de4e132c3899f 27-35,62,288-316,515-517
+packages/sdk/README.md
+  s_c6a08203850d89::t_2de4e132c3899f 954-957
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_c6a08203850d89::t_2de4e132c3899f 33-36,1390-1395,2255-2274,3044-3072,4737-4755
+  s_c6a08203850d89::t_5c59199384ce8c 4756
+static_assets/schema.graphql
+  s_c6a08203850d89::t_2de4e132c3899f 552-556,1699-1706,1719-1722
+.agents/rules/rust/db.md
+  s_c6a08203850d89::t_2de4e132c3899f 17-20,46-49
+services/authentication_service/src/api/session/session_login.rs
+  s_c6a08203850d89::t_2de4e132c3899f 8,10,19-21,48-121,124,127,130,133-134,137,139-140,142-148,151,154-164
+.agents/rules/web/architecture.md
+  s_c6a08203850d89::t_2de4e132c3899f 71
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-5,9-10,17-18,21-28,30-31,36-37,42,44-52,58-59,67
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_c6a08203850d89::t_25548cccde4dcb 34,256
+crates/agent_harness/src/domain/service/test/reattach.rs
+  s_c6a08203850d89::t_2de4e132c3899f 659
+apps/web/src/lib/core/media/recent-background-images.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-60
+crates/agent_session/src/inbound/axum_router/test/tool_actions.rs
+  s_c6a08203850d89::t_2de4e132c3899f 393-395,402-403
+apps/web/src/features/block-call/component/CallRecording/CallRecordingPinnedPlayer.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-91
+apps/web/src/features/channel/Call/tests/muted-microphone-badge.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 28
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_c6a08203850d89::t_2de4e132c3899f 64-66,697-706
+apps/web/src/lib/core/util/telemetryUrl.ts
+  s_c6a08203850d89::t_2de4e132c3899f 4-5,7,27-36
+  s_c6a08203850d89::t_6c64e93693a51f 37-38
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 232,255,260
+packages/sdk/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 88-92,153-154
+services/agent_harness_service/src/code_mode/ui_commands.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-150
+apps/web/src/features/meetings/components/meeting-copy-button.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 4,12,40-43,50,57-62
+apps/web/tauri/callkit_plugin/ios/Sources/NativeLiveKitCallSession.swift
+  s_c6a08203850d89::t_2de4e132c3899f 62-73,137
+apps/web/src/features/block-call/views/CallDetailView.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 33-35,40-51
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3-4,7,9,13,15,19-20,22,25-31,34-37,39,45,47,53,55-60,62-104,107-110,117-137,140-184,186-194,196-213,215-411,413,415-416,418-420
+apps/web/src/features/channel/Channel/use-channel-tab-items.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 9,27,30,36,39,80-82,85
+.agents/skills/query-writing/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-200
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 13,52,414-423,944,1026-1040,1050-1052,1177-1179,1242-1246,1248-1252,1306-1311,1313
+crates/complete_graph/src/realtime.rs
+  s_c6a08203850d89::t_2de4e132c3899f 4,7-8,11-16,39-96
+apps/web/src/features/agent-session-activity/browser-test/index.html
+  s_c6a08203850d89::t_2de4e132c3899f 1-5
+.agents/skills/query-review/table-sizes.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-39
+apps/web/src/components/ui/components/Tooltip.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 15,123-147,188,218,226
+apps/web/src/features/agent-session-activity/queries/keys.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-8
+apps/web/src/features/channel/Call/ChannelCallButton.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3,5-6,17,20-32,34-47
+apps/web/src/features/channel/Call/TrackView.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 2,15-16,18-19,26-30,32,38-50,53-54,61-63
+apps/web/src/features/channel/Call/primitives/call-speaker-detection.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-214
+apps/web/src/features/block-call/primitives/recording-volume.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-80
+apps/web/src/features/meetings/primitives/meeting-session-owner.ts
+  s_c6a08203850d89::t_2de4e132c3899f 117-131
+apps/web/src/features/block-call/component/CallRecording/CallRecordingChat.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-129
+crates/agent_correlation/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 11-12
+crates/agent_harness/src/domain/service/test/followers.rs
+  s_c6a08203850d89::t_2de4e132c3899f 40,60,69-103
+  s_c6a08203850d89::t_9a6f8b5f7eee65 104
+apps/web/src/features/channel/Channel/tests/active-call-message.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 16,23-28,32-33,39
+crates/code_execution/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 28-29
+crates/macro_cache_client/src/auth/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-208
+crates/macro_service_urls/src/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 267-270
+packages/sdk/generated/agent-harness/index.ts
+  s_c6a08203850d89::t_2de4e132c3899f 4
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_c6a08203850d89::t_2de4e132c3899f 1,89
+services/agent_harness_service/src/code_mode.rs
+  s_c6a08203850d89::t_2de4e132c3899f 187
+apps/web/src/lib/i18n/locales/en/agent-work.ts
+  s_c6a08203850d89::t_2de4e132c3899f 8-69
+crates/macro_db_client/migrations/20261105234844_agent_activity_verb.sql
+  s_c6a08203850d89::t_2de4e132c3899f 1-4
+services/document_storage_service/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 129
+apps/web/src/features/channel/Thread/ChannelThread.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 439-441,462
+apps/web/src/features/channel/Call/discussion/CallRootLine.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,20-21,32-34,59,70,111,115-116,119
+crates/agent_session/src/inbound/axum_router.rs
+  s_c6a08203850d89::t_2de4e132c3899f 546-550,1039-1063,1117,1127,1137-1138
+apps/web/src/features/channel/Thread/ThreadReplyList.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 60-61,91-95,151
+apps/web/src/features/meetings/new-meeting-route.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 94
+packages/sdk/src/entities/channels/message.ts
+  s_c6a08203850d89::t_2de4e132c3899f 84-98
+  s_c6a08203850d89::t_29d014061b1385 83
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 51,54,127-137
+  s_c6a08203850d89::t_51d9cdc7b8c0a4 138-140
+apps/web/src/components/icon/system/README.md
+  s_c6a08203850d89::t_2de4e132c3899f 5-9
+crates/activity/src/domain/announcements/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 275-299
+  s_c6a08203850d89::t_69c9e25333420e 274
+services/authentication_service/src/api/oauth/passwordless_callback.rs
+  s_c6a08203850d89::t_2de4e132c3899f 41-43
+apps/web/src/features/channel/Channel/ActiveCallMessage.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 5-6,8-9,11-14,17-21,26-34,42,46-60,62-77
+crates/agent_egress/src/domain/approval.rs
+  s_c6a08203850d89::t_2de4e132c3899f 77-100,190-192
+apps/web/src/features/command/useCommandItems.contacts.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 22-28
+crates/agent_egress/src/domain/service/actor.rs
+  s_c6a08203850d89::t_2de4e132c3899f 223-224,232,234,250-252
+crates/graphql_activity/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 25
+docs/agent-guide/channels.md
+  s_c6a08203850d89::t_75d9d9bf1fb4f1 1577-1580
+  s_c6a08203850d89::t_2de4e132c3899f 1379-1381,1561-1574
+crates/agent_session/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 96-99
+apps/web/src/features/channel/Call/primitives/call-mini-player-selection.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-45
+apps/web/src/lib/service-clients/service-auth/client.ts
+  s_c6a08203850d89::t_2de4e132c3899f 382-385
+packages/sdk/src/utils/activity.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 2-6,9-39
+apps/web/src/features/block-call/primitives/transcript-timeline.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-49
+crates/agent_correlation/src/verb.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-102
+services/document_storage_service/src/api/context.rs
+  s_c6a08203850d89::t_2de4e132c3899f 972
+apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-78
+crates/activity/src/domain/events.rs
+  s_c6a08203850d89::t_2de4e132c3899f 32-34,60,81-84,109-114,126,135-136,180
+apps/web/src/features/channels-view/components/ChannelsMobileView.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 79-85
+apps/web/src/features/agent-navigation/core/navigable-routes.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-127
+apps/web/src/features/channel/Call/primitives/create-call-panel.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-64
+crates/agent_correlation/Cargo.toml
+  s_c6a08203850d89::t_2de4e132c3899f 20
+services/authentication_service/src/api/oauth/oauth_redirect/tests.rs
+  s_c6a08203850d89::t_2de4e132c3899f 195-237
+services/document_storage_service/src/server.rs
+  s_c6a08203850d89::t_2de4e132c3899f 2552,2557-2559
+  s_c6a08203850d89::t_b9377fa590714e 2560
+apps/web/src/features/agent-session-activity/views/agent-activity-section.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-219
+packages/code-mode-sdk/src/index.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 11-16
+apps/web/src/features/block-call/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-57
+apps/web/src/features/channel/Call/views/PhoneAudioOutput.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-60
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.html
+  s_c6a08203850d89::t_2de4e132c3899f 1-2
+crates/macro_event_broker/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 55
+.agents/rules/sdk.md
+  s_c6a08203850d89::t_2de4e132c3899f 26-28
+crates/activity/src/domain/realtime/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 36,55-74
+  s_c6a08203850d89::t_808466b8edf674 75-76
+apps/web/src/components/ui/components/Tabs.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 24-28,38-42,144-148,168-172
+apps/web/src/features/channel/Call/components/CallMoreMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-388
+apps/web/src/features/agent-session-activity/core/step-label.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-15
+apps/web/src/features/block-call/component/CallRecording/CallRecordingSummary.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,7,9,12-15,32-45,49-53,58
+apps/web/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 293-294,296-309,847,916-918,922-924,1213,1350-1354
+apps/web/src/features/channel/Call/LivekitJsCallController.ts
+  s_c6a08203850d89::t_2de4e132c3899f 21,60-61,74-81,150,161,272-278,363,373,388
+crates/activity/src/outbound/pg_activity_repo/team_feed.sql
+  s_c6a08203850d89::t_2de4e132c3899f 90,124,137
+crates/agent_correlation/src/context.rs
+  s_c6a08203850d89::t_2de4e132c3899f 3,13-15,33-37,46,48-62,66,74-77,86-87,121
+crates/agent_session/src/domain/control/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 40-48,64,75,104,121,140,148-199
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.tsx
+  s_c6a08203850d89::t_cd99978c432816 172
+  s_c6a08203850d89::t_2de4e132c3899f 1-171,173-214
+apps/web/tauri/callkit_plugin/permissions/audio-output.toml
+  s_c6a08203850d89::t_2de4e132c3899f 1-11
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 15-16,36-37,54-56
+apps/web/src/features/channel/Call/components/CallReactionLayer.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-67
+apps/web/src/features/block-call/component/CallTranscript.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3,5,7,10-11,14-16,18-21,23-43,45,47-51,54-66,69-81,84,86-88,92-93,95-98,100-231,235-236,238-243,247-249,251-255,257-269,272,274-280,283-291,293,296-304
+apps/web/src/features/command/rank-command-search-items.ts
+  s_c6a08203850d89::t_2de4e132c3899f 71-74,108-121,125,136-139
+crates/coding_agent_worker/src/outbound/agent_session.rs
+  s_c6a08203850d89::t_2de4e132c3899f 154
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/TelecomService.kt
+  s_c6a08203850d89::t_2de4e132c3899f 40-41,50-61,63-71
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 986,1176
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-317
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 82,204
+crates/graphql_activity/src/objects/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 18
+apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 17,131,142,145
+crates/macro_cache_client/Cargo.toml
+  s_c6a08203850d89::t_2de4e132c3899f 30-33
+crates/agent_session/src/inbound/axum_router/tool_actions.rs
+  s_c6a08203850d89::t_2de4e132c3899f 68
+packages/sdk/src/coverage/check.ts
+  s_c6a08203850d89::t_2de4e132c3899f 4-5,11,15,52,74-75,90-100
+apps/web/src/features/block-agent/component/sidepanel/AgentSidePanelSections.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 13-15,17,22,48,59-61,195-203
+  s_c6a08203850d89::t_a7237d632b7d27 204-206
+packages/sdk/src/macro.ts
+  s_c6a08203850d89::t_2de4e132c3899f 40,112-118,199-201,289
+crates/macro_event_broker/src/domain/models.rs
+  s_c6a08203850d89::t_2de4e132c3899f 42-45,76,236-242,246-253
+apps/web/src/features/block-call/primitives/recording-navigation.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-68
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_c6a08203850d89::t_80d74624eb6b39 344-347
+  s_c6a08203850d89::t_2cf8f5eadec6e4 348
+  s_c6a08203850d89::t_2de4e132c3899f 84,90,98,143,162-163,174,192-194,198-199,204-205,214-220,227,241,262-271,273,277-284,289,291,477-479,487-491,520-522,538-549,561,564,578-615,618,620-665,667,669,671-677,684,686,688,690,693-696,698,700-703,705,707-712,714,716,718-725,727-739,741-742,744,747-752,754,756-759,762-779,782-815,944-1025
+  s_c6a08203850d89::t_77e59402156051 1026
+crates/scheduled_action/src/domain/templates.rs
+  s_c6a08203850d89::t_2de4e132c3899f 12,195-198
+apps/web/src/features/channel/Call/MutedMicrophoneBadge.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3,8-10,18-20,22-39
+apps/web/src/features/channel/Call/CallControls/CallControlsDefaultAndPanelRow.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3,9,12-28,30-33,36-38,40-41
+apps/web/src/features/meetings/views/meeting-media-setup.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3,60-66
+crates/agent_session/src/outbound/postgres/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 3439-3478,3510
+  s_c6a08203850d89::t_36b00219832b2a 3438
+packages/sdk/justfile
+  s_c6a08203850d89::t_2de4e132c3899f 24-25
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 42-45
+apps/web/src/features/channel/Channel/UnifiedReplyInput.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 30-32,41-71,82-83
+crates/macro_event_broker/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 20
+apps/web/src/features/channel/Call/CallContext.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 47,66,73,426-428,515-518,1248-1270,1272,1277,1281,1499,1502-1504,1507,1531-1542,1548,1552,1556,1566-1568,1571,1593-1604,1622,1625,1883-1884,1888,1892-1894,1941-1945
+apps/web/src/features/channel/Call/primitives/create-call-audio-output.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-156
+apps/web/src/features/channel/Call/core/call-layout.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-87
+apps/web/src/features/channel/Channel/tests/channel-detail-top-bar.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 57-60
+apps/web/src/lib/core/util/run-when-current.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-47
+apps/web/tauri/callkit_plugin/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 39-41
+crates/graphql_activity/src/subscriptions/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 68
+.agents/skills/git/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 106-117,142-148
+  s_c6a08203850d89::t_c9c769ed687809 149
+apps/web/src/features/channel/Call/views/call-fullscreen-host.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-95
+CLAUDE.md
+  s_c6a08203850d89::t_2de4e132c3899f 41,58,117-118
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-101
+.agents/skills/sqlx-query-validator/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 3,74,76-80,100-101
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,15-16,31,33-35,41-51,56,58-59,65-75,78-87,106-118,122-123,126-129,155-188
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 32,679-683,721-741
+apps/web/src/components/icon/system/regular/waveform.svg
+  s_c6a08203850d89::t_2de4e132c3899f 2-6
+apps/web/src/components/ui/components/Tabs.docs.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 18-22,169
+apps/web/src/components/icon/system/regular/picture-in-picture.svg
+  s_c6a08203850d89::t_2de4e132c3899f 1-4
+apps/web/src/components/app/Layout.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 258-262,368-370
+apps/web/src/features/channel/Call/ActiveCallLink.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-4,6,13-16,31-39,41-59,63-66,71-74
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,9,14,20-23,26-27,30,36,39,44-49,54-58,60-69,74,94-100,107-116,118-131,135-138,154-158,168-173,185,187,197,218,228,231,262,267-297,299-402,404-418,421,428,430-478,480-485,487-505,507-514,516-523,525-529,531-568,570-579,581-588,595-618,620-650,652-654,656-659,661-666,669-691,693-731,733,735-736,738-751,753-755,757-848,851-852,856-870,872-884,890-895,908-911,913
+  s_c6a08203850d89::t_f5a3f4c7cfdc6b 589-594
+  s_c6a08203850d89::t_75d9d9bf1fb4f1 207,569
+  s_c6a08203850d89::t_1faddda578347f 77,403,692,896-907
+  s_c6a08203850d89::t_c815d62e3aac3b 885-888
+  s_c6a08203850d89::t_7137a565510d8c 82
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_c6a08203850d89::t_2de4e132c3899f 868-877
+crates/activity/src/domain/service/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 113
+apps/web/src/features/agents-view/agents-view.css
+  s_c6a08203850d89::t_2de4e132c3899f 2157-2162
+crates/activity/src/outbound/pg_activity_repo/agent_activity.rs
+  s_c6a08203850d89::t_2de4e132c3899f 2,22-23,26-34
+crates/activity/src/outbound/pg_activity_repo/team_feed.rs
+  s_c6a08203850d89::t_2de4e132c3899f 42,62
+crates/agent_code_mode/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 57-73
+crates/agent_harness/src/domain/service/test/quota.rs
+  s_c6a08203850d89::t_2de4e132c3899f 87,735
+apps/web/src/features/channels-view/components/rail/ChannelRailItems.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 4,19-20,24,105,123,166,187,200-202,208-217,332
+apps/web/src/features/meetings/context/meeting-session-owner.ts
+  s_c6a08203850d89::t_2de4e132c3899f 7-10,12
+.agents/skills/query-review/measuring-plans.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-153
+crates/agent_harness/src/domain/queue.rs
+  s_c6a08203850d89::t_2de4e132c3899f 31,65-66,209,222
+crates/agent_egress/src/domain/approval/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 111,427,501-531,617,739
+apps/web/src/components/icon/system/regular/users-slash.svg
+  s_c6a08203850d89::t_2de4e132c3899f 1-3
+crates/macro_cache_client/src/auth.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-5,20-62,94-96,102-141,145-149,152-174,212-214
+apps/web/src/features/channel/Call/views/CallMediaPermissionHelp.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-107
+crates/macro_db_client/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 24-25,136
+apps/web/src/components/icon/system/regular/speaker-slash.svg
+  s_c6a08203850d89::t_2de4e132c3899f 1-24
+crates/macro_event_broker/src/domain/ports.rs
+  s_c6a08203850d89::t_2de4e132c3899f 48-53
+apps/web/src/features/channel/Call/primitives/use-active-call-companion.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-54
+deny.toml
+  s_c6a08203850d89::t_2de4e132c3899f 227
+packages/code-mode-sdk/scripts/catalog.ts
+  s_c6a08203850d89::t_2de4e132c3899f 30
+apps/web/src/components/ui/components/Slider.docs.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 23-26,66
+apps/web/src/features/channel/Call/components/CallReactionMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-128
+apps/web/src/lib/core/media/recent-background-state.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-85
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-182
+services/document_storage_service/src/api/graphql_soup.rs
+  s_c6a08203850d89::t_2de4e132c3899f 230
+apps/web/src/components/ui/components/ProgressPill.docs.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 4,41-51,56,64
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 10,27,40-42,45
+apps/web/tauri/callkit_plugin/ios/Sources/CallAudioRouteController.swift
+  s_c6a08203850d89::t_2de4e132c3899f 44,95-178,182,306-310
+apps/web/src/features/agent-session-activity/browser-test/vite.config.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-44
+apps/web/src/features/meetings/meeting-route.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 116
+apps/web/src/lib/core/util/telemetryUrl.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 5,68-97,99
+  s_c6a08203850d89::t_49668053ee68c8 98,100
+apps/web/src/components/ui/components/ToggleSwitch.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 31-32,101
+apps/web/src/features/channel/Call/chat/components/CallChatBody.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 46-48
+crates/agent_code_mode/src/domain/models.rs
+  s_c6a08203850d89::t_2de4e132c3899f 168-171
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-514
+crates/activity/src/inbound/toolset/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 128
+apps/web/src/lib/core/util/run-when-current.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-26
+crates/agent_correlation/src/inbound/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 60-61,66-70,83,88,90,97-110
+apps/web/src/features/channel/Call/CallControls/CallSettingsMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 26-29
+crates/agent_egress/src/domain/model.rs
+  s_c6a08203850d89::t_2de4e132c3899f 262-276
+apps/web/src/features/channel/Call/chat/CallChatHistory.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 6,13-21,117-138
+  s_c6a08203850d89::t_4687c58fb6e995 139
+apps/web/src/features/channel/Call/chat/components/CallChatEmptyState.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-15
+crates/agent_code_mode/src/domain/ui_commands.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-443
+crates/agent_harness/src/domain/model.rs
+  s_c6a08203850d89::t_2de4e132c3899f 562-564,698,715
+apps/web/src/components/ui/components/ProgressPill.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 12,29-31,40,48
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/AudioOutputSelection.kt
+  s_c6a08203850d89::t_2de4e132c3899f 1-7
+crates/agent_harness/src/domain/service/test/chat_reply.rs
+  s_c6a08203850d89::t_2de4e132c3899f 511
+crates/agent_session/src/domain/model.rs
+  s_c6a08203850d89::t_2de4e132c3899f 629-659,699-701
+apps/web/src/features/channel/Call/core/call-reactions.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-24
+crates/complete_graph/Cargo.toml
+  s_c6a08203850d89::t_2de4e132c3899f 8-9,62,76
+services/mcp-chatgpt-worker/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 28
+services/mcp-chatgpt-worker/wrangler.jsonc
+  s_c6a08203850d89::t_2de4e132c3899f 54-55,59
+crates/agent_harness/src/domain/queue/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 15,138
+crates/activity/src/domain/announcements.rs
+  s_c6a08203850d89::t_2de4e132c3899f 154-175
+apps/web/src/features/channel/Call/components/call-reactions.css
+  s_c6a08203850d89::t_2de4e132c3899f 1-19
+crates/agent_session/src/domain/routines/service.rs
+  s_c6a08203850d89::t_2de4e132c3899f 270,312
+apps/web/src/features/channel/Call/discussion/browser-test/playwright.config.ts
+  s_c6a08203850d89::t_2de4e132c3899f 5,9-11,28
+apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 536,568-580,639-645,723-735,739-755,757-759
+services/agent_harness_service/src/api/swagger.rs
+  s_c6a08203850d89::t_2de4e132c3899f 78
+packages/sdk/src/entities/ui/namespace.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-102
+apps/web/src/features/block-call/core/recording-chat.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-25
+apps/web/src/features/channel/Call/CallControls/CallControls.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 12,52
+apps/web/src/lib/split-router/index.ts
+  s_c6a08203850d89::t_2de4e132c3899f 58
+apps/web/tauri/callkit_plugin/build.rs
+  s_c6a08203850d89::t_2de4e132c3899f 19-21
+apps/web/src/features/channel/Call/primitives/call-fullscreen.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-60
+apps/web/src/lib/service-clients/service-storage/graphql/agent-session-activity-appended.graphql
+  s_c6a08203850d89::t_2de4e132c3899f 1-11
+crates/scheduled_action/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 137-140
+apps/web/src/features/agent-session-activity/core/fold-rows.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-66
+apps/web/src/features/block-call/primitives/recording-playback.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-162
+apps/web/src/features/channel/Call/primitives/create-call-stage.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-205
+crates/macro_db_client/migrations/20261110150954_backfill_activity_agent_session_id.sql
+  s_c6a08203850d89::t_2de4e132c3899f 1-38
+apps/web/src/features/block-call/primitives/recording-video.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-191
+.agents/skills/review/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-70
+apps/web/src/features/block-call/views/CallDetailView.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 2-6,8,10,12,15-18,20-21,23-24,37,49,52-53,55,57,62,67,73-153,186,188,198,208,214,223,235,244-245,251,254,260,262,270,281,284,296,324-326,334-376
+crates/activity/src/outbound/pg_activity_repo/entity_history.rs
+  s_c6a08203850d89::t_2de4e132c3899f 25,31
+apps/web/src/lib/core/media/primitives/create-background-camera-preview.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-107
+crates/initiative/src/inbound/axum_router/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 878
+crates/graphql_activity/src/objects.rs
+  s_c6a08203850d89::t_2de4e132c3899f 23-26,33-34,41-44,49-50,54
+infra/packages/shared/src/service_urls.ts
+  s_c6a08203850d89::t_2de4e132c3899f 66-67
+crates/agent_session/src/outbound/postgres.rs
+  s_c6a08203850d89::t_2de4e132c3899f 978,983-984,1011,1031-1033
+apps/web/src/features/meetings/meeting-route.test.tsx
+  s_c6a08203850d89::t_6759a03d902fdf 11,88,96-98,102-103,132
+apps/web/src/features/agent-session-activity/core/fold-rows.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-60
+crates/activity/src/inbound/kafka_consumer.rs
+  s_c6a08203850d89::t_2de4e132c3899f 78-83
+apps/web/src/features/channel/Call/components/CallWaveform.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-23
+apps/web/src/features/block-call/primitives/recording-layout.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-200
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_c6a08203850d89::t_2de4e132c3899f 5,727-734
+  s_c6a08203850d89::t_863be91f91fdf2 735-742
+apps/web/src/features/block-call/primitives/recording-identity.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-59
+crates/agent_correlation/src/inbound.rs
+  s_c6a08203850d89::t_2de4e132c3899f 44-45,62-63,91-100,172
+apps/web/src/features/channel/Channel/tests/thread-list-pagination.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 8-9,26-27,36-41,55-61,86,95,360-391
+  s_c6a08203850d89::t_c1b1cebd39904b 392
+crates/macro_tower_layers/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 111-112,119,126,133-161
+  s_c6a08203850d89::t_0c07da7c099c2f 162-163
+apps/web/src/lib/i18n/locales/en/nav.ts
+  s_c6a08203850d89::t_2de4e132c3899f 38-41
+apps/web/src/features/agent-session-activity/context/agent-activity-source.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-29
+apps/web/src/features/channel/Call/livekit-loader.ts
+  s_c6a08203850d89::t_2de4e132c3899f 83
+apps/web/src/features/block-call/component/CallRecording/CallRecordingParticipants.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,7,33,61-63,66-68,77-116
+  s_c6a08203850d89::t_523926bf3f7ac2 117
+apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 16,192-195,223-227
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 585-617
+crates/complete_graph/src/schema/test/form_activity.rs
+  s_c6a08203850d89::t_2de4e132c3899f 14
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 5,7-14,18,21,38,54-56,69-78,95-96,100-101,112,127,129-130,137,143-145,158-168
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_c6a08203850d89::t_7137a565510d8c 65-69,243-245
+  s_c6a08203850d89::t_2de4e132c3899f 1,75-83,91-95,100-111,118-134,139-164,210-218,241,275-277,294-296,298-299,309,320,346-384,390-392,421-532,547-580,588-1014
+  s_c6a08203850d89::t_ce842530013204 533-543,545-546,581-582,587
+  s_c6a08203850d89::t_78eb5b67ebd7b9 544,583-586
+crates/complete_graph/src/schema.rs
+  s_c6a08203850d89::t_2de4e132c3899f 4,7,701-763
+  s_c6a08203850d89::t_85638274545e08 764-765
+docs/agent-guide/login.md
+  s_c6a08203850d89::t_2de4e132c3899f 146-147
+apps/web/src/features/agent-session-activity/browser-test/main.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-111
+apps/web/src/routes/app-router-view.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 38,230-234,240,500-528
+packages/code-mode-sdk/src/index.ts
+  s_c6a08203850d89::t_2de4e132c3899f 8
+.pi/agents/db-checker.md
+  s_c6a08203850d89::t_2de4e132c3899f 25-30,58-59
+crates/macro_db_client/migrations/20261110150955_index_activity_agent_session.sql
+  s_c6a08203850d89::t_2de4e132c3899f 1-11
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 64-67,199-201,205-219,228,272-275
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-203
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_c6a08203850d89::t_2de4e132c3899f 2-83,97,106,113-118,121-126,139-142,146-208
+services/agent_harness_service/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 41-43
+apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 43-44,106,109
+apps/web/src/features/channel/Call/CallParticipantsList.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 9,13-15,18-19,26,30,32,35-47,60-61,66-70,79-84,86-94,96-130,137,141,154,156,158,162,171,199,201,214
+apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-117
+apps/web/src/features/agent-session-activity/core/step-label.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-65
+crates/macro_tower_layers/src/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 408-467
+apps/web/src/features/channel/Call/use-start-channel-call.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 115
+services/authentication_service/src/api/session/session_login/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-146
+apps/web/src/components/app/mobile/float-regions/FloatRegionHost.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 11
+apps/web/tauri/callkit_plugin/src/android.rs
+  s_c6a08203850d89::t_2de4e132c3899f 49,80,254-270,273
+  s_c6a08203850d89::t_f0912d2440982d 271-272
+apps/web/src/features/block-call/component/CallRecording/recording-layout.css
+  s_c6a08203850d89::t_2de4e132c3899f 1-96
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 19,74-81,97-100
+apps/web/src/features/channel/Call/components/call-waveform.css
+  s_c6a08203850d89::t_2de4e132c3899f 1-53
+apps/web/src/features/channel/Call/views/CallQuickControls.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-272
+crates/complete_graph/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 84-87
+crates/macro_cache_client/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 17-18,24-27,43-44
+crates/agent_correlation/src/context/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-24
+crates/agent_session/src/domain/control.rs
+  s_c6a08203850d89::t_2de4e132c3899f 9,16-18,23-27,36-39,44,52-55,57,60,66-68,79,85
+packages/sdk/src/utils/activity.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-2,26-31,57-58,85-98
+  s_c6a08203850d89::t_c67bc9b87a3304 99
+packages/sdk/src/entities/ui/app-link.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-60
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 5,16,88-89,142-194
+  s_c6a08203850d89::t_41e6baf0f3c9f9 195
+apps/web/src/features/channel/Call/views/MobileCallIsland.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-95
+apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 117,210-219,332,339-345
+  s_c6a08203850d89::t_70c36aace80f86 346-348
+crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json
+  s_c6a08203850d89::t_2de4e132c3899f 1-146
+apps/web/src/components/app/side-panel/sizing.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-2
+apps/web/src/features/channel/Call/components/CallLiveChip.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-37
+.github/workflows/pr-ci.yml
+  s_c6a08203850d89::t_2de4e132c3899f 14,634
+apps/web/src/features/channel/Call/CallControls/CallSharingMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3-4,8-15,19-24,55-58,63-86,99,105-107,109-113,115-122,127-131,153,155
+apps/web/src/components/app/side-panel/context.ts
+  s_c6a08203850d89::t_2de4e132c3899f 32-35,41-42,48-49
+apps/web/src/features/command/CommandMenu.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 31,721-735,742,755
+apps/web/src/lib/core/component/media/recent-background-images.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-125
+crates/agent_harness/src/domain/service/test/external_mcp.rs
+  s_c6a08203850d89::t_2de4e132c3899f 29,91
+apps/web/src/features/channel/Call/discussion/browser-test/overlay.vite.config.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-64
+apps/web/src/components/ui/components/ButtonGroup.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 9,79-80,116
+apps/web/src/features/channel/Input/ChannelInputContainer.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 2,12,17-20
+crates/agent_code_mode/src/domain/ui_commands/routes.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-235
+crates/agent_harness/src/domain/service/test/external_replies.rs
+  s_c6a08203850d89::t_2de4e132c3899f 272,336,626
+apps/web/src/lib/core/hotkey/types.ts
+  s_c6a08203850d89::t_2de4e132c3899f 96,420,429
+apps/web/tauri/src-tauri/capabilities/mobile.json
+  s_c6a08203850d89::t_2de4e132c3899f 11
+services/authentication_service/src/api/trace_capture.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-58
+apps/web/src/features/channel/Call/views/ActiveCallHeader.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-88
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-40
+docs/agent-guide/ai-chat.md
+  s_c6a08203850d89::t_2de4e132c3899f 3-31,1653-1656
+  s_c6a08203850d89::t_0670703e3f0e1a 1657
+crates/macro_db_client/migrations/20261109041008_agent_session_turn_prompter_client.sql
+  s_c6a08203850d89::t_2de4e132c3899f 1-6
+apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,4,11-19,22-113,116-117,120-121,123,127-131,133-135,140-142,146-151,153-194,202-210,212-227,229-265,267-299,301-302,305-345
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/app-link-opener.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-14
+crates/agent_harness/src/domain/service/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1979,2035,2083,2155,2191,2233,2261,2297,2350,2400,2440,2453,2503,2539,2558,2615,2740,2803,2866,2903,2940,2976,3007,3039,3414,4324,4413,5166
+services/authentication_service/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 204-209
+.agents/skills/sqlx-migration/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 27-29
+apps/web/src/features/block-call/component/CallBlockAdapter.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 4,39-44,71-80,83
+apps/web/src/features/channel/Channel/channel-tab-icons.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,18,27-30
+crates/scheduled_action/src/domain/templates/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 5,314,328-333
+packages/sdk/specs/agent-harness.json
+  s_c6a08203850d89::t_2de4e132c3899f 3520-3565,3909-3912,5737-5741,6967-6986,8313-8369
+apps/web/src/features/channel/Channel/ThreadList.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 110-111,141,143-144,164-176,322-337,339-340,424-436,466-482,497-515,617,619,634,637,651,656
+apps/web/src/features/meetings/views/meeting-page.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 21-22,54,200-201
+apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-108
+apps/web/src/features/channel/Call/primitives/create-call-media-permission-help.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-108
+apps/web/src/features/channel/Call/primitives/create-call-reactions.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-78
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/CallPlugin.kt
+  s_c6a08203850d89::t_2de4e132c3899f 35-36,49,75-96
+docs/agent-guide/calls.md
+  s_c6a08203850d89::t_2de4e132c3899f 39-146,167-220,228-251,257-258,409-414,424-430,433-443,448-455,457-469,474-477,480-484,488-494,506-558,561-563,565,577-597,603-607,609-612,615-618,646-666,729-731,742
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_c6a08203850d89::t_2de4e132c3899f 314-317,324-326
+apps/web/src/components/ui/components/Tabs.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3-10,26-27,252,277-280,299-320,345-348,402-405,464-467,530-533
+.agents/skills/migration-review/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 1-141
+packages/sdk/src/utils/verbs.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-361
+apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 7,24,173,178-182
+apps/web/src/features/agent-session-activity/browser-test/activity.browser.e2e.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-37
+apps/web/src/features/agent-session-activity/components/activity-row.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-169
+.agents/rules/web/solid.md
+  s_c6a08203850d89::t_2de4e132c3899f 25
+apps/web/src/features/agents-view/components/AgentSessionPane.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 28-29,45,55,61-81,113-114,174-179,275-279,282,320-323,327,329-332,360
+.agents/skills/add-sdk-endpoint/SKILL.md
+  s_c6a08203850d89::t_2de4e132c3899f 23-28
+apps/web/src/components/app/mobile/float-regions/float-region-state.ts
+  s_c6a08203850d89::t_2de4e132c3899f 5
+apps/web/src/components/ui/utils/control-sizes.ts
+  s_c6a08203850d89::t_2de4e132c3899f 29-36,38-42
+apps/web/src/features/agent-session-activity/browser-test/stubs.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-26
+apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-254,256-328,330-439,441-479,481-554
+  s_c6a08203850d89::t_25548cccde4dcb 255,329,440,480
+apps/web/src/lib/core/component/UserGroup.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 13-14,44-48
+apps/web/src/lib/design/empty-state-call-chat.svg
+  s_c6a08203850d89::t_2de4e132c3899f 1
+apps/web/src/features/channel/Call/views/CallMiniPlayer.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-409
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_c6a08203850d89::t_2de4e132c3899f 49,61,75,78,90,126,176-179,211,228,290,427
+crates/agent_code_mode/Cargo.toml
+  s_c6a08203850d89::t_2de4e132c3899f 29,45
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_c6a08203850d89::t_2de4e132c3899f 3-6,35,46,54,67,101-104,154-156,228-249,471-473
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_c6a08203850d89::t_2de4e132c3899f 9
+crates/agent_code_mode/src/inbound/axum_router/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 1-8
+crates/agent_harness/src/domain/service/test/permission_refresh.rs
+  s_c6a08203850d89::t_2de4e132c3899f 65
+apps/web/src/components/app/side-panel/SidePanel.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3,47,91-92,165-166,168-169,184,209-210,235-237,254,274,288-292,295-298,330,399,401,443,493-502,775
+crates/agent_harness/src/domain/service/deliver.rs
+  s_c6a08203850d89::t_2de4e132c3899f 336,407
+apps/web/src/index.css
+  s_c6a08203850d89::t_2de4e132c3899f 662-665
+crates/activity/src/domain/models.rs
+  s_c6a08203850d89::t_2de4e132c3899f 423-424,500-501,522,524-526,619
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/Calls.kt
+  s_c6a08203850d89::t_2de4e132c3899f 8,10,87-88,113-206,488-495,502,641-649
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 12,380-383,386-412,414-417,423-448
+crates/agent_session/src/outbound/postgres/test/queue.rs
+  s_c6a08203850d89::t_2de4e132c3899f 20
+crates/scheduled_action/src/domain/ports.rs
+  s_c6a08203850d89::t_2de4e132c3899f 13,140-145
+packages/code-mode-sdk/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 27-28
+apps/web/src/features/block-call/primitives/transcript-scroll.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-170
+apps/web/src/features/channel/Call/context/call-volume.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-16
+crates/agent_code_mode/src/domain.rs
+  s_c6a08203850d89::t_2de4e132c3899f 21-22
+crates/macro_service_urls/src/lib.rs
+  s_c6a08203850d89::t_2de4e132c3899f 604
+docs/architecture/agent-activity-correlation.md
+  s_c6a08203850d89::t_2de4e132c3899f 24-30,34-35,37-41
+apps/web/src/features/agent-work/views/call-work.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 11,84-97
+  s_c6a08203850d89::t_75d9d9bf1fb4f1 28,38
+crates/activity/src/domain/events/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 48,60,74
+crates/macro_event_broker/src/outbound/kafka_event_consumer/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 9-16
+apps/web/src/features/agent-session-activity/browser-test/playwright.config.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-32
+apps/web/src/features/channel/Call/primitives/create-call-media-settings.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-149
+crates/agent_harness/src/domain/service/queue.rs
+  s_c6a08203850d89::t_2de4e132c3899f 426,1086,1224,1267,1702,1736
+crates/activity/src/outbound/pg_activity_repo/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 12-51,1071,1085-1143
+apps/web/src/features/block-call/primitives/recording-controls.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-44
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.tsx
+  s_c6a08203850d89::t_cd99978c432816 60
+  s_c6a08203850d89::t_2de4e132c3899f 5,11,25-29,39,53-59,61-75,114-123,125-193
+apps/web/src/features/channel/Call/primitives/create-call-volume.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-31
+apps/web/src/features/block-agent/component/session-read-hosts.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 133,138-141
+apps/web/src/features/block-call/primitives/recording-timeline.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-115
+apps/web/src/lib/core/component/media/background-camera-preview.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-41
+crates/activity/AGENTS.md
+  s_c6a08203850d89::t_2de4e132c3899f 66-69
+apps/web/src/features/channel/Call/CallControls/CallMediaControls.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1,3,5,8-25,28,38-47,49-55,66-106,108-114,116-154,161-167,174-257,259,268-284,287-295,297-302,304-308,310-320,322-380,383-474,510,519-539
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_c6a08203850d89::t_2de4e132c3899f 391-426
+  s_c6a08203850d89::t_20c5f15e520b74 390
+apps/web/src/components/app/side-panel/SidePanel.test.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 10,12-16,26-38,51,56,68-69,90-95,97-102,104-109,120-153
+  s_c6a08203850d89::t_70711f293bd28f 154
+apps/web/src/features/block-call/component/sidepanel/CallSidePanelSections.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 3,13-15,17-18,26-27,40-45,49,75-80,83-86,89-90,96-100,106,111-114,116-125,130-135,177,180-191,201-209,213-227,229-242,263-268
+crates/macro_event_broker/src/domain/models/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 296-301,305-309,315,317,322-327,336
+crates/scheduled_action/src/domain/service/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 709,721-724,726-729
+apps/web/src/features/channel/Call/discussion/browser-test/baseline.d.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-3
+docs/development/database.md
+  s_c6a08203850d89::t_2de4e132c3899f 104-110,112-113,143-149,168-169
+apps/web/src/features/channel/Call/primitives/call-media-permissions.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-156
+apps/web/src/lib/core/component/media/media-background-picker.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 4-6,8-9,12,14,16-33,84-105,107-119,123-124,126-132
+crates/scheduled_action/src/inbound/axum_router.rs
+  s_c6a08203850d89::t_2de4e132c3899f 405-408,415
+CODING.md
+  s_c6a08203850d89::t_2de4e132c3899f 30
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay-state.tsx
+  s_c6a08203850d89::t_2de4e132c3899f 1-282
+packages/sdk/tests/ui.test.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-120
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.ts
+  s_c6a08203850d89::t_2de4e132c3899f 1-119
+crates/complete_graph/src/schema/test.rs
+  s_c6a08203850d89::t_2de4e132c3899f 25,1927-2102,2190,2793
+.sqlx/query-20afc51d5a5844bae80efee2d742bf5b54dd344b31fa089c966ce13f3e937152.json
+  s_c6a08203850d89::t_471d4a963aa44e 3,14
+.sqlx/query-28d5f8f62902ef9fa38cfecadf0a73c19bfc6852a788863f58b35a301fb61a29.json
+  s_c6a08203850d89::t_d06a7e3c9bba53 3,16-17,22
+.sqlx/query-2adda9be3b6cfc58230c492316ac03d4b52ca0afb932c0256f6d525c111f73f1.json
+  s_c6a08203850d89::t_794fb078838774 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-2ddf2a39fd51595b7d4e3e2bc3e0f9fc119bded0a08168a147d960cb26719396.json
+  s_c6a08203850d89::t_98b006f010df70 1-80
+.sqlx/query-3500068c8149dd1ba745938e54e346485052cd538a0c440fb8ec88f3b049ed7a.json
+  s_c6a08203850d89::t_4335607aee7a95 3,11-12,17
+.sqlx/query-4ca71721be564657a8c0aa4e136bfc9c937596493228474c6ef4e8471485d66c.json
+  s_c6a08203850d89::t_5a79e1255af3b3 3,18,23,28-32,37,42,47,52,66,76
+.sqlx/query-4e77d12e0fcb82ecd32ac01aab2fbaa5c79baa8882b92071ea4b2bfea883906c.json
+  s_c6a08203850d89::t_acae94462ca259 3,18,23,28-32,37,42,47,52,59,62,69,79
+.sqlx/query-56ae3b60f3bf1d6e08012079cc7cebee77d606da4cf675c36d59685a582d68a3.json
+  s_c6a08203850d89::t_f8364e67de2945 3,18,23,28-32,37,42,47,52,68,78
+.sqlx/query-8a8c624e6b80244fc08abc9c7db5110321fdf240f57481cb751b804a8f2958ca.json
+  s_c6a08203850d89::t_8aa349fce91563 3,18,23,28-32,37,42,47,52,57,82,86
+.sqlx/query-a7e23413a3e68e16f71238afb3970f6f6552884a177dde4e711edca3afee27aa.json
+  s_c6a08203850d89::t_740d12adfdb65b 3,20-24,35,39
+.sqlx/query-ac245a2d200ce337934a54741a47909ace3c4072031574be100285b5cf860039.json
+  s_c6a08203850d89::t_11d207bbe9825a 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-c93d8d9bca4cfb5ed9749efa00c7061237e42f54390ef1c76b7c5ec099e054f3.json
+  s_c6a08203850d89::t_c2c6941c5a453f 1-79
+Cargo.lock
+  s_c6a08203850d89::t_f1b17bfb22ffca 359,375,394,2332,4857,4899,4921,12452,12455
+apps/web/src/features/block-call/CLAUDE.md
+  s_c6a08203850d89::t_1fc81e3fd63e35 1
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_c6a08203850d89::t_def55a339a0351 58,77,4049-4108
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRow.ts
+  s_c6a08203850d89::t_ba2deafbc64a5f 8,24-25
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRowAgentVerb.ts
+  s_c6a08203850d89::t_c6e058a5ce7eb8 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOf.ts
+  s_c6a08203850d89::t_8f18e1c7ef0965 8,13-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOfClientId.ts
+  s_c6a08203850d89::t_662fb76869fbcc 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_c6a08203850d89::t_0b339c8201ed61 11,183,325,475-483
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/openInApp.ts
+  s_c6a08203850d89::t_ee5b5169567221 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcome.ts
+  s_c6a08203850d89::t_d53d73a5e1ed40 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOf.ts
+  s_c6a08203850d89::t_48098a3642837c 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFive.ts
+  s_c6a08203850d89::t_7ec66959f00ea0 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFiveStatus.ts
+  s_c6a08203850d89::t_db668cdc655d06 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfStatus.ts
+  s_c6a08203850d89::t_4f32caabb5275e 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThree.ts
+  s_c6a08203850d89::t_451c29a2f85081 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThreeStatus.ts
+  s_c6a08203850d89::t_9e5587a92f5ab1 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiDeclineReason.ts
+  s_c6a08203850d89::t_c53dd2d6eedf7a 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiPlacement.ts
+  s_c6a08203850d89::t_e96bf3a19d322c 1-17
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_c6a08203850d89::t_bdea5c4a849d2c 3520-3565,3909-3912,5737-5741,6967-6986,8313-8369
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_c6a08203850d89::t_de1d91f2484cf9 3599-3605,25917
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_c6a08203850d89::t_d1e46185cd88cb 23
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_c6a08203850d89::t_b6a341906fe67c 662
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7dae0ab4bec1789d517a5b473e55615583f6c0c7",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
