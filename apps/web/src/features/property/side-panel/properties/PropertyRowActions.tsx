@@ -145,7 +145,7 @@ function PropertyRowActionsRoot(props: {
 
 /** Keeps a row's action column aligned when one of its actions is unavailable. */
 function ActionSlot() {
-  return <span aria-hidden="true" class="size-6 shrink-0" />;
+  return <span aria-hidden="true" class="size-6 shrink-0 touch:size-9" />;
 }
 
 function PropertyPinAction() {
