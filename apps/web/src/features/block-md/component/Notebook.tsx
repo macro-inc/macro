@@ -236,6 +236,14 @@ export function Notebook(props: {
             md.nativeRuntime.editing?.focus.atStart();
             return true;
           }
+          const native = md.nativeRuntime;
+          const atStart = native?.overlays?.titleHandoff?.atStart;
+          if (native && atStart) {
+            // Lexical focus(rootStart) keeps an existing selection.
+            if (native.view.selection().selection.kind === 'none') atStart();
+            else native.view.focus();
+            return true;
+          }
           return false;
         },
         hide: true,
