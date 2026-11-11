@@ -185,10 +185,15 @@ files:
   - apps/web/src/features/auth/views/**
   - apps/web/src/features/auth/queries/**
   - apps/web/src/features/block-form/context/**
+  - apps/web/src/features/block-artifact/context/**
   - apps/web/src/features/block-form/queries/**
+  - apps/web/src/features/block-artifact/queries/**
   - apps/web/src/features/block-form/primitives/**
+  - apps/web/src/features/block-artifact/primitives/**
   - apps/web/src/features/block-form/components/**
+  - apps/web/src/features/block-artifact/components/**
   - apps/web/src/features/block-form/views/**
+  - apps/web/src/features/block-artifact/views/**
 rule:
   kind: string
   regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)

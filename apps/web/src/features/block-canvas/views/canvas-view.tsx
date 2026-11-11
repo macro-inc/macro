@@ -52,7 +52,10 @@ import { SelectionLayoutInspector } from '../components/selection-layout-inspect
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
 import { useArtifactLibrary } from '../context/artifact-library';
-import { setDocumentDisplayCommand } from '../core/document-display';
+import {
+  setDocumentDisplayCommand,
+  setDocumentSubpathCommand,
+} from '../core/document-display';
 import {
   selectionLayoutCommand,
   selectionLayoutInfo,
@@ -76,7 +79,11 @@ import {
   CanvasViewControls,
 } from './canvas-toolbars';
 import { ConnectorTargets } from './connector-targets';
-import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
+import {
+  ArtifactSceneField,
+  CanvasDocumentView,
+  CanvasMediaView,
+} from './embedded-items';
 import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
@@ -307,7 +314,7 @@ export function CanvasView(props: {
                     props.assets.media(asset, location.world),
                     'canvas-assets'
                   );
-                else props.assets.document(asset, location.world, 'preview');
+                else props.assets.document(asset, location.world);
                 props.insert.close();
               }}
               onFiles={(files) => {
@@ -578,6 +585,15 @@ export function CanvasView(props: {
                           : 'Open document';
                       })()}
                     </button>
+                    <ArtifactSceneField
+                      item={selectedItem()}
+                      onChange={(id, subpath) =>
+                        editor.execute(setDocumentSubpathCommand, {
+                          id,
+                          subpath,
+                        })
+                      }
+                    />
                     <Show
                       when={(() => {
                         const item = selectedItem();
@@ -601,6 +617,31 @@ export function CanvasView(props: {
                         }}
                       >
                         Use preview card
+                      </button>
+                    </Show>
+                    <Show
+                      when={(() => {
+                        const item = selectedItem();
+                        return (
+                          item?.type === 'document' &&
+                          item.geometry.fileType === 'artifact' &&
+                          item.geometry.display !== 'embed'
+                        );
+                      })()}
+                    >
+                      <button
+                        type="button"
+                        class="mx-3 mb-3 rounded border border-edge-muted p-2 text-xs hover:bg-hover"
+                        onClick={() => {
+                          const item = selectedItem();
+                          if (item?.type !== 'document') return;
+                          editor.execute(setDocumentDisplayCommand, {
+                            id: item.id,
+                            display: 'embed',
+                          });
+                        }}
+                      >
+                        Show page
                       </button>
                     </Show>
                   </Show>

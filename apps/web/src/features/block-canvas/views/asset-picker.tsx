@@ -1,8 +1,10 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MentionsMenuItem } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/components/MentionsMenuItem';
 import { createMentionPageLoader } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/createMentionPageLoader';
 import { useEntityMention } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEntityMention';
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableArtifacts } from '@core/constant/featureFlags';
 import { fileDrop } from '@core/directive/fileDrop';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -34,6 +36,7 @@ export function CanvasAssetPicker(props: {
   onClose: () => void;
 }) {
   const [dragging, setDragging] = createSignal(false);
+  const artifacts = useFeatureFlag(enableArtifacts);
   let fileInput: HTMLInputElement | undefined;
   const [search, setSearch] = createSignal('');
   const [index, setIndex] = createSignal(0);
@@ -52,7 +55,11 @@ export function CanvasAssetPicker(props: {
         (item) =>
           item.data.type === 'document' &&
           item.data.fileType &&
-          canInsertAsset(props.mode, fileTypeToBlockName(item.data.fileType))
+          canInsertAsset(
+            props.mode,
+            fileTypeToBlockName(item.data.fileType),
+            artifacts().enabled
+          )
       )
   );
   const selected = () => Math.min(index(), items().length - 1);
@@ -221,9 +228,9 @@ export function CanvasAssetPicker(props: {
                   selected={selected() === itemIndex()}
                   setIndex={setIndex}
                   itemAction={pick}
-                  setOpen={(open) => {
-                    if (!open) props.onClose();
-                  }}
+                  // Picking closes the menu through onSelect, as Enter does;
+                  // an artifact still has its scene step to show.
+                  setOpen={() => {}}
                 />
               </div>
             )}

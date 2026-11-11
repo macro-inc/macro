@@ -44,6 +44,8 @@ function documentDownloadSource(
       // exports from the open editor; a PDF's download bakes in the markup and
       // comments its open viewer has loaded.
       .with('md', 'canvas', 'spreadsheet', 'pdf', () => undefined)
+      // An artifact is a set of files across versions, not one download.
+      .with('artifact', () => undefined)
       .with(
         'write',
         'call',

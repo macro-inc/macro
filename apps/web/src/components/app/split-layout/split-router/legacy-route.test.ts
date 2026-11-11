@@ -195,6 +195,38 @@ describe('opening an app URL', () => {
   );
 });
 
+describe('artifact scenes', () => {
+  const artifactId = '01a15f1b-5b91-7aa3-885d-7d31fcc5a777';
+
+  it('moves a shared link’s ?scene= into the artifact pane’s search', async () => {
+    vi.useFakeTimers();
+    const { router } = openApp(`/app/artifact/${artifactId}?scene=empty`);
+    await router.settled();
+    vi.runAllTimers();
+
+    const entry = router.entry(router.panes()[0]!);
+    expect(entry?.location.search).toEqual({
+      artifact: { scene: ['empty'] },
+    });
+  });
+
+  it('keeps the scene an in-app open names', () => {
+    const location = resolveContentLocation(routes, {
+      type: 'artifact',
+      id: artifactId,
+      params: { scene: 'empty' },
+    });
+    expect(location.search).toEqual({ artifact: { scene: ['empty'] } });
+  });
+
+  it('adds no scene to an artifact opened at its index', () => {
+    expect(
+      resolveContentLocation(routes, { type: 'artifact', id: artifactId })
+        .search
+    ).toBeUndefined();
+  });
+});
+
 describe('resolveContentLocation', () => {
   it.each(['company', 'contact'] as const)(
     'keeps the Discussion message a %s opens at',

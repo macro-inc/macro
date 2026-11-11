@@ -18,6 +18,7 @@ import type {
   ForeignEntity,
 } from '@entity';
 import AddressBookBold from '@icon/system/bold/address-book-bold.svg';
+import AppWindowBold from '@icon/system/bold/app-window-bold.svg';
 import BellSimpleBold from '@icon/system/bold/bell-simple-bold.svg';
 import BlueprintBold from '@icon/system/bold/blueprint-bold.svg';
 import BracketsCurlyBold from '@icon/system/bold/brackets-curly-bold.svg';
@@ -58,6 +59,7 @@ import TableBold from '@icon/system/bold/table-bold.svg';
 import UsersBold from '@icon/system/bold/users-bold.svg';
 import UsersThreeBold from '@icon/system/bold/users-three-bold.svg';
 import AddressBook from '@icon/system/regular/address-book.svg';
+import AppWindow from '@icon/system/regular/app-window.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
 import Blueprint from '@icon/system/regular/blueprint.svg';
 import BracketsCurly from '@icon/system/regular/brackets-curly.svg';
@@ -186,6 +188,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-canvas',
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
+  },
+  artifact: {
+    icon: AppWindow,
+    boldIcon: AppWindowBold,
+    foreground: 'text-canvas',
+    background: 'bg-canvas/20',
+    prettyName: 'Artifact',
   },
   spreadsheet: {
     icon: Spreadsheet,
