@@ -564,3 +564,71 @@ async fn renamed_name_cursor_anchor_requires_restarting_in_both_directions() {
         ));
     }
 }
+
+#[tokio::test]
+async fn overview_reads_the_projects_own_properties_description_and_one_task_page() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_read()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok("# Goals".to_string()) }));
+    let status = uuid::Uuid::from_u128(50);
+    let project_id = detail(Vec::new()).id.to_string();
+    let read_properties = Arc::<Mutex<Vec<String>>>::default();
+    let svc = InitiativeServiceImpl::new(
+        repo,
+        surfaces,
+        Arc::new(FakeResources {
+            denied: HashSet::from(["hidden".into()]),
+            tasks: vec!["z".into(), "hidden".into(), "a".into()],
+            values: HashMap::from([(
+                project_id.clone(),
+                InitiativePropertySnapshot {
+                    status: Some(status),
+                    ..Default::default()
+                },
+            )]),
+            read_properties: read_properties.clone(),
+            ..Default::default()
+        }),
+    );
+
+    let overview = svc
+        .overview(
+            view_receipt(),
+            InitiativeTasksRequest {
+                limit: Some(1),
+                cursor: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(overview.detail.task_ids, ["a"]);
+    assert_eq!(overview.task_count, 2);
+    assert_eq!(overview.next_task_cursor.as_deref(), Some("a"));
+    assert_eq!(overview.properties.status, Some(status));
+    assert_eq!(overview.description, "# Goals");
+    // Only the project's own properties are read, not every task's.
+    assert_eq!(*read_properties.lock().unwrap(), [project_id]);
+}
+
+#[tokio::test]
+async fn overview_rejects_an_oversized_task_page_before_reading() {
+    let svc = service_with_resources(MockInitiativeRepo::new(), FakeResources::default());
+    assert!(matches!(
+        svc.overview(
+            view_receipt(),
+            InitiativeTasksRequest {
+                limit: Some(101),
+                cursor: None,
+            },
+        )
+        .await,
+        Err(InitiativeError::BadRequest(_))
+    ));
+}

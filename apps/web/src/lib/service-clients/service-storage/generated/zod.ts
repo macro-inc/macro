@@ -44680,6 +44680,143 @@ export const getInitiativeDescriptionResponse = zod
   .describe("An initiative's description.");
 
 /**
+ * @summary Read an initiative the caller can view: its detail with one page of the
+tasks they can view, its canonical properties and its description.
+ */
+export const getInitiativeOverviewParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeOverviewQueryTaskLimitMin = 0;
+
+export const getInitiativeOverviewQueryParams = zod.object({
+  taskLimit: zod
+    .number()
+    .min(getInitiativeOverviewQueryTaskLimitMin)
+    .optional()
+    .describe('Maximum task ids, from 1 through 100; 100 when omitted.'),
+  taskCursor: zod
+    .string()
+    .optional()
+    .describe('`nextTaskCursor` from the preceding page.'),
+});
+
+export const getInitiativeOverviewResponseTaskCountMin = 0;
+
+export const getInitiativeOverviewResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  )
+  .and(
+    zod.object({
+      description: zod
+        .string()
+        .describe('The description as Markdown; empty when it has none.'),
+      nextTaskCursor: zod
+        .string()
+        .nullish()
+        .describe(
+          'Continuation for the next task page, absent after the last.'
+        ),
+      properties: zod
+        .object({
+          assignees: zod
+            .array(zod.string())
+            .describe('Assigned user ids, independent of sharing membership.'),
+          completed: zod
+            .boolean()
+            .describe(
+              'Whether the canonical task status represents completion.'
+            ),
+          dueDate: zod.iso
+            .datetime({})
+            .nullish()
+            .describe('Due timestamp, or unset.'),
+          priority: zod
+            .uuid()
+            .nullish()
+            .describe('Priority option id, or unset.'),
+          status: zod.uuid().nullish().describe('Status option id, or unset.'),
+        })
+        .describe(
+          'Snapshot of canonical property values, never a second writable store.'
+        ),
+      taskCount: zod
+        .number()
+        .min(getInitiativeOverviewResponseTaskCountMin)
+        .describe('Total associated tasks the caller can view.'),
+    })
+  )
+  .describe(
+    'One initiative as an agent reads it: its detail with a page of the tasks\nthe caller can view, its own canonical properties and its description.'
+  );
+
+/**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({

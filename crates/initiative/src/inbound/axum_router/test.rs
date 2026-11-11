@@ -360,6 +360,14 @@ impl InitiativeService for FakeInitiativeService {
         Ok(sample_page())
     }
 
+    async fn overview(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _tasks: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeOverview, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
     async fn tasks_page(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,

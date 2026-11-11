@@ -185,34 +185,25 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
         let receipt = context
             .receipt::<ViewAccessLevel>(&request, &id, EntityType::Initiative)
             .await?;
-        let properties = context
-            .resources
-            .properties(vec![receipt.clone()])
-            .await
-            .map_err(failure)?
-            .remove(&id)
-            .unwrap_or_default();
-        let description = context
+        let overview = context
             .service
-            .read_description(receipt.clone())
+            .overview(
+                receipt,
+                InitiativeTasksRequest {
+                    limit: self.task_limit.or(Some(100)),
+                    cursor: self.task_cursor.clone(),
+                },
+            )
             .await
             .map_err(failure)?;
-        let detail = context.service.get(receipt).await.map_err(failure)?;
-        let tasks = detail
-            .task_page(InitiativeTasksRequest {
-                limit: self.task_limit.or(Some(100)),
-                cursor: self.task_cursor.clone(),
-            })
-            .map_err(failure)?;
-        let mut project: ProjectDetails = detail.into();
-        project.task_ids = tasks.task_ids;
-        project.task_count = tasks.total as usize;
-        project.tasks_truncated = tasks.next_cursor.is_some();
+        let mut project: ProjectDetails = overview.detail.into();
+        project.task_count = overview.task_count as usize;
+        project.tasks_truncated = overview.next_task_cursor.is_some();
         Ok(ProjectReadResult {
             project,
-            properties: properties.into(),
-            description,
-            next_task_cursor: tasks.next_cursor,
+            properties: overview.properties.into(),
+            description: overview.description,
+            next_task_cursor: overview.next_task_cursor,
         })
     }
 }

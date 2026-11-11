@@ -328,6 +328,33 @@ where
         self.read_tasks_page(receipt, request).await
     }
 
+    #[tracing::instrument(err, skip_all, fields(initiative_id = %receipt.entity().entity_id))]
+    async fn overview(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        tasks: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeOverview, InitiativeError> {
+        tasks.validate()?;
+        let id = receipt.entity().entity_id.clone();
+        let properties = self
+            .resources
+            .properties(vec![receipt.clone()])
+            .await?
+            .remove(&id)
+            .unwrap_or_default();
+        let description = self.read_description(receipt.clone()).await?;
+        let mut detail = self.get(receipt).await?;
+        let page = detail.task_page(tasks)?;
+        detail.task_ids = page.task_ids;
+        Ok(crate::domain::reads::InitiativeOverview {
+            detail,
+            properties,
+            description,
+            task_count: page.total,
+            next_task_cursor: page.next_cursor,
+        })
+    }
+
     /// A seeded description surface commits before the initiative row. A failed create
     /// retires it, and a failed property initialization deletes the new initiative.
     #[tracing::instrument(err, skip_all)]

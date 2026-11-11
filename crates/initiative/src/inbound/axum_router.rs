@@ -9,6 +9,7 @@ pub mod delete;
 pub mod description;
 pub mod get;
 pub mod list;
+pub mod overview;
 pub mod page;
 pub mod update;
 
@@ -129,6 +130,10 @@ where
         .route(
             "/{initiative_id}/description",
             routing::get(get_initiative_description_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{initiative_id}/overview",
+            routing::get(overview::get_initiative_overview_handler::<S, Eas, Auth>),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

@@ -21271,6 +21271,96 @@
         }
       }
     },
+    "/initiatives/{initiative_id}/overview": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Read an initiative the caller can view: its detail with one page of the\ntasks they can view, its canonical properties and its description.",
+        "operationId": "get_initiative_overview",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskLimit",
+            "in": "query",
+            "description": "Maximum task ids, from 1 through 100; 100 when omitted.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "taskCursor",
+            "in": "query",
+            "description": "`nextTaskCursor` from the preceding page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/instructions": {
       "get": {
         "tags": ["instructions::get_instructions"],
@@ -46007,6 +46097,39 @@
             "description": "Initiatives the caller can view."
           }
         }
+      },
+      "InitiativeOverview": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/InitiativeDetail",
+            "description": "The initiative; `taskIds` holds this page of visible tasks."
+          },
+          {
+            "type": "object",
+            "required": ["properties", "description", "taskCount"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "The description as Markdown; empty when it has none."
+              },
+              "nextTaskCursor": {
+                "type": ["string", "null"],
+                "description": "Continuation for the next task page, absent after the last."
+              },
+              "properties": {
+                "$ref": "#/components/schemas/InitiativePropertySnapshot",
+                "description": "The initiative's own canonical property values."
+              },
+              "taskCount": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Total associated tasks the caller can view.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "One initiative as an agent reads it: its detail with a page of the tasks\nthe caller can view, its own canonical properties and its description."
       },
       "InitiativePage": {
         "type": "object",

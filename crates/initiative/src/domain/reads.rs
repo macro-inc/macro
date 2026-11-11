@@ -162,6 +162,25 @@ pub struct InitiativePage {
     pub next_cursor: Option<String>,
 }
 
+/// One initiative as an agent reads it: its detail with a page of the tasks
+/// the caller can view, its own canonical properties and its description.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct InitiativeOverview {
+    /// The initiative; `taskIds` holds this page of visible tasks.
+    #[serde(flatten)]
+    pub detail: crate::domain::models::InitiativeDetail,
+    /// The initiative's own canonical property values.
+    pub properties: InitiativePropertySnapshot,
+    /// The description as Markdown; empty when it has none.
+    pub description: String,
+    /// Total associated tasks the caller can view.
+    pub task_count: u32,
+    /// Continuation for the next task page, absent after the last.
+    pub next_task_cursor: Option<String>,
+}
+
 /// Task page inputs.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::IntoParams, utoipa::ToSchema))]

@@ -1,8 +1,8 @@
 //! Ports (trait contracts) for the initiative domain.
 
 use super::reads::{
-    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeRead, InitiativeTasksPage,
-    InitiativeTasksRequest,
+    InitiativeOverview, InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeRead,
+    InitiativeTasksPage, InitiativeTasksRequest,
 };
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -135,6 +135,14 @@ pub trait InitiativeService: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         request: InitiativePageRequest,
     ) -> impl Future<Output = Result<InitiativePage, InitiativeError>> + Send;
+
+    /// An authorized initiative with its own properties, its description and
+    /// one page of the tasks the caller can view.
+    fn overview(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        tasks: InitiativeTasksRequest,
+    ) -> impl Future<Output = Result<InitiativeOverview, InitiativeError>> + Send;
 
     /// Page visible tasks within an authorized initiative.
     fn tasks_page(

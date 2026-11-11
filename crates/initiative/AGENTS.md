@@ -17,7 +17,9 @@ properties, and activity.
   `share.rs`): the Postgres adapter, split by operation.
 - `src/inbound/toolset/`: AI toolset surface (lifecycle, reads, sharing).
 - `src/inbound/axum_router/`: REST surface (create/get/list/update/delete, the
-  filtered `page` with properties and progress, and the `description` read), plus
+  filtered `page` with properties and progress, the `description` read, and
+  `overview`: `InitiativeService::overview`, the one read `ReadInitiative` and
+  the SDK's `Initiative.read()` share), plus
   `activity.rs`, `GET /initiatives/{id}/activity` over
   `InitiativeHistory::read_range` with its own router state; `ReadInitiativeActivity`
   shares `read_range`.
