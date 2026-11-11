@@ -2,6 +2,7 @@ import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
+import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import { DecoratorHostContext } from '@core/component/LexicalMarkdown/context/DecoratorHostContext';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
@@ -46,9 +47,18 @@ import {
 } from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
+import {
+  type PersistentLocation,
+  parsePersistentLocation,
+} from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
+import {
+  nativeGoToLocation,
+  nativeGoToNodeId,
+} from '@core/component/LexicalMarkdown/plugins/location/native';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
+import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { loadDocumentSession } from '@core/document-session/load';
@@ -76,6 +86,7 @@ import {
   createEffect,
   createSignal,
   getOwner,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -237,6 +248,55 @@ export default function RustMarkdownEditor(props: {
     }
   });
   createEffect(() => runtime()?.view.setEditable(canEdit()));
+
+  // Source MarkdownEditor's persistent-location and node-ID navigation.
+  const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
+  const [activeLocation, setActiveLocation] =
+    createSignal<PersistentLocation>();
+  const [locationReady, setLocationReady] = createSignal(false);
+  const urlParams = useUrlParams(URL_PARAMS);
+  createEffect(
+    on(urlParams.nodeId, (id) => setHighlightNodeId(id ?? undefined))
+  );
+  createEffect(
+    on(urlParams.location, (serialized) => {
+      const parsed = serialized && parsePersistentLocation(serialized);
+      if (parsed) setActiveLocation(parsed);
+    })
+  );
+  // Lags readiness like Source so the first scroll follows reconciliation.
+  const markLocationReady = () => {
+    setLocationReady(true);
+    state.editor.setMd('locationReady', true);
+  };
+  onCleanup(() => state.editor.setMd('locationReady', undefined));
+  // Revocation only follows a successful navigation, as in Source.
+  let navigatedLocation = false;
+  createEffect(() => {
+    const view = runtime()?.view;
+    const location = activeLocation();
+    if (!view || !location || !locationReady()) return;
+    navigatedLocation = nativeGoToLocation(view, location);
+  });
+  createEffect(() => {
+    const view = runtime()?.view;
+    const id = highlightNodeId();
+    if (!view || !id || !locationReady()) return;
+    setHighlightNodeId(undefined);
+    if (!nativeGoToNodeId(view, id))
+      toast.failure('Document reference not found');
+  });
+  const bindLocation = (mounted: RustMarkdownRuntime) => {
+    overlayLifecycle.add(
+      mounted.view.onCommit((commit) => {
+        if (!navigatedLocation || !locationReady()) return;
+        if (commit.mutations.size > 0 || commit.selectionChanged) {
+          navigatedLocation = false;
+          setActiveLocation(undefined);
+        }
+      })
+    );
+  };
   onMount(() => {
     const openStarted = performance.now();
     fireAndForget(
@@ -385,6 +445,7 @@ export default function RustMarkdownEditor(props: {
               return;
             }
             setRuntime(mounted);
+            bindLocation(mounted);
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
@@ -481,6 +542,9 @@ export default function RustMarkdownEditor(props: {
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
               props.onReady?.();
+              setTimeout(() => {
+                if (!abort.signal.aborted) markLocationReady();
+              });
             }
             if (props.autoFocus && !isTouchDevice() && !abort.signal.aborted)
               mounted.view.focus();
@@ -512,6 +576,15 @@ export default function RustMarkdownEditor(props: {
         class="ph-no-capture w-full max-w-full min-h-52 md"
         classList={{ 'select-auto': !permissions.canEdit() }}
       />
+      <Show when={locationReady() && runtime()}>
+        {(mounted) => (
+          <NativeLocationHighlight
+            view={mounted().view}
+            location={activeLocation()}
+            class="bg-accent/50"
+          />
+        )}
+      </Show>
       <Show when={runtime()?.overlays?.Overlays}>
         {(Overlays) => <Dynamic component={Overlays()} />}
       </Show>
