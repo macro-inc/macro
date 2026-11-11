@@ -1,0 +1,25 @@
+apps/web/src/lib/core/signal/profilePicture.ts
+  s_f8b43c54ee631d::t_5e96b6f3c1c48d 2,13,170-208
+apps/web/src/lib/core/signal/profilePicture.test.ts
+  s_f8b43c54ee631d::t_5e96b6f3c1c48d 1-64,68-69
+  s_f8b43c54ee631d::t_7e966365a82251 65-67
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_f8b43c54ee631d::t_5e96b6f3c1c48d 61,143-147
+  s_f8b43c54ee631d::t_2549116daaf9d6 148-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "56f6b225b6f0996413c26c4990f855d54b964598",
+  "prompts": {},
+  "sessions": {
+    "s_f8b43c54ee631d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a51848f-be10-46f6-932b-6cbd1e9951d9",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
