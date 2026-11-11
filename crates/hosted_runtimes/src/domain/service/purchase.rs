@@ -49,8 +49,8 @@ impl<
     /// (plus `extra_items`) in one subscription update. A retry with the same
     /// purchase key returns what the first attempt led to, so it never
     /// charges twice or buys a second computer. An error always means
-    /// nothing was charged; an unknown charge outcome is
-    /// [`Purchase::Confirming`].
+    /// nothing was charged; an unknown charge outcome, or a charge whose
+    /// conversion failed, is [`Purchase::Confirming`].
     #[tracing::instrument(
         skip(self, request),
         fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, outcome),
@@ -112,7 +112,11 @@ impl<
                 return Ok(Purchase::Confirming(reservation.id));
             }
             Ok(Reserved::Purchased(record)) => {
-                if record.team_id() != request.team_id {
+                if record.team_id() != request.team_id
+                    || record
+                        .healthy()
+                        .is_some_and(|computer| computer.size != request.size)
+                {
                     return Err(ComputerError::PurchaseKeyConflict);
                 }
                 span.record("outcome", "purchased");
@@ -141,11 +145,20 @@ impl<
                 .map(|subscription_item| ComputerBilling::Active { subscription_item }),
         };
         match outcome {
-            Ok(billing) => {
-                self.convert(&reservation, billing).await?;
-                span.record("outcome", "ready");
-                Ok(Purchase::Ready(reservation.id))
-            }
+            Ok(billing) => match self.convert(&reservation, billing).await {
+                Ok(()) => {
+                    span.record("outcome", "ready");
+                    Ok(Purchase::Ready(reservation.id))
+                }
+                // Charged: never an error, or a new attempt would buy again.
+                // The confirm worker replays the charge (a no-op) and converts.
+                Err(error) => {
+                    tracing::error!(computer_id = %reservation.id, error = ?error,
+                        "computer charged but not converted; confirming later");
+                    span.record("outcome", "confirming");
+                    Ok(Purchase::Confirming(reservation.id))
+                }
+            },
             Err(error) if error.is_definite() => {
                 self.repo
                     .delete_reservation(reservation.id)

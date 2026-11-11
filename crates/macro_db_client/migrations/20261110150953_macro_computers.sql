@@ -151,7 +151,7 @@ CREATE TABLE computer_reservation (
     comp_reason TEXT,
     name TEXT NOT NULL,
     purchase_key TEXT NOT NULL UNIQUE,
-    created_by TEXT NOT NULL REFERENCES "User" (id) ON DELETE RESTRICT,
+    created_by TEXT NOT NULL,
     extra_items JSONB NOT NULL,
     provision_traceparent TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -160,7 +160,6 @@ CREATE TABLE computer_reservation (
 
 CREATE INDEX computer_reservation_team_idx ON computer_reservation (team_id, created_at);
 CREATE INDEX computer_reservation_host_idx ON computer_reservation (host_id);
-CREATE INDEX computer_reservation_created_by_idx ON computer_reservation (created_by);
 
 -- One computer. `state` is the lifecycle's ComputerState: the machine's
 -- phase (`state.phase.phase`) and, beside it, its billing
@@ -168,8 +167,9 @@ CREATE INDEX computer_reservation_created_by_idx ON computer_reservation (create
 -- written with it. A computer holds sold capacity on `host_id` until its
 -- phase is `destroying`. The resources, catalog entry, price and comp reason
 -- are snapshotted at purchase; comped computers have no price.
--- `purchase_key` is the key of the purchase that bought it. `created_by` is
--- RESTRICTed so enrollment and billing attribution survive the buyer.
+-- `purchase_key` is the key of the purchase that bought it. `created_by`
+-- keeps the buyer's id without a foreign key, so attribution survives the
+-- buyer's account deletion without ever blocking it.
 -- `team_id` has no foreign key: rows outlive a deleted team until their
 -- release effects (billing removal, destroy, harness revocation) have run.
 -- `image` is the image the computer was created from, null until the first
@@ -194,7 +194,7 @@ CREATE TABLE hosted_runtime (
     enrollment_generation BIGINT NOT NULL DEFAULT 0
         CHECK (enrollment_generation BETWEEN 0 AND 4294967295),
     harness_id UUID REFERENCES harnesses (id) ON DELETE SET NULL,
-    created_by TEXT NOT NULL REFERENCES "User" (id) ON DELETE RESTRICT,
+    created_by TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     enrolled_at TIMESTAMPTZ,
@@ -208,7 +208,6 @@ CREATE INDEX hosted_runtime_host_idx ON hosted_runtime (host_id)
     WHERE (state->'phase'->>'phase') <> 'destroying';
 CREATE UNIQUE INDEX hosted_runtime_harness_idx ON hosted_runtime (harness_id)
     WHERE harness_id IS NOT NULL;
-CREATE INDEX hosted_runtime_created_by_idx ON hosted_runtime (created_by);
 
 -- The effect outbox. Workers lease rows by `worker` and key idempotency on `id`.
 CREATE TABLE hosted_runtime_effect (

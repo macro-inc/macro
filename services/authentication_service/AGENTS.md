@@ -75,15 +75,16 @@ access, webhook reconciliation and billing workers remain independent of attachm
   purchase's Stripe idempotency key is `computer-add:{reservation id}`.
   Prices are `ComputerPrices` (`src/domain/computer_billing.rs`), not seat
   plans. Replay durable item-change receipts before applying changes;
-  `settle_computer_add` ends an unknown outcome for good. Removing an item
-  already gone succeeds.
+  `settle_computer_add` ends an unknown outcome for good (fencing a charge
+  never sent); `charge_status` reads a key's receipt. Removing an item already
+  gone, or from a deleted team, succeeds.
 - With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - Every team subscription webhook re-reads the complete subscription (all item
   pages) and only reports a `SubscriptionObserved` (status, items with their
   `computer_id`, period end, read time) to `ComputerBillingObserver`
   (`ComputerService::observe_subscription`), which decides per computer by
-  computer id, never by price or count. Observer failures are logged, never
-  fail the webhook.
+  computer id, never by price or count. A failed read or observer call fails
+  the webhook (after the subscription work), so Stripe redelivers it.
 - Computer billing work (effects and purchase confirmation) runs on its own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through

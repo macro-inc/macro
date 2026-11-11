@@ -527,7 +527,7 @@ impl PgComputerRepo {
                 FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
-                FROM computer_reservation WHERE expires_at > $2
+                FROM computer_reservation
             )
             SELECT host.id
             FROM hosted_runtime_host host
@@ -538,7 +538,6 @@ impl PgComputerRepo {
             LIMIT 1
             "#,
             i64::from(computer_units),
-            now,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -606,6 +605,7 @@ impl PgComputerRepo {
 impl ComputerRepo for PgComputerRepo {
     type Err = PgComputerError;
     type EnrollmentGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+    type BillingGuard = sqlx::Transaction<'static, sqlx::Postgres>;
 
     fn policy(&self) -> BillingPolicy {
         self.policy
@@ -618,6 +618,19 @@ impl ComputerRepo for PgComputerRepo {
     ) -> Result<Self::EnrollmentGuard, PgComputerError> {
         let mut guard = self.guards.begin().await?;
         let key = format!("hosted-enrollment:{computer_id}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *guard)
+            .await?;
+        Ok(guard)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn lock_billing(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Self::BillingGuard, PgComputerError> {
+        let mut guard = self.guards.begin().await?;
+        let key = format!("hosted-billing:{computer_id}");
         sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
             .execute(&mut *guard)
             .await?;
@@ -1291,7 +1304,7 @@ impl ComputerRepo for PgComputerRepo {
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
-        now: DateTime<Utc>,
+        _now: DateTime<Utc>,
     ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let free = sqlx::query_scalar!(
             r#"
@@ -1300,7 +1313,7 @@ impl ComputerRepo for PgComputerRepo {
                 FROM hosted_runtime WHERE (state->'phase'->>'phase') <> 'destroying'
                 UNION ALL
                 SELECT host_id, GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)
-                FROM computer_reservation WHERE expires_at > $1
+                FROM computer_reservation
             )
             SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
             FROM (
@@ -1310,7 +1323,6 @@ impl ComputerRepo for PgComputerRepo {
                 GROUP BY host.id, host.sold_capacity_units
             ) hosts
             "#,
-            now,
         )
         .fetch_one(&self.pool)
         .await?;

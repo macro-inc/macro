@@ -112,6 +112,9 @@ pub trait ComputerRepo: Send + Sync + 'static {
     /// Serializes fleet enrollment with the harness claim transaction.
     type EnrollmentGuard: Send;
 
+    /// Serializes everything that changes one computer's billing item.
+    type BillingGuard: Send;
+
     /// The deployment's retention and past-due grace, used by every transition.
     fn policy(&self) -> BillingPolicy;
 
@@ -121,10 +124,19 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Self::EnrollmentGuard, Self::Err>> + Send;
 
+    /// Hold the computer's billing guard: undo, restore, item removal and
+    /// stray-item cleanup decide and talk to the billing provider under it,
+    /// so none of them acts on a billing state another is changing.
+    fn lock_billing(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Self::BillingGuard, Self::Err>> + Send;
+
     /// Under the host lock: return what `reservation.purchase_key` already
     /// led to, or hold the purchase's units on the host with the most sold
-    /// capacity left (sold capacity minus live computers and unexpired
-    /// reservations) until `expires_at`.
+    /// capacity left (sold capacity minus live computers and
+    /// reservations, expired or not: an expired one may still settle as
+    /// charged) until `expires_at`.
     fn reserve(
         &self,
         reservation: NewReservation,
@@ -376,6 +388,17 @@ impl BillingError {
     }
 }
 
+/// Where an item change keyed by an idempotency key stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChargeStatus {
+    /// Sent with its outcome unknown; sending it again replays it.
+    Pending,
+    /// It reached the subscription.
+    Applied,
+    /// It was refused or given up, and is never sent again.
+    NotApplied,
+}
+
 /// How an added item bills the part of the period already under way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemCharge {
@@ -413,7 +436,7 @@ pub trait Billing: Send + Sync + 'static {
     ) -> impl Future<Output = Result<SubscriptionItemId, BillingError>> + Send;
 
     /// Give up on an add whose outcome never became known: no later replay
-    /// may send it. Returns the computer's item if the add (or another)
+    /// may send it, including one never sent (it is fenced). Returns the computer's item if the add (or another)
     /// put one on the subscription, `None` if nothing was charged.
     fn settle_computer_add(
         &self,
@@ -421,6 +444,12 @@ pub trait Billing: Send + Sync + 'static {
         computer_id: ComputerId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<Option<SubscriptionItemId>, BillingError>> + Send;
+
+    /// Where the change keyed `idempotency_key` stands; `None` if it was never sent.
+    fn charge_status(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ChargeStatus>, BillingError>> + Send;
 
     /// The item carrying `computer_id`, if the subscription has one.
     fn computer_item(

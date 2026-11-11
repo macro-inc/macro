@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use teams::domain::model::{
-    ItemChangeSettlement, PriceInfo, SubscriptionItemView, SubscriptionTerms,
+    ItemChangeSettlement, ItemChangeStatus, PriceInfo, SubscriptionItemView, SubscriptionTerms,
 };
 
 use super::*;
@@ -142,8 +142,22 @@ impl TeamSubscriptionItems for FakeTeams {
         Ok(self.items.lock().unwrap().clone())
     }
 
+    async fn subscription_item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ItemChangeStatus>, TeamSubscriptionItemsError> {
+        Ok(self
+            .adds
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|add| add.key == idempotency_key)
+            .then_some(ItemChangeStatus::Applied))
+    }
+
     async fn settle_subscription_item_change(
         &self,
+        _: &Uuid,
         idempotency_key: &str,
     ) -> Result<ItemChangeSettlement, TeamSubscriptionItemsError> {
         Ok(
