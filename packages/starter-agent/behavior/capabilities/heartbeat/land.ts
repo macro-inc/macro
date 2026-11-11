@@ -28,7 +28,46 @@ export type CheckRun = {
   readonly head_sha: string;
   readonly app: string | null;
 };
-export type CiState = 'green' | 'red' | 'pending';
+/** `dependencies`: the SHA changes what packages the agent runs on, which only a new image can bring. */
+export type CiState = 'green' | 'red' | 'pending' | 'dependencies';
+
+/** What the agent is told when a branch changes its packages. */
+export const needsImage = 'dependency changes need a new image';
+
+const lockfile = 'bun.lock';
+const manifest = 'package.json';
+const dependencyFields = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
+
+const parsedManifest = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+/** A manifest's dependency fields, as comparable text; unreadable text compares as itself. */
+const dependenciesOf = (text: string | undefined): string => {
+  // No package.json declares no dependencies.
+  const parsed = parsedManifest(text ?? '{}');
+  if (typeof parsed !== 'object' || parsed === null) return text ?? '';
+  return JSON.stringify(
+    dependencyFields.map((field) =>
+      field in parsed ? Reflect.get(parsed, field) : undefined
+    )
+  );
+};
+
+/** Whether going from `before` to `after` (package.json texts) changes a dependency. */
+export const changesDependencies = (
+  before: string | undefined,
+  after: string | undefined
+): boolean => dependenciesOf(before) !== dependenciesOf(after);
 export type Pr = {
   readonly number: number;
   readonly title: string;
@@ -91,9 +130,6 @@ export type LandDeps = {
       };
   /** Whether the SHA is green: the repository's own check (`worktreeCheck`), or CI on GitHub. */
   readonly ci: (sha: string) => Promise<CiState>;
-  /** Installs dependencies. Only called when a manifest changed. */
-  readonly install: () => Promise<unknown>;
-  readonly manifests: readonly string[];
   /** A fresh empty directory outside the repository, and its removal. */
   readonly scratch: {
     readonly make: () => Promise<string>;
@@ -193,8 +229,9 @@ const rebaseOnMain = async (
 /**
  * The repository's own check as `ci`: `check` run in a fresh worktree of
  * exactly the SHA, made by `checkouts` under `.worktrees/` so it resolves the
- * live checkout's packages. Dependencies are installed there only when the
- * SHA changes a manifest.
+ * live checkout's packages, which are the image's. A SHA that changes them
+ * (bun.lock, or a dependency in package.json) is refused before the check:
+ * the image has no others, so it would fail to boot.
  */
 export const worktreeCheck =
   ({
@@ -202,8 +239,6 @@ export const worktreeCheck =
     checkouts,
     run,
     check,
-    install,
-    manifests,
     failed,
   }: {
     readonly repository: Pick<Repository, 'git' | 'main'>;
@@ -211,11 +246,9 @@ export const worktreeCheck =
     /** Runs a program as the agent, in `cwd`. */
     readonly run: (
       argv: readonly string[],
-      options: { readonly cwd: string; readonly install: boolean }
+      options: { readonly cwd: string }
     ) => Promise<Ran>;
     readonly check: readonly string[];
-    readonly install: readonly string[];
-    readonly manifests: readonly string[];
     /** Told the check's output when it fails. */
     readonly failed: (sha: string, output: string) => Promise<void>;
   }) =>
@@ -237,14 +270,19 @@ export const worktreeCheck =
       const changed = (
         await git(['diff', '--name-only', main, sha])
       ).stdout.split('\n');
-      if (manifests.some((manifest) => changed.includes(manifest))) {
-        const installed = await run(install, { cwd: checkout, install: true });
-        if (installed.code !== 0) {
-          await failed(sha, `${installed.stdout}\n${installed.stderr}`);
-          return 'red';
-        }
+      const shown = async (ref: string): Promise<string | undefined> => {
+        const read = await git(['show', `${ref}:${manifest}`]);
+        return read.code === 0 ? read.stdout : undefined;
+      };
+      if (
+        changed.includes(lockfile) ||
+        (changed.includes(manifest) &&
+          changesDependencies(await shown(main), await shown(sha)))
+      ) {
+        await failed(sha, needsImage);
+        return 'dependencies';
       }
-      const checked = await run(check, { cwd: checkout, install: false });
+      const checked = await run(check, { cwd: checkout });
       if (checked.code === 0) return 'green';
       await failed(sha, `${checked.stdout}\n${checked.stderr}`);
       return 'red';
@@ -340,12 +378,15 @@ const landHeld = async (
         return refuse(
           `the check failed on ${short(sha)}; ${main} didn't move.`
         );
+      if (ci === 'dependencies')
+        return refuse(
+          `${needsImage}: ${short(sha)} changes bun.lock or a dependency in package.json; ${main} didn't move. Keep to the packages you have.`
+        );
       if (ci === 'pending')
         return refuse(
           `the check didn't finish on ${short(sha)} in time; ${main} didn't move. Rerun.`
         );
 
-      const before = (await git(['rev-parse', main])).stdout.trim();
       // Touches only the files the branch changed; refuses rather than overwrite someone's uncommitted edit.
       const forwarded = await git(['merge', '-q', '--ff-only', sha]);
       if (forwarded.code !== 0) {
@@ -354,11 +395,6 @@ const landHeld = async (
         );
         continue;
       }
-      const changed = (
-        await git(['diff', '--name-only', before, sha])
-      ).stdout.split('\n');
-      if (deps.manifests.some((manifest) => changed.includes(manifest)))
-        await deps.install();
 
       const at = isoText(repository.clock.now());
       const restarting = deps.restart !== undefined;

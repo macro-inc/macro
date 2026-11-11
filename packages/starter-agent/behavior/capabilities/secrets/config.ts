@@ -6,9 +6,6 @@ export const owner = 'secrets';
 /** Access requests still waiting on the owner, in the run bucket. */
 export const pendingFile = 'pending.json';
 
-/** The last version of each item the agent saw, so an update can say which one it changes. */
-export const versionsFile = 'versions.json';
-
 /** The log stream every vault call is recorded in: opaque ids and outcomes, never names or values. */
 export const logStream = 'secrets';
 

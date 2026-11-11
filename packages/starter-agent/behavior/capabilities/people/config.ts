@@ -1,6 +1,6 @@
 /** The people area's settings: where its records are, and which model reads an exchange. */
 
-/** The owner of the people area's state directories. Its records are private: never committed. */
+/** The owner of the people area's state directories. Its records are in the private bucket. */
 export const owner = 'people';
 
 /** The log stream: every proposal's fate, and who each run was shown, never what. */

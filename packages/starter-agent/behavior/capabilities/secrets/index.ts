@@ -7,10 +7,9 @@
  */
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
-import { z } from 'zod';
 import type { Base } from '../../context/index.ts';
 import { addPending } from './access.ts';
-import { logStream, owner, searchLimit, versionsFile } from './config.ts';
+import { logStream, searchLimit } from './config.ts';
 import type { SecretsPorts } from './ports.ts';
 import type { Refusal } from './vault.ts';
 import {
@@ -45,6 +44,8 @@ export type SecretHit = {
   /** `usable`: copy away. `request_access`: ask with requestSecretAccess. `pending`: asked; you'll be woken. */
   readonly access: AccessStatus;
   readonly canUpdate: boolean;
+  /** Its version when it was found: a copy or update of a changed item is refused, so search again. */
+  readonly version: number;
   /** The fields copySecret can copy from it. */
   readonly fields: readonly SecretField[];
 };
@@ -86,12 +87,12 @@ export const refusal = (
     not_found:
       scope === 'team'
         ? "secrets aren't turned on for this team"
-        : `no secret "${name}" in your team's vault (or secrets aren't turned on for this team)`,
+        : `no secret "${name}" in your team's vault, or secrets aren't turned on for this team`,
     not_granted: `you have no access to "${name}": ask your owner for it with requestSecretAccess`,
     pending: `access to "${name}" is waiting on your owner's approval: you are woken when it is decided`,
     forbidden: `you may not ${doing} "${name}"`,
     invalid_request: `the vault refused the request to ${doing} "${name}" as malformed`,
-    version_conflict: `"${name}" changed since you last saw it: copy one of its fields to see the current version, then try again`,
+    version_conflict: `"${name}" changed since you last saw it: search for it again, and use the new hit`,
     vault_busy: 'the vault is busy: try again in a minute',
     vault_unavailable: 'the vault is unavailable right now: try again later',
     unexpected: "the vault answered in a way this agent doesn't understand",
@@ -108,37 +109,9 @@ const hitOf = (teamId: string, hit: AgentSearchHit): SecretHit => ({
   url: hit.url,
   access: hit.access.status,
   canUpdate: hit.access.canUpdate,
+  version: hit.version,
   fields: fieldsOf(hit.kind),
 });
-
-const Versions = z.record(z.string(), z.number().int());
-
-const versionsPath = ({ join, state }: Pick<Needs, 'join' | 'state'>) =>
-  join(state.run(owner), versionsFile);
-
-const versions = async (
-  context: Pick<Needs, 'disk' | 'join' | 'state'>
-): Promise<Readonly<Record<string, number>>> => {
-  const text = await context.disk.read(versionsPath(context));
-  if (text === undefined) return {};
-  try {
-    const parsed = Versions.safeParse(JSON.parse(text));
-    return parsed.success ? parsed.data : {};
-  } catch {
-    return {};
-  }
-};
-
-/** The version of an item the agent last saw, so an update says which one it changes. */
-const remember = async (
-  context: Pick<Needs, 'disk' | 'join' | 'state'>,
-  itemId: string,
-  version: number
-): Promise<void> =>
-  context.disk.write(
-    versionsPath(context),
-    `${JSON.stringify({ ...(await versions(context)), [itemId]: version })}\n`
-  );
 
 /** One line in the secrets log: opaque ids, the selector's kind and the outcome, never a name or value. */
 const record = (
@@ -228,7 +201,10 @@ export const copySecret = async (
     );
   }
   const { vault, clipboard } = context.secrets;
-  const answer = await vault.disclose(item.teamId, item.itemId, { selector });
+  const answer = await vault.disclose(item.teamId, item.itemId, {
+    selector,
+    ...(item.version === undefined ? {} : { expectedVersion: item.version }),
+  });
   const entry = { op: 'copy', item: item.itemId, selector: selector.type };
   if (answer.kind === 'refused') {
     await record(context, {
@@ -241,7 +217,6 @@ export const copySecret = async (
     );
   }
   await clipboard.put(answer.value.value);
-  await remember(context, item.itemId, answer.value.version);
   await record(context, { ...entry, wake: answer.wake, outcome: 'copied' });
   return `Copied ${item.name} ${field}`;
 };
@@ -333,7 +308,6 @@ export const createSecret = async (
     );
   }
   const item = hitOf(teamId, answer.value.item);
-  await remember(context, item.itemId, answer.value.version);
   await record(context, {
     op: 'create',
     item: item.itemId,
@@ -348,10 +322,11 @@ export const createSecret = async (
  * edit access to.
  *
  * Give any of: the secret as `value` or `fromClipboard: true` (as in
- * createSecret), a login's `username`, a new `name` or `url`. The vault
- * refuses to change a version you haven't seen: `version` is the one you
- * last saw, and is remembered from your last copy, create or update of the
- * item when you leave it out. Returns the item and its new version.
+ * createSecret), a login's `username`, a new `name` or `url`. `item` is a
+ * hit from searchSecrets (or what createSecret or updateSecret returned):
+ * its `version` is the one you saw, and the vault refuses to change an item
+ * that has changed since, so search again. Returns the item at its new
+ * version.
  */
 export const updateSecret = async (
   context: Needs,
@@ -362,7 +337,6 @@ export const updateSecret = async (
     username,
     name,
     url,
-    version,
   }: {
     readonly item: SecretItem;
     readonly value?: string;
@@ -370,10 +344,9 @@ export const updateSecret = async (
     readonly username?: string;
     readonly name?: string;
     readonly url?: string | null;
-    readonly version?: number;
   }
 ): Promise<{ readonly item: SecretHit; readonly version: number }> => {
-  const { kind } = item;
+  const { kind, version: expectedVersion } = item;
   if (!isCreatable(kind))
     throw new Error(`${kindNames[kind]} can't be changed here yet`);
   if (
@@ -385,10 +358,9 @@ export const updateSecret = async (
       'nothing to change: give a value, fromClipboard, username, name or url'
     );
   if (name !== undefined && name.trim() === '') throw new Error('name: empty');
-  const expectedVersion = version ?? (await versions(context))[item.itemId];
   if (expectedVersion === undefined)
     throw new Error(
-      `you haven't seen a version of "${item.name}" yet: copy one of its fields first, so this can't overwrite a change you haven't seen`
+      `search for "${item.name}" first: an update says which version it changes, so it can't overwrite a change you haven't seen`
     );
   const primary = await valueFrom(context.secrets, { value, fromClipboard });
   if (primary === '') throw new Error('the secret is empty');
@@ -416,7 +388,6 @@ export const updateSecret = async (
       refusal(answer.code, { name: item.name, scope: 'item', doing: 'change' })
     );
   }
-  await remember(context, item.itemId, answer.value.version);
   await record(context, { ...entry, wake: answer.wake, outcome: 'updated' });
   return {
     item: hitOf(item.teamId, answer.value.item),

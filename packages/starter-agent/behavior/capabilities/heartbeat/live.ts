@@ -174,18 +174,37 @@ const PrList = z.array(
   z.object({ number: z.number(), title: z.string(), baseRefName: z.string() })
 );
 
+/**
+ * The GitHub repository a landing goes through, or undefined for the
+ * repository's own check. Only a self-hosted agent with its own GitHub token
+ * and a GitHub remote lands through a PR and CI; a hosted agent (its remote is
+ * Macro's agent git server, and it has no token) never does.
+ */
+export const githubLanding = ({
+  token,
+  pushUrl,
+}: {
+  readonly token: boolean;
+  readonly pushUrl: string | undefined;
+}): string | undefined =>
+  token && pushUrl !== undefined ? githubRepo(pushUrl) : undefined;
+
 /** What a landing needs, for the repository as it is now: the repository's own check, or GitHub's PR and CI with a GitHub remote and the agent's token. */
 export const landDepsOf = async (
   context: Needs,
   repository: Repository
 ): Promise<LandDeps> => {
-  const { config, heartbeat, disk, log, shell } = context;
+  const { heartbeat, disk, log, shell } = context;
   const run = asAgent(context);
+  const tokened = await hasGithub(context);
   const url =
-    (await hasGithub(context)) && (await repository.hasRemote())
+    tokened && (await repository.hasRemote())
       ? await repository.git(['remote', 'get-url', '--push', settings.remote])
       : undefined;
-  const repo = url?.code === 0 ? githubRepo(url.stdout) : undefined;
+  const repo = githubLanding({
+    token: tokened,
+    pushUrl: url?.code === 0 ? url.stdout : undefined,
+  });
   const gh = async (args: readonly string[]): Promise<unknown> =>
     JSON.parse(
       await output(shell, [settings.gh, ...args], {
@@ -196,14 +215,8 @@ export const landDepsOf = async (
   const localCheck = worktreeCheck({
     repository,
     checkouts: heartbeat.scratch,
-    run: (argv, { cwd, install }) =>
-      run(argv, {
-        cwd,
-        timeoutMs: install ? limits.install : limits.ciTimeout,
-      }),
+    run: (argv, { cwd }) => run(argv, { cwd, timeoutMs: limits.ciTimeout }),
     check: [settings.bun, 'run', settings.checkScript],
-    install: [settings.bun, 'install', '--frozen-lockfile'],
-    manifests: settings.manifests,
     failed: (sha, text) =>
       log.event(logs.heartbeat, {
         line: `land: the check failed on ${sha.slice(0, 12)}`,
@@ -263,12 +276,6 @@ export const landDepsOf = async (
               sha,
               settings.checkJob
             ),
-    install: () =>
-      run([settings.bun, 'install', '--frozen-lockfile'], {
-        cwd: config.root,
-        timeoutMs: limits.install,
-      }),
-    manifests: settings.manifests,
     scratch: heartbeat.scratch,
     appendMerge: (row) => disk.append(heartbeat.paths.merges, `${row}\n`),
     restart: heartbeat.restart,

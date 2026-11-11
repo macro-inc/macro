@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { claudeKeys } from './children.ts';
 
 /**
  * What the agent's process is told as it starts, all from its environment
@@ -50,6 +51,8 @@ export type CredentialSource =
       readonly url: string;
       readonly token: string;
       readonly names: readonly string[];
+      /** How Claude Code reaches Anthropic from here: through the parent's relay, in Macro-credits mode. */
+      readonly claude: Readonly<Record<string, string>>;
     };
 
 export type McpServer = {
@@ -126,7 +129,18 @@ const credentialSource = (
       .filter((name) => name !== '');
     return {
       kind: 'configured',
-      value: { kind: 'relayed', url, token, names },
+      value: {
+        kind: 'relayed',
+        url,
+        token,
+        names,
+        claude: Object.fromEntries(
+          claudeKeys.flatMap((name) => {
+            const value = given(environment, name);
+            return value === undefined ? [] : [[name, value]];
+          })
+        ),
+      },
     };
   }
   const chosen = given(environment, variables.credentials);

@@ -46,9 +46,10 @@ owner speaking.
 - `state/memory/identity/identity.md`: who you are (`readIdentity`,
   `writeIdentity`).
 - What you know about the people you talk with is kept by the people area
-  (`whatIRemember`), on this machine only.
+  (`whatIRemember`), in `state/private/`.
 - Anything else: `stateWhere` says where a kind of thing lives and whether git
-  keeps it. Things about people, and their messages, are never committed.
+  keeps it. Your repository keeps memory and private state; your team's admins
+  can read it, so write about people only what you would say to them.
 
 Write a thing down when you learn it. Don't rely on remembering.
 
@@ -129,8 +130,9 @@ anything else needs your owner's approval once: ask with
 woken when they decide. To store a password a page generated or showed you,
 copy it there and pass `fromClipboard: true` to `createSecret` or
 `updateSecret`, so it never passes through you; a `value` you type is in your
-transcript. If you are told secrets aren't turned on for your team, say so to
-your owner and don't work around it.
+transcript. Pass the hit you found: if the item changed since, the vault
+refuses and you search again. If you are told secrets aren't turned on for
+your team, say so to your owner and don't work around it.
 
 ## Changing yourself
 
@@ -150,6 +152,9 @@ behave differently.
 - Your memory and this charter are edited in place, and committed after each
   wake.
 - The library you are built on, muppet, is a dependency. Never modify it.
+- Your packages are your computer's: a change to `bun.lock` or to a
+  dependency in `package.json` is refused when you land it, because only a new
+  image can bring new packages. Ask your owner if you need one.
 - Read `ARCHITECTURE.md` before changing anything under `behavior/`, and
   `ENGINEERING.md` before fixing a bug.
 

@@ -9,6 +9,7 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Hosts } from './addresses.ts';
+import { anthropicRoute } from './children.ts';
 
 /** The header a user API key travels in, both from the script and on to Macro. */
 export const keyHeader = 'x-macro-user-api-key';
@@ -66,6 +67,63 @@ const target = (
   };
 };
 
+const bearer = (request: Request): string =>
+  /^Bearer (.+)$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? '';
+
+/** A Claude Code request on to the Anthropic gateway, with the gateway's real token. */
+const forwardAnthropic = async ({
+  request,
+  url,
+  capability,
+  anthropic,
+  send,
+  equal,
+}: {
+  readonly request: Request;
+  readonly url: URL;
+  readonly capability: string;
+  readonly anthropic:
+    | { readonly url: string; readonly token: string }
+    | undefined;
+  readonly send: (request: Request) => Promise<Response>;
+  readonly equal: (given: string, expected: string) => boolean;
+}): Promise<Response> => {
+  if (!equal(bearer(request), capability))
+    return refuse(401, 'the relay needs its capability');
+  if (anthropic === undefined)
+    return refuse(
+      404,
+      'the relay has no Anthropic gateway (not Macro-credits mode)'
+    );
+  const rest = url.pathname.split('/').slice(2);
+  if (
+    rest.some(
+      (segment) => /^(\.|%2e)+$/i.test(segment) || /%2f|%5c/i.test(segment)
+    )
+  )
+    return refuse(404, 'the relay has no address for that path');
+  const headers = new Headers();
+  for (const [name, value] of request.headers)
+    if (!dropped.has(name) && name !== 'x-api-key') headers.set(name, value);
+  headers.set('authorization', `Bearer ${anthropic.token}`);
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  try {
+    return await send(
+      new Request(
+        `${anthropic.url.replace(/\/+$/, '')}/${rest.join('/')}${url.search}`,
+        {
+          method: request.method,
+          headers,
+          body: hasBody ? await request.arrayBuffer() : undefined,
+          redirect: 'manual',
+        }
+      )
+    );
+  } catch {
+    return refuse(502, "the relay couldn't reach the Anthropic gateway");
+  }
+};
+
 export const relayHandler =
   ({
     targets,
@@ -73,6 +131,7 @@ export const relayHandler =
     apiKey,
     fetch: send,
     equal,
+    anthropic,
   }: {
     /** Each service's real host. */
     readonly targets: Hosts;
@@ -82,8 +141,21 @@ export const relayHandler =
     readonly apiKey: string;
     readonly fetch: (request: Request) => Promise<Response>;
     readonly equal: (given: string, expected: string) => boolean;
+    /** The Anthropic gateway and its token, in Macro-credits mode. */
+    readonly anthropic?: { readonly url: string; readonly token: string };
   }) =>
   async (request: Request): Promise<Response> => {
+    const url = new URL(request.url);
+    // Claude Code presents its ANTHROPIC_AUTH_TOKEN, the capability, as a bearer token.
+    if (url.pathname.split('/')[1] === anthropicRoute)
+      return forwardAnthropic({
+        request,
+        url,
+        capability,
+        anthropic,
+        send,
+        equal,
+      });
     if (!equal(request.headers.get(keyHeader) ?? '', capability))
       return refuse(401, 'the relay needs its capability');
     if (isUpgrade(request))
@@ -208,15 +280,18 @@ const loopback = '127.0.0.1';
 export const startRelay = ({
   targets,
   apiKey,
+  anthropic,
 }: {
   readonly targets: Hosts;
   readonly apiKey: string;
+  readonly anthropic?: { readonly url: string; readonly token: string };
 }): Relay => {
   const token = randomBytes(capabilityBytes).toString('hex');
   const http = relayHandler({
     targets,
     capability: token,
     apiKey,
+    anthropic,
     fetch: (request) => fetch(request),
     equal: constantTimeEqual,
   });

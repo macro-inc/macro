@@ -91,8 +91,6 @@ export const sandbox = async () => {
       merged: async () => true,
     },
     ci: async () => 'green',
-    install: async () => undefined,
-    manifests: ['package.json', 'bun.lock'],
     scratch: {
       make: async () => (await output(shell, ['mktemp', '-d'])).trim(),
       remove: (path) => disk.remove(path),

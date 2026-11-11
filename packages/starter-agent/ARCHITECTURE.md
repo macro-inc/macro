@@ -26,9 +26,9 @@ behavior/
   capabilities/<area>/     what the agent can do, and all of the area's logic
 state/
   memory/<owner>/              committed: what the agent knows, and its durable records
-  private/<owner>/             never committed: people, their messages, mail, screenshots
+  private/<owner>/             committed: people, their messages, screenshots
   run/<owner>/                 never committed: queues, cursors, locks, per-run records
-  log/<owner>/                 never committed: logs and recordings
+  log/<owner>/                 never committed: logs and recordings (telemetry keeps the record)
 ```
 
 `chat` is the worked example of an area. Read these before writing another:

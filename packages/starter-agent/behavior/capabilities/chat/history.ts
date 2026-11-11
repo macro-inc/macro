@@ -31,7 +31,7 @@ export const history = ({
   join,
   disk,
 }: {
-  /** Where each channel's messages are kept. People's messages: never committed. */
+  /** Where each channel's messages are kept. People's messages: the private bucket. */
   readonly directory: string;
   /** Where waiting messages are kept. */
   readonly queue: string;

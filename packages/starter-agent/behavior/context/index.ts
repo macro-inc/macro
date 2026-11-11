@@ -31,7 +31,12 @@ import {
   type Hosts,
   type ServiceName,
 } from './addresses.ts';
-import { childEnvironment, claudeAccess, claudeKeys } from './children.ts';
+import {
+  anthropicUpstream,
+  childEnvironment,
+  claudeAccess,
+  claudeKeys,
+} from './children.ts';
 import { type Config, config as makeConfig, settingsFile } from './config.ts';
 import type { Credentials } from './credentials.ts';
 import type { Disk } from './disk.ts';
@@ -268,7 +273,11 @@ const source = (
   readonly credentials: Credentials;
   readonly addresses: () => Promise<Addresses>;
   /** The relay a script reaches Macro through: given to a script's process, made by the agent's. */
-  readonly relay?: { readonly url: string; readonly token: string };
+  readonly relay?: {
+    readonly url: string;
+    readonly token: string;
+    readonly claude: Readonly<Record<string, string>>;
+  };
 }> => {
   const from = startup.credentials;
   if (from.kind === 'relayed')
@@ -279,7 +288,7 @@ const source = (
           "a script's process reaches Macro only through its relay"
         );
       },
-      relay: { url: from.url, token: from.token },
+      relay: { url: from.url, token: from.token, claude: from.claude },
     });
   if (from.kind === 'file') {
     const text = readText(from.file);
@@ -358,10 +367,22 @@ export const base = (
   let relay: Promise<Relayed> | undefined;
   const ownRelay = () => {
     relay ??= Promise.all([addresses(), credentials.get(macroKey)]).then(
-      ([{ hosts }, apiKey]) => startRelay({ targets: hosts, apiKey })
+      ([{ hosts }, apiKey]) =>
+        held(credentials, claudeKeys).then((claude) =>
+          startRelay({
+            targets: hosts,
+            apiKey,
+            anthropic: anthropicUpstream(claude),
+          })
+        )
     );
     return relay;
   };
+  // Claude Code, wherever it is started, reaches Anthropic through the relay.
+  const claude = async (): Promise<Readonly<Record<string, string>>> =>
+    given === undefined
+      ? claudeAccess(await held(credentials, claudeKeys), await ownRelay())
+      : given.claude;
   const relayed = async () => {
     const { url, token } = given ?? (await ownRelay());
     return {
@@ -369,6 +390,7 @@ export const base = (
       [variables.relayUrl]: url,
       [variables.relayToken]: token,
       [variables.credentialNames]: (await credentials.names()).join(','),
+      ...(await claude()),
     };
   };
   return configured({
@@ -405,10 +427,7 @@ export const base = (
     wiring: {
       addresses,
       relayed,
-      claudeAccess: async () =>
-        given === undefined
-          ? claudeAccess(await held(credentials, claudeKeys))
-          : {},
+      claudeAccess: claude,
     },
   });
 };

@@ -200,6 +200,7 @@ export const AgentSearchHit = z.object({
   name: z.string(),
   kind: ItemKind,
   url: z.string().nullable(),
+  version: z.number().int(),
   access: AgentItemAccess,
 });
 export type AgentSearchHit = z.infer<typeof AgentSearchHit>;
