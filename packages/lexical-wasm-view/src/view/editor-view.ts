@@ -153,6 +153,20 @@ export class EditorView implements ViewSink {
   private paintFrame: number | null = null;
   private revisionValue = 0;
   private historySelectionRevision: number | undefined;
+  private domSelectionEcho: ViewSelection | null = null;
+  /**
+   * Source writes the DOM caret only for dirty nodes or a dirty selection; a
+   * clean selection read from the DOM leaves the browser's caret in place.
+   */
+  submitDomSelection(submit: () => void, selection: ViewSelection): void {
+    this.domSelectionEcho =
+      selection.kind === 'range' && !selection.dirty ? selection : null;
+    try {
+      submit();
+    } finally {
+      this.domSelectionEcho = null;
+    }
+  }
   private documentRevisionValue = 0;
   private nextReconcileSample = 0;
   get keyedDOMNodeCount(): number {
@@ -676,9 +690,16 @@ export class EditorView implements ViewSink {
                 this.tables.get(previousSelection.table)?.clear();
               // Only a focused history-awareness restore may override the
               // content update's skip tag in this packet.
+              const echo = this.domSelectionEcho;
+              this.domSelectionEcho = null;
+              const cleanDomEcho =
+                echo !== null &&
+                this.lastOps === 0 &&
+                sameSelection(echo, selection);
               if (
                 effect.flag ||
                 (!skipDomSelection &&
+                  !cleanDomEcho &&
                   !(
                     historyBoundary && sameSelection(historyBoundary, selection)
                   ))

@@ -840,9 +840,13 @@ export function registerEvents(view: EditorView): {
       (!sameSelection(selection, view.selection().selection) &&
         !isLastSubmittedSelection(selection))
     ) {
-      view.port.selectionFromView(
-        selection,
-        marked || saved || context.domRangeSameNode ? context : undefined
+      view.submitDomSelection(
+        () =>
+          view.port.selectionFromView(
+            selection,
+            marked || saved || context.domRangeSameNode ? context : undefined
+          ),
+        selection
       );
       rememberSelection();
     }
