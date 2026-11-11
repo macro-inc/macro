@@ -214,3 +214,32 @@ fn custom_commands_preserve_quoted_arguments() {
     assert!(agent.launch.env.is_empty());
     assert_eq!(agent.install, None);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_failed_install_reports_npm_s_reason_not_its_log_line() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let stderr = "\
+npm error code ETARGET
+npm error notarget No matching version found for @agentclientprotocol/codex-acp@0.0.0.
+npm error notarget In most cases you or one of your dependencies are requesting
+npm error notarget a package version that doesn't exist.
+npm error A complete log of this run can be found in: /home/test/.npm/_logs/debug-0.log
+";
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "code ETARGET; notarget No matching version found for \
+         @agentclientprotocol/codex-acp@0.0.0.; notarget In most cases you or one of your \
+         dependencies are requesting (npm log: /home/test/.npm/_logs/debug-0.log)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_silent_npm_failure_reports_its_exit_status() {
+    use std::os::unix::process::ExitStatusExt as _;
+    assert_eq!(
+        npm_adapter::failure_summary("\n", std::process::ExitStatus::from_raw(1 << 8)),
+        "npm exited with exit status: 1 and no error output"
+    );
+}
