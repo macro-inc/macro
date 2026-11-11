@@ -124,10 +124,19 @@ export const TASK_SORT_OPTIONS: {
   id: TaskSortId;
   label: string;
   property?: TaskPropertySort;
+  /** Unselected direction for sorts without a property. */
+  direction?: 'asc' | 'desc';
 }[] = [
   { id: 'viewed_at', label: 'Viewed' },
   { id: 'updated_at', label: 'Updated' },
   { id: 'created_at', label: 'Created' },
+  {
+    id: 'title',
+    get label() {
+      return t('viewMenus.sortTitle');
+    },
+    direction: 'asc',
+  },
   {
     id: 'status',
     label: 'Status',
@@ -166,6 +175,36 @@ export function taskPropertySort(id: TaskSortId): TaskPropertySort | undefined {
   return TASK_SORT_OPTIONS.find((option) => option.id === id)?.property;
 }
 
+/** The direction a sort runs in before the viewer reverses it. */
+export function taskSortDirection(id: TaskSortId): 'asc' | 'desc' {
+  const option = TASK_SORT_OPTIONS.find((item) => item.id === id);
+  return option?.property?.direction ?? option?.direction ?? 'desc';
+}
+
+/** Matches the server's `name` order: case-insensitive, then newest update and descending ID. */
+function sortTasksByTitle(
+  items: TaskEntityWithProperties[],
+  ascending: boolean
+): TaskEntityWithProperties[] {
+  const key = (item: TaskEntityWithProperties) =>
+    item.name?.toLocaleLowerCase();
+  return [...items].sort((left, right) => {
+    const a = key(left);
+    const b = key(right);
+    if (a === undefined && b !== undefined) return 1;
+    if (a !== undefined && b === undefined) return -1;
+    if (a !== undefined && b !== undefined && a !== b) {
+      return ascending ? a.localeCompare(b) : b.localeCompare(a);
+    }
+    const updated =
+      (propertyDateSortKey(right.updatedAt) ?? 0) -
+      (propertyDateSortKey(left.updatedAt) ?? 0);
+    if (updated) return updated;
+    if (left.id === right.id) return 0;
+    return left.id > right.id ? -1 : 1;
+  });
+}
+
 /** Property order matches Soup: missing last, then newest update and descending ID. */
 export function sortTasks(
   items: TaskEntityWithProperties[],
@@ -173,6 +212,9 @@ export function sortTasks(
   definitions?: ReadonlyMap<string, PropertyDefinitionDomain>
 ): TaskEntityWithProperties[] {
   const selection = selections[0];
+  if (selection?.id === 'title') {
+    return sortTasksByTitle(items, !selection.reversed);
+  }
   const propertySort = selection && taskPropertySort(selection.id);
   if (!propertySort) return sortItems(items, selections, TASK_SORT_DEFINITIONS);
   const definition = definitions?.get(propertySort.propertyDefinitionId);

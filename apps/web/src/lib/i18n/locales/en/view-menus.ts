@@ -50,6 +50,8 @@ export default {
   sortLastViewed: 'Last viewed',
   sortLastUpdated: 'Last updated',
   sortDateCreated: 'Date created',
+  sortTitle: 'Title',
+  sortName: 'Name',
 
   // Group options
   groupNone: 'None',

@@ -402,6 +402,30 @@ describe('property sorting', () => {
     ).toEqual(['a', 'b', 'missing']);
   });
 
+  it('orders titles case-insensitively, reverses on demand, and breaks ties by update then descending id', () => {
+    const titled = (id: string, name: string, updatedAt: string) => ({
+      ...boardEntity(id),
+      name,
+      updatedAt,
+    });
+    const rows = [
+      titled('zeta', 'zeta plan', '2026-10-01T00:00:00Z'),
+      titled('alpha', 'Alpha plan', '2026-10-02T00:00:00Z'),
+      titled('older-tie', 'Beta plan', '2026-10-01T00:00:00Z'),
+      titled('newer-tie', 'beta plan', '2026-10-03T00:00:00Z'),
+    ];
+
+    expect(sortTasks(rows, [{ id: 'title' }]).map((row) => row.id)).toEqual([
+      'alpha',
+      'newer-tie',
+      'older-tie',
+      'zeta',
+    ]);
+    expect(
+      sortTasks(rows, [{ id: 'title', reversed: true }]).map((row) => row.id)
+    ).toEqual(['zeta', 'newer-tie', 'older-tie', 'alpha']);
+  });
+
   it('uses server option display order for groups and leaves missing values last', () => {
     for (const propertyDefinitionId of [
       SYSTEM_PROPERTY_IDS.STATUS,

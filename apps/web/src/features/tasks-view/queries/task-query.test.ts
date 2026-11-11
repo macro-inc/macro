@@ -282,6 +282,22 @@ it.each([
     ).toBe(reversed);
   }
 );
+it('sorts titles A to Z by default and Z to A when reversed', () => {
+  expect(
+    buildTaskQuery({ ...options, sort: [{ id: 'title' }] }).params
+  ).toEqual({
+    expand: true,
+    limit: 100,
+    sort_method: 'name',
+    sort_property_definition_id: undefined,
+    sort_direction: 'asc',
+  });
+  expect(
+    buildTaskQuery({ ...options, sort: [{ id: 'title', reversed: true }] })
+      .params.sort_direction
+  ).toBe('desc');
+});
+
 describe('saved task presentation', () => {
   it('round-trips layout, grouping, and ordered sorts through capture, read, and materialization', () => {
     const captured = captureTaskSavedView({
