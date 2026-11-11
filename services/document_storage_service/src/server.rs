@@ -969,6 +969,9 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_sender.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        )),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -977,6 +980,7 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let sender = webhook_stream_sender;
+        let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
@@ -986,6 +990,7 @@ async fn run_server() -> anyhow::Result<()> {
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
                         &sender,
+                        &workspace_resolver,
                     ) => result,
                 };
 
@@ -1408,6 +1413,54 @@ async fn run_server() -> anyhow::Result<()> {
                         tracing::error!(
                             error = ?error,
                             "teammate DM consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    let user_picture_brokers = config.kafka_brokers.as_ref().to_string();
+    let user_picture_fanout = Arc::new(
+        contacts::domain::service::picture_fanout::UserPictureFanout::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            contacts::outbound::picture_gateway::ConnectionGatewayPictureNotifier::new(
+                conn_gateway_client.clone(),
+            ),
+        ),
+    );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting user picture fan-out consumer");
+                let result = contacts::inbound::user_picture_consumer::run_user_picture_consumer(
+                    &user_picture_brokers,
+                    user_picture_fanout.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("user picture fan-out consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "user picture fan-out consumer exited unexpectedly"
                         );
                     }
                 }
@@ -2330,7 +2383,20 @@ async fn run_server() -> anyhow::Result<()> {
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    // GraphQL and REST share one saved-view service; each committed write
+    // pushes a change to the pages that show those views.
+    let saved_views = Arc::new(crate::service::saved_views::service(
+        db.clone(),
+        crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
+            (*conn_gateway_client).clone(),
+            Arc::new(crate::service::saved_views::Membership(
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            )),
+            event_broker_tracker.clone(),
+        ),
+    ));
     let api_context = ApiContext {
+        saved_views,
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,

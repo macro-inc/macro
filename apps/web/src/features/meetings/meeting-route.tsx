@@ -26,9 +26,9 @@ import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { MeetingPage } from './views/meeting-page';
 
-const MeetingChannelHost = lazyNamed(
-  () => import('./views/meeting-channel-host'),
-  'MeetingChannelHost'
+const MeetingDiscussionHost = lazyNamed(
+  () => import('./views/meeting-discussion-host'),
+  'MeetingDiscussionHost'
 );
 
 export function MeetingRouteContent(props: {
@@ -182,8 +182,8 @@ export function MeetingRouteContent(props: {
                         )
                       }
                       onOutsideCountChange={setOutsideCount}
-                      channelHost={(channel) => (
-                        <MeetingChannelHost>{channel}</MeetingChannelHost>
+                      host={(panel) => (
+                        <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>
                       )}
                     />
                   ),

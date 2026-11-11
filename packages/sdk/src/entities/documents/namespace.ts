@@ -68,7 +68,11 @@ function toBlob(content: FileContent): Blob {
  * The same applies to `EditDocument`: when its `instructions` ask for a mention chip (person, date/time, document, agent session, booking link, and so on) or a document-card, include the referenced item's ids and details so the editing worker can construct the correct in-app markup itself. Date chips need an ISO datetime and displayFormat; they do not need a looked-up id. Booking-link chips need profileId, url, and slug when the URL has one.
  */
 export class DocumentNamespace {
-  /** Resolve a team task reference such as ENG-42. */
+  /**
+   * Resolve a team task reference such as ENG-42.
+   *
+   * @readonly
+   */
   async byTeamSlug(slug: string): Promise<Document> {
     // The generated operation currently references a colliding TypedSuccessResponse
     // schema. Validate the actual document response before constructing a handle.
@@ -91,7 +95,11 @@ export class DocumentNamespace {
     return Document.byId(this.client, result.data.documentMetadata.documentId);
   }
 
-  /** Validate a permissions token, returning its document and optional user handles. */
+  /**
+   * Validate a permissions token, returning its document and optional user handles.
+   *
+   * @readonly
+   */
   async validatePermissionsToken(token: string) {
     const result = unwrap(
       await this.client.storage.validateDocumentPermissionsToken({
@@ -127,6 +135,8 @@ export class DocumentNamespace {
    * });
    * await channel.send('Invoices attached.', { documents: [file] });
    * ```
+   *
+   * @write
    */
   async upload(options: {
     name: string;
@@ -145,6 +155,8 @@ export class DocumentNamespace {
   /**
    * Reserve a binary document and return a presigned URL to PUT its content
    * to. The URL is outside the hosts code mode can reach; use `upload` there.
+   *
+   * @write
    */
   async createUpload(options: {
     name: string;
@@ -186,7 +198,11 @@ export class DocumentNamespace {
     return Document.byId(this.client, id);
   }
 
-  /** Create a markdown document. */
+  /**
+   * Create a markdown document.
+   *
+   * @write
+   */
   create(opts: {
     name: string;
     markdown?: string;
@@ -198,6 +214,8 @@ export class DocumentNamespace {
   /**
    * Create a native Canvas with shared content ready for reading and editing;
    * work on it with `document.canvas()`.
+   *
+   * @write
    */
   async createCanvas(opts: {
     name: string;
@@ -234,6 +252,8 @@ export class DocumentNamespace {
    *   return { data: { spreadsheet: sheet, error: String(error) } };
    * }
    * ```
+   *
+   * @write
    */
   async createSpreadsheet(opts: {
     name: string;
@@ -250,12 +270,18 @@ export class DocumentNamespace {
   /**
    * Read, calculate and edit a document as a native spreadsheet, such as a
    * search result or mention. Its methods refuse a document of another type.
+   *
+   * @readonly
    */
   spreadsheet(document: Document): Spreadsheet {
     return Spreadsheet.byId(this.client, document.id);
   }
 
-  /** Create a snippet: a reusable markdown document. */
+  /**
+   * Create a snippet: a reusable markdown document.
+   *
+   * @write
+   */
   createSnippet(opts: {
     name: string;
     markdown?: string;
@@ -280,6 +306,8 @@ export class DocumentNamespace {
    *
    * `description` says when to use the skill, in one line starting "Use when"
    * (at most 300 characters); agents load the skill for requests it describes.
+   *
+   * @write
    */
   createSkill(opts: {
     name: string;
@@ -305,6 +333,8 @@ export class DocumentNamespace {
    * const [match] = await macro.documents.skills({ query: 'deploy' });
    * const instructions = match && (await match.skill.content());
    * ```
+   *
+   * @readonly
    */
   async skills(opts?: {
     query?: string;
@@ -329,17 +359,27 @@ export class DocumentNamespace {
    * The built-in system skills: static AI instructions with no document
    * behind them. Unlike user skills they cannot be opened or edited; read
    * their instructions with `content()`.
+   *
+   * @readonly
    */
   systemSkills(): Promise<SystemSkill[]> {
     return SystemSkill.list(this.client);
   }
 
-  /** Search documents by name and content, most relevant first, auto-paginated. */
+  /**
+   * Search documents by name and content, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Document> {
     return Document.search(this.client, query, opts);
   }
 
-  /** The user's recent documents, most recent first, auto-paginated. */
+  /**
+   * The user's recent documents, most recent first, auto-paginated.
+   *
+   * @readonly
+   */
   recent(opts?: {
     pageSize?: number;
     fileType?: string;
@@ -347,7 +387,11 @@ export class DocumentNamespace {
     return Document.recent(this.client, opts);
   }
 
-  /** The user's recently soft-deleted documents. */
+  /**
+   * The user's recently soft-deleted documents.
+   *
+   * @readonly
+   */
   recentlyDeleted(): Promise<Document[]> {
     return Document.recentlyDeleted(this.client);
   }

@@ -3,7 +3,7 @@ import { throwOnErr } from '@core/util/result';
 import { accessRequestsClient } from '@service-storage/access-requests';
 import type { ShareEntity } from '@service-storage/generated/schemas/shareEntity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { useQuery } from '@tanstack/solid-query';
+import { useQueries, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { revalidateActivityQueries } from '../activity/push-registry';
 import { agentSessionKeys } from '../agent-session/keys';
@@ -131,5 +131,19 @@ export function useAccessRequestState(
   return useQuery(() =>
     accessRequestStateOptions(entity(), enabled(), offset(), read)
   );
+}
+/**
+ * The first page of each entity's access-request state, sharing the cache
+ * the entity's own Share menu and rows read.
+ */
+export function useAccessRequestStates(
+  entities: Accessor<ShareEntity[]>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQueries(() => ({
+    queries: entities().map((entity) =>
+      accessRequestStateOptions(entity, enabled(), 0, 'mount')
+    ),
+  }));
 }
 export { accessRequestsClient };

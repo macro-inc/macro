@@ -2,28 +2,14 @@
 
 ## Development signup allowlist
 
-### Temporary open signup override
-
-Develop currently allows every public signup, even when
-`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` is `false` or absent. The temporary override
-in `Config::signup_policy_for_environment` skips the allowlist for both runtime
-startup and Doppler validation. Production and Local behavior is unchanged.
-
-Deploy the authentication service to apply this change. To restore allowlist
-enforcement, remove the temporary override, confirm the Develop allowlist is
-valid and the bypass flag is `false`, and redeploy. Changing Doppler alone cannot
-disable this override. Existing accounts remain after enforcement is restored.
-
-The configuration behavior described below applies once the override is removed.
-
 The authentication service gates new signups with a startup-built `SignupPolicy`.
 The policy is enforced authoritatively by the existing FusionAuth `user.create`
 webhook at `/webhooks/user`. FusionAuth is configured for `user.create` with
 `AbsoluteMajority`, so a non-2xx response from this service rejects the
 transaction and aborts FusionAuth user creation.
 
-Public prechecks in user creation and passwordless signup exist only for a
-faster user-facing `403` response. They are advisory. The transactional webhook
+The precheck in passwordless signup (`/login/passwordless`) exists only for a
+faster user-facing `403` response. It is advisory. The transactional webhook
 is the enforcement boundary for all signup paths, including SSO and future
 FusionAuth-created users.
 
@@ -51,7 +37,7 @@ or generated files.
 
 | Runtime environment | Doppler slug | Bypass | Effective signup policy |
 | --- | --- | --- | --- |
-| `Environment::Develop` | `dev` | Off | Requires `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON` to be present, nonblank, valid, and non-empty. |
+| `Environment::Develop` | `dev` | Off | Allows `@macro.com` addresses and the addresses in `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON`, which must be present, nonblank, valid, and non-empty. Denies every other signup. |
 | `Environment::Develop` | `dev` | On | Allows all public signups. The allowlist setting is ignored even if missing or malformed. |
 | `Environment::Production` | `prd` | No effect | Allows all public signups. The allowlist setting is ignored even if present or malformed. |
 | `Environment::Local` | `lcl` | No effect | Allows all public signups. The allowlist setting is ignored even if present or malformed. |
@@ -84,8 +70,10 @@ Matching rules:
 - Matching is exact after normalization.
 - Case differences do not matter.
 - `+` aliases remain distinct addresses.
+- Every `@macro.com` address is allowed without being listed; subdomains and
+  look-alike domains are not.
 - Domains, wildcards, suffixes, patterns, and regular expressions are not
-  supported.
+  supported in the allowlist.
 - Denial responses and policy errors must not disclose configured addresses.
 
 ## GTM invite links
@@ -188,7 +176,7 @@ turn the bypass off. Accounts created while the bypass is on remain afterward.
 Useful checks after editing signup configuration behavior:
 
 ```bash
-nix develop --command env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test
+nix develop --command cargo test -p authentication_service --lib config::test  # needs a live DATABASE_URL
 nix develop --command cargo check -p authentication_service --bin authentication_service_doppler_config
 cargo fmt --check
 ```
