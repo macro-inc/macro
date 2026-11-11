@@ -15,7 +15,7 @@ own permission checks and agent attribution apply.
   A request without a bearer gets a 401 pointing there.
 - `/.well-known/openai-apps-challenge` returns the `OPENAI_APPS_CHALLENGE`
   secret, which OpenAI's app dashboard checks to verify the domain before an
-  app submission (`wrangler secret put OPENAI_APPS_CHALLENGE --env <env>`).
+  app submission (`bunx wrangler secret put OPENAI_APPS_CHALLENGE --env <env>`).
 - `/mcp` builds a fresh MCP `Server` per request; `tools/call` picks the
   operation (`op` in `entity` grouping), and `runOperation` validates, calls
   the SDK and shapes the result. One `mcp_chatgpt.tool_call` span per call
