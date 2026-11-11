@@ -58,20 +58,22 @@ pub fn write_kickstart(
 /// Block until the kickstart has fully applied (first boot against an empty DB
 /// is slow). Runs as a stage so it shows the spinner.
 ///
-/// Polls the kickstart's OWN artifacts — a tenant fetch authorized by the
-/// kickstart API key — NOT `/api/status`: FusionAuth reports status Ok while
-/// the kickstart is still applying, and the snapshot save stops the containers
-/// right after this wait. Gating on status alone once froze a mid-kickstart DB
-/// into a snapshot (no tenant), and every stack restored from it 500'd at
-/// login with `InvalidTenantIdException` — while the key never changed, so the
-/// bad snapshot was sticky. The fetch below succeeds only once the API key,
-/// the tenant, and the application all exist (the kickstart creates the
-/// application after the tenant).
+/// Polls the kickstart's OWN last artifact — a fetch of the entity its final
+/// request creates, authorized by the kickstart API key — NOT `/api/status`:
+/// FusionAuth reports status Ok, and serves its API, while the kickstart is
+/// still applying, and the snapshot save stops the containers right after
+/// this wait. Gating on status alone once froze a mid-kickstart DB into a
+/// snapshot (no tenant), and every stack restored from it 500'd at login with
+/// `InvalidTenantIdException` — while the key never changed, so the bad
+/// snapshot was sticky. Gating on the application, which the kickstart
+/// creates midway, let a start go on before the identity providers after it
+/// existed. The final request is always an identity provider, created at its
+/// own URL.
 pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!(
-        "http://localhost:{}/api/application/{}",
+        "http://localhost:{}{}",
         instance.port(Port::FusionAuth),
-        identity::APPLICATION_ID,
+        last_kickstart_request(instance)?,
     );
     // Require an actual 200: `curl -f` only fails on 400+, so FusionAuth's
     // maintenance-mode 302 (e.g. after a boot-time DB connect failure) would
@@ -84,6 +86,26 @@ pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
     stage.run("Waiting for FusionAuth (kickstart)", &mut cmd)
+}
+
+/// The API path of the entity the kickstart creates last.
+fn last_kickstart_request(instance: &Instance) -> Result<String> {
+    let path = gen_compose::kickstart_dir(instance).join("kickstart.json");
+    let raw = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    let doc: serde_json::Value =
+        serde_json::from_slice(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    let url = doc
+        .pointer("/requests")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|requests| requests.last())
+        .and_then(|request| request.get("url"))
+        .and_then(serde_json::Value::as_str)
+        .with_context(|| format!("{} has no requests", path.display()))?;
+    anyhow::ensure!(
+        url.starts_with("/api/identity-provider/"),
+        "the kickstart's last request must create an identity provider, whose URL can be polled; it is {url}"
+    );
+    Ok(url.to_string())
 }
 
 fn redirect_urls(instance: &Instance) -> Result<Vec<String>> {
