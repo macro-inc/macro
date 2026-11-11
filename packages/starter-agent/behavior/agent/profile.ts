@@ -15,7 +15,6 @@ type Limits = Pick<Profile, 'budgetUsd' | 'timeoutMs'>;
 export const limits: Readonly<Record<string, Limits>> = {
   conversations: { budgetUsd: 3, timeoutMs: 5 * minute },
   schedules: { budgetUsd: 10, timeoutMs: 120 * minute },
-  mail: { budgetUsd: 5, timeoutMs: 20 * minute },
 };
 
 const otherwise: Limits = { budgetUsd: 10, timeoutMs: 60 * minute };

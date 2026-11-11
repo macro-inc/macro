@@ -32,7 +32,6 @@ import { guards } from './behavior/agent/guards/index.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
 import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
-import { ensureMailSchedules } from './behavior/capabilities/mail/schedule.ts';
 import { macroKey } from './behavior/context/index.ts';
 import { exitCodes } from './behavior/context/startup.ts';
 import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
@@ -115,7 +114,6 @@ const run = async (): Promise<void> => {
     },
     log: (entry) => void base.log.event(presenceLog, entry),
   });
-  await ensureMailSchedules(assistant.decorations.schedules);
   // The standing schedules exist before anything fires; ones the agent changed are left alone.
   await ensureSchedules(assistant.decorations.schedules);
   // A new agent's first wake is to ask its owner who it is.

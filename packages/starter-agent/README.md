@@ -41,7 +41,6 @@ to `state/memory/identity/identity.md`.
 | `tools`     | Its credentials, by name                                                | nothing                             |
 | `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | speech credentials (see below)      |
 | `screen`    | Show a browser on a call                                                | the screen service running          |
-| `mail`      | An inbox of its own, screened before it reaches it                      | a Gmail account's OAuth credentials |
 
 An area whose credentials are missing stays quiet: nothing fails, and the
 agent says which credential to add when asked to use it. "Credentials" below
@@ -73,10 +72,9 @@ fails.
 | `MACRO_API_KEY`, `MACRO_GATEWAY`                             | The agent itself: chat, schedules, memory. Set by enrollment.        |
 | `DEEPGRAM_API_KEY`                                           | Calls: hearing, and the default voice. Without it no call is joined. |
 | `INWORLD_API_KEY`                                            | Only if the agent's voice is changed to an Inworld one.              |
-| `MAIL_CLIENT_ID`, `MAIL_CLIENT_SECRET`, `MAIL_REFRESH_TOKEN` | Mail: a Gmail account's OAuth client and refresh token.              |
 | `AGENT_GITHUB_TOKEN`                                         | Only with a GitHub remote: landing through a PR and CI.              |
 
-Calls and mail check for their credentials again every few minutes, so
+Calls check for their credentials again every few minutes, so
 adding one turns the feature on without a restart.
 
 ## How it runs
@@ -131,6 +129,6 @@ the same messages.
       capabilities/<area>/         what it can do, its prompts, and all of the area's logic
     state/
       memory/<owner>/              committed: what it knows
-      private/<owner>/             never committed: people, their messages, mail
+      private/<owner>/             never committed: people, their messages
       run/<owner>/                 never committed: queues, cursors, locks
       log/<owner>/                 never committed: logs and recordings
