@@ -690,6 +690,20 @@ export type Idea = IdeaKind & {
 };
 
 /**
+ * The idea changed since the caller read it.
+ */
+export type IdeaChanged = {
+    /**
+     * The idea as it is now, to show before acting on it again.
+     */
+    idea: Idea;
+    /**
+     * What happened.
+     */
+    message: string;
+};
+
+/**
  * What kind of idea it is, with that kind's data. A kind never changes.
  */
 export type IdeaKind = {
@@ -1823,9 +1837,9 @@ export type AcceptIdeaErrors = {
      */
     404: string;
     /**
-     * The idea changed since the caller read it: read it again
+     * The idea changed since the caller read it: the body has it as it is now
      */
-    409: string;
+    409: IdeaChanged;
     500: string;
 };
 

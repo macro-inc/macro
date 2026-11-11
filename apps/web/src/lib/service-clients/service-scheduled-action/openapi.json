@@ -375,11 +375,11 @@
             }
           },
           "409": {
-            "description": "The idea changed since the caller read it: read it again",
+            "description": "The idea changed since the caller read it: the body has it as it is now",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/IdeaChanged"
                 }
               }
             }
@@ -3364,6 +3364,21 @@
           }
         ],
         "description": "One proactive suggestion for one person."
+      },
+      "IdeaChanged": {
+        "type": "object",
+        "description": "The idea changed since the caller read it.",
+        "required": ["message", "idea"],
+        "properties": {
+          "idea": {
+            "$ref": "#/components/schemas/Idea",
+            "description": "The idea as it is now, to show before acting on it again."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened."
+          }
+        }
       },
       "IdeaKind": {
         "oneOf": [
