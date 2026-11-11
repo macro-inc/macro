@@ -60,7 +60,7 @@ test.skipIf(!available)(
 );
 
 test.skipIf(!available)(
-  "pastes the clipboard into a field, so a vault secret never passes through the agent",
+  'pastes the clipboard into a field, so a vault secret never passes through the agent',
   async () => {
     const context = browser?.contexts()[0];
     const page = context?.pages().at(-1);
@@ -69,7 +69,7 @@ test.skipIf(!available)(
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.setContent('<input id="password" type="password">');
     // What copySecret does on the computer with xclip, done here by the page.
-    await page.evaluate(() => navigator.clipboard.writeText('s3cret-value'));
+    await page.evaluate("navigator.clipboard.writeText('s3cret-value')");
     await step(
       { tab: asTab(page), trace: passthrough },
       { kind: 'paste', selector: '#password' }

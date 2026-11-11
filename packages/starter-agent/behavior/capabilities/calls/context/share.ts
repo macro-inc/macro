@@ -12,7 +12,7 @@ import type { MakeShare } from '../types.ts';
 import { openBrowser } from './share-browser.ts';
 import { workerFrames } from './share-feed.ts';
 
-export const sharePorts = ({ state, join }: Base): SharePorts => {
+export const sharePorts = ({ state, join, trace }: Base): SharePorts => {
   const screen = screenConfig({ state, join });
   const safe = safeUrl(async (host) =>
     (await lookup(host, { all: true, verbatim: true })).map(
@@ -23,6 +23,7 @@ export const sharePorts = ({ state, join }: Base): SharePorts => {
     open: () => openBrowser({ port: screen.cdpPort, safe }),
     frames: () => workerFrames(),
     safe,
+    trace,
     // LiveKit's native library loads with the first share, never in the agent's main process.
     sound: async (room) =>
       (await import('./share-sound.ts')).recordSound(screen)(room),

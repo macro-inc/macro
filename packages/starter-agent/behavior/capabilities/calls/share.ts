@@ -13,8 +13,11 @@
  * A share also sends the browser's sound, as screen-share audio: its own
  * track, so it never reaches the agent's hearing.
  */
+
 import type { Room } from '@livekit/rtc-node';
 import type { ScreenFrame, ScreenShare } from '@macro-inc/sdk/calls/node';
+import type { Trace } from '../../agent/claude.ts';
+import { hostOf } from '../browser/browse.ts';
 import { driveRule, startRule, urlRule } from './share-policy.ts';
 import type { CallShare, DriveAction, MakeShare, ShareNeeds } from './types.ts';
 
@@ -51,6 +54,8 @@ export type SharePorts = {
   readonly safe: (url: string) => Promise<boolean>;
   /** Publishes the browser's sound in a room. Without it a share is silent. */
   readonly sound?: (room: Room) => Promise<Sounding>;
+  /** Spans: each share's start is one, with the host and whether it went up. */
+  readonly trace: Trace;
 };
 
 /** What a share looks like on the wire. 10 fps: a page, not a video. */
@@ -183,7 +188,15 @@ export const callShare = (needs: ShareNeeds, ports: SharePorts): CallShare => {
     return stopping;
   };
 
-  const start = async (url: string): Promise<string> => {
+  const start = (url: string): Promise<string> =>
+    ports.trace('screen.share', async (span) => {
+      span.set('share.host', hostOf(url));
+      const said = await begin(url);
+      span.set('share.started', active);
+      return said;
+    });
+
+  const begin = async (url: string): Promise<string> => {
     const decision = startRule({
       url,
       uninvited: needs.uninvited,

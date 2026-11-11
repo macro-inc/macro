@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Room } from '@livekit/rtc-node';
+import { passthrough } from '../../../agent/claude.ts';
 import {
   callShare,
   type FrameFeed,
@@ -94,6 +95,7 @@ const setup = (
       },
       frames: () => feed,
       safe: async () => true,
+      trace: passthrough,
       ...ports,
     }
   );
@@ -294,6 +296,31 @@ test('each failed start releases what it acquired', async () => {
   }
 });
 
+test('a share is a screen.share span with its host and whether it went up, never the path', async () => {
+  const fields: Record<string, unknown> = {};
+  const names: string[] = [];
+  const { share } = setup(
+    { uninvited: true },
+    {
+      trace: (name, run) => {
+        names.push(name);
+        return run({
+          set: (key, value) => {
+            fields[key] = value;
+          },
+          traceparent: () => undefined,
+        });
+      },
+    }
+  );
+  await share.tools.share_screen('https://example.com/a?token=x');
+  expect(names).toEqual(['screen.share']);
+  expect(fields).toEqual({
+    'share.host': 'example.com',
+    'share.started': false,
+  });
+});
+
 test('every call gets its own sharing from the same ports', async () => {
   const log: string[] = [];
   const one = setup();
@@ -303,6 +330,7 @@ test('every call gets its own sharing from the same ports', async () => {
       throw new Error('frames');
     },
     safe: async () => true,
+    trace: passthrough,
   });
   const share = make({
     room: () => room,
