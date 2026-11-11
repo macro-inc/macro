@@ -154,6 +154,9 @@ export const authExcluded = [
 ];
 
 export const authBacklog = [
+  'createTeamAgent', // Inviting an agent teammate buys a computer; an admin app flow for now.
+  'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
+  'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'getTeamComputer', // Computer billing and lifecycle controls belong to the app.

@@ -477,6 +477,37 @@ export type CreateProfilePictureUploadRequest = {
 };
 
 /**
+ * Input for inviting an agent teammate and buying its computer.
+ */
+export type CreateTeamAgent = {
+    /**
+     * Profile picture URL (a static file the caller uploaded).
+     */
+    avatarUrl?: string | null;
+    /**
+     * What the agent is responsible for. Seeds its workspace.
+     */
+    jobDescription: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks. Seeds its workspace.
+     */
+    personality: string;
+    /**
+     * One key per Invite dialog, reused when the invite is retried, so a
+     * retry never buys a second computer.
+     */
+    purchaseKey: string;
+    /**
+     * The computer to buy.
+     */
+    size: string;
+};
+
+/**
  * The request body to create a new team
  */
 export type CreateTeamRequest = {
@@ -2298,6 +2329,64 @@ export type Team = {
     name: string;
     owner_id: string;
     slug: string;
+};
+
+/**
+ * An agent teammate: an AI member of a team with its own Macro account and
+ * its own Macro computer.
+ */
+export type TeamAgent = {
+    /**
+     * The agent's Macro computer, once bought.
+     */
+    computerId?: string | null;
+    /**
+     * When the agent was invited.
+     */
+    createdAt: string;
+    /**
+     * Admin who invited the agent.
+     */
+    createdBy?: string | null;
+    /**
+     * What the agent is responsible for.
+     */
+    jobDescription: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks.
+     */
+    personality: string;
+    /**
+     * Where the agent is.
+     */
+    status: TeamAgentStatus;
+    /**
+     * Team the agent belongs to.
+     */
+    teamId: string;
+    /**
+     * The agent's Macro user id (`macro|<email>`).
+     */
+    userId: string;
+};
+
+/**
+ * Where an agent teammate is, from its computer.
+ */
+export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+
+/**
+ * A team's agents.
+ */
+export type TeamAgents = {
+    /**
+     * The agents, oldest first.
+     */
+    agents: Array<TeamAgent>;
 };
 
 /**
@@ -5074,6 +5163,80 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
+
+export type ListTeamAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type ListTeamAgentsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListTeamAgentsError = ListTeamAgentsErrors[keyof ListTeamAgentsErrors];
+
+export type ListTeamAgentsResponses = {
+    200: TeamAgents;
+};
+
+export type ListTeamAgentsResponse = ListTeamAgentsResponses[keyof ListTeamAgentsResponses];
+
+export type CreateTeamAgentData = {
+    body: CreateTeamAgent;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type CreateTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];
+
+export type CreateTeamAgentResponses = {
+    201: TeamAgent;
+};
+
+export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type DeleteTeamAgentData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}';
+};
+
+export type DeleteTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type DeleteTeamAgentError = DeleteTeamAgentErrors[keyof DeleteTeamAgentErrors];
+
+export type DeleteTeamAgentResponses = {
+    204: void;
+};
+
+export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
 
 export type AgentSetupData = {
     body?: never;
