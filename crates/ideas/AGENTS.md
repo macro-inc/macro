@@ -17,14 +17,23 @@ person. Served by the harness under the scheduler's gateway prefix
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
-- The feed, `accept` and `dismiss` (`UserOnly`) serve the person and their own
-  agent: a code-mode credential is a Macro API token for the person, so it
-  passes. The router labels the caller (`IdeaCaller`, span field
-  `ideas.caller`: `user` or `agent`); an agent whose signed invocation names
-  an open generation session, of either kind, gets 403 (`Generating`), since
-  hidden sessions only manage the feed through their own tools. Accepting
-  works the same for both: a background prompt idea starts a run (below);
-  any other idea is only marked accepted.
+- The feed, `accept` and `dismiss` (`UserOnly`) serve the person and anyone
+  acting for them: a code-mode credential is a Macro API token for the
+  person, so it passes. The router labels the caller (`IdeaCaller`, span
+  field `ideas.caller`): only the person's own session with no program's
+  marks (no code-mode invocation, no code-execution header) is `user`; any
+  other credential is `agent`. An agent whose signed invocation names an open
+  generation session, of either kind, gets 403 (`Generating`), since hidden
+  sessions only manage the feed through their own tools. The harness refuses
+  to start without validating requests' attribution. An agent accepting a
+  background prompt idea only takes it on (the person runs it from the app);
+  any other idea becomes done either way.
+- A generation session ends by having each idea it wrote checked against its
+  cited items: its last programs call `macro.ai.structuredCompletion` (tool
+  free) on the model `IdeaService::with_checker_model` names, which sees only
+  the idea and the items' text and lists what the items don't state; the
+  session rewrites those ideas. This lives in the brief (`domain/prompt.md`),
+  not in code. The calls are the hidden session's, recorded non-billable.
 - Code only validates (`domain/check.rs`), stores and logs. Ranking, wording and
   when an idea stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no
