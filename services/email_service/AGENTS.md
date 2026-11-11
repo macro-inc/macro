@@ -30,6 +30,8 @@ the gateway `/email` prefix.
   `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
+  Each worker's `worker::context` builds its production context; the label-write
+  simulation reuses those builders.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM

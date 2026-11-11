@@ -15,6 +15,19 @@ pub async fn run_worker(
     run_worker_with_cancellation(worker, db, sfs_client, CancellationToken::new()).await;
 }
 
+/// Builds the production context for the worker loop.
+pub(crate) fn context(
+    worker: &sqs_worker::SQSWorker,
+    db: PgPool,
+    sfs_client: StaticFileServiceClient,
+) -> SFSDeleteContext {
+    SFSDeleteContext {
+        db,
+        sfs_client,
+        sqs_worker: worker.clone(),
+    }
+}
+
 /// Ingests SFS deleter messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -24,11 +37,7 @@ pub async fn run_worker_with_cancellation(
     sfs_client: StaticFileServiceClient,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = SFSDeleteContext {
-        db,
-        sfs_client,
-        sqs_worker: worker.clone(),
-    };
+    let ctx = context(&worker, db, sfs_client);
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();
