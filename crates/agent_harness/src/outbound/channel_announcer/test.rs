@@ -72,6 +72,24 @@ fn declined_mentions_target_their_harness_settings() {
 }
 
 #[test]
+fn sandbox_unavailable_prompt_points_at_a_connected_runtime_agent() {
+    let prompt = connection_prompt(SessionBlocker::SandboxUnavailable);
+
+    assert_eq!(
+        prompt,
+        AgentConnectionPrompt {
+            agent_tag: "@coder".to_owned(),
+            message: "has no cloud sandbox to run in yet. Connect a runtime of your own in Runtimes settings and mention its agent instead.".to_owned(),
+            chip: AgentConnectionChip {
+                app_slug: "macrod".to_owned(),
+                name: "Runtimes".to_owned(),
+                target: "harness".to_owned(),
+            },
+        }
+    );
+}
+
+#[test]
 fn reply_target_carries_the_originating_channel_message() {
     assert_eq!(
         announcement_reply_target(&announcement()),

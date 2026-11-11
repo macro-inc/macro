@@ -251,8 +251,7 @@ pub const RUST_SERVICES: &[RustService] = &[
         path_prefix: Some("/agent-harness"),
         is_websocket: false,
         // Local stacks default to DEV_DANGEROUS_LOCAL_CONTAINERS, so managed
-        // sandboxes run on the host Docker daemon. Daytona is opt-in via
-        // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
+        // sandboxes run on the host Docker daemon.
         modes: &[Mode::Local],
         opt_in: false,
     },

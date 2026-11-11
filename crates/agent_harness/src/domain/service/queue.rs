@@ -446,7 +446,7 @@ where
             }
             // The queue mutations sit behind the same staff gate as delivery:
             // an edited entry is delivered later under its original identity,
-            // so rewriting (or dropping) what a Daytona session is about to
+            // so rewriting (or dropping) what a sandboxed session is about to
             // run is the same privilege as prompting it.
             HarnessCommand::Deliver(DeliverAction {
                 actor,

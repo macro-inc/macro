@@ -168,8 +168,8 @@ pub struct OpenSession {
 /// [`Self::folds_instructions`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
-    /// A sandbox this deployment provisions (Daytona, or local Docker when
-    /// a developer has opted in).
+    /// A sandbox this deployment provisions (local Docker when a developer
+    /// has opted in; no deployed provider yet).
     SandboxedCoder,
     /// A Cursor cloud agent, served over an in-process ACP pipe.
     Cursor,
@@ -783,6 +783,9 @@ pub enum SessionBlocker {
     CodexNotConnected,
     /// Codex is connected, but no cloud environment has been selected.
     CodexEnvironmentNotConfigured,
+    /// This deployment provisions no sandboxes, so a sandboxed session needs
+    /// a runtime the owner connects themselves.
+    SandboxUnavailable,
 }
 
 /// A mention that opened no session, and why. Posted back into the mention's

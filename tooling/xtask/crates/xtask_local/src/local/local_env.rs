@@ -479,10 +479,7 @@ impl MailEnv {
 /// The agent harness: which bot it answers for, and where its sandboxes come
 /// from.
 ///
-/// Local stacks run sandboxes on the developer's own Docker daemon, so no
-/// Daytona account is involved. `DAYTONA_API_KEY` is seeded empty so Doppler
-/// cannot bill Daytona, while still leaving the key in the map for
-/// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
+/// Local stacks run sandboxes on the developer's own Docker daemon.
 /// The sandbox holds no GitHub credential at all: it clones through the
 /// egress proxy.
 ///
@@ -492,7 +489,6 @@ impl MailEnv {
 /// in code, served wherever `ENVIRONMENT` is not production.
 struct AgentHarnessEnv {
     bot_id: &'static str,
-    snapshot: &'static str,
     /// Image the local provider runs. `run_local` / `stack up` `docker build`
     /// `crates/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
@@ -515,7 +511,6 @@ impl AgentHarnessEnv {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, a first-party bot with no row.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
-            snapshot: "macro-agent-harness",
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
             // Compose names a network `<project>_<network>`.
             network: format!("{project_name}_services"),
@@ -537,8 +532,6 @@ impl AgentHarnessEnv {
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
-        env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
-        env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
         env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
         env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());

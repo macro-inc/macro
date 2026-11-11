@@ -203,7 +203,7 @@ fn run_args(spec: &RunSpec) -> Vec<String> {
 
 /// `docker exec` running one shell command.
 ///
-/// A login shell, matching the Daytona provider: the image puts its baked nix
+/// A login shell: the image puts its baked nix
 /// dev shell on `PATH` through `BASH_ENV`, which a non-login shell would skip.
 fn exec_args(name: &str, command: &str) -> Vec<String> {
     vec![

@@ -1,8 +1,8 @@
 //! Routes container provisioning between the runtimes this deployment hosts.
 //!
 //! One deployment can manage two bots: a sandboxed bot, whose sessions come
-//! from whichever provider [`HarnessContainers`] holds (Daytona, or local
-//! Docker when a developer opts in), and the in-memory agent bot, whose
+//! from whichever provider [`HarnessContainers`] holds (local Docker when a
+//! developer opts in, none when deployed), and the in-memory agent bot, whose
 //! sessions run in-process. The session row's `bot_id` - written before any
 //! container is asked for - decides which runtime a session's transport comes
 //! from.
@@ -11,11 +11,11 @@ use std::sync::Arc;
 
 use agent_egress::domain::model::SessionToken;
 use agent_harness::domain::error::{HarnessError, Result};
-use agent_harness::domain::model::{AgentKind, SpawnContainer};
+use agent_harness::domain::model::{AgentKind, SessionBlocker, SpawnContainer};
 use agent_harness::domain::ports::ContainerManager;
 use agent_harness::domain::sandbox::SandboxResizeEffect;
-use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
-use agent_harness::outbound::sidecar::SidecarSender;
+use agent_harness::outbound::containers::HarnessContainers;
+use agent_harness::outbound::sidecar::{SidecarSender, SidecarTransport};
 use agent_inmem::domain::engine::{AgentIdentity, ReplyDelivery};
 use agent_inmem::outbound::manager::{InMemAgentManager, SessionFacts};
 use agent_runtime_protocol::domain::connection::ServerChannel;
@@ -24,6 +24,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, SandboxSize, SessionManagement};
 use agent_session::domain::service::AgentSessionService;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[cfg(test)]
 mod test;
@@ -31,7 +32,7 @@ mod test;
 /// A session transport from whichever runtime the session's bot uses.
 pub enum RoutedTransport {
     /// A sandboxed session's sidecar-backed transport.
-    Sandbox(HarnessContainer),
+    Sandbox(SidecarTransport),
     /// An in-process session's channel.
     InMem(ServerChannel),
 }
@@ -115,7 +116,7 @@ where
     ///
     /// Deliberately has no "when in doubt, use the sandbox" branch. The
     /// in-process bot must never be handed a sandbox: it has no repository to
-    /// clone and no reason to cost a Daytona container, so a deployment that
+    /// clone and no reason to cost a container, so a deployment that
     /// cannot serve it refuses the session instead of silently provisioning
     /// the wrong runtime for it.
     async fn route(&self, session: AgentSessionId) -> Result<Route> {
@@ -178,6 +179,22 @@ where
     Sessions: AgentSessionService,
 {
     type Transport = RoutedTransport;
+
+    /// The in-process bot needs nothing from its owner; everything else is
+    /// the sandbox provider's question.
+    async fn preflight(
+        &self,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        match kind {
+            AgentKind::InMemory => Ok(None),
+            AgentKind::SandboxedCoder
+            | AgentKind::Cursor
+            | AgentKind::CodexCloud
+            | AgentKind::External => self.sandbox.preflight(kind, owner).await,
+        }
+    }
 
     async fn spawn(
         &self,

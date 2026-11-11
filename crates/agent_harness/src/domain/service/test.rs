@@ -96,7 +96,7 @@ fn disconnected_harness_errors_keep_the_session_error_classification() {
 }
 
 /// A sender whose email domain is `is_macro_staff` - the identity the
-/// Daytona staff gate admits.
+/// sandboxed-coder staff gate admits.
 fn staff_sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("staff@macro.com").expect("a valid user id")
 }
@@ -164,7 +164,7 @@ fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
 /// A prompt arriving from a channel that is not the session's own, so it is
 /// the announcing case.
 fn forward_message(content: &str) -> DeliverAction {
-    // Staff: `disconnected_session` is a Daytona coder bot, and the
+    // Staff: `disconnected_session` is a sandboxed coder bot, and the
     // execute() gate admits only macro.com actors onto those.
     DeliverAction {
         context: Some(trigger()),
@@ -1838,7 +1838,7 @@ async fn live_session(
     container
 }
 
-/// Open a Daytona-backed (sandboxed coder) session with a staff opener - the
+/// Open a sandboxed coder session with a staff opener - the
 /// only identity the gate in `execute` lets past `Open`.
 async fn live_sandboxed_coder_session(
     service: &TestHarness,
@@ -2074,7 +2074,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
         .control_event(
             id,
             ControlEvent {
-                action: AgentAction::prompt("spend daytona credits"),
+                action: AgentAction::prompt("spend sandbox credits"),
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
