@@ -209,6 +209,7 @@ import {
   type ToolHandlerMap,
   type ToolRenderContext,
 } from './ToolRenderer';
+import { UnknownToolCall } from './UnknownToolCall';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
@@ -412,7 +413,29 @@ export function RenderTool(props: ToolProps) {
     json: props.json,
     name: props.name as ToolName,
   });
-  if (maybeTool.isErr()) return null;
+  if (maybeTool.isErr()) {
+    // A tool deleted without a retired schema still shows by name; a known
+    // tool whose saved call no longer parses stays hidden.
+    if (!maybeTool.error.some((error) => error.code === 'not_found')) {
+      return null;
+    }
+    return (
+      <ToolErrorContext.Provider
+        value={(): ToolEnding | undefined => {
+          if (props.error !== undefined) {
+            return { kind: 'failed', reason: props.error };
+          }
+          if (props.stopped) return { kind: 'stopped' };
+          return undefined;
+        }}
+      >
+        <UnknownToolCall
+          name={props.name}
+          renderContext={props.renderContext}
+        />
+      </ToolErrorContext.Provider>
+    );
+  }
 
   const tool = maybeTool.value;
   const handler = toolHandlers[tool.name] as ToolHandler<
