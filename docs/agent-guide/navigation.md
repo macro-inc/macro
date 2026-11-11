@@ -1844,8 +1844,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 
