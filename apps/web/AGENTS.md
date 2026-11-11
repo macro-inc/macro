@@ -44,6 +44,8 @@
 
 ## Verifying a change in a real browser
 
+- Keep native document editing and the public runtime unavailable until the actual Initialize projection; retain private cleanup ownership during loading and surface initialization errors through the existing error chrome.
+
 Require the maintained [six-step native preview install check](scripts/editor-live-check/README.md) before and after every native preview installation, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
 
 Native editor surfaces share `EditorEngineProvider` and `EditorEngineBoundary`

@@ -92,6 +92,7 @@ export default function RustMarkdownEditor(props: {
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const [ready, setReady] = createSignal(false);
   const abort = new AbortController();
+  const canEdit = () => ready() && permissions.canEdit();
   const userMentionContext = createNativeUserMentionContext(theme);
   const overlayLifecycle = createNativeListenerScope();
   overlayLifecycle.add(() => userMentionContext.dispose());
@@ -141,6 +142,19 @@ export default function RustMarkdownEditor(props: {
   let releaseEmpty: (() => void) | undefined;
   let releaseScrollTelemetry: (() => void) | undefined;
   let lastError: Error | undefined;
+  let initialProjectionTimer: ReturnType<typeof setTimeout> | undefined;
+  let syncStatus = 0;
+  const clearPublicRuntime = () => {
+    try {
+      props.onRuntime?.(undefined);
+    } catch (error) {
+      try {
+        Telemetry.error(error, { surface: 'rust-editor.runtime.cleanup' });
+      } catch {
+        // Cleanup must not hide the editor's original open failure.
+      }
+    }
+  };
   const showError = (value: unknown) => {
     const failure =
       value instanceof Error ? value : new Error('Editor session failed');
@@ -148,12 +162,14 @@ export default function RustMarkdownEditor(props: {
     if (!abort.signal.aborted && failure !== lastError) {
       lastError = failure;
       setReady(false);
+      clearPublicRuntime();
       props.onError?.(failure);
       Telemetry.error(failure, { surface: 'rust-editor.session' });
     }
   };
   onCleanup(() => {
     abort.abort();
+    clearTimeout(initialProjectionTimer);
     try {
       // Unmount UI and retire host callbacks before the asynchronous close starts.
       overlayLifecycle.dispose();
@@ -163,13 +179,14 @@ export default function RustMarkdownEditor(props: {
       releaseCommit?.();
       releaseEmpty?.();
       releaseScrollTelemetry?.();
-      props.onRuntime?.(undefined);
+      clearPublicRuntime();
       const current = runtime();
       if (current) fireAndForget(current.close(), 'rust-editor.close');
     }
   });
-  createEffect(() => runtime()?.view.setEditable(permissions.canEdit()));
+  createEffect(() => runtime()?.view.setEditable(canEdit()));
   onMount(() => {
+    const openStarted = performance.now();
     fireAndForget(
       flow
         .task('session.init', async () => {
@@ -224,7 +241,7 @@ export default function RustMarkdownEditor(props: {
                   if (abort.signal.aborted)
                     throw new Error('Editor open cancelled');
                   const installed = installNativeMarkdownOverlays(view, {
-                    canEdit: permissions.canEdit,
+                    canEdit,
                     mentions: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,
@@ -246,7 +263,7 @@ export default function RustMarkdownEditor(props: {
                 namespace,
                 owner,
                 parentSpan: flow.span,
-                editable: permissions.canEdit(),
+                editable: false,
                 preset: 'rich',
                 theme,
                 onError: showError,
@@ -268,6 +285,7 @@ export default function RustMarkdownEditor(props: {
               span: flow.span,
               onStatus(status) {
                 if (abort.signal.aborted) return;
+                syncStatus = status.code;
                 state.session.setStatus(
                   status.code === 1
                     ? SyncSourceStatus.Connected
@@ -293,23 +311,64 @@ export default function RustMarkdownEditor(props: {
             };
             releaseEmpty = mounted.view.onCommit(reportEmpty);
             reportEmpty();
-            props.onRuntime?.(mounted);
             if (abort.signal.aborted) return;
-            await new Promise<void>((resolve, reject) => {
-              rejectReady = reject;
-              if (mounted.view.node(0)) {
-                resolve();
-                return;
+            await flow.task('editor.initial-projection', async (span) => {
+              const waitStarted = performance.now();
+              let phase = 'cancelled';
+              let timedOut = false;
+              span.setAttr('document.id', documentId());
+              try {
+                if (lastError) throw lastError;
+                await new Promise<void>((resolve, reject) => {
+                  rejectReady = reject;
+                  if (mounted.view.node(0)) {
+                    resolve();
+                    return;
+                  }
+                  initialProjectionTimer = setTimeout(() => {
+                    timedOut = true;
+                    reject(new Error('Editor initial projection timed out'));
+                  }, 15_000);
+                  releaseCommit = mounted.view.onCommit((commit) => {
+                    if (commit.fullReconcile) resolve();
+                  });
+                });
+                if (lastError) throw lastError;
+                phase = 'initialized';
+              } catch (error) {
+                phase = abort.signal.aborted
+                  ? 'cancelled'
+                  : timedOut
+                    ? 'timeout'
+                    : lastError
+                      ? 'attach-error'
+                      : 'failed';
+                throw error;
+              } finally {
+                clearTimeout(initialProjectionTimer);
+                releaseCommit?.();
+                releaseCommit = undefined;
+                rejectReady = undefined;
+                span.setAttr('editor.open.phase', phase);
+                span.setAttr('editor.open.sync_status', syncStatus);
+                span.setAttr(
+                  'editor.open.wait_ms',
+                  performance.now() - waitStarted
+                );
+                span.setAttr(
+                  'editor.open.elapsed_ms',
+                  performance.now() - openStarted
+                );
               }
-              releaseCommit = mounted.view.onCommit((commit) => {
-                if (commit.fullReconcile) {
-                  releaseCommit?.();
-                  resolve();
-                }
-              });
             });
             if (!abort.signal.aborted) {
+              if (lastError) throw lastError;
               setReady(true);
+              if (abort.signal.aborted) return;
+              if (lastError) throw lastError;
+              props.onRuntime?.(mounted);
+              if (abort.signal.aborted) return;
+              if (lastError) throw lastError;
               props.onReady?.();
             }
             if (props.autoFocus && !isTouchDevice() && !abort.signal.aborted)
@@ -321,6 +380,10 @@ export default function RustMarkdownEditor(props: {
             overlayLifecycle.fail(error);
           } catch (cause) {
             showError(cause);
+          } finally {
+            const current = runtime();
+            if (current)
+              fireAndForget(current.close(), 'rust-editor.open.close');
           }
         }),
       'rust-editor.open'
@@ -332,7 +395,7 @@ export default function RustMarkdownEditor(props: {
         ref={root}
         role="textbox"
         aria-multiline="true"
-        aria-readonly={!permissions.canEdit()}
+        aria-readonly={!canEdit()}
         aria-label="Document content"
         data-input-surface="editor"
         class="ph-no-capture w-full max-w-full min-h-52 md"
@@ -344,7 +407,7 @@ export default function RustMarkdownEditor(props: {
       <Show when={equationMenuActive() && runtime()}>
         <DecoratorHostContext.Provider value={equationContext.host}>
           <FloatingMenuGroup>
-            <FloatingEquationMenu canEdit={permissions.canEdit} />
+            <FloatingEquationMenu canEdit={canEdit} />
           </FloatingMenuGroup>
         </DecoratorHostContext.Provider>
       </Show>

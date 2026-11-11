@@ -23,6 +23,8 @@ model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML
 import must cancel if the view becomes read-only before admission.
 
+While the native body loads, its root remains non-editable and its public runtime is unavailable until the actual initial projection. Check readiness using a non-null view generation and root node; disappearing skeletons can also mean an open error. An attach failure must show the existing could-not-open warning rather than leave an endless loading editor. If no initial projection arrives within 15 seconds of beginning the initial-projection wait, the native body reports that warning and closes the pending session without retrying. The routed flow records `editor.initial-projection` with the document id, reached phase, latest sync status, projection wait, and total open wait.
+
 The native body installs its checkbox pointer bridge through `installOverlays`.
 Click or tap a checklist marker, switch the view read-only, then unlock it and
 repeat; revoked Session write access must reject the toggle even if the local UI
