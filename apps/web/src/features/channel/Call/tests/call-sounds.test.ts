@@ -53,6 +53,67 @@ describe('call sound transport', () => {
     expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1);
   });
 
+  it('announces one join for repeated completion of the same connection', () => {
+    sounds.joined(room, 'call-1', false);
+    sounds.joined(room, 'call-1', false);
+    expect(play.mock.calls).toEqual([['join']]);
+    expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1);
+  });
+
+  it('plays a leave packet after signaling removes its participant', () => {
+    const peer = new RemoteParticipant(room.engine.client, 'peer-1', 'peer');
+    room.remoteParticipants.set(peer.identity, peer);
+    sounds.joined(room, 'call-1', false);
+    play.mockClear();
+    room.remoteParticipants.delete(peer.identity);
+    room.emit(RoomEvent.ParticipantDisconnected, peer);
+    const payload = new TextEncoder().encode(
+      JSON.stringify({
+        callId: 'call-1',
+        visitId: 'peer-visit',
+        event: 'leave',
+        senderSid: peer.sid,
+      })
+    );
+    room.emit(RoomEvent.DataReceived, payload, undefined, undefined, TOPIC);
+    expect(play.mock.calls).toEqual([['leave']]);
+    room.state = ConnectionState.Reconnecting;
+    room.emit(RoomEvent.Reconnecting);
+    room.state = ConnectionState.Connected;
+    room.emit(RoomEvent.Reconnected);
+    play.mockClear();
+    room.emit(RoomEvent.DataReceived, payload, undefined, undefined, TOPIC);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('ignores a delayed old leave after that identity rejoins', () => {
+    const peer = new RemoteParticipant(room.engine.client, 'peer-1', 'peer');
+    room.remoteParticipants.set(peer.identity, peer);
+    sounds.joined(room, 'call-1', false);
+    room.remoteParticipants.delete(peer.identity);
+    room.emit(RoomEvent.ParticipantDisconnected, peer);
+    room.remoteParticipants.set(
+      peer.identity,
+      new RemoteParticipant(room.engine.client, 'peer-2', 'peer')
+    );
+    play.mockClear();
+    room.emit(
+      RoomEvent.DataReceived,
+      new TextEncoder().encode(
+        JSON.stringify({
+          callId: 'call-1',
+          visitId: 'peer-visit',
+          event: 'leave',
+          senderSid: peer.sid,
+        })
+      ),
+      undefined,
+      undefined,
+      TOPIC
+    );
+    expect(play).not.toHaveBeenCalled();
+  });
+
   it('plays explicit peer events but rejects self, programs, wrong topics, and stale rooms', () => {
     const peer = new RemoteParticipant(room.engine.client, 'peer-1', 'peer');
     const program = new RemoteParticipant(

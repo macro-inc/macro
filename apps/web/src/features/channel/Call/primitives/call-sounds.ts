@@ -12,6 +12,11 @@ import { isProgramParticipant } from '../is-program-participant';
 const CALL_PRESENCE_TOPIC = 'macro.call-presence.v1';
 const LEAVE_ANNOUNCEMENT_TIMEOUT_MS = 150;
 const MAX_PENDING_ANNOUNCEMENTS = 32;
+const MAX_RECORDED_DEPARTURES = 64;
+type SoundParticipant = Pick<
+  RemoteParticipant,
+  'sid' | 'identity' | 'attributes'
+>;
 type CallPresencePacket = NonNullable<
   ReturnType<typeof parseCallPresenceMessage>
 >;
@@ -29,9 +34,11 @@ export function createCallSounds(options: {
     play: options.play,
     createVisitId: () => crypto.randomUUID(),
   });
+  let joinedRoom: Room | undefined;
 
   function attach(room: Room, callId: string) {
     let pending: CallPresencePacket[] = [];
+    const departed = new Map<string, SoundParticipant>();
     room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
       if (topic !== CALL_PRESENCE_TOPIC || options.room() !== room) return;
       if (room.state !== 'connected') return;
@@ -44,17 +51,21 @@ export function createCallSounds(options: {
       }
       const message = parseCallPresenceMessage(value);
       if (!message) return;
-      // Some LiveKit server versions omit the DataReceived sender. Resolve
-      // its announced RTC sid only against the room's current roster.
+      // Signaling can remove a participant before its leave packet arrives.
       const sender =
         participant ??
         [...room.remoteParticipants.values()].find(
           (peer) => peer.sid === message.senderSid
-        );
+        ) ??
+        departed.get(message.senderSid);
       if (!sender) {
         // Data and signaling use separate channels: a join announcement can
         // beat the roster update. Wait for that exact RTC sid, not a timer.
-        if (pending.length < MAX_PENDING_ANNOUNCEMENTS) pending.push(message);
+        if (
+          message.event === 'join' &&
+          pending.length < MAX_PENDING_ANNOUNCEMENTS
+        )
+          pending.push(message);
         return;
       }
       receive(room, message, sender);
@@ -68,12 +79,25 @@ export function createCallSounds(options: {
       );
       for (const message of messages) receive(room, message, participant);
     });
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      departed.set(participant.sid, {
+        sid: participant.sid,
+        identity: participant.identity,
+        attributes: participant.attributes,
+      });
+      if (departed.size > MAX_RECORDED_DEPARTURES) {
+        const oldest = departed.keys().next().value;
+        if (oldest !== undefined) departed.delete(oldest);
+      }
+    });
     room.on(RoomEvent.Reconnecting, () => {
       pending = [];
+      departed.clear();
     });
     room.on(RoomEvent.Reconnected, () => {
       if (options.room() !== room) return;
       pending = [];
+      departed.clear();
       // Re-arm against the recovered roster without announcing another visit.
       presence.joined(callId, participantSids(room), true);
     });
@@ -82,9 +106,12 @@ export function createCallSounds(options: {
   function receive(
     room: Room,
     message: CallPresencePacket,
-    sender: RemoteParticipant
+    sender: SoundParticipant
   ) {
-    if (!isCurrentParticipant(room, sender) || sender.sid !== message.senderSid)
+    if (
+      !isEligibleSender(room, sender, message.event) ||
+      sender.sid !== message.senderSid
+    )
       return;
     const deliver = () => {
       const span = Telemetry.span('call.presence.receive');
@@ -104,17 +131,16 @@ export function createCallSounds(options: {
     else deliver();
   }
 
-  function isCurrentParticipant(
+  function isEligibleSender(
     room: Room,
-    participant?: RemoteParticipant
-  ): participant is RemoteParticipant {
-    if (options.room() !== room || room.state !== 'connected' || !participant)
-      return false;
+    participant: SoundParticipant,
+    event: CallPresenceEvent
+  ): boolean {
+    if (options.room() !== room || room.state !== 'connected') return false;
     if (participant.identity === room.localParticipant.identity) return false;
     if (isProgramParticipant(participant.attributes)) return false;
-    return (
-      room.remoteParticipants.get(participant.identity)?.sid === participant.sid
-    );
+    const current = room.remoteParticipants.get(participant.identity);
+    return current ? current.sid === participant.sid : event === 'leave';
   }
 
   function participantSids(room: Room) {
@@ -152,12 +178,15 @@ export function createCallSounds(options: {
   }
 
   function joined(room: Room, callId: string, recovery: boolean) {
+    if (joinedRoom === room) return;
+    joinedRoom = room;
     const message = presence.joined(callId, participantSids(room), recovery);
     if (message) fireAndForget(publish(room, message), 'call-sounds');
   }
 
   async function leaving(room: Room | null) {
     const message = presence.left();
+    joinedRoom = undefined;
     if (!message || !room || room.state !== 'connected') return;
     // Give the reliable channel a small bounded head start over RTC teardown.
     // A blocked data channel must never hold the user's hangup hostage.
@@ -174,5 +203,13 @@ export function createCallSounds(options: {
     }
   }
 
-  return { attach, joined, leaving, abandon: presence.clear };
+  return {
+    attach,
+    joined,
+    leaving,
+    abandon: () => {
+      joinedRoom = undefined;
+      presence.clear();
+    },
+  };
 }

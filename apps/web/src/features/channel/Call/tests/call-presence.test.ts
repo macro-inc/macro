@@ -68,10 +68,9 @@ describe('call presence sounds', () => {
     expect(play.mock.calls).toEqual([['join'], ['leave'], ['join']]);
   });
 
-  it('does not announce duplicate joins or self recovery with a replacement room', () => {
+  it('does not announce self recovery with a replacement room', () => {
     presence.joined('call-1', ['peer-1'], false);
     play.mockClear();
-    expect(presence.joined('call-1', ['peer-1'], false)).toBeUndefined();
     expect(presence.joined('call-1', ['recovered-peer'], true)).toBeUndefined();
     presence.receive(
       { callId: 'call-1', visitId: 'old-visit', event: 'join' },
@@ -81,6 +80,13 @@ describe('call presence sounds', () => {
     expect(presence.left()?.visitId).toBe('visit-1');
   });
 
+  it('announces an explicit new join after recovery, even in the same call', () => {
+    presence.joined('call-1', [], false);
+    presence.joined('call-1', [], true);
+    play.mockClear();
+    expect(presence.joined('call-1', [], false)?.visitId).toBe('visit-2');
+    expect(play.mock.calls).toEqual([['join']]);
+  });
   it('starts a restored visit silently but can play its later intentional leave', () => {
     expect(presence.joined('call-1', ['peer-1'], true)).toBeUndefined();
     expect(play).not.toHaveBeenCalled();

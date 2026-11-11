@@ -58,7 +58,7 @@ export function createCallPresence(options: {
     // The initial roster never announces joins to its new observer, even if a
     // delayed reliable packet arrives after the observer finishes connecting.
     initialParticipantSids = new Set(participantSids);
-    if (visit?.callId === callId) return;
+    if (recovery && visit?.callId === callId) return;
     received.clear();
     visit = { callId, visitId: options.createVisitId() };
     if (recovery) return;
@@ -71,6 +71,7 @@ export function createCallPresence(options: {
     initialParticipantSids.clear();
     received.clear();
   }
+
   function left(): CallPresenceMessage | undefined {
     if (!visit) return;
     const message = { ...visit, event: 'leave' as const };
