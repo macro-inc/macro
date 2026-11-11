@@ -10,6 +10,46 @@ use crate::domain::ports::EntityActivityReads;
 mod teammate_feed;
 mod transaction;
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {
+    let correlation = Uuid::now_v7();
+    let activity = agent_correlation::context::scope_with_verb(
+        Some(correlation),
+        Some(agent_correlation::AgentVerb::Edited),
+        async {
+            Activity::common(
+                Uuid::now_v7(),
+                0,
+                Actor::new_from_user(user("macro|actor@example.com")),
+                None,
+                EntityType::Document,
+                "verb-document",
+                CommonAction::Edited,
+                Utc::now(),
+            )
+        },
+    )
+    .await;
+    let repo = PgActivityRepo::new(pool);
+    repo.insert_activities(&[activity]).await.unwrap();
+    let page = repo
+        .entity_feed(EntityType::Document, "verb-document", None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(page.records[0].agent_correlation_id, Some(correlation));
+    assert_eq!(
+        page.records[0].agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+    let wire = crate::domain::events::ActivityWireRow::from(page.records[0].clone());
+    assert_eq!(wire.agent_verb.as_deref(), Some("edited"));
+    assert_eq!(
+        wire.into_record().unwrap().agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+}
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }
@@ -1065,17 +1105,11 @@ async fn session_activity_preserves_invocations_and_paginates_without_entity_gra
             .is_empty()
     );
     // Session deletion removes its mapping, never the entity's existing history.
+    // The route refuses a deleted session at its access check before reading.
     sqlx::query!("DELETE FROM agent_session WHERE id = $1", session)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        repo.agent_activity(session, None, None, nz(10))
-            .await
-            .unwrap()
-            .records
-            .is_empty()
-    );
     assert_eq!(
         repo.entity_feed(EntityType::Document, "private-document", None, nz(10))
             .await
@@ -1083,5 +1117,64 @@ async fn session_activity_preserves_invocations_and_paginates_without_entity_gra
             .records
             .len(),
         5
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_activity_is_stamped_on_insert_and_leaves_out_reads(pool: PgPool) {
+    use crate::domain::ports::AgentActivityReads;
+    let session = Uuid::now_v7();
+    let run = Uuid::now_v7();
+    sqlx::query!("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ($1, 'macro|owner@example.com', $2, 'test', 'test', '/workspace')", session, Uuid::now_v7()).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+        run,
+        session
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgActivityRepo::new(pool.clone());
+    let timestamp = Utc::now();
+    let row = |ordinal: u32, action: CommonAction, correlation: Option<Uuid>| {
+        Activity::common(
+            Uuid::from_u128(500),
+            ordinal,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "document",
+            action,
+            timestamp,
+        )
+        .with_agent_correlation(correlation)
+    };
+    repo.insert_activities(&[
+        row(0, CommonAction::Edited, Some(run)),
+        row(1, CommonAction::Opened, Some(run)),
+        row(2, CommonAction::Edited, None),
+    ])
+    .await
+    .unwrap();
+
+    // The trigger stamps correlated rows only, whatever the writer sent.
+    let stamped = sqlx::query_scalar!(
+        "SELECT agent_session_id FROM activity_events WHERE entity_id = 'document' ORDER BY id"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stamped.iter().filter(|id| **id == Some(session)).count(), 2);
+    assert_eq!(stamped.iter().filter(|id| id.is_none()).count(), 1);
+
+    let page = repo
+        .agent_activity(session, None, None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert!(
+        page.records
+            .iter()
+            .all(|record| record.agent_correlation_id == Some(run))
     );
 }

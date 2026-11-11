@@ -731,7 +731,7 @@ async fn lists_each_routine_with_its_latest_run() {
 }
 
 #[tokio::test]
-async fn nonowners_can_read_but_not_manage_routines() {
+async fn nonowners_can_neither_read_nor_manage_routines() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -743,9 +743,15 @@ async fn nonowners_can_read_but_not_manage_routines() {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_eq!(
+            svc.get_action(&view_receipt(id)).await.unwrap().id,
+            Some(id)
+        );
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_policy(
+            svc.get_action(&view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
         assert_policy(
             svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,

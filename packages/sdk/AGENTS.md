@@ -85,11 +85,21 @@ enforced by the ordinary backend APIs.
   someone else prompted for the owner's approval. `discover(execution, name)`
   and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
   `ConnectMcpServer`. Only works inside a running execution.
+- `src/entities/ui/`: `macro.ui.open(execution, item)` opens an item (a handle
+  with `webUrl()`, or `macro.ui.link(url)`, which refuses non-Macro links) in a
+  new pane of the tab the user prompted from, through the harness's
+  `ui-commands` route; it resolves `sent`, `no_client` or `declined` with the
+  item's `url` to link instead. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
   picture; `macro.me.uploadProfilePicture()` stores the image through the auth
-  service, because static file storage does not accept API keys. `team.invite(emails, { agent: true })`
+  service, because static file storage does not accept API keys. `update` takes a
+  `StaticImage`; `macro.images.byId(savedId)` rebuilds one to switch back without
+  re-uploading. `me.profilePicture()`, `User.profilePicture()`
+  and `users.profilePictures()` read `POST /user/profile_pictures`, returning a
+  `StaticImage` for static file URLs (path `/file/<uuid>`, any public base) and an
+  `ExternalProfilePicture` (`{ url }`) for legacy ones (`users/profile-picture.ts`). `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
@@ -131,7 +141,7 @@ enforced by the ordinary backend APIs.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
-- `appearance()` / `setAppearance()` live on supported entity handles; writes replace icon/color together and invalidate cached detail only after success.
+- `appearance()` / `setAppearance()` live on supported entity handles; writes replace icon/color together, carry the `edited` SDK verb, and invalidate cached detail only after success.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
   Consumer application bundles belong to their consumer. The calls entry points
   are built separately from core, with LiveKit and OpenTelemetry external.
@@ -141,7 +151,8 @@ enforced by the ordinary backend APIs.
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
 `bun run lint`. After building, run `bun run check:pack` to verify isolated
 consumer imports, types, and bundle separation. Coverage requires each generated
-endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`, and
+every wrapped method to have a verb in `src/utils/verbs.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -156,6 +167,12 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
+- Every public method carries one MCP hint tag (`@readonly`, `@write`, `@send` or
+  `@destructive`, plus `@openworld`/`@idempotent` when true) or
+  `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
+  by them and fails on an untagged method. A new or changed public method
+  signature or hint tag updates that package's tool snapshots (`bunx vitest
+  run -u` there); doc text alone does not.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public

@@ -21,6 +21,8 @@ queries used across Rust services.
 - Not here: domain logic, authorization decisions, or caching built on top of
   these queries — those live in the owning domain crate/service that calls in.
 
+`activity_events.agent_verb` is nullable so older writers and historical rows remain valid during a rolling deploy.
+
 `agent_session_notification` is an additive leased outbox owned by
 `agent_session`. Review adapters use its transaction-aware producer port;
 notification frames have their own log direction. Session deletion cascades
@@ -135,3 +137,4 @@ foreign keys; the broker deletes expired rows.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
+- `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.

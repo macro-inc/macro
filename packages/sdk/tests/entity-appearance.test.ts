@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type EntityAppearance, Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
+import { setDefaultRequestVerbHeader } from '../src/utils/activity';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  setDefaultRequestVerbHeader(false);
 });
 
 const cases = [
@@ -44,6 +46,7 @@ const cases = [
 
 for (const entry of cases) {
   test(`${entry.name} appearance writes retain cached reads after failure and invalidate after success`, async () => {
+    setDefaultRequestVerbHeader(true);
     let saved: EntityAppearance = {};
     let refuse = false;
     let reads = 0;
@@ -98,6 +101,7 @@ for (const entry of cases) {
       expect(request.method).toBe('PUT');
       expect(new URL(request.url).pathname).toBe(`${entry.path}/appearance`);
       expect(request.headers.get('authorization')).toBe('Bearer test-token');
+      expect(request.headers.get('x-macro-sdk-verb')).toBe('edited');
     }
     expect(await writes[1].json()).toEqual(appearance);
     expect(await writes[2].json()).toEqual({});

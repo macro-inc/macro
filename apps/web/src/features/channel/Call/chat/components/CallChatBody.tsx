@@ -43,7 +43,9 @@ export function CallChatBody(props: {
             viewport.scrollHeight - scrollTop - viewport.clientHeight < 48;
         }}
       >
-        <div ref={content}>{props.children}</div>
+        <div ref={content} class="flex min-h-full flex-col">
+          {props.children}
+        </div>
       </div>
       <div class="shrink-0 p-3">{props.composer}</div>
     </div>

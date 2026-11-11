@@ -134,8 +134,10 @@ each run.
 - Owns: scheduled-action and event-trigger CRUD, dispatch (in-process or
   tokio), run history, and live-update notifications over the connection
   gateway.
-- An authenticated caller with a routine ID can read its detail; listing,
-  run history, and mutations stay owner-scoped.
+- Reading a routine, listing, run history, and mutations are owner-scoped:
+  ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
+  loads the routine only for its owner (`granted_action`). Without a grant
+  they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
@@ -203,6 +205,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   dates are never kept, so those properties only support any-change filters.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
+- GitHub presets do not configure subscriptions: use `../github/README.md`
+  and `../github/app-webhooks.json` for App registration and permission approval.
+  Keep event names open so new subscriptions need no routine parser changes.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`

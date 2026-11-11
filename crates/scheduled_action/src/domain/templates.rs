@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -196,21 +196,10 @@ impl<Actions: ScheduledActionService, Templates, Flags>
         &self,
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(Uuid, ScheduledAction)> {
-        if receipt.entity().entity_type != EntityType::ScheduledAction {
-            anyhow::bail!("scheduled action receipt has the wrong entity type");
-        }
-        let id = receipt
-            .entity()
-            .entity_id
-            .parse::<Uuid>()
-            .map_err(|_| ActionPolicyError::NotFound)?;
-        let action = self.actions.get_action(id).await?;
-        let owned = receipt
-            .acting_user_id()
-            .is_some_and(|user| action.owner.is_user(user));
-        if !owned {
-            return Err(ActionPolicyError::NotFound.into());
-        }
+        let action = self.actions.get_action(receipt).await?;
+        let Some(id) = action.id else {
+            anyhow::bail!("stored scheduled action has no id");
+        };
         Ok((id, action))
     }
 }

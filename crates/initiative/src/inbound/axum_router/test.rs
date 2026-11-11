@@ -913,6 +913,7 @@ impl ::activity::domain::ports::EntityActivityReads for FakeActivityReads {
         assert_eq!(cursor, None);
         let record = |id: u128, occurred_at: &str| ::activity::domain::models::ActivityRecord {
             agent_correlation_id: None,
+            agent_verb: None,
             id: Uuid::from_u128(id),
             actor: ::activity::domain::models::Actor::new_from_user(user()),
             subject_id: USER_ID.to_string(),
