@@ -57,7 +57,7 @@ pub struct AttachmentUploadMetadata {
     pub internal_date_ts: DateTime<Utc>,
     pub message_db_id: Uuid,
     pub thread_db_id: Uuid,
-    pub sender_email: String,
+    pub sender_email: Option<String>,
     pub subject: Option<String>,
 }
 

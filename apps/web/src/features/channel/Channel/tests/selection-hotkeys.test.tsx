@@ -47,9 +47,14 @@ const incoming = rootMessage('incoming', 'bob');
 const ownReply = message('own-reply', 'alice');
 const incomingReply = message('incoming-reply', 'bob');
 
-function setup(selectedId?: string, selectedReplyId?: string) {
+function setup(
+  selectedId?: string,
+  selectedReplyId?: string,
+  onEscapeToList = vi.fn(() => false)
+) {
   const onEdit = vi.fn();
   const onDone = vi.fn(() => true);
+  const onSplitEscape = vi.fn(() => true);
   render(() => {
     useHotKeyRoot();
     const [attachParent, parentScope] = useHotkeyDOMScope('home');
@@ -58,6 +63,12 @@ function setup(selectedId?: string, selectedReplyId?: string) {
       hotkey: 'e',
       description: 'Mark done',
       keyDownHandler: onDone,
+    });
+    registerHotkey({
+      scopeId: parentScope,
+      hotkey: 'escape',
+      description: 'Close spotlight',
+      keyDownHandler: onSplitEscape,
     });
     const selection = createMessageSelection({
       keys: () => [own.id, incoming.id],
@@ -83,6 +94,7 @@ function setup(selectedId?: string, selectedReplyId?: string) {
       isEditing: () => false,
       onOpenFindBar: vi.fn(),
       onGoToBottom: vi.fn(),
+      onEscapeToList,
     });
     createThreadHotkeys({
       messageListScopeId: channel.messageListScopeId,
@@ -123,7 +135,11 @@ function setup(selectedId?: string, selectedReplyId?: string) {
     fireEvent.keyDown(list, { key: 'e' });
     fireEvent.keyUp(list, { key: 'e' });
   };
-  return { onEdit, onDone, list, pressEdit };
+  const pressEscape = () => {
+    fireEvent.keyDown(list, { key: 'Escape' });
+    fireEvent.keyUp(list, { key: 'Escape' });
+  };
+  return { onEdit, onDone, onSplitEscape, list, pressEdit, pressEscape };
 }
 
 describe('selected message shortcuts in a Home split', () => {
@@ -188,5 +204,41 @@ describe('selected message shortcuts in a Home split', () => {
     fireEvent.keyUp(list, { key: 'Escape' });
     pressEdit();
     expect(onDone).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Esc from the message list', () => {
+  it('returns focus to the list the conversation was opened from', () => {
+    const onEscapeToList = vi.fn(() => true);
+    const { pressEscape, onSplitEscape } = setup(
+      undefined,
+      undefined,
+      onEscapeToList
+    );
+    pressEscape();
+    expect(onEscapeToList).toHaveBeenCalledOnce();
+    expect(onSplitEscape).not.toHaveBeenCalled();
+  });
+
+  it('clears a selected message before leaving', () => {
+    const onEscapeToList = vi.fn(() => true);
+    const { pressEscape } = setup(incoming.id, undefined, onEscapeToList);
+    pressEscape();
+    expect(onEscapeToList).not.toHaveBeenCalled();
+    pressEscape();
+    expect(onEscapeToList).toHaveBeenCalledOnce();
+  });
+
+  it('exits a focused thread reply before leaving', () => {
+    const onEscapeToList = vi.fn(() => true);
+    const { pressEscape } = setup(own.id, ownReply.id, onEscapeToList);
+    pressEscape();
+    expect(onEscapeToList).not.toHaveBeenCalled();
+  });
+
+  it('leaves Esc to the split when there is no list to return to', () => {
+    const { pressEscape, onSplitEscape } = setup();
+    pressEscape();
+    expect(onSplitEscape).toHaveBeenCalledOnce();
   });
 });

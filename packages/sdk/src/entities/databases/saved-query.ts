@@ -198,6 +198,8 @@ const BLOCK_TAG = 'm-db-query';
  * Changing the SQL means saving a new question. Changing how the answer
  * looks does not: {@link withView} returns the same question shown another
  * way.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class SavedQuery {
   private constructor(
@@ -282,7 +284,11 @@ export class SavedQuery {
     return this.presentation.height;
   }
 
-  /** The saved `SELECT`, read from the server. */
+  /**
+   * The saved `SELECT`, read from the server.
+   *
+   * @readonly
+   */
   async sql(): Promise<string> {
     const saved = unwrap(
       await this.client.storage.getDatabaseQuery({
@@ -303,6 +309,8 @@ export class SavedQuery {
    * answer sits inline in text and every other mode is a block, so a
    * question cannot switch between `scalar` and another mode; save it again
    * with the mode it should have.
+   *
+   * @readonly
    */
   withView(view: SavedQueryView): SavedQuery {
     const displayMode = view.displayMode ?? this.displayMode;
@@ -330,6 +338,8 @@ export class SavedQuery {
    * Markdown or quote verbatim in edit instructions. Never write or edit a
    * block by hand: it names the question by id, and the SQL stays on the
    * server.
+   *
+   * @readonly
    */
   toBlock(): string {
     const json = JSON.stringify({

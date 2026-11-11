@@ -596,6 +596,14 @@ service_url! {
             dev: "https://mcp-server-dev.macro.com",
             prod: "https://mcp-server.macro.com",
         },
+        /// ChatGPT MCP server base URL (a Cloudflare Worker). Append `/mcp` for
+        /// its transport endpoint, which is also its RFC 8707 resource: the
+        /// `McpPublicUrl` broker issues it Macro API tokens.
+        pub McpChatgptServiceUrl {
+            local: "http://localhost:8103",
+            dev: "https://mcp-chatgpt.dev.macro.com",
+            prod: "https://mcp-chatgpt.macro.com",
+        },
         /// Public integration callback base, preserving registered OAuth redirect URIs.
         pub CognitionPublicUrl {
             local: "http://localhost:8101/cognition",

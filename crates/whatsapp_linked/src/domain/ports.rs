@@ -146,15 +146,13 @@ pub trait GroupRepository: Send + Sync {
         &self,
         chats: &[ChatRef],
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
-    /// Names for WhatsApp ids in a chat: people seen in it first (their
-    /// WhatsApp name and verified Macro user), then the owner's roster. The
-    /// `unnamed` people (stored without a WhatsApp name) are named by the
-    /// roster, the owner's chat with them, else their phone number.
+    /// Names for WhatsApp ids and stored people in a chat
+    /// ([`super::people::ChatNames`]).
     async fn people(
         &self,
         chat: &ChatRef,
         jids: &[String],
-        unnamed: &[Uuid],
+        persons: &[Uuid],
     ) -> ExternalChatResult<People>;
 
     /// The account's stored chat list (without the roster), newest first.

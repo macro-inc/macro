@@ -18,6 +18,10 @@ name = "backfill_calendar_flags"
 path = "src/bin/backfill_calendar_flags/backfill_calendar_flags.rs"
 
 [[bin]]
+name = "backfill_attachment_flags"
+path = "src/bin/backfill_attachment_flags/backfill_attachment_flags.rs"
+
+[[bin]]
 name = "backfill_signal_flags"
 path = "src/bin/backfill_signal_flags/backfill_signal_flags.rs"
 
@@ -129,6 +133,7 @@ macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_pool = { path = "../../crates/macro_db_pool" }
 macro_db_client = { path = "../../crates/macro_db_client" }

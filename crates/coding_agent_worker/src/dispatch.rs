@@ -98,7 +98,7 @@ impl Dispatcher {
         }
         if repo_url.is_some() && repo_url != self.workspace.repo_url.as_deref() {
             return Err(DispatchError::Workspace(
-                "this runtime does not manage repositories; choose a Herdr agent in macrod"
+                "this machine does not manage repositories; choose a Herdr agent in macrod"
                     .to_owned(),
             ));
         }

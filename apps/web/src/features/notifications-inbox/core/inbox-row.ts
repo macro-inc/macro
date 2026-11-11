@@ -13,7 +13,8 @@ export type InboxRowType =
   | 'calendar_event'
   | 'calendar_join_request'
   | 'access_requested'
-  | 'access_granted';
+  | 'access_granted'
+  | 'access_removed';
 
 /** Who a row is from, per its newest notification. */
 export type InboxActor =
