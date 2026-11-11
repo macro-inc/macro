@@ -18,6 +18,8 @@ use tracing::instrument;
 
 /// Bounded name enrichment of the viewer's contact graph.
 pub mod directory;
+/// Realtime fan-out of a user's picture change to their contacts.
+pub mod picture_fanout;
 #[cfg(test)]
 mod test;
 

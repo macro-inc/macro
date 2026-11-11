@@ -167,10 +167,11 @@ export function useEntitySearch(
           (contactsActive() && contacts?.isLoading())
         )
           return;
-        const people = activeList()?.windowKey?.();
-        const aliases = contactsActive() ? contacts?.windowKey?.() : undefined;
-        return people || aliases
-          ? `${people ?? ''}:${aliases ?? ''}`
+        // People and contact matches grow in place for a query, so the
+        // window is the query: a source answering late is not a new window.
+        return activeList()?.windowKey?.() ||
+          (contactsActive() && contacts?.windowKey?.())
+          ? scopedSearchTerm()
           : undefined;
       },
       hasMore: () =>
