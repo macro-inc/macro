@@ -375,7 +375,7 @@ test("with no remote: no PR, the repository's own check decides, nothing is push
 });
 
 /** The repository's own check as `land` runs it without GitHub, with `bun run check` stood in for by a script that passes only on GOOD. */
-const ownCheck = (box: Sandbox, install: readonly string[] = ['false']) =>
+const ownCheck = (box: Sandbox) =>
   worktreeCheck({
     repository: box.repository(),
     checkouts: {
@@ -388,8 +388,6 @@ const ownCheck = (box: Sandbox, install: readonly string[] = ['false']) =>
     },
     run: (argv, { cwd }) => shell.run(argv, { cwd }),
     check: ['sh', '-c', `pwd >> '${box.root}/where'; grep -q GOOD code.ts`],
-    install,
-    manifests: ['package.json', 'bun.lock'],
     failed: async (sha) => {
       box.logged.push(`check failed on ${sha.slice(0, 12)}`);
     },
@@ -442,18 +440,41 @@ test('without GitHub: the check runs in a worktree under .worktrees; red refuses
   ).toHaveLength(2);
 });
 
-test('a branch that changes a manifest is installed in its worktree before the check, and a failed install is red', async () => {
+test('a branch that changes bun.lock or a package.json dependency is refused: the image has no other packages', async () => {
   const { box, worktree } = await setup();
-  await box.write(`${worktree}/package.json`, '{}\n');
+  const deps = box.landDeps({ github: undefined, ci: ownCheck(box) });
+  const before = await box.git(box.live, 'rev-parse', 'main');
   await box.write(`${worktree}/code.ts`, 'GOOD\n');
+  await box.write(
+    `${worktree}/package.json`,
+    '{"dependencies":{"left-pad":"1.3.0"}}\n'
+  );
   await box.git(worktree, 'add', '-A');
-  await box.git(worktree, 'commit', '-qm', 'feat: deps');
-  const sha = (await box.git(worktree, 'rev-parse', 'HEAD')).trim();
-  expect(await ownCheck(box, ['false'])(sha)).toBe('red');
-  expect(
-    await ownCheck(box, ['sh', '-c', `echo installed >> '${box.root}/where'`])(
-      sha
-    )
-  ).toBe('green');
-  expect(await box.read(`${box.root}/where`)).toContain('installed\n');
+  await box.git(worktree, 'commit', '-qm', 'feat: a dependency');
+  expect(await land(box.repository(), 'feat', '', deps)).toMatchObject({
+    status: 'refused',
+    reason: expect.stringContaining('dependency changes need a new image'),
+  });
+  expect(await box.git(box.live, 'rev-parse', 'main')).toBe(before);
+
+  await box.write(`${worktree}/package.json`, '{}\n');
+  await box.write(`${worktree}/bun.lock`, '{"lockfileVersion":1}\n');
+  await box.git(worktree, 'add', '-A');
+  await box.git(worktree, 'commit', '-qm', 'feat: a lockfile');
+  expect(await land(box.repository(), 'feat', '', deps)).toMatchObject({
+    status: 'refused',
+    reason: expect.stringContaining('dependency changes need a new image'),
+  });
+});
+
+test('a package.json change that leaves its dependencies alone is checked and lands', async () => {
+  const { box, worktree } = await setup();
+  const deps = box.landDeps({ github: undefined, ci: ownCheck(box) });
+  await box.write(`${worktree}/code.ts`, 'GOOD\n');
+  await box.write(`${worktree}/package.json`, '{"scripts":{"check":"true"}}\n');
+  await box.git(worktree, 'add', '-A');
+  await box.git(worktree, 'commit', '-qm', 'feat: a script');
+  expect(await land(box.repository(), 'feat', '', deps)).toMatchObject({
+    status: 'landed',
+  });
 });

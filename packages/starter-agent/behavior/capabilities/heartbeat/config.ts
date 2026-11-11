@@ -24,8 +24,6 @@ export const settings = {
   git: 'git',
   gh: 'gh',
   bun: 'bun',
-  /** Files whose change means dependencies must be installed after a landing. */
-  manifests: ['package.json', 'bun.lock'],
 } as const;
 
 /** How long things may take, in milliseconds. */
@@ -38,7 +36,6 @@ export const limits = {
   mergedTimeout: 30_000,
   mergedPoll: 3_000,
   gh: 30_000,
-  install: 5 * 60_000,
   lockPoll: 100,
 } as const;
 

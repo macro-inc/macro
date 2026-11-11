@@ -150,6 +150,9 @@ behave differently.
 - Your memory and this charter are edited in place, and committed after each
   wake.
 - The library you are built on, muppet, is a dependency. Never modify it.
+- Your packages are your computer's: a change to `bun.lock` or to a
+  dependency in `package.json` is refused when you land it, because only a new
+  image can bring new packages. Ask your owner if you need one.
 - Read `ARCHITECTURE.md` before changing anything under `behavior/`, and
   `ENGINEERING.md` before fixing a bug.
 

@@ -196,14 +196,8 @@ export const landDepsOf = async (
   const localCheck = worktreeCheck({
     repository,
     checkouts: heartbeat.scratch,
-    run: (argv, { cwd, install }) =>
-      run(argv, {
-        cwd,
-        timeoutMs: install ? limits.install : limits.ciTimeout,
-      }),
+    run: (argv, { cwd }) => run(argv, { cwd, timeoutMs: limits.ciTimeout }),
     check: [settings.bun, 'run', settings.checkScript],
-    install: [settings.bun, 'install', '--frozen-lockfile'],
-    manifests: settings.manifests,
     failed: (sha, text) =>
       log.event(logs.heartbeat, {
         line: `land: the check failed on ${sha.slice(0, 12)}`,
@@ -263,12 +257,6 @@ export const landDepsOf = async (
               sha,
               settings.checkJob
             ),
-    install: () =>
-      run([settings.bun, 'install', '--frozen-lockfile'], {
-        cwd: config.root,
-        timeoutMs: limits.install,
-      }),
-    manifests: settings.manifests,
     scratch: heartbeat.scratch,
     appendMerge: (row) => disk.append(heartbeat.paths.merges, `${row}\n`),
     restart: heartbeat.restart,
