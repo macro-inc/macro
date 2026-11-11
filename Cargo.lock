@@ -7723,6 +7723,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
