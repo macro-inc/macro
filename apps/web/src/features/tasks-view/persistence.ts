@@ -95,6 +95,7 @@ const DEFAULT_TASKS_ENTRY_STATE = {
 
 const tasksListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  userId: z.string().optional(),
   focusKey: z.string().optional(),
   scrollOffset: z.number().finite().default(0),
 });
@@ -177,18 +178,22 @@ function createTasksEntryStorage(options: {
 
 export function createTasksListEntryStorage(
   handle: EntryPersistenceHandle,
-  scopeKey?: string,
-  tab?: Accessor<TasksTab | undefined>
+  options: {
+    scopeKey?: string;
+    tab: Accessor<TasksTab | undefined>;
+    userId: Accessor<string | undefined>;
+  }
 ) {
-  return createTabbedEntryPersistenceStorage({
+  let stateOwner = options.userId();
+  const storage = createTabbedEntryPersistenceStorage({
     handle,
-    key: scopeKey
-      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${scopeKey}`
+    key: options.scopeKey
+      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${options.scopeKey}`
       : TASKS_LIST_ENTRY_STATE_KEY,
     tabs: TASK_TAB_IDS,
-    tab: (_state: TasksListStateSnapshot) => tab?.(),
+    tab: (_state: TasksListStateSnapshot) => options.tab(),
     restore: (current: TasksListStateSnapshot, stored) => {
-      const activeTab = tab?.();
+      const activeTab = options.tab();
       const tabs =
         stored && typeof stored === 'object' && 'tabs' in stored
           ? stored.tabs
@@ -198,7 +203,11 @@ export function createTasksListEntryStorage(
           ? Reflect.get(tabs, activeTab)
           : stored;
       const result = tasksListStateSchemaWithDefaults.safeParse(selected);
-      const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
+      // List may have been unmounted during an account change (for example
+      // while Board was active), so the entry itself must enforce ownership.
+      const sameAccount =
+        result.success && result.data.userId === options.userId();
+      const restored = sameAccount ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
         ...current,
@@ -206,12 +215,28 @@ export function createTasksListEntryStorage(
         scrollOffset: restored.scrollOffset,
       };
     },
-    select: (state): TasksListEntryState => ({
-      version: 1,
-      ...(state.focusKey === undefined ? {} : { focusKey: state.focusKey }),
-      scrollOffset: state.scrollOffset,
-    }),
+    select: (state): TasksListEntryState => {
+      const userId = options.userId();
+      // Account navigation can capture before the list's reset effect runs.
+      // Do not relabel the old account's live position as the new account's.
+      const current = userId === stateOwner ? state : DEFAULT_TASKS_LIST_STATE;
+      return {
+        version: 1,
+        userId,
+        ...(current.focusKey === undefined
+          ? {}
+          : { focusKey: current.focusKey }),
+        scrollOffset: current.scrollOffset,
+      };
+    },
   });
+  return {
+    ...storage,
+    clearTabs: () => {
+      storage.clearTabs();
+      stateOwner = options.userId();
+    },
+  };
 }
 
 export type CreateTasksViewPersistenceOptions = {

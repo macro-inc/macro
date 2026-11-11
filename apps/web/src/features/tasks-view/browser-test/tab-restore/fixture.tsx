@@ -233,9 +233,6 @@ function Controls() {
           Open saved view
         </Button>
         <Button onClick={() => view.startSavedView()}>New saved view</Button>
-        <Button onClick={() => setViewer('another-test-viewer')}>
-          Switch account
-        </Button>
       </div>
       <output hidden data-testid="tab">
         {view.state.tab}
@@ -287,7 +284,7 @@ function App() {
         <PanelContext.Provider
           value={{ handle, replaceOwnedSlot: slots.replace }}
         >
-          <div class="flex gap-2 p-4">
+          <div class="flex flex-wrap gap-2 p-4">
             <Button
               onClick={() =>
                 layout.openWithSplit(
@@ -307,6 +304,9 @@ function App() {
               }
             >
               Resume Tasks
+            </Button>
+            <Button onClick={() => setViewer('another-test-viewer')}>
+              Switch account
             </Button>
           </div>
           <SplitRouter.Outlet pane={pane} />

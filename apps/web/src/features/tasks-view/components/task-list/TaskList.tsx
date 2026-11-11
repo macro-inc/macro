@@ -217,11 +217,11 @@ export function TaskList(props: TaskListProps) {
     return value;
   };
   const listTab = () => (state.savedViewActive ? undefined : state.tab);
-  const listStorage = createTasksListEntryStorage(
-    panel.handle,
+  const listStorage = createTasksListEntryStorage(panel.handle, {
     scopeKey,
-    listTab
-  );
+    tab: listTab,
+    userId,
+  });
   const [, setPersistedListState] = makePersistedState(
     [readListState, applyListState],
     { storages: listStorage }

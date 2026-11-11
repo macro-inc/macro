@@ -184,7 +184,10 @@ it('captures live list position before switching and restores each tab on return
       return () => captors.delete(key);
     },
   };
-  const storage = createTasksListEntryStorage(handle, undefined, () => tab);
+  const storage = createTasksListEntryStorage(handle, {
+    tab: () => tab,
+    userId: () => 'viewer-a',
+  });
   storage.initialize?.(current, () => current);
   // The live virtualizer changes without a store write; the entry captor must
   // still read the latest position before the tab changes.
@@ -205,7 +208,10 @@ it('captures live list position before switching and restores each tab on return
   storage.dispose?.();
 
   tab = 'my-tasks';
-  const restored = createTasksListEntryStorage(handle, undefined, () => tab);
+  const restored = createTasksListEntryStorage(handle, {
+    tab: () => tab,
+    userId: () => 'viewer-a',
+  });
   expect(restored.restore(current)).toEqual({
     focusKey: 'task-2',
     scrollOffset: 360,
@@ -215,6 +221,20 @@ it('captures live list position before switching and restores each tab on return
     scrollOffset: 720,
   });
   restored.dispose?.();
+
+  const otherAccount = createTasksListEntryStorage(handle, {
+    tab: () => tab,
+    userId: () => 'viewer-b',
+  });
+  expect(otherAccount.restore(current)).toEqual({
+    focusKey: undefined,
+    scrollOffset: 0,
+  });
+  expect(otherAccount.restoreTab(current, 'team-tasks')).toEqual({
+    focusKey: undefined,
+    scrollOffset: 0,
+  });
+  otherAccount.dispose?.();
 });
 
 it('captures defaults rather than temporary settings on a direct saved-view entry', () => {
@@ -240,4 +260,40 @@ it('captures defaults rather than temporary settings on a direct saved-view entr
     tabs: {},
   });
   expect(view.restoreTab(view.state, 'team-tasks')).toBeUndefined();
+});
+
+it('does not relabel an old live list position before the account reset runs', () => {
+  createRoot((dispose) => {
+    DISPOSERS.push(dispose);
+    let userId = 'viewer-a';
+    let capture: (() => unknown) | undefined;
+    let current: TasksListStateSnapshot = {
+      focusKey: 'task-a',
+      scrollOffset: 360,
+    };
+    const storage = createTasksListEntryStorage(
+      {
+        currentEntryState: () => undefined,
+        registerEntryStateCaptor: (_key, getter) => {
+          capture = getter;
+          return () => {};
+        },
+      },
+      { tab: () => 'my-tasks', userId: () => userId }
+    );
+    storage.initialize?.(current, () => current);
+    userId = 'viewer-b';
+    expect(capture?.()).toMatchObject({ userId: 'viewer-b', scrollOffset: 0 });
+    expect(capture?.()).not.toHaveProperty('focusKey');
+
+    storage.clearTabs();
+    current = { focusKey: 'task-b', scrollOffset: 100 };
+    storage.write(current);
+    expect(capture?.()).toMatchObject({
+      userId: 'viewer-b',
+      scrollOffset: 100,
+      focusKey: 'task-b',
+    });
+    storage.dispose?.();
+  });
 });
