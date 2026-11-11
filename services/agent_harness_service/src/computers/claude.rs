@@ -551,6 +551,7 @@ impl From<HarnessError> for ComputerRouteError {
             HarnessError::Gone(message) => Self::Conflict(message),
             HarnessError::Unauthorized => Self::Forbidden,
             HarnessError::Throttled => Self::Conflict("try again later".to_owned()),
+            error @ HarnessError::ComputerHarness => Self::Conflict(error.to_string()),
             HarnessError::Repo(error) => Self::Internal(rootcause::report!("{error:?}")),
         }
     }
