@@ -27,7 +27,7 @@ CREATE TABLE suggestion_run (
     CHECK ((settled_at IS NULL) = (outcome IS NULL))
 );
 
-CREATE INDEX suggestion_run_idea_idx ON suggestion_run (suggestion_id, started_at DESC);
+CREATE INDEX suggestion_run_suggestion_idx ON suggestion_run (suggestion_id, started_at DESC);
 CREATE INDEX suggestion_run_unsettled_idx ON suggestion_run (checked_at NULLS FIRST, started_at)
     WHERE settled_at IS NULL;
 -- A person's latest run of each suggestion, for the feed; and deleting a person.
