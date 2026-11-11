@@ -18,8 +18,10 @@ function applicationInput(
   const generation = view.mirror.keyGeneration;
   if (generation === null) return undefined;
   const cached = view.selection().selection;
+  // Source application updates keep a null, node or table selection; only a
+  // published range follows the browser's current DOM range.
   const resolved =
-    cached.kind === 'node' || cached.kind === 'table'
+    cached.kind === 'node' || cached.kind === 'table' || cached.kind === 'none'
       ? ({ kind: 'keep' } as const)
       : readSelection(view);
   const selection =
