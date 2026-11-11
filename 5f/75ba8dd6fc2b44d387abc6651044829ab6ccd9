@@ -1,0 +1,21 @@
+services/authentication_service/src/api/oauth/passwordless_callback.rs
+  s_504605d3f04e9c::t_d96ce683fc31dd 120-125
+services/authentication_service/src/api/webhooks/user/create_user_webhook.rs
+  s_504605d3f04e9c::t_02b203e7a07ee5 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5f75ba8dd6fc2b44d387abc6651044829ab6ccd9",
+  "prompts": {},
+  "sessions": {
+    "s_504605d3f04e9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ee95beb6-dc01-47d2-a310-5782b4cf7f38",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
