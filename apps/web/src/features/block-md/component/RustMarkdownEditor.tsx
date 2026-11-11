@@ -3,6 +3,7 @@ import { useFlow } from '@app/observability/flow';
 import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
+import { NodeAccessoryLayer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import {
   NativeChecklistFacts,
@@ -72,6 +73,10 @@ import {
   nativeGoToLocation,
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
+import {
+  createNativeCodeAccessories,
+  type NativeCodeAccessories,
+} from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
@@ -238,6 +243,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => magicContext.dispose());
   const diffInsertContext = createNativeDiffInsertContext(theme);
   overlayLifecycle.add(() => diffInsertContext.dispose());
+  const [codeAccessories, setCodeAccessories] =
+    createSignal<NativeCodeAccessories>();
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -505,6 +512,14 @@ export default function RustMarkdownEditor(props: {
                 menuOpen: () => mounted.overlays?.menuOpen?.() ?? false,
               })
             );
+            const accessories = createNativeCodeAccessories(mounted.view, {
+              ready,
+            });
+            overlayLifecycle.add(() => {
+              setCodeAccessories(undefined);
+              accessories.dispose();
+            });
+            setCodeAccessories(accessories);
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
@@ -671,6 +686,18 @@ export default function RustMarkdownEditor(props: {
               ready={ready}
             />
           </Suspense>
+          )}
+        </Show>
+      <Show when={codeAccessories()}>
+        {(accessories) => (
+          <Show when={root?.parentElement}>
+            {(parent) => (
+              <NodeAccessoryLayer
+                parent={parent()}
+                store={accessories().store}
+              />
+            )}
+          </Show>
         )}
       </Show>
       <Show when={equationMenuActive() && runtime()}>
