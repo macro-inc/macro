@@ -960,3 +960,86 @@ test('actual inputSettled observes queued view application and cancellation with
     runtime.root.remove();
   }
 });
+
+test.each([false, true])(
+  'mounted Enter listener receives the admitted range when selectionchange delivered is %s',
+  async (admitted) => {
+    const runtime = mount();
+    try {
+      runtime.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'draft' }],
+              },
+              { type: 'paragraph', version: 1, children: [] },
+            ],
+          },
+        })
+      );
+      const root = runtime.root;
+      const doc = root.ownerDocument;
+      const dom = doc.getSelection();
+      const first = root.querySelector('p');
+      const second = root.querySelector('p:last-child');
+      const leaf =
+        first && doc.createTreeWalker(first, NodeFilter.SHOW_TEXT).nextNode();
+      if (!dom || !leaf || !second)
+        throw new Error('Missing actual fixture ranges');
+      root.tabIndex = 0;
+      root.focus();
+      dom.setBaseAndExtent(leaf, 0, leaf, 0);
+      doc.dispatchEvent(new Event('selectionchange'));
+      const original = runtime.view.selection().selection;
+
+      dom.setBaseAndExtent(second, 0, second, 0);
+      if (admitted) doc.dispatchEvent(new Event('selectionchange'));
+      const published = runtime.view.selection().selection;
+      if (published.kind !== 'range')
+        throw new Error('Missing published range');
+      if (admitted) expect(published).not.toEqual(original);
+      else expect(published).toEqual(original);
+
+      const keyboard = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        keyCode: 13,
+        bubbles: true,
+        cancelable: true,
+      });
+      const observe = vi.fn();
+      runtime.view.registerViewCommand(
+        enter,
+        (event) => {
+          observe(event, runtime.port.nativeEnter?.pendingSelection());
+          return true;
+        },
+        4
+      );
+      expect(runtime.port.nativeEnter?.hasListeners()).toBe(true);
+      root.dispatchEvent(keyboard);
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(observe.mock.calls[0]?.[0]).toBe(keyboard);
+      expect(observe.mock.calls[0]?.[1]).toMatchObject({
+        kind: 2,
+        anchor: {
+          key: published.anchor.key,
+          offset: published.anchor.offset,
+          type: published.anchor.type === 'text' ? 0 : 1,
+        },
+        focus: {
+          key: published.focus.key,
+          offset: published.focus.offset,
+          type: published.focus.type === 'text' ? 0 : 1,
+        },
+      });
+    } finally {
+      await runtime.close();
+      runtime.root.remove();
+    }
+  }
+);

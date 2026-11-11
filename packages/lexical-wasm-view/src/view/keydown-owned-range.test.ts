@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
@@ -77,3 +77,52 @@ test.each([false, true])(
     }
   }
 );
+
+test('generic Enter does not preserve a published range for a foreign DOM caret', () => {
+  const fixture = nativeSurface();
+  const foreign = document.createElement('div');
+  foreign.textContent = 'outside';
+  fixture.root.after(foreign);
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'inside' }],
+            },
+          ],
+        },
+      })
+    );
+    const doc = fixture.root.ownerDocument;
+    const dom = doc.getSelection();
+    const own = doc
+      .createTreeWalker(fixture.root, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    const other = foreign.firstChild;
+    if (!dom || !own || !other) throw new Error('Missing fixture DOM');
+    fixture.root.tabIndex = 0;
+    fixture.root.focus();
+    dom.setBaseAndExtent(own, 0, own, 0);
+    doc.dispatchEvent(new Event('selectionchange'));
+    expect(fixture.view.selection().selection.kind).toBe('range');
+    dom.setBaseAndExtent(other, 2, other, 2);
+    const submitted = vi.spyOn(fixture.port, 'keyDown');
+    fixture.root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(submitted.mock.calls[0]?.[4]).toEqual({ kind: 'none' });
+  } finally {
+    foreign.remove();
+    fixture.close();
+  }
+});

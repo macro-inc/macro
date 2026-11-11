@@ -70,27 +70,38 @@ for (const feedback of ['pending', 'delivered'] as const) {
       )
     ).toBe(feedback === 'pending');
 
-    await root.evaluate((element) => {
+    const pasteEvent = await root.evaluate((element) => {
       const data = new DataTransfer();
-      data.setData(
-        'application/x-lexical-editor',
-        JSON.stringify({
-          namespace: 'block-md-main',
-          nodes: ['alpha', 'beta'].map((text) => ({
-            type: 'paragraph',
-            version: 1,
-            children: [{ type: 'text', version: 1, text }],
-          })),
-        })
-      );
-      element.dispatchEvent(
-        new ClipboardEvent('paste', {
-          clipboardData: data,
-          bubbles: true,
-          cancelable: true,
-        })
-      );
+      const mime = 'application/x-lexical-editor';
+      const payload = JSON.stringify({
+        namespace: 'block-md-main',
+        nodes: ['alpha', 'beta'].map((text) => ({
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text }],
+        })),
+      });
+      data.setData(mime, payload);
+      const event = new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      });
+      // Gecko's synthetic constructor filters custom MIME entries from its
+      // event copy. Keep the original browser DataTransfer for this fixture.
+      if (event.clipboardData?.getData(mime) !== payload)
+        Object.defineProperty(event, 'clipboardData', { value: data });
+      element.dispatchEvent(event);
+      return {
+        prevented: event.defaultPrevented,
+        transfersRich: event.clipboardData?.getData(mime) === payload,
+      };
     });
+    await info.attach('paste-admission', {
+      body: JSON.stringify({ entered, pasteEvent }, null, 2),
+      contentType: 'application/json',
+    });
+    expect(pasteEvent).toEqual({ prevented: true, transfersRich: true });
     await expect(root).toContainText('beta');
     const pasted = await page.evaluate(() =>
       window.inputParity.snapshot('native')

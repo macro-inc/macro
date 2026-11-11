@@ -14,7 +14,6 @@ import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
 import {
   isSelectionWithinEditor,
-  readFocusedRootSelection,
   readSelection,
   readSelectionFromChange,
   resolvePoint,
@@ -481,27 +480,40 @@ export function registerEvents(view: EditorView): {
     }
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
+    const published = view.selection().selection;
+    const plain =
+      !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    let keepRange = false;
+    if (
+      published.kind === 'range' &&
+      (/^(Alt|AltGraph|Control|Meta|Shift)$/.test(event.key) ||
+        (event.key === 'End' &&
+          event.ctrlKey !== event.metaKey &&
+          !event.altKey &&
+          !event.shiftKey) ||
+        (event.key === 'Enter' && plain))
+    ) {
+      // Source clones the previous range on keydown. A real selectionchange
+      // admits browser movement, including movement that arrives before Enter.
+      const dom = doc.getSelection();
+      keepRange = isSelectionWithinEditor(
+        view,
+        dom?.anchorNode ?? null,
+        dom?.focusNode ?? null
+      );
+    }
     let selection: ViewSelection;
     if (
-      (event.key === 'Backspace' || event.key === 'Delete') &&
-      !event.altKey &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.shiftKey &&
-      view.selection().selection.kind === 'node'
+      keepRange ||
+      ((event.key === 'Backspace' || event.key === 'Delete') &&
+        plain &&
+        published.kind === 'node')
     ) {
       selection = { kind: 'keep' };
     } else if (routed === CommandCode.Undo || routed === CommandCode.Redo) {
       selection = readSelectionFromChange(view);
     } else {
       selection = readSelection(view);
-    }
-    if (/^(Alt|AltGraph|Control|Meta|Shift)$/.test(event.key)) {
-      // A modifier leaves the browser caret in place. Keep a root boundary
-      // already admitted as a descendant point, including between Undo and Redo.
-      const boundary = readFocusedRootSelection(view);
-      if (boundary && sameSelection(boundary, view.selection().selection))
-        selection = boundary;
     }
     if (
       !routed &&
@@ -511,7 +523,8 @@ export function registerEvents(view: EditorView): {
           !(
             keyCommand === 'Key(Enter)' && view.port.nativeEnter?.hasListeners()
           ))) &&
-      (sameSelection(selection, view.selection().selection) ||
+      (keepRange ||
+        sameSelection(selection, published) ||
         isLastSubmittedSelection(selection))
     )
       return;
