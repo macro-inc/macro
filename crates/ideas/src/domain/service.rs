@@ -34,7 +34,7 @@ use super::prompt;
 pub(crate) mod test;
 
 /// The PostHog flag that turns ideas on for a person.
-pub const IDEAS_FLAG: &str = "enable-ideas";
+pub const IDEAS_FLAG: &str = "enable-suggestions";
 /// Most open ideas a person may have.
 pub const OPEN_LIMIT: u32 = 30;
 /// Most ideas one generation may add or bring back.
@@ -319,7 +319,7 @@ where
             .load(user)
             .await
             .inspect_err(|error| {
-                tracing::warn!(?error, "feature flags unavailable; ideas stay off");
+                tracing::warn!(?error, "feature flags unavailable; suggestions stay off");
             })
             .is_ok_and(|flags| flags.is_enabled(IDEAS_FLAG));
         if enabled {
@@ -391,12 +391,12 @@ where
                 problems.push(match &target.part_id {
                     Some(part) => format!(
                         "the user can't open {item} `{}`, or `{part}` isn't one of its parts \
-                         (a message of a channel or email thread); an idea is only about \
+                         (a message of a channel or email thread); a suggestion is only about \
                          items they can open",
                         target.entity_id
                     ),
                     None => format!(
-                        "the user can't open {item} `{}`; an idea is only about items they \
+                        "the user can't open {item} `{}`; a suggestion is only about items they \
                          can open",
                         target.entity_id
                     ),
@@ -444,13 +444,13 @@ fn written_problem(written: Written) -> Option<String> {
     match written {
         Written::Applied => None,
         Written::OverOpenLimit => Some(format!(
-            "the user has {OPEN_LIMIT} open ideas; retire one that matters less first"
+            "the user has {OPEN_LIMIT} open suggestions; retire one that matters less first"
         )),
         Written::OverNewLimit => Some(format!(
-            "this generation added {NEW_PER_GENERATION} ideas, the most for one night; stop adding"
+            "this generation added {NEW_PER_GENERATION} suggestions, the most for one night; stop adding"
         )),
         Written::Conflict => Some(
-            "the idea changed while you wrote it; read it again with `macro.ideas.review` and retry"
+            "the suggestion changed while you wrote it; read it again with `macro.suggestions.review` and retry"
                 .to_owned(),
         ),
     }
@@ -492,7 +492,9 @@ where
                 .audience
                 .seen(user, timezone.name(), Utc::now())
                 .await
-                .inspect_err(|error| tracing::warn!(?error, "could not record an ideas reader"));
+                .inspect_err(|error| {
+                    tracing::warn!(?error, "could not record a suggestions reader")
+                });
         }
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Idea> = self
@@ -855,7 +857,7 @@ where
         };
         let sends = match &request.sends {
             Some(_) if request.run_mode != Some(RunMode::Background) => {
-                problems.push("`sends` is only for background prompt ideas".to_owned());
+                problems.push("`sends` is only for background prompt suggestions".to_owned());
                 None
             }
             Some(sends) => check::text(sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems),
@@ -909,7 +911,7 @@ where
             return Ok(rejected(
                 &span,
                 vec![format!(
-                    "`{}` is a {} idea and a kind never changes; use another `dedupKey`",
+                    "`{}` is a {} suggestion and a kind never changes; use another `dedupKey`",
                     existing.dedup_key,
                     existing.kind.name().as_ref()
                 )],
@@ -1016,19 +1018,19 @@ where
         let mut problems = Vec::new();
         if !existing.state.is_open() {
             problems.push(format!(
-                "this idea is {}; only open ideas are rewritten, and `macro.ideas.suggest` with \
+                "this suggestion is {}; only open suggestions are rewritten, and `macro.suggestions.suggest` with \
                  its `dedupKey` brings one back",
                 existing.state.as_ref()
             ));
         }
         if existing.kind.name() == KindName::Routine {
             problems.push(
-                "routine ideas follow their routine suggestion, which is never rewritten"
+                "routine suggestions follow their routine suggestion, which is never rewritten"
                     .to_owned(),
             );
         }
         if request.prompt.is_some() && existing.kind.name() != KindName::Prompt {
-            problems.push("`prompt` is only for prompt ideas".to_owned());
+            problems.push("`prompt` is only for prompt suggestions".to_owned());
         }
         let background = matches!(
             existing.kind,
@@ -1038,7 +1040,7 @@ where
             }
         );
         if request.sends.is_some() && !background {
-            problems.push("`sends` is only for background prompt ideas".to_owned());
+            problems.push("`sends` is only for background prompt suggestions".to_owned());
         }
         let reason = check::text(
             &request.reason,
@@ -1068,7 +1070,8 @@ where
         }
         if let Some(about) = request.about {
             if about.is_empty() && existing.kind.name() == KindName::Entity {
-                problems.push("an entity idea is about at least one item in `about`".to_owned());
+                problems
+                    .push("an entity suggestion is about at least one item in `about`".to_owned());
             }
             if let Some(about) = check::targets(about, &mut problems) {
                 self.inaccessible(&user, &about, &mut problems).await?;
@@ -1149,13 +1152,13 @@ where
         );
         if !existing.state.is_open() {
             problems.push(format!(
-                "this idea is {} already, not open",
+                "this suggestion is {} already, not open",
                 existing.state.as_ref()
             ));
         }
         if existing.kind.name() == KindName::Routine {
             problems.push(
-                "retire a routine idea by retiring its routine suggestion in a routines session"
+                "retire a routine suggestion by retiring its routine suggestion in a routines session"
                     .to_owned(),
             );
         }
@@ -1232,7 +1235,7 @@ where
         );
         if !existing.state.is_open() {
             problems.push(format!(
-                "this idea is {}; a draft is only attached to an open idea",
+                "this suggestion is {}; a draft is only attached to an open suggestion",
                 existing.state.as_ref()
             ));
         }
@@ -1241,7 +1244,8 @@ where
             draft: old,
         } = &existing.kind
         else {
-            problems.push("a draft is only for an entity idea with action `reply`".to_owned());
+            problems
+                .push("a draft is only for an entity suggestion with action `reply`".to_owned());
             return Ok(rejected(&span, problems));
         };
         let thread = self
@@ -1261,7 +1265,7 @@ where
                     .to_owned(),
             ),
             Some(draft) if !check::draft_is_about(draft, &existing.about) => problems.push(
-                "the draft is in another thread than the one this idea is about; write it in that \
+                "the draft is in another thread than the one this suggestion is about; write it in that \
                  thread, from its inbox: `macro.email.createDraft({thread, replyingTo, ...}, \
                  await thread.link())`"
                     .to_owned(),
@@ -1328,7 +1332,7 @@ fn run_prompt(prompt: &str, sends: Option<&str>) -> String {
             .to_owned(),
     };
     format!(
-        "{prompt}\n\nThe user started this run from an idea card and isn't watching: never stop \
+        "{prompt}\n\nThe user started this run from a suggestion card and isn't watching: never stop \
          to ask a question or wait for an approval; decide from what you can read, and say in \
          your last message what you assumed. {approval}"
     )

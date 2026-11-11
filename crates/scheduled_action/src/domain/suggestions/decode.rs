@@ -82,7 +82,7 @@ pub fn drafted_pick(
     let mut problems = Vec::new();
     let title = ideas::domain::check::text(
         &idea.title,
-        "`idea.title`",
+        "`card.title`",
         ideas::domain::check::MAX_TITLE_CHARS,
         &mut problems,
     );

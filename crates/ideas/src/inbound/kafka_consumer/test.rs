@@ -9,7 +9,7 @@ use super::*;
 use crate::domain::model::IdeaError;
 use crate::domain::resolution::Resolved;
 
-const OWNER: &str = "macro|ideas-consumer@macro.com";
+const OWNER: &str = "macro|suggestions-consumer@macro.com";
 const THREAD: &str = "01900000-0000-7000-8000-0000000000a1";
 const CHANNEL: &str = "01900000-0000-7000-8000-0000000000c1";
 const MESSAGE: &str = "01900000-0000-7000-8000-0000000000d1";

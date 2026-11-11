@@ -54,7 +54,7 @@ async fn the_person_themself_cannot_attach_a_draft(pool: PgPool) {
     });
     let response = app
         .oneshot(
-            Request::put(format!("/ideas/{}/draft", idea.id))
+            Request::put(format!("/suggestions/{}/draft", idea.id))
                 .header("authorization", "Bearer owner")
                 .header("content-type", "application/json")
                 .body(Body::from(

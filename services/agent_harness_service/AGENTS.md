@@ -90,7 +90,7 @@ Pulumi stacks; they do not host extra agent processes.
   email_service's internal recent-messages route and the person's connected
   Pipedream apps. Generations (`crates/suggestion_generation`) run their
   ideas and routines sessions hidden on the free tier's model, each kind
-  gated on its flag (`enable-ideas`, `enable-routine-suggestions`).
+  gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
   `scheduling.rs` sweeps generation sessions a stopped process left open
   every minute and starts nightly generations every five minutes, once the
   process is ready.

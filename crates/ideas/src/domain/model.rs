@@ -10,12 +10,13 @@ use utoipa::ToSchema;
 /// One proactive suggestion for one person.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = Suggestion)]
 pub struct Idea {
-    /// The idea's id.
+    /// The suggestion's id.
     #[schema(value_type = String, format = Uuid)]
     pub id: Uuid,
-    /// Names the idea across nights: proposing the same key again changes
-    /// this idea instead of adding one.
+    /// Names the suggestion across nights: proposing the same key again changes
+    /// this suggestion instead of adding one.
     pub dedup_key: String,
     /// What to do, in a few words.
     pub title: String,
@@ -27,7 +28,7 @@ pub struct Idea {
     pub categories: Vec<Category>,
     /// Where it is for the person.
     pub state: IdeaState,
-    /// Why it was resolved; only on resolved ideas.
+    /// Why it was resolved; only on resolved suggestions.
     pub state_reason: Option<String>,
     /// The items it is about.
     pub about: Vec<Target>,
@@ -39,17 +40,18 @@ pub struct Idea {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
-    /// A background prompt idea's latest run.
+    /// A background prompt suggestion's latest run.
     pub run: Option<IdeaRun>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: IdeaKind,
 }
 
-/// A run of a background prompt idea: a hidden agent session of the
+/// A run of a background prompt suggestion: a hidden agent session of the
 /// person's, with the full toolset, that never stops to ask.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = SuggestionRun)]
 pub struct IdeaRun {
     /// The agent session: open it to see the result or answer what it
     /// waits for.
@@ -72,9 +74,9 @@ pub enum RunProgress {
     NeedsApproval,
     /// Waiting for the person to answer a question.
     NeedsInput,
-    /// Done; its result is in the session and the idea's `produced`.
+    /// Done; its result is in the session and the suggestion's `produced`.
     Finished,
-    /// It stopped without finishing; accepting the idea again retries.
+    /// It stopped without finishing; accepting the suggestion again retries.
     Failed,
     /// The session couldn't be read just now.
     Unknown,
@@ -107,7 +109,7 @@ pub enum SessionState {
 }
 
 impl SessionState {
-    /// How the run shows on its idea.
+    /// How the run shows on its suggestion.
     pub fn progress(self) -> RunProgress {
         match self {
             Self::AwaitingPrompt | Self::Running | Self::Disconnected => RunProgress::Running,
@@ -143,7 +145,7 @@ pub enum RunStartError {
 pub struct StoredRun {
     /// The agent session.
     pub session: Uuid,
-    /// The idea it runs.
+    /// The suggestion it runs.
     pub idea: Uuid,
     /// Whose.
     pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -160,15 +162,16 @@ pub struct StoredRun {
 /// How a finished run was settled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunSettled {
-    /// It finished: the idea is done.
+    /// It finished: the suggestion is done.
     Finished,
-    /// It failed: the idea may be accepted again.
+    /// It failed: the suggestion may be accepted again.
     Failed,
 }
 
-/// What kind of idea it is, with that kind's data. A kind never changes.
+/// What kind of suggestion it is, with that kind's data. A kind never changes.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[schema(as = SuggestionKind)]
 pub enum IdeaKind {
     /// A prompt for an agent: opened in the composer, or run in the
     /// background.
@@ -189,11 +192,11 @@ pub enum IdeaKind {
     Entity {
         /// What to do about the items.
         action: EntityAction,
-        /// A reply idea's draft, once a session wrote one: the email thread
+        /// A reply suggestion's draft, once a session wrote one: the email thread
         /// it is in, with the draft as the part.
         draft: Option<Target>,
     },
-    /// A routine suggestion, shown among ideas.
+    /// A routine suggestion, shown among suggestions.
     #[serde(rename_all = "camelCase")]
     Routine {
         /// The suggestion it shows.
@@ -213,7 +216,7 @@ impl IdeaKind {
     }
 }
 
-/// An idea's kind, without its data.
+/// A suggestion's kind, without its data.
 #[derive(
     Debug,
     Clone,
@@ -237,7 +240,7 @@ pub enum KindName {
     Routine,
 }
 
-/// Where an idea is for the person.
+/// Where a suggestion is for the person.
 #[derive(
     Debug,
     Clone,
@@ -252,6 +255,7 @@ pub enum KindName {
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
+#[schema(as = SuggestionState)]
 pub enum IdeaState {
     /// Shown, not acted on yet.
     Proposed,
@@ -274,7 +278,7 @@ impl IdeaState {
     }
 }
 
-/// A filter on the feed. Not kinds: an idea may have several.
+/// A filter on the feed. Not kinds: a suggestion may have several.
 #[derive(
     Debug,
     Clone,
@@ -301,7 +305,7 @@ pub enum Category {
     MakeMoney,
 }
 
-/// How a prompt idea runs.
+/// How a prompt suggestion runs.
 #[derive(
     Debug,
     Clone,
@@ -323,7 +327,7 @@ pub enum RunMode {
     Background,
 }
 
-/// What an entity idea suggests doing about its items.
+/// What an entity suggestion suggests doing about its items.
 #[derive(
     Debug,
     Clone,
@@ -347,11 +351,11 @@ pub enum EntityAction {
     FollowUp,
 }
 
-/// How an item relates to an idea.
+/// How an item relates to a suggestion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum TargetRole {
-    /// What the idea is about.
+    /// What the suggestion is about.
     About,
     /// What acting on it made.
     Produced,
@@ -372,41 +376,46 @@ pub struct Target {
     pub part_id: Option<String>,
 }
 
-/// A person's feed: their open ideas, best first, and the ones they
+/// A person's feed: their open suggestions, best first, and the ones they
 /// finished in the last day, newest first.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = SuggestionFeed)]
 pub struct Ideas {
-    /// The open ideas.
+    /// The open suggestions.
+    #[serde(rename = "suggestions")]
     pub ideas: Vec<Idea>,
-    /// Ideas done in the last 24 hours, with what they produced.
+    /// Suggestions done in the last 24 hours, with what they produced.
     pub done: Vec<Idea>,
 }
 
-/// What a generation session reads before managing the person's ideas:
-/// every idea they have, open or not, and how many more it may add.
+/// What a generation session reads before managing the person's suggestions:
+/// every suggestion they have, open or not, and how many more it may add.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = SuggestionsReview)]
 pub struct IdeaReview {
-    /// Open ideas first, best first, then closed ones newest first. A
-    /// dismissed idea's `stateChangedAt` is when the person dismissed it.
+    /// Open suggestions first, best first, then closed ones newest first. A
+    /// dismissed suggestion's `stateChangedAt` is when the person dismissed it.
+    #[serde(rename = "suggestions")]
     pub ideas: Vec<Idea>,
-    /// Open ideas the person has, and the most they may have.
+    /// Open suggestions the person has, and the most they may have.
     pub open: u32,
-    /// The most open ideas a person may have.
+    /// The most open suggestions a person may have.
     pub open_limit: u32,
-    /// Ideas this generation may still add or bring back.
+    /// Suggestions this generation may still add or bring back.
     pub new_left: u32,
 }
 
-/// A new idea, or a new version of one with the same `dedupKey`, as a
-/// generation session hands it back through `macro.ideas.suggest`.
+/// A new suggestion, or a new version of one with the same `dedupKey`, as a
+/// generation session hands it back through `macro.suggestions.suggest`.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = NewSuggestion)]
 pub struct SuggestIdea {
-    /// `prompt` or `entity`; routine ideas come from `macro.routines.suggest`.
+    /// `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
     pub kind: KindName,
-    /// Names the idea across nights; the same key updates the same idea.
+    /// Names the suggestion across nights; the same key updates the same suggestion.
     pub dedup_key: String,
     /// What to do, in a few words.
     pub title: String,
@@ -420,27 +429,28 @@ pub struct SuggestIdea {
     /// The items it is about.
     #[serde(default)]
     pub about: Vec<Target>,
-    /// A prompt idea's prompt.
+    /// A prompt suggestion's prompt.
     #[serde(default)]
     pub prompt: Option<String>,
-    /// A prompt idea's run mode.
+    /// A prompt suggestion's run mode.
     #[serde(default)]
     pub run_mode: Option<RunMode>,
-    /// A background prompt idea that posts or sends: what, and where.
+    /// A background prompt suggestion that posts or sends: what, and where.
     #[serde(default)]
     pub sends: Option<String>,
-    /// An entity idea's action.
+    /// An entity suggestion's action.
     #[serde(default)]
     pub action: Option<EntityAction>,
-    /// Why, for the change log; required to bring back an idea the person
+    /// Why, for the change log; required to bring back a suggestion the person
     /// dismissed.
     #[serde(default)]
     pub reason: Option<String>,
 }
 
-/// Changes to an open idea; fields left out stay.
+/// Changes to an open suggestion; fields left out stay.
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = RewriteSuggestion)]
 pub struct RewriteIdea {
     /// A new title.
     #[serde(default)]
@@ -457,10 +467,10 @@ pub struct RewriteIdea {
     /// New items it is about.
     #[serde(default)]
     pub about: Option<Vec<Target>>,
-    /// Only on prompt ideas.
+    /// Only on prompt suggestions.
     #[serde(default)]
     pub prompt: Option<String>,
-    /// Only on background prompt ideas: what the run posts or sends, and
+    /// Only on background prompt suggestions: what the run posts or sends, and
     /// where.
     #[serde(default)]
     pub sends: Option<String>,
@@ -468,22 +478,23 @@ pub struct RewriteIdea {
     pub reason: String,
 }
 
-/// Retiring an open idea that no longer matters.
+/// Retiring an open suggestion that no longer matters.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = RetireSuggestionRequest)]
 pub struct RetireIdea {
     /// Why, for the change log.
     pub reason: String,
 }
 
-/// A reply draft a session wrote for an open reply idea, as the user,
-/// through `macro.email.createDraft`. It replaces the idea's draft, if any;
+/// A reply draft a session wrote for an open reply suggestion, as the user,
+/// through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
 /// nothing is ever sent.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AttachDraft {
     /// The email draft: an unsent draft in one of the user's own inboxes, in
-    /// the thread the idea is about.
+    /// the thread the suggestion is about.
     #[schema(value_type = String, format = Uuid)]
     pub email_draft_id: Uuid,
     /// Why, for the change log.
@@ -493,12 +504,14 @@ pub struct AttachDraft {
 /// What became of a session's write.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = SuggestionWriteOutcome)]
 pub struct IdeaWriteOutcome {
     /// Whether it was applied.
     pub ok: bool,
     /// Why it wasn't, to fix and try again.
     pub problems: Vec<String>,
-    /// The idea as it now is.
+    /// The suggestion as it now is.
+    #[serde(rename = "suggestion")]
     pub idea: Option<Idea>,
 }
 
@@ -512,7 +525,7 @@ impl IdeaWriteOutcome {
         }
     }
 
-    /// Applied; `idea` as it now is.
+    /// Applied; `suggestion` as it now is.
     pub fn applied(idea: Idea) -> Self {
         Self {
             ok: true,
@@ -522,7 +535,7 @@ impl IdeaWriteOutcome {
     }
 }
 
-/// An idea's words and items, checked and ready to store.
+/// A suggestion's words and items, checked and ready to store.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeaContent {
@@ -538,14 +551,14 @@ pub struct IdeaContent {
     pub categories: Vec<Category>,
     /// See [`Idea::about`].
     pub about: Vec<Target>,
-    /// A prompt idea's prompt.
+    /// A prompt suggestion's prompt.
     pub prompt: Option<String>,
-    /// A background prompt idea's [`IdeaKind::Prompt::sends`].
+    /// A background prompt suggestion's [`IdeaKind::Prompt::sends`].
     pub sends: Option<String>,
 }
 
 impl IdeaContent {
-    /// `idea`'s content.
+    /// `suggestion`'s content.
     pub fn of(idea: &Idea) -> Self {
         Self {
             dedup_key: idea.dedup_key.clone(),
@@ -566,15 +579,15 @@ impl IdeaContent {
     }
 }
 
-/// What kind a new idea is, with its fixed data.
+/// What kind a new suggestion is, with its fixed data.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NewKind {
-    /// A prompt idea.
+    /// A prompt suggestion.
     Prompt {
         /// How it runs.
         run_mode: RunMode,
     },
-    /// An entity idea.
+    /// An entity suggestion.
     Entity {
         /// What to do about its items.
         action: EntityAction,
@@ -594,11 +607,11 @@ pub enum GenerationTrigger {
     Nightly,
 }
 
-/// What a generation session may call: ideas or routine suggestions.
+/// What a generation session may call: suggestions or routine suggestions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SessionKind {
-    /// Writes ideas.
+    /// Writes suggestions.
     Ideas,
     /// Writes routine suggestions.
     Routines,
@@ -616,21 +629,21 @@ pub struct GenerationSession {
     /// What it may write.
     pub kind: SessionKind,
     /// The surfaces a routines session suggests for, by wire name; empty
-    /// for ideas.
+    /// for suggestions.
     pub surfaces: Vec<String>,
     /// The trace its generation runs in. A session's tool calls reach the
     /// API without its trace context, so they record this to be joined.
     pub trace_id: Option<String>,
 }
 
-/// The person acting on an idea.
+/// The person acting on a suggestion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Accept {
-    /// When the idea was last changed as the caller's copy shows it: a
-    /// background idea runs only if it is still what they saw.
+    /// When the suggestion was last changed as the caller's copy shows it: a
+    /// background suggestion runs only if it is still what they saw.
     pub shown_updated_at: DateTime<Utc>,
     /// Whether the person themself acts, in the app: only they start a
-    /// background idea's run. Anyone else (an agent of theirs) at most marks
+    /// background suggestion's run. Anyone else (an agent of theirs) at most marks
     /// it accepted, for them to run.
     pub by_person: bool,
 }
@@ -668,11 +681,11 @@ pub struct Change {
     pub at: DateTime<Utc>,
 }
 
-/// Why code resolved an idea, as stored in `state_reason`.
+/// Why code resolved a suggestion, as stored in `state_reason`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum ResolveReason {
-    /// The person answered what the idea asked them to answer.
+    /// The person answered what the suggestion asked them to answer.
     Replied,
     /// An item it is about was deleted.
     Deleted,
@@ -680,35 +693,35 @@ pub enum ResolveReason {
     AccessLost,
 }
 
-/// An open idea about an item, once per target naming that item.
+/// An open suggestion about an item, once per target naming that item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenTarget {
-    /// The idea.
+    /// The suggestion.
     pub idea: Uuid,
     /// Whose it is.
     pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
     /// When it was first proposed.
     pub created_at: DateTime<Utc>,
-    /// Whether it is an entity idea asking for a reply.
+    /// Whether it is an entity suggestion asking for a reply.
     pub reply: bool,
     /// The part of the item the target names, if only a part.
     pub part_id: Option<String>,
 }
 
-/// Why an ideas call failed.
+/// Why a suggestions call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum IdeaError {
-    /// No such idea for the person, or ideas are off for them.
-    #[error("idea not found")]
+    /// No such suggestion for the person, or suggestions are off for them.
+    #[error("suggestion not found")]
     NotFound,
-    /// Only an open ideas session of the person's may call this.
-    #[error("only an ideas generation session may do this")]
+    /// Only an open suggestions session of the person's may call this.
+    #[error("only a suggestions generation session may do this")]
     NotGenerating,
-    /// The idea changed since the caller read it: here it is as it is now.
-    #[error("the idea changed since it was read; read it again")]
+    /// The suggestion changed since the caller read it: here it is as it is now.
+    #[error("the suggestion changed since it was read; read it again")]
     Changed(Box<Idea>),
     /// Anything else.
-    #[error("internal ideas error: {0:?}")]
+    #[error("internal suggestions error: {0:?}")]
     Internal(rootcause::Report),
 }
 

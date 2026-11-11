@@ -118,8 +118,8 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
-        /// Never set: a catalog pick is not shown among ideas.
-        #[serde(default)]
+        /// Never set: a catalog pick is not shown among suggestions.
+        #[serde(default, rename = "card")]
         idea: Option<RoutineIdea>,
     },
     /// A routine the catalog lacks, checked as saving checks it.
@@ -132,15 +132,18 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
-        /// How it shows among the person's ideas.
+        /// How it shows in the person's Suggestions feed.
+        #[serde(rename = "card")]
         idea: RoutineIdea,
     },
 }
 
-/// How a drafted routine suggestion shows among the person's ideas: every
-/// routine a session drafts is also one idea, kept and closed with it.
+/// How a drafted routine suggestion shows in the person's Suggestions feed:
+/// every routine a session drafts is also one suggestion there, kept and
+/// closed with it.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as = RoutineSuggestionCard)]
 pub struct RoutineIdea {
     /// What it does for the person, in a few words.
     pub title: String,

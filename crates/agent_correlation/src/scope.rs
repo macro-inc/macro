@@ -130,10 +130,10 @@ const SENDS: &[(&str, &str)] = &[
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
 const GENERATION_WRITES: &[(&str, &str)] = &[
-    ("POST", "/ideas"),
-    ("PATCH", "/ideas/{id}"),
-    ("POST", "/ideas/{id}/retire"),
-    ("PUT", "/ideas/{id}/draft"),
+    ("POST", "/suggestions"),
+    ("PATCH", "/suggestions/{id}"),
+    ("POST", "/suggestions/{id}/retire"),
+    ("PUT", "/suggestions/{id}/draft"),
     ("POST", "/scheduled-actions/suggestions"),
     ("POST", "/scheduled-actions/suggestions/{id}/retire"),
     ("POST", "/email/drafts"),

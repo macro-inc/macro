@@ -166,12 +166,12 @@ async fn resolve_with_retry(
         match resolver.resolve(event).await {
             Ok(_) => return,
             // The `ideas.resolve` span records the error.
-            Err(_) => tracing::warn!(attempt, "resolving ideas failed"),
+            Err(_) => tracing::warn!(attempt, "resolving suggestions failed"),
         }
     }
     tracing::error!(
         outcome = "dropped",
-        "resolving ideas kept failing; record skipped"
+        "resolving suggestions kept failing; record skipped"
     );
 }
 
@@ -194,7 +194,7 @@ async fn process_message<C: CommittingConsumer>(
     }
     consumer
         .commit(message.inner())
-        .map_err(|_| rootcause::report!("ideas offset commit failed"))
+        .map_err(|_| rootcause::report!("suggestions offset commit failed"))
 }
 
 async fn consume<C>(
@@ -214,7 +214,7 @@ where
             biased;
             _ = &mut shutdown => return Ok(()),
             result = consumer.recv() => {
-                result.map_err(|_| rootcause::report!("ideas consumer receive failed"))?
+                result.map_err(|_| rootcause::report!("suggestions consumer receive failed"))?
             }
         };
         let span = kafka_util::consumer_span(message.inner(), IdeaResolutionGroup::GROUP_NAME);
@@ -245,7 +245,7 @@ pub async fn run_idea_resolution_consumer(
     tracing::info!(
         topics = ?IdeaEvent::topics(),
         group = IdeaResolutionGroup::GROUP_NAME,
-        "ideas resolution consumer listening"
+        "suggestions resolution consumer listening"
     );
     consume(consumer, resolver, shutdown, RETRY_BASE_DELAY).await
 }

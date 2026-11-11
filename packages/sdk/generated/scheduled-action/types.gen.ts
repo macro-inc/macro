@@ -5,11 +5,11 @@ export type ClientOptions = {
 };
 
 /**
- * Acting on an idea, as the caller's copy of it shows it.
+ * Acting on a suggestion, as the caller's copy of it shows it.
  */
-export type AcceptIdeaRequest = {
+export type AcceptSuggestionRequest = {
     /**
-     * The idea's `updatedAt` as the caller read it. A background idea runs
+     * The suggestion's `updatedAt` as the caller read it. A background suggestion runs
      * only if it is unchanged since; otherwise the answer is 409.
      */
     updatedAt: string;
@@ -256,7 +256,7 @@ export type CatalogEntry = {
 };
 
 /**
- * A filter on the feed. Not kinds: an idea may have several.
+ * A filter on the feed. Not kinds: a suggestion may have several.
  */
 export type Category = 'important' | 'revisit' | 'save_money' | 'make_money';
 
@@ -526,7 +526,7 @@ export type EmptyResponse = {
 };
 
 /**
- * What an entity idea suggests doing about its items.
+ * What an entity suggestion suggests doing about its items.
  */
 export type EntityAction = 'reply' | 'review' | 'follow_up';
 
@@ -646,194 +646,6 @@ export type GithubSelector = {
     repositories?: Array<string>;
 };
 
-/**
- * One proactive suggestion for one person.
- */
-export type Idea = IdeaKind & {
-    /**
-     * The items it is about.
-     */
-    about: Array<Target>;
-    /**
-     * The feed's filters it shows under.
-     */
-    categories: Array<Category>;
-    /**
-     * When it was first proposed.
-     */
-    createdAt: string;
-    /**
-     * Names the idea across nights: proposing the same key again changes
-     * this idea instead of adding one.
-     */
-    dedupKey: string;
-    /**
-     * The idea's id.
-     */
-    id: string;
-    /**
-     * 0 to 100, for ordering.
-     */
-    importance: number;
-    /**
-     * What acting on it produced.
-     */
-    produced: Array<Target>;
-    run?: null | IdeaRun;
-    /**
-     * Where it is for the person.
-     */
-    state: IdeaState;
-    /**
-     * When its state last changed, such as when it was dismissed.
-     */
-    stateChangedAt: string;
-    /**
-     * Why it was resolved; only on resolved ideas.
-     */
-    stateReason?: string | null;
-    /**
-     * Why, in a line or two.
-     */
-    summary: string;
-    /**
-     * What to do, in a few words.
-     */
-    title: string;
-    /**
-     * When it last changed.
-     */
-    updatedAt: string;
-};
-
-/**
- * The idea changed since the caller read it.
- */
-export type IdeaChanged = {
-    /**
-     * The idea as it is now, to show before acting on it again.
-     */
-    idea: Idea;
-    /**
-     * What happened.
-     */
-    message: string;
-};
-
-/**
- * What kind of idea it is, with that kind's data. A kind never changes.
- */
-export type IdeaKind = {
-    kind: 'prompt';
-    /**
-     * What the agent is asked to do.
-     */
-    prompt: string;
-    /**
-     * How it runs.
-     */
-    runMode: RunMode;
-    /**
-     * For a background run that posts or sends something: what, and
-     * where, in plain words. The card shows it before Run, and running
-     * it approves exactly that. None when the run posts and sends
-     * nothing.
-     */
-    sends?: string | null;
-} | {
-    /**
-     * What to do about the items.
-     */
-    action: EntityAction;
-    draft?: null | Target;
-    kind: 'entity';
-} | {
-    kind: 'routine';
-    /**
-     * The suggestion it shows.
-     */
-    routineSuggestionId: string;
-};
-
-/**
- * What a generation session reads before managing the person's ideas:
- * every idea they have, open or not, and how many more it may add.
- */
-export type IdeaReview = {
-    /**
-     * Open ideas first, best first, then closed ones newest first. A
-     * dismissed idea's `stateChangedAt` is when the person dismissed it.
-     */
-    ideas: Array<Idea>;
-    /**
-     * Ideas this generation may still add or bring back.
-     */
-    newLeft: number;
-    /**
-     * Open ideas the person has, and the most they may have.
-     */
-    open: number;
-    /**
-     * The most open ideas a person may have.
-     */
-    openLimit: number;
-};
-
-/**
- * A run of a background prompt idea: a hidden agent session of the
- * person's, with the full toolset, that never stops to ask.
- */
-export type IdeaRun = {
-    /**
-     * How it is going, read from the session.
-     */
-    progress: RunProgress;
-    /**
-     * The agent session: open it to see the result or answer what it
-     * waits for.
-     */
-    sessionId: string;
-    /**
-     * When it started.
-     */
-    startedAt: string;
-};
-
-/**
- * Where an idea is for the person.
- */
-export type IdeaState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
-
-/**
- * What became of a session's write.
- */
-export type IdeaWriteOutcome = {
-    idea?: null | Idea;
-    /**
-     * Whether it was applied.
-     */
-    ok: boolean;
-    /**
-     * Why it wasn't, to fix and try again.
-     */
-    problems: Array<string>;
-};
-
-/**
- * A person's feed: their open ideas, best first, and the ones they
- * finished in the last day, newest first.
- */
-export type Ideas = {
-    /**
-     * Ideas done in the last 24 hours, with what they produced.
-     */
-    done: Array<Idea>;
-    /**
-     * The open ideas.
-     */
-    ideas: Array<Idea>;
-};
-
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -841,7 +653,7 @@ export type InProgressExecution = {
 };
 
 /**
- * An idea's kind, without its data.
+ * A suggestion's kind, without its data.
  */
 export type KindName = 'prompt' | 'entity' | 'routine';
 
@@ -856,6 +668,56 @@ export type KnobName = string;
  * matches by name or lets them pick.
  */
 export type NamedItemKind = 'tag' | 'channel' | 'label';
+
+/**
+ * A new suggestion, or a new version of one with the same `dedupKey`, as a
+ * generation session hands it back through `macro.suggestions.suggest`.
+ */
+export type NewSuggestion = {
+    /**
+     * The items it is about.
+     */
+    about?: Array<Target>;
+    action?: null | EntityAction;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * Names the suggestion across nights; the same key updates the same suggestion.
+     */
+    dedupKey: string;
+    /**
+     * 0 to 100.
+     */
+    importance: number;
+    /**
+     * `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
+     */
+    kind: KindName;
+    /**
+     * A prompt suggestion's prompt.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log; required to bring back a suggestion the person
+     * dismissed.
+     */
+    reason?: string | null;
+    runMode?: null | RunMode;
+    /**
+     * A background prompt suggestion that posts or sends: what, and where.
+     */
+    sends?: string | null;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+};
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -908,9 +770,9 @@ export type PropertySelector = {
 };
 
 /**
- * Retiring an open idea that no longer matters.
+ * Retiring an open suggestion that no longer fits.
  */
-export type RetireIdea = {
+export type RetireSuggestion = {
     /**
      * Why, for the change log.
      */
@@ -918,9 +780,9 @@ export type RetireIdea = {
 };
 
 /**
- * Retiring an open suggestion that no longer fits.
+ * Retiring an open suggestion that no longer matters.
  */
-export type RetireSuggestion = {
+export type RetireSuggestionRequest = {
     /**
      * Why, for the change log.
      */
@@ -953,9 +815,9 @@ export type ReviewedSuggestion = SuggestedPick & {
 };
 
 /**
- * Changes to an open idea; fields left out stay.
+ * Changes to an open suggestion; fields left out stay.
  */
-export type RewriteIdea = {
+export type RewriteSuggestion = {
     /**
      * New items it is about.
      */
@@ -969,7 +831,7 @@ export type RewriteIdea = {
      */
     importance?: number | null;
     /**
-     * Only on prompt ideas.
+     * Only on prompt suggestions.
      */
     prompt?: string | null;
     /**
@@ -977,7 +839,7 @@ export type RewriteIdea = {
      */
     reason: string;
     /**
-     * Only on background prompt ideas: what the run posts or sends, and
+     * Only on background prompt suggestions: what the run posts or sends, and
      * where.
      */
     sends?: string | null;
@@ -1013,25 +875,6 @@ export type RoutineCheck = {
      * Code steps that don't type-check against Macro's SDK.
      */
     steps: Array<CheckedStepProblems>;
-};
-
-/**
- * How a drafted routine suggestion shows among the person's ideas: every
- * routine a session drafts is also one idea, kept and closed with it.
- */
-export type RoutineIdea = {
-    /**
-     * The feed's filters it shows under.
-     */
-    categories?: Array<Category>;
-    /**
-     * 0 to 100: how much the person would regret missing it this week.
-     */
-    importance: number;
-    /**
-     * What it does for the person, in a few words.
-     */
-    title: string;
 };
 
 /**
@@ -1220,6 +1063,26 @@ export type RoutineSuggestion = SuggestedPick & {
 };
 
 /**
+ * How a drafted routine suggestion shows in the person's Suggestions feed:
+ * every routine a session drafts is also one suggestion there, kept and
+ * closed with it.
+ */
+export type RoutineSuggestionCard = {
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * 0 to 100: how much the person would regret missing it this week.
+     */
+    importance: number;
+    /**
+     * What it does for the person, in a few words.
+     */
+    title: string;
+};
+
+/**
  * A person's suggestions, and whether more are on the way.
  */
 export type RoutineSuggestions = {
@@ -1308,7 +1171,7 @@ export type RunInfo = {
 };
 
 /**
- * How a prompt idea runs.
+ * How a prompt suggestion runs.
  */
 export type RunMode = 'composer' | 'background';
 
@@ -1495,56 +1358,6 @@ export type StepProblem = {
 };
 
 /**
- * A new idea, or a new version of one with the same `dedupKey`, as a
- * generation session hands it back through `macro.ideas.suggest`.
- */
-export type SuggestIdea = {
-    /**
-     * The items it is about.
-     */
-    about?: Array<Target>;
-    action?: null | EntityAction;
-    /**
-     * The feed's filters it shows under.
-     */
-    categories?: Array<Category>;
-    /**
-     * Names the idea across nights; the same key updates the same idea.
-     */
-    dedupKey: string;
-    /**
-     * 0 to 100.
-     */
-    importance: number;
-    /**
-     * `prompt` or `entity`; routine ideas come from `macro.routines.suggest`.
-     */
-    kind: KindName;
-    /**
-     * A prompt idea's prompt.
-     */
-    prompt?: string | null;
-    /**
-     * Why, for the change log; required to bring back an idea the person
-     * dismissed.
-     */
-    reason?: string | null;
-    runMode?: null | RunMode;
-    /**
-     * A background prompt idea that posts or sends: what, and where.
-     */
-    sends?: string | null;
-    /**
-     * Why, in a line or two.
-     */
-    summary: string;
-    /**
-     * What to do, in a few words.
-     */
-    title: string;
-};
-
-/**
  * What became of a suggestion handed back.
  */
 export type SuggestOutcome = {
@@ -1567,7 +1380,7 @@ export type SuggestOutcome = {
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
 export type SuggestRequest = {
-    idea?: null | RoutineIdea;
+    card?: null | RoutineSuggestionCard;
     keepProbability: number;
     key: string;
     kind: 'catalog';
@@ -1578,13 +1391,13 @@ export type SuggestRequest = {
     surfaces: Array<Surface>;
 } | {
     /**
+     * How it shows in the person's Suggestions feed.
+     */
+    card: RoutineSuggestionCard;
+    /**
      * What the session created for it, as `macro.routines.check` takes.
      */
     created?: Array<CreatedItem>;
-    /**
-     * How it shows among the person's ideas.
-     */
-    idea: RoutineIdea;
     keepProbability: number;
     kind: 'routine';
     reason: string;
@@ -1614,9 +1427,133 @@ export type SuggestedPick = {
 };
 
 /**
+ * One proactive suggestion for one person.
+ */
+export type Suggestion = SuggestionKind & {
+    /**
+     * The items it is about.
+     */
+    about: Array<Target>;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories: Array<Category>;
+    /**
+     * When it was first proposed.
+     */
+    createdAt: string;
+    /**
+     * Names the suggestion across nights: proposing the same key again changes
+     * this suggestion instead of adding one.
+     */
+    dedupKey: string;
+    /**
+     * The suggestion's id.
+     */
+    id: string;
+    /**
+     * 0 to 100, for ordering.
+     */
+    importance: number;
+    /**
+     * What acting on it produced.
+     */
+    produced: Array<Target>;
+    run?: null | SuggestionRun;
+    /**
+     * Where it is for the person.
+     */
+    state: SuggestionState;
+    /**
+     * When its state last changed, such as when it was dismissed.
+     */
+    stateChangedAt: string;
+    /**
+     * Why it was resolved; only on resolved suggestions.
+     */
+    stateReason?: string | null;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The suggestion changed since the caller read it.
+ */
+export type SuggestionChanged = {
+    /**
+     * What happened.
+     */
+    message: string;
+    /**
+     * The suggestion as it is now, to show before acting on it again.
+     */
+    suggestion: Suggestion;
+};
+
+/**
+ * A person's feed: their open suggestions, best first, and the ones they
+ * finished in the last day, newest first.
+ */
+export type SuggestionFeed = {
+    /**
+     * Suggestions done in the last 24 hours, with what they produced.
+     */
+    done: Array<Suggestion>;
+    /**
+     * The open suggestions.
+     */
+    suggestions: Array<Suggestion>;
+};
+
+/**
  * Who suggests a routine.
  */
 export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * What kind of suggestion it is, with that kind's data. A kind never changes.
+ */
+export type SuggestionKind = {
+    kind: 'prompt';
+    /**
+     * What the agent is asked to do.
+     */
+    prompt: string;
+    /**
+     * How it runs.
+     */
+    runMode: RunMode;
+    /**
+     * For a background run that posts or sends something: what, and
+     * where, in plain words. The card shows it before Run, and running
+     * it approves exactly that. None when the run posts and sends
+     * nothing.
+     */
+    sends?: string | null;
+} | {
+    /**
+     * What to do about the items.
+     */
+    action: EntityAction;
+    draft?: null | Target;
+    kind: 'entity';
+} | {
+    kind: 'routine';
+    /**
+     * The suggestion it shows.
+     */
+    routineSuggestionId: string;
+};
 
 /**
  * Every suggestion AI made for the person, for a routines session.
@@ -1627,6 +1564,70 @@ export type SuggestionReview = {
      */
     keptLeft: number;
     suggestions: Array<ReviewedSuggestion>;
+};
+
+/**
+ * A run of a background prompt suggestion: a hidden agent session of the
+ * person's, with the full toolset, that never stops to ask.
+ */
+export type SuggestionRun = {
+    /**
+     * How it is going, read from the session.
+     */
+    progress: RunProgress;
+    /**
+     * The agent session: open it to see the result or answer what it
+     * waits for.
+     */
+    sessionId: string;
+    /**
+     * When it started.
+     */
+    startedAt: string;
+};
+
+/**
+ * Where a suggestion is for the person.
+ */
+export type SuggestionState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
+
+/**
+ * What became of a session's write.
+ */
+export type SuggestionWriteOutcome = {
+    /**
+     * Whether it was applied.
+     */
+    ok: boolean;
+    /**
+     * Why it wasn't, to fix and try again.
+     */
+    problems: Array<string>;
+    suggestion?: null | Suggestion;
+};
+
+/**
+ * What a generation session reads before managing the person's suggestions:
+ * every suggestion they have, open or not, and how many more it may add.
+ */
+export type SuggestionsReview = {
+    /**
+     * Suggestions this generation may still add or bring back.
+     */
+    newLeft: number;
+    /**
+     * Open suggestions the person has, and the most they may have.
+     */
+    open: number;
+    /**
+     * The most open suggestions a person may have.
+     */
+    openLimit: number;
+    /**
+     * Open suggestions first, best first, then closed ones newest first. A
+     * dismissed suggestion's `stateChangedAt` is when the person dismissed it.
+     */
+    suggestions: Array<Suggestion>;
 };
 
 /**
@@ -1700,282 +1701,6 @@ export type ScheduledActionHealthResponses = {
 };
 
 export type ScheduledActionHealthResponse = ScheduledActionHealthResponses[keyof ScheduledActionHealthResponses];
-
-export type ListIdeasData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * IANA time zone, e.g. `America/New_York`: nightly generations run in
-         * the reader's night.
-         */
-        timezone?: string;
-    };
-    url: '/ideas';
-};
-
-export type ListIdeasErrors = {
-    401: string;
-    /**
-     * Ideas are off for the caller
-     */
-    404: string;
-    500: string;
-};
-
-export type ListIdeasError = ListIdeasErrors[keyof ListIdeasErrors];
-
-export type ListIdeasResponses = {
-    /**
-     * The caller's open ideas they can open every item of, best first
-     */
-    200: Ideas;
-};
-
-export type ListIdeasResponse = ListIdeasResponses[keyof ListIdeasResponses];
-
-export type SuggestIdeaData = {
-    body: SuggestIdea;
-    path?: never;
-    query?: never;
-    url: '/ideas';
-};
-
-export type SuggestIdeaErrors = {
-    400: string;
-    401: string;
-    /**
-     * Only an ideas generation session may suggest
-     */
-    403: string;
-    /**
-     * Ideas are off for the user
-     */
-    404: string;
-    500: string;
-};
-
-export type SuggestIdeaError = SuggestIdeaErrors[keyof SuggestIdeaErrors];
-
-export type SuggestIdeaResponses = {
-    /**
-     * Whether the idea was added or updated, and what to fix when it wasn't
-     */
-    200: IdeaWriteOutcome;
-};
-
-export type SuggestIdeaResponse = SuggestIdeaResponses[keyof SuggestIdeaResponses];
-
-export type ReviewIdeasData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/ideas/review';
-};
-
-export type ReviewIdeasErrors = {
-    401: string;
-    /**
-     * Only an ideas generation session may review
-     */
-    403: string;
-    /**
-     * Ideas are off for the user
-     */
-    404: string;
-    500: string;
-};
-
-export type ReviewIdeasError = ReviewIdeasErrors[keyof ReviewIdeasErrors];
-
-export type ReviewIdeasResponses = {
-    /**
-     * Every idea of the user's, open first, and how many more this generation may add
-     */
-    200: IdeaReview;
-};
-
-export type ReviewIdeasResponse = ReviewIdeasResponses[keyof ReviewIdeasResponses];
-
-export type RewriteIdeaData = {
-    body: RewriteIdea;
-    path: {
-        /**
-         * ID of the idea
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/ideas/{id}';
-};
-
-export type RewriteIdeaErrors = {
-    400: string;
-    401: string;
-    /**
-     * Only an ideas generation session may rewrite
-     */
-    403: string;
-    /**
-     * No such idea for the user, or ideas are off
-     */
-    404: string;
-    500: string;
-};
-
-export type RewriteIdeaError = RewriteIdeaErrors[keyof RewriteIdeaErrors];
-
-export type RewriteIdeaResponses = {
-    /**
-     * Whether the idea was rewritten, and what to fix when it wasn't
-     */
-    200: IdeaWriteOutcome;
-};
-
-export type RewriteIdeaResponse = RewriteIdeaResponses[keyof RewriteIdeaResponses];
-
-export type AcceptIdeaData = {
-    body: AcceptIdeaRequest;
-    path: {
-        /**
-         * ID of the idea
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/ideas/{id}/accept';
-};
-
-export type AcceptIdeaErrors = {
-    400: string;
-    401: string;
-    /**
-     * No open or done idea with this id for the caller, or ideas are off
-     */
-    404: string;
-    /**
-     * The idea changed since the caller read it: the body has it as it is now
-     */
-    409: IdeaChanged;
-    500: string;
-};
-
-export type AcceptIdeaError = AcceptIdeaErrors[keyof AcceptIdeaErrors];
-
-export type AcceptIdeaResponses = {
-    /**
-     * Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing
-     */
-    204: void;
-};
-
-export type AcceptIdeaResponse = AcceptIdeaResponses[keyof AcceptIdeaResponses];
-
-export type DismissIdeaData = {
-    body?: never;
-    path: {
-        /**
-         * ID of the idea
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/ideas/{id}/dismiss';
-};
-
-export type DismissIdeaErrors = {
-    401: string;
-    /**
-     * No open idea with this id for the caller, or ideas are off
-     */
-    404: string;
-    500: string;
-};
-
-export type DismissIdeaError = DismissIdeaErrors[keyof DismissIdeaErrors];
-
-export type DismissIdeaResponses = {
-    /**
-     * Dismissed; generation sessions see when
-     */
-    204: void;
-};
-
-export type DismissIdeaResponse = DismissIdeaResponses[keyof DismissIdeaResponses];
-
-export type AttachIdeaDraftData = {
-    body: AttachDraft;
-    path: {
-        /**
-         * ID of the idea
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/ideas/{id}/draft';
-};
-
-export type AttachIdeaDraftErrors = {
-    400: string;
-    401: string;
-    /**
-     * Only an ideas generation session may attach a draft
-     */
-    403: string;
-    /**
-     * No such idea for the user, or ideas are off
-     */
-    404: string;
-    500: string;
-};
-
-export type AttachIdeaDraftError = AttachIdeaDraftErrors[keyof AttachIdeaDraftErrors];
-
-export type AttachIdeaDraftResponses = {
-    /**
-     * Whether the draft is now the idea's, replacing its old one, and what to fix when it isn't
-     */
-    200: IdeaWriteOutcome;
-};
-
-export type AttachIdeaDraftResponse = AttachIdeaDraftResponses[keyof AttachIdeaDraftResponses];
-
-export type RetireIdeaData = {
-    body: RetireIdea;
-    path: {
-        /**
-         * ID of the idea
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/ideas/{id}/retire';
-};
-
-export type RetireIdeaErrors = {
-    400: string;
-    401: string;
-    /**
-     * Only an ideas generation session may retire
-     */
-    403: string;
-    /**
-     * No such idea for the user, or ideas are off
-     */
-    404: string;
-    500: string;
-};
-
-export type RetireIdeaError = RetireIdeaErrors[keyof RetireIdeaErrors];
-
-export type RetireIdeaResponses = {
-    /**
-     * Whether the idea was retired, and why not when it wasn't
-     */
-    200: IdeaWriteOutcome;
-};
-
-export type RetireIdeaResponse = RetireIdeaResponses[keyof RetireIdeaResponses];
 
 export type ListScheduledActionsData = {
     body?: never;
@@ -2593,6 +2318,71 @@ export type ActivateScheduledActionTemplateResponses = {
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
 
+export type ListSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * IANA time zone, e.g. `America/New_York`: nightly generations run in
+         * the reader's night.
+         */
+        timezone?: string;
+    };
+    url: '/suggestions';
+};
+
+export type ListSuggestionsErrors = {
+    401: string;
+    /**
+     * Suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListSuggestionsError = ListSuggestionsErrors[keyof ListSuggestionsErrors];
+
+export type ListSuggestionsResponses = {
+    /**
+     * The caller's open suggestions they can open every item of, best first
+     */
+    200: SuggestionFeed;
+};
+
+export type ListSuggestionsResponse = ListSuggestionsResponses[keyof ListSuggestionsResponses];
+
+export type AddSuggestionData = {
+    body: NewSuggestion;
+    path?: never;
+    query?: never;
+    url: '/suggestions';
+};
+
+export type AddSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may suggest
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type AddSuggestionError = AddSuggestionErrors[keyof AddSuggestionErrors];
+
+export type AddSuggestionResponses = {
+    /**
+     * Whether the suggestion was added or updated, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AddSuggestionResponse = AddSuggestionResponses[keyof AddSuggestionResponses];
+
 export type StartSuggestionGenerationData = {
     body?: never;
     path?: never;
@@ -2608,7 +2398,7 @@ export type StartSuggestionGenerationData = {
 export type StartSuggestionGenerationErrors = {
     401: string;
     /**
-     * Neither ideas nor routine suggestions are on for the caller
+     * Neither suggestions nor routine suggestions are on for the caller
      */
     404: string;
     500: string;
@@ -2618,12 +2408,43 @@ export type StartSuggestionGenerationError = StartSuggestionGenerationErrors[key
 
 export type StartSuggestionGenerationResponses = {
     /**
-     * The caller's onboarding generation started in the background: their ideas and routine suggestions, as each is on for them. Later calls start nothing
+     * The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing
      */
     200: GenerationStarted;
 };
 
 export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
+
+export type ReviewSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/suggestions/review';
+};
+
+export type ReviewSuggestionsErrors = {
+    401: string;
+    /**
+     * Only a suggestions generation session may review
+     */
+    403: string;
+    /**
+     * Suggestions are off for the user
+     */
+    404: string;
+    500: string;
+};
+
+export type ReviewSuggestionsError = ReviewSuggestionsErrors[keyof ReviewSuggestionsErrors];
+
+export type ReviewSuggestionsResponses = {
+    /**
+     * Every suggestion of the user's, open first, and how many more this generation may add
+     */
+    200: SuggestionsReview;
+};
+
+export type ReviewSuggestionsResponse = ReviewSuggestionsResponses[keyof ReviewSuggestionsResponses];
 
 export type RecordSuggestionsSeenData = {
     body?: never;
@@ -2646,9 +2467,189 @@ export type RecordSuggestionsSeenError = RecordSuggestionsSeenErrors[keyof Recor
 
 export type RecordSuggestionsSeenResponses = {
     /**
-     * Recorded: with ideas on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes
+     * Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes
      */
     204: void;
 };
 
 export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];
+
+export type RewriteSuggestionData = {
+    body: RewriteSuggestion;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}';
+};
+
+export type RewriteSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may rewrite
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RewriteSuggestionError = RewriteSuggestionErrors[keyof RewriteSuggestionErrors];
+
+export type RewriteSuggestionResponses = {
+    /**
+     * Whether the suggestion was rewritten, and what to fix when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RewriteSuggestionResponse = RewriteSuggestionResponses[keyof RewriteSuggestionResponses];
+
+export type AcceptSuggestionData = {
+    body: AcceptSuggestionRequest;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/accept';
+};
+
+export type AcceptSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * No open or done suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    /**
+     * The suggestion changed since the caller read it: the body has it as it is now
+     */
+    409: SuggestionChanged;
+    500: string;
+};
+
+export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestionErrors];
+
+export type AcceptSuggestionResponses = {
+    /**
+     * Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing
+     */
+    204: void;
+};
+
+export type AcceptSuggestionResponse = AcceptSuggestionResponses[keyof AcceptSuggestionResponses];
+
+export type DismissSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/dismiss';
+};
+
+export type DismissSuggestionErrors = {
+    401: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissSuggestionError = DismissSuggestionErrors[keyof DismissSuggestionErrors];
+
+export type DismissSuggestionResponses = {
+    /**
+     * Dismissed; generation sessions see when
+     */
+    204: void;
+};
+
+export type DismissSuggestionResponse = DismissSuggestionResponses[keyof DismissSuggestionResponses];
+
+export type AttachSuggestionDraftData = {
+    body: AttachDraft;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/draft';
+};
+
+export type AttachSuggestionDraftErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may attach a draft
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type AttachSuggestionDraftError = AttachSuggestionDraftErrors[keyof AttachSuggestionDraftErrors];
+
+export type AttachSuggestionDraftResponses = {
+    /**
+     * Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type AttachSuggestionDraftResponse = AttachSuggestionDraftResponses[keyof AttachSuggestionDraftResponses];
+
+export type RetireSuggestionData = {
+    body: RetireSuggestionRequest;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/retire';
+};
+
+export type RetireSuggestionErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a suggestions generation session may retire
+     */
+    403: string;
+    /**
+     * No such suggestion for the user, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type RetireSuggestionError = RetireSuggestionErrors[keyof RetireSuggestionErrors];
+
+export type RetireSuggestionResponses = {
+    /**
+     * Whether the suggestion was retired, and why not when it wasn't
+     */
+    200: SuggestionWriteOutcome;
+};
+
+export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];

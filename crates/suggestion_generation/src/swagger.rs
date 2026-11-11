@@ -8,6 +8,6 @@ use utoipa::OpenApi;
 #[openapi(
     paths(crate::inbound::router::start_generation, crate::inbound::router::seen),
     components(schemas(crate::domain::model::GenerationStarted)),
-    tags((name = "suggestions", description = "Generations of each person's ideas and routine suggestions")),
+    tags((name = "suggestions", description = "Generations of each person's suggestions and routine suggestions")),
 )]
 pub struct GenerationApiDoc;

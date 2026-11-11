@@ -212,14 +212,14 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
     let app = axum::Router::new()
         .route("/email/messages", axum::routing::post(handler.clone()))
         .route(
-            "/scheduled-action/ideas",
+            "/scheduled-action/suggestions",
             axum::routing::post(handler.clone()),
         )
         .route("/email/threads", axum::routing::get(handler))
         .layer(axum::middleware::from_fn_with_state(state, propagate));
     for (correlation, method, path, expected) in [
         (6, "POST", "/email/messages", StatusCode::FORBIDDEN),
-        (6, "POST", "/scheduled-action/ideas", StatusCode::OK),
+        (6, "POST", "/scheduled-action/suggestions", StatusCode::OK),
         (6, "GET", "/email/threads", StatusCode::OK),
         (1, "POST", "/email/messages", StatusCode::OK),
     ] {
