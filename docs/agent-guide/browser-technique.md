@@ -78,6 +78,7 @@
 ## Hygiene
 
 - Work in the user-visible tab (no isolated contexts) when a human is watching via VNC.
+- Grant `local-network-access` to fresh Chromium contexts on local/preview stacks; otherwise document WebSockets fail with `ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS` and the editor appears stuck.
 - Prefer snapshots over screenshots; screenshot only when layout confusion matters.
 - `evaluate_script` with `waitForStableDom: false` for read-only checks — it is cheaper and
   cannot deadlock on animating UI.
