@@ -379,6 +379,9 @@ export function EmailList(props: EmailListProps) {
     enabled: listHasKeyboard,
     selectedEntities,
     clearSelection: listInteractions.selection.clear,
+    readerHasKeyboard: () =>
+      panel.isPanelActive() && (props.pane?.readerHasKeyboard() ?? false),
+    goToFirst: listInteractions.navigation.first,
   });
 
   function actionGroupsFor(row: EmailActionRow) {

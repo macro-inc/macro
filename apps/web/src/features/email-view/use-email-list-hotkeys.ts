@@ -1,3 +1,4 @@
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { CommandState } from '@app/features/command/state';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -10,17 +11,33 @@ export type UseEmailListHotkeysOptions = {
   enabled: () => boolean;
   selectedEntities: () => EntityData[];
   clearSelection: () => void;
+  /** The reading pane beside the list has the keyboard. */
+  readerHasKeyboard: () => boolean;
+  goToFirst: () => boolean;
 };
 
 /**
  * The list-level shortcuts the legacy mail list had beyond navigation and
  * entity actions: `cmd+k` opens the command menu in entity-action mode for
- * the multi-selection (or toggles it when nothing is selected), and Escape
- * clears the selection.
+ * the multi-selection (or toggles it when nothing is selected), Escape
+ * clears the selection, and `g g` reaches the first email from the reading
+ * pane as it does from the list.
  */
 export function useEmailListHotkeys(options: UseEmailListHotkeysOptions) {
   const analytics = useAnalytics();
   const group = createHotkeyGroup();
+
+  // The reader steps through the list with j and k, so the list's own g g
+  // (which stands down while the reader has the keyboard) is mirrored here.
+  // Unhandled, the second g would restart the sidebar's go-to leader.
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: GO_TO_COMMAND_SCOPE,
+    description: 'Go to first email',
+    condition: options.readerHasKeyboard,
+    keyDownHandler: options.goToFirst,
+    registrationType: 'add',
+  }).withGroup(group);
 
   registerHotkey({
     scopeId: options.scopeId,
