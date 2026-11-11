@@ -442,15 +442,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       !!contactMention &&
       'isLoading' in contactMention &&
       contactMention.isLoading());
-  // Sources answer within tens of milliseconds of most keystrokes. The
-  // searching label appears only for a search that is really taking a while,
-  // then stays long enough to read; until then the previous label stays, so
-  // nothing flashes between keystrokes.
-  const searchingShown = createSteadyFlag(stillSearching);
-  const emptyLabel = createMemo<string>((shown) => {
-    if (searchingShown()) return t('commandMenu.searching');
-    return stillSearching() ? shown : t('commandMenu.noResults');
-  }, '\u00a0');
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -629,6 +620,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     ignoredIds: () => (blockId ? [blockId] : []),
     targetItems: TARGET_ITEMS,
   });
+
+  // Sources answer within tens of milliseconds of most keystrokes. The
+  // searching label appears only for a search that is really taking a while,
+  // then stays long enough to read; until then the previous label stays, so
+  // nothing flashes between keystrokes.
+  const searchingShown = createSteadyFlag(stillSearching);
+  const emptyLabel = createMemo<string>((shown) => {
+    // A label belongs to one run of empty lists. Once rows are listed or the
+    // menu closes, the next empty list starts without it.
+    if (!menuOpen() || controller.combinedItems().length > 0) return '\u00a0';
+    if (searchingShown()) return t('commandMenu.searching');
+    return stillSearching() ? shown : t('commandMenu.noResults');
+  }, '\u00a0');
 
   // Rows keep arriving from several sources after typing stops. The highlight
   // follows the row the user moved to; a new search term starts from the top.
