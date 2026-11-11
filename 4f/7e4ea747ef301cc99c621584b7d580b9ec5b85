@@ -1,0 +1,19 @@
+packages/sdk/src/utils/verbs.ts
+  s_4a74d9f7761b4c::t_d0390736501431 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4f7e4ea747ef301cc99c621584b7d580b9ec5b85",
+  "prompts": {},
+  "sessions": {
+    "s_4a74d9f7761b4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ac8d302-fab1-41fd-ac48-2cdef9bce3f6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
