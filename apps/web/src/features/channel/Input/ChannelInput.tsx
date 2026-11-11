@@ -663,12 +663,15 @@ export function ChannelInput(props: ChannelInputProps) {
     ];
   };
   const [addDrawerOpen, setAddDrawerOpen] = createSignal(false);
+  // A host with every add action switched off (a call guest) gets no menu.
   const addMenu = (pill?: boolean) => (
-    <ComposerAddMenu
-      groups={addMenuGroups()}
-      onOpenDrawer={() => setAddDrawerOpen(true)}
-      class={pill ? 'not-touch:light-mode:text-composer-ink' : undefined}
-    />
+    <Show when={addMenuGroups().some((group) => group.items.length > 0)}>
+      <ComposerAddMenu
+        groups={addMenuGroups()}
+        onOpenDrawer={() => setAddDrawerOpen(true)}
+        class={pill ? 'not-touch:light-mode:text-composer-ink' : undefined}
+      />
+    </Show>
   );
 
   const { isCompact: oneLineInput } = createComposerLayout(lexicalEditor(), {

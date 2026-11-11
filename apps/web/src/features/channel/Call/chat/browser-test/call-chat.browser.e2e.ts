@@ -299,6 +299,38 @@ test('guest and member render the same rows with redacted identity', async ({
   await memberPage.close();
 });
 
+test('a guest sees a member quote rendered and no empty add menu', async ({
+  context,
+  page,
+}, testInfo) => {
+  const quote = `<m-reply-target>${JSON.stringify({
+    parent: { type: 'call', id: CALL },
+    targetMessageId: CALL,
+    targetThreadId: CALL,
+    displayText: 'burger',
+    senderId: MEMBER,
+  })}</m-reply-target>\n\nsee Quick Call`;
+  const fake = fakeServer(context, [
+    makeMessage(CALL, MEMBER, 'burger'),
+    makeMessage(GUEST_MESSAGE, MEMBER, quote),
+  ]);
+  await fake.ready;
+  const guest = await open(page, 'guest', fake.errors);
+  await expect(guest.locator('[data-message]')).toHaveCount(2);
+  await expect(guest.getByText('see Quick Call')).toBeVisible();
+  await expect(guest.getByText(/<\/?m-|No Access/)).toHaveCount(0);
+  // Phones keep the button: it opens text formatting.
+  if (testInfo.project.name === 'desktop')
+    await expect(
+      guest.getByRole('button', { name: 'Add', exact: true })
+    ).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath('guest-quote.png'),
+    fullPage: true,
+  });
+  expect(fake.errors).toEqual([]);
+});
+
 test('member chat renders messages on a meeting page without app providers', async ({
   context,
   page,

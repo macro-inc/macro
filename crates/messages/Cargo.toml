@@ -56,6 +56,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false,
 macro_event_topics = { path = "../macro_event_topics", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
+mention_utils = { path = "../mention_utils" }
 mockall = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
 model-entity = { path = "../model-entity", optional = true }

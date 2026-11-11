@@ -60,6 +60,12 @@ Every `Message` returned to a guest is redacted so no account identity leaves:
   opaque reactor id, as external-chat reactions do for people outside Macro.
 - `mentions`, `attachments`, `triggered_by` and any other account or entity references
   are emptied.
+- Message content is rewritten for guests (`guest_text`): web links stay links, every
+  other `<m-*>` reference (people, documents, calls, tasks, dates, groups) becomes its
+  display name as plain text, and unrecognized or malformed markup is dropped. A guest
+  therefore receives no account or entity id in content and renders nothing that needs
+  a lookup. The same rewrite applies to what a guest posts and to the legacy
+  `GET /call/guest-chat/{call_id}` projection.
 - Guest quote input must reference a message in the same call and use that
   message's guest-visible sender ID; invalid quote targets are rejected.
 

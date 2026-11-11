@@ -541,7 +541,7 @@ export function createCallLifecycle(options: {
             !request.skipServerLeave && request.options?.endNativeCall !== false
               ? leaveServerOnce()
               : undefined;
-          let result: LeaveResult;
+          let result: LeaveResult = undefined;
           try {
             try {
               await options.disconnect(request.options);

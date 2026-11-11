@@ -253,6 +253,31 @@ fn malformed_quotes_do_not_expose_account_ids_to_guests() {
 }
 
 #[test]
+fn references_reach_guests_as_names_without_ids() {
+    let call = Uuid::now_v7();
+    let senders = HashMap::new();
+    let content = concat!(
+        "see <m-document-mention>{\"documentId\":\"01a1cc0d-d619-7372-a879-bb0d5aeeb99e\",",
+        "\"blockName\":\"call\",\"documentName\":\"Quick Call\",",
+        "\"blockParams\":{\"call_message_id\":\"01a1cc0d-d619-7372-a879-bb0d5aeeb99e\"},",
+        "\"collapsed\":false}</m-document-mention> ",
+        "<m-user-mention>{\"userId\":\"macro|author@example.com\",",
+        "\"email\":\"author@example.com\"}</m-user-mention> ",
+        "<m-link>{\"url\":\"https://example.com/a\",\"text\":\"a link\",\"title\":\"\"}</m-link> ",
+        "if a < b <m-image>{\"id\":\"secret\"}</m-image>",
+        "<m-user-mention>{\"userId\":\"macro|broken@example.com\"",
+    );
+    assert_eq!(
+        rewrite_quote_content(content, call, &senders, false).unwrap(),
+        concat!(
+            "see Quick Call @author ",
+            "<m-link>{\"url\":\"https://example.com/a\",\"text\":\"a link\",\"title\":\"\"}</m-link> ",
+            "if a < b ",
+        )
+    );
+}
+
+#[test]
 fn guest_quotes_require_a_verified_target_and_sender() {
     let call = Uuid::now_v7();
     let account_target = Uuid::now_v7();

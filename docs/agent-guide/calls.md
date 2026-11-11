@@ -402,6 +402,12 @@ responses carry opaque participant IDs, while signed-in quotes retain normal
 account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
 deletes; the changes should appear live. Closing and reopening the chat refreshes
 the thread.
+A guest never receives Macro markup for things they cannot open. Have a signed-in
+participant send a quote reply, a pasted message link, a document mention, and a
+person mention: the guest sees the quote rendered and each reference as plain
+text with its name (a person as `@name`), never raw `<m-…>` text or a **No
+Access** chip. Web links stay clickable. On desktop the guest composer has no `+`
+menu; on phones `+` opens text formatting only.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.

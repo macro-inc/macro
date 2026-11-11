@@ -2,7 +2,14 @@
 use super::*;
 use chrono::{DateTime, Utc};
 use macro_user_id::email::ReadEmailParts;
+use mention_utils::parse::{
+    ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention, ParsedDateMention,
+    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
+    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter,
+};
+use mention_utils::serialize::ExternalLink;
 use std::collections::HashMap;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 /// Identity returned only after verifying an active guest's call session.
@@ -163,7 +170,7 @@ fn project(
         name,
         guest: message.sender_id.is_guest(),
         is_you: message.sender_id == *actor,
-        content: message.content,
+        content: guest_text(&message.content),
         created_at: message.created_at,
     }
 }
@@ -173,6 +180,97 @@ fn opaque_id(call_id: Uuid, sender_id: &str) -> String {
         "participant:{}",
         Uuid::new_v5(&call_id, sender_id.as_bytes())
     )
+}
+
+/// Writes every reference as its name, so a guest receives no account identity or
+/// entity id and nothing in the message needs a lookup the guest cannot make.
+struct GuestTextFormatter;
+
+impl XmlFormatter for GuestTextFormatter {
+    fn format_plain_text(s: &str, f: &mut Formatter<'_>) -> std::fmt::Result {
+        PlainTextFormatter::format_plain_text(s, f)
+    }
+
+    fn format_link(link: &ParsedLink<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match ExternalLink::new(&link.url, &link.text).map(|link| link.serialize()) {
+            Ok(Ok(tag)) => write!(f, "{tag}"),
+            _ => PlainTextFormatter::format_link(link, f),
+        }
+    }
+
+    fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if doc.document_name.trim().is_empty() {
+            return write!(f, "{}", doc.kind());
+        }
+        PlainTextFormatter::format_doc(doc, f)
+    }
+
+    fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = user
+            .display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty());
+        match (name, user.user_id.as_user()) {
+            (Some(name), _) => write!(f, "@{name}"),
+            (None, Some(account)) => write!(f, "@{}", account.email_part().local_part()),
+            (None, None) => {
+                write!(f, "@")?;
+                PlainTextFormatter::format_user(user, f)
+            }
+        }
+    }
+
+    fn format_contact(
+        contact: &ParsedContactMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        PlainTextFormatter::format_contact(contact, f)
+    }
+
+    fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        PlainTextFormatter::format_date(date, f)
+    }
+
+    fn format_group(group: &ParsedGroupMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        PlainTextFormatter::format_group(group, f)
+    }
+
+    fn format_agent_session(
+        session: &ParsedAgentSessionMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        PlainTextFormatter::format_agent_session(session, f)
+    }
+
+    fn format_pull_request(
+        pr: &ParsedPullRequestMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        PlainTextFormatter::format_pull_request(pr, f)
+    }
+
+    fn format_booking_link(
+        link: &ParsedBookingLinkMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        PlainTextFormatter::format_booking_link(link, f)
+    }
+}
+
+/// Message text as a guest may send or receive it: links stay links, every other
+/// `<m-*>` reference becomes its name, and markup that does not parse is dropped
+/// rather than passed through with whatever identities it carries.
+fn guest_text(content: &str) -> String {
+    let mut parsed = ParsedXmlText::parse_lenient(content);
+    for segment in &mut parsed.0 {
+        if let TextSegment::Plain(text) = segment
+            && let Some(unparsed) = text.to_ascii_lowercase().find("<m-")
+        {
+            *text = &text[..unparsed];
+        }
+    }
+    GuestTextFormatter::format_xml_text(parsed).0
 }
 
 pub(super) fn rewrite_quote_content(
@@ -186,7 +284,7 @@ pub(super) fn rewrite_quote_content(
     let mut output = String::with_capacity(content.len());
     let mut remaining = content;
     while let Some(start) = remaining.find(OPEN) {
-        output.push_str(&remaining[..start]);
+        output.push_str(&guest_text(&remaining[..start]));
         remaining = &remaining[start + OPEN.len()..];
         let Some(end) = remaining.find(CLOSE) else {
             if guest_input {
@@ -231,7 +329,7 @@ pub(super) fn rewrite_quote_content(
         }
         remaining = &remaining[end + CLOSE.len()..];
     }
-    output.push_str(remaining);
+    output.push_str(&guest_text(remaining));
     Ok(output)
 }
 
