@@ -1,8 +1,7 @@
 import { workspaceFeatures } from '../../core/workspace-features';
 import { FeaturePageSection } from '../FeaturePage';
 import HomepageProductPreview from '../homepage/HomepageProductPreview';
-import { PaperDatabaseFields } from './PaperDatabaseFields';
-import { PaperDatabaseFieldsMobile } from './PaperDatabaseFieldsMobile';
+import { NotionImportGraphic } from './NotionImportGraphic';
 import { PaperDatabaseQuery } from './PaperDatabaseQuery';
 import { PaperFeatureGraphic } from './PaperFeatureGraphic';
 
@@ -17,12 +16,7 @@ export function DatabaseStories() {
         title={database.heading}
         description={database.detail}
       >
-        <PaperFeatureGraphic
-          label="A database with typed columns, record status, and a control to open a record."
-          mobile={<PaperDatabaseFieldsMobile />}
-        >
-          <PaperDatabaseFields />
-        </PaperFeatureGraphic>
+        <NotionImportGraphic />
       </FeaturePageSection>
       <FeaturePageSection
         id="databases-detail-1"

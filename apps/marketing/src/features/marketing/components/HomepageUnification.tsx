@@ -12,13 +12,7 @@ export function HomepageUnification(
 
   onMount(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let scroller = section.parentElement!;
-    while (
-      scroller.parentElement &&
-      !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
-    ) {
-      scroller = scroller.parentElement;
-    }
+    const scroller = section.parentElement!;
     const animations: {
       animation: Animation;
       start: number;
@@ -76,7 +70,7 @@ export function HomepageUnification(
       const origin = section.getBoundingClientRect();
       const coreRect = core.getBoundingClientRect();
       const hero = section
-        .closest('.onboarding-flow, .macro-homepage')
+        .closest('.onboarding-flow')
         ?.querySelector('[data-context-scene]');
       const sources = Array.from(
         hero?.querySelectorAll<HTMLElement>('[data-constellation-tool]') ?? []
@@ -286,7 +280,7 @@ export function HomepageUnification(
         section.getBoundingClientRect().top -
         scroller.getBoundingClientRect().top +
         scroller.scrollTop;
-      start = Math.max(0, top - scroller.clientHeight * 0.82);
+      start = top - scroller.clientHeight * 0.82;
       // Finish when the section reaches the upper fifth of the viewport,
       // before its heading and supporting copy are fully in view.
       distance = Math.max(1, scroller.clientHeight * 0.64);
@@ -358,7 +352,7 @@ export function HomepageUnification(
       class="homepage-unification"
       aria-labelledby="unification-heading"
     >
-      <FeatureConstellation expanded />
+      <FeatureConstellation expanded linked />
       <div class="unification-copy">
         <div class="unification-before" aria-hidden="true">
           The unified workspace
@@ -366,9 +360,9 @@ export function HomepageUnification(
           for your company.
         </div>
         <h2 id="unification-heading">
-          <span class="unification-heading-prefix">Replace 27+ apps</span>
+          Replace 27+ apps
           <br />
-          with Macro.
+          with one system.
         </h2>
         <p class="unification-subtext">
           <span class="unification-subtext-desktop">

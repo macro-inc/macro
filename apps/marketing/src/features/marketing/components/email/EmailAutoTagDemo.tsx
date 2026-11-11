@@ -11,23 +11,33 @@ export function EmailAutoTagDemo() {
   );
   return (
     <div class="email-auto-tag-art">
-      <span class="email-auto-tag-annotation">Tagged by your routine</span>
       <div class="email-auto-tag-rows">
         <For each={emails}>
           {(email, index) => (
-            <div
-              class="email-auto-tag-row"
-              classList={{ 'email-auto-tag-highlight': index() === 0 }}
-            >
-              <Envelope class="email-auto-tag-icon" />
-              <div class="email-auto-tag-message">
-                <div class="email-auto-tag-sender">
-                  <strong>{email.sender}</strong>
-                  <span>{email.time}</span>
+            <div class="email-auto-tag-example">
+              <div
+                class="email-auto-tag-row"
+                classList={{ 'email-auto-tag-highlight': index() === 0 }}
+              >
+                <Envelope class="email-auto-tag-icon" aria-hidden="true" />
+                <div class="email-auto-tag-message">
+                  <div class="email-auto-tag-sender">
+                    <strong>{email.sender}</strong>
+                    <span>{email.time}</span>
+                  </div>
+                  <div class="email-auto-tag-subject">{email.subject}</div>
+                  <EmailTags tags={email.tags} />
                 </div>
-                <div class="email-auto-tag-subject">{email.subject}</div>
-                <EmailTags tags={email.tags} />
               </div>
+              <span class="email-auto-tag-annotation">
+                {
+                  [
+                    'Auto-tagged by your routine',
+                    'Grouped by project',
+                    'Same tags in docs & tasks',
+                  ][index()]
+                }
+              </span>
             </div>
           )}
         </For>

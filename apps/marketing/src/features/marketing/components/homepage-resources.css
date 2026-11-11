@@ -1,0 +1,11 @@
+.homepage-resources p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; font-weight: 370; color: color-mix(in srgb, var(--color-ink) 70%, transparent); }
+.page-outline-layout .homepage-resources a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 6px 16px; border-left: 1px solid color-mix(in srgb, var(--color-ink) 8.4%, transparent); color: color-mix(in srgb, var(--color-ink) 60%, transparent); text-decoration: none; }
+.page-outline-layout .homepage-resources a:hover { color: var(--color-ink); border-color: currentColor; }
+.homepage-resource-stars { min-width: 5ch; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+@media (min-width: 1440px) {
+  #app-scroll-root:has(.homepage-resources) .site-header,
+  .macro-homepage:has(.homepage-resources) > .site-header { top: 20px; right: 32px; height: auto; padding: 0; }
+}
+@media (max-width: 1439px) {
+  .homepage-resources { display: block; position: static; width: min(320px, 100%); margin: 0 auto; padding: 48px 24px; color: color-mix(in srgb, var(--color-ink) 60%, transparent); font: 370 14px/20px 'Inter Variable', Inter, sans-serif; }
+}

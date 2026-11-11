@@ -1,12 +1,12 @@
 import OutlookIcon from '@assets/icons/logo-outlook.svg';
 import GoogleIcon from '@icon/macro-google.svg';
-import MacroIcon from '@icon/macro-logo.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { For } from 'solid-js';
 import { workspaceFeatures } from '../core/workspace-features';
 import { FeatureDemoBackdrop } from './FeatureDemoBackdrop';
 import { FeaturePageSection } from './FeaturePage';
+import { HomepageConversation } from './HomepageConversation';
 import './calendar-stories.css';
 
 /** Illustrative calendar states, with no changes to real accounts or events. */
@@ -84,32 +84,31 @@ export function CalendarStories() {
           aria-label="In the design channel, Julia asks Macro for a time with Teo and Priya. Macro finds Tuesday at 2 PM. Calendar settings share busy blocks with teammates and count the selected calendars as busy."
         >
           <FeatureDemoBackdrop />
-          <div class="calendar-story-conversation calendar-story-glass">
-            <div class="calendar-story-label"># design</div>
-            <div class="calendar-story-message">
-              <span class="calendar-story-avatar">J</span>
-              <div>
-                <strong>Julia</strong>
-                <p>
-                  <span class="calendar-story-mention">@Macro</span> find 30
-                  minutes with Teo and Priya this week.
-                </p>
-              </div>
-            </div>
-            <div class="calendar-story-message">
-              <span class="calendar-story-avatar">
-                <MacroIcon />
-              </span>
-              <div>
-                <strong>
-                  Macro <small>Agent</small>
-                </strong>
-                <p>Tuesday at 2 PM is free for everyone.</p>
-                <div class="calendar-story-slot">
-                  <CalendarIcon /> Tue, Nov 10 · 2–2:30 PM
-                </div>
-              </div>
-            </div>
+          <div class="calendar-story-conversation" inert aria-hidden="true">
+            <HomepageConversation
+              messages={[
+                {
+                  person: 'julia',
+                  text: (
+                    <>
+                      <span class="calendar-story-mention">@Macro</span> find 30
+                      minutes with Teo and Priya this week.
+                    </>
+                  ),
+                },
+                {
+                  person: 'macro',
+                  text: (
+                    <>
+                      Tuesday at 2 PM is free for everyone.
+                      <span class="calendar-story-slot">
+                        <CalendarIcon /> Tue, Nov 10 · 2–2:30 PM
+                      </span>
+                    </>
+                  ),
+                },
+              ]}
+            />
           </div>
           <div class="calendar-story-settings calendar-story-glass">
             <div class="calendar-story-label">Settings / Calendar</div>
@@ -148,9 +147,20 @@ export function CalendarStories() {
           aria-label="Julia asks Macro to move design review to Tuesday at 2 PM and add Priya. An event preview shows the revised time and guest list for review before updating the event."
         >
           <FeatureDemoBackdrop />
-          <div class="calendar-story-request calendar-story-glass">
-            <span class="calendar-story-mention">@Macro</span> move design
-            review to Tuesday at 2 PM and add Priya.
+          <div class="calendar-story-request" inert aria-hidden="true">
+            <HomepageConversation
+              messages={[
+                {
+                  person: 'julia',
+                  text: (
+                    <>
+                      <span class="calendar-story-mention">@Macro</span> move
+                      design review to Tuesday at 2 PM and add Priya.
+                    </>
+                  ),
+                },
+              ]}
+            />
           </div>
           <div class="calendar-story-invite calendar-story-glass">
             <div class="calendar-story-label">

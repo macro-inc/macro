@@ -2,6 +2,7 @@
 .homepage-sections { position: relative; overflow-x: clip; background: #000; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; }
 .homepage-sections-inner { width: min(1000px, calc(100% - 48px)); margin-inline: auto; padding-bottom: 100px; }
 .homepage-feature { padding: 64px 0; }
+.macro-homepage .homepage-sections-inner > :is(.homepage-feature, .homepage-testimonials, .homepage-blog, .homepage-feature-end) { width: min(680px, 100%); margin-inline: auto; }
 .homepage-conversation { display: flex; flex-direction: column; gap: 28px; width: min(760px, 100%); margin: 0 auto 48px; padding: 0; list-style: none; font-family: var(--font-sans), 'Inter', sans-serif; font-size: 16px; font-weight: 370; line-height: 1.65; letter-spacing: normal; }
 .homepage-message { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: ". name" "avatar bubble" ". reaction"; align-self: flex-start; gap: 6px 10px; max-width: 82%; }
 .homepage-message[data-side=self] { grid-template-columns: minmax(0, 1fr) 32px; grid-template-areas: "name ." "bubble avatar" "reaction ."; align-self: flex-end; }
@@ -118,3 +119,9 @@
 .homepage-person-mention { padding: 1px 3px; border-radius: 4px; color: var(--marketing-mention); background: color-mix(in srgb, var(--marketing-mention) 12%, transparent); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 /* Keep the next transition's traveling layer behind the unification copy. */
 .homepage-sections { z-index: 1; }
+
+/* Demo composers control their own height; never expose the native resize grip. */
+.feature-page textarea,
+.macro-homepage textarea,
+.guide-graphic textarea,
+.agents-view-portal textarea { resize: none; }

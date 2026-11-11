@@ -12,7 +12,7 @@ export function PostTaskComposer() {
   const [draft, setDraft] = createStore<WorkspaceTask>({
     id: 'blog-setup',
     title: 'Send the setup plan',
-    description: 'Send Valentina the plan before Thursday’s demo.',
+    description: 'Send Austin Barron the plan before Thursday’s demo.',
     status: 'Not Started',
     priority: 'High',
     owner: 'julia',

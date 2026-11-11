@@ -9,6 +9,7 @@ import { NoiseBackground } from '../flow/shared';
 export function OnboardingShell(props: {
   wide?: boolean;
   landing?: boolean;
+  hideHeader?: boolean;
   onBack?: () => void;
   children: JSX.Element;
   overlay?: JSX.Element;
@@ -62,35 +63,37 @@ export function OnboardingShell(props: {
       }</style>
 
       <NoiseBackground />
-      <Show
-        when={props.landing}
-        fallback={
-          <header class="site-header">
-            <Show
-              when={props.onBack}
-              fallback={
-                <a
-                  href="/"
-                  aria-label="Back to home"
+      <Show when={!props.hideHeader}>
+        <Show
+          when={props.landing}
+          fallback={
+            <header class="site-header">
+              <Show
+                when={props.onBack}
+                fallback={
+                  <a
+                    href="/"
+                    aria-label="Back to home"
+                    class="site-menu-trigger pointer-events-auto"
+                  >
+                    <ArrowLeftIcon class="size-7" aria-hidden="true" />
+                  </a>
+                }
+              >
+                <button
+                  type="button"
+                  aria-label="Back to previous step"
+                  onClick={() => props.onBack?.()}
                   class="site-menu-trigger pointer-events-auto"
                 >
                   <ArrowLeftIcon class="size-7" aria-hidden="true" />
-                </a>
-              }
-            >
-              <button
-                type="button"
-                aria-label="Back to previous step"
-                onClick={() => props.onBack?.()}
-                class="site-menu-trigger pointer-events-auto"
-              >
-                <ArrowLeftIcon class="size-7" aria-hidden="true" />
-              </button>
-            </Show>
-          </header>
-        }
-      >
-        <SiteHeader />
+                </button>
+              </Show>
+            </header>
+          }
+        >
+          <SiteHeader />
+        </Show>
       </Show>
 
       {/* Keep long connector catalogs and summaries inside the fixed frame. */}

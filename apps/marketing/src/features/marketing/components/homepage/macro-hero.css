@@ -1,38 +1,17 @@
 .macro-text-hero { width: min(760px, 100%); margin-inline: auto; }
 .macro-text-hero-copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.macro-text-hero-copy p { width: min(520px, 100%); color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; margin: 24px 0 0; text-wrap: balance; }
-.macro-text-hero-copy .homepage-hero-cta { margin-top: 30px; gap: 12px; }
-@media (max-width: 699px) { .macro-text-hero-copy p { font-size: 16px; } }
-
-.macro-home-hero > [data-context-scene] { margin-bottom: 48px; }
-@media (min-width: 768px) {
-  .macro-home-hero > [data-context-scene] { --welcome-scale: 1.25; }
-}
-
-@media (min-width: 700px) {
-  .macro-homepage .macro-home-hero { min-height: 100svh; box-sizing: border-box; justify-content: center; padding: 112px 32px 96px; }
-  .macro-home-hero .macro-text-hero h1 { font-size: clamp(44px, 4vw, 60px); line-height: 1.1; }
-  .macro-text-hero-copy .homepage-hero-cta { min-width: 172px; height: 52px; margin-top: 40px; }
-}
-
-@media (min-width: 700px) and (max-height: 900px) {
-  .macro-home-hero > [data-context-scene] { height: 248px; --welcome-scale: 1; }
-}
-
+.macro-text-hero-copy h2 { width: min(520px, 100%); color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; margin: 24px 0 0; letter-spacing: normal; text-wrap: balance; }
+.macro-text-hero-copy .homepage-hero-cta { margin-top: 40px; gap: 12px; min-width: 172px; height: 52px; }
+.macro-homepage .macro-home-hero { min-height: 0; padding: 0 32px 32px; }
+.macro-home-hero .macro-text-hero h1 { font-size: clamp(44px, 4vw, 60px); line-height: 1.1; }
 @media (max-width: 699px) {
-  .macro-home-hero > [data-context-scene] { margin-bottom: 43px; }
-  .macro-home-hero .ob-orbit-tile { transform: translate(-50%, -50%); }
-  .macro-home-hero .macro-text-hero { padding-bottom: 8px; }
-  .macro-home-hero .macro-text-hero h1 { line-height: 1.12; }
-  .macro-text-hero-copy p { width: min(288px, 100%); margin-top: 16px; font-size: 13px; line-height: 1.8; }
-  .macro-text-hero-copy .homepage-hero-cta { width: 144px; height: 48px; margin-top: 40px; }
+  .macro-homepage .macro-home-hero { display: none; }
+  .macro-home-hero .macro-text-hero h1 { font-size: clamp(34px, 8vw, 40px); line-height: 1.12; }
+  .macro-text-hero-copy h2 { width: min(288px, 100%); margin-top: 16px; font-size: 13px; line-height: 1.8; }
+  .macro-text-hero-copy .homepage-hero-cta { min-width: 144px; height: 48px; margin-top: 32px; }
 }
-@media (max-width: 699px) and (max-height: 800px) {
-  .macro-home-hero > [data-context-scene] { height: clamp(160px, calc(100svh - 540px), 256px); }
-}
-
-@media (max-width: 699px) and (max-height: 700px) {
-  .macro-homepage .macro-home-hero { padding: 72px 24px 20px; }
-  .macro-home-hero > [data-context-scene] { margin-bottom: 32px; }
-  .macro-text-hero-copy .homepage-hero-cta { margin-top: 24px; }
+/* Mobile keeps the deployed landing page dimensions, including its CTA. */
+@media (max-width: 699px) {
+  .macro-homepage .onboarding-flow[data-landing] { font-size: 15px; font-weight: 400; }
+  .macro-homepage .onboarding-flow .homepage-hero-cta { width: 144px; height: 48px; padding: 10px 18px; font-size: 15px; }
 }

@@ -320,3 +320,23 @@
 }
 
 .macro-product-canvas .demo-cursor-card { position: relative; }
+
+/* The Docs chapter reuses the homepage editing scene as one upright card. */
+.macro-document-editing-preview { position: relative; inset: auto; height: 410px; }
+.macro-document-editing-preview .macro-workflow-document {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  border: 0;
+  border-radius: 26.25px;
+  background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 82%);
+  box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
+}
+.macro-document-editing-preview .macro-workflow-document .doc-story-body { font-size: 17px; }
+.macro-document-editing-preview .macro-workflow-document .doc-story-title { font-size: 28px; }
+@media (max-width: 700px) {
+  .macro-document-editing-preview { height: 460px; }
+  .macro-document-editing-preview .doc-named-caret::before { bottom: auto; top: 100%; border-radius: 0 3px 3px; }
+}

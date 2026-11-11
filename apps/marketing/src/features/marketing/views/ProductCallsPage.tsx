@@ -80,10 +80,6 @@ export function RouteCalls() {
           id="call-start"
           demo={{
             tone: 'calls',
-            message: {
-              person: 'julia',
-              text: 'Can we jump on a call here for a minute?',
-            },
           }}
           title="Start a call from Macro Chat."
           description="Call from a channel or DM, or share a standalone meeting link with someone outside your team. They can join in a browser without installing anything."
@@ -97,10 +93,6 @@ export function RouteCalls() {
           id="call-followup"
           demo={{
             tone: 'calls',
-            message: {
-              person: 'jacob',
-              text: '@Macro turn the decisions from this call into tasks.',
-            },
           }}
           title="Ask agents to work from transcripts."
           description="Agents can read the full transcript and a summary of why the call matters and how it fits into the broader picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
@@ -114,10 +106,6 @@ export function RouteCalls() {
           id="call-default"
           demo={{
             tone: 'calls',
-            message: {
-              person: 'julia',
-              text: 'The recording is shared with the team. The transcript is there too.',
-            },
           }}
           title="Share call recordings with your team."
           description="Channel calls are recorded and shared with your team by default, so you don’t have to remember to share them afterward. You can turn off team sharing; standalone meetings stay with their participants unless shared."

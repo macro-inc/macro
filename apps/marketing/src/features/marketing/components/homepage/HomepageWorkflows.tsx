@@ -31,7 +31,7 @@ export function EmailWorkflow() {
           messages={[
             {
               person: 'julia',
-              text: 'Can you send Valentina the demo follow-up?',
+              text: 'Can you send Austin Barron the demo follow-up?',
             },
           ]}
         />
@@ -43,11 +43,11 @@ export function EmailWorkflow() {
                 text: (
                   <>
                     <span class="homepage-person-mention">@Macro</span> draft
-                    Valentina’s follow-up from{' '}
+                    Austin Barron’s follow-up from{' '}
                     <HomepageMention
                       kind="call"
                       label="Demo call transcript"
-                      description="The demo with Valentina"
+                      description="The demo with Austin Barron"
                       href="/calls"
                     />
                     . Link the sales PDF and rollout plan. Cc Julia.
@@ -80,7 +80,10 @@ export function ChatWorkflow(props: { phase: number }) {
 }
 
 /** Shared document edits use the same named carets as the document demos. */
-export function DocumentWorkflow(props: { phase: number }) {
+export function DocumentWorkflow(props: {
+  phase: number;
+  editingOnly?: boolean;
+}) {
   return (
     <>
       <div class="macro-preview-back macro-workflow-document">
@@ -105,40 +108,42 @@ export function DocumentWorkflow(props: { phase: number }) {
           </p>
         </DocumentFrame>
       </div>
-      <div class="macro-preview-front macro-preview-message">
-        <HomepageConversation
-          messages={[
-            {
-              person: 'julia',
-              text: (
-                <>
-                  <span class="homepage-person-mention">@Claude</span> Add the
-                  launch steps we agreed on in this channel.
-                </>
-              ),
-            },
-            ...(props.phase >= 6
-              ? [
-                  {
-                    person: 'claude' as const,
-                    text: (
-                      <>
-                        Updated the{' '}
-                        <DocMention
-                          item={{
-                            kind: 'document',
-                            label: 'Website launch plan',
-                          }}
-                        />
-                        .
-                      </>
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-        />
-      </div>
+      <Show when={!props.editingOnly}>
+        <div class="macro-preview-front macro-preview-message">
+          <HomepageConversation
+            messages={[
+              {
+                person: 'julia',
+                text: (
+                  <>
+                    <span class="homepage-person-mention">@Claude</span> Add the
+                    launch steps we agreed on in this channel.
+                  </>
+                ),
+              },
+              ...(props.phase >= 6
+                ? [
+                    {
+                      person: 'claude' as const,
+                      text: (
+                        <>
+                          Updated the{' '}
+                          <DocMention
+                            item={{
+                              kind: 'document',
+                              label: 'Website launch plan',
+                            }}
+                          />
+                          .
+                        </>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </div>
+      </Show>
     </>
   );
 }
@@ -264,7 +269,7 @@ export function SheetWorkflow(props: { phase: number }) {
             owner={
               <img
                 class="ml-auto size-6 rounded-full"
-                src={homepagePeople.valentina.photo}
+                src={homepagePeople.austin.photo}
                 alt=""
               />
             }
@@ -273,7 +278,7 @@ export function SheetWorkflow(props: { phase: number }) {
           />
           <div class="macro-company-detail">
             <span>Contacts</span>
-            <DocMention item={{ kind: 'person', label: 'Valentina' }} />
+            <DocMention item={{ kind: 'person', label: 'Austin Barron' }} />
             <span>Related email</span>
             <HomepageMention
               kind="email"

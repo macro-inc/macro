@@ -107,7 +107,7 @@ export function WorkspaceEventDetails(props: {
               <span>4 attendees</span>
             </div>
             <div class="pl-7 pb-4 space-y-3">
-              <For each={['jacob', 'julia', 'teo', 'valentina'] as const}>
+              <For each={['jacob', 'julia', 'teo', 'austin'] as const}>
                 {(person) => (
                   <div class="flex items-center gap-3 text-xs text-ink-muted">
                     <img

@@ -120,7 +120,7 @@ const row = {
   comment: {
     id: 'comment-plan',
     kind: 'comment',
-    label: 'Valentina commented on Website launch plan',
+    label: 'Austin Barron commented on Website launch plan',
     time: '8:52 AM',
     open: { view: 'documents', id: 'plan' },
   },
@@ -177,7 +177,7 @@ export function createHomeInbox(options: {
   w.setData('documents', (doc) => doc.id === 'plan', 'comments', [
     {
       id: 'plan-screenshots',
-      person: 'valentina',
+      person: 'austin',
       body: 'Can we add the mobile screenshots to the checklist? They’re ready.',
       time: '8:52 AM',
     },
@@ -326,7 +326,7 @@ function RowIcon(props: { row: HomeRow }) {
   );
 }
 
-/** "Julia in #launch", "Valentina commented on Website launch plan". */
+/** "Julia in #launch", "Austin Barron commented on Website launch plan". */
 function ActorTitle(props: { label: string; joiner: string }) {
   const parts = () => props.label.split(props.joiner);
   return (

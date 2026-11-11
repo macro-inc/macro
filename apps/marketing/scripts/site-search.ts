@@ -109,6 +109,7 @@ const featureSources: Record<string, string> = {
   '/calls': 'features/marketing/views/ProductCallsPage.tsx',
   '/agents': 'features/marketing/views/ProductAgentsPage.tsx',
   '/github': 'features/marketing/views/ProductReviewsPage.tsx',
+  '/forms': 'features/marketing/views/ProductFormsPage.tsx',
 };
 const otherPages = [
   [

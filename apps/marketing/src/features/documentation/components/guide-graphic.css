@@ -8,38 +8,40 @@
   font: 370 14px/1.5 'Inter Variable', Inter, sans-serif;
   color: #d8d8d8;
   color-scheme: dark;
-  --guide-panel: #111;
-  --guide-raised: #191919;
+  --guide-panel: rgb(16 16 18 / 64%);
+  --guide-raised: rgb(30 32 32 / 54%);
   --guide-edge: #ffffff19;
   --guide-muted: #929292;
 }
 .guide-graphic::before, .guide-graphic::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -36px -48px;
   z-index: -1;
   pointer-events: none;
 }
 .guide-graphic::before {
   background: radial-gradient(ellipse at 25% 40%, #4576b22b, transparent 65%), radial-gradient(ellipse at 80% 65%, #7657a32b, transparent 60%);
-  filter: blur(20px);
+  filter: blur(24px);
+  opacity: .7;
 }
 .guide-graphic::after {
   background: radial-gradient(#b8c7e039 .6px, transparent .9px) 0 0 / 8px 8px;
-  mask-image: radial-gradient(ellipse, #000, transparent 70%);
+  mask-image: radial-gradient(ellipse 45% 38% at 25% 35%, #0009, transparent 85%), radial-gradient(ellipse 38% 46% at 75% 65%, #0007, transparent 85%);
 }
 .guide-graphic-loading { height: 460px; }
 .guide-workspace { position: absolute; inset: 26px 14px 22px; }
 .guide-workspace-back, .guide-workspace-front {
   position: absolute;
-  background: var(--guide-panel);
+  background: linear-gradient(135deg, #ffffff0b, transparent 55%), var(--guide-panel);
+  backdrop-filter: blur(16px) saturate(115%);
   border: 1px solid var(--guide-edge);
   border-radius: 18px;
-  box-shadow: inset 0 1px 0 #ffffff08, 0 16px 40px #0002;
+  box-shadow: inset 0 1px 0 #ffffff12, 0 0 0 11px #ffffff04, 0 0 0 12px var(--guide-edge), 0 16px 40px #0002;
   overflow: hidden;
 }
-.guide-workspace-back { width: 88%; left: 0; top: 6px; padding: 16px; transform: rotate(-2deg); }
-.guide-workspace-front { width: 74%; right: 0; bottom: 0; padding: 20px; transform: rotate(2deg); }
+.guide-workspace-back { width: 88%; left: 0; top: 6px; padding: 16px; transform: none; }
+.guide-workspace-front { width: 74%; right: 0; bottom: 0; padding: 20px; transform: none; }
 .guide-workspace svg { width: 18px; height: 18px; flex-shrink: 0; }
 .guide-workspace-heading { display: flex; align-items: center; gap: 9px; font-weight: 500; }
 .guide-workspace-tabs { display: flex; gap: 8px; margin: 18px 0 12px; font-size: 12px; color: var(--guide-muted); }
@@ -77,3 +79,8 @@ html[data-palette=cream] .guide-graphic { color-scheme: light; color: #292929; -
 .guide-graphic[data-kind=email] .macro-product-preview { position: relative; inset: auto; padding: 24px 0 36px; }
 .guide-graphic[data-kind=email] .macro-product-canvas { height: auto; }
 .guide-tool .guide-workspace-front { bottom: 32px; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .guide-graphic { --guide-panel: #101012; --guide-raised: #202222; }
+  .guide-workspace-back, .guide-workspace-front { backdrop-filter: none; }
+}

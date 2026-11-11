@@ -11,7 +11,7 @@
   --workspace-grain-opacity: .11;
 }
 
-/* Half the shared glow, layered over the original 4% Paper glow. */
+/* Keep the shared cloud subdued behind the exported controls. */
 .task-paper-graphic .feature-demo-backdrop::before {
   opacity: .5;
 }
@@ -24,6 +24,7 @@
 .task-paper-canvas > div,
 .task-paper-canvas > div > div {
   background-color: transparent;
+  background-image: none;
   border-radius: 0;
 }
 

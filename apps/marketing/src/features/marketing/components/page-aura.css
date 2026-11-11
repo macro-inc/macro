@@ -39,6 +39,7 @@
 	.page-aura,
 	.marketing-content:not(:has(.feature-page, .wall-of-love))
 )::before {
+	opacity: 0.65;
 	background:
 		radial-gradient(
 			ellipse 55% 750px at 30% 530px,

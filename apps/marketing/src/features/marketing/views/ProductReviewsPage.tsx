@@ -79,10 +79,6 @@ export function RouteGithub() {
           id="pr-links"
           demo={{
             tone: 'github',
-            message: {
-              person: 'julia',
-              text: 'Can you review the changes? The PR is linked in this thread.',
-            },
           }}
           title="Discuss pull requests in Macro Chat."
           description="Paste a GitHub link in a document, channel, or anywhere you can write Markdown. Hover over it to see the pull request’s status."
@@ -96,10 +92,6 @@ export function RouteGithub() {
           id="pr-tasks"
           demo={{
             tone: 'github',
-            message: {
-              person: 'jacob',
-              text: 'Link this PR to the task so its status follows the code.',
-            },
           }}
           title="Open pull requests beside tasks."
           description="Click the GitHub pill to go right to the pull request from the task, or vice versa. It all opens in split-screen Macro blocks, so you don’t have to leave your workspace."
@@ -113,10 +105,6 @@ export function RouteGithub() {
           id="coding-agents"
           demo={{
             tone: 'github',
-            message: {
-              person: 'julia',
-              text: '@Cursor fix the issue from this thread and open a PR.',
-            },
           }}
           title="Give coding agents a task."
           description="Give a coding agent a task and follow its work through the linked pull request. The task and pull request link back to each other."
@@ -130,10 +118,6 @@ export function RouteGithub() {
           id="review-inbox"
           demo={{
             tone: 'github',
-            message: {
-              person: 'jacob',
-              text: 'Requested your review. It’s waiting in your inbox.',
-            },
           }}
           title="Read GitHub updates in your inbox."
           description="When you receive a comment on a pull request you authored, or you’re mentioned in a pull request, it appears in your unified inbox alongside messages, tasks, and important emails."

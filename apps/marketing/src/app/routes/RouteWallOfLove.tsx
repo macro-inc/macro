@@ -87,22 +87,7 @@ export function RouteWallOfLove() {
                     <Heart class="love-card-heart" aria-hidden="true" />
                   )}
                 </figcaption>
-                <blockquote>
-                  <For each={entry.quote.split('[redacted]')}>
-                    {(part, index) => (
-                      <>
-                        {index() > 0 && (
-                          <span
-                            class="love-redacted"
-                            role="img"
-                            aria-label="redacted company"
-                          />
-                        )}
-                        {part}
-                      </>
-                    )}
-                  </For>
-                </blockquote>
+                <blockquote>{entry.quote}</blockquote>
                 {'handle' in entry && (
                   <>
                     <div

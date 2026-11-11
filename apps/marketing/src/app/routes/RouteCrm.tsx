@@ -107,10 +107,6 @@ export function RouteCrm() {
         id="crm-from-email"
         demo={{
           tone: 'crm',
-          message: {
-            person: 'jacob',
-            text: '@Macro check the latest emails and update the deal’s next steps.',
-          },
         }}
         title="Tightly integrated with Macro Mail."
         description="Open a customer email right from their record, using the same email client you already use. Mention a company or contact in a channel, document, or task."
@@ -124,10 +120,6 @@ export function RouteCrm() {
         id="crm-enrichment"
         demo={{
           tone: 'crm',
-          message: {
-            person: 'julia',
-            text: 'Pull up the company before our first call.',
-          },
         }}
         title="Build customer records from email."
         description="Macro creates records from your team’s email and adds publicly available company information. Agents combine that with your team’s emails and calls to summarize the relationship."
@@ -141,10 +133,6 @@ export function RouteCrm() {
         id="crm-context"
         demo={{
           tone: 'crm',
-          message: {
-            person: 'jacob',
-            text: 'I left the handoff notes on the customer record.',
-          },
         }}
         title="Discuss customers on their records."
         description="Conversations on companies and contacts use the same threading system as your team chat. @mention a teammate and they receive a ping just like in a channel; it all goes into one inbox."
@@ -163,10 +151,6 @@ export function RouteCrm() {
         id="crm-agents"
         demo={{
           tone: 'crm',
-          message: {
-            person: 'julia',
-            text: '@Macro draft a follow-up using the latest customer call.',
-          },
         }}
         title="Ask agents to update your CRM."
         description="Our MCP support is just as important to us as the user interface. Ask your agent to update a deal or draft a follow-up from the customer’s emails, calls, and notes."

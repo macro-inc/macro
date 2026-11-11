@@ -3,7 +3,7 @@ import { EmailAgenticEditingDemo } from '../../features/marketing/components/ema
 import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
-import { EmailSharingDemo } from '../../features/marketing/components/email/EmailSharingDemo';
+import { EmailShareStory } from '../../features/marketing/components/email/EmailShareStory';
 import {
   FeaturePage,
   FeaturePageCta,
@@ -141,19 +141,23 @@ export function RouteEmail() {
         title="Tag incoming emails automatically."
         description="Use an agent routine to tag incoming emails by customer, project, or topic. The same tags work across emails, docs, and tasks, so you can find the related work together."
       >
-        <PaperFeatureGraphic label="Incoming emails tagged by an agent routine: Customers and Follow up on a customer thread, Launch on an announcement, and Product on an update.">
+        <PaperFeatureGraphic
+          height={300}
+          mobileHeight={390}
+          label="Incoming emails tagged automatically by a routine. Customer and follow-up tags identify the next step, project tags group related emails, and the same tags work in docs and tasks."
+        >
           <EmailAutoTagDemo />
         </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
-        demo={{ tone: 'email' }}
+        demo={{ tone: 'email', glassFrame: false }}
         title="Share email threads in Macro Chat."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
-          render={() => <EmailSharingDemo />}
+          render={() => <EmailShareStory />}
         />
       </FeaturePageSection>
       <FeaturePageSection
@@ -174,10 +178,6 @@ export function RouteEmail() {
         id="keyboard-speed"
         demo={{
           tone: 'email',
-          message: {
-            person: 'jacob',
-            text: 'Found the thread. I’ll reply before the call.',
-          },
         }}
         title="Navigate with superhuman speed."
         description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
@@ -191,10 +191,6 @@ export function RouteEmail() {
         id="agentic-editing"
         demo={{
           tone: 'email',
-          message: {
-            person: 'jacob',
-            text: '@Macro draft the follow-up from our call. Link the rollout plan and cc Julia.',
-          },
         }}
         title="Draft and send from the agent."
         description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."

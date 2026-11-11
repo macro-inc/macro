@@ -74,9 +74,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'documents',
     description:
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
-    heading: 'Migrate your Notion databases.',
+    heading: 'Migrate from Notion with 1 click.',
     detail:
-      'Bring your Notion databases into Macro. Add custom fields and views, and link records to the emails, tasks, and docs they refer to.',
+      'Connect Notion, choose the pages and databases you want, and import them into Macro. Your originals stay in Notion.',
     sceneTitle: 'Launch projects',
     rows: [],
     message: 'I added the launch tasks to the table.',

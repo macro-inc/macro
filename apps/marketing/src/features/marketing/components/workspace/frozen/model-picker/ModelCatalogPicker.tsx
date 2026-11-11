@@ -14,6 +14,7 @@ import {
   moreModelFamilies,
 } from './modelCatalog';
 import { ModelIcon } from './ProviderIcon';
+import './model-catalog-picker.css';
 
 type ModelCatalogPickerProps = {
   value: string | null;
@@ -167,7 +168,7 @@ export function ModelCatalogMenu(
   return (
     <>
       <div class="bg-menu p-1.5">
-        <div class="flex items-center gap-2 px-2">
+        <div class="model-catalog-search flex items-center gap-2 px-2">
           <MagnifyingGlassIcon
             aria-hidden="true"
             class="size-4 shrink-0 text-ink-extra-muted"

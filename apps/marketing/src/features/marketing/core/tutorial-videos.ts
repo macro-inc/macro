@@ -9,6 +9,11 @@ export const TUTORIAL_VIDEOS = {
     title: 'Learn how to use Macro Home',
     length: '1:00',
   },
+  forms: {
+    feature: 'Forms',
+    title: 'Learn how to use Macro Forms',
+    length: '0:49',
+  },
   calendar: {
     feature: 'Calendar',
     title: 'Learn how to use Macro Calendar',
@@ -84,13 +89,11 @@ export const TUTORIAL_VIDEOS = {
     feature: 'Routines',
     title: 'Learn how to use Macro Routines',
     length: '1:01',
-    preview: 'native',
   },
   skills: {
     feature: 'Skills',
     title: 'Learn how to use Macro Skills',
     length: '0:49',
-    preview: 'native',
   },
   'company-graph': {
     feature: 'Company graph',

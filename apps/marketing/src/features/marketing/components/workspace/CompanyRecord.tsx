@@ -97,13 +97,7 @@ export const STAGE_IDS: Record<Exclude<DealStage, 'No stage'>, string> = {
   Customer: PROPERTY_OPTION_IDS.STAGE.CUSTOMER,
   Churned: PROPERTY_OPTION_IDS.STAGE.CHURNED,
 };
-const COMPANY_OWNERS = [
-  'jacob',
-  'julia',
-  'teo',
-  'valentina',
-  'gabriel',
-] as const;
+const COMPANY_OWNERS = ['jacob', 'julia', 'teo', 'austin', 'gabriel'] as const;
 
 /** CrmStageIcon: the system stage dot, or the dashed circle for No stage. */
 export function StageIcon(props: { stage: DealStage; class?: string }) {

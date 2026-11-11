@@ -22,8 +22,9 @@ import {
   homepagePeople,
 } from '../../core/homepage-demo-people';
 
-/** GroupChannelLabel for #launch: its other members, up to 20 characters. */
-export const LAUNCH_MEMBERS = 'Julia, Teo, Gabriel +1 other';
+/** Other participants in the local #launch demo. */
+export const LAUNCH_MEMBERS =
+  'Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other';
 
 export type ShareLevel = 'view' | 'comment' | 'edit';
 type Level = ShareLevel;
@@ -96,10 +97,14 @@ const LINK_SCOPES = {
 type Scope = keyof typeof LINK_SCOPES;
 
 const MATCHES: [RegExp, HomepagePersonId][] = [
+  [/peter/i, 'peter'],
+  [/wolf/i, 'wolf'],
+  [/eric/i, 'eric'],
+  [/rahul/i, 'rahul'],
   [/teo/i, 'teo'],
   [/julia/i, 'julia'],
   [/gabriel/i, 'gabriel'],
-  [/valentina/i, 'valentina'],
+  [/austin/i, 'austin'],
 ];
 
 /**

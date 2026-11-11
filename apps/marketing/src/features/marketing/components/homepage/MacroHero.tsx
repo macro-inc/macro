@@ -11,16 +11,16 @@ export function MacroHero() {
           <br />
           for your company.
         </h1>
-        <p>
+        <h2>
           Your email, chat, tasks, docs, agents and CRM in one tab with team
           level memory for agents.
-        </p>
+        </h2>
         <a
           class="site-nav-start homepage-hero-cta macro-home-button"
           href="/app/signup"
           onClick={routePhoneToMobileSignup}
         >
-          Get started <span aria-hidden="true">→</span>
+          Sign Up <span aria-hidden="true">→</span>
         </a>
       </div>
     </div>

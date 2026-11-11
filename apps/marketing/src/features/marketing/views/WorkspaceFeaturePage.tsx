@@ -48,6 +48,7 @@ export default function WorkspaceFeaturePage() {
                         description={feature().detail}
                         demo={{
                           tone: feature().tone,
+                          glassFrame: slug() !== 'spreadsheets',
                           message: feature().message
                             ? { person: 'julia', text: feature().message }
                             : undefined,

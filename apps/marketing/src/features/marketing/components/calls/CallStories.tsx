@@ -108,7 +108,7 @@ const channelPeople: CallPerson[] = [
   'julia',
   'teo',
   'gabriel',
-  'valentina',
+  'austin',
 ];
 
 /**

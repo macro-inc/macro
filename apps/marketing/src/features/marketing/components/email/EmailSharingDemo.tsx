@@ -136,7 +136,7 @@ export function ChannelResult(props: {
   // Solid's For keys by object identity. Keep existing messages stable across phases.
   const question: HomepageMessage = {
     person: 'julia',
-    text: 'What does Valentina need before Thursday?',
+    text: 'What does Austin Barron need before Thursday?',
   };
   const sharedEmail: HomepageMessage = {
     person: 'jacob',

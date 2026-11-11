@@ -178,7 +178,7 @@ export function TaskOwnerMenu(props: {
     <PropertyMenu
       label="assignee"
       value={props.task.owner}
-      options={['jacob', 'julia', 'teo', 'valentina', 'claude', 'cursor']}
+      options={['jacob', 'julia', 'teo', 'austin', 'claude', 'cursor']}
       display={(value) => homepagePeople[value].shortName}
       onSave={props.onSave}
       inline={props.inline}

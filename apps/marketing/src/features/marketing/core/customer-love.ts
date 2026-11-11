@@ -145,11 +145,11 @@ export const customerLove = [
       'I love macro for so many reasons. I’m building my whole company on it. I love how cleanly it integrates into my Claude code workflow and how I can share documents, messages and create tasks all from one thread on Claude code. Beautiful. Totally get the use case.\n\n…\n\nBut seriously great job. You’ve killed Notion + slack for me!',
   },
   {
-    name: 'Sebastian',
+    name: 'Sam',
     initials: 'SK',
     priority: 2,
     quote:
-      'It\'s very impressive. I worked at notion and [redacted], so im pretty familiar with like "workspaces for doing stuff", and this is by far the best implementation that I\'ve seen for "workspaces for doing stuff with ai"',
+      'It\'s very impressive. I worked at notion, so im pretty familiar with like "workspaces for doing stuff", and this is by far the best implementation that I\'ve seen for "workspaces for doing stuff with ai"',
   },
   {
     name: 'Jared',

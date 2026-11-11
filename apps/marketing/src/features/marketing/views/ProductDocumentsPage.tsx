@@ -1,13 +1,13 @@
+import { TimelineArtworkBand } from '../../../app/routes/RouteDocuments';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { DocumentOrganizationDemo } from '../components/documents/DocumentOrganizationDemo';
-import {
-  DocumentAgentDemo,
-  DocumentMentionsDemo,
-} from '../components/documents/DocumentStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
+import HomepageCollaborativeDoc from '../components/HomepageCollaborativeDoc';
+import { HomepageMention } from '../components/HomepageMention';
+import HomepageProductPreview from '../components/homepage/HomepageProductPreview';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { documentComparisons } from '../core/feature-comparisons';
 
@@ -82,31 +82,19 @@ export function RouteDocuments() {
         />
         <FeaturePageSection
           id="document-agents"
-          demo={{ tone: 'documents' }}
+          demo={{ tone: 'documents', glassFrame: false }}
           title="Edit documents alongside agents."
           description="Agents have a live cursor in the document, instead of just editing the Markdown and giving you a diff or the next version. If you go offline and come back, your changes sync to your peers and conflicts resolve automatically."
         >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <DocumentAgentDemo />}
-          />
+          <HomepageProductPreview kind="documents" documentOnly />
         </FeaturePageSection>
         <FeaturePageSection
           id="document-links"
-          demo={{
-            tone: 'documents',
-            message: {
-              person: 'julia',
-              text: 'The pricing email is linked in the brief if you need the context.',
-            },
-          }}
+          demo={{ tone: 'documents', glassFrame: false }}
           title="Mention emails, tasks, and calls."
           description="Link a customer email from Macro Mail or a task from Macro Tasks. Open the original right from your document."
         >
-          <DemoInteractionBoundary
-            class="feature-page-visual docs-wide-demo"
-            render={() => <DocumentMentionsDemo />}
-          />
+          <HomepageCollaborativeDoc showHistory={false} />
         </FeaturePageSection>
         <FeaturePageSection
           id="document-organization"
@@ -114,7 +102,25 @@ export function RouteDocuments() {
             tone: 'documents',
             message: {
               person: 'jacob',
-              text: 'I put the brief in Launch and tagged it for the website project.',
+              text: (
+                <>
+                  I shared{' '}
+                  <HomepageMention
+                    kind="md"
+                    label="Website brief"
+                    description="The website copy and pricing changes."
+                    href="#document-organization"
+                  />{' '}
+                  in{' '}
+                  <HomepageMention
+                    kind="channel"
+                    label="website"
+                    description="The website project conversation."
+                    href="/channels"
+                  />{' '}
+                  so everyone has the context.
+                </>
+              ),
             },
           }}
           title="Follow links back to Macro Chat."
@@ -124,6 +130,13 @@ export function RouteDocuments() {
             class="feature-page-visual"
             render={() => <DocumentOrganizationDemo />}
           />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="document-version-control"
+          title="Version control for every edit."
+          description="Track changes by people and agents over time. Review earlier versions and see how your document evolved."
+        >
+          <TimelineArtworkBand topGap="40px" />
         </FeaturePageSection>
         <section
           id="documents-comparison"

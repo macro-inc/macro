@@ -44,7 +44,7 @@ export const cameraPhoto: Record<CallPerson, string> = {
   julia: juliaVideo,
   gabriel: gabrielVideo,
   teo: teoVideo,
-  valentina: homepagePeople.valentina.photo,
+  austin: homepagePeople.austin.photo,
 };
 
 /** Local stand-in for the recording's <video>: seeks and plays a clock only. */

@@ -137,6 +137,9 @@ const RouteGithub = lazy(() =>
     })
   )
 );
+const RouteForms = lazy(
+  () => import('../../features/marketing/views/ProductFormsPage')
+);
 const RouteWorkspaceFeature = lazy(
   () => import('../../features/marketing/views/WorkspaceFeaturePage')
 );
@@ -157,6 +160,7 @@ export function preloadProductRoute(pathname: string) {
     ['/github', RouteGithub],
     ['/spreadsheets', RouteWorkspaceFeature],
     ['/databases', RouteWorkspaceFeature],
+    ['/forms', RouteForms],
     ['/canvas', RouteWorkspaceFeature],
     ['/snippets', RouteWorkspaceFeature],
     ['/calendar', RouteWorkspaceFeature],
@@ -361,6 +365,7 @@ export const App: Component<{
       <Route path="/github" component={RouteGithub} />
       <Route path="/spreadsheets" component={RouteWorkspaceFeature} />
       <Route path="/databases" component={RouteWorkspaceFeature} />
+      <Route path="/forms" component={RouteForms} />
       <Route path="/canvas" component={RouteWorkspaceFeature} />
       <Route path="/snippets" component={RouteWorkspaceFeature} />
       <Route path="/calendar" component={RouteWorkspaceFeature} />

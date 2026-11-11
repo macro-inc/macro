@@ -29,3 +29,18 @@
 
 .workspace-feature-preview { position: relative; height: 510px; }
 @media (max-width: 640px) { .workspace-feature-preview { height: 620px; } }
+
+/* A spreadsheet and its opened record are separate, upright windows. */
+.workspace-feature-page[data-feature=spreadsheets] .workspace-feature-preview { height: 670px; }
+.workspace-feature-page[data-feature=spreadsheets] .macro-product-preview { inset: 18px 0; }
+.workspace-feature-page[data-feature=spreadsheets] :is(.macro-preview-back, .macro-preview-front) {
+  transform: none;
+  width: 100%;
+  left: 0;
+  right: auto;
+  box-shadow: inset 0 1px 0 #ffffff12, 0 0 0 11px #ffffff04, 0 0 0 12px #ffffff12;
+}
+.workspace-feature-page[data-feature=spreadsheets] .macro-preview-front { bottom: 0; }
+@media (max-width: 640px) {
+  .workspace-feature-page[data-feature=spreadsheets] .workspace-feature-preview { height: 650px; }
+}

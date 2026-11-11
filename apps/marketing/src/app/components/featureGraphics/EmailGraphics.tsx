@@ -980,8 +980,8 @@ type ComposeFrame = {
 
 const COMPOSE_RECIPIENT: ComposePill = {
   kind: 'person',
-  label: 'Valentina',
-  initials: 'V',
+  label: 'Austin Barron',
+  initials: 'AB',
 };
 const COMPOSE_PDF: ComposePill = { kind: 'doc', label: 'Pitch memo.pdf' };
 const COMPOSE_DOC: ComposePill = { kind: 'ref', label: 'Website launch plan' };
@@ -1173,7 +1173,7 @@ const COMPOSE_BLANK_MS = 880;
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const composeEase = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 /** How many stamps in a table have landed. */
 const countAt = (stamps: number[], now: number) => {
   let n = 0;
@@ -1629,7 +1629,7 @@ export function ComposeMentionGraphic() {
     <div
       ref={frameEl}
       role="img"
-      aria-label="A Macro email being composed: typing an @mention adds Valentina to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
+      aria-label="A Macro email being composed: typing an @mention adds Austin Barron to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
     >
       <ComposeMentionScene t={t} />
     </div>
@@ -2765,7 +2765,7 @@ const unifiedItems: UItem[] = [
   {
     kind: 'row',
     type: 'pr',
-    who: 'Valentina',
+    who: 'Austin Barron',
     subject: 'Adapt dark theme and input focus styling for mobile #4158',
     preview:
       'adapts the dark-theme tokens and input focus rings so they hold up on smaller screens',
@@ -3521,7 +3521,7 @@ const kbRows: {
   { who: 'Marcus Lee', subject: 'Re: Q3 roadmap draft', time: 'Jun 15' },
   { who: 'Mom', subject: 'dinner sunday?', time: 'Jun 14', unread: true },
   {
-    who: 'Valentina',
+    who: 'Austin Barron',
     subject: 'Contract countersigned',
     time: 'Jun 9',
   },

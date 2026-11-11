@@ -3617,13 +3617,13 @@ export function DocsAgentTeammateGraphic(
         }
       `}</style>
       <DocCropBand
-        label="Website launch plan: agents correct the launch date to Thursday and check it against Valentina’s email"
+        label="Website launch plan: agents correct the launch date to Thursday and check it against Austin Barron’s email"
         peak={46}
       >
         <p style={cropLine(true)}>
           Website launch plan. Gabriel owns the checklist, Teo is checking the
-          invite flow, and Valentina is waiting for the final plan before the
-          team call.
+          invite flow, and Austin Barron is waiting for the final plan before
+          the team call.
         </p>
         <p style={cropLine()}>
           The team will run through onboarding before we share the plan. Every
@@ -3637,8 +3637,8 @@ export function DocsAgentTeammateGraphic(
             </AgentSelection>
           </CropFocus>
           {cropShort(
-            ', matching the email sent to Valentina',
-            ', per Valentina’s email'
+            ', matching the email sent to Austin Barron',
+            ', per Austin Barron’s email'
           )}
           <Show when={!props.launchReview}>
             <CropFocus>
@@ -3665,8 +3665,8 @@ export function DocsAgentTeammateGraphic(
           . Invited teammates should land in onboarding with their team intact.
         </p>
         <p style={cropLine(true)}>
-          Share the updated plan in the launch channel. Send Valentina the link
-          once the invite check is complete, keeping the original email
+          Share the updated plan in the launch channel. Send Austin Barron the
+          link once the invite check is complete, keeping the original email
           attached.
         </p>
       </DocCropBand>

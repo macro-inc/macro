@@ -3,7 +3,7 @@ import { observeDemoTakeover } from './observeDemoTakeover';
 
 export type EmailDemoToken = string | { kind: 'pdf' | 'md'; label: string };
 const parts: EmailDemoToken[] = [
-  'Hi Valentina,\n',
+  'Hi Austin Barron,\n',
   'Thanks for joining the demo on September 14. Great meeting your team!\n',
   'Here’s our ',
   { kind: 'pdf', label: 'Macro sales overview.pdf' },

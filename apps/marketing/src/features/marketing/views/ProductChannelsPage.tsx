@@ -42,10 +42,6 @@ export function RouteChannels() {
         id="channel-access"
         demo={{
           tone: 'chat',
-          message: {
-            person: 'jacob',
-            text: 'Shared with the channel — everyone here can open it.',
-          },
         }}
         title="Share access with channel members."
         description="Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it."
@@ -68,10 +64,6 @@ export function RouteChannels() {
         id="catch-up"
         demo={{
           tone: 'chat',
-          message: {
-            person: 'jacob',
-            text: 'I’ll reply in the thread.',
-          },
         }}
         title="Mark conversations done as you go."
         description="Keep messages waiting in your inbox until you’re ready to reply, then mark them done. The first couple of replies show inline, so you don’t have to open a side panel to read every thread."

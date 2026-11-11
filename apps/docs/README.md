@@ -34,7 +34,7 @@ and Security. Queries survive redirects,
 and legacy feature heading fragments open the embedded reference section.
 
 `docs.json` contains the permanent redirect records for the old Mintlify host,
-pointing directly at the final destination. Keep both maps in sync. The website
+pointing directly at the final destination. Keep both maps in sync, with the catch-all last so specific page rules take precedence. The website
 still uses its navigation for standalone guides.
 
 The migration includes the 214 URLs published in the old host's sitemap on

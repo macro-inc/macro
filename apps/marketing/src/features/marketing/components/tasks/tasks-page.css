@@ -116,3 +116,13 @@
   flex: 1 0 auto;
   overflow: visible;
 }
+
+/* Give the Tasks summary room for two lines without changing its type size. */
+@media (min-width: 700px) {
+  .feature-page .tasks-page .email-page-hero {
+    grid-template-columns: minmax(0, 600px);
+  }
+  .feature-page .tasks-page .email-page-hero-description {
+    text-wrap: wrap;
+  }
+}

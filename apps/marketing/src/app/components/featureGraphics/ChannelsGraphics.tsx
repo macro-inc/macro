@@ -761,7 +761,7 @@ export function HeroChannelWindow() {
       meta: 'Gabriel Birman · Jun 12 · 2.4 MB',
     },
     { name: 'posthog-flags.png', meta: 'Rahul · 4:38 PM · 184 KB' },
-    { name: 'deploy-logs.txt', meta: 'Valentina · 4:41 PM · 12 KB' },
+    { name: 'deploy-logs.txt', meta: 'Austin Barron · 4:41 PM · 12 KB' },
   ];
   const participants: {
     name: string;
@@ -776,11 +776,11 @@ export function HeroChannelWindow() {
       initials: 'GB',
       color: 'var(--b3)',
     },
-    { name: 'Rahul', role: 'Member', initials: 'R', color: 'var(--b4)' },
+    { name: 'Rahul Batra', role: 'Member', initials: 'R', color: 'var(--b4)' },
     {
-      name: 'Valentina',
+      name: 'Austin Barron',
       role: 'Member',
-      initials: 'V',
+      initials: 'AB',
       color: 'var(--b3)',
     },
     {
@@ -978,7 +978,7 @@ export function HeroChannelWindow() {
                         gap: '8px',
                       }}
                     >
-                      <span style={nameStyle}>Rahul</span>
+                      <span style={nameStyle}>Rahul Batra</span>
                       <span style={timeStyle}>4:20 PM</span>
                     </div>
                     <p style={msgText}>which ones</p>
@@ -1152,7 +1152,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Rahul</span>
+                  <span style={nameStyle}>Rahul Batra</span>
                   <span style={timeStyle}>4:38 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1187,7 +1187,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Valentina</span>
+                  <span style={nameStyle}>Austin Barron</span>
                   <span style={timeStyle}>4:41 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1764,7 +1764,7 @@ function ChatHeroEmailCard(props: { compact: boolean }) {
               'white-space': 'nowrap',
             }}
           >
-            Email thread · Valentina · 6 messages
+            Email thread · Austin Barron · 6 messages
           </span>
         </div>
       </div>
@@ -2418,7 +2418,7 @@ export function InlineThreadsGraphic() {
     'margin-left': 'auto',
   };
   const replies = [
-    { who: 'Rahul', initials: 'R', time: '4:20 PM', text: 'which ones' },
+    { who: 'Rahul Batra', initials: 'R', time: '4:20 PM', text: 'which ones' },
     {
       who: 'Gabriel Birman',
       initials: 'GB',
@@ -3654,7 +3654,7 @@ export function ChannelCohesionGraphic() {
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
   const prog = (a: number, b: number) => clamp01((t() - a) / (b - a));
   const ease = (x: number) =>
-    x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 
   onMount(() => {
     const reduce =

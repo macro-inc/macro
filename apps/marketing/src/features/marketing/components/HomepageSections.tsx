@@ -107,7 +107,6 @@ function Feature(props: {
       <Show when={props.productPages}>
         {(pages) => (
           <div class="homepage-feature-more-group">
-            <span class="homepage-feature-more-label">Learn more</span>
             <For each={pages()}>
               {(page) => (
                 <HomepageFeatureDetails title={page.title} path={page.path} />
@@ -187,8 +186,8 @@ export function HomepageSections() {
           description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
           messages={[
             {
-              person: 'julia',
-              text: 'Can you send Valentina the demo follow-up?',
+              person: 'eric',
+              text: 'Can you send Austin Barron the demo follow-up?',
             },
             {
               person: 'jacob',
@@ -197,11 +196,11 @@ export function HomepageSections() {
                   <DemoMention
                     item={{ id: 'macro', label: 'Macro', kind: 'person' }}
                   />{' '}
-                  draft Valentina’s follow-up from{' '}
+                  draft Austin Barron’s follow-up from{' '}
                   <HomepageMention
                     kind="call"
                     label="Demo call transcript"
-                    description="Transcript of the September 14 demo with Valentina · Team rollout, sales materials, and follow-up next steps."
+                    description="Transcript of the September 14 demo with Austin Barron · Team rollout, sales materials, and follow-up next steps."
                     href="#email"
                   />
                   . Link the sales PDF and rollout plan. Cc Julia.
@@ -228,7 +227,7 @@ export function HomepageSections() {
           description="CRDT documents with live agent edits. Create tasks from messages and link them to the specification."
           messages={[
             {
-              person: 'jacob',
+              person: 'peter',
               text: (
                 <>
                   Let’s put the plan, owners, and tasks in <LaunchPlan />.

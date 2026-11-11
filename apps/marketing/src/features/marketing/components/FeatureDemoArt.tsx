@@ -17,9 +17,10 @@ export type FeatureDemoComposition = {
     | 'crm'
     | 'github';
   message?: HomepageMessage;
+  glassFrame?: boolean;
 };
 
-/** Keep the working demo intact, with its related conversation in a second layer. */
+/** Keep the working demo intact, with its related conversation outside the workspace. */
 export function FeatureDemoArt(props: {
   composition: FeatureDemoComposition;
   children: JSX.Element;
@@ -28,13 +29,14 @@ export function FeatureDemoArt(props: {
     <div
       class="feature-demo-art"
       data-tone={props.composition.tone}
+      data-glass-frame={props.composition.glassFrame !== false || undefined}
       data-native-context={!props.composition.message}
     >
       <FeatureDemoBackdrop />
       <div class="feature-demo-primary">{props.children}</div>
       <Show when={props.composition.message}>
         {(message) => (
-          <div class="feature-demo-context glass" inert aria-hidden="true">
+          <div class="feature-demo-context" inert aria-hidden="true">
             <HomepageConversation messages={[message()]} />
           </div>
         )}

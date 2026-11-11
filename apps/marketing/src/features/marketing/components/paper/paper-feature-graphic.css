@@ -36,6 +36,7 @@
 .paper-feature-canvas > div,
 .paper-feature-canvas > div > div {
   background-color: transparent;
+  background-image: none;
   border-radius: 0;
 }
 

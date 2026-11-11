@@ -13,6 +13,7 @@ import { SitePageClosing } from '../../marketing/components/SitePageClosing';
 import { BENEFIT_PAGES } from '../../marketing/core/benefit-pages';
 import { FEATURE_PAGES } from '../../marketing/core/navigation';
 import { BenefitPage } from '../../marketing/views/BenefitPage';
+import { PageOutline } from '../components/PageOutline';
 import { documentationComponents } from '../components/DocumentationContent';
 import '../components/documentation.css';
 import '../components/guide-home-preview.css';
@@ -75,7 +76,7 @@ export default function DocumentationPage() {
       <Show
         when={Object.hasOwn(BENEFIT_PAGES, slug())}
         fallback={
-          <main class="documentation-page">
+          <PageOutline><main class="documentation-page">
             <Show
               when={page()}
               fallback={
@@ -141,7 +142,7 @@ export default function DocumentationPage() {
                 </>
               )}
             </Show>
-          </main>
+          </main></PageOutline>
         }
       >
         <BenefitPage slug={slug()} />

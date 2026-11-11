@@ -9,6 +9,9 @@ export function PaperFeatureGraphic(props: {
   label: string;
   children: JSX.Element;
   mobile?: JSX.Element;
+  height?: number;
+  mobileHeight?: number;
+  backdrop?: boolean;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const size = createElementSize(viewport);
@@ -18,7 +21,9 @@ export function PaperFeatureGraphic(props: {
 
   return (
     <div class="paper-feature-graphic">
-      <FeatureDemoBackdrop />
+      <Show when={props.backdrop !== false}>
+        <FeatureDemoBackdrop />
+      </Show>
       <div
         ref={setViewport}
         class="paper-feature-viewport paper-feature-art"
@@ -26,7 +31,7 @@ export function PaperFeatureGraphic(props: {
         role="img"
         aria-label={props.label}
         style={{
-          height: `${(compact() && props.mobile ? 360 : 544) * scale()}px`,
+          height: `${(compact() ? (props.mobileHeight ?? (props.mobile ? 360 : (props.height ?? 544))) : (props.height ?? 544)) * scale()}px`,
         }}
       >
         <div

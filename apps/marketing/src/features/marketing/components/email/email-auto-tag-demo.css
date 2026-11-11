@@ -1,46 +1,29 @@
 .email-auto-tag-art {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   width: 100%;
-  height: 544px;
-  padding: 32px;
+  height: 300px;
+  padding: 16px;
   color: var(--color-ink);
-  font: 370 16px/1.5 'Inter Variable', Inter, sans-serif;
+  font: 370 13px/1.4 'Inter Variable', Inter, sans-serif;
 }
-.email-auto-tag-annotation {
-  position: relative;
-  align-self: center;
-  margin-bottom: 40px;
-  padding: 5px 16px;
-  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
-  border-radius: 99px;
-  background: var(--color-panel);
-  font-size: 13px;
-}
-.email-auto-tag-annotation::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  height: 40px;
-  border-left: 1px solid color-mix(in srgb, var(--color-ink) 30%, transparent);
-}
-.email-auto-tag-rows { display: grid; gap: 12px; }
-.email-auto-tag-row { display: flex; align-items: center; gap: 16px; padding: 18px 22px; opacity: .42; }
+.email-auto-tag-rows { display: grid; gap: 10px; }
+.email-auto-tag-example { display: grid; grid-template-columns: minmax(0, 1fr) 142px; align-items: center; gap: 26px; }
+.email-auto-tag-row { display: flex; align-items: center; gap: 10px; height: 82px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--color-ink) 8%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--color-ink) 3%, transparent); }
 .email-auto-tag-row.email-auto-tag-highlight {
-  opacity: 1;
-  border-radius: 24px;
-  border: 1px solid color-mix(in srgb, var(--color-ink) 8%, transparent);
   background: linear-gradient(135deg, color-mix(in srgb, var(--color-ink) 9%, transparent), color-mix(in srgb, var(--color-ink) 3%, transparent));
   box-shadow: inset 0 1px color-mix(in srgb, var(--color-ink) 7%, transparent);
   backdrop-filter: blur(16px);
 }
-.email-auto-tag-icon { width: 24px; height: 24px; flex: none; color: var(--color-ink-muted); }
+.email-auto-tag-icon { width: 20px; height: 20px; flex: none; color: var(--color-ink-muted); }
 .email-auto-tag-message { flex: 1; min-width: 0; }
 .email-auto-tag-sender { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .email-auto-tag-sender strong { font-weight: 500; }
-.email-auto-tag-sender > span { font-size: 12px; color: var(--color-ink-muted); }
-.email-auto-tag-subject { margin: 3px 0 10px; color: var(--color-ink-muted); }
-.paper-feature-art[data-compact=true] .email-auto-tag-art { padding-inline: 8px; }
-.paper-feature-art[data-compact=true] .email-auto-tag-row { gap: 12px; padding-inline: 16px; }
+.email-auto-tag-sender > span { font-size: 10px; color: var(--color-ink-muted); }
+.email-auto-tag-subject { margin: 1px 0 4px; color: var(--color-ink-muted); }
+.email-auto-tag-annotation { position: relative; font-size: 12px; line-height: 1.5; color: var(--color-ink-muted); }
+.email-auto-tag-annotation::before { content: ''; position: absolute; top: 50%; right: calc(100% + 6px); width: 20px; border-top: 1px solid color-mix(in srgb, var(--color-ink) 30%, transparent); }
+.email-auto-tag-annotation::after { content: ''; position: absolute; top: calc(50% - 2px); right: calc(100% + 24px); width: 4px; height: 4px; border-radius: 50%; background: var(--color-ink-muted); }
+.paper-feature-art[data-compact=true] .email-auto-tag-art { height: 390px; padding: 8px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-example { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-annotation { grid-row: 1; justify-self: end; margin-right: 14px; }
+.paper-feature-art[data-compact=true] .email-auto-tag-annotation::before { top: 100%; right: 10px; width: 0; height: 12px; border-top: 0; border-left: 1px solid color-mix(in srgb, var(--color-ink) 30%, transparent); }
+.paper-feature-art[data-compact=true] .email-auto-tag-annotation::after { top: calc(100% + 10px); right: 8.5px; }

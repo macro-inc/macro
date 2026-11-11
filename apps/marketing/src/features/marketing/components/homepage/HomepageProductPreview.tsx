@@ -48,6 +48,7 @@ const stepDelays = [1600, 1000, 1400, 1400, 1300, 1100, 1000];
 /** Local fixture actions reuse the product's forms and surfaces, never live data. */
 export default function HomepageProductPreview(props: {
   kind: HomepagePreviewKind;
+  documentOnly?: boolean;
 }) {
   const sitePalette = createSitePalette();
   let canvas!: HTMLDivElement;
@@ -121,7 +122,10 @@ export default function HomepageProductPreview(props: {
     active: () => !!playback && playback.playing() && !playback.reducedMotion(),
   });
   return (
-    <div class="macro-product-preview">
+    <div
+      class="macro-product-preview"
+      classList={{ 'macro-document-editing-preview': props.documentOnly }}
+    >
       <style>{properties}</style>
       <style>{`@scope (.macro-product-canvas) { ${scopedUi} ${palette.replaceAll(':root', ':scope')} ${lightPalette} }`}</style>
       <div
@@ -145,7 +149,10 @@ export default function HomepageProductPreview(props: {
             <HomepageDatabaseWorkflow phase={phase()} />
           </Match>
           <Match when={props.kind === 'documents'}>
-            <DocumentWorkflow phase={phase()} />
+            <DocumentWorkflow
+              phase={phase()}
+              editingOnly={props.documentOnly}
+            />
           </Match>
           <Match when={props.kind === 'tasks'}>
             <TaskWorkflow phase={phase()} />

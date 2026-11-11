@@ -19,6 +19,7 @@ import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
 import SkillIcon from '@phosphor/blueprint.svg';
 import SnippetIcon from '@phosphor/brackets-curly.svg';
 import ChatIcon from '@phosphor/chats-circle.svg';
+import FormIcon from '@phosphor/clipboard-text.svg';
 import GraphIcon from '@phosphor/graph.svg';
 import StackIcon from '@phosphor/stack.svg';
 import { type JSX, type ParentProps, Show } from 'solid-js';
@@ -53,6 +54,7 @@ const productIcons = {
   GitHub: GitHubIcon,
   Spreadsheets: SpreadsheetIcon,
   Databases: DatabaseIcon,
+  Forms: FormIcon,
   Canvas: CanvasIcon,
   Snippets: SnippetIcon,
   Calendar: CalendarIcon,

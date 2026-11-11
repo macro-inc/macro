@@ -356,7 +356,7 @@ const SCRIPT: Block[] = [
   {
     kind: 'li',
     md: '',
-    segs: [{ k: 'text', text: 'Share the plan with Valentina' }],
+    segs: [{ k: 'text', text: 'Share the plan with Austin Barron' }],
   },
   { kind: 'h2', md: '## ', segs: [{ k: 'text', text: 'Context' }] },
   {
@@ -440,7 +440,7 @@ const SCRIPT: Block[] = [
 ];
 
 /** The run the comment lands on, and the comment itself. */
-const COMMENT_TEXT = 'Please check the date against Valentina’s email.';
+const COMMENT_TEXT = 'Please check the date against Austin Barron’s email.';
 /** Anchor the date-check comment to the launch date, not the checklist heading. */
 const COMMENT_BLOCK = 3;
 
@@ -660,7 +660,7 @@ const COMMENT_STAMPS = stampChars(
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const ease = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 const _lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 /** How many stamps in a table have landed. */
 const countAt = (stamps: number[], now: number) => {
@@ -1064,7 +1064,7 @@ const travel = (k: number, o: number, i: number): number => {
   if (o <= 0) return ease(k);
   const kb = 0.54 + 0.12 * vary(i, 1);
   const twoHops = vary(i, 2) > 0.45;
-  if (k <= kb) return (1 + o) * (1 - Math.pow(1 - clamp01(k / kb), 3));
+  if (k <= kb) return (1 + o) * (1 - (1 - clamp01(k / kb)) ** 3);
   const rest = 1 - kb;
   const back = -(0.2 + 0.35 * vary(i, 4));
   const h1 = 0.2 + 0.14 * vary(i, 5);

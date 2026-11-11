@@ -21,7 +21,7 @@ export default function GuideWorkspaceGraphic(props: {
           {
             icon: Email,
             title: 'Thursday demo',
-            detail: 'Valentina · Can you send the rollout plan?',
+            detail: 'Austin Barron · Can you send the rollout plan?',
             time: '9:41 AM',
           },
           {
@@ -59,7 +59,7 @@ export default function GuideWorkspaceGraphic(props: {
           {
             icon: Email,
             title: 'Thursday demo',
-            detail: 'Email · Valentina',
+            detail: 'Email · Austin Barron',
             time: '',
           },
           {
@@ -130,8 +130,8 @@ export default function GuideWorkspaceGraphic(props: {
                 <span>Rollout plan</span>
               </div>
               <div class="guide-workspace-copy">
-                Confirm the launch date with Valentina, then send the plan to
-                the team.
+                Confirm the launch date with Austin Barron, then send the plan
+                to the team.
               </div>
               <div class="guide-workspace-reference">
                 <DocMention item={{ kind: 'email', label: 'Thursday demo' }} />
@@ -149,7 +149,7 @@ export default function GuideWorkspaceGraphic(props: {
           </div>
           <div class="guide-workspace-reference">
             <DocMention item={{ kind: 'document', label: 'Rollout plan' }} />
-            <span>Valentina</span>
+            <span>Austin Barron</span>
           </div>
         </Show>
       </div>

@@ -24,14 +24,12 @@ function files(directory: string): string[] {
 function destination(source: string): URL {
   const url = new URL(source, 'https://docs.macro.com');
   const pathname = url.pathname.replace(/\/$/, '') || '/';
-  const exact = config.redirects.find((rule) => rule.source === pathname);
-  const rule =
-    exact ??
-    config.redirects.find(
-      (candidate) =>
-        candidate.source.endsWith('/:path*') &&
-        pathname.startsWith(candidate.source.slice(0, -':path*'.length))
-    );
+  const rule = config.redirects.find(
+    (candidate) =>
+      candidate.source === pathname ||
+      (candidate.source.endsWith('/:path*') &&
+        pathname.startsWith(candidate.source.slice(0, -':path*'.length)))
+  );
   assert(rule, `No redirect record for ${source}`);
   assert.equal(rule.permanent, true, `Temporary redirect: ${source}`);
   const suffix = pathname.slice(rule.source.indexOf(':path*'));
@@ -52,8 +50,16 @@ assert.equal(
   config.redirects.length,
   'Duplicate redirect sources'
 );
+assert.equal(
+  config.redirects.at(-1)?.source,
+  '/:path*',
+  'Keep the catch-all last so it cannot shadow specific page redirects'
+);
 const sources = new Set([
   ...publishedPaths,
+  ...config.redirects
+    .filter((rule) => !rule.source.includes('*'))
+    .map((rule) => rule.source),
   '/',
   '/index',
   '/sitemap.xml',

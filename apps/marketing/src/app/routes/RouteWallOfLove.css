@@ -211,18 +211,6 @@
 	color: var(--love-accent);
 	opacity: 0.65;
 }
-.love-redacted {
-	display: inline-block;
-	width: 3.2em;
-	height: 0.65em;
-	margin-inline: 0.15em;
-	border-radius: 0.2em;
-	background: currentColor;
-	opacity: 0.55;
-	filter: blur(4px);
-	vertical-align: baseline;
-}
-
 .love-card blockquote {
 	margin: 20px 0 0;
 	font-size: 16px;

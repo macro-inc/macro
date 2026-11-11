@@ -18,6 +18,7 @@ import './feature-page.css';
 import './product-feature-section.css';
 import './product-page-preview.css';
 import './demo-glass.css';
+import { PageOutline } from '../../documentation/components/PageOutline';
 import { BENEFIT_PAGES } from '../core/benefit-pages';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeatureDemoArt, type FeatureDemoComposition } from './FeatureDemoArt';
@@ -80,7 +81,7 @@ export function FeaturePage(props: {
       data-product-spacing={props.productSpacing ? 'true' : undefined}
     >
       <FeatureUiStyles />
-      {props.children}
+      {embedded ? props.children : <PageOutline>{props.children}</PageOutline>}
     </main>
   );
 }

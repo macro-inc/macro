@@ -23,6 +23,7 @@ import Spreadsheet from '@icon/wide-spreadsheet.svg';
 import Skill from '@phosphor/blueprint.svg';
 import Snippet from '@phosphor/brackets-curly.svg';
 import Channel from '@phosphor/chats-circle.svg';
+import Form from '@phosphor/clipboard-text.svg';
 import Block from '@phosphor/cube.svg';
 import Graph from '@phosphor/graph.svg';
 import Heart from '@phosphor/heart.svg';
@@ -52,16 +53,10 @@ import {
 } from '../../marketing/core/navigation';
 import { createPageSearch } from '../core/page-search';
 
-const coreFeaturePaths = new Set([
-  '/email',
-  '/tasks',
-  '/channels',
-  '/documents',
-  '/calls',
-  '/crm',
-  '/agents',
-]);
 const extraFeaturePaths = new Set([
+  '/drive',
+  '/spreadsheets',
+  '/forms',
   '/canvas',
   '/snippets',
   '/booking-links',
@@ -71,17 +66,10 @@ const extraFeaturePaths = new Set([
 const featureGroups = [
   {
     title: 'Top features',
-    pages: FEATURE_PAGES.filter((page) => coreFeaturePaths.has(page.href)),
+    pages: FEATURE_PAGES.filter((page) => !extraFeaturePaths.has(page.href)),
   },
   {
     title: 'More features',
-    pages: FEATURE_PAGES.filter(
-      (page) =>
-        !coreFeaturePaths.has(page.href) && !extraFeaturePaths.has(page.href)
-    ),
-  },
-  {
-    title: 'Even more features',
     pages: FEATURE_PAGES.filter((page) => extraFeaturePaths.has(page.href)),
   },
 ];
@@ -122,9 +110,19 @@ const blockIcons: Record<
   '/docs/product/drive': Folder,
   '/docs/product/spreadsheets': Spreadsheet,
   '/docs/product/databases': Database,
+  '/docs/product/forms': Form,
   '/docs/product/reviews': Review,
   '/docs/product/routines': Routine,
   '/docs/product/skills': Skill,
+};
+
+const benefitNavigationLabels: Record<string, string | undefined> = {
+  '/replace-apps': 'Save money',
+  '/docs/concepts/mentions': 'Graph DB',
+  '/docs/product/tagging': 'Autotagging',
+  '/docs/product/sharing': 'Permissions',
+  '/docs/concepts/event-system': 'Event system',
+  '/docs/product/search': 'Omnisearch',
 };
 
 function NavigationLabel(props: { href: string; title: string }) {
@@ -141,7 +139,7 @@ function NavigationLabel(props: { href: string; title: string }) {
           </span>
         )}
       </Show>
-      <span>{props.title}</span>
+      <span>{benefitNavigationLabels[props.href] ?? props.title}</span>
     </span>
   );
 }

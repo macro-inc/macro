@@ -246,7 +246,7 @@ const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
     can be swapped for another without the box reflowing around it. */
 const PIN = { left: 0, position: 'absolute', right: 0, top: 0 } as const;
 const ease = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 // --- primitives --------------------------------------------------------------
@@ -487,13 +487,13 @@ const THREAD: Msg[] = [
   {
     who: 'teo',
     time: '2:54 PM',
-    text: 'Do we have the launch date and owners confirmed? Valentina asked for the plan before the team call.',
+    text: 'Do we have the launch date and owners confirmed? Austin Barron asked for the plan before the team call.',
     reaction: true,
   },
   {
     who: 'aidan',
     time: '3:00 PM',
-    text: 'The Website launch plan is updated. Thursday at 9, and Valentina has the email. We just need to check invites.',
+    text: 'The Website launch plan is updated. Thursday at 9, and Austin Barron has the email. We just need to check invites.',
   },
   {
     who: 'teo',
@@ -618,7 +618,7 @@ const travel = (k: number, o: number, i: number): number => {
   // When the throw ends, and whether the hand needs one correction or two.
   const kb = 0.54 + 0.12 * vary(i, 1);
   const twoHops = vary(i, 2) > 0.45;
-  if (k <= kb) return (1 + o) * (1 - Math.pow(1 - clamp01(k / kb), 3));
+  if (k <= kb) return (1 + o) * (1 - (1 - clamp01(k / kb)) ** 3);
   const rest = 1 - kb;
   // How far back the first correction carries, and when each hop lands. Both
   // vary per move: corrections that all undershoot by the same fraction on the

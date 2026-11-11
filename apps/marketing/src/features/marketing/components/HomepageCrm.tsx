@@ -37,8 +37,8 @@ function DemoCard(props: { company: Company }) {
       owner={
         <img
           class="ml-auto size-5 rounded-full"
-          src={homepagePeople.valentina.photo}
-          alt="Valentina"
+          src={homepagePeople.austin.photo}
+          alt="Austin Barron"
         />
       }
       domain={<span class="truncate">{props.company.domain}</span>}

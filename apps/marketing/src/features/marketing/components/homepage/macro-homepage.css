@@ -156,3 +156,8 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
   .macro-home-intro { padding: 32px 24px 48px; }
   .macro-home-intro p br { display: none; }
 }
+
+/* Match the deployed mobile landing navigation spacing. */
+@media (max-width: 699px) {
+  .macro-homepage .site-header { inset: 14px 16px auto; width: auto; height: 54px; padding: 0; }
+}

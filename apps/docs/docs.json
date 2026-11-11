@@ -48,6 +48,7 @@
           "product/drive",
           "product/spreadsheets",
           "product/databases",
+          "product/forms",
           "product/routines",
           "product/skills"
         ]
@@ -249,6 +250,11 @@
       "permanent": true
     },
     {
+      "source": "/product/forms",
+      "destination": "https://macro.com/forms",
+      "permanent": true
+    },
+    {
       "source": "/product/spreadsheets",
       "destination": "https://macro.com/spreadsheets",
       "permanent": true
@@ -361,11 +367,6 @@
     {
       "source": "/faq.md",
       "destination": "https://macro.com/pricing",
-      "permanent": true
-    },
-    {
-      "source": "/:path*",
-      "destination": "https://macro.com/docs/:path*",
       "permanent": true
     },
     {
@@ -2046,6 +2047,11 @@
     {
       "source": "/AI/mcp/tools/web-search.md",
       "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "destination": "https://macro.com/docs/:path*",
       "permanent": true
     }
   ]

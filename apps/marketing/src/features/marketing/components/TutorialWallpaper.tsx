@@ -50,6 +50,11 @@ export const wallpapers: Record<
     ridge: 850,
     crest: 290,
   },
+  forms: {
+    colors: ['#ffe1dc', '#e99588', '#b76681', '#673952'],
+    ridge: 640,
+    crest: 420,
+  },
   calendar: {
     colors: ['#e8eccb', '#a1bb79', '#678e67', '#345957'],
     ridge: 600,
@@ -86,14 +91,14 @@ export const wallpapers: Record<
     crest: 300,
   },
   routines: {
-    colors: ['#dadbff', '#8496e7', '#5362ba', '#2c3477'],
-    ridge: 720,
-    crest: 360,
+    colors: ['#f5e4bc', '#d2b477', '#9a814f', '#5d553b'],
+    ridge: 610,
+    crest: 450,
   },
   skills: {
     colors: ['#e5d8fa', '#bda0e2', '#8465b5', '#4c3673'],
-    ridge: 720,
-    crest: 360,
+    ridge: 860,
+    crest: 320,
   },
   'company-graph': {
     colors: ['#dce6ff', '#8caaf4', '#596cc4', '#343c79'],

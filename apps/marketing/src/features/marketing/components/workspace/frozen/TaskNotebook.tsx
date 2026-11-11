@@ -259,7 +259,7 @@ export function TaskNotebook(props: {
                 </div>
               </div>
               <div class="spacer h-3" />
-              <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
+              <div class="sample-task-properties mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
                 <TaskStatusMenu
                   task={props.task}
                   onSave={(status) => save({ status })}

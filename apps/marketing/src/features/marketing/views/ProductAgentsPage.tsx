@@ -88,10 +88,6 @@ export function RouteAgents() {
         id="agent-sources"
         demo={{
           tone: 'agents',
-          message: {
-            person: 'jacob',
-            text: '@Macro get me ready for tomorrow’s meetings. Check the recent emails and calls.',
-          },
         }}
         title="Give agents your team’s context."
         description="Macro builds memory from your files, email, tasks, team channels, and calls. It develops a shared understanding of what everyone on your team is working on and who is responsible for what."
@@ -105,10 +101,6 @@ export function RouteAgents() {
         id="agent-actions"
         demo={{
           tone: 'agents',
-          message: {
-            person: 'julia',
-            text: '@Macro update the document with what we agreed.',
-          },
         }}
         title="Search your workspace with an agent."
         description="We put the same effort into our tools and MCP as the app itself. An agent can use one search tool across your files, email, tasks, messages, and calls."
@@ -122,10 +114,6 @@ export function RouteAgents() {
         id="agent-collaboration"
         demo={{
           tone: 'agents',
-          message: {
-            person: 'jacob',
-            text: '@Cursor build this from the mockup and open a pull request.',
-          },
         }}
         title="Let agents work while you’re away."
         description="Put your agents to work on a task in Macro Tasks. Hosted agents keep working after you close the app; pick up the same conversation on another device."

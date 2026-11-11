@@ -114,10 +114,7 @@ export function RouteTasks() {
           id="ask-macro"
           demo={{
             tone: 'tasks',
-            message: {
-              person: 'jacob',
-              text: '@Macro turn what we just agreed into tasks and assign the owners.',
-            },
+            glassFrame: true,
           }}
           title="Ask Macro to create tasks."
           description="Mention @Macro in Macro Chat and ask it to create tasks from what was just said. It assigns the work and links the tasks back to the conversation. You can also assign an available agent to a task and open its session to follow the work. Through Macro’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
@@ -145,10 +142,7 @@ export function RouteTasks() {
           id="github"
           demo={{
             tone: 'tasks',
-            message: {
-              person: 'jacob',
-              text: 'The PR is ready for review. It’s linked to the task.',
-            },
+            glassFrame: true,
           }}
           title="Update task status from GitHub."
           description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. The task records which pull request is associated with it. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."

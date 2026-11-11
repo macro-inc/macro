@@ -46,11 +46,6 @@ export function TutorialVideoEmbed(props: {
   let playRecorded = false;
 
   const tutorial = () => TUTORIAL_VIDEOS[props.tutorial];
-  const usesNativePoster = () => {
-    const entry = tutorial();
-    return 'preview' in entry && entry.preview === 'native';
-  };
-
   const usesBenefitPoster = () => {
     const entry = tutorial();
     return 'preview' in entry && entry.preview === 'benefit';
@@ -111,7 +106,7 @@ export function TutorialVideoEmbed(props: {
           <Show when={usesBenefitPoster()}>
             <BenefitVideoPoster tutorial={props.tutorial} />
           </Show>
-          <Show when={!usesNativePoster() && !usesBenefitPoster()}>
+          <Show when={!usesBenefitPoster()}>
             <div class="tutorial-video-poster" aria-hidden="true">
               <TutorialWallpaper tutorial={props.tutorial} />
               <div class="tutorial-video-poster-window">

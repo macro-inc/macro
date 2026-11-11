@@ -57,7 +57,7 @@ export default function HomepageEmailCompose(
   let body: HTMLDivElement | undefined;
   let fileInput: HTMLInputElement | undefined;
   const [to, setTo] = createSignal(
-    props.draft?.to ?? 'Valentina <valentina@coparse.com>'
+    props.draft?.to ?? 'Austin Barron <austin@example.com>'
   );
   const [cc, setCc] = createSignal(
     props.draft?.cc ?? 'Julia <julia@macro.com>'
@@ -101,7 +101,7 @@ export default function HomepageEmailCompose(
                 description={
                   item.kind === 'pdf'
                     ? 'Macro product overview and pricing, shared after the demo.'
-                    : 'The setup steps and owners for Valentina’s team.'
+                    : 'The setup steps and owners for Austin Barron’s team.'
                 }
                 href={
                   item.kind === 'md' ? '/demo?document=rollout' : '/documents'

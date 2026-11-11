@@ -504,7 +504,11 @@ export function GithubTaskDemo() {
                 task={task()}
                 hideCollectionNavigation
                 pills={
-                  <Show when={linked()}>
+                  <span
+                    class="demo-reserved-badge"
+                    data-visible={linked()}
+                    aria-hidden={!linked()}
+                  >
                     <PrMention
                       pr={signInPr}
                       status={merged() ? 'merged' : 'open'}
@@ -513,7 +517,7 @@ export function GithubTaskDemo() {
                         setPrOpen(true);
                       }}
                     />
-                  </Show>
+                  </span>
                 }
                 sourceContent={
                   <button
