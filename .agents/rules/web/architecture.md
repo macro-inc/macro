@@ -69,6 +69,7 @@ Module layout, layering, and TypeScript conventions.
   paths in its `files` list.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.
+- **FE-71** A primitive owns real logic or is shared; one component's local UI state stays in that component.
 - **FE-34** Treat the legacy block state system as adapter-boundary code, not
   state management for new or refactored surfaces. Do not add new `useBlock*`,
   `createBlock*`, block-scoped signal/store/memo/resource, or block permission

@@ -12,6 +12,8 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { TutorialPill } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
+import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
@@ -38,9 +40,11 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { CallWaveform } from '../../channel/Call/components/CallWaveform';
 import type { ChannelsDataSource } from '../queries';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
+import { ChannelLiveCallBadge } from './rail/ChannelLiveCallBadge';
 import { IncomingCallActions } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
@@ -57,6 +61,9 @@ export function ChannelsMobileView(props: {
   onClearSearch: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const call = useCallContextOptional();
+  const joined = (id: string) =>
+    call?.isInCall() && call.activeChannelId() === id;
   const notificationSource = useGlobalNotificationSource();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
@@ -157,6 +164,19 @@ export function ChannelsMobileView(props: {
     }
   };
 
+  const callActions = (channelId: string) => {
+    const ringing = channelActivity.incomingCallIds().get(channelId);
+    const live = channelActivity.callStatuses().has(channelId);
+    if (!ringing && !live) return undefined;
+    return (
+      <Show
+        when={ringing}
+        fallback={<ChannelLiveCallBadge channelId={channelId} />}
+      >
+        {(id) => <IncomingCallActions callId={id()} channelId={channelId} />}
+      </Show>
+    );
+  };
   return (
     <div
       role="tree"
@@ -318,6 +338,17 @@ export function ChannelsMobileView(props: {
                     )}
                   >
                     <ChannelCardLayout
+                      icon={
+                        joined(channel.id) ? (
+                          <CallWaveform class="size-6" channelId={channel.id} />
+                        ) : undefined
+                      }
+                      preview={
+                        channelActivity.incomingCallIds().has(channel.id)
+                          ? t('calls.callingYou')
+                          : undefined
+                      }
+                      trailing={callActions(channel.id)}
                       item={{
                         ...toInboxCardDisplayItem(channel),
                         unread: isUnread(channel),
@@ -328,12 +359,6 @@ export function ChannelsMobileView(props: {
                           'channels-view'
                         )
                       }
-                    />
-                    <IncomingCallActions
-                      callId={channelActivity.incomingCallIds().get(channel.id)}
-                      channelId={channel.id}
-                      class="pr-3 pb-3 pl-(--soup-inbox-left-of-content)"
-                      layout="wide"
                     />
                     <Show when={index() < visibleChannels().length - 1}>
                       <InboxDivider />

@@ -78,6 +78,18 @@ prevented click does nothing. Browser-only URLs such as `about:blank`, `data:`,
 behavior is unchanged. iOS/Android retain their existing JS opener fallback because
 Tauri's native popup callback is desktop-only.
 
+## Macro links in agent replies
+
+A plain click on a Macro `/app` link in an agent's reply, in its session
+transcript or in a channel message the agent posted, opens the item in the app
+the way the reply's mention chips do: a new split on desktop, in place on touch,
+and reusing a split that already shows it. On the web this replaces the new
+browser tab; the desktop app takes the same path. Links to other sites, links no
+app route matches, and Cmd/Ctrl/Shift/Alt or middle clicks keep opening a
+browser tab, and links in people's messages and prompts are unchanged. To
+check, ask an agent for a link to a document (`https://<host>/app/md/<id>`) and
+to `/app/tasks`, click each, and confirm a split opens with no new tab.
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and
@@ -1066,8 +1078,9 @@ view is in the foreground. Leaving the call view restores the current page's
 action, even if the call continues in the background.
 Active phone calls hide the bottom dock but retain the channel header island.
 Their Back button returns to the app while the call continues; tablets keep app
-chrome. Phone media controls sit below the video and hide when idle without
-resizing it; the header islands remain visible.
+chrome. Phone media controls sit below the video and remain visible while idle.
+Away from the Call tab, the call island sits above the dock. Desktop uses the
+rail's call popover and a draggable mini player; see [Calls](calls.md).
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
