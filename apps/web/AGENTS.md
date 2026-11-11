@@ -1337,6 +1337,8 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
 
 ### Tracing
 
+- Keep native document loading active while its sync core schedules reconnects; only a terminal connection failure or attach error may end initial-projection readiness. Do not race its retry budget with a separate host deadline.
+
 - Instrument loading with the flow API in the `instrumentation` skill; read the
   traces with the [observability guide](../../docs/agent-guide/observability.md#web-performance-traces).
   Tracing observes readiness; never drive app behavior from trace callbacks.

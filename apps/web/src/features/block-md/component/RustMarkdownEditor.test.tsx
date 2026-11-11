@@ -625,7 +625,7 @@ it('reports the original open error even if withdrawing the public handle throws
   rendered.unmount();
 });
 
-it('times out a missing Initialize, records its phase, and closes without replaying late output', async () => {
+it('keeps the view private through the reconnect budget and publishes a late Initialize', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const mounted = session();
   control.create.mockResolvedValue(mounted);
@@ -642,23 +642,141 @@ it('times out a missing Initialize, records its phase, and closes without replay
     />
   ));
   await vi.advanceTimersByTimeAsync(0);
-  expect(mounted.view.setEditable).toHaveBeenCalledWith(false);
+  const status = control.create.mock.calls[0][0].onStatus;
   await vi.advanceTimersByTimeAsync(15_000);
+  status({ code: 2 });
+  await vi.advanceTimersByTimeAsync(8_000);
+  status({ code: 0 });
+  expect(error).not.toHaveBeenCalled();
+  expect(mounted.close).not.toHaveBeenCalled();
+  expect(exposed).not.toHaveBeenCalled();
+  expect(mounted.view.setEditable).not.toHaveBeenCalledWith(true);
+  expect(control.attrs).toHaveBeenCalledWith('editor.open.phase', 'retrying');
+  mounted.initialize();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ready).toHaveBeenCalledOnce();
+  expect(exposed).toHaveBeenCalledWith(mounted);
+  expect(control.attrs).toHaveBeenCalledWith(
+    'editor.open.phase',
+    'initialized'
+  );
+  rendered.unmount();
+});
+
+it('reports exhausted native retries and closes without replaying a late Initialize', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const exposed = vi.fn();
+  const ready = vi.fn();
+  const error = vi.fn();
+  const rendered = render(() => (
+    <RustMarkdownEditor
+      context={context}
+      autoFocus={false}
+      onRuntime={exposed}
+      onReady={ready}
+      onError={error}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  control.create.mock.calls[0][0].onStatus({ code: 3 });
+  await vi.advanceTimersByTimeAsync(0);
   expect(error).toHaveBeenCalledOnce();
   expect(error.mock.calls[0][0].message).toBe(
-    'Editor initial projection timed out'
+    'Editor connection retries exhausted'
   );
-  expect(control.attrs).toHaveBeenCalledWith('document.id', 'fixture-document');
-  expect(control.attrs).toHaveBeenCalledWith('editor.open.phase', 'timeout');
   expect(control.attrs).toHaveBeenCalledWith(
-    'editor.open.wait_ms',
-    expect.any(Number)
+    'editor.open.phase',
+    'retries-exhausted'
   );
   expect(mounted.close).toHaveBeenCalledOnce();
   mounted.initialize();
   await vi.advanceTimersByTimeAsync(0);
   expect(exposed.mock.calls.every(([value]) => value === undefined)).toBe(true);
   expect(ready).not.toHaveBeenCalled();
+  rendered.unmount();
+});
+
+it.each([3, 4])(
+  'observes terminal status %i delivered during construction before the projection wait',
+  async (code) => {
+    const mounted = session();
+    control.create.mockImplementation(async (options) => {
+      options.onStatus({ code });
+      return mounted;
+    });
+    const error = vi.fn();
+    const exposed = vi.fn();
+    const rendered = render(() => (
+      <RustMarkdownEditor
+        context={context}
+        autoFocus={false}
+        onRuntime={exposed}
+        onError={error}
+      />
+    ));
+    await waitFor(() => expect(error).toHaveBeenCalledOnce());
+    expect(error.mock.calls[0][0].message).toBe(
+      code === 3
+        ? 'Editor connection retries exhausted'
+        : 'Editor connection closed before initialization'
+    );
+    await waitFor(() => expect(mounted.close).toHaveBeenCalledOnce());
+    expect(exposed.mock.calls.every(([value]) => value === undefined)).toBe(
+      true
+    );
+    rendered.unmount();
+  }
+);
+
+it.each([3, 4])(
+  'publishes an already initialized cached root despite connection status %i',
+  async (code) => {
+    const mounted = session();
+    mounted.initialize();
+    control.create.mockImplementation(async (options) => {
+      options.onStatus({ code });
+      return mounted;
+    });
+    const error = vi.fn();
+    const exposed = vi.fn();
+    const rendered = render(() => (
+      <RustMarkdownEditor
+        context={context}
+        autoFocus={false}
+        onRuntime={exposed}
+        onError={error}
+      />
+    ));
+    await waitFor(() => expect(exposed).toHaveBeenCalledWith(mounted));
+    expect(error).not.toHaveBeenCalled();
+    expect(mounted.close).not.toHaveBeenCalled();
+    rendered.unmount();
+  }
+);
+
+it('retains initialized content when retries end during or after the Initialize continuation', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const error = vi.fn();
+  const exposed = vi.fn();
+  const rendered = render(() => (
+    <RustMarkdownEditor
+      context={context}
+      autoFocus={false}
+      onRuntime={exposed}
+      onError={error}
+    />
+  ));
+  await waitFor(() => expect(mounted.view.setEditable).toHaveBeenCalled());
+  mounted.initialize();
+  control.create.mock.calls[0][0].onStatus({ code: 3 });
+  await waitFor(() => expect(exposed).toHaveBeenCalledWith(mounted));
+  control.create.mock.calls[0][0].onStatus({ code: 3 });
+  expect(error).not.toHaveBeenCalled();
+  expect(mounted.close).not.toHaveBeenCalled();
+  expect(mounted.view.setEditable).toHaveBeenLastCalledWith(true);
   rendered.unmount();
 });
 

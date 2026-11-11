@@ -171,7 +171,7 @@ export default function RustMarkdownEditor(props: {
   let releaseEmpty: (() => void) | undefined;
   let releaseScrollTelemetry: (() => void) | undefined;
   let lastError: Error | undefined;
-  let initialProjectionTimer: ReturnType<typeof setTimeout> | undefined;
+  let reportOpenStatus: ((status: number) => void) | undefined;
   let syncStatus = 0;
   const clearPublicRuntime = () => {
     try {
@@ -198,7 +198,6 @@ export default function RustMarkdownEditor(props: {
   };
   onCleanup(() => {
     abort.abort();
-    clearTimeout(initialProjectionTimer);
     try {
       // Unmount UI and retire host callbacks before the asynchronous close starts.
       overlayLifecycle.dispose();
@@ -344,6 +343,7 @@ export default function RustMarkdownEditor(props: {
               onStatus(status) {
                 if (abort.signal.aborted) return;
                 syncStatus = status.code;
+                reportOpenStatus?.(status.code);
                 state.session.setStatus(
                   status.code === 1
                     ? SyncSourceStatus.Connected
@@ -373,8 +373,30 @@ export default function RustMarkdownEditor(props: {
             await flow.task('editor.initial-projection', async (span) => {
               const waitStarted = performance.now();
               let phase = 'cancelled';
-              let timedOut = false;
+              let terminalStatus: number | undefined;
               span.setAttr('document.id', documentId());
+              const observeStatus = (status: number) => {
+                span.setAttr('editor.open.sync_status', status);
+                span.setAttr(
+                  'editor.open.wait_ms',
+                  performance.now() - waitStarted
+                );
+                span.setAttr(
+                  'editor.open.phase',
+                  status === 2 ? 'retrying' : 'waiting-for-sync'
+                );
+                if (status === 3 || status === 4) {
+                  terminalStatus = status;
+                  rejectReady?.(
+                    new Error(
+                      status === 3
+                        ? 'Editor connection retries exhausted'
+                        : 'Editor connection closed before initialization'
+                    )
+                  );
+                }
+              };
+              reportOpenStatus = observeStatus;
               try {
                 if (lastError) throw lastError;
                 await new Promise<void>((resolve, reject) => {
@@ -383,10 +405,9 @@ export default function RustMarkdownEditor(props: {
                     resolve();
                     return;
                   }
-                  initialProjectionTimer = setTimeout(() => {
-                    timedOut = true;
-                    reject(new Error('Editor initial projection timed out'));
-                  }, 15_000);
+                  // Native owns the same reconnect budget as the Source socket.
+                  // A host timer must not close it when its first retry begins.
+                  observeStatus(syncStatus);
                   releaseCommit = mounted.view.onCommit((commit) => {
                     if (commit.fullReconcile) resolve();
                   });
@@ -396,14 +417,16 @@ export default function RustMarkdownEditor(props: {
               } catch (error) {
                 phase = abort.signal.aborted
                   ? 'cancelled'
-                  : timedOut
-                    ? 'timeout'
-                    : lastError
-                      ? 'attach-error'
-                      : 'failed';
+                  : terminalStatus === 3
+                    ? 'retries-exhausted'
+                    : terminalStatus === 4
+                      ? 'connection-closed'
+                      : lastError
+                        ? 'attach-error'
+                        : 'failed';
                 throw error;
               } finally {
-                clearTimeout(initialProjectionTimer);
+                reportOpenStatus = undefined;
                 releaseCommit?.();
                 releaseCommit = undefined;
                 rejectReady = undefined;
