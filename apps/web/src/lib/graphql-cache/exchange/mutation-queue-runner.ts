@@ -15,6 +15,7 @@
  *         ▼
  *       preparing ── superseded discard ──▶ idle
  *         │       └─ veto or recovery failure ──▶ settling
+ *         │          (a recovery failure is first deferred and asked again)
  *         ▼
  *       in-flight ── replay rejected unsettled ──▶ settling
  *         ▼
@@ -78,6 +79,10 @@ const EMPTY_QUEUE_POLL_MS = 30_000;
 // A deferred admission usually waits on user info, which lands within a
 // second or two of the cache client at startup.
 const DEFERRED_ADMISSION_RETRY_MS = 1_000;
+// Admission reads local storage, which can stall or reopen (a busy tab, a
+// resumed app). Ask again before treating that as the head's failure; the
+// bound keeps a broken head from holding the queue.
+const MAX_ADMISSION_FAILURES = 3;
 const MAX_MUTATION_SERVER_FAILURES = 10;
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
@@ -367,6 +372,8 @@ export function createMutationQueueRunner(
   let head: HeadState = IDLE;
   // Pump state: wakeups and the retry hint are independent of the head.
   let queuePreparation: Promise<void> | undefined;
+  // Failed admissions per head; cleared once the head is admitted or failed.
+  const admissionFailures = new Map<string, number>();
   let drainRunning = false;
   let drainRequested = false;
   let deferredUntil: number | undefined;
@@ -498,6 +505,7 @@ export function createMutationQueueRunner(
         return;
       }
       if (!admission) {
+        admissionFailures.delete(claimed.transactionId);
         // preparing → settling → idle: discard obsolete local intent.
         if (!transition(attempt, SETTLING)) return;
         await host.rollbackOptimisticWrite(
@@ -513,9 +521,22 @@ export function createMutationQueueRunner(
         return;
       }
     } catch {
+      const failures = (admissionFailures.get(claimed.transactionId) ?? 0) + 1;
+      if (failures < MAX_ADMISSION_FAILURES) {
+        admissionFailures.set(claimed.transactionId, failures);
+        await deferAdmission(claimed, attempt);
+        attemptTelemetry.finish('retry-scheduled', {
+          failure: 'local',
+          errorCode: 'LOCAL_RECOVERY_FAILED',
+          retryDelayMs: DEFERRED_ADMISSION_RETRY_MS,
+        });
+        return;
+      }
+      admissionFailures.delete(claimed.transactionId);
       await failPreparation(claimed, attempt, attemptTelemetry);
       return;
     }
+    admissionFailures.delete(claimed.transactionId);
     // A superseded create can already exist on the server. Replay it to
     // recover its identity before sending the newer edit or discard.
     // Older hosts omit this flag: conservatively replay rather than loop
@@ -633,7 +654,10 @@ export function createMutationQueueRunner(
     }
   }
 
-  /** preparing → settling → idle for a head whose recovery state failed. */
+  /**
+   * preparing → settling → idle for a head whose recovery state kept failing.
+   * Its live caller was released as queued by the first deferral.
+   */
   async function failPreparation(
     claimed: ClaimedMutation,
     attempt: QueueAttemptContext,
@@ -642,17 +666,14 @@ export function createMutationQueueRunner(
     queuePreparation = undefined;
     try {
       if (!transition(attempt, SETTLING)) return;
-      const live = liveQueuedOps.get(claimed.transactionId);
-      const operation =
-        live?.operation ??
-        makeOperation(
-          'mutation',
-          createRequest(
-            replayDocument(claimed.query, claimed.operationName),
-            claimed.variables
-          ),
-          { url: '', requestPolicy: 'network-only' }
-        );
+      const operation = makeOperation(
+        'mutation',
+        createRequest(
+          replayDocument(claimed.query, claimed.operationName),
+          claimed.variables
+        ),
+        { url: '', requestPolicy: 'network-only' }
+      );
       const failure = new CombinedError({
         graphQLErrors: [
           {
@@ -683,13 +704,6 @@ export function createMutationQueueRunner(
         failure: 'local',
         errorCode: 'LOCAL_RECOVERY_FAILED',
       });
-      liveQueuedOps.delete(claimed.transactionId);
-      live?.resolveRoute(
-        withOptimisticMutationDisposition(result, {
-          kind: 'permanently-failed',
-          transactionId: claimed.transactionId,
-        })
-      );
       deferredUntil = undefined;
     } finally {
       if (transition(attempt, IDLE)) {
@@ -1099,6 +1113,7 @@ export function createMutationQueueRunner(
 
   function resetStorage(): void {
     storageGeneration += 1;
+    admissionFailures.clear();
     activeAttempt = undefined;
     latestClaim = undefined;
     head = IDLE;

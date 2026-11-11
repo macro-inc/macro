@@ -142,7 +142,26 @@ describe('native WebView startup diagnostics', () => {
       droppedSamples: 0,
       webContent: { terminations: 2, lastTerminationMs: 1234 },
       bundleReloads: { dispatches: 1, lastSource: 'run_event_resumed' },
+      bundleStartup: {
+        selection: 'embedded',
+        savedSelection: 'ota',
+        rejection: 'entrypoint_unreadable',
+        readError: 'NotFound',
+        bundleDirsFound: 1,
+        bundleDirsRemoved: 0,
+      },
     });
+    expect(telemetry.track).toHaveBeenCalledWith(
+      'native_webview_started',
+      expect.objectContaining({
+        native_bundle_startup_selection: 'embedded',
+        native_bundle_startup_saved_selection: 'ota',
+        native_bundle_startup_rejection: 'entrypoint_unreadable',
+        native_bundle_startup_read_error: 'NotFound',
+        native_bundle_startup_dirs_found: 1,
+        native_bundle_startup_dirs_removed: 0,
+      })
+    );
     const expected = expect.objectContaining({
       native_instance_id: 'native-launch',
       native_web_content_terminations: 2,

@@ -15,23 +15,32 @@ const draft: LocalDraft = {
   acknowledgedRevision: 0,
   content: { subject: 'Keep this' },
   attachments: [],
-  status: 'deleting',
+  status: 'delete-failed',
   updatedAt: 1,
   latestAttemptId: 'delete',
-  queuedAttemptId: 'old-save',
+  queuedAttemptId: 'delete',
 };
 
-it('offers retry discard when a crash interrupted deletion before admission', async () => {
+it('reports a failed discard, not one still on its way to the server', async () => {
   const context = createComposeContext();
+  const [local, setLocal] = createSignal(draft);
+  let changed = () => {};
   context.drafts.saveLocalDraft = vi.fn();
   context.drafts.readDraft = vi.fn(async () => ({
-    local: draft,
+    local: local(),
     persistence: 'queued' as const,
   }));
+  context.drafts.watchDrafts = (callback) => {
+    changed = callback;
+    return () => {};
+  };
   const recover = vi.fn(async () => {});
   context.drafts.recoverSynchronization = recover;
   const discard = vi.fn(async () => {
     expect(recover).toHaveBeenCalledOnce();
+    // The retried delete waits for the queue to admit it.
+    setLocal({ ...draft, status: 'deleting', queuedAttemptId: undefined });
+    changed();
   });
   const status = createRoot((dispose) => {
     disposers.push(dispose);
@@ -51,6 +60,7 @@ it('offers retry discard when a crash interrupted deletion before admission', as
   });
   status.retry();
   await vi.waitFor(() => expect(discard).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(status.state()).toBeUndefined());
 });
 
 it('shows a failed status read without throwing into the composer error boundary', async () => {
