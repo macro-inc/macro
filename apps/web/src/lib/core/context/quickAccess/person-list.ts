@@ -34,9 +34,10 @@ export function createPersonList(options: {
   activity: Accessor<ReadonlyMap<string, DateValue>>;
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
-  /** List later pages below the earlier ones instead of replacing them. */
-  append?: Accessor<boolean>;
 }): QuickAccessList<UserItem> {
+  // Property pickers page a replaceable window with explicit controls; menus
+  // list each further page below what is already shown.
+  const append = () => options.policy().mode !== 'property';
   // Window setup reads the search term and its own query state. A list built
   // inside a memo must not subscribe that memo to them: every keystroke, cache
   // change, or next page would rebuild the list at page one.
@@ -98,7 +99,7 @@ export function createPersonList(options: {
         return target ? { ...item, commandTarget: target } : item;
       });
     const key = listKey();
-    if (!options.append?.() || listed?.key !== key)
+    if (!append() || listed?.key !== key)
       listed = { key, first: fresh, later: [] };
     else if (window.continued()) {
       const known = new Set(
@@ -126,13 +127,13 @@ export function createPersonList(options: {
   }, []);
   const hasNextPage = () =>
     !!window.data()?.nextCursor &&
-    (!options.append?.() || items().length < MAX_LISTED_PEOPLE);
+    (!append() || items().length < MAX_LISTED_PEOPLE);
   return {
     items,
     // Appended pages are one growing window; only a new list is a new window.
     windowKey: () => {
       if (!items().length) return undefined;
-      return options.append?.() ? listKey() : window.windowKey();
+      return append() ? listKey() : window.windowKey();
     },
     totalCount: () => items().length,
     hasMore: hasNextPage,
@@ -143,7 +144,7 @@ export function createPersonList(options: {
       if (loadingMore() || !hasNextPage()) return;
       setLoadingMore(true);
       const input = window.inputKey();
-      const listedBefore = options.append?.() ? items().length : 0;
+      const listedBefore = append() ? items().length : 0;
       try {
         for (let page = 0; page < 4; page++) {
           await window.loadNext();

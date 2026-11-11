@@ -72,7 +72,8 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       scope: () => ({ userId: viewer, host }),
       search: query,
       enabled: () => true,
-      policy: () => ({ mode: 'command', excluded: [viewer] }),
+      // Property pickers page a replaceable window.
+      policy: () => ({ mode: 'property', excluded: [viewer] }),
       activity: () => new Map(),
       conversation: () => undefined,
       excluded: () => false,
@@ -279,7 +280,6 @@ it('lists the next page below the first when pages are appended', async () => {
       activity: () => new Map(),
       conversation: () => undefined,
       excluded: () => false,
-      append: () => true,
     });
     return null;
   }
