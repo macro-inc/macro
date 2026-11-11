@@ -65,12 +65,7 @@ pub fn deploy_all_services() -> Workflow {
         .add_job("build-service-binaries", build_service_binaries())
         .add_job("build-lambda-artifacts", build_lambda_artifacts())
         .add_job("migrate-db", migrate_db())
-        .add_job(
-            "deploy-email",
-            deploy_services("email", false).add_step(verify_email_consumers()),
-        )
-        .add_job("deploy-dss", deploy_services("dss", true))
-        .add_job("deploy-services", deploy_services("others", false))
+        .add_job("deploy-services", deploy_services())
         .add_job("deployment-summary", deployment_summary())
 }
 
@@ -125,9 +120,6 @@ fn setup() -> Job {
         .name("Setup Deployment Matrix")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("matrix", "${{ steps.set-matrix.outputs.matrix }}")
-        .add_output("email", "${{ steps.set-matrix.outputs.email }}")
-        .add_output("dss", "${{ steps.set-matrix.outputs.dss }}")
-        .add_output("others", "${{ steps.set-matrix.outputs.others }}")
         .add_output("binaries", "${{ steps.set-matrix.outputs.binaries }}")
         .add_output("lambdas", "${{ steps.set-matrix.outputs.lambdas }}")
         .add_step(steps::checkout_v4())
@@ -145,16 +137,6 @@ fn set_matrix() -> Step<Run> {
             services=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | .key]' "$cfg")
             binaries=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
             lambdas=$(jq -c '[.services | to_entries[] | select(.value.deploy_enabled != false and .value.bootstrap_pending == null) | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
-            email=$(jq -c '[.[] | select(. == "email-service")]' <<< "$services")
-            dss=$(jq -c '[.[] | select(. == "document-storage-service")]' <<< "$services")
-            others=$(jq -c '[.[] | select(. != "email-service" and . != "document-storage-service")]' <<< "$services")
-            if [[ "$dss" != '[]' && "$email" == '[]' ]]; then
-              echo '::error::DSS requires an enabled email-service deployment and consumer readiness proof'
-              exit 1
-            fi
-            echo "email=${email}" >> "$GITHUB_OUTPUT"
-            echo "dss=${dss}" >> "$GITHUB_OUTPUT"
-            echo "others=${others}" >> "$GITHUB_OUTPUT"
             echo "matrix=${services}" >> "$GITHUB_OUTPUT"
             echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
             echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"
@@ -344,34 +326,28 @@ fn run_migrations() -> Step<Use> {
 /// (configure-aws-credentials). PULUMI_HOME is pinned to a fixed path (outside
 /// the workspace, which the deploy action's checkout cleans) so the plugins
 /// subdir can be backed by a sticky disk; it propagates into the composite
-/// action's pulumi step via the job env.
-fn deploy_services(matrix: &str, after_email: bool) -> Job {
-    let mut needs = vec![
-        "setup".to_string(),
-        "warm-binaries".to_string(),
-        "warm-lambdas".to_string(),
-        "build-service-binaries".to_string(),
-        "build-lambda-artifacts".to_string(),
-        "migrate-db".to_string(),
-    ];
-    let email_gate = if after_email {
-        needs.push("deploy-email".to_string());
-        " && needs.deploy-email.result == 'success'"
-    } else {
-        ""
-    };
+/// action's pulumi step via the job env. Every enabled service deploys in
+/// this one matrix, in parallel; no service waits for another to deploy.
+fn deploy_services() -> Job {
     Job::default()
         .name("Deploy ${{ matrix.service }}")
-        .needs(needs)
-        .cond(Expression::new(format!(
-            "${{{{ !cancelled() && needs.setup.outputs.{matrix} != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled'){email_gate} }}}}"
-        )))
+        .needs(vec![
+            "setup".to_string(),
+            "warm-binaries".to_string(),
+            "warm-lambdas".to_string(),
+            "build-service-binaries".to_string(),
+            "build-lambda-artifacts".to_string(),
+            "migrate-db".to_string(),
+        ])
+        .cond(Expression::new(
+            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
+        ))
         .runs_on(runners::Runner::Small.to_string())
         .add_env(("PULUMI_HOME", "/pulumi"))
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": format!("${{{{ fromJson(needs.setup.outputs.{matrix}) }}}}"),
+                "service": "${{ fromJson(needs.setup.outputs.matrix) }}",
             })),
             max_parallel: None,
         })
@@ -382,20 +358,6 @@ fn deploy_services(matrix: &str, after_email: bool) -> Job {
         .add_step(steps::cache_pulumi_plugins())
         .add_step(steps::ensure_pulumi_home_writable())
         .add_step(deploy_service())
-}
-
-fn verify_email_consumers() -> Step<Run> {
-    Step::new("Verify exact email consumers and old-task drain")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            pulumi stack output crmBackfillConsumer --json \
-              --stack "macro-inc/email-service/$ENVIRONMENT" \
-              --cwd infra/stacks/email-service > "$RUNNER_TEMP/crm-email-consumer.json"
-            bun .github/scripts/wait-crm-email-consumers.ts "$RUNNER_TEMP/crm-email-consumer.json"
-        "#})
-        .shell("bash")
-        .add_env(("ENVIRONMENT", "${{ inputs.environment }}"))
-        .add_env(("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
 }
 
 fn get_project_name() -> Step<Use> {
@@ -493,8 +455,6 @@ fn deployment_summary() -> Job {
             "build-service-binaries".to_string(),
             "build-lambda-artifacts".to_string(),
             "migrate-db".to_string(),
-            "deploy-email".to_string(),
-            "deploy-dss".to_string(),
             "deploy-services".to_string(),
         ])
         .cond(Expression::new("always()"))

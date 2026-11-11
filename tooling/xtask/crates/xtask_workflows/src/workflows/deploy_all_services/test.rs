@@ -46,65 +46,82 @@ fn bootstrap_excludes_all_deployment_matrices_until_activation() {
     }
 }
 
-fn deployment_partitions(
-    config: serde_json::Value,
-) -> (bool, std::collections::BTreeMap<String, Vec<String>>) {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::create_dir(dir.path().join(".github")).unwrap();
-    std::fs::write(
-        dir.path().join(".github/services-config.json"),
-        config.to_string(),
-    )
-    .unwrap();
-    let path = dir.path().join("output");
-    std::fs::write(&path, "").unwrap();
-    let output = std::process::Command::new("bash")
-        .args(["-euo", "pipefail", "-c", &set_matrix().value.run.unwrap()])
-        .current_dir(dir.path())
-        .env("GITHUB_OUTPUT", &path)
-        .output()
+#[test]
+fn document_storage_service_deploys_without_email_service() {
+    for email in [
+        None,
+        Some(serde_json::json!({"deploy_enabled": false})),
+        Some(serde_json::json!({"bootstrap_pending": "setup"})),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".github")).unwrap();
+        let mut config = serde_json::json!({"services": {"document-storage-service": {}}});
+        if let Some(email) = email {
+            config["services"]["email-service"] = email;
+        }
+        std::fs::write(
+            dir.path().join(".github/services-config.json"),
+            config.to_string(),
+        )
         .unwrap();
-    let values = std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .filter_map(|line| {
-            let (key, value) = line.split_once('=')?;
-            Some((key.to_string(), serde_json::from_str(value).unwrap()))
-        })
-        .collect();
-    (output.status.success(), values)
+        let output_path = dir.path().join("output");
+        std::fs::write(&output_path, "").unwrap();
+        let output = std::process::Command::new("bash")
+            .args(["-euo", "pipefail", "-c", &set_matrix().value.run.unwrap()])
+            .current_dir(dir.path())
+            .env("GITHUB_OUTPUT", &output_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let result = std::fs::read_to_string(output_path).unwrap();
+        assert!(
+            result
+                .lines()
+                .any(|line| line == r#"matrix=["document-storage-service"]"#),
+            "{result}"
+        );
+    }
 }
 
 #[test]
-fn consumer_and_api_partition_is_ordered_without_serializing_other_services() {
-    let (ok, matrices) = deployment_partitions(serde_json::json!({"services": {
-        "email-service": {"deploy_binaries": ["pubsub_workers"]},
-        "document-storage-service": {"deploy_binaries": ["document_storage_service"]},
-        "unrelated": {}, "paused": {"deploy_enabled": false},
-        "pending": {"bootstrap_pending": "setup"}
-    }}));
-    assert!(ok);
-    assert_eq!(matrices["email"], ["email-service"]);
-    assert_eq!(matrices["dss"], ["document-storage-service"]);
-    assert_eq!(matrices["others"], ["unrelated"]);
-    let mut partitioned = ["email", "dss", "others"]
-        .into_iter()
-        .flat_map(|key| matrices[key].clone())
+fn every_service_deploys_in_one_parallel_matrix_after_migrations() {
+    let workflow = serde_json::to_value(deploy_all_services()).unwrap();
+    let jobs = workflow["jobs"].as_object().unwrap();
+    let deploy_jobs = jobs
+        .iter()
+        .filter(|(_, job)| {
+            job["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|step| step["uses"] == "./.github/actions/deploy-cloud-storage-pulumi")
+        })
+        .map(|(id, _)| id.as_str())
         .collect::<Vec<_>>();
-    partitioned.sort();
-    let mut all = matrices["matrix"].clone();
-    all.sort();
-    assert_eq!(partitioned, all);
-    let dss = serde_json::to_value(deploy_services("dss", true)).unwrap();
-    assert!(
-        dss["needs"]
-            .as_array()
-            .unwrap()
-            .contains(&serde_json::json!("deploy-email"))
+    assert_eq!(deploy_jobs, ["deploy-services"]);
+    let deploy = &jobs["deploy-services"];
+    assert_eq!(
+        deploy["strategy"]["matrix"]["service"],
+        "${{ fromJson(needs.setup.outputs.matrix) }}"
     );
-    let condition = dss["if"].as_str().unwrap();
+    assert!(deploy["strategy"].get("max-parallel").is_none());
+    assert_eq!(
+        deploy["needs"],
+        serde_json::json!([
+            "setup",
+            "warm-binaries",
+            "warm-lambdas",
+            "build-service-binaries",
+            "build-lambda-artifacts",
+            "migrate-db",
+        ])
+    );
+    let condition = deploy["if"].as_str().unwrap();
     for clause in [
-        "needs.deploy-email.result == 'success'",
         "needs.migrate-db.result == 'success'",
         "!cancelled()",
         "'cancelled'",
@@ -112,37 +129,15 @@ fn consumer_and_api_partition_is_ordered_without_serializing_other_services() {
     ] {
         assert!(condition.contains(clause), "{condition}");
     }
-    let others = serde_json::to_value(deploy_services("others", false)).unwrap();
-    assert!(
-        !others["needs"]
-            .as_array()
-            .unwrap()
-            .contains(&serde_json::json!("deploy-email"))
-    );
 }
 
 #[test]
-fn absent_disabled_or_unbootstrapped_email_cannot_admit_dss() {
-    for email in [
-        None,
-        Some(serde_json::json!({"deploy_enabled": false})),
-        Some(serde_json::json!({"bootstrap_pending": "setup"})),
-    ] {
-        let mut config = serde_json::json!({"services": {"document-storage-service": {}}});
-        if let Some(email) = email {
-            config["services"]["email-service"] = email;
-        }
-        assert!(!deployment_partitions(config).0);
-    }
-    let (ok, matrices) = deployment_partitions(serde_json::json!({"services": {}}));
-    assert!(ok);
-    assert!(matrices.values().all(Vec::is_empty));
-}
-
-#[test]
-fn rollout_and_summary_scripts_cover_failed_cancelled_and_noop_deployments() {
+fn summary_script_covers_failed_cancelled_and_noop_deployments() {
     let result = std::process::Command::new("bun")
-        .args(["test", "./.github/scripts/crm-deployment.test.ts"])
+        .args([
+            "test",
+            "./.github/scripts/check-service-deployment-results.test.ts",
+        ])
         .current_dir(xtask_paths::repo_root())
         .output()
         .unwrap();
