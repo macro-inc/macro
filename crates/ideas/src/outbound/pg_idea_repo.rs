@@ -26,7 +26,7 @@ pub enum PgIdeaRepoError {
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     /// A stored row holds a value the domain doesn't know.
-    #[error("undecodable idea row: {0}")]
+    #[error("undecodable suggestion row: {0}")]
     Decode(String),
 }
 
@@ -94,10 +94,10 @@ impl PgIdeaRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
-                       FROM idea i
-                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
-                       LEFT JOIN idea_entity e ON e.idea_id = i.id
-                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       FROM suggestion i
+                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
+                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
+                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id
                        WHERE i.user_id = $1
                          AND (i.state IN ('proposed', 'accepted')
                               OR (i.state = 'done' AND i.state_changed_at >= $2))"#,
@@ -120,17 +120,17 @@ impl PgIdeaRepo {
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
                        FROM (
-                           SELECT * FROM idea
+                           SELECT * FROM suggestion
                            WHERE user_id = $1 AND state IN ('proposed', 'accepted')
                            UNION ALL
-                           (SELECT * FROM idea
+                           (SELECT * FROM suggestion
                             WHERE user_id = $1 AND state NOT IN ('proposed', 'accepted')
                             ORDER BY state_changed_at DESC
                             LIMIT $2)
                        ) i
-                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
-                       LEFT JOIN idea_entity e ON e.idea_id = i.id
-                       LEFT JOIN idea_routine r ON r.idea_id = i.id"#,
+                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
+                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
+                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id"#,
                     user.as_ref(),
                     closed,
                 )
@@ -146,10 +146,10 @@ impl PgIdeaRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
-                       FROM idea i
-                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
-                       LEFT JOIN idea_entity e ON e.idea_id = i.id
-                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       FROM suggestion i
+                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
+                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
+                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id
                        WHERE i.id = $2 AND i.user_id = $1"#,
                     user.as_ref(),
                     id,
@@ -166,10 +166,10 @@ impl PgIdeaRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?",
                               e.action AS "action?",
                               r.routine_suggestion_id AS "routine_suggestion_id?"
-                       FROM idea i
-                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
-                       LEFT JOIN idea_entity e ON e.idea_id = i.id
-                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       FROM suggestion i
+                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
+                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
+                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id
                        WHERE i.user_id = $1 AND i.dedup_key = $2"#,
                     user.as_ref(),
                     dedup_key,
@@ -180,10 +180,10 @@ impl PgIdeaRepo {
         };
         let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
         let targets = sqlx::query!(
-            r#"SELECT idea_id, role, entity_type, entity_id, part_id
-               FROM idea_target
-               WHERE idea_id = ANY($1)
-               ORDER BY idea_id, role, position"#,
+            r#"SELECT suggestion_id, role, entity_type, entity_id, part_id
+               FROM suggestion_target
+               WHERE suggestion_id = ANY($1)
+               ORDER BY suggestion_id, role, position"#,
             &ids,
         )
         .fetch_all(&mut *tx)
@@ -202,7 +202,7 @@ impl PgIdeaRepo {
                     },
                 ))
             });
-            by_idea.entry(row.idea_id).or_default().push(target);
+            by_idea.entry(row.suggestion_id).or_default().push(target);
         }
         let ideas = rows.into_iter().filter_map(|row| {
             let id = row.id;
@@ -241,7 +241,7 @@ impl PgIdeaRepo {
                     }
                     (kind, ..) => {
                         return Err(PgIdeaRepoError::Decode(format!(
-                            "idea {} of kind {kind} lacks its kind's row",
+                            "suggestion {} of kind {kind} lacks its kind's row",
                             row.id
                         )));
                     }
@@ -270,7 +270,7 @@ impl PgIdeaRepo {
             })();
             // One broken row must not hide the person's other ideas.
             idea.inspect_err(|error| {
-                tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable idea row");
+                tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable suggestion row");
             })
             .ok()
         });
@@ -295,7 +295,7 @@ fn category_names(categories: &[Category]) -> Vec<String> {
 /// so limits hold under concurrent writes.
 async fn lock(conn: &mut PgConnection, user: &MacroUserIdStr<'_>) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "SELECT pg_advisory_xact_lock(hashtextextended('idea:' || $1, 0))",
+        "SELECT pg_advisory_xact_lock(hashtextextended('suggestion:' || $1, 0))",
         user.as_ref(),
     )
     .fetch_one(conn)
@@ -312,10 +312,10 @@ async fn within(
 ) -> Result<Written, sqlx::Error> {
     let counts = sqlx::query!(
         r#"SELECT
-             (SELECT count(*) FROM idea
+             (SELECT count(*) FROM suggestion
               WHERE user_id = $1 AND state IN ('proposed', 'accepted')) AS "open!",
              (SELECT count(*) FROM suggestion_change
-              WHERE generation_id = $2 AND subject = 'idea'
+              WHERE generation_id = $2 AND subject = 'suggestion'
                 AND action IN ('created', 'restored')) AS "added!""#,
         user.as_ref(),
         generation,
@@ -339,7 +339,7 @@ async fn insert_targets(
 ) -> Result<(), sqlx::Error> {
     for (position, target) in targets.iter().enumerate() {
         sqlx::query!(
-            r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id, part_id)
+            r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id, part_id)
                VALUES ($1, $2, $3, $4, $5, $6)"#,
             idea,
             role.as_ref(),
@@ -364,7 +364,7 @@ async fn log(
         r#"INSERT INTO suggestion_change
              (id, user_id, generation_id, session_id, subject, subject_id, action,
               old_value, new_value, reason, created_at)
-           VALUES ($1, $2, $3, $4, 'idea', $5, $6, $7, $8, $9, $10)"#,
+           VALUES ($1, $2, $3, $4, 'suggestion', $5, $6, $7, $8, $9, $10)"#,
         Uuid::now_v7(),
         user.as_ref(),
         change.generation,
@@ -449,7 +449,7 @@ impl IdeaRepo for PgIdeaRepo {
     async fn added_in(&self, generation: Uuid) -> Result<u32, Self::Err> {
         let count = sqlx::query_scalar!(
             r#"SELECT count(*) AS "count!" FROM suggestion_change
-               WHERE generation_id = $1 AND subject = 'idea'
+               WHERE generation_id = $1 AND subject = 'suggestion'
                  AND action IN ('created', 'restored')"#,
             generation,
         )
@@ -478,7 +478,7 @@ impl IdeaRepo for PgIdeaRepo {
             NewKind::Entity { .. } => "entity",
         };
         let inserted = sqlx::query!(
-            r#"INSERT INTO idea
+            r#"INSERT INTO suggestion
                  (id, user_id, kind, dedup_key, title, summary, importance, categories,
                   session_id, created_at, updated_at, state_changed_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $10)
@@ -503,7 +503,7 @@ impl IdeaRepo for PgIdeaRepo {
         match kind {
             NewKind::Prompt { run_mode } => {
                 sqlx::query!(
-                    "INSERT INTO idea_prompt (idea_id, prompt, run_mode) VALUES ($1, $2, $3)",
+                    "INSERT INTO suggestion_prompt (suggestion_id, prompt, run_mode) VALUES ($1, $2, $3)",
                     id,
                     content.prompt.as_deref().unwrap_or_default(),
                     run_mode.as_ref(),
@@ -513,7 +513,7 @@ impl IdeaRepo for PgIdeaRepo {
             }
             NewKind::Entity { action } => {
                 sqlx::query!(
-                    "INSERT INTO idea_entity (idea_id, action) VALUES ($1, $2)",
+                    "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, $2)",
                     id,
                     action.as_ref(),
                 )
@@ -546,7 +546,7 @@ impl IdeaRepo for PgIdeaRepo {
             }
         }
         let updated = sqlx::query!(
-            r#"UPDATE idea
+            r#"UPDATE suggestion
                SET title = $4, summary = $5, importance = $6, categories = $7,
                    state = $8, state_reason = NULL, session_id = $9, updated_at = $10,
                    state_changed_at = CASE WHEN state = $8 THEN state_changed_at ELSE $10 END
@@ -570,7 +570,7 @@ impl IdeaRepo for PgIdeaRepo {
         }
         if let Some(prompt) = &content.prompt {
             sqlx::query!(
-                "UPDATE idea_prompt SET prompt = $2 WHERE idea_id = $1",
+                "UPDATE suggestion_prompt SET prompt = $2 WHERE suggestion_id = $1",
                 id,
                 prompt,
             )
@@ -578,7 +578,7 @@ impl IdeaRepo for PgIdeaRepo {
             .await?;
         }
         sqlx::query!(
-            "DELETE FROM idea_target WHERE idea_id = $1 AND role = 'about'",
+            "DELETE FROM suggestion_target WHERE suggestion_id = $1 AND role = 'about'",
             id,
         )
         .execute(&mut *tx)
@@ -601,7 +601,7 @@ impl IdeaRepo for PgIdeaRepo {
         let from: Vec<String> = from.iter().map(|state| state.as_ref().to_owned()).collect();
         let mut tx = self.pool.begin().await?;
         let moved = sqlx::query!(
-            r#"UPDATE idea
+            r#"UPDATE suggestion
                SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5,
                    session_id = COALESCE($6, session_id)
                WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,

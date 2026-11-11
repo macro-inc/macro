@@ -20,9 +20,9 @@ use crate::domain::model::{
 };
 use crate::domain::ports::IdeaApi;
 
-/// What the ideas routes share.
+/// What the suggestions routes share.
 pub struct IdeaRouterState<S, Auth> {
-    /// The ideas service.
+    /// The suggestions service.
     pub service: Arc<S>,
     /// Who is calling.
     pub authorization_state: MacroAuthorizationState<Auth>,
@@ -44,14 +44,14 @@ impl<S, Auth> FromRef<IdeaRouterState<S, Auth>> for MacroAuthorizationState<Auth
 }
 
 /// A generation session's agent reaches the domain, which accepts only the
-/// person's own open ideas sessions.
+/// person's own open suggestions sessions.
 impl<S, Auth> FromRef<IdeaRouterState<S, Auth>> for NonUserOwners {
     fn from_ref(_state: &IdeaRouterState<S, Auth>) -> Self {
         NonUserOwners::Enabled
     }
 }
 
-/// The ideas routes.
+/// The suggestions routes.
 pub fn idea_router<S, Auth, St>(state: IdeaRouterState<S, Auth>) -> Router<St>
 where
     S: IdeaApi,
@@ -60,18 +60,21 @@ where
 {
     Router::new()
         .route(
-            "/ideas",
+            "/suggestions",
             get(list_ideas::<S, Auth>).post(suggest_idea::<S, Auth>),
         )
-        .route("/ideas/review", get(review_ideas::<S, Auth>))
-        .route("/ideas/{id}", axum::routing::patch(rewrite_idea::<S, Auth>))
-        .route("/ideas/{id}/retire", post(retire_idea::<S, Auth>))
-        .route("/ideas/{id}/accept", post(accept_idea::<S, Auth>))
-        .route("/ideas/{id}/dismiss", post(dismiss_idea::<S, Auth>))
+        .route("/suggestions/review", get(review_ideas::<S, Auth>))
+        .route(
+            "/suggestions/{id}",
+            axum::routing::patch(rewrite_idea::<S, Auth>),
+        )
+        .route("/suggestions/{id}/retire", post(retire_idea::<S, Auth>))
+        .route("/suggestions/{id}/accept", post(accept_idea::<S, Auth>))
+        .route("/suggestions/{id}/dismiss", post(dismiss_idea::<S, Auth>))
         .with_state(state)
 }
 
-/// An ideas call's failure, as an HTTP answer.
+/// A suggestions call's failure, as an HTTP answer.
 pub enum IdeaApiError {
     /// The body didn't parse.
     InvalidRequest(JsonRejection),
@@ -99,7 +102,7 @@ impl IntoResponse for IdeaApiError {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
             Self::Service(IdeaError::Internal(report)) => {
-                tracing::error!(error = ?report, "ideas call failed");
+                tracing::error!(error = ?report, "suggestions call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
         }
@@ -108,13 +111,13 @@ impl IntoResponse for IdeaApiError {
 
 #[utoipa::path(
     get,
-    path = "/ideas",
-    tag = "ideas",
-    operation_id = "list_ideas",
+    path = "/suggestions",
+    tag = "suggestions",
+    operation_id = "list_suggestions",
     responses(
-        (status = 200, body = Ideas, description = "The caller's open ideas they can open every item of, best first"),
+        (status = 200, body = Ideas, description = "The caller's open suggestions they can open every item of, best first"),
         (status = 401, body = String),
-        (status = 404, body = String, description = "Ideas are off for the caller"),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
         (status = 500, body = String),
     )
 )]
@@ -137,18 +140,18 @@ where
 
 #[utoipa::path(
     post,
-    path = "/ideas/{id}/accept",
-    tag = "ideas",
-    operation_id = "accept_idea",
-    params(("id" = String, Path, description = "ID of the idea")),
+    path = "/suggestions/{id}/accept",
+    tag = "suggestions",
+    operation_id = "accept_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
     responses(
-        (status = 204, description = "Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing"),
+        (status = 204, description = "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"),
         (status = 401, body = String),
-        (status = 404, body = String, description = "No open or done idea with this id for the caller, or ideas are off"),
+        (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller acts on an idea: a background prompt idea is taken on; any
+/// The caller acts on a suggestion: a background prompt suggestion is taken on; any
 /// other is done once they act on it (open its item, the composer, the
 /// routine), and shows in the feed's `done`.
 pub async fn accept_idea<S, Auth>(
@@ -169,18 +172,18 @@ where
 
 #[utoipa::path(
     post,
-    path = "/ideas/{id}/dismiss",
-    tag = "ideas",
-    operation_id = "dismiss_idea",
-    params(("id" = String, Path, description = "ID of the idea")),
+    path = "/suggestions/{id}/dismiss",
+    tag = "suggestions",
+    operation_id = "dismiss_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
     responses(
         (status = 204, description = "Dismissed; generation sessions see when"),
         (status = 401, body = String),
-        (status = 404, body = String, description = "No open idea with this id for the caller, or ideas are off"),
+        (status = 404, body = String, description = "No open suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller isn't interested in an open idea.
+/// The caller isn't interested in an open suggestion.
 pub async fn dismiss_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -199,18 +202,18 @@ where
 
 #[utoipa::path(
     get,
-    path = "/ideas/review",
-    tag = "ideas",
-    operation_id = "review_ideas",
+    path = "/suggestions/review",
+    tag = "suggestions",
+    operation_id = "review_suggestions",
     responses(
-        (status = 200, body = IdeaReview, description = "Every idea of the user's, open first, and how many more this generation may add"),
+        (status = 200, body = IdeaReview, description = "Every suggestion of the user's, open first, and how many more this generation may add"),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Only an ideas generation session may review"),
-        (status = 404, body = String, description = "Ideas are off for the user"),
+        (status = 403, body = String, description = "Only a suggestions generation session may review"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
         (status = 500, body = String),
     )
 )]
-/// What an ideas generation session reads before managing ideas.
+/// What a suggestions generation session reads before managing suggestions.
 pub async fn review_ideas<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
@@ -227,20 +230,20 @@ where
 
 #[utoipa::path(
     post,
-    path = "/ideas",
-    tag = "ideas",
-    operation_id = "suggest_idea",
+    path = "/suggestions",
+    tag = "suggestions",
+    operation_id = "add_suggestion",
     request_body = SuggestIdea,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the idea was added or updated, and what to fix when it wasn't"),
+        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was added or updated, and what to fix when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Only an ideas generation session may suggest"),
-        (status = 404, body = String, description = "Ideas are off for the user"),
+        (status = 403, body = String, description = "Only a suggestions generation session may suggest"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
         (status = 500, body = String),
     )
 )]
-/// Add an idea from an ideas generation session, or a new version of the
+/// Add a suggestion from a suggestions generation session, or a new version of the
 /// one with its dedup key.
 pub async fn suggest_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
@@ -263,21 +266,21 @@ where
 
 #[utoipa::path(
     patch,
-    path = "/ideas/{id}",
-    tag = "ideas",
-    operation_id = "rewrite_idea",
-    params(("id" = String, Path, description = "ID of the idea")),
+    path = "/suggestions/{id}",
+    tag = "suggestions",
+    operation_id = "rewrite_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
     request_body = RewriteIdea,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the idea was rewritten, and what to fix when it wasn't"),
+        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was rewritten, and what to fix when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Only an ideas generation session may rewrite"),
-        (status = 404, body = String, description = "No such idea for the user, or ideas are off"),
+        (status = 403, body = String, description = "Only a suggestions generation session may rewrite"),
+        (status = 404, body = String, description = "No such suggestion for the user, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// Change an open idea from an ideas generation session.
+/// Change an open suggestion from a suggestions generation session.
 pub async fn rewrite_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
@@ -300,21 +303,21 @@ where
 
 #[utoipa::path(
     post,
-    path = "/ideas/{id}/retire",
-    tag = "ideas",
-    operation_id = "retire_idea",
-    params(("id" = String, Path, description = "ID of the idea")),
+    path = "/suggestions/{id}/retire",
+    tag = "suggestions",
+    operation_id = "retire_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
     request_body = RetireIdea,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the idea was retired, and why not when it wasn't"),
+        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was retired, and why not when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Only an ideas generation session may retire"),
-        (status = 404, body = String, description = "No such idea for the user, or ideas are off"),
+        (status = 403, body = String, description = "Only a suggestions generation session may retire"),
+        (status = 404, body = String, description = "No such suggestion for the user, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// Retire an open idea from an ideas generation session.
+/// Retire an open suggestion from a suggestions generation session.
 pub async fn retire_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,

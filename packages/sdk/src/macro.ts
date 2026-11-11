@@ -22,7 +22,7 @@ import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
-import { IdeaNamespace } from './entities/ideas/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
@@ -131,8 +131,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
 
-  /** ideas resources and operations. */
-  readonly ideas: IdeaNamespace;
+  /** suggestions resources and operations. */
+  readonly suggestions: SuggestionNamespace;
 
   /** unfurls resources and operations. */
   readonly unfurls: UnfurlNamespace;
@@ -255,7 +255,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     const client = new MacroClient(opts);
     this._client = client;
     this.routines = new RoutineNamespace(client);
-    this.ideas = new IdeaNamespace(client);
+    this.suggestions = new SuggestionNamespace(client);
     this.unfurls = new UnfurlNamespace(client);
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
@@ -492,15 +492,15 @@ export {
 export { Harness } from './entities/harnesses/harness';
 export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
 export {
-  Idea,
-  type IdeaChanges,
-  type IdeaItem,
-  type IdeaWriteOutcome,
-} from './entities/ideas/idea';
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export type {
-  IdeaReview,
-  IdeaSuggestion,
-} from './entities/ideas/namespace';
+  SuggestionsReview,
+  SuggestionInput,
+} from './entities/suggestions/namespace';
 export { GeneratedImage, StaticImage } from './entities/images/image';
 export type {
   GenerateImageAspectRatio,

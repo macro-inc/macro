@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptIdeaData, AcceptIdeaErrors, AcceptIdeaResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DismissIdeaData, DismissIdeaErrors, DismissIdeaResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GenerateRoutineSuggestionsData, GenerateRoutineSuggestionsErrors, GenerateRoutineSuggestionsResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListIdeasData, ListIdeasErrors, ListIdeasResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RetireIdeaData, RetireIdeaErrors, RetireIdeaResponses, ReviewIdeasData, ReviewIdeasErrors, ReviewIdeasResponses, RewriteIdeaData, RewriteIdeaErrors, RewriteIdeaResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, SuggestIdeaData, SuggestIdeaErrors, SuggestIdeaResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GenerateRoutineSuggestionsData, GenerateRoutineSuggestionsErrors, GenerateRoutineSuggestionsResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -59,79 +59,6 @@ export class Sdk extends HeyApiClient {
 
     public scheduledActionHealth<ThrowOnError extends boolean = false>(options?: Options<ScheduledActionHealthData, ThrowOnError>): RequestResult<ScheduledActionHealthResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<ScheduledActionHealthResponses, unknown, ThrowOnError>({ url: '/health', ...options });
-    }
-
-    /**
-     * The caller's feed.
-     */
-    public listIdeas<ThrowOnError extends boolean = false>(options?: Options<ListIdeasData, ThrowOnError>): RequestResult<ListIdeasResponses, ListIdeasErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListIdeasResponses, ListIdeasErrors, ThrowOnError>({ url: '/ideas', ...options });
-    }
-
-    /**
-     * Add an idea from an ideas generation session, or a new version of the
-     * one with its dedup key.
-     */
-    public suggestIdea<ThrowOnError extends boolean = false>(options: Options<SuggestIdeaData, ThrowOnError>): RequestResult<SuggestIdeaResponses, SuggestIdeaErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<SuggestIdeaResponses, SuggestIdeaErrors, ThrowOnError>({
-            url: '/ideas',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * What an ideas generation session reads before managing ideas.
-     */
-    public reviewIdeas<ThrowOnError extends boolean = false>(options?: Options<ReviewIdeasData, ThrowOnError>): RequestResult<ReviewIdeasResponses, ReviewIdeasErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ReviewIdeasResponses, ReviewIdeasErrors, ThrowOnError>({ url: '/ideas/review', ...options });
-    }
-
-    /**
-     * Change an open idea from an ideas generation session.
-     */
-    public rewriteIdea<ThrowOnError extends boolean = false>(options: Options<RewriteIdeaData, ThrowOnError>): RequestResult<RewriteIdeaResponses, RewriteIdeaErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<RewriteIdeaResponses, RewriteIdeaErrors, ThrowOnError>({
-            url: '/ideas/{id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * The caller acts on an idea: a background prompt idea is taken on; any
-     * other is done once they act on it (open its item, the composer, the
-     * routine), and shows in the feed's `done`.
-     */
-    public acceptIdea<ThrowOnError extends boolean = false>(options: Options<AcceptIdeaData, ThrowOnError>): RequestResult<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/accept', ...options });
-    }
-
-    /**
-     * The caller isn't interested in an open idea.
-     */
-    public dismissIdea<ThrowOnError extends boolean = false>(options: Options<DismissIdeaData, ThrowOnError>): RequestResult<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/dismiss', ...options });
-    }
-
-    /**
-     * Retire an open idea from an ideas generation session.
-     */
-    public retireIdea<ThrowOnError extends boolean = false>(options: Options<RetireIdeaData, ThrowOnError>): RequestResult<RetireIdeaResponses, RetireIdeaErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<RetireIdeaResponses, RetireIdeaErrors, ThrowOnError>({
-            url: '/ideas/{id}/retire',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
     }
 
     public listScheduledActions<ThrowOnError extends boolean = false>(options?: Options<ListScheduledActionsData, ThrowOnError>): RequestResult<ListScheduledActionsResponses, ListScheduledActionsErrors, ThrowOnError> {
@@ -272,6 +199,79 @@ export class Sdk extends HeyApiClient {
     public activateScheduledActionTemplate<ThrowOnError extends boolean = false>(options: Options<ActivateScheduledActionTemplateData, ThrowOnError>): RequestResult<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ActivateScheduledActionTemplateResponses, ActivateScheduledActionTemplateErrors, ThrowOnError>({
             url: '/scheduled-actions/{id}/template/activate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller's feed.
+     */
+    public listSuggestions<ThrowOnError extends boolean = false>(options?: Options<ListSuggestionsData, ThrowOnError>): RequestResult<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSuggestionsResponses, ListSuggestionsErrors, ThrowOnError>({ url: '/suggestions', ...options });
+    }
+
+    /**
+     * Add a suggestion from a suggestions generation session, or a new version of the
+     * one with its dedup key.
+     */
+    public addSuggestion<ThrowOnError extends boolean = false>(options: Options<AddSuggestionData, ThrowOnError>): RequestResult<AddSuggestionResponses, AddSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddSuggestionResponses, AddSuggestionErrors, ThrowOnError>({
+            url: '/suggestions',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * What a suggestions generation session reads before managing suggestions.
+     */
+    public reviewSuggestions<ThrowOnError extends boolean = false>(options?: Options<ReviewSuggestionsData, ThrowOnError>): RequestResult<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ReviewSuggestionsResponses, ReviewSuggestionsErrors, ThrowOnError>({ url: '/suggestions/review', ...options });
+    }
+
+    /**
+     * Change an open suggestion from a suggestions generation session.
+     */
+    public rewriteSuggestion<ThrowOnError extends boolean = false>(options: Options<RewriteSuggestionData, ThrowOnError>): RequestResult<RewriteSuggestionResponses, RewriteSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<RewriteSuggestionResponses, RewriteSuggestionErrors, ThrowOnError>({
+            url: '/suggestions/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * The caller acts on a suggestion: a background prompt suggestion is taken on; any
+     * other is done once they act on it (open its item, the composer, the
+     * routine), and shows in the feed's `done`.
+     */
+    public acceptSuggestion<ThrowOnError extends boolean = false>(options: Options<AcceptSuggestionData, ThrowOnError>): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/accept', ...options });
+    }
+
+    /**
+     * The caller isn't interested in an open suggestion.
+     */
+    public dismissSuggestion<ThrowOnError extends boolean = false>(options: Options<DismissSuggestionData, ThrowOnError>): RequestResult<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DismissSuggestionResponses, DismissSuggestionErrors, ThrowOnError>({ url: '/suggestions/{id}/dismiss', ...options });
+    }
+
+    /**
+     * Retire an open suggestion from a suggestions generation session.
+     */
+    public retireSuggestion<ThrowOnError extends boolean = false>(options: Options<RetireSuggestionData, ThrowOnError>): RequestResult<RetireSuggestionResponses, RetireSuggestionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetireSuggestionResponses, RetireSuggestionErrors, ThrowOnError>({
+            url: '/suggestions/{id}/retire',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
