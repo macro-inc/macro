@@ -222,6 +222,26 @@ test.each(['no event', 'selectionchange', 'blur', 'new revision', 'dispose'])(
       });
       expect(dom.anchorNode).toBe(fixture.root);
       expect(dom.anchorOffset).toBe(0);
+      for (const [key, keyCode] of [
+        ['Control', 17],
+        ['Shift', 16],
+      ] as const) {
+        fixture.root.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            keyCode,
+            ctrlKey: true,
+            shiftKey: key === 'Shift',
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        expect(fixture.view.selection().selection).toMatchObject({
+          kind: 'range',
+          anchor: point,
+          focus: point,
+        });
+      }
       fixture.root.dispatchEvent(
         new KeyboardEvent('keydown', {
           key: 'z',

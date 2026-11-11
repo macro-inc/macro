@@ -49,7 +49,7 @@ import type {
   RenderContext,
 } from './registry';
 import {
-  readHistoryRootSelection,
+  readFocusedRootSelection,
   readSelection,
   sameSelection,
   writeSelection,
@@ -617,7 +617,7 @@ export class EditorView implements ViewSink {
               const historyBoundary =
                 this.historySelectionRevision === this.revision &&
                 previousSelection.kind === 'none'
-                  ? readHistoryRootSelection(this)
+                  ? readFocusedRootSelection(this)
                   : null;
               this.selectionInfo = {
                 selection,
@@ -702,7 +702,7 @@ export class EditorView implements ViewSink {
               this.selectionInfo.selection.kind !== 'none'
             )
               return;
-            const selection = readHistoryRootSelection(this);
+            const selection = readFocusedRootSelection(this);
             if (selection) this.port.selectionFromView(selection);
           } finally {
             if (this.historySelectionRevision === revision)

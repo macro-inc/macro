@@ -127,8 +127,8 @@ export function readSelection(view: EditorView): ViewSelection {
 export function readSelectionFromChange(view: EditorView): ViewSelection {
   return read(view, true);
 }
-/** Read a browser caret left at the owned root after history reconciliation. */
-export function readHistoryRootSelection(
+/** Resolve a collapsed browser caret at the focused editor root. */
+export function readFocusedRootSelection(
   view: EditorView
 ): Extract<ViewSelection, { kind: 'range' }> | null {
   const root = view.root;
