@@ -15,6 +15,7 @@ import {
   type JSX,
   on,
   onMount,
+  Show,
 } from 'solid-js';
 import { DisclosureCaret } from './DisclosureCaret';
 import { TextShimmer } from './TextShimmer';
@@ -25,6 +26,11 @@ export interface ToolGroupProps {
   active: boolean;
   /** Child position of the first running call, so later results cannot bury it. */
   activeIndex?: number;
+  /**
+   * The session's live one-line status over these calls, shown in place of
+   * the count while the run is active; the count stays beside it.
+   */
+  summary?: string;
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -148,10 +154,22 @@ export function ToolGroup(props: ToolGroupProps) {
         type="button"
         aria-expanded={expanded()}
         aria-controls={contentId}
-        class="group flex min-h-8 items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        class="group flex min-h-8 min-w-0 max-w-full items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
         onClick={() => setExpanded(!expanded())}
       >
-        <TextShimmer text={title()} active={props.active} />
+        <Show
+          when={props.active && props.summary}
+          fallback={<TextShimmer text={title()} active={props.active} />}
+        >
+          {(summary) => (
+            <>
+              <span class="min-w-0 truncate">
+                <TextShimmer text={summary()} active />
+              </span>
+              <span class="shrink-0 text-xs tabular-nums">{props.count}</span>
+            </>
+          )}
+        </Show>
         <DisclosureCaret open={expanded()} />
       </button>
       <CollapseTransition open={expanded()}>

@@ -9,6 +9,7 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
@@ -176,6 +177,7 @@ function ToolGroupPart(props: {
         )
       : -1;
   const active = () => activeIndex() !== -1;
+  const activity = useSessionActivity(() => props.message.agentSessionId);
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
@@ -197,6 +199,7 @@ function ToolGroupPart(props: {
         count={calls().length}
         active={active()}
         activeIndex={active() ? activeIndex() : undefined}
+        summary={active() ? activity() : undefined}
       >
         {renderParts()}
       </LiveToolGroup>
