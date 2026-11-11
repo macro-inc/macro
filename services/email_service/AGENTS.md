@@ -35,6 +35,11 @@ the gateway `/email` prefix.
   the email domain's `message_labels::gmail_ops` service there; their listener
   only decodes and acknowledges the domain disposition. Settlement transactions,
   Gmail calls, and retry publication are in `outbound/message_labels/gmail_ops.rs`.
+  Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
+  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` keeps
+  the shared backfill context unchanged. Stage A retains history and upsert
+  through a temporary borrowed legacy port; notification overrides update that
+  current legacy context before each delivery.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
@@ -189,6 +194,8 @@ the gateway `/email` prefix.
   new race between writes and syncs; its ignored `randomized_shard_*` tests run
   the seeded simulation (`SIM_SEEDS`, `SIM_OVERLAP`, `SIM_BATCHES`, see
   `sim/test.rs`). Scenarios run in both label write forms (`scenario!`).
+  Keep bare unauthenticated `GET /` listener probes out of the fake Gmail
+  request log; retain authenticated, query-bearing, body-bearing and provider requests.
 - Local stacks run debug workers on tokio's 2 MiB worker stacks, where every
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;

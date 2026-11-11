@@ -331,7 +331,7 @@ scenario!(
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
-        let ctx = sim.world.sync.clone();
+        let ctx = sim.world.sync.legacy.0.clone();
         let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, sim.world.link_id)
             .await
             .unwrap()

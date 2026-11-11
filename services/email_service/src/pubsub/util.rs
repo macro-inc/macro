@@ -200,38 +200,6 @@ pub async fn cg_refresh_join_request(
         );
 }
 
-/// Shared filter/dedup pass for the CRM populate + depopulate enqueue
-/// helpers. Returns each input email, lowercased and trimmed, with
-/// malformed addresses and the caller's own address dropped, and
-/// duplicates collapsed.
-///
-/// Validation is stricter than a bare `contains('@')` check:
-///   - must contain exactly one `@`
-///   - local-part and domain must both be non-empty
-///
-/// Matches the validation in [`crm::domain::service::CrmService::populate_contact`]
-/// so malformed inputs never reach the consumer side.
-fn normalized_non_self_contact_emails(
-    self_email: &str,
-    contact_emails: impl IntoIterator<Item = String>,
-) -> Vec<String> {
-    let mut seen: HashSet<String> = HashSet::new();
-    contact_emails
-        .into_iter()
-        .filter_map(|raw| {
-            let email = raw.trim().to_ascii_lowercase();
-            let (local, domain) = email.split_once('@')?;
-            if local.is_empty() || domain.is_empty() || domain.contains('@') {
-                return None;
-            }
-            if email == self_email || !seen.insert(email.clone()) {
-                return None;
-            }
-            Some(email)
-        })
-        .collect()
-}
-
 /// Producer-side fan-out helper: normalizes and enqueues one
 /// `PopulateCrmContact` message per distinct, non-self contact.
 ///
@@ -250,8 +218,8 @@ fn normalized_non_self_contact_emails(
 /// creates a new `crm_companies` row and never moves
 /// `first_interaction` backwards).
 ///
-/// Email validation rules and dedup match
-/// [`normalized_non_self_contact_emails`]; dedup is by email only, so the
+/// Trim and lowercase addresses, then skip malformed, self and duplicate
+/// addresses. Dedup is by email only, so the
 /// first name / timestamps seen for a given address in this batch win.
 pub async fn enqueue_populate_crm_contacts(
     ctx: &PubSubContext,
@@ -296,35 +264,6 @@ pub async fn enqueue_populate_crm_contacts(
                 })
             })?;
     }
-
-    Ok(())
-}
-
-/// Producer-side dedupe for deferred CRM teardown when a message is deleted.
-/// Uses the same [`normalized_non_self_contact_emails`] filter as the populate
-/// helper, then upserts one `crm_cleanup_candidates` row per distinct contact.
-/// The unique `(link_id, contact_email)` index collapses bulk deletes into a
-/// single pending row; the nightly cleanup job sweeps the table and
-/// depopulates contacts whose links no longer have messages with them.
-pub async fn insert_crm_cleanup_candidates<'e, E>(
-    executor: E,
-    link_id: Uuid,
-    self_email: &str,
-    contact_emails: impl IntoIterator<Item = String>,
-) -> Result<(), ProcessingError>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
-{
-    let emails = normalized_non_self_contact_emails(self_email, contact_emails);
-
-    email_db_client::crm_cleanup::candidates::insert_candidates(executor, link_id, &emails)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to insert crm cleanup candidates"),
-            })
-        })?;
 
     Ok(())
 }

@@ -10,8 +10,9 @@
 use super::fake_gmail::{FakeGmail, GmailMessage, GmailState};
 use super::fake_sqs::{self, FakeSqs};
 use super::wiring;
-use crate::pubsub::context::{CrmMetadataResolver, PubSubContext};
+use crate::pubsub::context::CrmMetadataResolver;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
+use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use axum::Router;
 use axum::response::IntoResponse;
 use email::domain::service::EmailServiceImpl;
@@ -85,8 +86,8 @@ pub struct World {
     pub queues: Queues,
     pub ops: GmailOpsContext,
     pub ops_retry: GmailOpsContext,
-    pub sync: PubSubContext,
-    pub sync_retry: PubSubContext,
+    pub sync: InboxSyncContext,
+    pub sync_retry: InboxSyncContext,
     pub email: EmailSvc,
     /// Provider message id → database id.
     pub message_ids: BTreeMap<String, Uuid>,
