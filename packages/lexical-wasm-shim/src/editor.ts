@@ -31,6 +31,7 @@ import type {
 } from './nodes/editor-config';
 import { bindReplacementRuntime } from './nodes/replacement/runtime';
 import type {
+  Klass,
   NodeConfigInput,
   RegisteredNodes,
 } from './nodes/replacement/types';
@@ -324,6 +325,12 @@ export class LexicalEditor {
       this.editableListeners.delete(listener);
       if (cleanup) cleanup();
     };
+  }
+  hasNode<T extends Klass<LexicalNode>>(node: T): boolean {
+    return this._nodes.has(node.getType());
+  }
+  hasNodes<T extends Klass<LexicalNode>>(nodes: Array<T>): boolean {
+    return nodes.every(this.hasNode.bind(this));
   }
   registerUpdateListener(
     listener: (payload: {

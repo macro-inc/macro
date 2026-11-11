@@ -127,6 +127,8 @@ Forward LexicalNodeReplacement from the replacement type barrel so the root pres
 
 Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.
 
+Match hasNode/hasNodes through registered getType names, preserving getType order and errors. Keep constructor authorization separate: availability of a type name does not authorize constructing an unregistered class with that name.
+
 Install the canonical nativePlugins manifest once at editor construction and pass it as a separate backend factory argument. Default to no native owners; the development conformance backend rejects nonempty manifests instead of substituting native policy. Production ownership requires the actual named staged installer before JS logic may be skipped.
 
 Route public builtin creation factories through actual registered replacements while preserving node identity and cold module evaluation.
