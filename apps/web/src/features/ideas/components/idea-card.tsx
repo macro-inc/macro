@@ -121,12 +121,19 @@ function IdeaSurface(props: {
 /** Lines up a card's body and footer under its title, past the tile. */
 const UNDER_TITLE = 'pl-12.5';
 
-/** A routine's sentence, with the values AI picked in violet. */
+const PICKED_MARK_MAX = 32;
+
+/** A routine's sentence, with the short values AI picked in violet. */
 function RoutineSentence(props: { text: RoutineIdeaText }) {
   return (
     <For each={props.text.sentence}>
       {(part) => (
-        <Show when={part.picked} fallback={part.text}>
+        // A long picked value, such as a whole message, stays plain: a
+        // sentence that is mostly violet stops being quiet.
+        <Show
+          when={part.picked && part.text.length <= PICKED_MARK_MAX}
+          fallback={part.text}
+        >
           <span class="font-medium text-violet-ink">{part.text}</span>
         </Show>
       )}
