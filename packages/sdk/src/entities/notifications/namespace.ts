@@ -21,9 +21,11 @@ type NotificationTypePreferences = GetNotificationTypePreferencesResponses[200];
 
 /**
  * What a sent notification opens: the kinds the inbox and Home list. Tasks
- * are documents. An agent session must be listed (a routine's runs are not,
- * unless the routine lists them); an email thread shows only while it is
- * Signal-important and not shared.
+ * are documents. The recipient's inbox and Home must both list it, or the
+ * send fails: they must have been shared it directly (a link share or an
+ * attachment is not enough), it must not be deleted or a snippet, a session
+ * must be listed (a routine's runs are not, unless the routine lists them),
+ * and an email thread must be the recipient's own Signal mail in their inbox.
  */
 export type NotificationLink =
   | Document
@@ -84,12 +86,12 @@ export class NotificationNamespace {
    * Notify yourself, or someone who can already see `link`, that work finished or needs attention; post a message instead when a reply is expected.
    *
    * Routines should use this to report back, linking the document or listed
-   * session the run produced; links to routines, databases and forms, and to
-   * unlisted or hidden sessions, are refused because the inbox would never
-   * show them. It is delivered like any other
-   * notification (in-app, desktop and phone push) and respects the
-   * recipient's notification preferences, so it may not reach them. Sends are
-   * rate limited per sender.
+   * session the run produced. A link the recipient's inbox or Home would not
+   * show is refused with a 400 rather than delivered unseen (see
+   * {@link NotificationLink}). It is delivered like any other notification
+   * (in-app, desktop and phone push) and respects the recipient's
+   * notification preferences, so it may not reach them. Sends are rate
+   * limited per sender and per recipient.
    *
    * @example
    * ```ts

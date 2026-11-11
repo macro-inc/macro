@@ -1099,7 +1099,7 @@
             }
           },
           "429": {
-            "description": "Too many manual notifications from this sender"
+            "description": "Too many manual notifications from this sender, or to this recipient"
           },
           "500": {
             "description": "",
@@ -2705,7 +2705,7 @@
           },
           "entityType": {
             "$ref": "#/components/schemas/EntityType",
-            "description": "One of document, chat, channel, project, email_thread or agent_session:\nthe kinds the inbox and Home list. An agent session must be listed;\nan email thread shows only while it is Signal-important and not shared."
+            "description": "One of document, chat, channel, project, email_thread or agent_session:\nthe kinds the inbox and Home list. The recipient's inbox and Home must\nboth list it: their access comes from a share the feeds read (not a\nlink share or an attachment), it is not deleted, a session is listed,\na document is not a snippet, and an email thread is the recipient's own\nSignal mail in the inbox."
           }
         }
       },

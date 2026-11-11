@@ -1111,8 +1111,11 @@ export type ManualNotificationLink = {
     entityId: string;
     /**
      * One of document, chat, channel, project, email_thread or agent_session:
-     * the kinds the inbox and Home list. An agent session must be listed;
-     * an email thread shows only while it is Signal-important and not shared.
+     * the kinds the inbox and Home list. The recipient's inbox and Home must
+     * both list it: their access comes from a share the feeds read (not a
+     * link share or an attachment), it is not deleted, a session is listed,
+     * a document is not a snippet, and an email thread is the recipient's own
+     * Signal mail in the inbox.
      */
     entityType: EntityType;
 };
@@ -2175,7 +2178,7 @@ export type SendManualNotificationErrors = {
      */
     404: ErrorResponse;
     /**
-     * Too many manual notifications from this sender
+     * Too many manual notifications from this sender, or to this recipient
      */
     429: unknown;
     500: ErrorResponse;

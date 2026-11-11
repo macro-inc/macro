@@ -384,12 +384,18 @@ an agent it reads as from the sending user. Opening one opens the link:
 documents and tasks by their file type, plus chats, channels, projects, email
 threads and agent sessions.
 
-A link must be something the inbox and Home list, or the notification would
-be delivered and never shown. The service derives the allowed kinds from the
-inbox's `CANDIDATE_TYPES` and Home's candidate types, and refuses the rest
-(routines, databases, forms) with 400. It also refuses unlisted and hidden
-agent sessions (a routine's runs, unless the routine lists them). An email
-thread is accepted but shows only while it is Signal-important and not shared.
+A notification is accepted only when the recipient's inbox and Home would both
+list it, so nothing is delivered unseen. Kinds the feeds never list (routines,
+databases, forms) are refused by type, derived from the inbox's
+`CANDIDATE_TYPES` and Home's candidate types. Every other link is checked for
+the recipient (the sender, for a note to oneself) by asking the inbox and Home
+whether a new notification would be listed: Soup's attention query, probed with
+the link as if a notification were pending, through each feed's own filter and
+hydration. That refuses links reached only by a link share or an attachment,
+deleted entities, snippets (Home leaves them out), unlisted and hidden
+sessions, and mail that is not the recipient's own Signal inbox mail, with 400
+and the feed that refused. Sends are limited to 60 an hour per sender and 60
+an hour per recipient.
 In the unified Notifications view a manual notification is an agent row on its
 linked entity, from the agent (or the sending user when no agent sent it); on
 a channel it is its own row beside the channel's messages.
