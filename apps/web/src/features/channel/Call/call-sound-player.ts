@@ -2,18 +2,24 @@ import {
   DEFAULT_NOTIFICATION_SOUND_SETTINGS,
   soundForCallEvent,
 } from '@app/features/notification-sounds/core/settings';
-import {
-  playNotificationSound,
-  unlockNotificationSounds,
-} from '@app/features/notification-sounds/primitives/sound-player';
+import { createSoundPlayer } from '@app/features/notification-sounds/primitives/sound-player';
 import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
+import { createSoundUnlock } from '@app/features/notification-sounds/primitives/sound-unlock';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { makeEventListener } from '@solid-primitives/event-listener';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import type { CallPresenceEvent } from './call-presence';
 
 /** Playback policy shared by signed-in channel calls and guest browser calls. */
-export function createCallSoundPlayer(userId: Accessor<string | undefined>) {
+export function createCallSoundPlayer(
+  userId: Accessor<string | undefined>,
+  outputDeviceId: Accessor<string | null> = () => null
+) {
+  const player = createSoundPlayer(outputDeviceId);
+  createSoundUnlock(player.unlock);
+  createEffect(
+    on(outputDeviceId, () => fireAndForget(player.syncOutput(), 'call-sounds'))
+  );
+  onCleanup(() => fireAndForget(player.dispose(), 'call-sounds'));
   const settings = () => {
     const id = userId();
     return id
@@ -21,26 +27,9 @@ export function createCallSoundPlayer(userId: Accessor<string | undefined>) {
       : DEFAULT_NOTIFICATION_SOUND_SETTINGS;
   };
 
-  // Unlock during the Join gesture, not after token or media awaits. Guest
-  // call pages do not mount the authenticated notification-sound listener.
-  makeEventListener(
-    window,
-    'pointerdown',
-    () => {
-      if (settings().callSoundsEnabled) {
-        fireAndForget(unlockNotificationSounds(), 'call-sounds');
-      }
-    },
-    { capture: true, passive: true }
-  );
-
   return (event: CallPresenceEvent) => {
     const current = settings();
     const sound = soundForCallEvent(event, current);
-    if (sound)
-      fireAndForget(
-        playNotificationSound(sound, current.volume),
-        'call-sounds'
-      );
+    if (sound) fireAndForget(player.play(sound, current.volume), 'call-sounds');
   };
 }

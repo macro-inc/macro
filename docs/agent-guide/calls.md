@@ -52,6 +52,12 @@ of the notification-sounds switch. Join and Leave preview buttons play the fixed
 cues. The shared volume slider and quiet-hours schedule apply. Guest browser
 calls use the default settings because they have no signed-in device profile.
 
+Call cues follow the speaker selected in the call controls; notification sounds
+and settings previews still use the system-default output. Mouse, touch, Enter,
+and Space activation unlock audio, including when enabling sounds. A browser
+that cannot resume audio promptly drops the cue rather than replaying it on a
+later click.
+
 `Call/primitives/call-sounds.ts` exchanges explicit visit announcements over the
 room's reliable data channel; RTC roster changes never make sounds. Announcements
 are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
@@ -64,6 +70,9 @@ the first participant hearing the second join, and both sides of a deliberate
 leave. Rejoin deliberately, then interrupt and restore the second connection:
 recovery must not play a leave or another join. Turn Call sounds off on one
 participant and confirm the other participant still hears announcements.
+Also select a non-default call speaker and check that both cues play there,
+while notification previews stay on the default output. After reloading, join
+with Enter or Space to check keyboard-only audio activation.
 
 ### Saved call detail
 

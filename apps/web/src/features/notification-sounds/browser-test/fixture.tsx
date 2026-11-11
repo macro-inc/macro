@@ -4,6 +4,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { UnifiedNotification } from '@notifications/types';
 import { onMount } from 'solid-js';
 import { render } from 'solid-js/web';
+import { createCallSoundPlayer } from '../../channel/Call/call-sound-player';
 import { SettingsPage } from '../../settings/primitives';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
@@ -19,11 +20,13 @@ const USER_ID = 'fixture-user';
 declare global {
   interface Window {
     deliverNotification: (tag: string) => void;
+    playCallCue: (event: 'join' | 'leave') => void;
   }
 }
 
 function Fixture() {
   const sounds = createNotificationSoundSettings(USER_ID);
+  window.playCallCue = createCallSoundPlayer(() => USER_ID);
   const listeners = new Set<(notification: UnifiedNotification) => void>();
   useNotificationSounds(
     {

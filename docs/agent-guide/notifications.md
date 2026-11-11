@@ -392,9 +392,11 @@ backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
-tab hands sound back to the others until one is focused. Browsers keep
-audio suspended until the page has had a gesture; a notification before that
-stays silent rather than playing late.
+tab hands sound back to the others until one is focused. Mouse, touch, Enter,
+and Space activation unlock audio even while sounds are off, so enabling a
+sound setting also unlocks playback. A cue that cannot resume audio within
+250 ms stays silent rather than playing on a later gesture. Notification sounds
+use the system-default output; call cues follow the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the
@@ -413,7 +415,8 @@ settings, so a phone and a computer can differ. A sound preview still plays.
 Mobile push sent while the app is not open is unchanged.
 
 The backend-free desktop/phone regression drives the real settings section,
-persistence, previews, and delivery through a stand-in notification feed:
+persistence, previews, keyboard activation, rendered audio, and delivery
+through a stand-in notification feed:
 `bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and

@@ -513,7 +513,6 @@ function createCallState() {
   const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
-  const playCallSound = createCallSoundPlayer(userId);
   const mediaPermissions = createCallMediaPermissions({
     onGranted: (device) =>
       device === 'microphone' ? toggleAudio(true) : toggleVideo(true),
@@ -524,6 +523,10 @@ function createCallState() {
     backgroundEffect: persistedBackgroundEffect(),
     noiseSuppressionMode: persistedNoiseSuppressionMode(),
   });
+  const playCallSound = createCallSoundPlayer(
+    userId,
+    () => store.activeAudioOutputDeviceId
+  );
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
     typeof KrispNoiseFilter
   > | null>(null);
