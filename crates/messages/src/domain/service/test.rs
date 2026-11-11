@@ -753,6 +753,24 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
             .await,
         Err(MessageError::Invalid(_))
     ));
+    for sender in [
+        "participant:00000000-0000-0000-0000-000000000001",
+        "guest|00000000-0000-0000-0000-000000000001",
+    ] {
+        assert!(matches!(
+            service
+                .validate_references(
+                    &access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    vec![SimpleMention {
+                        entity_type: "user".into(),
+                        entity_id: sender.into(),
+                    }],
+                    &[],
+                )
+                .await,
+            Err(MessageError::Invalid("invalid mentioned user"))
+        ));
+    }
 }
 
 fn post_input() -> PostMessage {
