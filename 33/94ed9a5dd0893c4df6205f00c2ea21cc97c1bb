@@ -1,0 +1,3114 @@
+apps/web/src/lib/core/internal/browser-test/calendar-guests-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-204
+crates/client/cache-wasm/src/shell/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-109
+apps/web/src/lib/service-clients/service-storage/graphql-contacts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-143
+apps/web/src/features/block-chat/README.md
+  s_154e7eadce3a09::t_37065794a721d1 3-5
+crates/ai_billing/src/domain/service/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 3629
+apps/web/src/features/channel/Participants/ChannelParticipantsTab.tsx
+  s_154e7eadce3a09::t_37065794a721d1 14,188,251
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-83
+crates/client/cache-core/src/people/name_search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-132
+crates/client/cache-turso/src/storage/people_sql/test/name_index.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-240
+packages/sdk/generated/storage/index.ts
+  s_154e7eadce3a09::t_acf632cdd62a2e 4
+apps/web/src/lib/core/internal/browser-test/calendar-guests.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-115
+crates/database_sql/src/run/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-2
+apps/web/src/lib/core/database-sql/generated/types.ts
+  s_154e7eadce3a09::t_37065794a721d1 1134-1137,1268-1275,1694-1710
+apps/web/src/components/ui/components/ChipCombobox.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-132
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 120-139
+apps/web/src/features/crm/record-adapter.ts
+  s_154e7eadce3a09::t_37065794a721d1 6,10,13,61-62,78-84,89-104,135,175-199
+apps/web/src/features/next-soup/soup-view/filters-bar/search/search-facets.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17-18,21-22,29,141,184-186,188-192,194-203,205-211,214,249,258,286,394-395,415-416,489-490
+.agents/skills/add-sdk-endpoint/SKILL.md
+  s_154e7eadce3a09::t_37065794a721d1 57-59
+apps/web/src/features/onboarding/queries/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,7-24
+  s_154e7eadce3a09::t_691bd6a4e55b07 25
+crates/complete_graph/src/saved_view.rs
+  s_154e7eadce3a09::t_37065794a721d1 46-47,101-106,118,182-191,265-282
+  s_154e7eadce3a09::t_8b608ea4093cd2 283-284
+apps/web/src/lib/graphql-cache/people/protocol.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-131
+crates/client/cache-turso/src/storage/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-87
+apps/web/src/lib/core/component/AI/component/tool/email/DraftComposer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 376-377
+crates/client/cache-turso/src/storage/people_sql/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-275
+apps/web/src/features/command/queries/entity-search.ts
+  s_154e7eadce3a09::t_37065794a721d1 81-82,92-97,164-176
+apps/web/src/lib/core/component/TopBar/linkShare.ts
+  s_154e7eadce3a09::t_37065794a721d1 49
+crates/agent_session/src/testing.rs
+  s_154e7eadce3a09::t_37065794a721d1 77-78,120-132,320-337,1111-1117
+apps/web/src/lib/queries/channel/access-requests.ts
+  s_154e7eadce3a09::t_37065794a721d1 170
+apps/web/src/features/onboarding/core/signup-draft.ts
+  s_154e7eadce3a09::t_37065794a721d1 4-6,11,13-14,17-19,44-47
+apps/web/src/lib/service-clients/service-storage/graphql-contacts.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-148
+apps/web/src/features/property/editors/popover/EntityEditor.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 39-41,45-51,53,84-89
+crates/email/src/outbound/email_pg_repo/test/attachment_filter.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-86
+crates/agent_session/src/outbound/name_generator.rs
+  s_154e7eadce3a09::t_37065794a721d1 87-88,124-125
+apps/web/src/components/view-shell/ViewShell.detail.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-128
+crates/client/cache-core/src/search/ranking/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2,79-85
+crates/client/cache-core/src/search/changes/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 34,60-75
+  s_154e7eadce3a09::t_afc3d6b9dcf91e 76-77
+apps/web/src/features/channel/Input/browser-test/attach.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-117
+apps/web/src/lib/queries/auth/user-names.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-3,5,7-9,12-23,25
+apps/web/src/lib/queries/email/email-send-dispatcher.ts
+  s_154e7eadce3a09::t_37065794a721d1 8-13,45-57,178,185-186
+apps/web/src/features/calendar-view/components/CalendarSearchFilters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4-5,59,62,173-174,180-181
+apps/web/src/features/next-soup/soup-view/NewCallButton.tsx
+  s_154e7eadce3a09::t_37065794a721d1 14,115
+apps/web/src/features/sidebar-promotion/primitives/promotion.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-6,50-74
+apps/web/src/lib/queries/contacts/reference-reader.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-8,10-21,23-28,30-39
+crates/contacts/src/domain/models.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-2,7-10
+apps/web/src/components/ui/utils/multiSelectSelection.ts
+  s_154e7eadce3a09::t_37065794a721d1 15-18
+apps/web/src/lib/queries/email/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 10-11
+apps/web/src/features/notifications/tests/mark-message-notifications.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 19
+apps/web/src/lib/queries/persistence-scopes.ts
+  s_154e7eadce3a09::t_37065794a721d1 13-21
+crates/agent_session/src/domain/session/types.rs
+  s_154e7eadce3a09::t_37065794a721d1 196-199,211
+apps/web/src/features/saved-views/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 5,12,18-22,29
+apps/web/src/lib/core/component/AI/component/debug/Component.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9
+crates/agent_harness/src/domain/service/deliver.rs
+  s_154e7eadce3a09::t_37065794a721d1 6-36,149-152,161-164,170-215
+  s_154e7eadce3a09::t_97405da9e4c321 216-217
+crates/ai_billing/src/outbound/pg_usage_reader/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 19,315,362
+crates/agent_session/src/domain/ports.rs
+  s_154e7eadce3a09::t_37065794a721d1 449-454
+apps/web/src/features/auth/auth.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,9,26,39,47,53-55
+crates/client/cache-core/src/engine/hydration.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-43
+crates/client/cache-turso/src/storage.rs
+  s_154e7eadce3a09::t_37065794a721d1 24,58,76,80,105,923-980,1091-1092,1098,1102-1104,1106-1147,1812,2092-2103,3297,3819,3918,4139-4140,4287-4297,4827,4841-4851,4954-4955,5331,5334,5336,5338
+apps/web/src/features/calendar/components/TurnOffCalendarDialog.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,22-25,47-49
+  s_154e7eadce3a09::t_bc8c69b9d6430a 50
+apps/web/src/features/email-compose/views/email-compose.tsx
+  s_154e7eadce3a09::t_37065794a721d1 165
+apps/web/src/features/email-view/components/EmailSidebar.tsx
+  s_154e7eadce3a09::t_37065794a721d1 46,89,93,108,139,142-146,262
+  s_154e7eadce3a09::t_f34f9a9778dd8f 263
+apps/web/src/features/tasks-view/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 75-78,86
+apps/web/src/lib/graphql-cache/people/references.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-90
+apps/web/src/features/saved-views/views/saved-view-dialogs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 47-49,56-58,75,129-130
+apps/web/src/features/universal-input/core/recipients.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,9-10,13-50,52-63,73,81-82,88-120,124-126
+apps/web/src/lib/core/util/create-replaceable-reader.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-19
+apps/web/src/lib/core/util/create-replaceable-reader.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-76
+apps/web/src/lib/queries/contacts/lookup.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-216
+crates/coding_agent_worker/src/tui/api.rs
+  s_154e7eadce3a09::t_37065794a721d1 3-5,20-43,64-66,68
+crates/agent_session/src/domain/session/session.rs
+  s_154e7eadce3a09::t_37065794a721d1 165-182
+crates/coding_agent_worker/e2e/memory_soak.py
+  s_154e7eadce3a09::t_37065794a721d1 1-215
+apps/web/src/features/channel/use-channel-participants.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9-12
+apps/web/src/features/notifications-inbox/open-notification-in-split.ts
+  s_154e7eadce3a09::t_37065794a721d1 61-67,69-70
+apps/web/src/lib/graphql-cache/worker/browser-test/people-references.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-102
+apps/web/src/features/email-view/email-view-context.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 25,27-36,49-52,69-71,104-110,127,129,275-474
+apps/web/src/lib/core/internal/browser-test/task-filter-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-78
+apps/web/src/lib/graphql-cache/host/read-availability.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-5,24-30
+  s_154e7eadce3a09::t_a7f8f488bc79f6 31
+apps/web/src/lib/core/user/use-contact-filter-options.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-55
+crates/contacts/src/outbound/names/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-232
+apps/web/src/features/runtime-sharing/browser-test/vite.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 16
+crates/computer_id/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 1-23
+apps/web/src/features/channel/composer-arrival-focus.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-36
+apps/web/src/features/channel/Participants/ParticipantsAddPanel.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2-3,7,11,18-26,29-31,42-44,54
+apps/web/src/lib/core/database-sql/wasm-module.ts
+  s_154e7eadce3a09::t_37065794a721d1 16,42-44,113-121
+  s_154e7eadce3a09::t_743abd7ba85bc3 122-123
+apps/web/src/features/email-view/components/EmailFilterFields.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-4,6-44,47-144,146-156,158-161,163-164,167,169-174,176-190,192-216,218-233,235-247
+apps/web/src/features/auth/create-app-auth-context.ts
+  s_154e7eadce3a09::t_37065794a721d1 4,79-84
+apps/web/src/lib/core/comments/discussion/DiscussionInput.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 11-13,25,150-162
+apps/web/src/lib/queries/channel/tests/channels.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-2,7-17,28-74
+apps/web/src/lib/core/context/quickAccess/person-list.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-311
+apps/web/src/lib/queries/system-status/status.ts
+  s_154e7eadce3a09::t_37065794a721d1 24,27-31,35,41
+apps/web/src/components/ui/components/Tabs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 22-26,226-229
+apps/web/src/features/email-view/email-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 6-9,11,19-20,27,32,41,47-50,52-56,145,157-158,197,207-212,214,242-243,245,274,276-298,325-329,332-339
+apps/web/src/lib/service-clients/service-storage/graphql/saved-views.graphql
+  s_154e7eadce3a09::t_37065794a721d1 40-43
+crates/contacts/src/domain/models/contact.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-68
+apps/web/src/features/property/editor/entity-property-editor.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4,153,158,165
+apps/web/src/lib/core/component/RecipientMenuContent.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-24
+apps/web/src/features/channel/Call/chat/browser-test/playwright.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-30
+apps/web/src/features/email-compose/browser-test/watermark.app.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-93
+crates/client/cache-core/src/search/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 13-43,132,270-283
+  s_154e7eadce3a09::t_3c3de0c6011963 12
+apps/web/src/lib/core/internal/ContactDirectoryInspector.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-119
+apps/web/src/lib/core/internal/browser-test/task-filter-people.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-67
+apps/web/src/lib/i18n/locales/en.ts
+  s_154e7eadce3a09::t_37065794a721d1 14,20,48,54
+apps/web/src/features/saved-views/queries/saved-views.ts
+  s_154e7eadce3a09::t_37065794a721d1 26,39-42,45-46,48,114
+apps/web/src/lib/core/internal/browser-test/index.html
+  s_154e7eadce3a09::t_37065794a721d1 1
+apps/web/src/features/calendar/components/composer/guest-options.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-24
+apps/web/src/lib/core/internal/browser-test/network.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-91
+apps/web/src/lib/queries/soup/recently-viewed.ts
+  s_154e7eadce3a09::t_37065794a721d1 70-71
+crates/client/cache-turso/tests/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-64
+apps/web/tauri/src-tauri/gen/apple/project.yml
+  s_154e7eadce3a09::t_37065794a721d1 61-62,148-149,183-184
+apps/web/src/features/routine-suggestions/views/suggestion-list-view.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,8,16-20,48,53,74,81,91-95,97,99-101,103,107-118,120-130,135-136,138-140,142-143,145-152,155-156,158,160-162,165-177,189-227
+  s_154e7eadce3a09::t_2e28ccffa7500d 228
+apps/web/src/lib/queries/database-sql/create-database-sql-query.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 29,130-140,165-169,251,324,414,482,550,655,718,811-824
+apps/web/min-native-build.json
+  s_154e7eadce3a09::t_37065794a721d1 3
+apps/web/src/features/settings/MobileSettingsSheet.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2,208-210
+apps/web/src/lib/graphql-cache/worker/browser-test/vite.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 62
+crates/ai_usage/src/domain/service.rs
+  s_154e7eadce3a09::t_37065794a721d1 109
+apps/web/src/lib/core/internal/browser-test/cached-people-policy-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-181
+apps/web/src/lib/core/context/quickAccess/projected-list.ts
+  s_154e7eadce3a09::t_37065794a721d1 18-19
+crates/client/cache-turso/tests/shared_conformance.rs
+  s_154e7eadce3a09::t_37065794a721d1 235-240,259-265,267
+apps/web/src/lib/queries/contacts/contact-user-id.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-18
+packages/sdk/README.md
+  s_154e7eadce3a09::t_a071ba96914ae9 72-78,574-603,824-827,830-833
+apps/web/src/components/ui/components/Badge.tsx
+  s_154e7eadce3a09::t_37065794a721d1 21-24,70-75
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_154e7eadce3a09::t_37065794a721d1 8-11,38-40,43-52,54-57,59-84,87-99
+apps/web/src/lib/queries/email/email-send-dispatcher.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 313-394
+apps/web/src/lib/graphql-cache/telemetry.ts
+  s_154e7eadce3a09::t_37065794a721d1 517-521,526-533,564
+apps/web/src/lib/core/component/AI/component/tool/email/ChatCompose.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2-3,11-18,24,28,30
+apps/web/src/features/next-soup/soup-view/soup-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,536
+apps/web/src/lib/service-clients/service-auth/fetch.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,132-208
+  s_154e7eadce3a09::t_a5d3d86323269d 209
+apps/web/src/lib/queries/email/local-drafts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 64-67,336-375,522,606-610,618,621-624,627,630-759
+apps/web/src/features/next-soup/actions/make-copy-action.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 24,26
+apps/web/src/lib/core/component/AI/util/storage.ts
+  s_154e7eadce3a09::t_37065794a721d1 3
+apps/web/src/features/routines/views/routines-list.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2-6,21-22,39
+crates/client/cache-core/src/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 13,19,89-134,159-162,178,185,198,204,263-265,277-292,364-385,465-468,472,479-483,486-490,503
+apps/web/src/lib/core/internal/browser-test/calendar-filters.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-68
+apps/web/src/lib/queries/contacts/directory.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-195
+apps/web/src/lib/graphql-cache/people/sql-protocol.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-139
+apps/web/src/lib/queries/soup/backfill.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 33-38
+crates/coding_agent_worker/src/herdr/acp_agent/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 923-937,952-956
+crates/crm/src/outbound/companies_repo.rs
+  s_154e7eadce3a09::t_37065794a721d1 25-42,62-63,75-253,255-354,386-427,430-431,435,879,882-884,887,906,908-911,914,1201-1204
+crates/agent_inmem/src/domain/replay.rs
+  s_154e7eadce3a09::t_37065794a721d1 32,72-75,108-116,120,243-262,264-267,269-307,319-322,333-334,336-337,339,359-364,386-390,396-398,401,414-415,427-433
+apps/web/src/lib/queries/auth/user-info.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 17-23,40,61,64-68,74-78,80,84,154-188
+  s_154e7eadce3a09::t_d959ebe643b9de 189-190
+apps/web/src/lib/queries/database-sql/local-routing.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-9,11-15,18,23-43,45-141,143-159,162-186,188-199,202-216,219-247,250-265,268-285,288-297
+apps/web/src/features/universal-input/browser-test/input-references.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-213
+crates/client/cache-turso/src/storage/name_search/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-409
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/components/MentionsMenuItem.tsx
+  s_154e7eadce3a09::t_37065794a721d1 74
+apps/web/src/features/home/components/HomeList.tsx
+  s_154e7eadce3a09::t_37065794a721d1 132,208-211,236-240,345-352
+crates/database_sql/src/lib.rs
+  s_154e7eadce3a09::t_37065794a721d1 23,42-43
+apps/web/src/features/channel/views/channel-invite-modal.tsx
+  s_154e7eadce3a09::t_37065794a721d1 6,25-26,52-54,120-121,125,127
+apps/web/src/features/soup/filters/facets/constants.ts
+  s_154e7eadce3a09::t_37065794a721d1 116-134,148-151,331-335,341
+apps/web/src/features/routine-suggestions/core/discover.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-25
+apps/web/src/lib/queries/email/draft-queue.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,9-14,22,25,27,29,375-377,482-593
+apps/web/src/features/integrations/import-linear/queries/assignees.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-201
+apps/web/src/features/universal-input/views/ai-draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 16-27
+apps/web/src/lib/core/component/AI/component/tool/SendEmail.tsx
+  s_154e7eadce3a09::t_37065794a721d1 252-254
+apps/web/tauri/src-tauri/src/lib.rs
+  s_154e7eadce3a09::t_37065794a721d1 141-142,156-157,252,254,419-425,432,477-484
+crates/contacts/src/domain/ports.rs
+  s_154e7eadce3a09::t_37065794a721d1 1,3-4,25-104,114-121,123
+  s_154e7eadce3a09::t_c51bfda91716f5 122,124
+apps/web/src/features/property/utils/entityConversion.ts
+  s_154e7eadce3a09::t_37065794a721d1 118-120
+apps/web/src/lib/core/internal/browser-test/onboarding-contact-cache.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-67
+apps/web/src/components/ui/components/ChipCombobox.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-325
+apps/web/src/features/next-soup/soup-view/filters-bar/unified-filter-dropdown.tsx
+  s_154e7eadce3a09::t_37065794a721d1 33,551-552,556-561,731-734,882-886,898-904
+apps/web/src/features/calendar/components/composer/EventPropertyPills.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 39,54
+apps/web/src/features/home/components/HomeEntityDetailRouteView.tsx
+  s_154e7eadce3a09::t_37065794a721d1 16,234-241,275-280
+crates/client/cache-core/src/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-260
+apps/web/src/features/channel/Input/browser-test/mention-ranking.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 4-89
+apps/web/src/features/runtime-sharing/core/pending-requests.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-81
+apps/web/src/lib/graphql-cache/host/retirable-host.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-2,30-64,67
+apps/web/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 5-7,28-198,251-254,267-270,292-298,334-336,390,397-401,405-407,417,437-440,699,777-778,806-809,823,1348,1350
+crates/client/cache-core/src/people/references/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-214
+apps/web/src/features/property/tags/entityTagging.ts
+  s_154e7eadce3a09::t_37065794a721d1 47-48
+apps/web/src/features/channel/composer-arrival-focus.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-87
+apps/web/src/features/settings/browser-test/signatures/services.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,3,12,18,38-108,112,144-153,183,193-194,202-203
+apps/web/src/features/soup/filters/facets/compile.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,198-213
+  s_154e7eadce3a09::t_29369fc04bd315 214-215
+CODING.md
+  s_154e7eadce3a09::t_37065794a721d1 69-71
+.github/kafka-cluster-topics.json
+  s_154e7eadce3a09::t_37065794a721d1 27
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_154e7eadce3a09::t_37065794a721d1 244
+apps/web/tauri/src-tauri/gen/apple/NotificationServiceExtension/Info.plist
+  s_154e7eadce3a09::t_37065794a721d1 20,22
+crates/email/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 71-85
+apps/web/tauri/graphql_cache_plugin/src/engine.rs
+  s_154e7eadce3a09::t_37065794a721d1 17,38,763,776-805
+apps/web/src/features/onboarding/views/onboarding-flow-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 56-61,231,257-259
+crates/client/cache-turso/tests/common/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-155
+crates/contacts/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 11-18,22,37,52,55
+  s_154e7eadce3a09::t_a8d3f3705e22ee 56
+apps/web/src/lib/core/internal/DataDebug.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4,7-8,10,12-13,16-17,19,76,79,98
+crates/client/cache-turso/src/storage/test/startup.rs
+  s_154e7eadce3a09::t_37065794a721d1 4-63
+  s_154e7eadce3a09::t_d44a7f3ae10076 3
+apps/web/src/features/chat/ChatWithAgentButton.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 135,148-149,236-247
+  s_154e7eadce3a09::t_45ac644c2e0da8 248-249
+apps/web/src/features/channel/Input/ChannelInput.tsx
+  s_154e7eadce3a09::t_37065794a721d1 68,152-153,372-373,379-386,404,483,774-776
+apps/web/src/features/routines/components/routines-list.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,11,17-33,46-49,52-53,56-65,70,97-108,110,184-194,197,199-256,258-259,261-263,265-294,296-329,332-333,335,337-338,340
+apps/web/src/features/universal-input/queries/composer-recipients.ts
+  s_154e7eadce3a09::t_37065794a721d1 3-8,29,34,50-52
+apps/web/src/features/calendar-view/components/EventGuests.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,55-56,61,77-95,101-102,105-106
+crates/client/cache-wasm/src/shell/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 12,14,1239,1265
+crates/client/cache-core/src/people/ranking.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-381
+apps/web/src/lib/queries/auth/use-query-account.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-12
+crates/crm/src/outbound/companies_repo/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 25
+apps/web/src/lib/graphql-cache/people/worker.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-85
+apps/web/src/lib/queries/contacts/directory-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-269
+apps/web/src/lib/queries/contacts/context-sync.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-138
+apps/web/src/features/sidebar-promotion/primitives/promotion.ts
+  s_154e7eadce3a09::t_37065794a721d1 35-37,40-84
+apps/web/src/components/ui/index.ts
+  s_154e7eadce3a09::t_37065794a721d1 54-59
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/createMentionPageLoader.ts
+  s_154e7eadce3a09::t_37065794a721d1 9,19,36-42,47-48,51-57
+apps/web/src/features/settings/Account.tsx
+  s_154e7eadce3a09::t_37065794a721d1 89-90,98-99,103-104
+apps/web/src/lib/queries/channel/join-links.ts
+  s_154e7eadce3a09::t_37065794a721d1 7-13,74-75,79-84,91-93,95,112-115,129-132,135-140,147-149,151,177-178
+apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,26,215-223,257-258
+crates/ai_usage/src/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-62
+apps/web/src/lib/graphql-cache/people/sync.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-170
+apps/web/src/lib/core/internal/browser-test/vite.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-161
+Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 79,98-99,103,142,155,222,354,382
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.html
+  s_154e7eadce3a09::t_37065794a721d1 1-5
+crates/contacts/src/outbound/picture_gateway.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-48
+apps/web/src/features/entity/types/entity.ts
+  s_154e7eadce3a09::t_37065794a721d1 465-472,538,558
+apps/web/src/lib/queries/contacts/backfill.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-424
+apps/web/src/lib/queries/contacts/lookup-query.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-111
+apps/web/src/features/email-view/email-route.ts
+  s_154e7eadce3a09::t_37065794a721d1 7-18
+apps/web/src/lib/graphql-cache/host/worker-host.ts
+  s_154e7eadce3a09::t_37065794a721d1 12,88,327,421-428,448,1268,1357-1372,1491,1494
+apps/web/src/features/next-soup/soup-view/filters-bar/consolidated-filter-chip.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15,53,242-243,246-254,270,276-277,351-352
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/poll-card.tsx
+  s_154e7eadce3a09::t_37065794a721d1 131,135,137-146,185-186
+apps/web/src/observability/desktop.ts
+  s_154e7eadce3a09::t_37065794a721d1 10-13,51-52
+crates/client/cache-core/src/store.rs
+  s_154e7eadce3a09::t_37065794a721d1 23-26,91-94,96-133,336-337,432-434,437-439,451-508,546,550-579
+apps/web/src/features/channel/Call/tests/callkit-answered-recovery.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 34
+apps/web/src/features/email-thread/primitives/thread-recipients.ts
+  s_154e7eadce3a09::t_37065794a721d1 9,11,40
+apps/web/src/features/onboarding/components/routine-suggestion-row.tsx
+  s_154e7eadce3a09::t_37065794a721d1 119
+apps/web/src/lib/graphql-cache/people/sync-protocol.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-73
+crates/agent_session/src/domain/name_generation.rs
+  s_154e7eadce3a09::t_37065794a721d1 156-157
+apps/web/src/lib/queries/auth/user-name-cache.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-388
+apps/web/src/lib/queries/contacts/recipient-window.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-198
+apps/web/src/lib/graphql-cache/worker/worker-core.ts
+  s_154e7eadce3a09::t_37065794a721d1 7,122,144,158-159,533-548,605-606
+apps/web/src/lib/core/internal/browser-test/name-cache-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-105
+apps/web/src/features/command/Launcher.tsx
+  s_154e7eadce3a09::t_37065794a721d1 498-499,501,928
+apps/web/src/features/next-soup/soup-view/empty-states.tsx
+  s_154e7eadce3a09::t_37065794a721d1 262
+apps/web/src/features/onboarding/browser-test/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 77,133
+apps/web/src/features/onboarding/browser-test/onboarding.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 31,374
+apps/web/src/lib/core/internal/browser-test/soup-filters.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-129
+.github/workflows/web-app-check-main.yml
+  s_154e7eadce3a09::t_37065794a721d1 50,373-374
+apps/web/src/lib/queries/contacts/context-facts.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-154
+apps/web/src/lib/queries/contacts/reference-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-60,62-67,71-106,108-127,129-137,139-145,147-183,185,187-193,195-201,203-216
+apps/web/src/lib/core/component/FileList/itemOperations.ts
+  s_154e7eadce3a09::t_37065794a721d1 414,437,442
+apps/web/src/lib/core/internal/browser-test/linear-import-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-65
+apps/web/src/lib/graphql-cache/worker/coordinator-protocol.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-11,19,38-45,47,578-588,590,759-800,1527
+apps/web/src/features/routine-suggestions/core/discover.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+crates/client/cache-core/src/meta/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 82-87
+crates/client/cache-turso/src/storage/name_search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-283
+apps/web/src/lib/queries/mutation-coverage.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 23-24
+apps/web/src/features/command/rank-command-search-items.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-3,7-10,58-61,92-119,124-128,136-140
+apps/web/src/lib/core/internal/browser-test/sql-people.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-76
+apps/web/src/lib/graphql-cache/worker/wasm-module.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-14,42,121-129,157-158
+apps/web/src/lib/core/component/RecipientSelector.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17,19-20,24,54-64,179-181,208-213,304-305,321-332,354-357,360,436,443,454,465-472,531-540,545-546,549,572-575,589,594,623-632,756,758-760,830,915,973-992,1060,1160-1172
+apps/web/src/features/onboarding/views/signup-journey-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 23-24,76-92,117,121,125-136,144,146
+apps/web/tauri/src-tauri/tauri.ios.conf.json
+  s_154e7eadce3a09::t_37065794a721d1 3,6
+apps/web/src/features/command/mobile/create-search-pagination.ts
+  s_154e7eadce3a09::t_37065794a721d1 14,29-36
+crates/client/cache-turso/src/storage/page_retention.rs
+  s_154e7eadce3a09::t_37065794a721d1 7
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentCard.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,6,45,95-167,174,180,182-185,506-508,510,557-566,568-604,606-633,635-656,658-662,664-665,667-669,672-676,715-729,772
+apps/web/src/features/onboarding/create-app-onboarding-context.ts
+  s_154e7eadce3a09::t_37065794a721d1 8,48,60,66,230-239,298,301,314,318
+apps/web/src/features/auth/browser-test/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,208-209,213
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/mention-ranking.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 82-86
+apps/web/src/lib/core/internal/browser-test/crm-owner.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-63
+apps/web/src/features/channel/Input/browser-test/README.md
+  s_154e7eadce3a09::t_37065794a721d1 43-58
+apps/web/src/features/database-query/queries/query-source.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 164-168
+apps/web/src/lib/core/component/Emoji/EmojiSelector.tsx
+  s_154e7eadce3a09::t_37065794a721d1 19,44-45,61,70-72,165-169,172-173,176-180,207
+apps/web/src/lib/queries/contacts/contact-key.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-13
+apps/web/tauri/macro_bundle_updater_plugin/src/inbound/plugin.rs
+  s_154e7eadce3a09::t_37065794a721d1 15,35-37,40,48,82-89,510,513-514
+apps/web/src/features/block-form/core/poll-card-layout.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-7,24
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 3731,3760-3762,3764-3767,3785-3856
+apps/web/src/lib/queries/soup/normalized-cache/operations.ts
+  s_154e7eadce3a09::t_37065794a721d1 939-941
+apps/web/src/lib/core/util/domain.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-31
+apps/web/src/lib/core/internal/browser-test/onboarding-contacts-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-79
+apps/web/src/lib/core/util/ordered-window.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-58
+apps/web/src/features/settings/browser-test/signatures/account-sources.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-102
+apps/web/src/lib/queries/auth/user-info.ts
+  s_154e7eadce3a09::t_37065794a721d1 9-14,16,23-26,47-54,70-76,102-140,142-143
+apps/web/src/lib/core/auth/email.ts
+  s_154e7eadce3a09::t_37065794a721d1 5-6
+apps/web/src/lib/queries/contacts/directory-query.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-270
+apps/web/src/features/integrations/import-linear/assignee-picker.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-92
+apps/web/src/features/email-compose/views/compose-subject.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 41
+apps/web/src/lib/queries/database-sql/graphql-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 3-4,10,56,73-74,171-213,220,225,231-233
+apps/web/src/features/channels-view/components/ChannelDetailView.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2-5,13-15,25-37,43-44,46-51,58,77-79,130-177
+  s_154e7eadce3a09::t_aa628c652550a9 178
+apps/web/src/features/onboarding/views/signup-journey-view.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 22,28,37,64-66,72,83-85,90-103
+  s_154e7eadce3a09::t_cab2813852b961 104-105
+apps/web/src/lib/queries/auth/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 17-23,25
+crates/agent_session/src/domain/session/actors.rs
+  s_154e7eadce3a09::t_37065794a721d1 76-78,84,142-144,213,217-222,285,330,652-686,810,814-820
+crates/client/cache-core/src/page_retention.rs
+  s_154e7eadce3a09::t_37065794a721d1 1,9,22-29
+crates/client/cache-turso/src/storage/name_search/sql.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-274
+apps/web/src/features/email-thread/email-thread.tsx
+  s_154e7eadce3a09::t_37065794a721d1 10,72-74
+apps/web/src/lib/core/util/name-match-score.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-6,8-22,24-47
+apps/web/tauri/src-tauri/src/desktop.rs
+  s_154e7eadce3a09::t_37065794a721d1 11
+apps/web/src/lib/core/internal/browser-test/property-user-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-16
+apps/web/src/components/view-shell/ListDropdowns.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 145,150-151,195,218-219,221-222,396,431-435,437-439,988-1028
+  s_154e7eadce3a09::t_4228a7f6148475 1029
+apps/web/src/features/onboarding/primitives/email-accounts.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,18,26-27,68-69,72,76,79,88
+apps/web/src/lib/core/internal/browser-test/import-contact-network.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-94
+apps/web/src/components/app/mobile/MobilePageActionRow.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,20
+apps/web/src/lib/graphql-cache/people/reference-hosts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-130
+crates/client/cache-turso/tests/common/people_sql.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-250
+apps/web/src/lib/queries/database-sql/local-read.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-135
+apps/web/src/features/crm/browser-test/notes-filter-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-37
+apps/web/src/lib/queries/soup/backfill-contacts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 10-14
+apps/web/src/features/email-view/email-view-context.tsx
+  s_154e7eadce3a09::t_37065794a721d1 10-17,50,53,70-78,81-84,88,103-113,133-139,180-193,196-199,220,223,229-233,249-347,358,367-371,375-416,418-427,488,498,506,532,560,576,600-607,623,632-653,672-674,686-706,713-721,725-728,730,744-749,755-756,783-786,802-816
+apps/web/src/lib/core/internal/browser-test/cached-people-policy.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-62
+crates/complete_graph/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 127-135
+crates/contacts/src/outbound/repository/page.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-28
+apps/web/src/features/email-compose/views/reply-input.tsx
+  s_154e7eadce3a09::t_37065794a721d1 628,714-717
+apps/web/src/features/settings/Harness.tsx
+  s_154e7eadce3a09::t_37065794a721d1 29,172
+apps/web/src/features/block-chat/component/TopBar.tsx
+  s_154e7eadce3a09::t_37065794a721d1 12,27,78
+apps/web/src/features/calendar/components/composer/EventGuestsEditor.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17-20,23,32-33,35-36,38-40,55-61,76,81,94,99,101,109,114-123,125-126,128-130
+apps/web/src/features/tasks-view/components/TasksFilterDrawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 188-189,245-273,275-276,279
+apps/web/tauri/graphql_cache_plugin/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 1-38
+crates/client/cache-core/tests/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 80,105,108,137,258,384-414,448
+apps/web/src/lib/core/util/name-match-score.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-9,11-21,24-30,33-63
+apps/web/src/features/email-compose/views/compose-offline.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 35
+apps/web/src/lib/queries/contacts/use-references.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-7,9-12,14-26,28-46
+crates/agent_harness/src/domain/service/reattach.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-290
+apps/web/src/features/universal-input/queries/suggested-task-properties.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 48,58,72,83,109,117-120,140,159
+apps/web/src/lib/queries/database-sql/create-database-sql-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-2,15,26-31,33-37,54-55,57-62,64-67,81,89-91,95,110-134,139-144,146-189,218-220,222-225,228,234,236-237,242-244,246-248,258-262,265,267-280,296-301,303-307,309-312,314-371,374-379,386,397,406,418-423,432-438,441,445-453,455-462,464-471,473,477,479-552,554-559,562-566,571-573,584-588,590-593,596-600,608,613-615,618-658,661,664,666-668
+apps/web/src/features/onboarding/queries/team-contacts.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-161
+crates/agent_harness/src/outbound/runtime_registry.rs
+  s_154e7eadce3a09::t_37065794a721d1 19-21,44-45,275-288,293
+apps/web/src/lib/queries/contacts/backfill.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-360
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service/interruption_test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2,7,20-23,29-47,58
+apps/web/src/features/channel/use-agent-mention-users.ts
+  s_154e7eadce3a09::t_37065794a721d1 35-42,47,49
+apps/web/src/features/email-compose/compose-adapter.ts
+  s_154e7eadce3a09::t_37065794a721d1 29,265-266
+apps/web/src/lib/queries/contacts/context-sync.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-276
+apps/web/src/features/routine-suggestions/components/routine-suggestion-list.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,15,18,20-21,33-34,36,44-47
+crates/client/cache-core/src/people/name_search/reader.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-463
+apps/web/src/observability/native-lifecycle.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 145-152,154-164
+crates/crm/src/outbound/companies_repo/test/population_locks.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-152
+apps/web/src/features/email-compose/browser-test/recipient-directory.app.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-47
+apps/web/src/features/auth/primitives/email-login.ts
+  s_154e7eadce3a09::t_37065794a721d1 41-42,46,52-54
+apps/web/src/features/email-compose/primitives/compose-view-state.ts
+  s_154e7eadce3a09::t_37065794a721d1 3-6,22
+apps/web/src/lib/core/util/channels.ts
+  s_154e7eadce3a09::t_37065794a721d1 12,75
+apps/web/src/lib/graphql-cache/protocol.ts
+  s_154e7eadce3a09::t_37065794a721d1 11-19,70-76,78,90-120,148-150,859,926
+apps/web/src/lib/core/internal/browser-test/recipient-directory-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-108
+apps/web/src/features/notifications-inbox/views/notifications-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 35,179-181,434-446,448-451,456-464,486-491,1089,1116-1117
+packages/sdk/src/events/receiver.ts
+  s_154e7eadce3a09::t_a071ba96914ae9 14,78-80,95-96
+apps/web/src/features/onboarding/browser-test/README.md
+  s_154e7eadce3a09::t_37065794a721d1 8-12,14,34
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentCard.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 233-234,236,238-239,242-247,267-269
+apps/web/src/features/command/mobile/MobileSearchResults.tsx
+  s_154e7eadce3a09::t_37065794a721d1 28-36,64-81,151-154,234-243
+apps/web/src/lib/core/internal/browser-test/task-filter-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-92
+apps/web/src/lib/queries/auth/account-scope.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-271
+crates/client/cache-turso/tests/contacts.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-50
+apps/web/src/features/routine-suggestions/routine-suggestions.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,15-23,25-28,30-37,43,45-46,48,51,56,58,69-71,76-77,79,81,84-86,88-89,96-108,110-114,118-141,151,170,183-186,189,198-202,212,215-218,226-228,236,244-245,254-267,274,280,286-315,317-329,333-360,376,381,385-393,395-402,404-412,417-429,434-436,439,441,445-448,459-460,462-463,465,468-470,473-476,478,481-485,492-527
+apps/web/src/features/routines/components/routines-list.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 12,206-271
+  s_154e7eadce3a09::t_13a3c0961f3ae4 272
+apps/web/src/lib/core/component/UserIcon.tsx
+  s_154e7eadce3a09::t_37065794a721d1 11,29-30,44,62-63,109,121-123,126-132,152,229,259,290
+apps/web/src/lib/queries/contacts/lookup-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-106
+apps/web/src/lib/queries/email/local-draft-entities.ts
+  s_154e7eadce3a09::t_37065794a721d1 6
+apps/web/src/features/email-view/types.ts
+  s_154e7eadce3a09::t_37065794a721d1 7-8,11-13,31-56,73-80
+crates/agent_inmem/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 17-26,36-38,113-117
+apps/web/src/features/auth/core/sso-fallback.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-23
+apps/web/src/features/auth/browser-test/auth.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 155,226,259-295
+crates/database_sql/src/bin/database_sql_types.rs
+  s_154e7eadce3a09::t_37065794a721d1 11,32
+apps/web/src/features/tasks-view/views/task-saved-views.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,43,75-82,98-103,106-107,405
+apps/web/src/features/saved-views/queries/saved-view-changes.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-71
+apps/web/src/lib/core/context/quickAccess/QuickAccessProvider.tsx
+  s_154e7eadce3a09::t_37065794a721d1 37,55
+apps/web/tauri/src-tauri/src/desktop/main_window.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-97
+apps/web/src/lib/service-clients/service-storage/graphql/contacts.graphql
+  s_154e7eadce3a09::t_37065794a721d1 1-68
+apps/web/src/features/email-view/components/EmailFilterDrawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 3,5-14,17-22,28-29,31-41,43-85,89-95,98-99,114-149,151-176
+apps/web/src/lib/core/util/recipient-match-rank.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-23
+apps/web/src/lib/queries/contacts/reconcile.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-74
+crates/client/cache-core/src/people/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-8
+crates/client/cache-wasm/src/shell/test/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-102
+crates/client/search-performance.md
+  s_154e7eadce3a09::t_37065794a721d1 1-141
+apps/web/src/lib/core/util/create.ts
+  s_154e7eadce3a09::t_37065794a721d1 7-10,112-121,141-144,171
+apps/web/src/lib/queries/contacts/cache-scope.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-63
+apps/web/src/features/calendar-view/components/EventGuests.tsx
+  s_154e7eadce3a09::t_37065794a721d1 12,43,46-51
+apps/web/src/lib/i18n/locales/en/view-menus.ts
+  s_154e7eadce3a09::t_37065794a721d1 84-85,163-165
+packages/sdk/src/events/types.ts
+  s_154e7eadce3a09::t_a071ba96914ae9 12,39-40
+apps/web/src/lib/queries/contacts/reconcile.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-162
+apps/web/src/features/auth/components/login-picker.tsx
+  s_154e7eadce3a09::t_37065794a721d1 3,10,12,28-33
+crates/webhook/src/domain/ingestion/test.rs
+  s_154e7eadce3a09::t_6b3d11b74c5128 2247-2324
+apps/web/src/features/calendar/hooks/use-event-editor.ts
+  s_154e7eadce3a09::t_37065794a721d1 30,160-165
+apps/web/src/features/onboarding/components/google-accounts-step.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2,8,19-20,27-28,46-56,67-77,79-103,132,135,148,167-188
+  s_154e7eadce3a09::t_fe6f01ee7c4e15 189
+apps/web/src/lib/graphql-cache/worker/browser-test/people-references.html
+  s_154e7eadce3a09::t_37065794a721d1 1
+crates/contacts/src/outbound/repository/page.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-71
+apps/web/src/lib/core/internal/browser-test/contact-removal-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-202
+apps/web/src/lib/queries/channel/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 26-33
+apps/web/src/lib/i18n/locales/en/common.ts
+  s_154e7eadce3a09::t_37065794a721d1 18-19,39-42
+crates/contacts/src/domain/service/picture_fanout.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-107
+crates/agent_harness/src/domain/service.rs
+  s_154e7eadce3a09::t_37065794a721d1 22,28,172-176,211-213,402-403,411,432-441,453-463
+  s_154e7eadce3a09::t_11494d36890d50 464
+crates/client/cache-turso/tests/common/contacts.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-238
+crates/email/src/outbound/email_pg_repo/test/mail_tab_projection.rs
+  s_154e7eadce3a09::t_37065794a721d1 71
+apps/web/src/lib/core/internal/browser-test/task-list-label-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-70
+apps/web/src/features/universal-input/context/capabilities.ts
+  s_154e7eadce3a09::t_37065794a721d1 4-5,20,31-33,36,39
+crates/ai_usage/src/domain/service/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 14
+apps/web/src/features/email-compose/views/compose-recipients.tsx
+  s_154e7eadce3a09::t_37065794a721d1 207
+apps/web/src/features/email-view/queries/use-focus-email-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 58
+apps/web/src/lib/graphql-cache/people/protocol.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-167
+.github/workflows/deploy_mcp_chatgpt_worker.yml
+  s_154e7eadce3a09::t_37065794a721d1 1-41
+apps/web/src/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 191,233-261,279,295,301,332
+apps/web/src/features/saved-views/components/saved-view-list.tsx
+  s_154e7eadce3a09::t_37065794a721d1 63-67,69,94-100,108-112,137-138,141-145,150-153,155-156,161,169-199,201-204
+apps/web/src/lib/queries/contacts/references.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-483
+apps/web/src/lib/service-clients/service-storage/graphql/soup.graphql
+  s_154e7eadce3a09::t_37065794a721d1 322-327
+apps/web/src/features/channel/use-message-participants.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 3,6-10,22-24,34-49,56,62,71,74-76
+crates/client/cache-core/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 30-38,54,72-73,78
+  s_154e7eadce3a09::t_90534ce58f333e 79
+apps/web/src/features/entity/utils/shared.ts
+  s_154e7eadce3a09::t_37065794a721d1 14
+apps/web/src/lib/queries/access-requests/requests.ts
+  s_154e7eadce3a09::t_37065794a721d1 6,135-147
+  s_154e7eadce3a09::t_7c5c406661d2c4 148
+apps/web/src/lib/core/mobile/nativePhotoLibrary.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-2,4,17,26,34-63
+  s_154e7eadce3a09::t_191aa86aedecc0 64
+crates/client/cache-turso/src/storage/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 5,16,18,29-44,1029,1306-1307
+  s_154e7eadce3a09::t_9776013cb80d2a 1308
+crates/agent_inmem/src/outbound/manager/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1083-1697
+apps/web/src/features/email-compose/context/compose-capabilities.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,430-433,449,451-452
+apps/web/src/lib/core/util/freshSort.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,14,16,116,119,191-197,221,229-241,286-287,293,366-367,369-370,373-380,401,413-424
+apps/web/src/lib/core/component/AI/component/tool/CalendarTools.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 138,140-142
+apps/web/src/features/universal-input/queries/task-field-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 3,8-9,12,20-21,25-29,40,57-61,69-97,99-118,136-141,145,174-175
+crates/agent_harness/src/outbound/cursor/manager/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 84-87
+apps/web/src/lib/queries/email/send-intent.ts
+  s_154e7eadce3a09::t_37065794a721d1 168-213
+apps/web/src/components/app/mobile/MobilePageActionRow.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 80-81
+apps/web/src/features/notifications/components/MarkMessageNotifications.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,36,38-42,87
+apps/web/src/lib/queries/auth/user-name-self.ts
+  s_154e7eadce3a09::t_37065794a721d1 7,9,17,20-21,24,26-38,67
+apps/web/src/features/command/CommandItem.tsx
+  s_154e7eadce3a09::t_37065794a721d1 189-194
+apps/web/src/features/property/side-panel/properties/EntityCollectionProperty.tsx
+  s_154e7eadce3a09::t_37065794a721d1 252,336
+apps/web/src/lib/core/component/RecipientSelector.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 119-162
+crates/client/cache-core/src/engine/people/sync.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-121
+crates/contacts/src/outbound/repository.rs
+  s_154e7eadce3a09::t_37065794a721d1 1
+apps/web/src/features/channel/Channel/tests/create-channel-unread-navigation.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 31
+apps/web/src/lib/core/util/ordered-window.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-41
+crates/ai_usage/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 62-66
+apps/web/src/features/calendar-view/browser-test/preview-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,204-205,210,214-222,255-256,259-260
+apps/web/src/features/email-compose/primitives/draft-sync-status.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 18,21,24,26-27,30,33-36,41-43,63
+apps/web/src/lib/graphql-cache/host/read-availability.ts
+  s_154e7eadce3a09::t_37065794a721d1 11,14-15
+apps/web/src/features/block-chat/component/Chat.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,3,8,10,23,26-27,30-33,35,41,46,48,55,73-83,85,87,89,119,123,149,156-160,162-163,165-191,193-195
+apps/web/src/features/database/core/write-failure.ts
+  s_154e7eadce3a09::t_37065794a721d1 189-193
+apps/web/src/features/drive-view/views/drive-filter-drawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4,13,23-24,66-68,77-108,110,112
+apps/web/src/lib/graphql-cache/host/retirable-host.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-8,107-243
+  s_154e7eadce3a09::t_550ab3d3a15470 244
+apps/web/src/features/agents-view/route-views.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,32-47
+apps/web/src/lib/queries/contacts/exclusions.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-31
+apps/web/src/lib/queries/soup/graphql/ast.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 300-349
+apps/web/src/features/routines/routines-page.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15,61,97
+apps/web/src/components/app/PreviewPanel.tsx
+  s_154e7eadce3a09::t_37065794a721d1 37-38,43-46,59-60,91,183-190,260,266-267
+apps/web/src/features/email-compose/core/local-draft.ts
+  s_154e7eadce3a09::t_37065794a721d1 56-61
+apps/web/src/features/onboarding/tests/fake-onboarding-context.ts
+  s_154e7eadce3a09::t_37065794a721d1 43-44,108,251-252,265
+apps/web/src/lib/core/internal/browser-test/soup-filter-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-158
+.agents/rules/sdk.md
+  s_154e7eadce3a09::t_37065794a721d1 23-25
+apps/web/src/lib/core/internal/browser-test/contacts.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-58
+apps/web/src/features/routine-suggestions/routine-suggestions.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-2,11-12,14,16-17,19-21,23-24,26-27,29-32,34-38,40-53,55-57,59-60,62-67,70-74,76-83,86-91,94-109,111-116,118,120-136,138-140,142-143,147-150
+apps/web/src/lib/queries/contacts/reference-query.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-283
+crates/agent_inmem/src/rig_engine.rs
+  s_154e7eadce3a09::t_37065794a721d1 574-575,698-699,702-703
+apps/web/src/lib/core/internal/browser-test/playwright.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+crates/contacts/src/outbound/repository/page/test/case_lookup.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-226
+apps/web/src/lib/core/internal/browser-test/README.md
+  s_154e7eadce3a09::t_37065794a721d1 1-146
+apps/web/src/lib/service-clients/service-auth/fetch.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,21,23-44,46,48,54,68,111-112,115-116,185
+crates/client/cache-core/examples/people_schema.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-8
+apps/web/src/features/command/contact-items.ts
+  s_154e7eadce3a09::t_37065794a721d1 10,12,32-36,59-60,65-69,73-76,86-88,113-117,120
+apps/web/src/features/routines/components/routine-step-knobs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 18,20,22-25,36-39,45-55,57-63,71-75,85,123-124,129-135,138-144,150-153,168,183-186,224,259-260
+apps/web/src/lib/queries/messages/tests/timeline.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 481
+apps/web/src/lib/queries/contacts/reference-reader.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-138
+crates/client/cache-core/src/lib.rs
+  s_154e7eadce3a09::t_37065794a721d1 18
+crates/contacts/src/domain/models/query.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-130
+apps/web/src/features/agents-view/route-views.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2
+apps/web/src/lib/core/internal/browser-test/sql-people-joins.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-33
+crates/coding_agent_worker/src/herdr/acp_agent.rs
+  s_154e7eadce3a09::t_37065794a721d1 534-536,568-571,1351-1358
+  s_154e7eadce3a09::t_d18551e1acb99b 1359-1360
+apps/web/src/lib/core/internal/browser-test/channel-recipients.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-119
+apps/web/src/lib/queries/channel/channels.ts
+  s_154e7eadce3a09::t_37065794a721d1 17,19-31,42-43,49-50,58-59,67-77,80-81,84-92,95-112,114-123,125,127-129,136-138,141-145,149-150,152,167,170-172,193-197,234,237-246,249-251,253,271-275
+apps/web/src/lib/queries/email/local-draft-store.ts
+  s_154e7eadce3a09::t_37065794a721d1 368-369
+apps/web/src/features/saved-views/components/saved-view-dialog.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,67-72,79,81,83,92-98,100-147,149-150,161,172-177,189-190
+apps/web/src/features/email-view/queries/use-email-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 40-44,72-80,168-182,191,205,258,269,310,374,399,409-410,416,471,473-474,563,726
+.agents/rules/web/i18n.md
+  s_154e7eadce3a09::t_37065794a721d1 57-58
+apps/web/src/lib/graphql-cache/people/host.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-248
+apps/web/src/features/settings/components/settings-sidebar.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,107-109
+apps/web/src/features/channel/use-message-participants.ts
+  s_154e7eadce3a09::t_37065794a721d1 12-13,20,40
+apps/web/src/features/onboarding/queries/team-contacts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-165
+apps/web/src/features/universal-input/browser-test/contact-directory-fixture.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-130
+crates/client/cache-turso/src/storage/contact_search.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-5
+apps/web/src/features/sharing/native-share-sheet/NativeShareSheet.tsx
+  s_154e7eadce3a09::t_37065794a721d1 40-41,219,362
+crates/email_db_client/src/attachments/provider/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 268-302
+  s_154e7eadce3a09::t_76439dd057af2a 266-267
+apps/web/src/features/email-compose/browser-test/recipient-hotkeys-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 14-20,27,33-99,101-109,168-169,182,226-227,233,239,277,313-318
+apps/web/src/features/next-soup/soup-view/collection-select-filter.ts
+  s_154e7eadce3a09::t_37065794a721d1 3,18-21
+crates/coding_agent_worker/README.md
+  s_154e7eadce3a09::t_37065794a721d1 27-33
+apps/web/src/features/email-view/queries/email-query.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 10,14,306,315-410
+  s_154e7eadce3a09::t_4e0e7fc918f635 411-412
+apps/web/src/lib/queries/contacts/references.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-400
+apps/web/src/features/notifications/notification-navigation.ts
+  s_154e7eadce3a09::t_37065794a721d1 697
+crates/databases_sql/src/toolset.rs
+  s_154e7eadce3a09::t_37065794a721d1 123-124
+crates/agent_harness/src/domain/service/test/reattach.rs
+  s_154e7eadce3a09::t_37065794a721d1 6,64-67,84-87,123-138,160,163-166,170-173,287,336-337,349-352,363-776
+apps/web/codegen.ts
+  s_154e7eadce3a09::t_37065794a721d1 18-21
+apps/web/src/lib/core/component/recipient-options.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-117
+apps/web/src/features/email-compose/views/reply-envelope.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 69
+crates/agent_session/src/domain/connection/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 572-575,667-669,677-684
+apps/web/src/features/universal-input/views/message-draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 3,11-12,28-30,47-48,50-60,62,71-76,81-82,87
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 286,293,366,368,380,542-584
+crates/agent_session/src/domain/connection.rs
+  s_154e7eadce3a09::t_37065794a721d1 396,434-443,781-788
+  s_154e7eadce3a09::t_26a47e37fb700a 789-790
+crates/client/cache-turso/tests/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-79
+apps/web/src/features/calendar/components/composer/create-calendar-event-form-controller.ts
+  s_154e7eadce3a09::t_37065794a721d1 129
+apps/web/src/lib/core/component/EntityIcon.tsx
+  s_154e7eadce3a09::t_37065794a721d1 739
+apps/web/src/features/channels-view/components/rail/ChannelsRail.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,39,153,168,179-183,207,274-275,643-647,1003-1027
+  s_154e7eadce3a09::t_24a56ad525e120 1028
+apps/web/src/features/tasks-view/filters/task-people-options.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-55
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx
+  s_154e7eadce3a09::t_37065794a721d1 24,27,43-44,73,365,398,403-404,1088-1125,1128-1132,1176-1179,1338,1381-1387,1392,1394,1398-1399,1403-1405,1407,1444
+crates/email_db_client/fixtures/sync_thread_attachment_kind_flags.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-46
+apps/web/src/features/home/work-feed/queries/decode.ts
+  s_154e7eadce3a09::t_37065794a721d1 106
+apps/web/src/features/channel/views/channel-invite-modal.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 51
+apps/web/src/features/channels-view/components/ChannelDetailView.tsx
+  s_154e7eadce3a09::t_37065794a721d1 8,12,20,28-32,39-43
+apps/web/src/lib/core/component/Emoji/browser-test/emoji-picker.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 26-53
+apps/web/src/lib/core/component/LexicalMarkdown/component/task-list/TaskListControls.tsx
+  s_154e7eadce3a09::t_37065794a721d1 16,18-21,27,70,136-139,232,320
+apps/web/src/lib/core/internal/browser-test/channel-recipient-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-134
+apps/web/src/lib/core/util/selection-anchor.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-48
+crates/agent_session/src/outbound/postgres/test/list_activity.rs
+  s_154e7eadce3a09::t_37065794a721d1 111-170
+crates/client/cache-core/src/search/changes.rs
+  s_154e7eadce3a09::t_37065794a721d1 12
+apps/web/src/features/command/CommandMenu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17,31,64,513-527,545-550,697-699,712-714,973
+packages/sdk/generated/auth/types.gen.ts
+  s_154e7eadce3a09::t_acf632cdd62a2e 472-476,4776-4779,4840-4843
+apps/web/package.json
+  s_154e7eadce3a09::t_37065794a721d1 39-40,50
+apps/web/src/lib/queries/soup/transform-utils.ts
+  s_154e7eadce3a09::t_37065794a721d1 29,99-100,987-994
+crates/database_sql/src/fold/predicate.rs
+  s_154e7eadce3a09::t_37065794a721d1 100,118-120
+  s_154e7eadce3a09::t_18f183daa049b7 121-122
+apps/web/src/lib/queries/email/link.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 8,64-66,76-78,111-115,130-140
+apps/web/src/features/onboarding/queries/outlook-availability.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-15
+crates/webhook/README.md
+  s_154e7eadce3a09::t_6b3d11b74c5128 80-81,101-105
+apps/web/src/features/chat/ChatWithAgentButton.tsx
+  s_154e7eadce3a09::t_37065794a721d1 35,118-120,122-124
+apps/web/src/features/email-view/components/EmailSavedViewFields.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-188
+apps/web/src/lib/core/component/AI/component/DragDrop.tsx
+  s_154e7eadce3a09::t_37065794a721d1 6,26
+apps/web/src/lib/core/component/AI/component/tool/calendar/DraftComposer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 14,143
+apps/web/src/features/property/editors/selectors/PropertyEntitySelector.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,6-7,10,22,26,34,62-63,128,130-135,138-141,170-177,194,238-245,259-268,327,346-385,406-410,413,423,427,444-453,474-475,478-490,503-507,515-519,525,528-530,533,539,657-661,734,749,764-769,784-794
+apps/web/src/features/integrations/import-linear/queries/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-21
+apps/web/src/features/entity/debug/DebugEntityView.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17
+apps/web/src/lib/queries/auth/account-scope.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-135
+apps/web/src/features/runtime-sharing/queries/pending-requests.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-73
+crates/ai_usage/src/outbound/pg_usage_repo.rs
+  s_154e7eadce3a09::t_37065794a721d1 119,123,146,286,348
+apps/web/src/features/email-compose/primitives/draft-sync-status.ts
+  s_154e7eadce3a09::t_37065794a721d1 42-43,70,101,109-110,142
+apps/web/src/features/routine-suggestions/primitives/suggestion-actions.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 5-11,28,33-44,74,78,82-83,87-91,120,131,134,139,143,150,155-169,189
+crates/agent_harness/src/outbound/runtime_registry/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 432-436
+apps/web/src/features/system-status/primitives/use-banner-status.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-4,6-7,10-39,45-47,54-69,72,74
+apps/web/tauri/desktop-cef/src/main.rs
+  s_154e7eadce3a09::t_37065794a721d1 27-32
+apps/web/src/features/entity/extractors/entity-title.tsx
+  s_154e7eadce3a09::t_37065794a721d1 54
+crates/agent_harness/src/testing/helpers/agent.rs
+  s_154e7eadce3a09::t_37065794a721d1 301-307
+crates/client/cache-core/src/people/references.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-274
+apps/web/tauri/graphql_cache_plugin/src/engine/test/soup.rs
+  s_154e7eadce3a09::t_37065794a721d1 104,424
+apps/web/src/features/auth/browser-test/README.md
+  s_154e7eadce3a09::t_37065794a721d1 27-28,31
+apps/web/src/features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 32,66,245,249,470-479
+apps/web/tauri/src-tauri/src/diagnostics.rs
+  s_154e7eadce3a09::t_37065794a721d1 200,220
+apps/web/src/features/universal-input/core/search.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-16,21,27
+apps/web/src/lib/queries/soup/graphql/ast.ts
+  s_154e7eadce3a09::t_37065794a721d1 318-325,490-491,510-511
+apps/web/src/lib/core/util/domain.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-28
+crates/email/src/outbound/email_pg_repo/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2,25
+crates/client/cache-core/src/people/schema.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-31
+apps/web/src/features/block-database/queries/database-relations.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 119-123
+apps/web/src/features/universal-input/core/recipient-references.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-209
+crates/client/cache-turso/tests/common/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-458
+apps/web/src/lib/queries/soup/backfill.ts
+  s_154e7eadce3a09::t_37065794a721d1 27-28,735-736
+apps/web/src/features/channel/Input/InputActions.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,106-108
+crates/coding_agent_worker/src/tui/app.rs
+  s_154e7eadce3a09::t_37065794a721d1 12,108-111,155,238
+apps/web/src/lib/queries/contacts/filter-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-71
+crates/agent_session/src/domain/service.rs
+  s_154e7eadce3a09::t_37065794a721d1 70-71,110-112,203-212,311-320,602-608,637,686-687,724-725,857,973-989,1108-1140,2229-2232,2534-2538
+crates/contacts/src/domain/service/picture_fanout/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-199
+crates/client/cache-turso/src/storage/test/page_retention.rs
+  s_154e7eadce3a09::t_37065794a721d1 24,53,71
+crates/coding_agent_worker/src/tui/api/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-25
+apps/web/src/features/calendar/components/composer/EventGuestsEditor.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-119
+crates/agent_harness/src/domain/service/idle.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-151
+crates/agent_harness/src/domain/service/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 7,11
+apps/web/tauri/src-tauri/gen/apple/ShareExtension/Info.plist
+  s_154e7eadce3a09::t_37065794a721d1 20,22
+apps/web/tests/functional/whatsapp-linked/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 82
+crates/contacts/src/inbound/user_picture_consumer.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-195
+apps/web/src/features/universal-input/universal-input.tsx
+  s_154e7eadce3a09::t_37065794a721d1 62
+apps/web/src/components/view-shell/ViewShell.tsx
+  s_154e7eadce3a09::t_37065794a721d1 830-852,860
+apps/web/src/lib/core/internal/browser-test/list-filter-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-43
+apps/web/src/lib/graphql-cache/people/sql.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-194
+apps/web/src/features/universal-input/browser-test/mobile-input.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 6,85,126,155,190
+apps/web/src/lib/core/internal/browser-test/linear-import-adapters.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-38
+crates/agent_session/src/domain/service/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 758-761
+apps/web/src/features/auth/context/auth-context.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17
+apps/web/src/features/settings/components/machines-request-badge.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-19
+apps/web/src/features/channel/Input/create-collapsed-input-state.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,37-42,44
+apps/web/src/features/universal-input/queries/input-people.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-85
+apps/web/src/features/universal-input/views/calendar-draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 27,29,31,49-53,55,57,192
+crates/client/cache-core/src/page_retention/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 70-98
+  s_154e7eadce3a09::t_fefa7fdc13e06f 69
+crates/complete_graph/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 29,68
+crates/contacts/src/outbound/names.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-62
+apps/web/src/features/channel/Channel/tests/create-channel-hotkeys.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 75
+apps/web/src/features/email-view/primitives/create-email-saved-view-draft.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-24,26-36,38-40,43-74,76-83,85-87,89-98,100-105,107-108,110-118,120-160,162-184,186-201,203-206,208-213,215-238,240,243-254
+apps/web/src/features/email-view/components/EmailSavedViewFields.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-319
+crates/client/cache-core/src/people/name_search/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-160
+apps/web/src/features/email-view/use-reading-pane-list-width.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-35
+apps/web/src/features/email-view/components/EmailEmptyState.tsx
+  s_154e7eadce3a09::t_37065794a721d1 84-85,137,146
+apps/web/src/features/universal-input/browser-test/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15,39-44,56,70,73-81,305-307,362-374,377-384,389-393,403,432-435,446,470-474,480-489,581-585,592-610,615-627,636-646,648-652,656,665-680,719-727,815-822
+  s_154e7eadce3a09::t_4253451a37c670 823-824
+apps/web/src/lib/queries/contacts/query-epoch.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-36
+crates/client/cache-turso/tests/common/contact_sync.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-331
+apps/web/src/lib/queries/contacts/alias-window.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-117
+apps/web/src/lib/core/component/AI/component/tool/CalendarTools.tsx
+  s_154e7eadce3a09::t_37065794a721d1 192-197
+crates/crm/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 100-106,108-110,117-119
+apps/web/src/features/routine-suggestions/core/suggestions.ts
+  s_154e7eadce3a09::t_37065794a721d1 10,27,29,33-38,46-49,61-69,71-72,151,160,165,167,178,188,193-198,214-222,224-236,240-265,270-352
+apps/web/src/features/system-status/primitives/use-banner-status.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,13-14,33-47,51-52,58-60,63-64,66,68-75,78-92
+crates/ai_usage/src/outbound/pg_financial_usage_repo/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 389
+crates/client/cache-turso/tests/web.rs
+  s_154e7eadce3a09::t_37065794a721d1 16-277
+apps/web/src/features/channel/Input/tests/input-slots.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,25,27,269,284-290,415,421,471,476-477,914,917,920,928-930
+crates/contacts/src/domain/models/contact/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-19
+apps/web/src/features/onboarding/primitives/signup-journey.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-3,7-8,12-16,21,30-33,35-41,46-50,52,63
+apps/web/src/features/universal-input/browser-test/vite.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 22-30
+crates/client/cache-turso/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 13-17,43-48,54-58
+crates/database_sql/src/engine.rs
+  s_154e7eadce3a09::t_37065794a721d1 27,476-478,490
+apps/web/src/features/tasks-view/filters/ai-task-filter.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-4,7-11,15-16,18,32,59-62,71,73-74,83-84,95-110,165,169-174,176-186,193,195-196
+apps/web/src/lib/i18n/locales/en/email-views.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-75
+.gitattributes
+  s_154e7eadce3a09::t_37065794a721d1 17-19
+apps/web/src/features/routine-suggestions/components/routine-suggestions-dialog.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,7-10,15-17,27,30,32-34,38-39,42,47,49,52-55,58,62-63
+apps/web/src/lib/queries/contacts/keys.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-4,7-27
+crates/database_sql/src/fold.rs
+  s_154e7eadce3a09::t_37065794a721d1 14
+crates/email/fixtures/email_dynamic_query_attachment_kinds.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-11
+packages/sdk/specs/storage.json
+  s_154e7eadce3a09::t_acf632cdd62a2e 23691-24155,33873-33896,52793-52810,53692-53769,56305-56334,56599-56613,60845-60874,61207-61225,61239-61258,61902-61905
+apps/web/src/lib/queries/contacts/contact-key.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-11
+apps/web/src/features/email-view/components/EmailInboxSelector.tsx
+  s_154e7eadce3a09::t_37065794a721d1 40-43,72-74,107-124,552-553,565,567,577,579
+apps/web/src/features/tasks-view/queries/ai-task-filter-plan.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-5,7-8,14,16,21-22,25-29,32-34,36-67,69-130
+apps/web/tauri/graphql_cache_plugin/src/commands.rs
+  s_154e7eadce3a09::t_37065794a721d1 28-34,44-54,239-329,525,538-582,596
+crates/contacts/src/inbound/user_picture_consumer/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-63
+apps/web/src/lib/core/internal/browser-test/calendar-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-48
+apps/web/src/lib/core/user/displayName.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-6,10,18-19,23,29-33,36,43-44,46-57,59,62-74,79,81,83,92-102,105-110,112-126,136,141,149-163,166,171,173,176-177,181-185,187-188
+apps/web/src/features/command/useCommandItems.ts
+  s_154e7eadce3a09::t_37065794a721d1 78,87-88
+apps/web/src/lib/core/internal/browser-test/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-232
+crates/agent_inmem/src/domain/session.rs
+  s_154e7eadce3a09::t_37065794a721d1 196
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/startup.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-76
+apps/web/src/lib/queries/contacts/directory-window-lifecycle.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-299
+apps/web/src/lib/core/signal/profilePicture.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,13,170-208
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 65-71,128-133,135,148-154,283-285,339-346,531-532,539,662-665,814-817,845-848,870-877,892-895,1021-1106
+  s_154e7eadce3a09::t_dd1da794388386 1107
+apps/web/src/lib/queries/contacts/context-facts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-131
+.github/workspace-dep-closures.json
+  s_154e7eadce3a09::t_37065794a721d1 64-66,81,101,103,108,119,122-123,205-206,223,244,247,252,266,269-270,326,347,350,355,369,373-374,449,475,478,483,498,503-504,633,642,785,794,992,1003,1187,1197,1296,1317,1320,1325,1339,1343-1344,1397,1418,1421,1426,1440,1444-1445,1503,1524,1527,1532,1547,1551-1552,1615,1638,1641,1646,1661,1666-1667,1696-1697,1714,1735,1738,1743,1757,1760-1761,1789-1790,1807,1828,1831,1836,1850,1853-1854,2034,2044,2220,2230,2294-2295,2312,2333,2336,2341,2355,2358-2359,2504,2513,2666,2678,2748,2764,2784,2786,2791,2802,2804-2805,2813,2815-2821,2823-2829,2832,2836-2842,2844-2850,2928,2951,2955,2961,2980,2985-2986,3023-3025,3041,3061,3063,3068,3079,3081-3082,3113-3114,3132,3153,3156,3161,3175,3178-3179,3213-3214,3237,3259,3262,3267,3282,3285-3286,3313-3315,3331,3351,3353,3358,3369,3371-3372,3555,3565,3635-3637,3652,3672,3674,3679,3690,3692-3693,3818,3839,3842,3847,3861,3865-3866,3920,3941,3944,3949,3963,3967-3968,4112,4121,4153-4154,4172,4193,4196,4201,4215,4218-4219,4323-4325,4340,4360,4362,4367,4378,4380-4381,4458,4550,4560,4565-4568,4683-4688,4691-4694,4697-4704,4707-4711,4714-4715,4718-4721,4723-4727,4729-4731,4733-4745,4748,4750-4753,4757-4758,4760-4762,4765-4768,4772-4778,4781-4785,4792,4796-4797,4800,4802-4806,4808-4810,4812-4824,4828,4830-4833,4951-4953,4969,4991,4993,4998,5009,5012-5013,5070,5091,5094,5099,5113,5117-5118,5345,5368,5372,5378,5394,5399-5400,5563,5571,5691,5816,5828,6020,6028,6139,6147,6287-6289,6309,6332,6335,6340,6353,6357-6358,6388-6390,6407,6427,6430,6435,6446,6448-6449,6593,6604,6723-6725,6745,6769,6772,6777,6790,6794-6795,6910,6914,6956-6958,6978,7001,7004,7009,7022,7026-7027,7534,7540,7685,7694,7813-7815,7832,7853,7855,7860,7872,7874-7875,7953-7955,7973,7993,7995,8000,8011,8013-8014,8038-8040,8057,8077,8079,8084,8095,8097-8098,8127-8201,8228-8230,8249,8271,8273,8278,8289,8292-8293,8439,8448,8488-8490,8512,8535,8538,8543,8556,8560-8561,8706,8715,8862,8871,9018,9027,9220,9229,9472,9481,9613,9623,9768,9777,9952,9961,10046,10066,10087,10090,10095,10109,10113-10114,10255,10280,10283,10288,10303,10307-10308,10405-10408,10633-10634,10652,10673,10676,10681,10695,10698-10699,11423,11433,11704-11706,11726,11749,11760,11775,11779-11780,11827-11829,11849,11872,11875,11881,11894,11898-11899,11927-11929,11944,11964,11972,11984,11986-11987,12210,12219,12508-12511,12648,12656,12857-12859,12879,12902,12905,12910,12924,12928-12929,12968,12984,13004,13006,13011,13023,13025-13026,13052,13068,13088,13090,13095,13108,13110-13111,13258,13268,13410,13419,13542,13547,13587-13589,13609,13632,13643,13659,13663-13664,13800,13806,14015,14024,14083,14109,14112,14117,14133,14137-14138,14195,14221,14224,14229,14245,14249-14250,14326,14349,14353,14359,14375,14380-14381,14457,14480,14484,14490,14509,14514-14515,14588,14611,14615,14621,14639,14644-14645,14775,14784,14894-14896,15093-15094,15111,15132,15135,15140,15154,15157-15158,15212-15213,15231,15252,15255,15260,15274,15278-15279,15392-15405,15523-15524,15541,15562,15565,15570,15584,15587-15588,15718,15727,16048,16057
+apps/web/src/lib/queries/email/settings.ts
+  s_154e7eadce3a09::t_37065794a721d1 14-19,70,72-78,80-81,85-92,94,159,161-166,190-192,194
+apps/web/src/lib/queries/contacts/recipient-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-40
+apps/web/src/lib/core/component/LexicalMarkdown/component/task-list/task-list-assignee-names.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-54
+apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx
+  s_154e7eadce3a09::t_37065794a721d1 298
+apps/web/src/lib/graphql-cache/people/test-support.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-25
+apps/web/src/lib/core/context/quickAccess/types.ts
+  s_154e7eadce3a09::t_37065794a721d1 21,100-101,104-105,120-121,183-184,202-206,210-211
+crates/contacts/src/domain/models/query/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-83
+apps/web/src/lib/queries/auth/user-name-cache.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-617
+crates/client/cache-core/src/engine.rs
+  s_154e7eadce3a09::t_37065794a721d1 6-8,58-59,92-94,119-130,348-351,385-386,418-419,453-455,467,469-470,472-483,658-663,688-693,1233,1254-1269,1274-1285,1288-1301,1382,1394,1423-1429,1603,1634-1663,1690,1693-1695,2625-2630,2685-2690,3058-3063,3087-3092,3105,3165-3167,3254-3259,3422,3426-3427
+apps/web/src/components/app/GlobalAppState.tsx
+  s_154e7eadce3a09::t_37065794a721d1 31-36
+apps/web/src/features/next-soup/filters/query-filters.ts
+  s_154e7eadce3a09::t_37065794a721d1 198-206
+apps/web/src/features/routine-suggestions/core/suggestions.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,5,7-9,11-12,14,26-29,37-38,50,53-64,66-78,92-93,102-176
+apps/web/src/features/sidebar-promotion/primitives/promotion-visibility.ts
+  s_154e7eadce3a09::t_37065794a721d1 7-12,26-31,48-52
+crates/complete_graph/src/schema/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 49
+apps/web/src/lib/core/util/create-task-account.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-90
+apps/web/tauri/graphql_cache_plugin/src/engine/test/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-177
+crates/email/src/outbound/email_pg_repo/test/subject_filter.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-267
+apps/web/src/features/email-view/views/email-saved-views.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-995
+apps/web/src/lib/core/util/channels.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,51,59,72,85-99
+crates/agent_harness/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 76
+apps/web/src/features/tasks-view/filters/use-task-filters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 12,15-16,23,31,33-34,51-52,66-88,90-96,99-101,182-183,234,240-247,254-259
+apps/web/src/features/universal-input/browser-test/task-references.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-56
+apps/web/src/lib/queries/email/inbox-email.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 8,13,26,58-61,105-107,119-120,131-133,144-146
+apps/web/src/components/entity-detail/EntityDetail.tsx
+  s_154e7eadce3a09::t_37065794a721d1 31,76-80,254-256
+apps/web/src/lib/core/internal/browser-test/onboarding-contacts.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-66
+apps/web/src/lib/service-clients/service-auth/client.ts
+  s_154e7eadce3a09::t_37065794a721d1 533-536,539-541
+apps/web/src/lib/graphql-cache/host/tauri-host.ts
+  s_154e7eadce3a09::t_37065794a721d1 58,88-90,92-96,139-140,188-192,420-439,445-549,763,765-784,786-806
+apps/web/src/features/home/components/HomeChatStart.tsx
+  s_154e7eadce3a09::t_37065794a721d1 6,10,13,26,32,40-41,43,45-50
+apps/web/src/lib/core/internal/browser-test/sql-people-join-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-158
+apps/web/src/features/universal-input/views/search-draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 22
+apps/web/src/features/email-compose/tests/capabilities.ts
+  s_154e7eadce3a09::t_37065794a721d1 51
+crates/contacts/src/domain/service/directory/test/search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-238
+crates/email/fixtures/email_dynamic_query_subject.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+apps/web/src/lib/core/internal/browser-test/list-filter-adapters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-128
+apps/web/src/lib/core/user/automated-address.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-12
+apps/web/src/features/block-database/queries/table-rows.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 260-264,821-825,830-834
+apps/web/src/features/tasks-view/queries/ai-task-filter-plan.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-175
+crates/complete_graph/src/schema/test/contacts.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-100
+crates/client/cache-core/src/people/name_search/reader/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-192
+apps/web/src/lib/core/util/selection-anchor.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-64
+apps/web/src/features/auth/views/auth-view.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 21,36,468-488
+  s_154e7eadce3a09::t_0f423d5a89a243 489-490
+apps/web/src/lib/core/component/recipient-options.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-43
+crates/agent_inmem/src/outbound/manager.rs
+  s_154e7eadce3a09::t_37065794a721d1 25,132-149,184-185,239-281,290-343
+apps/web/src/lib/graphql-cache/generated/entity-resolver-schema.ts
+  s_154e7eadce3a09::t_37065794a721d1 94,121
+apps/web/src/features/onboarding/onboarding.tsx
+  s_154e7eadce3a09::t_37065794a721d1 64
+apps/web/src/lib/queries/channel/tests/channel-join-links.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 26-27,36,49-52,80-82,89,120
+crates/client/cache-turso/src/driver.rs
+  s_154e7eadce3a09::t_37065794a721d1 4,65-101,128-141,176-178,192
+apps/web/src/observability/native-lifecycle.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,61,73-82
+  s_154e7eadce3a09::t_13f4ddf8c2f2b6 83-84
+apps/web/src/lib/service-clients/service-cognition/prompt-dismissals.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-19
+apps/web/src/features/channel/Channel/tests/channel-surface-navigation.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15,34,179-202
+  s_154e7eadce3a09::t_16d2d5b8e21edd 203-204
+apps/web/src/features/home/work-feed/home-scope.ts
+  s_154e7eadce3a09::t_37065794a721d1 33
+apps/web/src/features/channel/Attachments/attachment-utils.ts
+  s_154e7eadce3a09::t_37065794a721d1 79-81
+apps/web/src/lib/queries/email/local-drafts.ts
+  s_154e7eadce3a09::t_37065794a721d1 19,463,562-584,589-590,597-600,604-607,610,613-652,685-717,737,885-905,909,913-918,920-921,992-1002,1013-1016,1030,1033,1035,1040-1056,1079-1103
+apps/web/src/features/home/work-feed/core/work-feed.ts
+  s_154e7eadce3a09::t_37065794a721d1 20-21
+packages/sdk/specs/auth.json
+  s_154e7eadce3a09::t_acf632cdd62a2e 5894-5903,5973-5982,7113-7117
+apps/web/src/features/email-view/queries/email-query.ts
+  s_154e7eadce3a09::t_37065794a721d1 14-30,41-42,76-83,85-157,159-160,229-233,259-261,264-265,270,273
+apps/web/src/features/email-view/persistence.ts
+  s_154e7eadce3a09::t_37065794a721d1 21-24,37-41,59,118-139,154,166-167,169,172-178,210-214,265-268
+apps/web/src/features/onboarding/views/email-step.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2,5,8-9,12-13,19-40,48,56-67
+apps/web/src/features/universal-input/actions.ts
+  s_154e7eadce3a09::t_37065794a721d1 24,27,29-32,39-42,46,59,63,72,96-113,121-125,161,164,167,179-180,190,208,230,236,255,258,273-274,280,293-294,298-323,328,357-358,360-361,379,422,445,468-470,483
+apps/web/src/lib/queries/contacts/lookup.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-281
+crates/coding_agent_worker/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 76,78
+apps/web/src/lib/core/internal/browser-test/calendar-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-84
+apps/web/src/features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx
+  s_154e7eadce3a09::t_37065794a721d1 128,134
+apps/web/src/features/email-view/queries/use-focus-email-source.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 181
+apps/web/src/lib/queries/contacts/recipient-exclusions.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-172
+apps/web/src/features/email-thread/context/email-thread-context.ts
+  s_154e7eadce3a09::t_37065794a721d1 58
+apps/web/src/features/system-status/components/StatusBanner.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15-18
+apps/web/src/lib/graphql-cache/people/sync.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-23
+apps/web/src/lib/queries/contacts/recipient-window.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-72
+apps/web/tauri/src-tauri/gen/apple/app_iOS/Info.plist
+  s_154e7eadce3a09::t_37065794a721d1 18,31
+crates/database_sql/src/run/test/description.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-44
+apps/web/native-commands.json
+  s_154e7eadce3a09::t_37065794a721d1 20-21,30,36-40
+apps/web/src/features/meetings/meeting-route.tsx
+  s_154e7eadce3a09::t_37065794a721d1 29-31,184-185
+apps/web/src/features/next-soup/soup-view/filters-bar/assignee-filter-source.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-12
+apps/web/src/features/universal-input/queries/suggested-task-properties.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,19-24,43-74,78,121-141
+apps/web/src/lib/core/mobile/nativePhotoLibrary.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-117
+apps/web/src/lib/core/user/contact-filter-options.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-104
+crates/agent_harness/src/domain/service/test/idle_release.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-259
+apps/web/src/features/email-view/use-reading-pane-list-width.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-57
+apps/web/src/lib/queries/contacts/directory-write-fence.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-75
+apps/web/src/components/ui/components/Dropdown.docs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 77
+apps/web/src/lib/core/component/ForwardToChannel.tsx
+  s_154e7eadce3a09::t_37065794a721d1 17,25,62,83,591,613
+apps/web/src/lib/queries/database-sql/local-read.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-148
+apps/web/src/lib/core/user/contact-filter-options.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-157
+apps/web/src/features/crm/components/activity-controls.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,11,37,43-44,110-131,133-144,146,148
+apps/web/src/lib/core/internal/browser-test/name-cache.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-157
+crates/agent_harness/src/inbound/runtime_gateway.rs
+  s_154e7eadce3a09::t_37065794a721d1 19-23,25-28,35-37,39,43-44,58,62,70,73-78,87,109-119,129-152,155-164,167-271
+crates/agent_session/src/outbound/postgres.rs
+  s_154e7eadce3a09::t_37065794a721d1 610-628,1870-1876
+crates/database_sql/src/engine/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 6
+apps/web/src/features/command/contact-items.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-65
+crates/database_sql/src/engine/test/people_hints.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+apps/web/src/features/calendar-view/components/CalendarPeopleFilterSubmenu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,38-39,44-52,62-72,74-80,82-94,100-102,108-109,127-130,132,134-141,175,192,222-226,231,245-272,291,293,295
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/mention-ranking.ts
+  s_154e7eadce3a09::t_37065794a721d1 7,96,99-102
+crates/client/cache-wasm/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 14,61-62
+apps/web/src/lib/core/user/recipient-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+apps/web/src/features/channel/Call/CallContext.tsx
+  s_154e7eadce3a09::t_37065794a721d1 209-211
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,3-6,8-21,23-81,83-84,86-100,102-111,114-116,118-150
+apps/web/src/lib/queries/channel-labels/channel-labels.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 14,41,45-46,86-89,125-128,138
+apps/web/src/lib/queries/contacts/use-directory.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-76
+apps/web/src/lib/service-clients/service-contacts/client.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,6
+apps/web/src/features/universal-input/primitives/recipient-selection.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-29
+apps/web/src/features/universal-input/browser-test/task-reference-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-107
+apps/web/src/lib/i18n/locales/en/runtime-sharing.ts
+  s_154e7eadce3a09::t_37065794a721d1 71-72
+crates/agent_harness/src/domain/service/test/command_workers.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-172
+crates/client/cache-turso/src/storage/test/search_options.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-113
+apps/web/tauri/graphql_cache_plugin/src/engine/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-96
+crates/computer_id/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 1-18
+.github/workflows/ios-app-store-release.yml
+  s_154e7eadce3a09::t_37065794a721d1 265-269
+apps/web/src/features/meetings/views/meeting-discussion-host.tsx
+  s_154e7eadce3a09::t_37065794a721d1 6-8,10
+crates/email/src/outbound/email_pg_repo/dynamic/query.rs
+  s_154e7eadce3a09::t_37065794a721d1 118-135,140,145-146,151-158,230-235,237,292-300,303,305-327,329-354,356-402,405-446,533,550,557-559,561-566,568-578,902,1229-1230,1283-1295
+  s_154e7eadce3a09::t_b7e17d404164d8 1296
+apps/web/src/lib/i18n/locales/en/commands.ts
+  s_154e7eadce3a09::t_37065794a721d1 29
+apps/web/src/features/property/editors/selectors/entityUtils.ts
+  s_154e7eadce3a09::t_37065794a721d1 8,24,72-76,79-94,96-123,214
+apps/web/src/features/routines/queries/catalog.ts
+  s_154e7eadce3a09::t_37065794a721d1 32-33,35,39-48
+apps/web/src/features/saved-views/components/saved-view-menu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-3,16-17,19-21,36-43,45-64
+crates/agent_harness/src/domain/ports.rs
+  s_154e7eadce3a09::t_37065794a721d1 603-631
+crates/client/cache-wasm/src/shell/test_storage.rs
+  s_154e7eadce3a09::t_37065794a721d1 13-15,70-86,113,117-137
+crates/contacts/src/outbound/repository/lookup.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-22
+apps/web/src/features/onboarding/core/team.ts
+  s_154e7eadce3a09::t_37065794a721d1 36-47
+apps/web/src/features/routine-suggestions/core/surfaces.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,22-33
+apps/web/src/lib/queries/properties/entity.ts
+  s_154e7eadce3a09::t_37065794a721d1 276
+crates/agent_harness/src/testing/helpers/containers.rs
+  s_154e7eadce3a09::t_37065794a721d1 212-218,298-343,470-471,498-518,520
+  s_154e7eadce3a09::t_966b6f90a2a89c 519
+apps/web/src/lib/queries/contacts/use-directory.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-4,6-14,16-27,29-32,34-41,43,45-56,58-62,64,66-80,82-83
+crates/client/cache-core/tests/optimistic.rs
+  s_154e7eadce3a09::t_37065794a721d1 91-145
+crates/client/cache-turso/src/key/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 21-43
+  s_154e7eadce3a09::t_a9b7ebf2473973 20
+crates/agent_inmem/src/domain/agent.rs
+  s_154e7eadce3a09::t_37065794a721d1 80
+apps/web/src/features/crm/filter-adapter.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4-7,15,23-32,34-35,37,49-51,54,61,64,66-72,82,163,165-169
+crates/client/cache-turso/src/storage/contact_search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-84
+apps/web/src/features/runtime-sharing/browser-test/share.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 77,274-328
+  s_154e7eadce3a09::t_2479a4612becda 329
+apps/web/src/lib/core/internal/browser-test/name-cache-services.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-3
+apps/web/src/features/drive-view/filters/use-drive-filters.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 27-29
+apps/web/src/lib/core/internal/browser-test/soup-filter-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-59
+apps/web/src/features/universal-input/actions.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 26-28,56,120-121,123,127-150,161-164,182-187,215,247-250,265-267,287,298,509-512,570-573,626-629,674-751
+apps/web/src/features/channel/Channel/tests/selection-hotkeys.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 50-54,57,67-72,97,138-142,209-243
+  s_154e7eadce3a09::t_30ab3417a58bf7 244
+apps/web/src/features/universal-input/queries/input-people.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-60
+crates/agent_harness/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 90-122,140-146
+  s_154e7eadce3a09::t_045a2fd7076972 147
+crates/client/cache-core/src/people/sql/projection.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-124
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 24,32,42,50,105-107,174-175,182,184,187-189,191,252-260,263-264,420,429-432,461,476,482,489,509,516-518,602-604,612-625,690,694,815-817,904,993,1022,1038-1052,1066-1067,1120-1133
+apps/web/src/lib/graphql-cache/worker/browser-test/playwright.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 22
+apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  s_154e7eadce3a09::t_37065794a721d1 67,396-398,658-663
+crates/client/cache-wasm/src/shell/test/hydration_scope.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-37
+apps/web/src/lib/core/internal/browser-test/name-policy.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-40
+apps/web/src/lib/queries/auth/index.ts
+  s_154e7eadce3a09::t_37065794a721d1 46
+apps/web/src/features/block-form/core/poll-card-layout.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,5-7,21
+apps/web/src/features/next-soup/soup-view/filters-bar/option-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-23
+apps/web/src/features/saved-views/queries/saved-view-actions.ts
+  s_154e7eadce3a09::t_37065794a721d1 11-13,117-136
+  s_154e7eadce3a09::t_4905caf762157c 137-142
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_154e7eadce3a09::t_37065794a721d1 106-112,471-475
+apps/web/src/lib/queries/database-sql/graphql-source.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-5,25,192-270
+crates/database_sql/src/local_people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-577
+apps/web/src/features/universal-input/browser-test/composer.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 580-581,593,595-596,599-601,603
+apps/web/src/lib/core/component/RecipientSourceControls.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-79
+apps/web/src/features/auth/auth.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-132
+apps/web/src/lib/queries/email/link-selection.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,14,28-32,66-69
+  s_154e7eadce3a09::t_2d953c5918ef4e 70
+apps/web/src/features/email-compose/browser-test/playwright.app.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 33-42
+  s_154e7eadce3a09::t_0254c6d36ea098 32
+apps/web/src/features/block-channel/component/Compose.tsx
+  s_154e7eadce3a09::t_37065794a721d1 23,194-195
+apps/web/src/features/channels-view/channels-view-context.tsx
+  s_154e7eadce3a09::t_37065794a721d1 25-32,52-62,71-72,85-92,216-228,230-231,234,245-252,280,301-302
+apps/web/src/features/next-soup/soup-view/soup-view-create-button.tsx
+  s_154e7eadce3a09::t_37065794a721d1 32
+apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts
+  s_154e7eadce3a09::t_37065794a721d1 379-381
+crates/contacts/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 25-34,44-51,53-54,56
+crates/webhook/src/inbound/kafka_stream_consumer.rs
+  s_154e7eadce3a09::t_a071ba96914ae9 8-9,11,13,29-32,35,53,70,72,95-122
+apps/web/src/lib/queries/auth/user-name-self.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-66
+apps/web/src/features/integrations/import-linear/queries/assignees.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-166
+apps/web/src/features/next-soup/soup-view/filters-bar/searchable-multi-select.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-2,8,17,21-22,26,28-29,55,89-90,97-98,240,247-257,264-284,287-288,358-376,383,385,392,394-404,416-428,432-435,439-444,488-494,497-502,516-521,543-547,550-552,557-561,567-569,584-619,621-622,633-634,649-660,662-669,680-710,713-718,752-762,785-789,792,814-823,828-830,835-837
+apps/web/src/features/home/home-view-context.tsx
+  s_154e7eadce3a09::t_37065794a721d1 26,36,66-67,83-91,200-202,208,211-229,286-288
+apps/web/src/lib/core/internal/browser-test/sql-people-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-210
+apps/web/src/features/entity/queries/rename.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 41,69,72-77,98-101,132,183-186,235-238
+crates/ai_usage/src/domain/ports.rs
+  s_154e7eadce3a09::t_37065794a721d1 267-268,322-323,342-344,355,366,376-381,401,414,427
+crates/client/cache-core/src/engine/people.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-246
+crates/client/cache-turso/tests/common/name_search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-137
+apps/web/src/features/onboarding/core/team.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 38-52
+apps/web/src/lib/core/internal/browser-test/test-account.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,4-16
+.agents/rules/rust/code.md
+  s_154e7eadce3a09::t_37065794a721d1 17-19
+crates/ai_usage/src/outbound/pg_usage_repo/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2-5,16,146-203,579,625
+apps/web/src/components/ui/components/Dropdown.tsx
+  s_154e7eadce3a09::t_37065794a721d1 392-394
+apps/web/src/lib/graphql-cache/worker/coordinator-takeover.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 29
+crates/agent_session/src/outbound/postgres/recovery.rs
+  s_154e7eadce3a09::t_37065794a721d1 71-78
+apps/web/src/lib/core/internal/browser-test/recipient-directory.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-81
+apps/web/src/lib/queries/email/send-queue.ts
+  s_154e7eadce3a09::t_37065794a721d1 29,31-36
+apps/web/src/lib/queries/email/settings.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 12,25-28,47-50,177-181,252-254,279-283
+apps/web/src/features/channel/Input/browser-test/mention-ranking.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,13-14,16,24,91-116,118-184,190,197-198,221-226,228-235,244-257,261
+apps/web/src/features/universal-input/primitives/recipient-selection.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-39
+apps/web/src/features/email-view/filters/email-saved-view.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-600
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_154e7eadce3a09::t_37065794a721d1 581-589,619-625
+  s_154e7eadce3a09::t_ed4976d2abb56e 626
+crates/agent_session/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 66-73
+apps/web/src/features/email-view/queries/use-email-saved-view-unread.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-56
+apps/web/src/features/email-view/inbox-selection.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 4-8
+apps/web/tests/functional/whatsapp-linked.spec.ts
+  s_154e7eadce3a09::t_37065794a721d1 579-586
+crates/contacts/src/domain/service/directory/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-169
+crates/agent_harness/src/domain/service/queue.rs
+  s_154e7eadce3a09::t_37065794a721d1 27-32,34-35,38,44,111,114-117,120,122-123,132-161,169,175-178,182-201,1371,1869-1870,1884-1901,1908,1939-1944,1946-1948
+apps/web/src/lib/queries/channel-labels/channel-labels.ts
+  s_154e7eadce3a09::t_37065794a721d1 13-15,142,146,156,158
+apps/web/src/components/view-shell/MobileFilterDrawer.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-3,9,14,16,21-22,24,237,252,261-264,279-357
+crates/agent_harness/src/outbound/routing/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 99-108,146-148
+  s_154e7eadce3a09::t_92201e7cec56a8 149
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,10,13-25,59-60,130-188,221-240,242-243
+  s_154e7eadce3a09::t_c23dba06133100 241
+apps/web/src/features/email-view/queries/use-email-participant-suggestions.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-49
+apps/web/src/components/view-shell/view-shell-layout.ts
+  s_154e7eadce3a09::t_37065794a721d1 27-30
+crates/contacts/src/outbound/repository/page/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-262
+apps/web/src/features/onboarding/queries/outlook-availability.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-9,11-20,23-30,32,34-36,39-41,44-48
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_154e7eadce3a09::t_37065794a721d1 438-443,2262-2274
+  s_154e7eadce3a09::t_96d0434c038652 2275-2278
+apps/web/scripts/generate-cache-people-schema.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-56
+apps/web/src/features/settings/Harness.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 42-44,476,481,487-491
+crates/webhook/src/domain/stream/test.rs
+  s_154e7eadce3a09::t_a071ba96914ae9 278-316,331,469,559,777-911
+apps/web/src/features/runtime-sharing/browser-test/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9,33
+crates/client/cache-wasm/src/shell/test/mail_projection.rs
+  s_154e7eadce3a09::t_37065794a721d1 91
+apps/web/src/lib/core/context/quickAccess/person-list.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-166
+apps/web/src/features/property/debug/PropertyDebug.tsx
+  s_154e7eadce3a09::t_37065794a721d1 13,18,72
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service.rs
+  s_154e7eadce3a09::t_37065794a721d1 9,574-575,577-600,602-604,606-609,611-614,616-624,626-642,644-647,649-650,652-653,655,958-961,970-974,977,980-985,987,989,994,997,999-1009,1109,1161,1186-1193,1296-1300,1597-1641,1652-1655,1678-1681,1704-1707,1727-1733,1754-1756,1773,1775,1793,1795,1812,1814
+crates/client/cache-core/src/people/schema.json
+  s_154e7eadce3a09::t_37065794a721d1 1-1471
+packages/sdk/generated/storage/types.gen.ts
+  s_154e7eadce3a09::t_a071ba96914ae9 5528-5548,17174-17185,17743-17798,19516-19543,19666-19671,22426-22443,22647-22665,22673-22682,33672-33837
+  s_154e7eadce3a09::t_acf632cdd62a2e 23083
+  s_154e7eadce3a09::t_f55e1a7014fcd5 22683,33838
+apps/web/src/features/onboarding/context/onboarding-context.tsx
+  s_154e7eadce3a09::t_37065794a721d1 44-45,86,115-124,134-137
+crates/database_sql/src/wasm.rs
+  s_154e7eadce3a09::t_37065794a721d1 108-129
+apps/web/src/features/onboarding/primitives/onboarding-flow.ts
+  s_154e7eadce3a09::t_37065794a721d1 15,62-64,89,172
+crates/client/cache-core/tests/query_inspection.rs
+  s_154e7eadce3a09::t_37065794a721d1 92-135
+apps/web/src/lib/core/user/displayName-failure.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-5,7,9-14,17-22,26-30,36,39,42-48,51-53,57-60,62-63,65-66,68,70,72,75,78-80,83-180
+crates/client/cache-core/tests/contact_sync.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-117
+apps/web/src/features/universal-input/core/people-terms.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-17
+apps/web/src/features/email-view/inbox-selection.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,5
+.config/hakari.toml
+  s_154e7eadce3a09::t_37065794a721d1 68-69
+crates/database_sql/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 12,15-16,63
+apps/web/src/lib/graphql-cache/worker/coordinator-protocol.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 27-48,898,901
+apps/web/src/features/tasks-view/filters/ai-task-filter.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 4,8,10,12-23,26-31,34,36-52,56-59,61-66,70-72,78-81,83-97,99-103,105-107,109-120,124-133,135-136,138-145,148
+apps/web/src/features/universal-input/browser-test/playwright.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 42-46
+apps/web/src/lib/core/internal/browser-test/list-filters.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-86
+apps/web/src/lib/queries/contacts/alias-window.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-192
+apps/web/src/lib/queries/contacts/context-publisher.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-206
+packages/sdk/generated/storage/sdk.gen.ts
+  s_154e7eadce3a09::t_acf632cdd62a2e 5,4112-4155
+  s_154e7eadce3a09::t_0ed40527d188b2 4156
+apps/web/src/features/universal-input/views/email-draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 10,48-52,78-79,84
+crates/coding_agent_worker/src/main.rs
+  s_154e7eadce3a09::t_37065794a721d1 40-48
+crates/email_db_client/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 48-52
+apps/web/src/features/calendar/components/next-meeting-countdown-setting.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4,12
+apps/web/tauri/macro_bundle_updater_plugin/src/domain.rs
+  s_154e7eadce3a09::t_37065794a721d1 11-12
+apps/web/src/features/crm/activity-filters-adapter.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2,32-33
+apps/web/src/lib/service-clients/service-cognition/prompt-dismissals.ts
+  s_154e7eadce3a09::t_37065794a721d1 22-25,29
+crates/client/cache-turso/tests/people_sql.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-62
+apps/web/tauri/graphql_cache_plugin/src/engine/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 5,47-79,280
+  s_154e7eadce3a09::t_a569c6356c231e 301
+crates/contacts/src/domain/models/page/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-22
+apps/web/src/lib/core/internal/browser-test/task-filters.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-200
+crates/database_sql/src/run.rs
+  s_154e7eadce3a09::t_37065794a721d1 114-116,491,500-502,517,530,538,544,580-607,638-677
+  s_154e7eadce3a09::t_08e6bab30284f2 678
+apps/web/src/features/onboarding/components/trust-details.tsx
+  s_154e7eadce3a09::t_37065794a721d1 3,18-163,167-173,176-182,188-193,240-261,292-294
+apps/web/src/features/onboarding/views/team-step.tsx
+  s_154e7eadce3a09::t_37065794a721d1 56-66
+apps/web/src/features/email-view/queries/use-email-participant-suggestions.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-78
+apps/web/src/features/channel/Call/use-callkit.ts
+  s_154e7eadce3a09::t_37065794a721d1 6,144-148,741,751-755,765
+crates/coding_agent_worker/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 74-75,116-120,133-139
+apps/web/src/components/view-shell/ListDropdowns.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,16-23,216-218,222-223,283-317,338,340-357,360-361,364,366,369,458,460-504,506,508-511,513,515
+apps/web/src/features/next-soup/utils.ts
+  s_154e7eadce3a09::t_37065794a721d1 20,97,731-740,1024-1027
+  s_154e7eadce3a09::t_01ddcf92804b9d 1028
+crates/agent_harness/src/inbound/runtime_gateway/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2-3,84-87,101-107,125-128,130,135-143,179-307
+crates/email/src/outbound/email_pg_repo/dynamic/tests.rs
+  s_154e7eadce3a09::t_37065794a721d1 650-673
+  s_154e7eadce3a09::t_662297b848b5bf 649
+apps/web/src/features/routine-suggestions/primitives/discover-seen.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-32
+apps/web/src/components/ui/components/ChipCombobox.docs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-75
+crates/crm/src/domain/model.rs
+  s_154e7eadce3a09::t_37065794a721d1 420-423
+apps/web/src/lib/graphql-cache/host/types.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,30,87-91,157-158,176
+apps/web/src/features/universal-input/core/input.ts
+  s_154e7eadce3a09::t_37065794a721d1 3,138-144
+apps/web/src/lib/queries/auth/user-name-cache-runtime.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,3-16,18-47,49-58,61-76,78-82
+apps/web/src/lib/core/signal/profilePicture.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-69
+apps/web/src/features/channel/CreateChannelModal.tsx
+  s_154e7eadce3a09::t_37065794a721d1 20,393
+apps/web/src/lib/core/context/quickAccess/person-items.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-17
+apps/web/src/lib/core/component/FileList/itemOperations.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 187-202,204-219,221-223,225,227,229-230
+apps/web/src/features/database-query/core/query.ts
+  s_154e7eadce3a09::t_37065794a721d1 246-252,305-307
+apps/web/src/features/drive-view/filters/use-drive-filters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 5,30,80-81
+apps/web/src/features/saved-views/queries/saved-view-changes.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-34
+apps/web/src/features/universal-input/queries/task-field-source.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-5,7,17-24,28-37,45-69,73-77,93,97-102,143-147,166-170,184-281,283-358,365,373-377
+apps/web/src/lib/core/internal/browser-test/filter-entity-adapters.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-5
+apps/web/src/lib/core/context/quickAccess/person-list.provider.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-166
+apps/web/src/lib/queries/contacts/context-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-140
+apps/web/src/features/next-soup/soup-view/filters-bar/use-filter-refinements.tsx
+  s_154e7eadce3a09::t_37065794a721d1 31-34,37-38,45,154-155,167,512-515,570,591,676
+crates/ai_usage/src/lib.rs
+  s_154e7eadce3a09::t_37065794a721d1 23-25,42,79-106
+  s_154e7eadce3a09::t_34d972e37b1cee 107
+apps/web/src/features/routine-suggestions/components/routine-suggestions-card.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-2,5-8,11-15,18-24,29-35,39,46-53,56-73,75,77-80,85-87
+crates/agent_harness/src/outbound/routing.rs
+  s_154e7eadce3a09::t_37065794a721d1 151-161
+apps/web/src/lib/queries/email/link.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,13-20,40-49,53,55-57,60-77,80-81,185-186,190-192,194,209,211-213,219-224,226,243,266,268-270,276-290,296-297,312-314,316-317
+apps/web/src/features/next-soup/filters/inbox-filters.ts
+  s_154e7eadce3a09::t_37065794a721d1 152-154
+apps/web/src/lib/graphql-cache/host/worker-host.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1231-1251
+apps/web/src/lib/core/component/Toast/Toast.tsx
+  s_154e7eadce3a09::t_37065794a721d1 73-77,213-216,218,556,588
+apps/web/src/features/email-view/filters/email-saved-view.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-269
+apps/web/src/features/settings/components/connected-runtimes-section.tsx
+  s_154e7eadce3a09::t_37065794a721d1 78-81,99,101
+crates/client/cache-core/tests/hydration_scope.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-5,7-32,34-45,48-89,92-140
+crates/client/cache-core/src/people/name_search/projection.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-106
+packages/sdk/src/entities/webhooks/namespace.ts
+  s_154e7eadce3a09::t_a071ba96914ae9 25-27,48-49
+apps/web/src/features/email-view/filters/use-email-filters.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-5,8,11-31,49-50,53,62,64-118,120-201,205,225-228,236,240-243,245,247-248,251-427
+crates/contacts/src/domain/service/directory.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-166
+apps/web/src/lib/core/component/firstPartyBotMark.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 20-24,26-27,29,69-86
+  s_154e7eadce3a09::t_fc812f3b1cabcd 87-88
+apps/web/src/lib/graphql-cache/people/generated.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-362
+crates/agent_session/src/domain/model.rs
+  s_154e7eadce3a09::t_37065794a721d1 118-129
+apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
+  s_154e7eadce3a09::t_37065794a721d1 18,82-85,375-376,508,524-535,539,657-660,669-676,1116
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_154e7eadce3a09::t_37065794a721d1 174-179,200,746-766,857,1330
+apps/web/src/lib/core/internal/browser-test/contact-removal.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-46
+crates/client/cache-turso/src/storage/test/search_projection.rs
+  s_154e7eadce3a09::t_37065794a721d1 76,117-132,144-155,191-196
+apps/web/src/features/settings/components/pending-requests-section.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-5,7-22,24-28,30-74,77-108,111-114,117-136,139-141,143,145-150,152-156,158-159,161-165,168-173,175-179,181-188,191-199
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 36,130,189-195,386-421
+  s_154e7eadce3a09::t_316f6bd2db3ed4 422-423
+apps/web/src/features/email-view/components/EmailControls.tsx
+  s_154e7eadce3a09::t_37065794a721d1 41,43
+apps/web/src/lib/queries/contacts/directory.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-248
+crates/client/cache-core/src/people/sql.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-57
+crates/webhook/src/domain/ingestion/stream.rs
+  s_154e7eadce3a09::t_6b3d11b74c5128 7-8,23,95-114
+  s_154e7eadce3a09::t_c4fa8bf090149d 115-116
+packages/sdk/src/entities/webhooks/webhook.ts
+  s_154e7eadce3a09::t_a071ba96914ae9 128-129,136-141,151-156,161-166,174-176,182-187,192-197,202-207,220-222
+apps/web/docs/graphql-normalized-cache-plan.md
+  s_154e7eadce3a09::t_37065794a721d1 1168-1367,1370
+apps/web/src/lib/graphql-cache/worker/worker-core.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 2145-2237
+apps/web/src/features/entity/queries/rename.ts
+  s_154e7eadce3a09::t_37065794a721d1 11-18,49-52,73,234,243,251,365-369,376,423-424,435,439,446,463,468-469,471,524-525,527-528,535,545,587,604,611-613,621-622,639,646
+crates/client/cache-core/Cargo.toml
+  s_154e7eadce3a09::t_37065794a721d1 7-13,18,20,25,30,38-39
+crates/complete_graph/src/schema.rs
+  s_154e7eadce3a09::t_37065794a721d1 881-886
+apps/web/src/components/app/split-layout/components/SplitHeader.tsx
+  s_154e7eadce3a09::t_37065794a721d1 82-83
+apps/web/src/lib/core/component/LexicalMarkdown/builder/types.ts
+  s_154e7eadce3a09::t_37065794a721d1 47-52
+apps/web/src/features/channel/Input/browser-test/draft.tsx
+  s_154e7eadce3a09::t_37065794a721d1 4,126
+apps/web/src/features/integrations/import-linear/ImportLinear.tsx
+  s_154e7eadce3a09::t_37065794a721d1 2-3,5,8-13,18-29,40-46,49-54,58,64-67,93-113,120-122,137-147,149,152-164,169-246,251-263,265,274-277,288,291-297,321-323,326-337,341,347-395,469-473
+crates/agent_inmem/src/domain/replay/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 254,283-286,727
+apps/web/src/components/icon/system/README.md
+  s_154e7eadce3a09::t_37065794a721d1 134-140
+apps/web/src/features/email-view/filters/use-email-filters.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-175
+apps/web/src/lib/queries/subscribe-to-visible-cache-changes.ts
+  s_154e7eadce3a09::t_37065794a721d1 14-17,25,31
+crates/ai_tools/src/tool_context.rs
+  s_154e7eadce3a09::t_37065794a721d1 2106,2224-2229
+  s_154e7eadce3a09::t_2ea3d2b90408ff 2230-2232
+apps/web/src/features/block-project/component/ProjectCreateMenu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 41,46-48,54-59,308-334,344,366-369,402,414-419
+apps/web/src/components/ui/components/Badge.docs.tsx
+  s_154e7eadce3a09::t_37065794a721d1 8-14
+crates/client/cache-turso/src/storage/test/contact_search.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-153
+crates/email/src/outbound/email_pg_repo/dynamic/filters.rs
+  s_154e7eadce3a09::t_37065794a721d1 7,30-33,39-40,44,69,209-216,221-298,327-335,367-368,391-392,446-447
+apps/web/src/lib/core/context/quickAccess/person-list-continuation.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-79
+apps/web/src/lib/i18n/locales/en/routine-suggestions.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-64
+apps/web/src/features/channel/Call/discussion/CallDiscussionContent.tsx
+  s_154e7eadce3a09::t_37065794a721d1 34-39,50-52,57-58,65-66,69-78
+apps/web/src/lib/core/messages/configured-message-editor.ts
+  s_154e7eadce3a09::t_37065794a721d1 35-38,66
+crates/client/cache-turso/src/storage/test/search_bucket_cost.rs
+  s_154e7eadce3a09::t_37065794a721d1 4,13,38-44,47-55,61-65,68
+.agents/rules/web/design-system.md
+  s_154e7eadce3a09::t_37065794a721d1 25
+crates/email/src/outbound/mailbox_pg/ingest.rs
+  s_154e7eadce3a09::t_37065794a721d1 249
+apps/web/src/features/routine-suggestions/primitives/suggestion-actions.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,6,51-54,77-78,80,99,107,133-135,141-142,150,157,160,166-168
+apps/web/src/lib/core/internal/UserIconDemo.tsx
+  s_154e7eadce3a09::t_37065794a721d1 40
+apps/web/src/lib/core/internal/browser-test/linear-import.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-267
+apps/web/src/lib/core/internal/browser-test/recipient-ranking.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-40
+crates/contacts/src/outbound/names/fixtures/directory_names.sql
+  s_154e7eadce3a09::t_37065794a721d1 1-29
+crates/contacts/src/domain/service.rs
+  s_154e7eadce3a09::t_37065794a721d1 5-6,9-10,19-22,101-121
+  s_154e7eadce3a09::t_e396debc87c612 122-123
+crates/contacts/src/inbound.rs
+  s_154e7eadce3a09::t_37065794a721d1 4-6
+crates/client/cache-turso/src/storage/people_sql.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-327
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,12-14,16,31-35,57-65,74-102,128-135,158-165,173-179
+apps/web/src/features/email-view/persistence.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 134-231
+apps/web/src/features/onboarding/views/onboarding-flow-view.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1151-1194
+apps/web/src/features/settings/components/pending-requests-section.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-5,9-13,15-18,20-62,65-68,70-78,80-119,121-125,127-153
+apps/web/src/lib/core/internal/browser-test/task-list-labels.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-41
+apps/web/src/components/icon/microsoft-color.svg
+  s_154e7eadce3a09::t_37065794a721d1 1
+apps/web/src/features/command/mobile/MobileSearchResults.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 164
+apps/web/src/lib/graphql-cache/host/tauri-host.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 144-298,1290-1336
+  s_154e7eadce3a09::t_b7c858b34725e2 1337
+crates/client/cache-turso/src/storage/test/search_streaming.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-83
+crates/contacts/src/outbound.rs
+  s_154e7eadce3a09::t_37065794a721d1 7-12
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/poll-card.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 10-11,20-23,25-31,33
+apps/web/src/lib/core/internal/trackBlockOpened.ts
+  s_154e7eadce3a09::t_37065794a721d1 39
+apps/web/src/features/channel/Channel/ChannelSurface.tsx
+  s_154e7eadce3a09::t_37065794a721d1 252-255,308-320,331
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service/rollback_test.rs
+  s_154e7eadce3a09::t_37065794a721d1 2,40-43,63-66
+apps/web/src/lib/analytics/app-events.ts
+  s_154e7eadce3a09::t_37065794a721d1 459,461-463,465,470,482-493
+apps/web/src/features/command/useCommandItems.contacts.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 155-162
+apps/web/src/features/email-view/components/EmailHeader.tsx
+  s_154e7eadce3a09::t_37065794a721d1 29-34,44-47,49,95-97,102,109,169-171,186-187
+crates/client/cache-turso/src/key.rs
+  s_154e7eadce3a09::t_37065794a721d1 38-39,54-70
+apps/web/src/components/app/split-layout/componentRegistry.tsx
+  s_154e7eadce3a09::t_37065794a721d1 334-339
+apps/web/src/lib/core/internal/browser-test/recipient-ranking-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-57
+apps/web/src/lib/queries/contacts/context-publisher.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-218
+apps/web/src/features/settings/browser-test/signatures/fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 18,85-90
+apps/web/src/features/settings/browser-test/signatures/account-sources.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-39
+crates/client/README.md
+  s_154e7eadce3a09::t_37065794a721d1 78-80,248-383
+crates/contacts/src/domain/models/contact/identity-fixtures.json
+  s_154e7eadce3a09::t_37065794a721d1 1-5
+crates/webhook/AGENTS.md
+  s_154e7eadce3a09::t_6b3d11b74c5128 18,31,46-52
+  s_154e7eadce3a09::t_d8fde6052f5fc0 32
+apps/web/src/features/routine-suggestions/components/suggestion-card.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-2,4,6-18,20-21,24-66,69-73,75-78,81-83,85-86,88,90-133,135-264,268-273,281-301,303-307,309-311,314,319-322,324-353,357-361,363-378,380-385
+apps/web/src/features/command/Launcher.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 40,56-58,60-77
+crates/client/cache-turso/src/query_telemetry/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 90-105
+  s_154e7eadce3a09::t_8c9fb8ce211377 112-113
+crates/ai_billing/src/outbound/pg_settlement_candidates/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 25
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/fs/test.rs
+  s_154e7eadce3a09::t_37065794a721d1 20
+apps/web/src/lib/queries/persistence.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 66,69-74,76-78,185,191,438-452
+  s_154e7eadce3a09::t_a73b12031ae262 453-454
+apps/web/src/observability/generated/bundle-updater.ts
+  s_154e7eadce3a09::t_37065794a721d1 2-14,22-63
+apps/web/src/components/icon/system/IconSystemGallery.tsx
+  s_154e7eadce3a09::t_37065794a721d1 191
+crates/crm/src/inbound/axum_router.rs
+  s_154e7eadce3a09::t_37065794a721d1 298-303
+apps/web/src/features/runtime-sharing/core/pending-requests.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-50
+apps/web/src/features/system-status/core/status.ts
+  s_154e7eadce3a09::t_37065794a721d1 8-9,35-36
+apps/web/src/features/notifications-inbox/queries/decode.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 309-380
+apps/web/src/lib/queries/contacts/use-context-publisher.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-28
+apps/web/src/lib/queries/contacts/refresh.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-8
+apps/web/src/features/routines/components/routine-template-strip.tsx
+  s_154e7eadce3a09::t_37065794a721d1 18-22,35-50,53-60,65,68,73-82,84
+  s_154e7eadce3a09::t_304ea8b24521aa 83,85
+apps/web/src/features/universal-input/browser-test/input-reference-fixture.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-137
+apps/web/src/features/channel/channel-invite-button.tsx
+  s_154e7eadce3a09::t_37065794a721d1 7,81
+apps/web/src/features/email-thread/queries/thread-source.ts
+  s_154e7eadce3a09::t_37065794a721d1 2,160
+apps/web/src/features/property/editors/selectors/entityUtils.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 1,3,6-7,12,73-109
+apps/web/src/lib/core/user/automated-address.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-9
+apps/web/tauri/src-tauri/README.md
+  s_154e7eadce3a09::t_37065794a721d1 8-30,130-148,528-531
+  s_154e7eadce3a09::t_667fae754f9058 532
+crates/client/cache-core/tests/search_buckets.rs
+  s_154e7eadce3a09::t_37065794a721d1 57,90-91,102,112-113,120-121,123,128,217,250,255,395
+crates/client/cache-wasm/src/shell.rs
+  s_154e7eadce3a09::t_37065794a721d1 9,44,1446,1733,1790-1822
+crates/complete_graph/src/sdl_test.rs
+  s_154e7eadce3a09::t_37065794a721d1 843-904,1003
+  s_154e7eadce3a09::t_821a262a6b26c7 842
+apps/web/src/features/home/components/HomeChatStart.test.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1,29-30,42-43
+apps/web/src/lib/queries/channel/activity.ts
+  s_154e7eadce3a09::t_37065794a721d1 10-16,19-34,40-41,54-55,61,63,70,73-77,90-92
+apps/web/src/features/email-view/filters/email-facets.ts
+  s_154e7eadce3a09::t_37065794a721d1 57-66,68,105,176,194-199,206-210
+apps/web/src/lib/queries/channel/activity.test.ts
+  s_154e7eadce3a09::t_37065794a721d1 5,35-38,74-80,87-89
+crates/client/cache-core/src/search/ranking.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-2,5-6,11-12,16,18-23,26,31,36,38-66,69,71-78,80-83,86-106
+apps/web/src/features/email-compose/views/reply-envelope.tsx
+  s_154e7eadce3a09::t_37065794a721d1 9-12,25,108
+apps/web/src/lib/queries/email/draft-queue.ts
+  s_154e7eadce3a09::t_37065794a721d1 46,51,54,56,114-115,293,297-353,359-363,386-390,444
+apps/web/src/features/entity/extractors-property/entity-key-properties.tsx
+  s_154e7eadce3a09::t_37065794a721d1 76-78,244
+apps/web/src/features/email-view/AGENTS.md
+  s_154e7eadce3a09::t_37065794a721d1 1-65
+crates/contacts/src/domain/models/page.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-85
+crates/computer_id/src/lib.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-113
+apps/web/src/lib/graphql-cache/worker/browser-test/people-references.browser.e2e.ts
+  s_154e7eadce3a09::t_37065794a721d1 1-14
+apps/web/src/lib/service-clients/service-storage/itemType.ts
+  s_154e7eadce3a09::t_37065794a721d1 17
+apps/web/src/features/next-soup/soup-view/filters-bar/filter-menu.tsx
+  s_154e7eadce3a09::t_37065794a721d1 15,378,390-391,448,459
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController.ts
+  s_154e7eadce3a09::t_37065794a721d1 26,333,357-359
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_154e7eadce3a09::t_37065794a721d1 33,61,120,143-147
+  s_154e7eadce3a09::t_2bb4c3903a523c 148-149
+apps/web/src/features/routine-suggestions/views/suggestion-list-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 1-2,4-7,13-24,43-129,131-133,137-175,179-180,192-197,200,202-215,217,222-308
+crates/client/cache-core/src/people/sync.rs
+  s_154e7eadce3a09::t_37065794a721d1 1-95
+apps/web/src/features/property/editor/hooks/useEntitiesForProperty.ts
+  s_154e7eadce3a09::t_37065794a721d1 6,35-36,66-70,107-113,135-136,139
+apps/web/src/features/settings/browser-test/signatures/vite.config.ts
+  s_154e7eadce3a09::t_37065794a721d1 28,34-44
+apps/web/src/lib/core/database-sql/driver.ts
+  s_154e7eadce3a09::t_37065794a721d1 38-41,50-54,69,74,101-102,104
+apps/web/src/features/auth/views/auth-view.tsx
+  s_154e7eadce3a09::t_37065794a721d1 29-30,42-43,48-49,73,90-92,127,134-136
+  s_154e7eadce3a09::t_2c2d457f0f5a75 137-139
+.sqlx/query-07c679c87451a67f218808b846061fa7e225ba31c9d99eed215f28802fb39a08.json
+  s_154e7eadce3a09::t_908d870dc39caf 1-22
+.sqlx/query-250089cc4fd6f04a2cd41c849f5d492d9455a4b45da37803d4c454def3c1415a.json
+  s_154e7eadce3a09::t_1f49507db6c16d 1-24
+.sqlx/query-484eebbf8b681146d33e59a730dd40389f3eb4055c2fdcaf853c55759e80587a.json
+  s_154e7eadce3a09::t_34bd5a9727cbf3 3,49,63
+.sqlx/query-558732a9342b385035595b2499bf22297f25c55050e22dbae51ef8f6e9f83f02.json
+  s_154e7eadce3a09::t_d8f1fa7559ee6e 3,9,14
+.sqlx/query-58001884cc7d81c9960d18bdc5ec0a5dbe9ae23abe260d4f308363ff3212237f.json
+  s_154e7eadce3a09::t_82e74fb1faebcc 3,28-32,37,42,47,52,57,62,67,72,77,82,87,92,97,102,120,138
+.sqlx/query-91f50578efd22c45ce3e1d17055c768d7334cfcfa48be143048e0643cbfe4d68.json
+  s_154e7eadce3a09::t_45990c6dd01497 3,8-9,14
+.sqlx/query-92f23b9a8045db4366b5f67b6ad7f0991c56f0aecb73047b5dd6bfc852181ac4.json
+  s_154e7eadce3a09::t_2d1073897bfc85 3,27
+.sqlx/query-9449791d0a69255c6e8dcf7a9a80d7f685537b32bcf454f8f95d6e47e9dbea9f.json
+  s_154e7eadce3a09::t_06cbc4502177c7 1-17
+.sqlx/query-9ff45f517b07295a9c55ad6a2328696894b3a06dec33a464283cd2cb581c70f3.json
+  s_154e7eadce3a09::t_89cfb14fef9906 1-12
+.sqlx/query-a57e5860daf4bc1f5fb22879ca0cc767a5fabc2dbee51764ec58e45978055704.json
+  s_154e7eadce3a09::t_a87bf813fe1fd7 1-23
+.sqlx/query-acb961f5b1be06bf56dfee3f540b2983c6307fa9f2bdcd7c7ef7d2b2284d120e.json
+  s_154e7eadce3a09::t_cce14974de697a 1-17
+.sqlx/query-b72ccfaf7ecc8797be5f4cc1b8068dafd18bd716f940ae357774b2d9513afbe2.json
+  s_154e7eadce3a09::t_36e4e1aebd4d9f 1-76
+.sqlx/query-b7e5c322f485d5dda4b8a7271bfb32a791fd3a09449a6f0ac63136887e0d6476.json
+  s_154e7eadce3a09::t_95371d4d20e982 3,27,33
+.sqlx/query-dc1bc098ba81938c7ef4a9cd2146b69df65115072fa49d07c2c6e7b4b7a226a6.json
+  s_154e7eadce3a09::t_5dccf687d14d93 1-16
+Cargo.lock
+  s_154e7eadce3a09::t_6d9eb9f30110ad 541,679,691,2333,3753,3755,3762,3766,4700,4866,4878,4939-4950,5193,5196,5198,5200,5202-5203,5205,5212,5217,6695,9265-9280,10954-10972,11859-11867,13157-13165,14982-14993,15891-15905,17604,19776-19779,21519-21531,22158
+apps/web/src/features/email-view/CLAUDE.md
+  s_154e7eadce3a09::t_fa9ba58efb67f1 1
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_154e7eadce3a09::t_d00e6c310c18ee 6843-6847,6858,6926-6930,6944
+apps/web/src/lib/service-clients/service-auth/generated/schemas/currentSystemStatusAllOf.ts
+  s_154e7eadce3a09::t_0f095dc6161434 7,11-13
+apps/web/src/lib/service-clients/service-auth/generated/schemas/currentSystemStatusAllOfId.ts
+  s_154e7eadce3a09::t_543bb7eb4a68c0 1-12
+apps/web/src/lib/service-clients/service-auth/generated/schemas/index.ts
+  s_154e7eadce3a09::t_2c07269c219287 61
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_154e7eadce3a09::t_8e5110469fdef0 5894-5903,5973-5982,7113-7117
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequest.ts
+  s_154e7eadce3a09::t_131143b2d902b7 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequestConfig.ts
+  s_154e7eadce3a09::t_baa6712909f05e 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequestId.ts
+  s_154e7eadce3a09::t_d930d401c770a4 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequestSharedTeamId.ts
+  s_154e7eadce3a09::t_d0c6597e4d213f 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/deleteSavedViewDefinitionParams.ts
+  s_154e7eadce3a09::t_4bbae1c9f949ed 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_154e7eadce3a09::t_88b2d73eae22d3 755-758,858,1989,2451,2535-2541,2798,2826-2827,3242-3246,3282-3284,3286-3288
+apps/web/src/lib/service-clients/service-storage/generated/schemas/listSavedViewDefinitionsParams.ts
+  s_154e7eadce3a09::t_e31130f24efc41 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/reorderSavedViewDefinitionsRequest.ts
+  s_154e7eadce3a09::t_339677f5164233 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinition.ts
+  s_154e7eadce3a09::t_b42ee4814dfe20 1-29
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinitionConfig.ts
+  s_154e7eadce3a09::t_14227786f3bafc 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinitionPage.ts
+  s_154e7eadce3a09::t_fc67f1d2db7ba5 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinitionPageNextCursor.ts
+  s_154e7eadce3a09::t_075da0f89d6fdb 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinitionSharedTeamId.ts
+  s_154e7eadce3a09::t_397c98b1bb8de1 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewSharingRequest.ts
+  s_154e7eadce3a09::t_532e4c0f7f8578 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewSharingRequestTeamId.ts
+  s_154e7eadce3a09::t_53f59c47cb0799 1-8
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupHarness.ts
+  s_154e7eadce3a09::t_d700ef3f6e991f 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItem.ts
+  s_154e7eadce3a09::t_45888f8858adb0 18,40-41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItemOneOfTwonine.ts
+  s_154e7eadce3a09::t_4d4e5f87af41a4 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItemOneOfTwonineTag.ts
+  s_154e7eadce3a09::t_8f93893dd83f5c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateSavedViewDefinitionRequest.ts
+  s_154e7eadce3a09::t_3c3a67bc69fc77 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateSavedViewDefinitionRequestConfig.ts
+  s_154e7eadce3a09::t_066fd48a0cfdb5 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateSavedViewDefinitionRequestConfigAnyOf.ts
+  s_154e7eadce3a09::t_c30f811c7e4a43 1-13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateSavedViewDefinitionRequestName.ts
+  s_154e7eadce3a09::t_4b4646cdd4bbad 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateSavedViewDefinitionRequestSharing.ts
+  s_154e7eadce3a09::t_36637e623035ea 1-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadata.ts
+  s_154e7eadce3a09::t_3a932c2b5d16e7 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadataFileId.ts
+  s_154e7eadce3a09::t_50431ea27b7b9b 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadataUrl.ts
+  s_154e7eadce3a09::t_60890cfd436599 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEvent.ts
+  s_154e7eadce3a09::t_82113e8ef5ecbf 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEventOneOf.ts
+  s_154e7eadce3a09::t_99287a525b41a3 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEventOneOfEventType.ts
+  s_154e7eadce3a09::t_e30b47646b8c5d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_154e7eadce3a09::t_15fdb74f292f1b 48921-48942,53919-53940,58358-58379,63380-63405,67790-67815,74199-74409
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_154e7eadce3a09::t_85a380066b5912 740-748,1087-1098,1382-1412,1414,1416,2165-2166,2481-2491,2893-2894,3202-3217,3495-3511,3576,3631,4440-4477,4712,4842-4843,4886,4949,4973,4998,5004-5051,5070,5095,5124,5186,5249,5288-5289,5309,6386-6423,7107-7144,7829-7866,8551,8588-8589,8626-8631,8641,8678-8731,9273-9310,9995-10032,10717-10754,11439-11476,12161-12198,12884-12921,13189-13198,13357-13366,13431,13501,13961-14008,14045-14046,14270,14840-14877,15197,15355,15524,15694,15866,16031,16196,16374,16398,16427,16470,16519-16520,16540,16575-16576,16596,16626-16627,16647,16712-16718,16753,17295-17332,18016-18053,18733-18770,19454-19491,20033-20085,20122,20132,20169-20170,20886-20923,21074,21638-21676,21830,22381-22419,22573,22680-22681,22724,23198-23236,23367,23408-23409,23429,24218-24255,24840-24878,25009,25105,25263,25432,25602,25767,25853-25854,25858,25865,25867,25870,25873-25875,25889-25890,25899,25903-25904,25925-25926,25930-25935,25947-25949,25952-25953,25956-25964,25974,25976,25983,25985,25987-25989,26003,26006-26010,26014,26016-26019
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_154e7eadce3a09::t_188ccfecbc8da6 23691-24155,33873-33896,52793-52810,53692-53769,56305-56334,56599-56613,60845-60874,61207-61225,61239-61258,61902-61905
+apps/web/tauri/Cargo.lock
+  s_154e7eadce3a09::t_d3be6bd9dda4cc 1055,1057,1065,1852-1871,2608-2613,4178-4209,4315-4323,4494-4510,6875-6885,7331,7501-7504,9333-9357
+apps/web/tauri/desktop-cef/Cargo.lock
+  s_154e7eadce3a09::t_f08842189bc2e2 5-10,1024,1026,1034,1947-1966,2766-2771,4612-4643,4758-4766,4947-4963,7377-7387,7846-7869,8016-8019,8404,8467,9842-9866
+apps/web/tauri/graphql_cache_plugin/CLAUDE.md
+  s_154e7eadce3a09::t_9eb0acff651c05 1
+bun.lock
+  s_154e7eadce3a09::t_ea9603474d5834 438-451,592-609,1128-1129,1362-1363,1374-1375,2072-2073,2092,2196-2197,2226-2227,2304-2307,2312-2313,2320-2321,2470-2471,2544-2545,2590-2591,2604-2605,2616-2617,2628-2631,2684-2685,2706-2707,2712-2713,2840-2841,2892-2893,2948-2949,3028-3029,3200-3201,3208-3209,3212-3213,3274-3275,3314-3315,3394-3395,3430-3431,3466-3467,3482,3504-3507,3574-3575,3616-3617,3624-3625,3636-3637,3736-3737,3852-3853,3882-3883,3942-3943,3968-3969,4090-4091,4122-4123,4126-4127,4202-4203,4260-4263,4270-4271,4322-4323,4344-4347,4404-4409,4414-4415,4496-4497,4500-4501,4542-4543,4550-4551,4556-4557,4574-4575,4598-4601,4744-4745,4812-4813,4870-4871,4922-4923,4936-4937,5012-5013
+crates/computer_id/CLAUDE.md
+  s_154e7eadce3a09::t_b4109be45a0e50 1
+crates/email_db_client/src/attachments/provider.rs
+  s_154e7eadce3a09::t_5b8272f75ae6ff 100-101,103-104,161,167-168,180
+crates/email_db_client/src/messages/delete.rs
+  s_154e7eadce3a09::t_f6a93ecc224203 77-78,80
+crates/email_db_client/src/messages/sent_identity/test.rs
+  s_154e7eadce3a09::t_0f80929d44155d 89
+crates/email_db_client/src/messages/test.rs
+  s_154e7eadce3a09::t_40ceff77423930 349,377-415
+crates/email_db_client/src/threads/provider_identity.rs
+  s_154e7eadce3a09::t_6953aea61f336f 101
+crates/email_db_client/src/threads/update.rs
+  s_154e7eadce3a09::t_52a2dca99c9ea3 92-135,137,144-147,149-163,166-169,171-174,182-222
+crates/email_db_client/src/threads/update/test.rs
+  s_154e7eadce3a09::t_b59c01ac28c49b 29,46,59,63,68-167
+crates/fusionauth/src/lib.rs
+  s_154e7eadce3a09::t_96999e1deb1ea6 156-174,183,190,221-224
+crates/fusionauth/src/test.rs
+  s_154e7eadce3a09::t_42f419accde5e5 23-53
+crates/graphql_common/src/entity_type.rs
+  s_154e7eadce3a09::t_c6ced2b2f31a17 35-36,127,158
+crates/graphql_contacts/AGENTS.md
+  s_154e7eadce3a09::t_1b3a67bb5c2a6f 1-39
+crates/graphql_contacts/CLAUDE.md
+  s_154e7eadce3a09::t_f2146a8d361cc5 1
+crates/graphql_contacts/Cargo.toml
+  s_154e7eadce3a09::t_7bc27e9532a004 1-19
+crates/graphql_contacts/src/lib.rs
+  s_154e7eadce3a09::t_67dbdf2795f65f 1-11
+crates/graphql_contacts/src/reads.rs
+  s_154e7eadce3a09::t_7c0f7a36a9c871 1-81
+crates/graphql_contacts/src/test.rs
+  s_154e7eadce3a09::t_7c6deaaeadacee 1-337
+crates/graphql_contacts/src/user_query.rs
+  s_154e7eadce3a09::t_b75892256aa7b5 1-209
+crates/graphql_soup/src/objects.rs
+  s_154e7eadce3a09::t_20d91dc2d6f13d 27,318,340-341,474-475,505,629-634,1183-1254,2766
+crates/graphql_soup_filter_input/src/lib.rs
+  s_154e7eadce3a09::t_2521ed59e174d5 34,951-952,971-972,989-991,1001,1040-1063
+crates/graphql_soup_filter_input/src/test.rs
+  s_154e7eadce3a09::t_485f09a36db4b5 437-469
+crates/graphql_work_feed/src/inputs.rs
+  s_154e7eadce3a09::t_cd7107c78cb618 66-67,84
+crates/image_generation/src/domain/models.rs
+  s_154e7eadce3a09::t_3508188c2f73d4 153-154
+crates/image_generation/src/domain/service.rs
+  s_154e7eadce3a09::t_7e69b0bbbe086b 73,118-119
+crates/image_generation/src/domain/service/test.rs
+  s_154e7eadce3a09::t_f524f9da06e31b 145,522-523,537-543,551
+crates/image_generation/src/inbound/axum_router.rs
+  s_154e7eadce3a09::t_0b3c22346f7631 307
+crates/image_generation/src/inbound/toolset.rs
+  s_154e7eadce3a09::t_e14846512b2cb0 9,17-18,26,37,46-51
+crates/image_generation/src/inbound/toolset/generate_image.rs
+  s_154e7eadce3a09::t_52de21bae9f4d2 167
+crates/incus_client/AGENTS.md
+  s_154e7eadce3a09::t_9191ce296dbf7d 1-83
+crates/incus_client/CLAUDE.md
+  s_154e7eadce3a09::t_9b55675273d095 1
+crates/incus_client/Cargo.toml
+  s_154e7eadce3a09::t_5473105c77979c 1-22
+crates/incus_client/regen.sh
+  s_154e7eadce3a09::t_7f4c039e0ea9ea 1-110
+crates/incus_client/spec/openapi.json
+  s_154e7eadce3a09::t_34d7417b768286 1-3196
+crates/incus_client/spec/patch.py
+  s_154e7eadce3a09::t_204af9cea26aca 1-264
+crates/incus_client/spec/rest-api.yaml
+  s_154e7eadce3a09::t_cbfccc4e209171 1-20335
+crates/incus_client/src/client.rs
+  s_154e7eadce3a09::t_a4f55b3f7fdfdc 1-641
+crates/incus_client/src/client/test.rs
+  s_154e7eadce3a09::t_d7e78504b31549 1-561
+crates/incus_client/src/client/test/exec.rs
+  s_154e7eadce3a09::t_c384844b24b1e2 1-45
+crates/incus_client/src/client/test/volumes.rs
+  s_154e7eadce3a09::t_392ebb15694828 1-180
+crates/incus_client/src/error.rs
+  s_154e7eadce3a09::t_6f709df64dbf19 1-86
+crates/incus_client/src/generated.rs
+  s_154e7eadce3a09::t_c764ef6d5f635b 1-2386
+crates/incus_client/src/lib.rs
+  s_154e7eadce3a09::t_71bcb11a1a83cd 1-26
+crates/incus_client/src/model.rs
+  s_154e7eadce3a09::t_e625d82eed2c40 1-237
+crates/incus_client/src/names.rs
+  s_154e7eadce3a09::t_f4e9bce18af001 1-270
+crates/incus_client/src/names/test.rs
+  s_154e7eadce3a09::t_4518a72b098420 1-33
+crates/incus_client/src/tls.rs
+  s_154e7eadce3a09::t_96c3841b57ee06 1-100
+crates/incus_client/src/tls/test.rs
+  s_154e7eadce3a09::t_42f81e22d89a45 1-34
+crates/incus_client/testdata/other.crt
+  s_154e7eadce3a09::t_43fa0662f4fdb4 1-11
+crates/incus_client/testdata/server.crt
+  s_154e7eadce3a09::t_08c94c3037719e 1-11
+crates/item_filters/AGENTS.md
+  s_154e7eadce3a09::t_3c5ef517ae6847 63-65
+crates/item_filters/src/ast/email.rs
+  s_154e7eadce3a09::t_40356b48a5a95b 22-71,98-99,125-126
+crates/item_filters/src/ast/tests.rs
+  s_154e7eadce3a09::t_f0e9d23a75e375 1955-1994
+crates/macro_db_client/AGENTS.md
+  s_154e7eadce3a09::t_ce7422ac40fe93 80-82,98-99
+crates/macro_db_client/migrations/20261103223004_saved_view_position.sql
+  s_154e7eadce3a09::t_f6a7d38ed2ed4c 1-10
+crates/macro_db_client/migrations/20261103225134_email_threads_attachment_kind_flags.sql
+  s_154e7eadce3a09::t_3435abb4302b52 1-13
+crates/macro_db_client/migrations/20261103225135_email_threads_pdf_attachment_view_index.sql
+  s_154e7eadce3a09::t_6b5530f25c6ae6 1-8
+crates/macro_db_client/migrations/20261103225136_email_threads_image_attachment_view_index.sql
+  s_154e7eadce3a09::t_769d92e2a8e9bb 1-8
+crates/macro_db_client/migrations/20261103225137_email_threads_document_attachment_view_index.sql
+  s_154e7eadce3a09::t_729689549b0625 1-8
+crates/macro_db_client/migrations/20261103225138_email_messages_link_subject_trgm.sql
+  s_154e7eadce3a09::t_e06b84c711c714 1-7
+crates/macro_db_client/migrations/20261105044718_contacts_forward_canonical_lookup_index.sql
+  s_154e7eadce3a09::t_f00743ee0cd3db 1-7
+crates/macro_db_client/migrations/20261105044750_contacts_reverse_canonical_lookup_index.sql
+  s_154e7eadce3a09::t_0e4795010ed4b1 1-6
+crates/macro_db_client/migrations/20261110150950_add_ai_usage_agent_session_id.sql
+  s_154e7eadce3a09::t_f0e5b77ce4da7c 1-7
+crates/macro_db_client/migrations/20261110150951_ai_usage_agent_session_id_idx_concurrently.sql
+  s_154e7eadce3a09::t_67d6d32c7e0f22 1-10
+crates/macro_db_client/migrations/20261110150952_agent_session_turn_interrupted.sql
+  s_154e7eadce3a09::t_a6f36de5ce3d37 1-8
+crates/macro_db_client/src/user/get_user_name.rs
+  s_154e7eadce3a09::t_916d8edf19ec87 77
+crates/macro_entrypoint/AGENTS.md
+  s_154e7eadce3a09::t_696234336e1b0c 53-57
+crates/macro_entrypoint/Cargo.toml
+  s_154e7eadce3a09::t_8dc105c0361473 10-11
+crates/macro_entrypoint/src/lib.rs
+  s_154e7eadce3a09::t_6b81e778ade5de 20,124,139-141,153-154,158,164,181-185,222,269,289,300,340,480-498
+crates/macro_entrypoint/src/test.rs
+  s_154e7eadce3a09::t_a3cff4b68f8af3 59,112,126,133-175
+crates/macro_event_topics/src/lib.rs
+  s_154e7eadce3a09::t_9a1dbd4b142a6f 103-104
+crates/macro_event_topics/src/test.rs
+  s_154e7eadce3a09::t_8e8710985b3979 40
+crates/macro_service_urls/AGENTS.md
+  s_154e7eadce3a09::t_64542a0c471baf 46-47
+crates/macro_service_urls/src/lib.rs
+  s_154e7eadce3a09::t_ff9bc8aed14e37 599-606
+crates/macro_service_urls/src/test.rs
+  s_154e7eadce3a09::t_2604e3dff1108c 262-276
+crates/mcp_toolset/AGENTS.md
+  s_154e7eadce3a09::t_d44d64ce0239b2 13-15
+crates/mcp_toolset/src/lib.rs
+  s_154e7eadce3a09::t_ff221e2f8e0b22 18
+crates/mcp_toolset/src/mangle.rs
+  s_154e7eadce3a09::t_6705876ac5983b 126-132
+crates/models_soup/AGENTS.md
+  s_154e7eadce3a09::t_2d97bf3bf51ef4 16-17
+crates/models_soup/src/harness.rs
+  s_154e7eadce3a09::t_0e1cacd848464b 1-28
+crates/models_soup/src/item.rs
+  s_154e7eadce3a09::t_92da9ab9d29093 10,60-61,110-112,138,259-260,305,567,659
+crates/models_soup/src/lib.rs
+  s_154e7eadce3a09::t_6893c9b5074477 27-28
+crates/notification_inbox/AGENTS.md
+  s_154e7eadce3a09::t_9f5f80123a8fd8 7-8
+crates/notification_inbox/src/domain/policy.rs
+  s_154e7eadce3a09::t_b538fa2b83f039 30,42
+crates/pairing_id/AGENTS.md
+  s_154e7eadce3a09::t_bab89d5d3df252 1-23
+crates/pairing_id/CLAUDE.md
+  s_154e7eadce3a09::t_4747004b605ce0 1
+crates/pairing_id/Cargo.toml
+  s_154e7eadce3a09::t_d6a34bd25c6c31 1-18
+crates/pairing_id/src/lib.rs
+  s_154e7eadce3a09::t_aa52c64898a10f 1-113
+crates/saved_views/AGENTS.md
+  s_154e7eadce3a09::t_72af763adba7d5 5,9,12
+crates/saved_views/Cargo.toml
+  s_154e7eadce3a09::t_82ac4abd136062 20-22
+crates/saved_views/src/domain.rs
+  s_154e7eadce3a09::t_a3216f3c7c7917 43-44,47-48,55-66,80-83,91-99,147-174,208,211,214,216-221,327-331,337,340,364-418,463-469,528-538,545-551,557-566,682-683,687-689,724-726
+crates/saved_views/src/pgsql.rs
+  s_154e7eadce3a09::t_beb8a0b4153346 1-3,7-9,120-132,141-152,156,162-209
+crates/saved_views/src/pgsql/test.rs
+  s_154e7eadce3a09::t_26761baf5a8624 1-371
+crates/scheduled_action/src/outbound/pg_event_run_repo/test.rs
+  s_154e7eadce3a09::t_1a244ba5689b82 27-32,296-309,311,329-331,333-334,336,340
+crates/soup/AGENTS.md
+  s_154e7eadce3a09::t_261a8e947b64e3 22,59-62
+crates/soup/fixtures/attention_harnesses.sql
+  s_154e7eadce3a09::t_2038a54a4c76ff 1-39
+crates/soup/src/domain/service.rs
+  s_154e7eadce3a09::t_78a845b972eee4 1064-1065,1070
+crates/soup/src/inbound/toolset/list_entities.rs
+  s_154e7eadce3a09::t_5f7cc18e1f7b70 360-362,415-416
+crates/soup/src/outbound/pg_soup_repo.rs
+  s_154e7eadce3a09::t_3afd52e7fcaaa6 31,271-280,305,487-488
+crates/soup/src/outbound/pg_soup_repo/attention.rs
+  s_154e7eadce3a09::t_2100f147d9c6a6 37,49,57-58,75-83,87,198
+crates/soup/src/outbound/pg_soup_repo/attention/query.sql
+  s_154e7eadce3a09::t_95707e4f403855 147-148
+crates/soup/src/outbound/pg_soup_repo/attention/test.rs
+  s_154e7eadce3a09::t_f7e22059b08af5 512-543
+crates/soup/src/outbound/pg_soup_repo/harness.rs
+  s_154e7eadce3a09::t_6cb70e30317fbd 1-102
+crates/soup/src/outbound/pg_soup_repo/harness/test.rs
+  s_154e7eadce3a09::t_1aa01c5aab5ed8 1-51
+crates/soup_filter_projection/src/lib.rs
+  s_154e7eadce3a09::t_4a591c4f1d8539 373-374
+crates/subsequence_match/AGENTS.md
+  s_154e7eadce3a09::t_c559d9cf0dd156 1-24
+crates/subsequence_match/CLAUDE.md
+  s_154e7eadce3a09::t_d08b4b39727e34 1
+crates/subsequence_match/Cargo.toml
+  s_154e7eadce3a09::t_fcde301fe5ed94 1-7
+crates/subsequence_match/src/lib.rs
+  s_154e7eadce3a09::t_244dce8a7a57a7 1-17,20-31,33-43,48,50-52
+crates/subsequence_match/src/names.rs
+  s_154e7eadce3a09::t_ebe0b12270b62a 1-82
+crates/subsequence_match/src/names/test.rs
+  s_154e7eadce3a09::t_c9d9e78cb39461 1-46
+crates/subsequence_match/src/ranking.rs
+  s_154e7eadce3a09::t_b6f1097ab354fe 1-219
+crates/subsequence_match/src/ranking/automated-recipient-fixtures.tsv
+  s_154e7eadce3a09::t_d77539043f0d7d 1-30
+crates/subsequence_match/src/ranking/fixtures.tsv
+  s_154e7eadce3a09::t_ad28adedc3424f 1-14
+crates/subsequence_match/src/ranking/recipient-fixtures.tsv
+  s_154e7eadce3a09::t_7b55cfba09f03d 1-9
+crates/subsequence_match/src/ranking/test.rs
+  s_154e7eadce3a09::t_a3e3cae5b9a243 1-117
+crates/subsequence_match/src/test.rs
+  s_154e7eadce3a09::t_27e7269bbc921f 1-13
+crates/system_status/AGENTS.md
+  s_154e7eadce3a09::t_139117241f6e78 16-17
+crates/system_status/src/domain/models.rs
+  s_154e7eadce3a09::t_35cb0f3d4fd408 129-131,142,147
+crates/system_status/src/domain/service/test.rs
+  s_154e7eadce3a09::t_27e36202e9eb93 30,47,138,144,151,155
+crates/system_status/src/inbound/axum_router/test.rs
+  s_154e7eadce3a09::t_edd849ee701b03 121
+crates/user_events/AGENTS.md
+  s_154e7eadce3a09::t_4c12e786a2f03e 1-26
+crates/user_events/CLAUDE.md
+  s_154e7eadce3a09::t_1a48f13a87f283 1
+crates/user_events/Cargo.toml
+  s_154e7eadce3a09::t_118a25f07b06f1 1-19
+crates/user_events/src/lib.rs
+  s_154e7eadce3a09::t_9c2c02dc9e4b34 1-85
+crates/user_events/src/test.rs
+  s_154e7eadce3a09::t_e65dac7fb3926d 1-20
+crates/webhook/Cargo.toml
+  s_154e7eadce3a09::t_4576d7c9eb994c 37,48,115
+crates/webhook/src/domain/events.rs
+  s_154e7eadce3a09::t_87fd7daf2fae7a 210-211
+crates/webhook/src/domain/ingestion.rs
+  s_154e7eadce3a09::t_86dca242856082 35,41,149-154,390-421,880-900
+crates/webhook/src/domain/ports.rs
+  s_154e7eadce3a09::t_b60e29ddd82416 108-121
+crates/webhook/src/domain/stream.rs
+  s_154e7eadce3a09::t_a1923ed3e4c697 20,54-60,110,114,117,123,128,134,140,146,150,156,160,189-207,301,305,338
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_154e7eadce3a09::t_168f460a319f78 137-139
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_154e7eadce3a09::t_93768a4cb67fd5 77-78,246-252
+crates/webhook/src/topics.rs
+  s_154e7eadce3a09::t_a4eaa38378e5cf 16,27
+crates/work_feed/src/domain/models.rs
+  s_154e7eadce3a09::t_8caaa06cdea573 55-56,61,73,89
+crates/work_feed/src/domain/policy/test.rs
+  s_154e7eadce3a09::t_8e53271c871b84 21
+docs/README.md
+  s_154e7eadce3a09::t_5338aa22b2e037 20-22,25-26
+docs/agent-guide/ai-chat.md
+  s_154e7eadce3a09::t_fcef06bd18fdb1 199,247-250,400-401,738-740,834,933-950,983-984,1003-1006,1029,1149,1186,1188-1189,1400,1499-1500,1503,1508,1626
+docs/agent-guide/calendar.md
+  s_154e7eadce3a09::t_219d1a5fe07da0 355-365,591-600
+docs/agent-guide/channels.md
+  s_154e7eadce3a09::t_47507ed375c38e 40-67,150-156,624-625
+docs/agent-guide/crm.md
+  s_154e7eadce3a09::t_8c4728b36aca4d 87-93,120-124
+docs/agent-guide/databases.md
+  s_154e7eadce3a09::t_14d0e12a299c85 74-92
+docs/agent-guide/documents.md
+  s_154e7eadce3a09::t_43e3d6d81eaaf0 2453-2456
+docs/agent-guide/email.md
+  s_154e7eadce3a09::t_fe95ca0d999e6f 23-33,57-58,258,354-357,360-377,380,662-665,856,859-872,913-914,978-981,985-987,989-990,1101-1104,1465-1466,1540-1542,1583-1630
+docs/agent-guide/files.md
+  s_154e7eadce3a09::t_71124c534d6870 176-182
+docs/agent-guide/home.md
+  s_154e7eadce3a09::t_9c4b9efc82887c 10-11,67-68,104-105
+docs/agent-guide/login.md
+  s_154e7eadce3a09::t_28893075c87083 89,91-97,241-253,273-275
+docs/agent-guide/navigation.md
+  s_154e7eadce3a09::t_4f41f1818cf454 198,247,827-833,839-847,1085-1089,1161-1172,1542-1546,1551-1556,1567-1571
+docs/agent-guide/notifications.md
+  s_154e7eadce3a09::t_79e54b56d1a350 56-58
+docs/agent-guide/observability.md
+  s_154e7eadce3a09::t_fb2d965cd0c1c6 57-60
+docs/agent-guide/onboarding.md
+  s_154e7eadce3a09::t_9a66d14706e77e 25-36
+docs/agent-guide/reminders.md
+  s_154e7eadce3a09::t_558e15ff1ff05d 78-80
+docs/agent-guide/search.md
+  s_154e7eadce3a09::t_591d2dc90f8e60 33-60
+docs/agent-guide/settings.md
+  s_154e7eadce3a09::t_3313bb01d8bc72 758
+docs/agent-guide/setup-cards.md
+  s_154e7eadce3a09::t_be4d87627273a3 79-107,109-118
+docs/agent-guide/soup-live-updates.md
+  s_154e7eadce3a09::t_66a8d9c1a29563 139-140
+docs/agent-guide/tasks.md
+  s_154e7eadce3a09::t_c8e8e3f5ee751e 15-22,28-36,310-333
+docs/agent-guide/ui-conventions.md
+  s_154e7eadce3a09::t_48736c96425152 138-159,163-164,176-177,183-192,329-330
+docs/architecture/email.md
+  s_154e7eadce3a09::t_b882c8610216a9 56,243-260,306-319,587-592
+docs/architecture/mcp-surfaces.md
+  s_154e7eadce3a09::t_d22e23f13baadd 1-49
+docs/design/call-chat-in-channel.md
+  s_154e7eadce3a09::t_58168ee600220d 246-247
+docs/design/contact-name-search-proposal.md
+  s_154e7eadce3a09::t_c8eac2cc717347 1-183
+docs/design/disk-backed-contacts.md
+  s_154e7eadce3a09::t_62658186656e23 1-637
+docs/design/saved-views.md
+  s_154e7eadce3a09::t_f8c27e7882ac0b 1,32-35,278-286,304-311,346-353,480-481,483-544
+docs/runbooks/agent-harness-runtimes.md
+  s_154e7eadce3a09::t_bbbf34aa52b3ac 1-51
+docs/runbooks/ai-quota-enforcement.md
+  s_154e7eadce3a09::t_a106b65f06f1bc 123-131,426-430
+flake.lock
+  s_154e7eadce3a09::t_f258e62216009a 33-52,110-126,177,181
+flake.nix
+  s_154e7eadce3a09::t_c58ef7de10e575 10-11,13-18
+infra/packages/shared/src/service_urls.ts
+  s_154e7eadce3a09::t_c5ea4b16ad88fb 28,66,95,102
+infra/stacks/fusionauth-instance/index.ts
+  s_154e7eadce3a09::t_ebef3c3dc61c2c 512-513,515,527,529,533-557,566,568,570,572
+infra/stacks/fusionauth-instance/templates/reconcile_microsoft_signin.js
+  s_154e7eadce3a09::t_d5a6ead1fdb3f0 1-72
+infra/stacks/monitoring/AGENTS.md
+  s_154e7eadce3a09::t_38f735e0cf2099 7,75-78,82-84
+infra/stacks/monitoring/README.md
+  s_154e7eadce3a09::t_b9b8c87961a275 10,53,119,121-122,124-125,226-255,333-353
+infra/stacks/monitoring/index.ts
+  s_154e7eadce3a09::t_65cff00a2d3a4f 25,27
+infra/stacks/monitoring/monitors/harness-runtimes.ts
+  s_154e7eadce3a09::t_5cbc1a7ec6822f 1-184
+infra/stacks/monitoring/monitors/oauth.ts
+  s_154e7eadce3a09::t_a1245a43384f84 1-67
+infra/stacks/monitoring/routing.test.ts
+  s_154e7eadce3a09::t_526d520870e7f5 167
+nix-support/node_modules-hashes.json
+  s_154e7eadce3a09::t_a067c31bf14af8 3-4
+nix/_swagger2openapi.nix
+  s_154e7eadce3a09::t_2d6c5d762d958d 1-31
+nix/cloud-storage.nix
+  s_154e7eadce3a09::t_e55a1a68ff8f1e 1125
+nix/hosts.nix
+  s_154e7eadce3a09::t_c2ab0d859a74db 1-14
+nix/hosts/README.md
+  s_154e7eadce3a09::t_a0521140cca09c 1-164
+nix/hosts/_nixos/certs/control-plane-dev.crt
+  s_154e7eadce3a09::t_f2b12bd07db854 1-13
+nix/hosts/_nixos/gcp.nix
+  s_154e7eadce3a09::t_2afcd26ade631f 1-29
+nix/hosts/_nixos/incus-host.nix
+  s_154e7eadce3a09::t_57b1056843c274 1-255
+nix/hosts/_nixos/keys/admin.pub
+  s_154e7eadce3a09::t_2e9899185eb363 1
+nix/hosts/_nixos/runtime-dev-1.nix
+  s_154e7eadce3a09::t_b6649e7fce1e7a 1-149
+nix/macro-box/AGENTS.md
+  s_154e7eadce3a09::t_13058d631af419 1-190
+nix/macro-box/CLAUDE.md
+  s_154e7eadce3a09::t_23e61a0109a10a 1
+nix/macro-box/_chrome-devtools-mcp.nix
+  s_154e7eadce3a09::t_01e6521a397725 1-18
+nix/macro-box/_claude-agent-acp.nix
+  s_154e7eadce3a09::t_8e5b3848d4e6eb 1-32
+nix/macro-box/_claude-code.nix
+  s_154e7eadce3a09::t_47d28a0eb3e64f 1-10
+nix/macro-box/_container.nix
+  s_154e7eadce3a09::t_777662f81419ed 1-16
+nix/macro-box/_guest.nix
+  s_154e7eadce3a09::t_2ee0c6d620efb3 1-423
+nix/macro-box/_image.nix
+  s_154e7eadce3a09::t_0b217c93de930b 1-23
+nix/macro-box/_vm-test.nix
+  s_154e7eadce3a09::t_9baf597339edc9 1-125
+nix/macro-box/claude-agent-acp/lock.sh
+  s_154e7eadce3a09::t_e7872afcdb2d36 1-23
+nix/macro-box/claude-agent-acp/package-lock.json
+  s_154e7eadce3a09::t_f0228ef1ec3bb5 1-1572
+nix/macro-box/claude-agent-acp/package.json
+  s_154e7eadce3a09::t_32be3fb516e705 1-8
+nix/macro-box/files/check-enrollment-source
+  s_154e7eadce3a09::t_548a877dceab46 1-40
+nix/macro-box/files/etc/claude-code/CLAUDE.md
+  s_154e7eadce3a09::t_9bbd0d03ddd4b6 1-40
+nix/macro-box/macro-box.nix
+  s_154e7eadce3a09::t_b90f0e09bd231e 1-100
+nix/macro-box/skills/browser/SKILL.md
+  s_154e7eadce3a09::t_4253f03d36f146 1-20
+nix/macro-box/skills/coding-workflow/SKILL.md
+  s_154e7eadce3a09::t_963c5180f7afba 1-22
+nix/macro-box/skills/macro/SKILL.md
+  s_154e7eadce3a09::t_2fdd62672fb0a3 1-18
+nix/macro-box/skills/this-machine/SKILL.md
+  s_154e7eadce3a09::t_66192ae71dad1b 1-27
+nix/swagger2openapi/AGENTS.md
+  s_154e7eadce3a09::t_c7a655668340f7 1-18
+nix/swagger2openapi/CLAUDE.md
+  s_154e7eadce3a09::t_f9aa013994da36 1
+nix/swagger2openapi/package-lock.json
+  s_154e7eadce3a09::t_32cf5891be0571 1-454
+nix/swagger2openapi/package.json
+  s_154e7eadce3a09::t_896c8dd48448d3 1-8
+package.json
+  s_154e7eadce3a09::t_493c3118ca0ae0 74,82
+packages/code-mode-sdk/scripts/catalog.ts
+  s_154e7eadce3a09::t_addb664921bc33 44
+packages/collaboration/src/websocket/platform/tauri-websocket.test.ts
+  s_154e7eadce3a09::t_8582e04a0cb44b 8,38,54-57,485-573
+packages/collaboration/src/websocket/platform/tauri-websocket.ts
+  s_154e7eadce3a09::t_7ddc4a432a36c3 50-73,127-130,237,240,325-327,390,392-404,526,529-533
+packages/sdk-docs/src/render.ts
+  s_154e7eadce3a09::t_f2ce8aeb88d351 26-38,76-77,107,116-132
+packages/sdk-mcp/.gitignore
+  s_154e7eadce3a09::t_cdaf835911fb80 1
+packages/sdk-mcp/AGENTS.md
+  s_154e7eadce3a09::t_38b0d6bf4348ac 1-57
+packages/sdk-mcp/CLAUDE.md
+  s_154e7eadce3a09::t_1256860ef06883 1
+packages/sdk-mcp/package.json
+  s_154e7eadce3a09::t_a117177c4f3973 1-24
+packages/sdk-mcp/scripts/generate.ts
+  s_154e7eadce3a09::t_93ee9550b4aa8e 1-874
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_154e7eadce3a09::t_89bd74393b2999 1-109
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_154e7eadce3a09::t_6b18f35ff4d7ed 1-808
+packages/sdk-mcp/src/call.test.ts
+  s_154e7eadce3a09::t_658a4d97a9036f 1-303
+packages/sdk-mcp/src/call.ts
+  s_154e7eadce3a09::t_e3f0fc231b3b2e 1-283
+packages/sdk-mcp/src/catalog.ts
+  s_154e7eadce3a09::t_ddc9e215d2f4d4 1-112
+packages/sdk-mcp/src/index.ts
+  s_154e7eadce3a09::t_bf4e1d881abca4 1-18
+packages/sdk-mcp/src/schema.ts
+  s_154e7eadce3a09::t_bcdf9ac04f0035 1-141
+packages/sdk-mcp/src/tools.test.ts
+  s_154e7eadce3a09::t_cf48f685ac3c23 1,3-4,6-18,20-39,41-50,52-55,57-67,70-78
+packages/sdk-mcp/src/tools.ts
+  s_154e7eadce3a09::t_b544d7b7d70fba 1-3,5-11,13-59,62-68,70-82,84-99,101,103-109,111-119,121-139,141-173,175-198,200-206,208-223,225-231,233
+packages/sdk-mcp/src/validate.ts
+  s_154e7eadce3a09::t_e18bbb986ba9ed 1-164
+packages/sdk-mcp/tsconfig.json
+  s_154e7eadce3a09::t_a898df0a4a5550 1-15
+packages/sdk-mcp/vitest.config.ts
+  s_154e7eadce3a09::t_686b3c713216cf 1-12
+packages/sdk/AGENTS.md
+  s_154e7eadce3a09::t_bcb4716b7583a7 76-78,92-97,170-175
+packages/sdk/examples/profile-picture-e2e.ts
+  s_154e7eadce3a09::t_9e6ab036c98c5b 1-177
+packages/sdk/package.json
+  s_154e7eadce3a09::t_2240693839fe1e 3
+packages/sdk/src/entities/account-managers/grant.ts
+  s_154e7eadce3a09::t_f0f74cd4c92e6f 48-52,57-61,66-70,80-84,97-98,107-112
+packages/sdk/src/entities/account-managers/namespace.ts
+  s_154e7eadce3a09::t_93e5be857b5083 15-19,26-30,35-39
+packages/sdk/src/entities/activity/namespace.ts
+  s_154e7eadce3a09::t_829fa8da4380c2 60-61
+packages/sdk/src/entities/agent-sessions/activity.ts
+  s_154e7eadce3a09::t_6938164e992c5c 30-34,39-43
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_154e7eadce3a09::t_5e820831594a37 213-217,222-226,235-240,250-254,362-363,458-459,486-487,506-507,529-531,545-547,558-562,582-584,598-603,623-625,641-643,676-681,686-691,705-710,783-785,802-804,820-821,834-838,847-851,860-866,882-883,896-900,927-931,941-946
+packages/sdk/src/entities/agent-sessions/code-execution.ts
+  s_154e7eadce3a09::t_5a574532e1d8d8 49-53,70-74,79-83
+packages/sdk/src/entities/agent-sessions/conversation.ts
+  s_154e7eadce3a09::t_bae875a83288f3 12-16,25-29,34-38,47-51,58-62,78-82,91-95,104-108,113-118
+packages/sdk/src/entities/agent-sessions/namespace.ts
+  s_154e7eadce3a09::t_775e9eb17f4a06 64-66,76-77,86-87,96-98,108-110,121-122,131-132,138-142,147-152,157-161,166-170,175-180,187-192
+packages/sdk/src/entities/agent-sessions/queued-action.ts
+  s_154e7eadce3a09::t_c03e68d63c380b 18-19,74-76,89-93,102-107
+packages/sdk/src/entities/agent-sessions/review.ts
+  s_154e7eadce3a09::t_cdee1a25fa4884 107-111,115-119,123-127,141-145,151-156,160-165,188-192,215-220,224-229,233-238
+packages/sdk/src/entities/agent-sessions/tool-approval.ts
+  s_154e7eadce3a09::t_85fd375b817abd 25-29
+packages/sdk/src/entities/agents/agent.ts
+  s_154e7eadce3a09::t_95372597437c09 179-181,196-198
+packages/sdk/src/entities/agents/namespace.ts
+  s_154e7eadce3a09::t_d37af8b9f472f2 48-49,67-68,84-88
+packages/sdk/src/entities/ai/namespace.ts
+  s_154e7eadce3a09::t_3efe9c544f6a5e 25-29,47-48,61-62
+packages/sdk/src/entities/api-keys/api-key.ts
+  s_154e7eadce3a09::t_0dfa44af84a117 37-42
+packages/sdk/src/entities/api-keys/namespace.ts
+  s_154e7eadce3a09::t_7688a7928f1479 18-22,29-33,41-45
+packages/sdk/src/entities/bots/bot.ts
+  s_154e7eadce3a09::t_f76248b7181c2e 127-132,146-151,158-162,175-176,186-191,201-206,215-219,230-231
+packages/sdk/src/entities/bots/namespace.ts
+  s_154e7eadce3a09::t_e0a22f7063bf62 24-28,36-37,46-47,60-61,81-82
+packages/sdk/src/entities/bots/token.ts
+  s_154e7eadce3a09::t_060e58e490f792 57-62
+packages/sdk/src/entities/calendar/booking-link.ts
+  s_154e7eadce3a09::t_548c2458e541b2 59-63,77-78
+packages/sdk/src/entities/calendar/booking-namespace.ts
+  s_154e7eadce3a09::t_8c9b4ce109b8e6 72-73,115-117,136-137,159-160,181-182,203-204
+packages/sdk/src/entities/calendar/booking.ts
+  s_154e7eadce3a09::t_a0e287de4e114b 82-83,98-100,110-113,122-124,133-135
+packages/sdk/src/entities/calendar/calendar.ts
+  s_154e7eadce3a09::t_429ead7a5d2fc2 14-20
+packages/sdk/src/entities/calendar/event.ts
+  s_154e7eadce3a09::t_73014a6dd1c5ac 195-198,216-221,247-252,268-271,290-294,323-328,354-358,376-380,393-396,403-409
+packages/sdk/src/entities/calendar/namespace.ts
+  s_154e7eadce3a09::t_4a1d7027c9ee9c 147-151,163-167,172-177,218-221,251-255,274-278,311-312,350-354,359-363,368-372,377-381,390-392,415-417
+packages/sdk/src/entities/calendar/replacement.ts
+  s_154e7eadce3a09::t_f85e2b44ba25fc 12-21,31-36,45-50
+packages/sdk/src/entities/calls/call-record.ts
+  s_154e7eadce3a09::t_c5b95867d5f830 51-56,71-75,84-88,100-105,112-116,142-146,151-155,168-173,183-188,200-204,220-224,239-243,317-322,337-339,357-359,370-375
+packages/sdk/src/entities/calls/connection.ts
+  s_154e7eadce3a09::t_c7d5a12e67101b 47-53
+packages/sdk/src/entities/calls/message.ts
+  s_154e7eadce3a09::t_49572bd343f6de 53-57,62-66,71-75,86-91,103-108
+packages/sdk/src/entities/calls/namespace.ts
+  s_154e7eadce3a09::t_58ea7a068054a1 29-33,38-42,50-54
+packages/sdk/src/entities/canvases/canvas.ts
+  s_154e7eadce3a09::t_eaed667f53e79e 207-211,233-234,297-298,348-349,395-396
+packages/sdk/src/entities/channels/access-request.ts
+  s_154e7eadce3a09::t_d18c4a7c65e483 71-75,80-84
+packages/sdk/src/entities/channels/activity.ts
+  s_154e7eadce3a09::t_44c9ff287869e8 10-14,28-32,37-41,46-50
+packages/sdk/src/entities/channels/channel.ts
+  s_154e7eadce3a09::t_39d363435d094b 49-54,69-73,85-89,102-107,117-121,130-134,144-148,245-246,265-269,277-278,307-311,316-321,331-336,343-348,355-359,372-373,397-399,413-418,427-432,439-443,452-456,465-470,480-485,495-500,516-520,541-545
+packages/sdk/src/entities/channels/labels.ts
+  s_154e7eadce3a09::t_9156417288be8d 27-31,40-41,51-55,65-69,74-79,93-98,108-113,122-127
+packages/sdk/src/entities/channels/message.ts
+  s_154e7eadce3a09::t_7f4674c39154bd 74-78,83-87,92-96,101-106,117-122,137-139,152-157,164-168
+packages/sdk/src/entities/channels/namespace.ts
+  s_154e7eadce3a09::t_fecf5af0eab801 30-34,60-62,71-73,79-83,98-99,110-111
+packages/sdk/src/entities/channels/thread.ts
+  s_154e7eadce3a09::t_79067510b24ea2 22-26,32-36,41-45,50-54,79-80
+packages/sdk/src/entities/chats/chat.ts
+  s_154e7eadce3a09::t_d85e38463b69de 26-31,118-122,134-136,147-152,165-167,177-181,189-194,201-205,215-219,236-240
+packages/sdk/src/entities/chats/generation.ts
+  s_154e7eadce3a09::t_a1e489b2231775 29-34,82-86
+packages/sdk/src/entities/chats/namespace.ts
+  s_154e7eadce3a09::t_87fed9450fccbe 24-28,33-37
+packages/sdk/src/entities/connected-apps/connected-app.ts
+  s_154e7eadce3a09::t_80ecbca4990e28 110-113,126-131,186-189
+packages/sdk/src/entities/connected-apps/connector.ts
+  s_154e7eadce3a09::t_8cea1e725c626b 78-80
+packages/sdk/src/entities/connected-apps/namespace.ts
+  s_154e7eadce3a09::t_01827053be4211 45-48,59-62,75-77,92-96
+packages/sdk/src/entities/crm/company.ts
+  s_154e7eadce3a09::t_6d65ad7357ef80 26-30,39-43,105-109,115-119,125-129,150-152,158-163,180-182,193-198,212-213,233-237,247-248,257-261
+packages/sdk/src/entities/crm/contact.ts
+  s_154e7eadce3a09::t_a9161dcc358a7b 24-28,37-41,103-108,113-118,132-137,147-152,162-167,182-186,196-197,206-210
+packages/sdk/src/entities/crm/namespace.ts
+  s_154e7eadce3a09::t_141287f2c45a0a 39-43,48-52,57-61,77-78,92-96,108-109,118-122,134-136,148-150,156-160,165-170,179-184,189-194,205-206,239-243
+packages/sdk/src/entities/crm/pipeline-entry.ts
+  s_154e7eadce3a09::t_faace9b80b35fd 92-93
+packages/sdk/src/entities/crm/pipeline.ts
+  s_154e7eadce3a09::t_6e00cf2191ad66 94-99,106-111,119-124,131-135,144-149,159-163,205-211,241-245,250-255,266-271,276-280,296-300,330-331,371-373,423-425,463-464,517-518,535-536,555-556,569-572,596-600,643-647,676-680,687-691,698-702,707-711,716-720,726-730,744-748,764-765,825-829,836-840,878-882,890-894,899-903
+packages/sdk/src/entities/crm/pipelines.ts
+  s_154e7eadce3a09::t_5683a2a378e9a9 21-25,32-36,47-48,67-68
+packages/sdk/src/entities/databases/column.ts
+  s_154e7eadce3a09::t_c729754d0de9d6 41-42,55-59,70-72,79-84,90-95,106-107,119-120,126-131,136-140,145-149,154-158,166-167,176-177,186-188
+packages/sdk/src/entities/databases/database.ts
+  s_154e7eadce3a09::t_336fbce4b3545a 272-276,306-307,328-332,351-352,365-370,378-379,413-417,424-428,453-454,486-488,508-510,526-527,538-542,556-557,569-574,593-597,610-611,626-632,642-646,655-660,677-679,708-709,729-730,785-787,814-816,856-858,883-885,908-913,936-937,986-988
+packages/sdk/src/entities/databases/namespace.ts
+  s_154e7eadce3a09::t_fbc1ca6215c70d 72-76,89-93,98-102
+packages/sdk/src/entities/databases/row.ts
+  s_154e7eadce3a09::t_b1d9212e7aa29b 27-28
+packages/sdk/src/entities/databases/saved-query.ts
+  s_154e7eadce3a09::t_be274cf034a323 201-202,287-291,312-313,341-342
+packages/sdk/src/entities/databases/table.ts
+  s_154e7eadce3a09::t_95a0c1ca920297 36-37,50-54,59-64,75-76,82-86,91-95,101-105,110-115,121-125,130-134,140-144,149-153,158-163
+packages/sdk/src/entities/databases/view.ts
+  s_154e7eadce3a09::t_24c5736466e4b9 32-36,48-52,57-61,66-70,75-79,88-89
+packages/sdk/src/entities/databases/webhook.ts
+  s_154e7eadce3a09::t_00f1236304d242 10-11,43-48
+packages/sdk/src/entities/documents/anchor.ts
+  s_154e7eadce3a09::t_43b7347ae1b805 62-67,85-90
+packages/sdk/src/entities/documents/comment.ts
+  s_154e7eadce3a09::t_8d1e9090a2c86b 58-62,67-71,76-80,85-89,98-100,113-118
+packages/sdk/src/entities/documents/document.ts
+  s_154e7eadce3a09::t_e52a9a0a29aa27 96-100,109-113,129-133,138-142,155-157,168-172,181-185,195-199,211-215,224-228,237-241,410-411,427-428,465-466,493-495,589-590,603-604,621-622,658-659,684-685,724-725,762-763,792-793,812-813,829-830,841-846,856-861,874-876,888-893,903-904,920-924,959-960,1004-1005,1014-1018,1027-1031,1040-1045,1058-1059,1074-1076,1087-1091,1101-1105,1119-1120,1140-1144
+packages/sdk/src/entities/documents/namespace.ts
+  s_154e7eadce3a09::t_9a286970227062 71-75,98-102,138-139,158-159,201-205,217-218,255-256,273-274,280-284,309-310,336-337,362-363,369-373,378-382,390-394
+packages/sdk/src/entities/documents/system-skill.ts
+  s_154e7eadce3a09::t_44dfea526e1d5c 9-10,24-25
+packages/sdk/src/entities/documents/version.ts
+  s_154e7eadce3a09::t_2d5b310c694cfb 36-40
+packages/sdk/src/entities/email/attachment.ts
+  s_154e7eadce3a09::t_04c53d2ede73e0 55-57
+packages/sdk/src/entities/email/draft.ts
+  s_154e7eadce3a09::t_2cafa38b18eaaa 75-81,98-104,118-120,144-146,155-161,173-177,212-216,238-243,267-272,307-312,317-322
+packages/sdk/src/entities/email/filter.ts
+  s_154e7eadce3a09::t_5791a7e413cd7c 64-69,84-89
+packages/sdk/src/entities/email/label.ts
+  s_154e7eadce3a09::t_294fb39b8ea6ca 39-45
+packages/sdk/src/entities/email/link.ts
+  s_154e7eadce3a09::t_07c7bcd3204c34 54-58
+packages/sdk/src/entities/email/message.ts
+  s_154e7eadce3a09::t_734911a9140374 202-206,228-230,286-288,329-333,341-345,354-359,376-381,399-405,418-424,437-441,453-455
+packages/sdk/src/entities/email/namespace.ts
+  s_154e7eadce3a09::t_b773a6549298eb 48-53,66-70,75-79,103-107,116-121,142-146,151-155,186-190,195-199,204-208,213-217,222-226,232-237,251-253,271-273,284-285,291-295,315-319,324-328,333-338,346-349,355-361,366-372,379-385,394-398
+packages/sdk/src/entities/email/thread.ts
+  s_154e7eadce3a09::t_5c13af1bd23da7 68-72,81-86,96-100,120-124,147-148,164-169,206-210,262-266,276-277,290-294,311-315,328-330,354-360,399-405,412-416,423-428,433-439,449-455,465-470
+packages/sdk/src/entities/entity-mentions/mention.ts
+  s_154e7eadce3a09::t_d14dcc5989ea27 17-22
+packages/sdk/src/entities/entity-mentions/namespace.ts
+  s_154e7eadce3a09::t_78df6a183e8ee4 19-23
+packages/sdk/src/entities/entity.ts
+  s_154e7eadce3a09::t_4706d23f4450f5 122-126,139-141,156-157,174-177,187-192,217-221,226-230,252-254,271-277,299-304
+packages/sdk/src/entities/external-chat/chat.ts
+  s_154e7eadce3a09::t_963fc047d5c43f 85-89,98-102,122-127,138-142,151-156,168-173,180-185,199-201,250-254,263-267,280-284,307-311
+packages/sdk/src/entities/external-chat/namespace.ts
+  s_154e7eadce3a09::t_5968401ef44185 16-20
+packages/sdk/src/entities/external-chat/send.ts
+  s_154e7eadce3a09::t_178c32db0e1627 68-72,114-118
+packages/sdk/src/entities/favorites/namespace.ts
+  s_154e7eadce3a09::t_3eef9c38f4cc66 32-36,51-53,63-68,77-82
+packages/sdk/src/entities/foreign/foreign-entity.ts
+  s_154e7eadce3a09::t_31c76769f9e0ff 53-57
+packages/sdk/src/entities/foreign/namespace.ts
+  s_154e7eadce3a09::t_c875c3b6acaf59 61-62,83-84
+packages/sdk/src/entities/forms/form.ts
+  s_154e7eadce3a09::t_0c392b60e07633 223-227,263-267,274-278,289-294,314-316,500-504,518-523,537-541,628-632,648-652,685-689,696-701,713-717,727-731
+packages/sdk/src/entities/forms/namespace.ts
+  s_154e7eadce3a09::t_daaa2a8080d1af 19-23,28-32
+packages/sdk/src/entities/forms/question.ts
+  s_154e7eadce3a09::t_e3ae24cbeed2b0 23-27,42-46,51-55,63-67,89-93,105-109,114-118
+packages/sdk/src/entities/forms/response.ts
+  s_154e7eadce3a09::t_d408989b1cfd17 45-49,54-58,63-67,72-76,81-85
+packages/sdk/src/entities/forms/section.ts
+  s_154e7eadce3a09::t_8fdd9ab7b43344 20-24,36-40,45-49
+packages/sdk/src/entities/github-pull-requests/namespace.ts
+  s_154e7eadce3a09::t_d900931a12cf44 18-22
+packages/sdk/src/entities/github-pull-requests/pull-request.ts
+  s_154e7eadce3a09::t_d96e77128197fe 31-35,54-58,73-77
+packages/sdk/src/entities/harnesses/harness.ts
+  s_154e7eadce3a09::t_39d9100d848b6a 51-53,64-69,100-101,107-111,120-125
+packages/sdk/src/entities/harnesses/namespace.ts
+  s_154e7eadce3a09::t_4017d902c632ea 22-26,36-37,45-51,59-66,71-77,84-90,97-101,106-112
+packages/sdk/src/entities/harnesses/pairing.ts
+  s_154e7eadce3a09::t_209bd0b97894ca 30-34,67-73
+packages/sdk/src/entities/images/image.ts
+  s_154e7eadce3a09::t_5155b8519ce5e1 48-49
+packages/sdk/src/entities/images/namespace.ts
+  s_154e7eadce3a09::t_51a846284006bd 8,41-48,61-62
+packages/sdk/src/entities/initiatives/initiative.ts
+  s_154e7eadce3a09::t_5d4c1365f1af42 68-72,130-131,146-150,160-161,167-171,176-180,189-193,204-209,241-242,277-282
+packages/sdk/src/entities/initiatives/namespace.ts
+  s_154e7eadce3a09::t_5331702bb2a36f 117-118,165-169,180-184
+packages/sdk/src/entities/me/namespace.ts
+  s_154e7eadce3a09::t_d2bae2d185b135 4-5,19-24,39-43,69-82,93-97,101,104
+packages/sdk/src/entities/meetings/meeting.ts
+  s_154e7eadce3a09::t_b148bae54f2f5e 16-21,36-41,105-110,117-122,129-133,142-147,157-161,171-175
+packages/sdk/src/entities/meetings/namespace.ts
+  s_154e7eadce3a09::t_6b148ca1949d66 19-23,33-37,44-48,55-59
+packages/sdk/src/entities/memory/namespace.ts
+  s_154e7eadce3a09::t_a8ab0ac0cc489a 32-33,54-55
+packages/sdk/src/entities/messages/discussion.ts
+  s_154e7eadce3a09::t_a23a4e642a6276 90-94,99-103,108-112,123-125,138-143
+packages/sdk/src/entities/messages/thread.ts
+  s_154e7eadce3a09::t_94840346c2ed19 108-113,129-134
+packages/sdk/src/entities/notifications/namespace.ts
+  s_154e7eadce3a09::t_31c8781a4b8324 25-29,34-39,48-53,62-67,76-80,87-92,101-106
+packages/sdk/src/entities/notifications/notification.ts
+  s_154e7eadce3a09::t_a845ed68e0f2ef 95-99,104-109,118-123,132-137,146-151
+packages/sdk/src/entities/pins/namespace.ts
+  s_154e7eadce3a09::t_8f6355383e9488 19-23,29-34,47-52,62-67
+packages/sdk/src/entities/projects/namespace.ts
+  s_154e7eadce3a09::t_f2877b2e195ace 34-38,43-47
+packages/sdk/src/entities/projects/project.ts
+  s_154e7eadce3a09::t_61fef0e1d1f318 22-26,39-41,52-56,83-87,133-134,145-150,163-165,175-180
+packages/sdk/src/entities/properties/namespace.ts
+  s_154e7eadce3a09::t_588986463e360e 43-47,71-75,84-88,93-97,106-112,134-140,157-163,184-185,196-197
+packages/sdk/src/entities/properties/property-definition.ts
+  s_154e7eadce3a09::t_42c8a9b29f4705 104-109,118-122,132-136,147-153,167-173
+packages/sdk/src/entities/properties/property-option.ts
+  s_154e7eadce3a09::t_24c26b8a9798e8 14-15,60-65,76-81
+packages/sdk/src/entities/referrals/namespace.ts
+  s_154e7eadce3a09::t_daf1bee431f9de 22-26,45-47
+packages/sdk/src/entities/routines/namespace.ts
+  s_154e7eadce3a09::t_90d92a60bf03e1 112-113,143-144,187-188,229-233
+packages/sdk/src/entities/routines/routine.ts
+  s_154e7eadce3a09::t_5a798d5e4ba913 158-162,220-224,236-238,259-260,282-287,296-301,311-316,326-330,349-353,362-367,375-379,393-394
+packages/sdk/src/entities/saved-views/namespace.ts
+  s_154e7eadce3a09::t_bcd5201d77e1a5 1-90
+packages/sdk/src/entities/saved-views/saved-view.ts
+  s_154e7eadce3a09::t_39b695eb26c5ed 1-164
+packages/sdk/src/entities/search/namespace.ts
+  s_154e7eadce3a09::t_a17138b0272df7 116-117,135-136
+packages/sdk/src/entities/sharing/access.ts
+  s_154e7eadce3a09::t_2d78744884f13a 24-28,64-65,77-81,98-102,112-116,126-131,141-146,155-160,185-189,239-243
+packages/sdk/src/entities/spreadsheets/spreadsheet.ts
+  s_154e7eadce3a09::t_b8ea26b413fd43 129-130,168-169,230-231,289-290,317-321
+packages/sdk/src/entities/tasks/namespace.ts
+  s_154e7eadce3a09::t_26df9f55f6c6ab 31-32,55-56,67-68,76-77,83-87
+packages/sdk/src/entities/tasks/task.ts
+  s_154e7eadce3a09::t_6eec17a4f107d8 181-182,197-201
+packages/sdk/src/entities/teams/invite.ts
+  s_154e7eadce3a09::t_42107829fc814b 51-53
+packages/sdk/src/entities/teams/namespace.ts
+  s_154e7eadce3a09::t_3fc3438256baf9 15-19,24-28
+packages/sdk/src/entities/teams/team.ts
+  s_154e7eadce3a09::t_84dfa6a221cbd7 71-72,106-108,146-147
+packages/sdk/src/entities/unfurls/namespace.ts
+  s_154e7eadce3a09::t_65f8dff98b2179 12-17,22-27
+packages/sdk/src/entities/users/namespace.ts
+  s_154e7eadce3a09::t_158c6d203141b2 3,17-21,26-52,57-58
+packages/sdk/src/entities/users/profile-picture.test.ts
+  s_154e7eadce3a09::t_90e0dfb7789c3a 1-120
+packages/sdk/src/entities/users/profile-picture.ts
+  s_154e7eadce3a09::t_5b38ff5ee5ed52 1-48
+packages/sdk/src/entities/users/user.ts
+  s_154e7eadce3a09::t_bc7a5d33859fde 8,57-58,66-89,94-95,108-109,121-123,141-142,160-164
+packages/sdk/src/entities/web/namespace.ts
+  s_154e7eadce3a09::t_c1325d9def8ccf 57-59,87-89
+packages/sdk/src/entities/whatsapp/account.ts
+  s_154e7eadce3a09::t_74c96fc3d5ebed 41-45
+packages/sdk/src/entities/whatsapp/chat.ts
+  s_154e7eadce3a09::t_5a6d2361067785 95-98,110-114
+packages/sdk/src/entities/whatsapp/namespace.ts
+  s_154e7eadce3a09::t_1da26f1f7d506f 17-21,31-32
+packages/sdk/src/entities/workspace/namespace.ts
+  s_154e7eadce3a09::t_c7882c8c99b48f 88-92,103-104
+packages/sdk/src/entities/workspace/query.ts
+  s_154e7eadce3a09::t_2175e97711e58c 68-72
+packages/sdk/src/events/hydrate/user.ts
+  s_154e7eadce3a09::t_5fbc2239823b76 1-24
+packages/sdk/src/local-portmap.ts
+  s_154e7eadce3a09::t_636eedbc34d575 28-39,41-42
+packages/sdk/src/macro.ts
+  s_154e7eadce3a09::t_c8b073bcd98b90 36,222-224,290,304-305,313-317,530-533,557-560
+packages/sdk/src/utils/lazy.ts
+  s_154e7eadce3a09::t_8533e64f4f383f 35-44
+packages/sdk/tests/saved-views.test.ts
+  s_154e7eadce3a09::t_9b2ca4d34e502c 1-172
+packages/sdk/tests/user-event.test.ts
+  s_154e7eadce3a09::t_8375491bfedd2f 1-49
+services/agent_harness_service/AGENTS.md
+  s_154e7eadce3a09::t_0ec166e716a0a4 23-27,182-186,191-199,227-230
+services/agent_harness_service/Cargo.toml
+  s_154e7eadce3a09::t_deeb1268785ab3 30-31,151
+services/agent_harness_service/src/cognition/config.rs
+  s_154e7eadce3a09::t_f698f375bef642 119-120,230-231
+services/agent_harness_service/src/config.rs
+  s_154e7eadce3a09::t_768ca67dd5ca00 16-18,50-52,70-73,121-125,143-144,317-334,342,346,350,353-357,361,364-369
+services/agent_harness_service/src/config/test.rs
+  s_154e7eadce3a09::t_d9e32f1f8f097d 1-121
+services/agent_harness_service/src/containers.rs
+  s_154e7eadce3a09::t_1926b2b5b6a4a4 10-11,76-77,289-314
+services/agent_harness_service/src/containers/test.rs
+  s_154e7eadce3a09::t_3fe801b066eeb8 93,98,290-356
+services/agent_harness_service/src/main.rs
+  s_154e7eadce3a09::t_ce405efb8fbd24 30,214-221,519,730-733,996-997,1006-1008,1397,1439,2014-2028,2385-2387
+services/agent_harness_service/src/public_mcp.rs
+  s_154e7eadce3a09::t_f6ab44d9756165 3,19,69-77,169,225-232,259-263,272-273
+services/agent_harness_service/src/public_mcp/macro_api_tokens.rs
+  s_154e7eadce3a09::t_ef7c703d061559 1-64
+services/agent_harness_service/src/runtime_gauges.rs
+  s_154e7eadce3a09::t_3ed648301ef65b 1-109
+services/agent_harness_service/src/scheduling/config.rs
+  s_154e7eadce3a09::t_ae9866adbb21a5 11-12,21,37-38,86,88-91,94
+services/agent_harness_service/src/scheduling/config/test.rs
+  s_154e7eadce3a09::t_56b0fa1ececfa7 3-17,24,87,90,104,119-158
+services/authentication_service/AGENTS.md
+  s_154e7eadce3a09::t_777b66678af2b3 48-63,137-138,156-158,186-190,193-203
+services/authentication_service/Cargo.toml
+  s_154e7eadce3a09::t_130df9b251feeb 160
+services/authentication_service/README.md
+  s_154e7eadce3a09::t_2415e13304b984 11-12,40,73-74,76,179
+services/authentication_service/src/api/context.rs
+  s_154e7eadce3a09::t_056d5908df30a7 266-267
+services/authentication_service/src/api/login/sso.rs
+  s_154e7eadce3a09::t_dcf3115664d384 90-101,170,182,214,232-254
+services/authentication_service/src/api/login/sso/tests.rs
+  s_154e7eadce3a09::t_ed14edaeecfd73 55-62
+services/authentication_service/src/api/oauth/oauth_redirect.rs
+  s_154e7eadce3a09::t_2e38bd7b40b08a 7,69-72,75,81-84,308-331
+services/authentication_service/src/api/oauth/oauth_redirect/tests.rs
+  s_154e7eadce3a09::t_8f1194fb307b1f 194-230
+services/authentication_service/src/api/oauth2.rs
+  s_154e7eadce3a09::t_d051ad33ba7fe9 99,115,128-129
+services/authentication_service/src/api/user.rs
+  s_154e7eadce3a09::t_b1ae488b338919 25
+services/authentication_service/src/api/user/post_get_names_with_email.rs
+  s_154e7eadce3a09::t_aeeeaa1597e2ff 33
+services/authentication_service/src/api/user/profile_picture_change.rs
+  s_154e7eadce3a09::t_2fead4ff6282cd 1-108
+services/authentication_service/src/api/user/profile_picture_change/test.rs
+  s_154e7eadce3a09::t_c359f1bf3c572f 1-53
+services/authentication_service/src/api/user/put_profile_picture.rs
+  s_154e7eadce3a09::t_4f3f641b8f6065 8-10,32,37,43-47,59-62
+services/authentication_service/src/api/user/put_profile_picture_file.rs
+  s_154e7eadce3a09::t_1841ebdb24c2f7 12-14,226,232-236,246-251,291-299
+services/authentication_service/src/config.rs
+  s_154e7eadce3a09::t_b2acafbef8a584 322
+services/authentication_service/src/config/test.rs
+  s_154e7eadce3a09::t_801af3c9103fa8 310-374
+services/authentication_service/src/server.rs
+  s_154e7eadce3a09::t_5187bb7f38687e 799
+services/document_storage_service/AGENTS.md
+  s_154e7eadce3a09::t_9b5081be47c395 18-22
+services/document_storage_service/Cargo.toml
+  s_154e7eadce3a09::t_2c23edbd887ba2 108,175
+services/document_storage_service/src/api/context.rs
+  s_154e7eadce3a09::t_78b688342fdf6c 934-940,991,1016-1018,1109-1114
+services/document_storage_service/src/api/graphql_soup.rs
+  s_154e7eadce3a09::t_171b1bfa3b63d3 169,208
+services/document_storage_service/src/api/saved_views.rs
+  s_154e7eadce3a09::t_f5e363c7da1d7a 20-23,32,115-116,147-148,183,210
+services/document_storage_service/src/api/saved_views/definitions.rs
+  s_154e7eadce3a09::t_fa926f56721a5e 1-428
+services/document_storage_service/src/api/saved_views/definitions/test.rs
+  s_154e7eadce3a09::t_f2f12141b251b3 1-488
+services/document_storage_service/src/api/saved_views/test.rs
+  s_154e7eadce3a09::t_ca26275579d8e7 1-6
+services/document_storage_service/src/api/swagger.rs
+  s_154e7eadce3a09::t_2939339120d545 6-9,624-629,1221-1226
+services/document_storage_service/src/outbound/mod.rs
+  s_154e7eadce3a09::t_2ae95007704b31 10-11
+services/document_storage_service/src/outbound/saved_view_changes.rs
+  s_154e7eadce3a09::t_849265618ca189 1-111
+services/document_storage_service/src/outbound/saved_view_changes/test.rs
+  s_154e7eadce3a09::t_5091f54cd17044 1-130
+services/document_storage_service/src/outbound/stream_contacts.rs
+  s_154e7eadce3a09::t_e7afc5c64ebac8 1-51
+services/document_storage_service/src/outbound/stream_contacts/test.rs
+  s_154e7eadce3a09::t_70affd9159f01d 1-91
+services/document_storage_service/src/server.rs
+  s_154e7eadce3a09::t_9e160e502a237a 972-974,983,993,1429-1476,1823-1826,1833,1836-1844,2386-2397,2399,2496
+services/document_storage_service/src/service/saved_views.rs
+  s_154e7eadce3a09::t_30d4e2d20a68ef 5,42-55,59
+services/email_service/AGENTS.md
+  s_154e7eadce3a09::t_a38a1b5c87a24e 130-133
+services/email_service/Cargo.toml
+  s_154e7eadce3a09::t_2e968c08662066 20-23
+services/email_service/src/bin/backfill_attachment_flags/backfill_attachment_flags.rs
+  s_154e7eadce3a09::t_6aeeea0cefc3db 1-102
+services/email_service/src/bin/backfill_attachment_flags/config.rs
+  s_154e7eadce3a09::t_c1e0ff6a7cf2a4 1-41
+services/email_service/src/bin/backfill_attachment_flags/process.rs
+  s_154e7eadce3a09::t_14646e73d73934 1-40
+services/email_service/src/outbound/scheduled_delivery.rs
+  s_154e7eadce3a09::t_157a9218c5a0ed 537-538
+services/email_service/src/pubsub/backfill/populate_crm_contact.rs
+  s_154e7eadce3a09::t_8f865a414a3e97 1,3,26-30,54-75
+services/email_service/src/pubsub/backfill/write_slot.rs
+  s_154e7eadce3a09::t_3293c43c423a42 12-25,32
+services/email_service/src/util/redis/backfill_write_slots.rs
+  s_154e7eadce3a09::t_799c5ce7e88f90 39-48,195-210
+services/mcp-chatgpt-worker/.gitignore
+  s_154e7eadce3a09::t_3b4944d330aa46 1-2
+services/mcp-chatgpt-worker/AGENTS.md
+  s_154e7eadce3a09::t_568ed76422edf6 1-48
+services/mcp-chatgpt-worker/CLAUDE.md
+  s_154e7eadce3a09::t_1d0950a1a08821 1
+services/mcp-chatgpt-worker/package.json
+  s_154e7eadce3a09::t_c19bc5c16d5f27 1-26
+services/mcp-chatgpt-worker/src/app.test.ts
+  s_154e7eadce3a09::t_0c51798f5a86d0 1-161
+services/mcp-chatgpt-worker/src/app.ts
+  s_154e7eadce3a09::t_2b81659ed6dfbd 1-191
+services/mcp-chatgpt-worker/src/config.ts
+  s_154e7eadce3a09::t_f72e8e69a6ff0b 1-40
+services/mcp-chatgpt-worker/src/worker.ts
+  s_154e7eadce3a09::t_39a8fd46321b8b 1-27
+services/mcp-chatgpt-worker/tsconfig.json
+  s_154e7eadce3a09::t_1a61846b929cea 1-15
+services/mcp-chatgpt-worker/vitest.config.ts
+  s_154e7eadce3a09::t_93d955fa9ed6a0 1-12
+services/mcp-chatgpt-worker/wrangler.jsonc
+  s_154e7eadce3a09::t_b33761c0a91723 1-77
+services/mcp_auth_proxy/AGENTS.md
+  s_154e7eadce3a09::t_2e8551acbcc677 20-22,28-30,51-52,62-64,81-83,95
+services/mcp_auth_proxy/README.md
+  s_154e7eadce3a09::t_494dbfb821377b 187-214,260
+services/mcp_auth_proxy/src/domain.rs
+  s_154e7eadce3a09::t_3d3bc6c94687f3 13-14
+services/mcp_auth_proxy/src/domain/access_token_clients.rs
+  s_154e7eadce3a09::t_46b10589e49b7a 70,74-78
+services/mcp_auth_proxy/src/domain/models.rs
+  s_154e7eadce3a09::t_b8dffdcf52080e 326-329,371-374
+services/mcp_auth_proxy/src/domain/ports.rs
+  s_154e7eadce3a09::t_f43da9e91e6612 6-7,127-155
+services/mcp_auth_proxy/src/domain/resource.rs
+  s_154e7eadce3a09::t_99cbcc30ae449d 1-55
+services/mcp_auth_proxy/src/domain/resource/test.rs
+  s_154e7eadce3a09::t_2cb36d722a0221 1-42
+services/mcp_auth_proxy/src/domain/service.rs
+  s_154e7eadce3a09::t_8582d9703b18e6 15,18,25-26,29,179-182,195-196,210-211,230-231,246-247,344-377,387,446-449,465,482,485,492,541-549,558,562,565,596,941-942,944-948,1240-1245
+services/mcp_auth_proxy/src/domain/service/test.rs
+  s_154e7eadce3a09::t_255ee3ab859430 10-12,441,467,501,528,542,564,590,604,625,650,665,680,695,725,1105,1202,1311-1447
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_154e7eadce3a09::t_c49bb8bcf6ffac 555,788-803
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_154e7eadce3a09::t_c8f3134ebfbf94 16-19,1288-1427
+services/mcp_auth_proxy/src/test_support.rs
+  s_154e7eadce3a09::t_e57de5fe36f468 7,22-23,28,62-93,495-496,538
+services/mcp_auth_proxy/templates/consent.html
+  s_154e7eadce3a09::t_8569fff4ab0dce 47-49
+static_assets/schema.graphql
+  s_154e7eadce3a09::t_c4412eeecd5b63 527-531,2220-2237,3852-3906,4774-4777,4814-4817,7592-7593,10000-10003,10086-10154,10638-10676,11664-11678,12670-12673
+tooling/pii/exceptions
+  s_154e7eadce3a09::t_cc6b7f15a1cc6c 11-13
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_154e7eadce3a09::t_2813add72e9aaf 42,247-256
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_mcp_chatgpt_worker.rs
+  s_154e7eadce3a09::t_de3fcd0b8c330c 1-86
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/ios_release_preconditions.sh
+  s_154e7eadce3a09::t_6e61d70b85e26f 46-50
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_154e7eadce3a09::t_12901a3b7913fb 113,158-167,503
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3394ed9a5dd0893c4df6205f00c2ea21cc97c1bb",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
