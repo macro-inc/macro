@@ -134,6 +134,13 @@ export function createIdeasFeed(
         return;
       }
 
+      // Accepted first: an idea rewritten under the card opens nothing, and
+      // the card shows it as it is now.
+      if ((await source.accept(idea)) === 'changed') {
+        setChangedIds((ids) => [...ids, idea.id]);
+        return;
+      }
+
       if (idea.kind === 'prompt' && idea.runMode === 'composer') {
         await actions.openComposer(idea.prompt);
       }
@@ -142,10 +149,6 @@ export function createIdeasFeed(
         const [about] = idea.about;
         if (idea.draft) actions.openDraft(idea.draft);
         else if (about) actions.openItem(about);
-      }
-
-      if ((await source.accept(idea)) === 'changed') {
-        setChangedIds((ids) => [...ids, idea.id]);
       }
     });
 

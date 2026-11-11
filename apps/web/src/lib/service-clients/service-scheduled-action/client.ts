@@ -4,8 +4,8 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Result } from 'neverthrow';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
+import { ok, type Result } from 'neverthrow';
 import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
@@ -43,6 +43,8 @@ import type {
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
+  Idea,
+  IdeaChanged,
   Ideas,
   InProgressExecution,
   RoutineSuggestions,
@@ -212,11 +214,35 @@ export const scheduledActionClient = {
     scheduledActionFetch<Ideas>(getListIdeasUrl(args), { method: 'GET' }),
 
   /** Take an idea up; a background prompt idea starts running. */
-  acceptIdea: (args: { ideaId: string; body: AcceptIdeaRequest }) =>
-    scheduledActionFetch(getAcceptIdeaUrl(args.ideaId), {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    }),
+  /**
+   * `changed` is the idea as it is now, when it was rewritten since the caller
+   * read it: nothing was taken up.
+   */
+  acceptIdea: async (args: {
+    ideaId: string;
+    body: AcceptIdeaRequest;
+  }): Promise<
+    Result<{ changed?: Idea }, ResultError<FetchWithTokenErrorCode>[]>
+  > => {
+    let changed: IdeaChanged | undefined;
+    const result = await fetchWithToken<{}>(
+      `${scheduledActionHost}${getAcceptIdeaUrl(args.ideaId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            changed = await response.clone().json();
+          }
+
+          return statusError(response.status);
+        },
+      }
+    );
+    if (changed) return ok({ changed: changed.idea });
+
+    return result.map(() => ({}));
+  },
 
   /** `keepalive` lets the call outlive a page that is closing. */
   dismissIdea: (args: { ideaId: string; keepalive?: boolean }) =>

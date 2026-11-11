@@ -13,7 +13,7 @@ export type IdeasSource = {
   /**
    * Take an idea up as the card showed it; a background prompt idea starts
    * running. `changed` means it was rewritten since: nothing was taken up and
-   * the feed was read again.
+   * the feed now holds the idea as it is.
    */
   accept(idea: Pick<Idea, 'id' | 'updatedAt'>): Promise<'accepted' | 'changed'>;
   /** Turn an idea down. `leaving` sends it so it survives the page closing. */

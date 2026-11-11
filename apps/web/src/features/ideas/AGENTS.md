@@ -14,9 +14,9 @@ only, behind `enable-ideas`.
   while a run is under way. Views only see the `IdeasSource` contract in
   `context/`.
 - `primitives/feed.ts` decides what a card's action does for its kind: a
-  composer prompt opens the composer and accepts; a background prompt only
-  accepts, which starts its run; an entity idea opens its item or draft and
-  accepts; a routine idea saves its suggestion.
+  composer prompt accepts, then opens the composer; a background prompt only
+  accepts, which starts its run; an entity idea accepts, then opens its item
+  or draft; a routine idea saves its suggestion.
 - `idea-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
 
@@ -51,11 +51,11 @@ only, behind `enable-ideas`.
   move, to the end. The server decides what is done: accepting anything but a
   background idea makes it `done`. An `accepted` background idea with no run
   was taken on for the person by an agent; it stays open and Run starts it.
-- Accept sends the idea's `updatedAt` as the card read it. The server checks
-  it only when the accept starts a background run: if the idea was rewritten
-  since, it refuses (409), the source reads the feed again
-  and answers `changed`, and the card shows the new text with a note, so Run
-  never starts text the person didn't see.
+- Accept sends the idea's `updatedAt` as the card read it. If the idea was
+  rewritten since, the server refuses (409) and answers with the idea as it
+  is now: the source puts that in the feed and answers `changed`, and the
+  card shows the new text with a note, so nothing is taken up or run on text
+  the person didn't see.
 - The page follows the chosen design frames: one column; a card is a tile,
   title, state badge and time, one sentence, one block for its kind (prompt
   quote, drafted reply, routine sentence, a finished run's result), then

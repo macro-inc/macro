@@ -2,14 +2,14 @@ import { useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { queryOptions, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 import type { IdeasSource } from '../context/ideas-source';
 import { type Idea, ideaStatus } from '../core/idea';
 import { useIdeasFlag } from '../use-ideas-flag';
-import { toIdeas } from './decode';
+import { toIdea, toIdeas } from './decode';
 import { ideasKeys } from './keys';
 
 /** How often to read again while a run is under way. */
@@ -43,6 +43,8 @@ export function useIdeasSource(): IdeasSource {
   const feed = useQuery(() =>
     feedOptions(userId() ?? '', enabled() && userId() !== undefined)
   );
+  const queryClient = useQueryClient();
+  const key = () => feedOptions(userId() ?? '', false).queryKey;
   const refresh = async () => {
     await feed.refetch();
   };
@@ -62,17 +64,24 @@ export function useIdeasSource(): IdeasSource {
     retry: () => fireAndForget(refresh(), 'ideas'),
     refresh,
     async accept(idea) {
-      const result = await scheduledActionClient.acceptIdea({
-        ideaId: idea.id,
-        body: { updatedAt: idea.updatedAt },
-      });
-      await refresh();
-      if (result.isOk()) return 'accepted';
-      if (result.error.some((error) => error.code === 'CONFLICT')) {
-        return 'changed';
+      const { changed } = await throwOnErr(() =>
+        scheduledActionClient.acceptIdea({
+          ideaId: idea.id,
+          body: { updatedAt: idea.updatedAt },
+        })
+      );
+      // The refusal carries the idea as it is now: show that, without
+      // another read.
+      const now = changed && toIdea(changed);
+      if (!now) {
+        await refresh();
+        return changed ? 'changed' : 'accepted';
       }
 
-      throw new ThrownResultError(result.error);
+      queryClient.setQueryData(key(), (ideas: Idea[] | undefined) =>
+        ideas?.map((other) => (other.id === now.id ? now : other))
+      );
+      return 'changed';
     },
     async dismiss(id, options) {
       await throwOnErr(() =>

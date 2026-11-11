@@ -186,6 +186,21 @@ describe('ideas feed', () => {
     });
   });
 
+  it('opens nothing for an idea that changed under the card', async () => {
+    await withFeed(
+      [composerIdea, draftedReplyIdea],
+      async (feed, { source, actions }) => {
+        source.accept.mockResolvedValue('changed');
+
+        await feed.accept(composerIdea);
+        await feed.accept(draftedReplyIdea);
+
+        expect(actions.openComposer).not.toHaveBeenCalled();
+        expect(actions.openDraft).not.toHaveBeenCalled();
+      }
+    );
+  });
+
   it('keeps Run on a background idea someone took on for the person without starting it', async () => {
     const takenOn = { ...backgroundIdea, state: 'accepted' as const };
     await withFeed([takenOn], async (feed, { source }) => {
