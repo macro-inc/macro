@@ -36,11 +36,16 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
 
+// Phone layout (touch and under 640px), as `isMobile()` reports it.
+const layout = vi.hoisted(() => ({ phone: false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => layout.phone }));
+
 const play = vi.fn(() => Promise.resolve());
 const pause = vi.fn();
 
 beforeEach(() => {
   localStorage.clear();
+  layout.phone = false;
   channelList.channels = [];
   openWithSplit.mockClear();
   track.mockClear();
@@ -335,5 +340,31 @@ describe('block tutorial sidebar item', () => {
       name: /Learn how to use Macro Docs/,
     });
     expect(docs.textContent).toContain('Watch tutorial');
+  });
+});
+
+describe('block tutorials on phones', () => {
+  const renderEntries = () =>
+    render(() => (
+      <>
+        <TutorialRow tutorial="mail" />
+        <TutorialPill tutorial="crm" />
+        <TutorialSidebarItem tutorial="docs" />
+      </>
+    ));
+
+  it('shows every entry on desktop', () => {
+    renderEntries();
+    expect(
+      screen.getAllByRole('button', { name: /Learn how to use Macro/ })
+    ).toHaveLength(3);
+  });
+
+  it('mounts no entry, dialog or video on a phone', () => {
+    layout.phone = true;
+    renderEntries();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(video()).toBeNull();
   });
 });
