@@ -189,8 +189,10 @@ app's Slack window, which reads the HttpOnly `d` cookie and every
 all) and posts them all. DSS seals the body and returns `working`; the
 replica runs `auth.test` per token and ends in `done` (each valid team an
 account) or `failed: invalid_session`. The web shows "Sign in from Macro
-desktop" with a `macro:///external?slackLogin=1` handoff when it can't do
-this itself.
+desktop" when it can't do this itself, handing off with
+`macro:///external?slackLogin=browser` (open the desktop's Slack window) or
+`macro:///external?slackLogin=<attemptId>` (resume an attempt's captcha or
+SSO step on the desktop).
 
 Each workspace signed in is one `slack_account` (created, or reconnected when
 the person already had one for that team: `generation` +1, state
@@ -325,7 +327,7 @@ Signals (payload `{id, traceparent}`):
 | `slack_login_requested` | attempt | DSS → session | an attempt has input to process |
 | `slack_account_changed` | account | DSS → session | new account, consent or added chats changed; re-read |
 | `slack_catalogue_requested` | account | DSS → session | refresh the catalogue (≤ once per 30 s) |
-| `slack_history_requested` | chat | DSS → session | import earlier messages |
+| `slack_history_requested` | account | DSS → session | import earlier messages of its `pending` chats |
 | `slack_send_requested` | account | DSS → session | claim pending sends |
 | `slack_read_requested` | account | DSS → session | send pending read marks |
 | `slack_account_released` | account | session ↔ session | lease handed over |
