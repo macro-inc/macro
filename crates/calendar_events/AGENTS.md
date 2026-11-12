@@ -319,9 +319,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `owner` to anyone with manage rights, on a colleague's primary calendar too;
   Outlook stores only `canEdit`; `is_primary` is false on a person's own other
   calendars. `VisibleCalendar::contributes_to_availability` is the nearest
-  signal: the user's setting, by default the primaries of inboxes they own.
-  With meetings they attend, it is their own schedule for agents as for
-  `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
+  signal: the user's Busy switch in Settings → Calendar, on for every calendar
+  until they turn it off, since booking links always counted every calendar
+  and one setting must mean the same everywhere. Every SQL reader of
+  `calendar_availability_preferences` defaults it with
+  `COALESCE(preference.contributes_to_availability, true)`; change them
+  together. With meetings they attend, it is their own schedule for agents,
+  for `TeamSourceOccurrence::is_personally_busy` and for booking links'
+  busy time (`calendar_scheduling`'s `MacroCalendars::busy`), and an organizer
+  row on a read-only event is no attendance in any of them. `viewer_can.organize` stays a
   capability, since writing a calendar lets the user act as its organizer, so
   `EventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as

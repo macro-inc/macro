@@ -280,6 +280,30 @@ fn subscriptions_do_not_block_owner_but_owned_attendance_does() {
 }
 
 #[test]
+fn an_excluded_read_only_calendar_naming_the_owner_organizer_does_not_block() {
+    let mut shared = source(
+        "a",
+        "outlook-shared",
+        timed("2026-10-07T09:00:00Z", "2026-10-07T10:00:00Z"),
+    );
+    shared.contributes_to_availability = false;
+    shared.event.is_read_only = true;
+    let mut organizer = attendee("a@example.com", AttendeeResponseStatus::Accepted);
+    organizer.is_organizer = true;
+    shared.event.attendees = vec![organizer];
+    let mut invited = shared.clone();
+    invited.event.ical_uid = "invited".into();
+    invited.event.attendees = vec![attendee("a@example.com", AttendeeResponseStatus::Accepted)];
+    invited.occurrence.time = timed("2026-10-07T12:00:00Z", "2026-10-07T13:00:00Z");
+    let result = calculate(window(), inputs(vec![member("a")], vec![shared, invited]));
+    assert_eq!(
+        result.members[0].busy,
+        vec![span("2026-10-07T12:00:00Z", "2026-10-07T13:00:00Z")],
+        "only the meeting the owner is invited to blocks them"
+    );
+}
+
+#[test]
 fn declined_cancelled_transparent_and_informational_events_do_not_block() {
     let base = source(
         "a",

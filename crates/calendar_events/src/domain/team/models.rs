@@ -146,6 +146,9 @@ impl TeamSourceOccurrence {
 
     /// Whether this person's calendar/attendance makes the occurrence eligible
     /// for availability, before checking its duration or reconciling copies.
+    /// Microsoft Graph names the mailbox owner as organizer on every event of
+    /// a read-only calendar, so that row is no attendance, as in
+    /// [`crate::domain::labels::EventRole::of`].
     pub fn is_personally_busy(&self) -> bool {
         if !self.is_busy() {
             return false;
@@ -154,9 +157,11 @@ impl TeamSourceOccurrence {
             .attendees()
             .iter()
             .filter(|attendee| {
-                self.owner_emails
-                    .iter()
-                    .any(|email| email.eq_ignore_ascii_case(&attendee.email))
+                !(attendee.is_organizer && self.event.is_read_only)
+                    && self
+                        .owner_emails
+                        .iter()
+                        .any(|email| email.eq_ignore_ascii_case(&attendee.email))
             })
             .collect();
         if !owned.is_empty()
