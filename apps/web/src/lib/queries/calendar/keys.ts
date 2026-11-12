@@ -23,10 +23,11 @@ export const AVAILABILITY_CALENDAR_MUTATION_KEY = [
  * optimistic patches applied to `occurrences._def` reach both.
  */
 export const calendarKeys = createQueryKeys('calendar', {
-  visibleCalendars: {
-    queryKey: null,
+  // Keyed by account, so a persisted list is only restored for its owner.
+  visibleCalendars: (userId: string | undefined) => ({
+    queryKey: [userId],
     contextQueries: { graphql: null },
-  },
+  }),
   invitations: (threadId: string) => ({
     queryKey: [threadId],
   }),

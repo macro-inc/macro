@@ -98,6 +98,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
   // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
   const workspace = createWorkspaceMode();
+  // A coding agent another surface asked the composer to start with.
+  const [requestedAgentId, setRequestedAgentId] = createSignal<string>();
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
@@ -256,10 +258,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       },
       () => {
         const content = panel.handle.content();
-        const next =
-          content.type === 'component'
-            ? parseAgentsPage(content.params?.agentPage)
-            : undefined;
+        if (content.type !== 'component') return;
+        const next = parseAgentsPage(content.params?.agentPage);
+        const agent = content.params?.composerAgentId;
+        if (next === 'new' && typeof agent === 'string') {
+          workspace.setMode('code');
+          setRequestedAgentId(agent);
+        }
         if (next) openPage(next);
       }
     )
@@ -474,6 +479,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 }}
                                 mode={workspace.mode()}
                                 onModeChange={workspace.setMode}
+                                requestedAgentId={requestedAgentId()}
                                 active={
                                   !isTouchDevice() ||
                                   (!mobileList() && page() === 'new')
