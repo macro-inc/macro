@@ -32,8 +32,8 @@ export function DatabaseStories() {
       >
         <PaperFeatureGraphic
           interactive
-          height={400}
-          mobileHeight={400}
+          height={364}
+          mobileHeight={358}
           label="The same database records shown as a table, a board, or a timeline."
         >
           <DatabaseViewsGraphic />

@@ -13,14 +13,12 @@
 .database-views [data-status='In progress'] { --tone: #d1a34b; }
 .database-views [data-status=Done] { --tone: #58ae83; }
 
-.database-views-head, .database-views-bar, .database-views-tabs { display: flex; align-items: center; gap: 6px; }
-.database-views-head { padding-bottom: 10px; }
-.database-views-head > strong { font-size: 14px; font-weight: 600; }
-.database-views-mark { width: 16px !important; height: 16px !important; color: oklch(78% 0.19 135); }
-.database-views-more { margin: 0 6px 0 4px; color: var(--color-ui-content-tertiary); }
+/* One row: the database's name, its saved-view tabs, then the view's tools. */
+.database-views-bar, .database-views-tabs { display: flex; align-items: center; gap: 6px; }
 .database-views-bar { padding-bottom: 12px; }
+.database-views-bar > strong { margin-right: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.database-views-mark { width: 16px !important; height: 16px !important; color: oklch(78% 0.19 135); }
 .database-views-tabs { margin-right: auto; }
-.database-views-add { margin-left: 6px; color: var(--color-ui-content-tertiary); }
 
 /* The app's rounded controls: table tabs, view tabs, and toolbar buttons. */
 .database-views-pill {
@@ -28,8 +26,7 @@
   background: var(--database-views-raised); color: var(--color-ui-content-secondary);
   font: inherit; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease;
 }
-.database-views-round { justify-content: center; width: 28px; padding: 0; }
-.database-views-table-tab, .database-views-pill[aria-pressed=true] { background: oklch(100% 0 0 / 12%); color: var(--color-ui-content-primary); font-weight: 500; }
+.database-views-pill[aria-pressed=true] { background: oklch(100% 0 0 / 12%); color: var(--color-ui-content-primary); font-weight: 500; }
 .database-views-pill:focus-visible { outline: 2px solid var(--color-ui-content-tertiary); outline-offset: 1px; }
 
 /* A fixed height, so switching views never moves the page. */
@@ -66,24 +63,32 @@
 .database-views-card > span { color: var(--color-ui-content-secondary); font-size: 12px; }
 
 /* The scale and the bars share one range: `--at` and `--start` are shares of it. */
-.database-views-scale { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; border-bottom: 1px solid var(--database-views-line); color: var(--color-ui-content-tertiary); font-size: 11.5px; }
+.database-views-body[data-view=timeline] {
+  /* The range runs on past the frame: fade it out to the right as well as down. */
+  mask-image: linear-gradient(to right, #000 72%, transparent), linear-gradient(to bottom, #000 78%, transparent);
+  mask-composite: intersect;
+}
+.database-views-scale { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; color: var(--color-ui-content-tertiary); font-size: 11.5px; }
 .database-views-scale svg { color: var(--color-ui-content-tertiary); }
 .database-views-scale strong, .database-views-month { color: var(--color-ui-content-primary); font-weight: 600; }
 .database-views-scale span { position: absolute; left: calc(var(--at) * 100%); }
-.database-views-tracks { position: relative; height: 260px; padding-top: 8px; box-sizing: border-box; }
-.database-views-gridline, .database-views-today { position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 1px; background: oklch(100% 0 0 / 4%); }
-.database-views-today { left: 68.5%; background: oklch(100% 0 0 / 30%); }
+.database-views-tracks { position: relative; height: 260px; padding-top: 8px; box-sizing: border-box; border-top: 1px solid var(--database-views-line); }
+.database-views-gridline, .database-views-today { position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 1px; background: linear-gradient(to bottom, oklch(100% 0 0 / 7%), transparent 85%); }
+.database-views-today { left: 68.5%; background: linear-gradient(to bottom, oklch(100% 0 0 / 45%), transparent 90%); }
 .database-views-track { position: relative; height: 36px; }
-/* A record is a bar edged in its status colour. */
+/* A record is a bar washed in its status colour, strongest where it starts. */
 .database-views-span {
   position: absolute; top: 5px; bottom: 5px; left: calc(var(--start) * 100%); width: calc(var(--length) * 100%);
-  overflow: hidden; padding: 0 9px; box-sizing: border-box; border-left: 2px solid var(--tone); border-radius: 5px;
-  background: color-mix(in oklch, var(--tone) 16%, oklch(100% 0 0 / 7%));
+  overflow: hidden; padding: 0 10px; box-sizing: border-box; border-radius: 7px;
+  background: linear-gradient(90deg, color-mix(in oklch, var(--tone) 34%, transparent), color-mix(in oklch, var(--tone) 9%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone) 28%, transparent);
   font-size: 12px; font-weight: 500; line-height: 26px; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Phone artboard: only the view tabs stay in the toolbar. */
+/* Phone artboard: the name and the view tabs share the row; the tools go. */
 .paper-feature-art[data-compact=true] .database-views { margin: 10px; }
+.paper-feature-art[data-compact=true] .database-views-bar > strong { margin-right: 4px; font-size: 13px; }
+.paper-feature-art[data-compact=true] .database-views-pill { height: 26px; padding: 0 9px; font-size: 12px; }
 .paper-feature-art[data-compact=true] .database-views-extra,
 .paper-feature-art[data-compact=true] .database-views-due { display: none; }
 .paper-feature-art[data-compact=true] .database-views-row { grid-template-columns: 24px minmax(0, 1fr) 104px 84px; }

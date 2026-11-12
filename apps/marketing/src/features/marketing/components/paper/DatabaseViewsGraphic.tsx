@@ -4,12 +4,10 @@ import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import FilterIcon from '@icon/system/regular/funnel.svg';
 import StatusIcon from '@icon/system/regular/list-bullets.svg';
-import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import NameIcon from '@icon/system/regular/pencil.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
-import TableIcon from '@icon/system/regular/table.svg';
 import OwnerIcon from '@icon/system/regular/user-circle.svg';
 import { For, Match, Switch } from 'solid-js';
 import { Badge } from '../../../../ui/components/Badge';
@@ -128,9 +126,9 @@ function Owner(props: { owner: LaunchRecord['owner'] }) {
 }
 
 /**
- * One database table seen through its three saved views: all records, a
- * board, and a timeline. The view tabs switch it, and it steps through them
- * by itself until someone picks one.
+ * One database seen through its three saved views: all records, a board, and
+ * a timeline. The view tabs beside its name switch it, and it steps through
+ * them by itself until someone picks one.
  */
 export function DatabaseViewsGraphic() {
   let root!: HTMLDivElement;
@@ -141,19 +139,9 @@ export function DatabaseViewsGraphic() {
 
   return (
     <div ref={root} class="database-views">
-      <div class="database-views-head" aria-hidden="true">
-        <DatabaseIcon class="database-views-mark" />
-        <strong>Launch projects</strong>
-        <DotsIcon class="database-views-more" />
-        <span class="database-views-pill database-views-table-tab">
-          <TableIcon />
-          Projects
-        </span>
-        <span class="database-views-pill database-views-round">
-          <PlusIcon />
-        </span>
-      </div>
       <div class="database-views-bar">
+        <DatabaseIcon class="database-views-mark" aria-hidden="true" />
+        <strong>Launch projects</strong>
         <div
           class="database-views-tabs"
           role="group"
@@ -171,7 +159,6 @@ export function DatabaseViewsGraphic() {
               </button>
             )}
           </For>
-          <PlusIcon class="database-views-add" aria-hidden="true" />
         </div>
         <span
           class="database-views-pill database-views-extra"
@@ -179,19 +166,6 @@ export function DatabaseViewsGraphic() {
         >
           <FilterIcon />
           <SortIcon />
-        </span>
-        <span
-          class="database-views-pill database-views-round database-views-extra"
-          aria-hidden="true"
-        >
-          <SearchIcon />
-        </span>
-        <span
-          class="database-views-pill database-views-extra"
-          aria-hidden="true"
-        >
-          <PlusIcon />
-          New
         </span>
       </div>
       <div class="database-views-body" data-view={view()}>
