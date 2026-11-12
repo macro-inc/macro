@@ -89,6 +89,18 @@ impl IntoResponse for ForwardCalendarEventError {
     }
 }
 
+/// A channel-mention bot's program never sends email, a forward included.
+/// Reuses the 403 code so the published schema stays as it is.
+fn refuse_channel_mention() -> Result<(), ForwardCalendarEventError> {
+    if email::is_channel_mention_run() {
+        return Err(ForwardCalendarEventError {
+            code: ForwardCalendarEventErrorCode::InboxUnavailable,
+            message: email::CHANNEL_MENTION_SEND_REFUSAL.to_owned(),
+        });
+    }
+    Ok(())
+}
+
 impl From<EventForwardError> for ForwardCalendarEventError {
     fn from(error: EventForwardError) -> Self {
         let (code, message) = match &error {
@@ -145,6 +157,7 @@ pub(crate) async fn handler(
     Path(event_id): Path<Uuid>,
     Json(request): Json<ForwardCalendarEventRequest>,
 ) -> Result<(StatusCode, Json<ForwardCalendarEventResponse>), ForwardCalendarEventError> {
+    refuse_channel_mention()?;
     let actor = authorization.authorization.user.macro_user_id.clone();
     let email = state.email_service.service();
     let sent = forward_event(

@@ -29,7 +29,8 @@ by policy.
 
 ## Boundaries
 
-- Depends on: `macro_auth` (outbound JWT validation), `bot_id`, `bot_token`,
+- Depends on: `macro_auth` (outbound JWT validation), `agent_correlation`
+  (the signed channel-mention claim, `axum` feature), `bot_id`, `bot_token`,
   `harness_id`, `harness_token`, `model_user`, `model-error-response`.
 - Used by: essentially every
   authenticated HTTP surface (`agent_session`, `agent_harness`, `ai_tools`,
@@ -65,8 +66,10 @@ does not turn a user credential into bot authority or change endpoint policies.
 An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`
 naming the grant and the agent holding it. `AccountHolderOrInternal` is
-`UserOrInternal` minus that credential: use it on anything that mints credentials,
-changes who can sign in, deletes the account, or changes its managers.
+`UserOrInternal` minus that credential, and minus any request from a
+channel-mention bot's program (`agent_correlation::context::current_channel_mention`):
+use it on anything that mints credentials, changes who can sign in, deletes the
+account, or changes its managers.
 
 ## Gotchas
 
