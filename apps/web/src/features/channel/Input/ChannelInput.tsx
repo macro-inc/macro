@@ -54,6 +54,7 @@ import {
   createSignal,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -100,6 +101,7 @@ import type { UploadResult } from './utils/file-helpers';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
+import { registerDraftComposer } from './utils/unsent-text';
 
 /**
  * What the composer offers beyond text, formatting and file attachments.
@@ -326,6 +328,20 @@ export function ChannelInput(props: ChannelInputProps) {
   restoreFailedSend = (snapshot) => {
     applySnapshot(snapshot, { focus: false });
   };
+
+  // A post refused after the composer moved on puts its text back here.
+  if (props.persistenceKey) {
+    onCleanup(
+      registerDraftComposer(props.persistenceKey, {
+        value: () => inputState.view().value ?? '',
+        restoreText: (value) => {
+          const snapshot = { value, mentions: [], attachments: [] };
+          if (isEditorConnected) applySnapshot(snapshot, { focus: false });
+          else pendingRestore = { snapshot, options: { focus: false } };
+        },
+      })
+    );
+  }
 
   const flushPendingRestore = () => {
     const restore = pendingRestore;

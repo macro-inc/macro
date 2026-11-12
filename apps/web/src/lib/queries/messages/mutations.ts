@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
+import { keepUnsentPostText } from '@channel/Input/utils/unsent-text';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -585,6 +586,16 @@ export function useSendMessageMutation(
           }
           context?.updatedAt?.rollback();
           reconcileFailedChannelWrite(vars.parent);
+          // After the composer that sent it had its turn to take the draft
+          // back: what was typed is kept wherever that left it out.
+          if (vars.parent.type === 'channel' && !vars.message.anchor) {
+            const post = {
+              channelId: vars.parent.id,
+              threadId: vars.message.thread_id,
+              content: vars.message.content,
+            };
+            setTimeout(() => keepUnsentPostText(post), 0);
+          }
         },
         onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(

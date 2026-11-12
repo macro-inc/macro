@@ -51,6 +51,8 @@ export function createChannelServer() {
     busy: false,
     /** Apply each write, then never answer it: the connection drops. */
     loseResponses: false,
+    /** Refuse every post for good with this code, as one sent too late. */
+    refusePosts: undefined as string | undefined,
   };
 
   const now = () => new Date().toISOString();
@@ -237,6 +239,10 @@ export function createChannelServer() {
     if (state.busy) {
       request.outcome = 'refused:BUSY';
       throw new Refusal('BUSY');
+    }
+    if (state.refusePosts && operation === 'PostChannelMessage') {
+      request.outcome = `refused:${state.refusePosts}`;
+      throw new Refusal(state.refusePosts);
     }
     let result: { item: MessageListItem; seq: number | null };
     try {

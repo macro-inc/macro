@@ -1,3 +1,4 @@
+import { keepUnsentPostText } from '@channel/Input/utils/unsent-text';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -113,6 +114,20 @@ function failureText(write: QueuedChannelWrite): string {
         ? 'Failed to add reaction'
         : 'Failed to remove reaction';
   }
+}
+
+/**
+ * A refused post restored after a reload has no hook to hand its text back
+ * to; it goes to the channel's draft so what was typed is not lost.
+ */
+function keepUnsentText(write: QueuedChannelWrite) {
+  if (write.kind !== 'post') return;
+  keepUnsentPostText({
+    channelId: String(write.input.channelId),
+    threadId:
+      write.input.threadId == null ? null : String(write.input.threadId),
+    content: write.input.content,
+  });
 }
 
 type HeldWrite = {
@@ -276,6 +291,7 @@ function onSettled(host: CacheHost, settlement: MutationSettlement) {
     refreshAfterChannelWrite(parent);
   } else if (settlement.status === 'permanently-failed') {
     toast.failure(failureText(entry.write));
+    keepUnsentText(entry.write);
     rereadAfterFailedWrite(parent);
   } else if (!held.has(settlement.replacementTransactionId)) {
     // A newer write under the same key replaced it; read the queue for it.
@@ -294,6 +310,9 @@ function onStorageReset(host: CacheHost) {
     lost.filter((entry) => !entry.live).map((entry) => failureText(entry.write))
   );
   for (const text of failures) toast.failure(text);
+  for (const entry of lost) {
+    if (!entry.live) keepUnsentText(entry.write);
+  }
   for (const channelId of channelsOf(lost)) {
     rereadAfterFailedWrite({ type: 'channel', id: channelId });
   }

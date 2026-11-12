@@ -1,6 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
+
+import { makeInputValuePersistenceKey } from '@channel/Input/utils/persistence';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CHANNEL, ME } from './channel-writes-server';
 import {
@@ -373,6 +375,55 @@ describe('a write restored after a reload', () => {
     expect(waiting.id).toBe(world.server.rows()[0]?.id);
     expect(failures()).toEqual([]);
     expect(world.duplicates).toEqual([]);
+  });
+});
+
+describe('a queued post the server refuses for good', () => {
+  const draft = () =>
+    JSON.parse(
+      localStorage.getItem(
+        makeInputValuePersistenceKey({ channelId: CHANNEL.id })
+      ) ?? 'null'
+    );
+
+  it('leaves its text in the channel draft after a reload', async () => {
+    localStorage.clear();
+    await openChannel();
+    await world.setOffline(true);
+    world.page.send('typed on friday');
+    await world.advance(1_000);
+
+    // Days later the app starts again; the server no longer takes the post.
+    await world.reload();
+    world.page.open();
+    await world.advance(1_000);
+    expect(contents()).toEqual(['typed on friday', 'earlier']);
+    world.server.state.refusePosts = 'BAD_USER_INPUT';
+    await world.setOffline(false);
+    await world.advance(60_000, 1_000);
+
+    expect(world.server.applied()).toEqual([]);
+    expect(world.queue.entries).toEqual([]);
+    expect(contents()).toEqual(['earlier']);
+    expect(world.events.filter((event) => event.kind === 'toast')).toEqual([
+      { kind: 'toast', message: 'Failed to send message' },
+    ]);
+    expect(draft()).toBe('typed on friday');
+  });
+
+  it('leaves its text in the channel draft on the page that sent it', async () => {
+    localStorage.clear();
+    await openChannel();
+    await world.setOffline(true);
+    const post = world.page.send('typed just now');
+    await world.advance(1_000);
+    world.server.state.refusePosts = 'FORBIDDEN';
+    await world.setOffline(false);
+    await world.advance(60_000, 1_000);
+
+    expect(post.outcome().status).toBe('rejected');
+    expect(contents()).toEqual(['earlier']);
+    expect(draft()).toBe('typed just now');
   });
 });
 
