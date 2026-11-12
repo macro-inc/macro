@@ -196,6 +196,10 @@ pub(crate) fn force_general_splice() -> GeneralSplice {
     }
 }
 
+pub(crate) fn general_splice_forced() -> bool {
+    FORCE_GENERAL_SPLICE.with(Cell::get)
+}
+
 impl Drop for GeneralSplice {
     fn drop(&mut self) {
         FORCE_GENERAL_SPLICE.with(|force| force.set(self.previous));

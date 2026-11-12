@@ -589,7 +589,15 @@ pub(crate) fn visit_transition_diff(
     }
     for parent in preorder_sort(next, parents, &mut next_positions) {
         let children = next.children_keys(parent)?;
-        if !prev.contains(parent) || prev.children_keys(parent)? != children {
+        // Compare lazily so the previous order is walked only up to its first difference.
+        let changed = !prev.contains(parent) || {
+            prev.element(parent).ok_or(Error::NotAnElement(parent))?;
+            let previous = prev.children(parent);
+            #[cfg(test)]
+            let previous = previous.inspect(|_| crate::test_work::record_link_step(parent));
+            previous.ne(children.iter().copied())
+        };
+        if changed {
             emit(DiffOp::Children { parent, children });
         }
     }

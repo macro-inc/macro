@@ -247,6 +247,45 @@ impl Transaction<'_> {
             element.size = size;
             return Ok(());
         }
+        if !nodes.is_empty()
+            && delete_count == 0
+            && start < size as usize
+            && nodes.iter().all(|key| self.parent(*key).is_none())
+            && !general_splice_forced()
+            && let Some(next) = self.child_from_nearer_end(parent, first, last, size, start)
+        {
+            // Same writes, in the same order, as the general path below for a detached insertion:
+            // set_children rewrites only the previous sibling, the inserted nodes and the next sibling.
+            let previous = self.prev_sibling(next);
+            let size = size
+                .checked_add(u32::try_from(nodes.len()).map_err(|_| Error::SpliceOutOfRange)?)
+                .ok_or(Error::SpliceOutOfRange)?;
+            for key in nodes {
+                self.remove_from_parent(*key)?;
+            }
+            if let Some(previous) = previous {
+                self.writable(previous)?.links.next = nodes.first().copied();
+            }
+            for (index, key) in nodes.iter().enumerate() {
+                self.writable(*key)?.links = Links {
+                    parent: Some(parent),
+                    prev: index.checked_sub(1).map(|i| nodes[i]).or(previous),
+                    next: nodes.get(index + 1).copied().or(Some(next)),
+                };
+            }
+            self.writable(next)?.links.prev = nodes.last().copied();
+            let BaseData::Element(element) = &mut self.writable(parent)?.base else {
+                return Err(Error::NotAnElement(parent));
+            };
+            if start == 0 {
+                element.first = nodes.first().copied();
+            }
+            element.size = size;
+            for key in [previous, Some(next)].into_iter().flatten() {
+                self.writable(key)?;
+            }
+            return Ok(());
+        }
         let old = self.children_keys(parent)?;
         let before: Vec<_> = old
             .iter()
@@ -353,6 +392,35 @@ impl Transaction<'_> {
             }
         }
         Ok(())
+    }
+    /// Child at `index`, walking from whichever end is nearer; None if the links run out.
+    fn child_from_nearer_end(
+        &self,
+        #[cfg_attr(not(test), expect(unused_variables, reason = "test-only work count"))]
+        parent: NodeKey,
+        first: Option<NodeKey>,
+        last: Option<NodeKey>,
+        size: u32,
+        index: usize,
+    ) -> Option<NodeKey> {
+        let from_end = (size as usize).checked_sub(index + 1)?;
+        if index <= from_end {
+            let mut key = first?;
+            for _ in 0..index {
+                key = self.next_sibling(key)?;
+                #[cfg(test)]
+                crate::test_work::record_link_step(parent);
+            }
+            Some(key)
+        } else {
+            let mut key = last?;
+            for _ in 0..from_end {
+                key = self.prev_sibling(key)?;
+                #[cfg(test)]
+                crate::test_work::record_link_step(parent);
+            }
+            Some(key)
+        }
     }
     fn set_children(&mut self, parent: NodeKey, children: &[NodeKey]) -> Result<(), Error> {
         for (i, key) in children.iter().enumerate() {
@@ -1054,4 +1122,12 @@ impl Transaction<'_> {
         let point = Point::element(parent, ChildIndex(self.children_size(parent)));
         self.select_points(point, point)
     }
+}
+
+/// The general splice path is forced only by the test-only differential control.
+fn general_splice_forced() -> bool {
+    #[cfg(test)]
+    return crate::test_work::general_splice_forced();
+    #[cfg(not(test))]
+    false
 }
