@@ -166,7 +166,8 @@ pub(super) async fn claim_picture_checks_in(
     // The existing id is only offered for a ready picture, whose id is the
     // stored file's, so "unchanged" always means the stored file is current
     // (a staged id that never got stored is not offered). A person's common
-    // group is one of the owner's added groups they are in.
+    // group is one of the owner's added groups they are in, probed per group
+    // through the alias key (there is no jid-only alias index).
     let rows = sqlx::query!(
         r#"UPDATE whatsapp_profile_picture p SET retry_at = now() + make_interval(mins => $4)
         WHERE p.account_id = $1 AND p.jid IN (
@@ -177,8 +178,10 @@ pub(super) async fn claim_picture_checks_in(
             CASE WHEN p.state = 'ready' THEN p.picture_id END AS existing_id,
             CASE WHEN p.jid NOT LIKE '%@g.us' THEN (
                 SELECT c.remote_id FROM external_chat c
+                CROSS JOIN LATERAL (
+                    SELECT 1 FROM whatsapp_identity_alias a WHERE a.chat_id = c.id AND a.jid = p.jid LIMIT 1
+                ) member
                 WHERE c.user_id = $3 AND c.provider = 'whatsapp' AND c.kind = 'group' AND c.state <> 'detached'
-                  AND EXISTS (SELECT 1 FROM whatsapp_identity_alias a WHERE a.chat_id = c.id AND a.jid = p.jid)
                 LIMIT 1) END AS common_group"#,
         account.id,
         allowed,

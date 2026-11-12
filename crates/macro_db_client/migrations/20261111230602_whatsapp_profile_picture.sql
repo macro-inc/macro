@@ -1,3 +1,7 @@
+-- The foreign keys take a short lock on whatsapp_linked_account; never wait
+-- behind a long transaction for it.
+SET LOCAL lock_timeout = '5s';
+
 -- What one linked account can see of a WhatsApp person's or group's profile
 -- picture (preview size). Privacy is per viewer, so a picture is stored per
 -- observing account; a chat shows the pictures its owner's account sees.
