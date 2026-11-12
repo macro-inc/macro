@@ -10,11 +10,6 @@
   scroll-margin-top: 112px;
 }
 .feature-comparison-anchor { position: absolute; top: 0; scroll-margin-top: 112px; }
-.feature-comparisons .feature-comparison-heading {
-  margin: 0 0 16px;
-  font: 600 20px/1.4 var(--font-sans);
-  letter-spacing: -.02em;
-}
 .feature-comparison-scroll { width: 100%; overflow-x: auto; }
 .feature-comparison-scroll:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 4px; }
 .feature-comparison-table {
