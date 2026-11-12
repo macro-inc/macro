@@ -106,6 +106,7 @@ pkgs.testers.runNixOSTest {
     imports = [ guest ];
     macro.box = {
       inherit macrod;
+      harnessd.package = harnessd;
       agentMode = true;
       dataDisk = null;
       # Prints the environment the `claude` wrapper hands it.
