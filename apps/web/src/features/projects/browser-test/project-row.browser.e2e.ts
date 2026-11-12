@@ -6,11 +6,16 @@ test('read-only property controls keep project navigation available', async ({
   await page.goto('/?scenario=collection&readOnly');
   const row = page.getByRole('row', { name: /Alpha launch/ });
   const priority =
-    info.project.name === 'desktop'
+    info.project.name !== 'phone'
       ? row.locator('.entity-slot[style*="grid-area: priority"] button')
       : row.getByRole('button', { name: 'Change priority', exact: true });
   await expect(priority).toHaveAttribute('aria-disabled', 'true');
-  await priority.click({ force: true });
+  const bounds = await priority.boundingBox();
+  if (!bounds) throw new Error('Missing readonly control geometry');
+  await page.mouse.click(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2
+  );
   await expect(page.getByTestId('opened')).toHaveText('alpha');
   await expect(page.getByTestId('saved-property')).toBeEmpty();
 });
@@ -21,11 +26,11 @@ test('empty project priority creates a value through the shared control', async 
   await page.goto('/?scenario=collection&noPriority');
   const row = page.getByRole('row', { name: /Alpha launch/ });
   const priority =
-    info.project.name === 'desktop'
+    info.project.name !== 'phone'
       ? row.locator('.entity-slot[style*="grid-area: priority"] button')
       : row.getByRole('button', { name: 'Change priority', exact: true });
   await priority.click();
-  await page.getByText('High', { exact: true }).click();
+  await page.getByRole('menu').getByText('High', { exact: true }).click();
   await expect(page.getByTestId('saved-property')).toContainText('alpha:');
   await expect(page.getByTestId('saved-property')).toContainText(
     '00000001-0000-0000-0003-000000000003'
@@ -45,11 +50,11 @@ test('project row keeps editable columns and a named progress ring at every devi
   const row = page.getByRole('row', { name: /Alpha launch/ });
   await expect(row).toBeVisible();
   const priority =
-    info.project.name === 'desktop'
+    info.project.name !== 'phone'
       ? row.locator('.entity-slot[style*="grid-area: priority"] button')
       : row.getByRole('button', { name: 'Change priority', exact: true });
   const status =
-    info.project.name === 'desktop'
+    info.project.name !== 'phone'
       ? row.locator('.entity-slot[style*="grid-area: status"] button')
       : row.getByRole('button', { name: 'Change status', exact: true });
   const title = row.getByText('Alpha launch', { exact: true });
@@ -89,7 +94,7 @@ test('project row keeps editable columns and a named progress ring at every devi
   }
   await page.screenshot({ path: `/tmp/project-row-${info.project.name}.png` });
   await priority.click();
-  await page.getByText('High', { exact: true }).click();
+  await page.getByRole('menu').getByText('High', { exact: true }).click();
   await expect(priority).toBeVisible();
   await expect(page.getByTestId('saved-property')).toContainText('alpha:');
   await expect(page.getByTestId('saved-property')).toContainText(

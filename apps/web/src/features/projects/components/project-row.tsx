@@ -171,6 +171,16 @@ export function ProjectRow(props: {
       {(column) => (
         <Entity.Slot
           placement={column.id}
+          on:click={{
+            capture: true,
+            handleEvent: (event) => {
+              // Read-only property triggers must not swallow project navigation.
+              if (canEdit()) return;
+              event.preventDefault();
+              event.stopPropagation();
+              props.onOpen(event);
+            },
+          }}
           class="ms-2 flex min-w-0 items-center text-xs @container/slot @max-[840px]/u-list:justify-center"
         >
           <Show when={propertyFor(column.defId)}>
