@@ -1437,6 +1437,8 @@ async fn run() -> anyhow::Result<()> {
         ))
         .with_conversation_turns(conversation_turns)
         .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
+        // Kill switch for retrying idle releases that kept their session.
+        .with_idle_release_flags(feature_flags.clone())
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)

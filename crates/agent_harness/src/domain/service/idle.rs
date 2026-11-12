@@ -9,12 +9,47 @@
 //! nothing is published, and no lifecycle event or webhook goes out. Its next
 //! command finds no actor and resumes it from the durable log.
 
-use agent_session::domain::model::SessionRelease;
+use std::{future::Future, pin::Pin};
 
 use super::*;
+use agent_session::domain::model::SessionRelease;
+
+/// PostHog kill switch: on for a session's owner, a release that kept the
+/// session is not tried again and its worker retires, as before retries
+/// existed. Missing or unreadable flags keep retrying.
+pub const IDLE_RELEASE_NO_RETRY_FLAG: &str = "disable-agent-idle-release-retry";
+
+/// Whether an idle release that kept `owner`'s session is tried again.
+pub(super) trait IdleReleaseRetry: Send + Sync {
+    fn retries<'a>(
+        &'a self,
+        owner: &'a MacroUserIdStr<'_>,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+}
+
+/// Reads [`IDLE_RELEASE_NO_RETRY_FLAG`].
+pub(super) struct FlaggedIdleReleaseRetry<F>(pub(super) F);
+
+impl<F: FeatureFlags> IdleReleaseRetry for FlaggedIdleReleaseRetry<F> {
+    fn retries<'a>(
+        &'a self,
+        owner: &'a MacroUserIdStr<'_>,
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        Box::pin(async move {
+            match self.0.load(owner).await {
+                Ok(flags) => !flags.is_enabled(IDLE_RELEASE_NO_RETRY_FLAG),
+                Err(error) => {
+                    tracing::warn!(?error, "feature flags unavailable; retrying idle release");
+                    true
+                }
+            }
+        })
+    }
+}
 
 /// What an idle session's release came to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub(super) enum IdleRelease {
     /// This process holds nothing for the session anymore.
     Released,
@@ -47,18 +82,6 @@ impl IdleRelease {
     /// soon after its work ends.
     pub(super) fn backs_off(self) -> bool {
         matches!(self, Self::NotLossless | Self::Failed)
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Released => "released",
-            Self::NotQuiet => "not_quiet",
-            Self::NotLossless => "not_lossless",
-            Self::OtherRuntime => "other_runtime",
-            Self::Busy => "busy",
-            Self::NotAttached => "not_attached",
-            Self::Failed => "failed",
-        }
     }
 }
 
@@ -119,10 +142,6 @@ where
     ///
     /// `attempt` counts the earlier tries this worker made since the
     /// session's last command; the caller backs off on what this answers.
-    ///
-    /// Every field starts empty and is recorded once: a field given a value
-    /// up front and recorded again is exported twice, and Datadog keeps the
-    /// first.
     #[tracing::instrument(
         name = "agent.session.idle_release",
         skip(self),
@@ -156,8 +175,23 @@ where
             "agent.session.idle_release.released",
             outcome == IdleRelease::Released,
         );
-        span.record("agent.session.idle_release.outcome", outcome.as_str());
+        span.record("agent.session.idle_release.outcome", <&str>::from(outcome));
         outcome
+    }
+
+    /// Whether a release that kept `session_id` is tried again, or its worker
+    /// retires ([`IDLE_RELEASE_NO_RETRY_FLAG`]).
+    pub(super) async fn retries_idle_release(&self, session_id: AgentSessionId) -> bool {
+        let Some(retry) = &self.idle_release_retry else {
+            return true;
+        };
+        match self.sessions.get_session(session_id).await {
+            Ok(AgentSession {
+                owner_id: model_owner::Owner::User(owner),
+                ..
+            }) => retry.retries(&owner).await,
+            _ => true,
+        }
     }
 
     /// The release of a quiet session, and whether its actor was closed.

@@ -113,7 +113,9 @@ A try that replayed the log and kept the session, or failed, pushes the next
 one out to twice, four times, then every sixteen times the timeout
 (`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
 whole log; a try that found work open (a running turn, a busy actor) does not,
-so the session is tried again at the plain timeout. A worker also exits with
+so the session is tried again at the plain timeout. The PostHog kill switch
+`disable-agent-idle-release-retry` (`IDLE_RELEASE_NO_RETRY_FLAG`, read for the
+session's owner) turns retries off: the worker tries once and exits. A worker also exits with
 the session it deletes. Both remove its map entry through `retire_worker`;
 commands are sent under the same entry lock, so one racing the exit either
 keeps the worker or starts a new one. A try silently releases a quiet session
@@ -129,9 +131,7 @@ drops this process's runtime state, and the queue copy and `hydrated` mark are
 forgotten. The next command finds no actor and resumes from the log. Unclaimed
 warm sessions never get a worker, so they stay warm until
 `reap_warm_sessions` expires and deletes them. The `agent.session.idle_release`
-span's `outcome` names where a release stopped; its fields start empty and are
-recorded once, because a field given a value up front and recorded again is
-exported twice and Datadog keeps the first.
+span's `outcome` names where a release stopped.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session

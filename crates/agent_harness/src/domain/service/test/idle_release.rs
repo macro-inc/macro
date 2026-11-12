@@ -339,9 +339,66 @@ async fn a_session_kept_at_its_idle_timeout_is_tried_again_until_it_releases() {
     );
 }
 
-/// Every field of the idle release's span is exported once. A field given a
-/// value up front and recorded again is exported twice, and Datadog keeps
-/// the first: every release read `released=false` that way.
+/// With the kill switch on for the session's owner, a release that kept the
+/// session is not tried again: its worker retires after the one try, as
+/// before retries existed, and the session stays held until its next command.
+#[tokio::test]
+async fn with_the_kill_switch_on_a_kept_session_is_tried_once_and_its_worker_retires() {
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    flags.set(
+        sender(),
+        Ok(feature_flags::FlagSnapshot::new([(
+            crate::domain::service::IDLE_RELEASE_NO_RETRY_FLAG.to_owned(),
+            feature_flags::FlagValue::Boolean(true),
+        )])),
+    );
+    let ((service, repo, containers, _announcer, _runtimes), mut signals) =
+        harness_with_journal_and_policy(
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            KindDefaultPolicies,
+            HarnessDefaultCodingAgents,
+            PromptMentionsMock::new(),
+            EgressProvisionerMock::new(),
+            None,
+            None,
+            None,
+            Some(flags),
+        );
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let (prompted, ()) = tokio::join!(
+        service.execute(id, HarnessCommand::Deliver(forward_message("first"))),
+        async {
+            complete_resume(&containers.wait_for_resumes(id, 1).await).await;
+        },
+    );
+    prompted.expect("the first prompt runs");
+    signals.settled(id).await;
+    containers.keep_on_release(id);
+
+    tokio::time::pause();
+    tokio::time::timeout(
+        WORKER_IDLE_TIMEOUT * 2,
+        containers.wait_for_lossless_checks(id, 1),
+    )
+    .await
+    .expect("the worker tries once");
+    tokio::time::sleep(WORKER_IDLE_TIMEOUT * 40).await;
+    tokio::time::resume();
+
+    assert_eq!(service.command_workers(), 0, "its worker retires");
+    assert_eq!(containers.lossless_checks(id), 1, "nothing tries again");
+    assert!(containers.released().is_empty());
+    assert_eq!(
+        service.inner.sessions.active_sessions(),
+        1,
+        "the session stays held"
+    );
+}
+
+/// Every field of the idle release's span is exported once
+/// (`rust-span-field-recorded-once`); every release read `released=false`
+/// before.
 #[tokio::test]
 async fn each_idle_release_span_field_is_exported_once() {
     let (exporter, provider, _guard) = span_exporter();

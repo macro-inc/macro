@@ -567,6 +567,7 @@ fn harness_with_ports_and_journal(
         journal,
         None,
         None,
+        None,
     )
 }
 
@@ -584,6 +585,7 @@ fn harness_with_journal_and_policy(
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     notifications: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    idle_release_flags: Option<feature_flags::outbound::fake::FakeFeatureFlags>,
 ) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
@@ -644,6 +646,7 @@ fn harness_with_journal_and_policy(
         Some(store) => service.with_notifications(store),
         None => service,
     };
+    let service = service.with_idle_release_flags(idle_release_flags);
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
         harness: service.clone(),

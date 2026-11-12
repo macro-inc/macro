@@ -204,8 +204,6 @@ where
             record_warm_claim(request.id.is_some(), eligible, claim);
             claim
         };
-        // Recorded once: a field given a value up front and recorded again is
-        // exported twice, and Datadog keeps the first.
         tracing::Span::current()
             .record("agent.session.warm_hit", claim == Some(WarmClaim::Claimed));
         if claim == Some(WarmClaim::Claimed) {

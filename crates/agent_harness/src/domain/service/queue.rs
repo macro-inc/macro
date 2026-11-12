@@ -1912,8 +1912,9 @@ pub(super) async fn run_session_worker<
                 // behind this worker rather than racing it on a new one.
                 let outcome = inner.release_idle(session_id, attempts).await;
                 // A session still held stays with its worker, or nothing
-                // would ever try again before its next command.
-                if outcome.holds_nothing() {
+                // would ever try again before its next command, unless the
+                // kill switch turns retries off.
+                if outcome.holds_nothing() || !inner.retries_idle_release(session_id).await {
                     if retire_worker(&workers, session_id, &own, &receiver) {
                         return;
                     }
