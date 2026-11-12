@@ -65,7 +65,7 @@ pub enum ItemKind {
 }
 
 /// Sensitive text: zeroized on drop, `Debug` prints `Secret(..)`, no `Display`.
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default)]
 pub struct Secret(Zeroizing<String>);
 
 impl Secret {
@@ -126,7 +126,7 @@ impl serde::Serialize for Secret {
 
 /// A TOTP seed with default parameters (SHA1, 6 digits, 30 s): uppercase
 /// base32 without spaces or padding.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct TotpSeed(pub(crate) Secret);
@@ -218,7 +218,7 @@ impl FolderPath {
 
     /// This path and each of its ancestors.
     pub(crate) fn with_ancestors(&self) -> impl Iterator<Item = Self> + '_ {
-        (1..=self.0.len()).map(|depth| Self(self.0[..depth].to_vec()))
+        (1..=self.0.len()).filter_map(|depth| self.0.get(..depth).map(|path| Self(path.to_vec())))
     }
 }
 
