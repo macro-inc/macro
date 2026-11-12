@@ -9731,6 +9731,38 @@
         }
       }
     },
+    "/crm/pipelines/details": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "The caller's live pipelines, each with its fields in column order (a\nselect field lists its options, so Stage lists the stages) and its table\nversion: what `ListPipelines` gives the agent, in one call.",
+        "operationId": "list_crm_pipeline_details",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineFields"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines/entry-search": {
       "get": {
         "tags": ["crm::inbound::pipeline_workflows"],
