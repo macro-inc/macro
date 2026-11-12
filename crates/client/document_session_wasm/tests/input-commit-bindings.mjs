@@ -45,6 +45,7 @@ function declaration(binding, name, predicate) {
   return binding.source.statements.find((node) => predicate(node) && node.name?.text === name);
 }
 function nameOf(node, source) {
+  if (node.name === undefined) return undefined;
   if (ts.isComputedPropertyName(node.name)) return node.name.getText(source);
   return node.name?.text;
 }
