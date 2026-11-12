@@ -99,9 +99,20 @@ tools/HTTP/GraphQL surfaces over them.
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Contact setters add email only when absent or link/switch company for a known
-  personal-provider email; validate under the contact lock and reject same-team
-  duplicates without disclosing restricted matches. Preserve ID, archive and sources.
+- Contact setters add or remove an address, choose the primary, link/switch
+  company for a personal-provider primary, or unlink a company; the rules live
+  in `src/domain/contact_update.rs`. Validate under the contact lock and reject
+  same-team duplicates without disclosing restricted matches. A new address
+  must be free across the team; a link, switch or unlink re-checks every
+  address the contact holds. Preserve ID, archive and sources.
+- A company-domain contact has a company and an address on one of that
+  company's `crm_domains` (`CrmContact::company_domain_emails`; there is no
+  stored marker). It cannot be unlinked or moved, and its last such address
+  cannot be removed. Read queries and the edit path compute it with the same
+  SQL expression; keep them identical.
+- Removing an address deletes only its `crm_contact_emails` row. Mailbox sources
+  stay, removed addresses are not remembered, and later mail from one may file a
+  fresh contact. Removing the primary promotes the oldest address left.
 - Personal sync and cleanup resolve one same-team/email contact across all companies,
   including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
@@ -158,15 +169,18 @@ tools/HTTP/GraphQL surfaces over them.
   trigger records it in that table. Find a contact by address through
   `crm_contact_emails` (sync, teardown, email scope, thread access, call
   linking, the activity scope); read `crm_contacts.email` only to display the
-  primary. Two paths still match the primary only: company-domain population
-  (it upserts on company and primary), and contact search and listing.
+  primary. Contact search and listing still match the primary only.
   The table has no team column, so a read by address starts from the address
   index and a read by team probes it once per contact: keep both behind their
   `OFFSET 0` fences, or the planner joins against every team's addresses.
-  A mailbox source is recorded per contact
-  and mailbox, not per address: before anything writes a second address,
-  teardown must keep the source while that mailbox still has mail with
-  another of the contact's addresses.
+  Company-domain population still
+  upserts on company and primary, but first looks for a contact that holds the
+  address as a further one and refreshes it instead: under the domain's
+  company, or anywhere in the team when nobody is filed under the domain with
+  it. A mailbox source is recorded per contact and mailbox, not per address:
+  `depopulate_contact` keeps it while that mailbox still has mail with another
+  of the contact's addresses (`other_address_mail.sql`), checked before the
+  domain lock like population's mailbox scan.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

@@ -321,13 +321,21 @@ Initialize browser fixtures with the app's `data-touch-device` root attribute an
 `applyTheme`; setting `data-theme-light` alone does not apply the theme tokens.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
-A call's own chat on a meeting page (the real `CallChat` under only the providers
-`Root` gives every page) has a backend-free desktop and phone regression: the
-first message sent shows in the panel, and a guest's message renders without
-the app's notification state:
+A call's own chat on a meeting page has backend-free desktop and phone
+regressions for both `CallDiscussionContent` and `CallChat` under only the
+providers `Root` gives every page. The first sent message appears in the panel,
+and a guest's message renders for a member without the app's notification state:
 `bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
-A meeting page has none of `AppProviders`; anything rendering app messages there
-goes inside `MeetingDiscussionHost`, created by the host's render function.
+A meeting page has none of `AppProviders`; only `ChannelCallPanel` goes inside
+`MeetingDiscussionHost`, created by the host's render function. `CallChat`
+renders directly for both member and guest access.
+The stored discussion chooses one of two paths: `channel_thread` uses
+`ChannelCallPanel`, while `call_chat` uses the call's own shared message thread.
+Quick and scheduled calls use `call_chat`. Guests use the same `MessageThread`
+and `ChannelInput` composer as members; they can send text, quote replies,
+react, and edit or delete their own messages.
+Signed-out meeting guests get initial avatars in tiles and the roster; do not
+mount account profile-picture queries for them.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -875,6 +883,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
+- Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
