@@ -82,10 +82,25 @@ export function offersBlockedByTrial(offers: {
   );
 }
 
-/** The cheapest size on sale, for "From $20/month". */
-export function cheapestOffer(
-  offers: readonly SizeOffer[]
-): SizeOffer | undefined {
+/**
+ * "From $20/month" (or "from $20/month" mid-line) for the cheapest size on
+ * sale; "Included" when the team's computers are comped.
+ */
+export function fromPriceText(
+  offers: readonly SizeOffer[] | undefined,
+  placement: 'leading' | 'inline'
+): string | undefined {
+  const offer = offers ? cheapestOffer(offers) : undefined;
+  if (!offer) return undefined;
+  if (offer.quote.amount === 0) return t('computers.included');
+  const price = formatQuote(offer.quote);
+  return placement === 'leading'
+    ? t('computers.fromPrice', { price })
+    : t('computers.fromPriceLower', { price });
+}
+
+/** The cheapest size on sale. */
+function cheapestOffer(offers: readonly SizeOffer[]): SizeOffer | undefined {
   return offers
     .filter((offer) => !offer.soldOut)
     .reduce<SizeOffer | undefined>(
@@ -416,12 +431,8 @@ export function MacroComputers(props: {
     return harness.created_by === viewer || isTeamOwner();
   };
 
-  const fromPriceLine = () => {
-    const offer = offers.isSuccess ? cheapestOffer(offers.data) : undefined;
-    if (!offer) return undefined;
-    if (offer.quote.amount === 0) return t('computers.included');
-    return t('computers.fromPriceLower', { price: formatQuote(offer.quote) });
-  };
+  const fromPriceLine = () =>
+    fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
 
   const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);

@@ -7,11 +7,10 @@ import { Button } from '@ui';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { SettingsSelect } from '../../components/settings-select';
 import { WhereItRunsOption } from '../../components/where-it-runs-option';
-import { formatQuote } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ComputerBuyFlow } from './computer-buy-flow';
 import {
-  cheapestOffer,
+  fromPriceText,
   GetComputerRow,
   offersBlockedByTrial,
 } from './MacroComputers';
@@ -27,13 +26,11 @@ export function useComputerOffer() {
   const canBuy = () => canPurchase() && isAdmin();
   const offers = useComputerOffersQuery(canBuy);
   const fromLine = () => {
-    const offer = offers.isSuccess ? cheapestOffer(offers.data) : undefined;
-    if (!offer) return undefined;
-    const price =
-      offer.quote.amount === 0
-        ? t('computers.included')
-        : t('computers.fromPrice', { price: formatQuote(offer.quote) });
-    return `${price} · ${t('computers.readyInMinutes')}`;
+    const price = fromPriceText(
+      offers.isSuccess ? offers.data : undefined,
+      'leading'
+    );
+    return price && `${price} · ${t('computers.readyInMinutes')}`;
   };
   return {
     // A trialing team can't buy; Settings → Machines says why.
