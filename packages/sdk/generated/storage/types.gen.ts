@@ -6022,6 +6022,17 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
+     * Whether the contact has an address on one of its company's domains.
+     * Such a contact cannot be unlinked from the company or moved to another.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    companyDomain?: boolean;
+    /**
+     * The addresses on one of the company's domains. The last one cannot be
+     * removed while the contact is linked to the company.
+     */
+    companyDomainEmails?: Array<string>;
+    /**
      * The id of the company the contact belongs to; absent for a
      * contact without a company.
      */
@@ -6031,10 +6042,15 @@ export type CrmContactResponse = {
      */
     createdAt: string;
     /**
-     * The contact's email address; absent for contacts added by name
-     * alone.
+     * The contact's primary email address; absent for contacts added by
+     * name alone.
      */
     email?: string | null;
+    /**
+     * Every address the contact is known by: the primary first, then the
+     * rest oldest first. Older servers omit it; clients then show `email`.
+     */
+    emails?: Array<string>;
     /**
      * Earliest known interaction with this contact.
      */
@@ -6059,7 +6075,8 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
-     * Whether the address uses a known personal provider and permits company edits.
+     * Whether the primary address uses a known personal provider. Linking
+     * or switching the company needs this and `companyDomain = false`.
      * Older servers omit this classification; clients must then keep it read-only.
      */
     personalEmail?: boolean;
@@ -17309,17 +17326,18 @@ export type SetCompanyNameRequest = {
  */
 export type SetContactCompanyRequest = {
     /**
-     * Destination company in the same team. Unlinking is not supported.
+     * Destination company in the same team.
      */
     companyId: string;
 };
 
 /**
- * Add a missing contact email. Existing addresses are read-only.
+ * Choose a contact's primary email.
  */
 export type SetContactEmailRequest = {
     /**
-     * The address to add. An identical retry is accepted.
+     * The address to make primary. It is added when the contact does not
+     * hold it yet. An identical retry is accepted.
      */
     email: string;
 };
@@ -26577,6 +26595,35 @@ export type GetContactResponses = {
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
 
+export type UnlinkCrmContactCompanyData = {
+    body?: never;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type UnlinkCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnlinkCrmContactCompanyError = UnlinkCrmContactCompanyErrors[keyof UnlinkCrmContactCompanyErrors];
+
+export type UnlinkCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type UnlinkCrmContactCompanyResponse = UnlinkCrmContactCompanyResponses[keyof UnlinkCrmContactCompanyResponses];
+
 export type SetCrmContactCompanyData = {
     body: SetContactCompanyRequest;
     path: {
@@ -26634,6 +26681,72 @@ export type SetCrmContactEmailResponses = {
 };
 
 export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
+
+export type RemoveCrmContactEmailData = {
+    body?: never;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+        /**
+         * The address to remove
+         */
+        email: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails/{email}';
+};
+
+export type RemoveCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmContactEmailError = RemoveCrmContactEmailErrors[keyof RemoveCrmContactEmailErrors];
+
+export type RemoveCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type RemoveCrmContactEmailResponse = RemoveCrmContactEmailResponses[keyof RemoveCrmContactEmailResponses];
+
+export type AddCrmContactEmailData = {
+    body?: never;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+        /**
+         * The address to add
+         */
+        email: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails/{email}';
+};
+
+export type AddCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmContactEmailError = AddCrmContactEmailErrors[keyof AddCrmContactEmailErrors];
+
+export type AddCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type AddCrmContactEmailResponse = AddCrmContactEmailResponses[keyof AddCrmContactEmailResponses];
 
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;

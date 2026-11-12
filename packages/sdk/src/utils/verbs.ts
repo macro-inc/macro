@@ -277,7 +277,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -339,6 +339,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createEntityMention
       setCrmContactCompany
     `,
+    unlinked: 'unlinkCrmContactCompany',
     reordered: `
       reorderFavorites reorderPinsHandler
       reorderSavedViewDefinitions

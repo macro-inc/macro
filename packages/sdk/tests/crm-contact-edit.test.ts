@@ -67,3 +67,67 @@ test('contact additions and company links invalidate detail only after success',
   expect(await contact.email()).toBe(address);
   expect(reads).toBe(readsBeforeFailure);
 });
+
+test('contact addresses and the company link use their own routes', async () => {
+  const writes: { method: string; path: string }[] = [];
+  let emails = ['first@example.com'];
+  let companyId: string | null = 'company-1';
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      const path = new URL(request.url).pathname;
+      if (request.method !== 'GET') {
+        writes.push({ method: request.method, path });
+        const address = decodeURIComponent(path.split('/emails/')[1] ?? '');
+        if (request.method === 'PUT' && address) emails = [...emails, address];
+        if (request.method === 'DELETE' && address)
+          emails = emails.filter((email) => email !== address);
+        if (request.method === 'DELETE' && path.endsWith('/company'))
+          companyId = null;
+      }
+      return Response.json({
+        id: 'contact-1',
+        name: 'Example person',
+        email: emails[0] ?? null,
+        emails,
+        companyId,
+        companyDomain: false,
+        companyDomainEmails: [],
+        hidden: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-02T00:00:00Z',
+        firstInteraction: '2026-10-01T00:00:00Z',
+        lastInteraction: '2026-10-01T00:00:00Z',
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'token',
+    hosts: { storage: 'https://storage.test' },
+  });
+  const contact = macro.crm.contactById('contact-1');
+
+  await contact.addEmail('second+tag@example.com');
+  expect(await contact.emails()).toEqual([
+    'first@example.com',
+    'second+tag@example.com',
+  ]);
+  await contact.removeEmail('first@example.com');
+  expect(await contact.email()).toBe('second+tag@example.com');
+  await contact.unlinkCompany();
+  expect(await contact.company()).toBeUndefined();
+  expect(await contact.companyDomain()).toBe(false);
+
+  expect(writes).toEqual([
+    {
+      method: 'PUT',
+      path: '/crm/contacts/contact-1/emails/second%2Btag%40example.com',
+    },
+    {
+      method: 'DELETE',
+      path: '/crm/contacts/contact-1/emails/first%40example.com',
+    },
+    { method: 'DELETE', path: '/crm/contacts/contact-1/company' },
+  ]);
+});
