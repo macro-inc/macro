@@ -3,10 +3,7 @@
 use super::super::purge::{LinkPurgeRepository, LinkPurgeService, PurgePacing, PurgeSummary};
 use crm::domain::{model::CrmError, service::CrmService};
 use email_api_client::domain::models::EmailApiError;
-use models_email::{
-    api::refresh::RefreshEmailEvent,
-    service::{cache::TokenCacheKey, link::Link},
-};
+use models_email::service::{cache::TokenCacheKey, link::Link};
 use std::error::Error;
 use uuid::Uuid;
 
@@ -113,10 +110,6 @@ impl<R: LinkPurgeRepository> LinkPurger for LinkPurgeService<R> {
 
 /// Best-effort delivery of the existing client refresh after physical deletion.
 pub trait LinkDeletionRefresh: Send + Sync + 'static {
-    /// Forward the owner and payload without changing the feature-gated refresh behavior.
-    fn refresh_email(
-        &self,
-        owner: &str,
-        event: RefreshEmailEvent,
-    ) -> impl Future<Output = ()> + Send;
+    /// Notify the owner that the link has been removed.
+    fn link_removed(&self, owner: &str, link_id: Uuid) -> impl Future<Output = ()> + Send;
 }
