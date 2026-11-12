@@ -64,12 +64,6 @@ type RenderItem =
     };
 
 /**
- * Tools rendered outside the standard grouped activity chrome own their full
- * presentation. The dashboard renders as a full-bleed view, not a tool row.
- * Deferred user tools suspend the chat on an interactive compose UI, so they
- * must stay visible rather than being collapsed inside a tool group.
- */
-/**
  * The agent looking up its own tools. People never see that it works in
  * code, so these are not steps: no row, no count, no preview.
  */
@@ -80,6 +74,12 @@ const LOOKUP_TOOLS: ReadonlySet<string> = new Set([
   'LoadTools',
 ]);
 
+/**
+ * Tools rendered outside the standard grouped activity chrome own their full
+ * presentation. The dashboard renders as a full-bleed view, not a tool row.
+ * Deferred user tools suspend the chat on an interactive compose UI, so they
+ * must stay visible rather than being collapsed inside a tool group.
+ */
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'CreateCalendarEvent',
   'DispatchCodingAgent',

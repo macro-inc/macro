@@ -463,6 +463,23 @@ fn a_notify_becomes_a_realtime_and_push_request_with_its_own_id() {
 }
 
 #[test]
+fn a_held_code_run_asks_for_work_in_the_workspace() {
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        Uuid::from_u128(0xA99),
+        Some(&user("alice@macro.com")),
+        "Macro",
+        "ExecuteCode",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to work in your workspace with your access. Approve or decline it."
+    );
+}
+
+#[test]
 fn a_held_tool_call_tells_only_the_owner() {
     let approval = Uuid::from_u128(0xA99);
     let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
@@ -484,19 +501,6 @@ fn a_held_tool_call_tells_only_the_owner() {
         tool_approval_notification_id(SESSION, approval)
     );
 
-    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
-        &identity(),
-        approval,
-        Some(&user("alice@macro.com")),
-        "Macro",
-        "ExecuteCode",
-    ) else {
-        panic!("filed as waiting for input");
-    };
-    assert_eq!(
-        notify.metadata.question,
-        "alice asked it to work in your workspace with your access. Approve or decline it."
-    );
     assert_ne!(
         notify.notification_id,
         tool_approval_notification_id(SESSION, Uuid::from_u128(0xA98)),

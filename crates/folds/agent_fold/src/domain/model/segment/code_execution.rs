@@ -53,6 +53,8 @@ pub(super) fn rows(
     detail: &ToolDetail,
     closed: bool,
 ) -> Option<Vec<ActivityRow>> {
+    // A lookup has no segment of its own, but one between two steps still
+    // falls inside their segment's slice.
     if is_tool_lookup(name) {
         return Some(Vec::new());
     }
