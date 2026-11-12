@@ -142,6 +142,7 @@ in
             {
               nativeBuildInputs = [
                 pkgs.bash
+                pkgs.bun
                 pkgs.git
                 pkgs.diffutils
                 pkgs.gnused
