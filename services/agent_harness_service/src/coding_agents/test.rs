@@ -19,6 +19,8 @@ fn harness(id: HarnessId, connected: bool) -> Harness {
         updated_at: "2026-10-02T00:00:00Z".parse().unwrap(),
         connected,
         last_connected_at: None,
+        computer_id: None,
+        claude_mode: Default::default(),
     }
 }
 
@@ -29,7 +31,7 @@ async fn authorized_shared_personas_need_no_permission_to_list_their_private_har
         .withf(|id| *id == HarnessId::TEST_A)
         .times(1)
         .returning(|id| Box::pin(async move { Ok(Some(harness(id, true))) }));
-    // No list_visible_harnesses call is permitted: a channel participant may
+    // No list_usable_harnesses call is permitted: a channel participant may
     // start the shared persona without owning or administering its runtime.
     let connections = RuntimeConnections {
         harnesses: connected_harnesses(&repo, [HarnessId::TEST_A, HarnessId::TEST_A])

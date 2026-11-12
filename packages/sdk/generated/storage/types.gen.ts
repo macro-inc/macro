@@ -3403,6 +3403,10 @@ export type ChangesetSourceDto = 'github_pull_request';
  */
 export type Channel = {
     /**
+     * Whether members of the channel's team join it automatically.
+     */
+    auto_join_team?: boolean;
+    /**
      * Channel type.
      */
     channel_type: ChannelType;
@@ -4150,6 +4154,12 @@ export type ClaimedPairing = {
     token: string;
 };
 
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
 /**
@@ -4666,6 +4676,8 @@ export type CompleteUploads = {
      */
     uploads: Array<UploadId>;
 };
+
+export type ComputerId = string;
 
 /**
  * The conferencing system backing an event's join URL.
@@ -5884,7 +5896,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -12399,6 +12411,12 @@ export type Harness = {
      */
     allow_permission_bypass?: boolean;
     /**
+     * How Claude Code on this machine is paid for, derived from whether
+     * it has an active Claude login. Only meaningful for Macro computers.
+     */
+    claude_mode?: ClaudeMode;
+    computer_id?: null | ComputerId;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -15031,6 +15049,8 @@ export type PairingDetails = {
      */
     requested_name: string;
 };
+
+export type PairingId = string;
 
 /**
  * Paragraph formatting changes.
@@ -18239,6 +18259,24 @@ export type SortKey = {
 };
 
 /**
+ * The persona of a viewer's private conversation with an agent.
+ */
+export type SoupAgentDmProfile = {
+    /**
+     * Persona avatar, when supplied.
+     */
+    avatar_url?: string | null;
+    /**
+     * Persona id.
+     */
+    bot_id: string;
+    /**
+     * Persona display name.
+     */
+    name: string;
+};
+
+/**
  * An agent session as displayed in Soup.
  *
  * Includes the persisted runtime and repository metadata needed to render
@@ -18640,6 +18678,7 @@ export type SoupCallRecordSoupPropertiesField = {
  * A channel as displayed in Soup.
  */
 export type SoupChannel = ChannelWithParticipants & LatestMessage & {
+    agent_dm?: null | SoupAgentDmProfile;
     /**
      * Timestamp when the requesting user last interacted with this channel.
      */
@@ -31881,7 +31920,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';
