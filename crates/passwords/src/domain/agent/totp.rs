@@ -34,7 +34,7 @@ pub(crate) fn window_cutoff(
         return None;
     }
     let end = window.checked_add(1)?.checked_mul(period_nanos)?;
-    Some(DateTime::from_timestamp_nanos(end).checked_sub_signed(MARGIN)?)
+    DateTime::from_timestamp_nanos(end).checked_sub_signed(MARGIN)
 }
 
 /// Whole milliseconds from `now` until `cutoff`, rounded down; `None` unless

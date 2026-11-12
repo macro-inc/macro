@@ -61,10 +61,6 @@ fn action_text(action: AgentAction) -> Result<String, Error> {
 }
 
 /// Decode the stored columns of one access row.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one argument per stored column of the access row"
-)]
 fn row(
     approved: bool,
     permission_revision: i64,
