@@ -495,6 +495,7 @@ mod brain_route {
     use crate::anthropic_gateway::brain::{
         BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout,
     };
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
     const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";

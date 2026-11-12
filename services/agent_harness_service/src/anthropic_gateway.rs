@@ -224,10 +224,13 @@ pub(super) fn router<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .route("/anthropic/{*rest}", any(unsupported))
         .merge(
             Router::new()
-                .route("/brain/anthropic/v1/messages", post(messages::<Sessions>))
+                .route(
+                    "/brain/anthropic/v1/messages",
+                    post(messages::<Sessions, Computers>),
+                )
                 .route(
                     "/brain/anthropic/v1/messages/count_tokens",
-                    post(count_tokens::<Sessions>),
+                    post(count_tokens::<Sessions, Computers>),
                 )
                 .route("/brain/anthropic/{*rest}", any(unsupported))
                 .layer(axum::Extension(BrainRoute)),
