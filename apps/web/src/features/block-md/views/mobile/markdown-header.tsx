@@ -18,7 +18,11 @@ import {
   useMarkdownDocumentTools,
 } from '../../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
-import { SkillBadge } from '../shared/markdown-header-parts';
+import {
+  MarkdownAppearanceIcon,
+  SkillBadge,
+  useMarkdownHeaderEntity,
+} from '../shared/markdown-header-parts';
 
 /**
  * The title menu rows of the mobile header. Phones offer no version history,
@@ -47,6 +51,7 @@ export function MobileMarkdownHeader(props: {
   const name = () => displayName() ?? '';
   const iconType = () => (kind() === 'document' ? 'md' : kind());
   const { fileOperations, actions } = useMarkdownDocumentTools();
+  const headerEntity = useMarkdownHeaderEntity();
 
   return (
     <>
@@ -88,6 +93,11 @@ export function MobileMarkdownHeader(props: {
           class="ph-no-capture"
           iconType={iconType()}
           colorIcon
+          icon={
+            <Show when={headerEntity()}>
+              {(entity) => <MarkdownAppearanceIcon entity={entity()} />}
+            </Show>
+          }
           label={name()}
         />
         <SkillBadge />
@@ -102,6 +112,7 @@ export function MobileMarkdownHeader(props: {
         name={name()}
         ops={fileOperations}
         tools={mobileMarkdownHeaderMenu(actions)}
+        entity={headerEntity()}
       />
     </>
   );

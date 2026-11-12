@@ -4,7 +4,13 @@ import {
 } from '@core/component/EntityIcon';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { cn } from '@ui';
-import { type JSX, onCleanup, type ParentProps, Show } from 'solid-js';
+import {
+  children,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SidePanel, useSidePanel } from '../side-panel';
 import {
@@ -60,12 +66,13 @@ function MobileHeaderRoot(props: ParentProps<{ trailing?: JSX.Element }>) {
 function Title(props: {
   label: string;
   iconType?: EntityIconSelector;
-  /** Replaces the entity icon, e.g. with the session's model. */
+  /** Replaces the entity icon when it renders something, e.g. the session's model. */
   icon?: JSX.Element;
   colorIcon?: boolean;
   class?: string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const icon = children(() => props.icon);
   useSplitDisplayName(() => props.label);
 
   const openTitleMenu = (event: MouseEvent) => {
@@ -85,18 +92,20 @@ function Title(props: {
           props.class
         )}
       >
-        <Show when={props.iconType}>
-          <EntityIcon
-            class="shrink-0"
-            targetType={props.iconType}
-            size="xs"
-            theme={props.colorIcon ? undefined : 'monochrome'}
-          />
-        </Show>
-        <Show when={props.icon}>
-          <div class="flex shrink-0 items-center justify-center">
-            {props.icon}
-          </div>
+        <Show
+          when={icon.toArray().length > 0}
+          fallback={
+            <Show when={props.iconType}>
+              <EntityIcon
+                class="shrink-0"
+                targetType={props.iconType}
+                size="xs"
+                theme={props.colorIcon ? undefined : 'monochrome'}
+              />
+            </Show>
+          }
+        >
+          <div class="flex shrink-0 items-center justify-center">{icon()}</div>
         </Show>
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="inline-block truncate text-sm font-semibold">

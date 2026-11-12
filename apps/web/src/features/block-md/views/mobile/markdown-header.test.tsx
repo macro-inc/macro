@@ -5,6 +5,20 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { MobileMarkdownHeader } from './markdown-header';
 
 const device = vi.hoisted(() => ({ phone: true }));
+const document = vi.hoisted(() => ({ entity: false, canEdit: true }));
+
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  EntityAppearanceTrigger: (props: { editable: boolean }) => (
+    <span
+      role="img"
+      aria-label={props.editable ? 'Change icon' : 'Document icon'}
+    />
+  ),
+}));
+vi.mock('@app/features/entity-appearance/queries/document-appearance', () => ({
+  useDocumentAppearance: () => () => undefined,
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.phone }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -20,7 +34,12 @@ vi.mock('@components/app/mobile-header/mobile-header', () => {
       {props.trailing}
     </header>
   );
-  MobileHeader.Title = (props: { label: string }) => <h1>{props.label}</h1>;
+  MobileHeader.Title = (props: { label: string; icon?: JSX.Element }) => (
+    <>
+      {props.icon}
+      <h1>{props.label}</h1>
+    </>
+  );
   MobileHeader.Island = (props: { children: JSX.Element }) => (
     <>{props.children}</>
   );
@@ -60,6 +79,14 @@ vi.mock('../../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'task-1',
     kind: () => 'task',
+    entity: () =>
+      document.entity && {
+        type: 'document',
+        id: 'doc-1',
+        name: 'Ship the release',
+        fileType: 'md',
+      },
+    permissions: { canEdit: () => document.canEdit },
   }),
 }));
 vi.mock('../../component/useMarkdownDocumentTools', () => ({
@@ -85,6 +112,7 @@ vi.mock('../../component/useMarkdownDocumentTools', () => ({
 afterEach(() => {
   cleanup();
   device.phone = true;
+  document.entity = false;
 });
 
 const names = (container: HTMLElement) =>
@@ -119,4 +147,13 @@ it('offers History, wide mode and Dispatch Agent on a tablet', () => {
   expect(names(screen.getByRole('list', { name: 'Document actions' }))).toEqual(
     ['History', 'Turn on wide mode', 'Ask Macro', 'Code Actions', 'Share']
   );
+});
+
+it('lets an editor change the document icon from the title', () => {
+  document.entity = true;
+  render(() => <MobileMarkdownHeader collaborationStatus={() => undefined} />);
+
+  expect(
+    within(screen.getByRole('banner')).getByRole('img', { name: 'Change icon' })
+  ).toBeTruthy();
 });

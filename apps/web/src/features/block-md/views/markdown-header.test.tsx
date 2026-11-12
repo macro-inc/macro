@@ -5,6 +5,20 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { MarkdownHeader } from './markdown-header';
 
 const item = vi.hoisted(() => ({ kind: 'task', share: vi.fn() }));
+const document = vi.hoisted(() => ({ entity: false, canEdit: true }));
+
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  EntityAppearanceTrigger: (props: { editable: boolean }) => (
+    <span
+      role="img"
+      aria-label={props.editable ? 'Change icon' : 'Document icon'}
+    />
+  ),
+}));
+vi.mock('@app/features/entity-appearance/queries/document-appearance', () => ({
+  useDocumentAppearance: () => () => undefined,
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_MARKDOWN_SIDE_PANEL: true,
@@ -18,8 +32,14 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderRight: (props: { children: JSX.Element }) => <>{props.children}</>,
 }));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
-  BlockItemSplitLabel: (props: { name: Accessor<string | undefined> }) => (
-    <h1>{props.name()}</h1>
+  BlockItemSplitLabel: (props: {
+    name: Accessor<string | undefined>;
+    icon: JSX.Element;
+  }) => (
+    <>
+      {props.icon}
+      <h1>{props.name()}</h1>
+    </>
   ),
   SplitPermissionsBadge: () => null,
 }));
@@ -70,6 +90,14 @@ vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'doc-1',
     kind: () => item.kind,
+    entity: () =>
+      document.entity && {
+        type: 'document',
+        id: 'doc-1',
+        name: 'Ship the release',
+        fileType: 'md',
+      },
+    permissions: { canEdit: () => document.canEdit },
   }),
 }));
 vi.mock('../component/useMarkdownDocumentTools', () => ({
@@ -97,6 +125,8 @@ afterEach(() => {
   cleanup();
   item.kind = 'task';
   item.share.mockClear();
+  document.entity = false;
+  document.canEdit = true;
 });
 
 const headerButtons = () =>
@@ -146,4 +176,21 @@ it('marks a skill beside its title', () => {
   render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
 
   expect(screen.getByText('Skill')).toBeTruthy();
+});
+
+it('lets an editor change the document icon', () => {
+  item.kind = 'document';
+  document.entity = true;
+  render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
+
+  expect(screen.getByRole('img', { name: 'Change icon' })).toBeTruthy();
+});
+
+it('shows a viewer the document icon without the picker', () => {
+  item.kind = 'document';
+  document.entity = true;
+  document.canEdit = false;
+  render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
+
+  expect(screen.getByRole('img', { name: 'Document icon' })).toBeTruthy();
 });

@@ -24,7 +24,11 @@ import {
 } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { MarkdownHeaderActions } from './markdown-header-parts';
-import { SkillBadge } from './shared/markdown-header-parts';
+import {
+  MarkdownAppearanceIcon,
+  SkillBadge,
+  useMarkdownHeaderEntity,
+} from './shared/markdown-header-parts';
 
 /** The title menu rows of the desktop header. */
 export function markdownHeaderMenu(
@@ -46,11 +50,19 @@ export function MarkdownHeader(props: {
   const { documentId } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const { fileOperations, actions, openShare } = useMarkdownDocumentTools();
+  const headerEntity = useMarkdownHeaderEntity();
 
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel name={displayName} />
+        <BlockItemSplitLabel
+          name={displayName}
+          icon={
+            <Show when={headerEntity()}>
+              {(entity) => <MarkdownAppearanceIcon entity={entity()} />}
+            </Show>
+          }
+        />
         <SkillBadge />
       </SplitHeaderLeft>
 
@@ -81,6 +93,7 @@ export function MarkdownHeader(props: {
         id={documentId()}
         itemType="document"
         name={displayName() ?? ''}
+        entity={headerEntity()}
       />
     </>
   );
