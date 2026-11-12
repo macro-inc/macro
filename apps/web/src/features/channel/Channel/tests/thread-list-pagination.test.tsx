@@ -1,6 +1,14 @@
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { ThreadList, type ThreadListNavigation } from '../ThreadList';
 
 const rowHeights = new Map<string, number>();
@@ -119,6 +127,49 @@ function reportObservedRowsOnce() {
       unobserve() {}
       disconnect() {}
     }
+  );
+}
+
+/**
+ * Browsers deliver a scroll event with the next frame, not within the task
+ * that wrote the offset.
+ */
+function deliverScrollEventsWithFrames() {
+  const original = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    'scrollTo'
+  );
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    configurable: true,
+    value(this: HTMLElement, options: ScrollToOptions) {
+      const offset = Math.max(
+        0,
+        Math.min(options.top ?? 0, this.scrollHeight - this.clientHeight)
+      );
+      if (offset === this.scrollTop) return;
+      this.scrollTop = offset;
+      requestAnimationFrame(() => this.dispatchEvent(new Event('scroll')));
+    },
+  });
+  onTestFinished(() => {
+    if (original)
+      Object.defineProperty(HTMLElement.prototype, 'scrollTo', original);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+  });
+}
+
+/** Row measurement and the range it changes run in chained microtasks. */
+async function settleMicrotasks() {
+  for (let turn = 0; turn < 10; turn++)
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+}
+
+/** The lowest row index mounted in the list. */
+function firstMountedIndex(container: HTMLElement) {
+  return Math.min(
+    ...[...container.querySelectorAll('[data-index]')].map((row) =>
+      Number(row.getAttribute('data-index'))
+    )
   );
 }
 
@@ -282,8 +333,10 @@ describe('history loading ahead of scrolling', () => {
     expect(f.element.scrollTop).toBe(1520);
     expect(f.paginate).not.toHaveBeenCalled();
 
-    // The frame that paints the first screen, then the one after it.
+    // The frame that paints the first screen, then the one after it. The
+    // request is made from a microtask, so let those run before looking.
     frames.run();
+    await settleMicrotasks();
     expect(f.paginate).not.toHaveBeenCalled();
     frames.run();
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
@@ -302,37 +355,14 @@ describe('history loading ahead of scrolling', () => {
   it('measures history one pass a frame once the first screen has painted', async () => {
     const frames = controlFrames();
     reportObservedRowsOnce();
-    // Browsers deliver a scroll event with the next frame, not within the task
-    // that wrote the offset.
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-      configurable: true,
-      value(this: HTMLElement, options: ScrollToOptions) {
-        const offset = Math.max(
-          0,
-          Math.min(options.top ?? 0, this.scrollHeight - this.clientHeight)
-        );
-        if (offset === this.scrollTop) return;
-        this.scrollTop = offset;
-        requestAnimationFrame(() => this.dispatchEvent(new Event('scroll')));
-      },
-    });
+    deliverScrollEventsWithFrames();
     const keys = Array.from({ length: 40 }, (_, index) => String(index));
     for (const key of keys) rowHeights.set(key, 300);
     const { container } = render(() => (
       <ThreadList keys={() => keys}>{({ id }) => <div>{id}</div>}</ThreadList>
     ));
-    const firstMounted = () =>
-      Math.min(
-        ...[...container.querySelectorAll('[data-index]')].map((row) =>
-          Number(row.getAttribute('data-index'))
-        )
-      );
-
-    const settle = async () => {
-      // Row measurement and the range it changes run in chained microtasks.
-      for (let turn = 0; turn < 10; turn++)
-        await new Promise<void>((resolve) => queueMicrotask(resolve));
-    };
+    const firstMounted = () => firstMountedIndex(container);
+    const settle = settleMicrotasks;
 
     // Before the paint, only the default overscan of six rows (32-37).
     await waitFor(() => expect(firstMounted()).toBe(32));
@@ -354,6 +384,43 @@ describe('history loading ahead of scrolling', () => {
       await settle();
     }
     expect(firstMounted()).toBeLessThanOrEqual(22);
+  });
+
+  it('keeps measuring when an older page lands after a pass that reached the top', async () => {
+    const frames = controlFrames();
+    reportObservedRowsOnce();
+    deliverScrollEventsWithFrames();
+    const [keys, setKeys] = createSignal(
+      Array.from({ length: 17 }, (_, index) => String(index))
+    );
+    for (let key = -20; key < 17; key++) rowHeights.set(String(key), 300);
+    const { container } = render(() => (
+      <ThreadList keys={keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+    ));
+    const firstMounted = () => firstMountedIndex(container);
+
+    // The first screen and its overscan end at row 9 or just above it.
+    await waitFor(() => expect(firstMounted()).toBeLessThanOrEqual(9));
+    frames.run();
+    frames.run();
+    await settleMicrotasks();
+    // One pass took the last six unmeasured rows and reached the top, so it
+    // never met its limit and nothing asked for another pass.
+    expect(firstMounted()).toBe(0);
+
+    // An older page lands in the same frame, after those rows were measured.
+    setKeys((previous) => [
+      ...Array.from({ length: 20 }, (_, index) => String(index - 20)),
+      ...previous,
+    ]);
+    await settleMicrotasks();
+    // The frame's limit is spent: none of the new page mounts with it.
+    expect(firstMounted()).toBe(20);
+
+    // The next frame goes on into the new page.
+    frames.run();
+    await settleMicrotasks();
+    expect(firstMounted()).toBeLessThan(20);
   });
 
   it('ends native scrolling at the latest message while a gesture shifts the rows', async () => {

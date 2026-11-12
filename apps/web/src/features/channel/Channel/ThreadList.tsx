@@ -360,6 +360,16 @@ export function ThreadList(props: ThreadListProps) {
     resumeHistoryAfter = reachedPassLimit
       ? instance.itemSizeCache.size
       : undefined;
+    // Measuring a row admitted this frame asks for the next pass. If they are
+    // all measured already, as when an older page lands after a pass that
+    // reached the top, nothing would, so the limit asks for it here.
+    if (
+      reachedPassLimit &&
+      [...historyRowsThisFrame].every((key) => instance.itemSizeCache.has(key))
+    ) {
+      historyPassDue = true;
+      scheduleHistoryFrame();
+    }
     return added.length === 0 ? indexes : [...added, ...indexes];
   }
 
@@ -477,7 +487,8 @@ export function ThreadList(props: ThreadListProps) {
         element?.addEventListener('touchstart', onTouchStart, {
           passive: true,
         });
-      // A gesture that begins before the first paint needs its history now.
+      // A gesture that begins before the first paint starts the buffers at
+      // once. They help the flings after it, not the one that began here.
       if (scrollCompensation) {
         element?.addEventListener('wheel', startHistoryBuffering, {
           passive: true,

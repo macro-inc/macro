@@ -128,8 +128,13 @@ concurrent requests and stops at the actual beginning of history.
 Neither buffer is needed to show the list. Loading older pages and measuring
 history both start once the first screen has painted, or at the first wheel or
 touch if that comes sooner, so opening a conversation requests and mounts only
-what its first screen needs. A fling that starts in that window has only the
-first page above it.
+what its first screen needs. The cost is a short window after the first paint:
+until the rows of the first page have been measured, a few frames after
+buffering starts, and until the next page has loaded and been measured in turn,
+a fling crosses rows that still have their estimated height. It can stop short
+of loaded history, or run past it, as it did before the buffers existed.
+Starting the buffers at a touch does not help the gesture that touch begins,
+because corrections during a gesture are deferred.
 
 This retains the normal top-origin scroller and its bottom-pinning behavior. It
 reduces pagination stops, but a fling can still exhaust the native headroom that
