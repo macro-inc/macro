@@ -12691,6 +12691,13 @@
       "crates/workspace-hack",
       "services/organization_retention_trigger"
     ],
+    "outlook_emulator": [
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/outlook_emulator",
+      "crates/workspace-hack"
+    ],
     "pairing_id": [
       "crates/pairing_id",
       "crates/workspace-hack"

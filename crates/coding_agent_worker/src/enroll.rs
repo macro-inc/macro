@@ -310,6 +310,7 @@ fn write_config(
         &ServiceOptions {
             ignore_stdin_eof: false,
             config: Some(options.config.clone()),
+            profile: None,
             agent: None,
             workspace: Some(options.workspace.clone()),
         },

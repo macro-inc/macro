@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: contacts-service
+    app.kubernetes.io/name: contacts-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: contacts-service
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: contacts-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: contacts-service
+        app.kubernetes.io/name: contacts-service
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: DD_SERVICE
+              value: contacts-service
+            - name: PORT
+              value: "8080"
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/contacts-service:build.y0hdich7a3y448s2z5irq9mqcgyis50s
+          imagePullPolicy: IfNotPresent
+          name: contacts-service
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - |
+              until kubectl get job kafka-topics-1cafe78ff8 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-1cafe78ff8 --timeout=600s
+
+              until kubectl get job migrate-6d826d99db >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-6d826d99db --timeout=600s
+
+              until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s
+
+              for endpoint in fusionauth:9011 localstack:4566 redis:6379; do
+                until nc -z -w 1 "${endpoint%:*}" "${endpoint#*:}"; do sleep 0.2; done
+              done
+          image: localhost:32550/macro/readiness:build.smghxgld6q7kd9samdjm65jjgd5zm50c
+          name: dependencies
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - emptyDir: {}
+          name: tmp

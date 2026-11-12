@@ -328,12 +328,21 @@ The upload indicator above the toasts follows one folder through every stage:
 The indicator polls the upload's status
 (`GET /projects/upload_extract/{request_id}`) as well as listening for the
 `bulk_upload` websocket result, so a dropped socket still ends in the true
-state. A reload during processing loses the indicator; the folder still appears
-in Drive when the server finishes.
+state. Once a folder is sent, the browser remembers it for the signed-in account
+until its end toast shows. After a reload or a crash, or in a tab of the same
+account opened while it processes, the indicator comes back as **Processing
+&lt;folder&gt;** and ends in the same toasts; a tab that was already open does not
+pick it up. Signing out keeps the record, and the folder resumes when that
+account signs in again; another account never sees it. A reload while a folder
+is still preparing or uploading cancels that upload. A folder sent more than a
+day earlier is dropped without a toast, and one still unfinished 90 minutes
+after it was sent, past every extractor retry, ends at once in **Couldn't
+confirm**.
 
 Verification: the shared headless Chrome runs in Docker and cannot read files on
 the host, so feed real folders through a private Playwright Chromium on the same
 machine: open **Upload folders**, catch the file chooser and pass the folder's
 path to `fileChooser.setFiles`. Check each stage's label and percentage, the
-end toast, and the uploaded tree in Drive; delete the uploaded folders
-afterwards.
+end toast, and the uploaded tree in Drive. To check resuming, reload during
+**Processing** and open a second tab of the same account. Delete the uploaded
+folders afterwards.
