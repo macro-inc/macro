@@ -39,6 +39,7 @@ async fn internal_upstreams_are_refused_outside_local_development() {
     for url in [
         format!("http://127.0.0.1:{port}/"),
         format!("http://localhost:{port}/"),
+        "https://10.0.0.1/".to_owned(),
     ] {
         assert!(forwarder.forward(get_request(&url)).await.is_err(), "{url}");
     }
