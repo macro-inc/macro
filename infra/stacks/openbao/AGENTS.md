@@ -29,3 +29,7 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 - The `openbao` Doppler project has a dev config only and is created by hand.
   Don't add it to `doppler-projects`, which would also create `prd`.
 - The stack is not in `services-config.json`; deploys are manual.
+- OpenBao 2.7 has no built-in AWS KMS seal. `server-config.ts` loads the
+  `kms-aws` plugin from ghcr.io into `plugins/`, a sibling of the Raft `data/`
+  directory. On a version bump, update both the image digest and the binary
+  sha256 from the official openbao/openbao-plugins release.

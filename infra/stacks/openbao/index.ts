@@ -221,7 +221,8 @@ const taskIngress = new aws.vpc.SecurityGroupIngressRule(
     tags,
   }
 );
-// KMS, ECR/Quay, SSM, and the Datadog intake are all HTTPS.
+// KMS, Quay, the seal plugin's registry (ghcr.io), SSM, and the Datadog
+// intake are all HTTPS.
 const taskHttpsEgress = new aws.vpc.SecurityGroupEgressRule(
   `${BASE_NAME}-task-https-out`,
   {

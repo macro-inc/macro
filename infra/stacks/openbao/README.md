@@ -8,7 +8,7 @@ hosted dev vault that QA uses.
 | --- | --- |
 | Server | `quay.io/openbao/openbao:2.7.2` (digest-pinned), one Fargate task on the shared cluster |
 | Storage | Integrated Raft, node `macro-dev`, on encrypted EFS through an access point (uid 100, mode 0700); IAM + TLS mount only |
-| Seal | `awskms`, key `alias/openbao-dev`, rotation on; only the task role may use it |
+| Seal | `awskms` through the external `kms-aws` plugin (2.7 dropped the built-in), downloaded digest-pinned from ghcr.io into the data volume at startup; key `alias/openbao-dev`, rotation on; only the task role may use it |
 | Backup | AWS Backup vault `openbao-dev`, daily at 05:00 UTC, kept 14 days |
 | TLS | Internal ALB, ACM certificate for `openbao-dev.macro-internal.com`, TLS 1.2+/1.3 policy |
 | Access | ALB ingress 443 only from the document storage service's security group; task port 8200 only from the ALB |

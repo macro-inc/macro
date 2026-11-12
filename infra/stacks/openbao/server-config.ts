@@ -1,6 +1,13 @@
 /** Mount point of the EFS access point; the upstream entrypoint owns `/openbao/file`. */
 export const DATA_MOUNT_PATH = '/openbao/file';
 export const API_PORT = 8200;
+// The AWS KMS seal plugin from the openbao/openbao-plugins `kms-aws-v0.1.1`
+// release: the image is pinned by digest, and the binary by the sha256 in that
+// release's checksummed linux_amd64 asset.
+const AWS_KMS_PLUGIN_VERSION = 'v0.1.1';
+const AWS_KMS_PLUGIN_SHA256 =
+  '0dffe0a159a5bdbeb147a892595fe517de858f48a99a64f33fabc775af0eec76';
+const AWS_KMS_PLUGIN_IMAGE = `ghcr.io/openbao/openbao-plugin-kms-aws:${AWS_KMS_PLUGIN_VERSION}@sha256:24a0a1294385a34224848d0d6ff2c9287f9c9b0ded1de953cc539dc76ced160c`;
 
 /**
  * The server HCL. The upstream image's entrypoint writes `BAO_LOCAL_CONFIG` to
@@ -32,6 +39,17 @@ listener "tcp" {
 storage "raft" {
   path = "${DATA_MOUNT_PATH}/data"
   node_id = "macro-dev"
+}
+
+# OpenBao 2.7 no longer builds in the AWS KMS seal; it is an external plugin,
+# downloaded at startup into a sibling of the Raft directory on the volume.
+plugin_directory = "${DATA_MOUNT_PATH}/plugins"
+plugin_auto_download = true
+
+plugin "kms" "awskms" {
+  image = "${AWS_KMS_PLUGIN_IMAGE}"
+  version = "${AWS_KMS_PLUGIN_VERSION}"
+  sha256sum = "${AWS_KMS_PLUGIN_SHA256}"
 }
 
 seal "awskms" {
