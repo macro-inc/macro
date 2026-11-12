@@ -82,7 +82,7 @@ async fn flag_on_runs_chat_in_code_mode() {
     assert!(prompt.contains("AboutMacro"));
     assert!(prompt.contains("DisplayResults"));
     assert!(!prompt.contains("SelfKnowledge"));
-    assert!(!prompt.contains("execution.views.present"));
+    assert!(prompt.contains("present them with `DisplayResults` without being asked"));
 }
 
 #[test]

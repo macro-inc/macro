@@ -56,7 +56,7 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 
 A static image (a canvas render, a generated image, a channel attachment) is a file, not a document: a document mention of its id reads "Deleted". Show it on a line of its own with the `markdown` an SDK image carries (`image.toMarkdown()`), or with `<m-image>{"url":"{url}","alt":"","srcType":"sfs","id":"{static_file_id}","width":{width},"height":{height},"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>`.
 
-Mention the relevant items your tools found. Skip items a view you presented with `execution.views.present` already shows: the view already opens them.
+Mention the relevant items your tools found. Skip items a view you presented (`execution.views.present`, or `DisplayResults` where you have it) already shows: the view already opens them.
 
 Whenever you name a task — one you created, linked, searched, or were assigned — emit the task mention chip. Do not use a Markdown URL, MACRO- id, or bare title, and do not repeat the title beside the chip. Use the `mention` field a task tool returned when you have it.
 
