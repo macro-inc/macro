@@ -2276,6 +2276,29 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -4493,6 +4516,29 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -6660,6 +6706,29 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          itemId: zod.uuid().describe('Requested item.'),
+                          itemName: zod
+                            .string()
+                            .describe(
+                              'Item display name when the request was made.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe('Request under review.'),
+                          teamId: zod.uuid().describe('Team owning the item.'),
+                        })
+                        .describe(
+                          "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                        ),
+                      tag: zod.enum(['password_access_requested']),
+                    })
+                    .describe(
+                      'An agent asked for access to a vault item the user manages.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -8666,6 +8735,25 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'Someone asked to join a channel the user participates in.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  itemId: zod.uuid().describe('Requested item.'),
+                  itemName: zod
+                    .string()
+                    .describe('Item display name when the request was made.'),
+                  requestId: zod.uuid().describe('Request under review.'),
+                  teamId: zod.uuid().describe('Team owning the item.'),
+                })
+                .describe(
+                  "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values."
+                ),
+              tag: zod.enum(['password_access_requested']),
+            })
+            .describe(
+              'An agent asked for access to a vault item the user manages.'
             ),
           zod
             .object({

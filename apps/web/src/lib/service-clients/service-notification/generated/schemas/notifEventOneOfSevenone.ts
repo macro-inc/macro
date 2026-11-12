@@ -4,17 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { AgentSignInExpiryMetadata } from './agentSignInExpiryMetadata';
 import type { NotifEventOneOfSevenoneTag } from './notifEventOneOfSevenoneTag';
-import type { RuntimeAccessRemovedMetadata } from './runtimeAccessRemovedMetadata';
 
 /**
- * A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped.
+ * An agent's sign-in on one of the team's Macro computers is about
+to expire, expired, or was rejected.
  */
 export type NotifEventOneOfSevenone = {
-  /** A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped. */
-  content: RuntimeAccessRemovedMetadata;
+  /** An agent's sign-in on one of the team's Macro computers is about
+to expire, expired, or was rejected. */
+  content: AgentSignInExpiryMetadata;
   tag: NotifEventOneOfSevenoneTag;
 };
