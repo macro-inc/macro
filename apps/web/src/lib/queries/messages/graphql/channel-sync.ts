@@ -56,9 +56,9 @@ import {
 } from './source';
 
 /**
- * How long a cache that has answered before is waited on alone. It answers in
- * milliseconds unless the engine is busy. A cache that has not answered yet
- * is still starting, which takes about as long as the server's answer, so the
+ * How long the cache is waited on alone for a channel it is known to hold. It
+ * answers in milliseconds unless the engine is busy. For any other channel
+ * the read is most likely a miss, or the cache is still starting, so the
  * server is asked at once.
  */
 const ANSWERED_CACHE_HEAD_START_MS = 2_000;
@@ -84,7 +84,19 @@ type ChannelSyncState = {
 };
 
 const STATES = new Map<string, ChannelSyncState>();
-const ANSWERED_HOSTS = new WeakSet<object>();
+/**
+ * Channels each cache is known to hold a page for, learned from reads and
+ * writes this session. Only those wait on the cache alone.
+ */
+const CACHED_CHANNELS = new WeakMap<object, Set<string>>();
+
+/** Records whether the cache holds a page for the channel. */
+export function noteCachedPage(host: object, channelId: string, held: boolean) {
+  const known = CACHED_CHANNELS.get(host) ?? new Set<string>();
+  CACHED_CHANNELS.set(host, known);
+  if (held) known.add(channelId);
+  else known.delete(channelId);
+}
 
 function track(channelId: string, userId: string) {
   const state = STATES.get(channelId);
@@ -181,8 +193,9 @@ async function readCache(
 ): Promise<CachedLatestPage | undefined> {
   try {
     const page = await readCachedLatestPage(host, channelId);
-    ANSWERED_HOSTS.add(host);
-    return page && page.page.entries.length > 0 ? page : undefined;
+    const held = page && page.page.entries.length > 0 ? page : undefined;
+    noteCachedPage(host, channelId, held !== undefined);
+    return held;
   } catch {
     // An unreadable cache is a miss: the network read replaces what it holds.
     return undefined;
@@ -200,6 +213,7 @@ async function dropCachedPage(host: CacheHost, channelId: string) {
     ...cached,
     page: { ...cached.page, entries: [] },
   });
+  noteCachedPage(host, channelId, false);
 }
 
 type LatestPageRead =
@@ -207,8 +221,8 @@ type LatestPageRead =
   | { source: 'network'; read: LatestChannelPage };
 
 /**
- * The server's page, unless the cache answers with one first. A cache that is
- * still starting loses to a fast network and wins on a slow or absent one.
+ * The server's page, unless the cache answers with one first. A slow or
+ * starting cache loses to a fast network and wins on a slow or absent one.
  */
 async function raceCacheWithNetwork(
   host: CacheHost,
@@ -275,7 +289,7 @@ async function readLatestPage(
     }
   }
   const cache = readCache(host, parent.id);
-  const early = ANSWERED_HOSTS.has(host)
+  const early = CACHED_CHANNELS.get(host)?.has(parent.id)
     ? await withinCacheHeadStart(cache, ANSWERED_CACHE_HEAD_START_MS)
     : 'not-ready';
   signal?.throwIfAborted();
@@ -632,6 +646,7 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
     userId: state.userId,
     page: trimLatestPage(latest, CURSOR_PAGE_LIMIT),
   });
+  noteCachedPage(host, parent.id, true);
 }
 
 /** Write the loaded latest page back to the cache once the timeline is quiet. */

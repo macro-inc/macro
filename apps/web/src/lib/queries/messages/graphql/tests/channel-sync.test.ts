@@ -43,6 +43,7 @@ import {
   catchUpChannel,
   channelSyncSeq,
   loadChannelTimelinePage,
+  noteCachedPage,
   resetChannelSync,
 } from '../channel-sync';
 import { entryToGraphql } from '../convert';
@@ -129,6 +130,8 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.writeCachedLatestPage.mockResolvedValue(undefined);
   mocks.channelCacheHost.mockReturnValue(HOST);
+  // Most cases open a channel the cache is known to hold a page for.
+  noteCachedPage(HOST, CHANNEL.id, true);
 });
 
 afterEach(() => {
@@ -424,8 +427,7 @@ describe('opening a channel while the cache is still starting', () => {
     page: page([messageEntry('m2', 2), messageEntry('m1', 1)]),
   };
 
-  // Longer than the head start of a cache that has answered before, which
-  // the shared test host has by the time these run.
+  // Longer than the head start given to a cache known to hold the channel.
   const SLOW = 2_500;
 
   function after<T>(ms: number, value: T): Promise<T> {
@@ -466,12 +468,12 @@ describe('opening a channel while the cache is still starting', () => {
     expect(signal.aborted).toBe(true);
   });
 
-  it('asks the server at once when the cache has never answered', async () => {
+  it('asks the server at once for a channel the cache is not known to hold', async () => {
     vi.useFakeTimers();
     mocks.channelCacheHost.mockReturnValue({} as CacheHost);
     mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
     mocks.fetchLatestChannelPage.mockResolvedValue(SERVER);
-    // No timer has to pass: the open does not wait on the starting cache.
+    // No timer has to pass: the open does not wait on the cache alone.
     await open();
     expect(loadedIds()).toEqual([['m2', 'm1']]);
     expect(channelSyncSeq(CHANNEL.id)).toBe(9);
