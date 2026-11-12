@@ -46931,6 +46931,12 @@ export const getItemsSoupResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -47070,6 +47076,25 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -51929,6 +51954,12 @@ export const postItemsSoupResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -52068,6 +52099,25 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -56366,6 +56416,12 @@ export const postItemsSoupAstResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -56507,6 +56563,25 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -61303,6 +61378,12 @@ export const postItemsSoupAstGroupedResponse = zod
                       .object({
                         channel: zod
                           .object({
+                            auto_join_team: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                "Whether members of the channel's team join it automatically."
+                              ),
                             channel_type: zod
                               .enum([
                                 'public',
@@ -61461,6 +61542,25 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          agent_dm: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Persona avatar, when supplied.'),
+                                  bot_id: zod.string().describe('Persona id.'),
+                                  name: zod
+                                    .string()
+                                    .describe('Persona display name.'),
+                                })
+                                .describe(
+                                  "The persona of a viewer's private conversation with an agent."
+                                ),
+                            ])
+                            .optional(),
                           interacted_at: zod.iso
                             .datetime({})
                             .nullish()
@@ -65713,6 +65813,12 @@ export const postItemsSoupAstGroupedResponse = zod
                       .object({
                         channel: zod
                           .object({
+                            auto_join_team: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                "Whether members of the channel's team join it automatically."
+                              ),
                             channel_type: zod
                               .enum([
                                 'public',
@@ -65871,6 +65977,25 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          agent_dm: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Persona avatar, when supplied.'),
+                                  bot_id: zod.string().describe('Persona id.'),
+                                  name: zod
+                                    .string()
+                                    .describe('Persona display name.'),
+                                })
+                                .describe(
+                                  "The persona of a viewer's private conversation with an agent."
+                                ),
+                            ])
+                            .optional(),
                           interacted_at: zod.iso
                             .datetime({})
                             .nullish()
