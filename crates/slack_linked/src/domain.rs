@@ -1,3 +1,5 @@
+/// Slack rich text blocks as mrkdwn.
+pub mod blocks;
 /// What the session service hands the domain.
 pub mod events;
 /// Account, sign-in and catalogue models shared with the web app.

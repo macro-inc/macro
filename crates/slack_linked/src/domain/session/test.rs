@@ -149,3 +149,18 @@ fn only_slack_connect_conversations_enter_the_catalogue() {
         );
     }
 }
+
+#[test]
+fn a_blocks_only_message_is_stored_as_mrkdwn_with_its_mentions() {
+    let message: Message = serde_json::from_value(serde_json::json!({
+        "type": "message", "user": "U0EXTERNAL", "ts": "1700000100.000200", "text": "",
+        "blocks": [{"type": "rich_text", "elements": [{"type": "rich_text_section", "elements": [
+            {"type": "text", "text": "ping "},
+            {"type": "user", "user_id": "U0OWNER12"}
+        ]}]}]
+    }))
+    .unwrap();
+    let stored = inbound_message(&message);
+    assert_eq!(stored.body, "ping <@U0OWNER12>");
+    assert_eq!(stored.mentions, vec!["U0OWNER12".to_owned()]);
+}

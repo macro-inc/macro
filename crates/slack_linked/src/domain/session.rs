@@ -491,7 +491,11 @@ pub fn inbound_message(message: &Message) -> InboundMessage {
         },
         (None, None) => Sender::Conversation,
     };
-    let mut body = message.text.clone();
+    let mut body = if message.text.trim().is_empty() {
+        super::blocks::blocks_to_mrkdwn(&message.blocks)
+    } else {
+        message.text.clone()
+    };
     truncate_to_char_boundary(&mut body, INBOUND_TEXT_LIMIT_BYTES);
     InboundMessage {
         ts: message.ts.to_string(),
