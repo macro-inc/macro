@@ -52,6 +52,26 @@ test.describe('desktop', () => {
     ).toBeVisible();
     expect(await columnWidth(page)).toBe(standard);
   });
+
+  test('the column only widens as the pane widens', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await openDocument(page);
+    await page.getByRole('button', { name: 'Turn on wide mode' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Turn off wide mode' })
+    ).toBeVisible();
+
+    // Below the standard column plus 64px margins the text keeps the
+    // standard width; past it the column takes the extra room.
+    let previous = 0;
+    for (const width of [780, 860, 890, 896, 900, 1000]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const expected = Math.max(Math.min(768, width - 48), width - 128);
+      await expect.poll(() => columnWidth(page)).toBe(expected);
+      expect(expected).toBeGreaterThanOrEqual(previous);
+      previous = expected;
+    }
+  });
 });
 
 test('phones offer no wide mode', async ({ page, isMobile }) => {

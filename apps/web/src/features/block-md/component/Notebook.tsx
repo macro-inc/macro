@@ -68,10 +68,6 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
-// Wide mode's side padding once the pane is wide enough to spare it: room for
-// the outline in the left gutter, and a margin on par with the standard column's.
-const WideGutterWidth = 64;
-const WideGutterMinWidth = NoteTargetWidth + 2 * WideGutterWidth;
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -308,17 +304,22 @@ export function Notebook(props: {
     hasRun = true;
   });
 
-  const wideGutter = () => isWide() && (width() ?? 0) >= WideGutterMinWidth;
-
   const containerClasses = createMemo(() => {
     const mode = layoutMode();
     const shared = 'flex relative text-ink min-h-full min-w-0 isolate';
     if (mode === CommentLayoutMode.lg) return shared;
 
     const gap = mode === CommentLayoutMode.none ? '' : 'gap-6 justify-center';
-    if (wideGutter()) return `${shared} px-16 ${gap}`;
-    if (mode === CommentLayoutMode.md) return `${shared} px-8 ${gap}`;
-    return `${shared} px-6 ${gap}`;
+    const isMd = mode === CommentLayoutMode.md;
+    if (!isWide()) return `${shared} ${isMd ? 'px-8' : 'px-6'} ${gap}`;
+    // Wide mode's margin grows with the pane up to 64px, room for the outline
+    // in the left gutter. It never drops below the standard padding, and while
+    // the pane is narrower than the standard column plus that margin the text
+    // keeps the standard width, so the column only widens as the pane does.
+    const padding = isMd
+      ? 'px-[clamp(2rem,calc((100%_-_48rem)/2),4rem)]'
+      : 'px-[clamp(1.5rem,calc((100%_-_48rem)/2),4rem)]';
+    return `${shared} ${padding} ${gap}`;
   });
 
   const contentDivClasses = createMemo(() => {
