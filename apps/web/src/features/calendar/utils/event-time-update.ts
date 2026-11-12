@@ -12,6 +12,14 @@ export function calendarEventUpdateTarget(
   scope: CalendarUpdateScope
 ) {
   const single = scope === 'this_event';
+  const occurrenceTime: EventTime = event.allDay
+    ? { kind: 'allDay', startDate: event.start, endDate: event.end }
+    : {
+        kind: 'timed',
+        startsAt: event.start,
+        endsAt: event.end,
+        timeZone: event.timeZone,
+      };
   return {
     eventId: event.eventId,
     calendarId: event.calendarId,
@@ -20,6 +28,15 @@ export function calendarEventUpdateTarget(
       ? (event.recurrenceId ?? event.occurrenceKey)
       : undefined,
     occurrenceKey: single ? event.occurrenceKey : undefined,
+    timeBasis: {
+      seriesTime: event.seriesTime ?? occurrenceTime,
+      recurrenceLines: event.recurrenceLines,
+      occurrence: {
+        occurrenceKey: event.occurrenceKey,
+        recurrenceId: event.recurrenceId,
+        time: occurrenceTime,
+      },
+    },
   };
 }
 

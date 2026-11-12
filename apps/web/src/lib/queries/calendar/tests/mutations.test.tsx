@@ -1,3 +1,7 @@
+import {
+  beginCacheWriteSession,
+  endCacheWriteSession,
+} from '@graphql-cache/session-writes';
 import { previewKeys } from '@queries/preview/keys';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import {
@@ -677,6 +681,387 @@ describe('useDeleteCalendarEventMutation', () => {
 });
 
 describe('useUpdateCalendarEventMutation', () => {
+  it('retires queued writes without cached occurrences when the account changes', async () => {
+    const firstResponse = deferredResult();
+    updateCalendarEventMock.mockReturnValueOnce(firstResponse.promise);
+    const installed = vi.fn();
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const first = update.mutateAsync({
+      eventId: 'uncached-event',
+      onOptimistic: installed,
+      patch: { title: 'First' },
+    });
+    await vi.waitFor(() =>
+      expect(updateCalendarEventMock).toHaveBeenCalledOnce()
+    );
+    const second = update.mutateAsync({
+      eventId: 'uncached-event',
+      onOptimistic: installed,
+      patch: { title: 'Second' },
+    });
+    const results = Promise.allSettled([first, second]);
+    try {
+      await vi.waitFor(() => expect(installed).toHaveBeenCalledTimes(2));
+      await endCacheWriteSession(async () => {});
+      firstResponse.resolve(ok({ id: 'uncached-event' }));
+      const settled = await results;
+      expect(settled[1].status).toBe('rejected');
+      expect(updateCalendarEventMock).toHaveBeenCalledOnce();
+    } finally {
+      firstResponse.resolve(ok({ id: 'uncached-event' }));
+      await results;
+      await beginCacheWriteSession(async () => {}).ready;
+    }
+  });
+
+  it.each([
+    [false, false],
+    [true, false],
+    [true, true],
+  ])(
+    'reuses an anchored occurrence across viewports (saved %s, refreshed %s)',
+    async (earlierSave, refreshed) => {
+      const update = renderHook(() => useUpdateCalendarEventMutation());
+      if (earlierSave) {
+        updateCalendarEventMock.mockResolvedValueOnce(ok({ id: 'event-2' }));
+        await update.mutateAsync({
+          eventId: 'event-2',
+          patch: {
+            time: {
+              kind: 'timed',
+              startsAt: '2026-08-04T10:00:00Z',
+              endsAt: '2026-08-04T10:30:00Z',
+            },
+          },
+        });
+      }
+      const response = deferredResult();
+      updateCalendarEventMock.mockReturnValueOnce(response.promise);
+      const installed = vi.fn();
+      const time = {
+        kind: 'timed' as const,
+        startsAt: '2026-08-04T11:00:00Z',
+        endsAt: '2026-08-04T11:30:00Z',
+      };
+      const saved = update.mutateAsync({
+        eventId: 'event-2',
+        onOptimistic: installed,
+        patch: { time },
+      });
+      const settled = Promise.allSettled([saved]);
+      await vi.waitFor(() => expect(installed).toHaveBeenCalledOnce());
+      const range = {
+        start: '2026-08-05T00:00:00Z',
+        end: '2026-08-06T00:00:00Z',
+        startDate: '2026-08-05',
+        endDate: '2026-08-06',
+      };
+      const key = calendarKeys.occurrences('user', range).queryKey;
+      const next = recurringItem();
+      next.event.time = time;
+      if (refreshed)
+        next.occurrence = {
+          ...next.occurrence,
+          occurrenceKey: '2026-08-05T10:00:00Z',
+          recurrenceId: '2026-08-05T10:00:00Z',
+          time: {
+            kind: 'timed',
+            startsAt: '2026-08-05T10:00:00Z',
+            endsAt: '2026-08-05T10:30:00Z',
+          },
+        };
+      const data = { items: [next], syncStatus: 'ready' as const };
+      testQueryClient.setQueryData(key, data);
+      const projected = reconcileCalendarUpdateRead(
+        testQueryClient,
+        key,
+        data,
+        calendarUpdateReadRevision(testQueryClient),
+        range
+      );
+      testQueryClient.setQueryData(key, projected);
+      expect(projected.items).toHaveLength(1);
+      expect(projected.items[0].occurrence.time).toMatchObject({
+        startsAt: '2026-08-05T11:00:00.000Z',
+      });
+      response.resolve(failure());
+      await settled;
+      const restored =
+        testQueryClient.getQueryData<CalendarOccurrencesData>(key)?.items[0]
+          .occurrence.time;
+      expect(restored?.kind === 'timed' && Date.parse(restored.startsAt)).toBe(
+        Date.parse(
+          earlierSave ? '2026-08-05T10:00:00Z' : '2026-08-05T09:00:00Z'
+        )
+      );
+    }
+  );
+
+  it('retains a saved occurrence in a new range when the provider read is stale', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    await update.mutateAsync({
+      eventId: 'event-2',
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T10:00:00Z',
+          endsAt: '2026-08-04T10:30:00Z',
+        },
+      },
+    });
+    const range = {
+      start: '2026-08-05T00:00:00Z',
+      end: '2026-08-06T00:00:00Z',
+      startDate: '2026-08-05',
+      endDate: '2026-08-06',
+    };
+    const key = calendarKeys.occurrences('user', range).queryKey;
+    const data = { items: [recurringItem()], syncStatus: 'ready' as const };
+    testQueryClient.setQueryData(key, data);
+    const projected = reconcileCalendarUpdateRead(
+      testQueryClient,
+      key,
+      data,
+      calendarUpdateReadRevision(testQueryClient),
+      range
+    );
+    expect(projected.items[0].occurrence.time).toMatchObject({
+      startsAt: '2026-08-05T10:00:00.000Z',
+    });
+  });
+
+  it('uses the caller time basis when the first viewport opens during a save', async () => {
+    testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
+    const original = recurringItem();
+    const pending = deferredResult();
+    updateCalendarEventMock.mockReturnValueOnce(pending.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const installed = vi.fn();
+    const time = {
+      kind: 'timed' as const,
+      startsAt: '2026-08-04T11:00:00Z',
+      endsAt: '2026-08-04T11:30:00Z',
+    };
+    const saving = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic: installed,
+      timeBasis: {
+        seriesTime: original.event.time,
+        recurrenceLines: original.event.recurrenceLines,
+        occurrence: original.occurrence,
+      },
+      patch: { time },
+    });
+    await vi.waitFor(() => expect(installed).toHaveBeenCalledOnce());
+    const key = calendarKeys.occurrences('user', viewportA).queryKey;
+    const data = {
+      items: [{ ...original, event: { ...original.event, time } }],
+      syncStatus: 'ready' as const,
+    };
+    testQueryClient.setQueryData(key, data);
+    const projected = reconcileCalendarUpdateRead(
+      testQueryClient,
+      key,
+      data,
+      calendarUpdateReadRevision(testQueryClient),
+      viewportA
+    );
+    expect(projected.items[0].occurrence.time).toMatchObject({
+      startsAt: '2026-08-05T11:00:00.000Z',
+    });
+    expect(updateCalendarEventMock.mock.calls[0][1]).not.toHaveProperty(
+      'timeBasis'
+    );
+    pending.resolve(ok({ id: 'event-2' }));
+    await saving;
+  });
+
+  it('rebases the caller anchor even when no viewport was cached', async () => {
+    testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
+    const original = recurringItem();
+    const timeBasis = {
+      seriesTime: original.event.time,
+      recurrenceLines: original.event.recurrenceLines,
+      occurrence: original.occurrence,
+    };
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    await update.mutateAsync({
+      eventId: 'event-2',
+      timeBasis,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T11:00:00Z',
+          endsAt: '2026-08-04T11:30:00Z',
+        },
+      },
+    });
+    await update.mutateAsync({
+      eventId: 'event-2',
+      timeBasis,
+      scope: 'this_event',
+      occurrenceKey: original.occurrence.occurrenceKey,
+      patch: { title: 'This occurrence' },
+    });
+    expect(updateCalendarEventMock.mock.calls[1][1].recurrenceId).toBe(
+      '2026-08-05T11:00:00+00:00'
+    );
+  });
+
+  it.each([true, false])(
+    'removes stale range membership during a move that succeeds: %s',
+    async (succeeded) => {
+      const response = deferredResult();
+      updateCalendarEventMock.mockReturnValueOnce(response.promise);
+      const update = renderHook(() => useUpdateCalendarEventMutation());
+      const installed = vi.fn();
+      const saving = update.mutateAsync({
+        eventId: 'event-2',
+        onOptimistic: installed,
+        patch: {
+          time: {
+            kind: 'timed',
+            startsAt: '2026-08-05T09:00:00Z',
+            endsAt: '2026-08-05T09:30:00Z',
+          },
+        },
+      });
+      await vi.waitFor(() => expect(installed).toHaveBeenCalledOnce());
+      const range = {
+        start: '2026-08-05T00:00:00Z',
+        end: '2026-08-06T00:00:00Z',
+        startDate: '2026-08-05',
+        endDate: '2026-08-06',
+      };
+      const key = calendarKeys.occurrences('user', range).queryKey;
+      const data = { items: [recurringItem()], syncStatus: 'ready' as const };
+      testQueryClient.setQueryData(key, data);
+      const projected = reconcileCalendarUpdateRead(
+        testQueryClient,
+        key,
+        data,
+        calendarUpdateReadRevision(testQueryClient),
+        range
+      );
+      expect(projected.items).toEqual([]);
+      testQueryClient.setQueryData(key, projected);
+      const finished = Promise.allSettled([saving]);
+      response.resolve(succeeded ? ok({ id: 'event-2' }) : failure());
+      await finished;
+      if (succeeded) {
+        expect(
+          reconcileCalendarUpdateRead(
+            testQueryClient,
+            key,
+            data,
+            calendarUpdateReadRevision(testQueryClient),
+            range
+          ).items
+        ).toEqual([]);
+      } else {
+        expect(
+          testQueryClient.getQueryData<CalendarOccurrencesData>(key)?.items[0]
+            .occurrence.time
+        ).toEqual(recurringItem().occurrence.time);
+      }
+    }
+  );
+
+  it('filters a moved occurrence from an already cached range and restores it on failure', async () => {
+    const pending = deferredResult();
+    updateCalendarEventMock.mockReturnValueOnce(pending.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const installed = vi.fn();
+    const saving = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic: installed,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-11T09:00:00Z',
+          endsAt: '2026-08-11T09:30:00Z',
+        },
+      },
+    });
+    const settled = Promise.allSettled([saving]);
+    await vi.waitFor(() => expect(installed).toHaveBeenCalledOnce());
+    expect(viewportData(viewportB)?.items.map((item) => item.event.id)).toEqual(
+      ['event-1']
+    );
+    expect(viewportData(viewportA)?.items[1].occurrence.time).toMatchObject({
+      startsAt: '2026-08-12T09:00:00.000Z',
+    });
+    pending.resolve(failure());
+    await settled;
+    expect(viewportData(viewportB)?.items[1]).toEqual(recurringItem());
+  });
+
+  it('does not guess a new occurrence address while a series time change is unresolved', async () => {
+    const pending = deferredResult();
+    updateCalendarEventMock.mockReturnValueOnce(pending.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const installed = vi.fn();
+    const saving = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic: installed,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T11:00:00Z',
+          endsAt: '2026-08-04T11:30:00Z',
+        },
+      },
+    });
+    await vi.waitFor(() => expect(installed).toHaveBeenCalledOnce());
+    const unknown = recurringItem();
+    unknown.occurrence = {
+      ...unknown.occurrence,
+      occurrenceKey: '2026-08-12T09:00:00Z',
+      recurrenceId: '2026-08-12T09:00:00Z',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-12T09:00:00Z',
+        endsAt: '2026-08-12T09:30:00Z',
+      },
+    };
+    const range = {
+      start: '2026-08-12T00:00:00Z',
+      end: '2026-08-13T00:00:00Z',
+      startDate: '2026-08-12',
+      endDate: '2026-08-13',
+    };
+    const key = calendarKeys.occurrences('user', range).queryKey;
+    const data = { items: [unknown], syncStatus: 'ready' as const };
+    testQueryClient.setQueryData(key, data);
+    expect(
+      reconcileCalendarUpdateRead(
+        testQueryClient,
+        key,
+        data,
+        calendarUpdateReadRevision(testQueryClient),
+        range
+      )
+    ).toEqual(data);
+    await expect(
+      update.mutateAsync({
+        eventId: 'event-2',
+        scope: 'this_event',
+        occurrenceKey: unknown.occurrence.occurrenceKey,
+        timeBasis: {
+          seriesTime: unknown.event.time,
+          recurrenceLines: unknown.event.recurrenceLines,
+          occurrence: unknown.occurrence,
+        },
+        patch: { title: 'Unknown address' },
+      })
+    ).rejects.toThrow('Refresh this occurrence');
+    expect(updateCalendarEventMock).toHaveBeenCalledOnce();
+    pending.resolve(ok({ id: 'event-2' }));
+    await saving;
+  });
+
   it('updates only the addressed occurrence time without changing its cached series master', async () => {
     updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
     const original = recurringItem();
@@ -1431,6 +1816,37 @@ it('leaves unrelated invitation lookups, including failed ones, untouched by a r
 });
 
 describe('optimistic recurring times', () => {
+  it('projects recurring timed events into all-day dates and back', () => {
+    const timed = recurringItem();
+    timed.event.time = {
+      kind: 'timed',
+      startsAt: '2026-08-04T09:00:00Z',
+      endsAt: '2026-08-04T09:30:00Z',
+      timeZone: 'UTC',
+    };
+    const allDayMaster = {
+      kind: 'allDay' as const,
+      startDate: '2026-08-04',
+      endDate: '2026-08-05',
+    };
+    const allDay = projectCalendarOccurrenceTime(timed, allDayMaster);
+    expect(allDay.occurrence.time).toEqual({
+      kind: 'allDay',
+      startDate: '2026-08-05',
+      endDate: '2026-08-06',
+    });
+    expect(allDay.occurrence.recurrenceId).toBe('2026-08-05');
+    expect(allDay.occurrence.occurrenceKey).toBe(
+      timed.occurrence.occurrenceKey
+    );
+    const restored = projectCalendarOccurrenceTime(allDay, timed.event.time);
+    expect(restored.occurrence.time).toMatchObject({
+      kind: 'timed',
+      startsAt: '2026-08-05T09:00:00.000Z',
+      endsAt: '2026-08-05T09:30:00.000Z',
+    });
+  });
+
   it('uses the series wall clock across daylight-saving changes', () => {
     expect(
       shiftCalendarEventTime(

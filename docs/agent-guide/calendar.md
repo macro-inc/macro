@@ -506,11 +506,16 @@ switches the open details.
 Editable recurring events can also be dragged and resized in the grid. The
 `Save repeating event` dialog keeps the dropped position visible until Save or
 Cancel. After Save, cached occurrences update immediately and the grid stays
-editable while the provider saves and refreshes. Successive edits to one event
-save in order; other events remain independent. Failed saves remove only their
-own optimistic change without undoing newer edits. A failed or incomplete
-refresh retains the projected events and offers Retry without blocking the
-rest of the grid. `This event` changes only the selected occurrence and leaves
+editable while the provider saves and refreshes, including timed/all-day moves.
+Newly opened ranges reuse known occurrence baselines without applying saved
+moves twice. Previously unseen occurrences keep provider times while the series
+is changing; time or single-occurrence edits need a refresh rather than a guessed
+address. Successive edits to one event save in order; other events remain
+independent. Account changes retire unsent edits, even without an open calendar.
+Failed saves remove only their own optimistic change without undoing newer
+edits. A failed or incomplete refresh retains the projected events and offers
+Retry without blocking the rest of the grid. `This event` changes only the
+selected occurrence and leaves
 the cached series master time untouched; Cancel and Escape restore the original
 position before saving.
 `All events`, when available, applies

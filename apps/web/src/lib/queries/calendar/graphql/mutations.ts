@@ -7,6 +7,7 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { captureCacheWriteSession } from '@graphql-cache/session-writes';
 import { Telemetry } from '@macro-inc/observability';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
@@ -387,6 +388,7 @@ export async function executeGraphqlUpdate(
   if (waitForSettlement && !host.onMutationSettled) {
     throw new Error('Calendar update settlement is unavailable');
   }
+  const writeSession = captureCacheWriteSession();
   const traceContext = Telemetry.captureContext();
   const { patch } = args;
   const oneOccurrence =
@@ -442,6 +444,8 @@ export async function executeGraphqlUpdate(
       })
     : undefined;
   try {
+    if (!writeSession.isCurrent())
+      throw new Error('Calendar account changed before saving');
     const result = await traceContext.run(() =>
       executeOptimisticMutation(
         client,

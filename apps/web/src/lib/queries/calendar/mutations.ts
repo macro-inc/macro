@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { captureCacheWriteSession } from '@graphql-cache/session-writes';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -19,6 +20,7 @@ import {
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
+import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
 import {
   beginCalendarUpdate,
@@ -698,6 +700,15 @@ export interface UpdateCalendarEventArgs {
   recurrenceId?: string;
   /** Cache key of the occurrence a scoped update targets, for the optimistic update. */
   occurrenceKey?: string;
+  /** Pre-edit times for an occurrence opened without a cached calendar range; never sent. */
+  timeBasis?: {
+    seriesTime: EventTime;
+    recurrenceLines: string[];
+    occurrence: Pick<
+      CalendarOccurrenceItem['occurrence'],
+      'occurrenceKey' | 'recurrenceId' | 'time'
+    >;
+  };
   /** UI-owned move span; never serialized into the request. */
   parentSpan?: Span;
   /** Shared optimistic cache state is installed; the grid can release its preview. */
@@ -720,6 +731,7 @@ type UpdateCallbacks = MutationCallbacks<
 async function updateCalendarEvent(
   args: UpdateCalendarEventArgs
 ): Promise<CalendarEventEntity | undefined> {
+  const writeSession = captureCacheWriteSession();
   const operation = async (span: Span) => {
     const host = answeringGraphqlCalendarHost();
     span.setAttr('calendar.event_id', args.eventId);
@@ -729,6 +741,8 @@ async function updateCalendarEvent(
       const prepared = await span.span('calendar.update_queue', () =>
         prepareCalendarUpdate(args)
       );
+      if (!writeSession.isCurrent())
+        throw new Error('Calendar account changed before saving');
       if (host)
         return committedEvent(
           await span.run(() =>
@@ -778,11 +792,17 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
           await installCalendarUpdate(queryClient, context);
           return context;
         },
-        onSuccess: (_data, args) => args.onWriteAccepted?.(),
+        onSuccess: (_data, args, context) => {
+          if (context?.state.isCurrent()) args.onWriteAccepted?.();
+        },
         onSettled: (_data, error, args, context) => {
           if (context) settleCalendarUpdate(context.client, context, !error);
-          if (!context || context.client === queryClient)
+          if (
+            !context ||
+            (context.client === queryClient && context.state.isCurrent())
+          ) {
             refreshAfterWrite(args.eventId);
+          }
         },
       },
       callbacks

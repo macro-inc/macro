@@ -1,4 +1,5 @@
 import { deepEqual } from '@core/util/compareUtils';
+import { captureCacheWriteSession } from '@graphql-cache/session-writes';
 import type { CalendarEvent } from '@service-storage/generated/schemas/calendarEvent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
@@ -13,14 +14,17 @@ type Patch = UpdateCalendarEventArgs['patch'];
 interface ViewportSnapshot {
   query: Query;
   items: CalendarOccurrenceItem[];
+  range?: CalendarOccurrenceQueryRange;
 }
 
 interface EventUpdates {
   entries: CalendarUpdate[];
   viewports: Map<string, ViewportSnapshot>;
   confirmedTime?: EventTime;
+  timeBasis?: UpdateCalendarEventArgs['timeBasis'];
   revision: number;
   tail: Promise<void>;
+  isCurrent: () => boolean;
   retired?: boolean;
 }
 
@@ -201,9 +205,130 @@ function publish(client: QueryClient, state: EventUpdates) {
     const current = client.getQueryCache().get(key);
     if (current !== snapshot.query) continue;
     client.setQueryData<CalendarOccurrencesData>(current.queryKey, (data) =>
-      data ? { ...data, items: project(data.items, state, snapshot) } : data
+      data
+        ? { ...data, items: applySnapshot(data.items, state, snapshot) }
+        : data
     );
   }
+}
+
+function occurrenceVersions(base: CalendarOccurrenceItem, state: EventUpdates) {
+  const versions = [base];
+  let current = base;
+  for (const entry of state.entries) {
+    // Failed versions still identify cache records that must be replaced by
+    // rollback; only project() decides which writes remain visible.
+    if (!targets(base, entry.args)) continue;
+    current = applyEventPatch(current, entry.args);
+    versions.push(current);
+  }
+  return versions;
+}
+
+function applySnapshot(
+  items: CalendarOccurrenceItem[],
+  state: EventUpdates,
+  snapshot: ViewportSnapshot
+) {
+  // Replace all known versions of an occurrence, including stale membership,
+  // but keep unrelated or genuinely unseen provider records.
+  const versions = snapshot.items.flatMap((base) =>
+    occurrenceVersions(base, state)
+  );
+  const unknown = items.filter(
+    (item) => !versions.some((version) => sameOccurrence(item, version))
+  );
+  const current = snapshot.items.map((item) => {
+    const versions = occurrenceVersions(item, state);
+    const observed =
+      items.find(
+        (next) =>
+          next.event.id === item.event.id &&
+          next.occurrence.occurrenceKey === item.occurrence.occurrenceKey
+      ) ??
+      items.find((next) =>
+        versions.some((version) => sameOccurrence(next, version))
+      );
+    if (!observed) return item;
+    return {
+      ...observed,
+      occurrence: {
+        ...observed.occurrence,
+        occurrenceKey: item.occurrence.occurrenceKey,
+      },
+    };
+  });
+  const projected = project(current, state, snapshot).filter((item) =>
+    inRange(item.occurrence.time, snapshot.range)
+  );
+  return [...unknown, ...projected];
+}
+
+function knownSnapshot(
+  state: EventUpdates,
+  query: Query,
+  data: CalendarOccurrencesData,
+  range?: CalendarOccurrenceQueryRange
+): ViewportSnapshot | undefined {
+  const originals = new Map<string, CalendarOccurrenceItem>();
+  for (const snapshot of state.viewports.values()) {
+    for (const item of snapshot.items)
+      originals.set(item.occurrence.occurrenceKey, item);
+  }
+  const basis = state.timeBasis;
+  if (basis && !originals.has(basis.occurrence.occurrenceKey)) {
+    for (const observed of data.items) {
+      if (observed.event.id !== state.entries[0]?.args.eventId) continue;
+      const original = {
+        ...observed,
+        event: {
+          ...observed.event,
+          time: basis.seriesTime,
+          recurrenceLines: basis.recurrenceLines,
+        },
+        occurrence: { ...observed.occurrence, ...basis.occurrence },
+      };
+      if (
+        occurrenceVersions(original, state).some((version) =>
+          sameOccurrence(version, observed)
+        )
+      ) {
+        originals.set(basis.occurrence.occurrenceKey, original);
+        break;
+      }
+    }
+  }
+  const items = [...originals.values()];
+  const included = items.filter((item) =>
+    occurrenceVersions(item, state).some((version) =>
+      inRange(version.occurrence.time, range)
+    )
+  );
+  return included.length ? { query, items: included, range } : undefined;
+}
+
+function snapshotRange(query: Query): CalendarOccurrenceQueryRange | undefined {
+  // calendarKeys.occurrences stores the range after namespace, name, and user.
+  const range = query.queryKey[3];
+  if (
+    typeof range !== 'object' ||
+    range === null ||
+    !('start' in range) ||
+    typeof range.start !== 'string' ||
+    !('end' in range) ||
+    typeof range.end !== 'string' ||
+    !('startDate' in range) ||
+    typeof range.startDate !== 'string' ||
+    !('endDate' in range) ||
+    typeof range.endDate !== 'string'
+  )
+    return;
+  return {
+    start: range.start,
+    end: range.end,
+    startDate: range.startDate,
+    endDate: range.endDate,
+  };
 }
 
 export function beginCalendarUpdate(
@@ -212,8 +337,16 @@ export function beginCalendarUpdate(
 ): CalendarUpdate {
   const owner = registry(client);
   let state = owner.events.get(args.eventId);
+  if (state && !state.isCurrent()) {
+    state.retired = true;
+    owner.events.delete(args.eventId);
+    state = undefined;
+  }
   if (!state) {
     state = {
+      isCurrent: captureCacheWriteSession().isCurrent,
+      timeBasis: args.timeBasis,
+      confirmedTime: args.timeBasis?.seriesTime,
       entries: [],
       viewports: new Map(),
       revision: 0,
@@ -221,15 +354,34 @@ export function beginCalendarUpdate(
     };
     owner.events.set(args.eventId, state);
   }
+  const existingTimeChange = state.entries.some(
+    (entry) => entry.status !== 'failed' && entry.args.patch.time
+  );
+  if (existingTimeChange && (args.patch.time || args.scope === 'this_event')) {
+    const key = args.timeBasis?.occurrence.occurrenceKey ?? args.occurrenceKey;
+    const known =
+      key &&
+      (state.timeBasis?.occurrence.occurrenceKey === key ||
+        [...state.viewports.values()].some((snapshot) =>
+          snapshot.items.some((item) => item.occurrence.occurrenceKey === key)
+        ));
+    if (!known && (key !== undefined || args.scope === 'this_event')) {
+      throw new Error('Refresh this occurrence before editing its time.');
+    }
+  }
   for (const query of client
     .getQueryCache()
     .findAll({ queryKey: calendarKeys.occurrences._def })) {
     const data = client.getQueryData<CalendarOccurrencesData>(query.queryKey);
     if (!data || state.viewports.has(query.queryHash)) continue;
     const items = data.items.filter((item) => item.event.id === args.eventId);
-    if (!items.length) continue;
-    state.viewports.set(query.queryHash, { query, items });
+    if (!items.length || state.entries.length > 0) continue;
     state.confirmedTime ??= items[0].event.time;
+    state.viewports.set(query.queryHash, {
+      query,
+      items,
+      range: snapshotRange(query),
+    });
   }
   const ready = state.tail;
   let release = () => {};
@@ -257,6 +409,10 @@ export async function installCalendarUpdate(
   entry: CalendarUpdate
 ) {
   await client.cancelQueries({ queryKey: calendarKeys.occurrences._def });
+  if (!entry.state.isCurrent()) {
+    entry.state.retired = true;
+    return;
+  }
   publish(client, entry.state);
   entry.args.onOptimistic?.();
 }
@@ -268,14 +424,38 @@ export async function prepareCalendarUpdate(args: UpdateCalendarEventArgs) {
   if (submissions?.length === 0) SUBMISSIONS.delete(args);
   if (!entry) return args;
   await entry.ready;
-  if (entry.state.retired)
+  if (entry.state.retired || !entry.state.isCurrent()) {
+    entry.state.retired = true;
     throw new Error('Calendar account changed before saving');
+  }
   if (args.scope !== 'this_event') return args;
   const key = args.occurrenceKey ?? args.recurrenceId;
-  const base = [...entry.state.viewports.values()]
-    .flatMap((snapshot) => snapshot.items)
-    .find((item) => item.occurrence.occurrenceKey === key);
-  if (!base || !entry.state.confirmedTime) return args;
+  const basis = entry.state.timeBasis;
+  const base =
+    [...entry.state.viewports.values()]
+      .flatMap((snapshot) => snapshot.items)
+      .find((item) => item.occurrence.occurrenceKey === key) ??
+    (basis && basis.occurrence.occurrenceKey === key
+      ? {
+          event: {
+            time: basis.seriesTime,
+            recurrenceLines: basis.recurrenceLines,
+          },
+          occurrence: basis.occurrence,
+        }
+      : undefined);
+  if (!base || !entry.state.confirmedTime) {
+    const changedSeries = entry.state.entries.some(
+      (other) =>
+        other !== entry &&
+        other.status === 'saved' &&
+        other.args.scope !== 'this_event' &&
+        other.args.patch.time
+    );
+    if (changedSeries)
+      throw new Error('Refresh this occurrence before editing it.');
+    return args;
+  }
   const projected = projectCalendarOccurrenceTime(
     base,
     entry.state.confirmedTime
@@ -299,7 +479,8 @@ export function settleCalendarUpdate(
     entry.state.confirmedTime = entry.args.patch.time;
   }
   entry.state.revision = ++registry(client).revision;
-  if (!entry.state.retired) publish(client, entry.state);
+  if (!entry.state.retired && entry.state.isCurrent())
+    publish(client, entry.state);
   entry.release();
 }
 
@@ -408,9 +589,16 @@ function readConfirmsUpdates(
   range?: CalendarOccurrenceQueryRange
 ) {
   const expected = project(snapshot.items, state, snapshot);
-  return expected.every((item) => {
-    if (item.occurrence.isCancelled || !inRange(item.occurrence.time, range))
-      return true;
+  return expected.every((item, index) => {
+    if (item.occurrence.isCancelled) return true;
+    if (!inRange(item.occurrence.time, range)) {
+      const versions = occurrenceVersions(snapshot.items[index], state);
+      return !data.items.some(
+        (actual) =>
+          inRange(actual.occurrence.time, range) &&
+          versions.some((version) => sameOccurrence(actual, version))
+      );
+    }
     const writes = state.entries.filter(
       (entry) => entry.status === 'saved' && targets(item, entry.args)
     );
@@ -437,9 +625,21 @@ export function reconcileCalendarUpdateRead(
   const key = hashKey(queryKey);
   let items = data.items;
   for (const [eventId, state] of owner.events) {
-    const snapshot = state.viewports.get(key);
-    if (!snapshot) continue;
+    if (!state.isCurrent()) {
+      state.retired = true;
+      owner.events.delete(eventId);
+      continue;
+    }
     const pending = state.entries.some((entry) => entry.status === 'pending');
+    let snapshot = state.viewports.get(key);
+    if (!snapshot) {
+      const query = client.getQueryCache().get(key);
+      if (query) {
+        snapshot = knownSnapshot(state, query, data, range);
+        if (snapshot) state.viewports.set(key, snapshot);
+      }
+    }
+    if (!snapshot) continue;
     if (
       !pending &&
       !data.partial &&
@@ -450,18 +650,7 @@ export function reconcileCalendarUpdateRead(
       if (state.viewports.size === 0) owner.events.delete(eventId);
       continue;
     }
-    // A series move can replace all occurrence keys. Retain this viewport's
-    // known instances until its post-write read, rather than dropping the edit.
-    const otherEvents = items.filter((item) => item.event.id !== eventId);
-    const current = snapshot.items.map(
-      (item) =>
-        items.find(
-          (next) =>
-            next.event.id === eventId &&
-            next.occurrence.occurrenceKey === item.occurrence.occurrenceKey
-        ) ?? item
-    );
-    items = [...otherEvents, ...project(current, state, snapshot)];
+    items = applySnapshot(items, state, snapshot);
   }
   return { ...data, items };
 }

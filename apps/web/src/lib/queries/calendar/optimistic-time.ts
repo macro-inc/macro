@@ -4,11 +4,19 @@ import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 
 const DAY = 86_400_000;
 
+interface TimeProjection {
+  event: Pick<CalendarOccurrenceItem['event'], 'time' | 'recurrenceLines'>;
+  occurrence: Pick<
+    CalendarOccurrenceItem['occurrence'],
+    'time' | 'recurrenceId'
+  > & { isCancelled?: boolean };
+}
+
 function eventTimeZone(...times: EventTime[]): string {
   for (const time of times) {
     if (time.kind === 'timed' && time.timeZone) return time.timeZone;
   }
-  return 'UTC';
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 function wallInstant(instant: string, zone: string): number {
@@ -57,7 +65,7 @@ export function shiftCalendarEventTime(
   fromMaster: EventTime,
   toMaster: EventTime
 ): EventTime | undefined {
-  if (time.kind !== fromMaster.kind || time.kind !== toMaster.kind) return;
+  if (time.kind !== fromMaster.kind) return;
   const zone = eventTimeZone(fromMaster, toMaster, time);
   try {
     const [fromStart, fromEnd] = wallRange(fromMaster, zone);
@@ -81,7 +89,7 @@ export function shiftCalendarEventTime(
     )
       return;
 
-    if (time.kind === 'allDay') {
+    if (toMaster.kind === 'allDay') {
       if (shiftedStart % DAY !== 0 || shiftedEnd % DAY !== 0) return;
       return {
         kind: 'allDay',
@@ -90,21 +98,22 @@ export function shiftCalendarEventTime(
       };
     }
     const startsAt =
-      shiftedStart === start
+      time.kind === 'timed' && shiftedStart === start
         ? time.startsAt
         : instantAtWall(shiftedStart, zone);
     const endsAt =
-      shiftedEnd === end ? time.endsAt : instantAtWall(shiftedEnd, zone);
+      time.kind === 'timed' && shiftedEnd === end
+        ? time.endsAt
+        : instantAtWall(shiftedEnd, zone);
     if (!startsAt || !endsAt || Date.parse(endsAt) <= Date.parse(startsAt))
       return;
     return {
-      ...time,
+      kind: 'timed',
       startsAt,
       endsAt,
       timeZone:
-        toMaster.kind === 'timed'
-          ? (toMaster.timeZone ?? time.timeZone)
-          : time.timeZone,
+        toMaster.timeZone ??
+        (time.kind === 'timed' ? time.timeZone : undefined),
     };
   } catch {
     // Invalid time zones, dates, and out-of-range instants cannot be projected.
@@ -113,10 +122,10 @@ export function shiftCalendarEventTime(
 }
 
 /** Keep the cached occurrence identity while projecting an ordinary series instance. */
-export function projectCalendarOccurrenceTime(
-  item: CalendarOccurrenceItem,
+export function projectCalendarOccurrenceTime<T extends TimeProjection>(
+  item: T,
   nextMaster: EventTime
-): CalendarOccurrenceItem {
+): T {
   const { event, occurrence } = item;
   const updatedEvent = { ...event, time: nextMaster };
   const recurrenceId = occurrence.recurrenceId;
