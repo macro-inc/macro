@@ -252,6 +252,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "EditPipeline",
         "ImportPipelineCsv",
         "ExportPipelineCsv",
+        "ShareWithChannel",
         "ListInitiatives",
         "CreateInitiative",
         "UpdateInitiative",
