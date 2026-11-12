@@ -1,0 +1,53 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "macro",
+  "version": "1.0.0",
+  "description": "Search, read, and create documents, messages, and tasks in your Macro workspace.",
+  "author": { "name": "Macro", "email": "support@macro.com", "url": "https://macro.com" },
+  "homepage": "https://macro.com",
+  "repository": "https://github.com/macro-inc/macro",
+  "keywords": ["productivity", "documents", "tasks", "chat"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Macro",
+        "shortDescription": "Your Macro workspace",
+        "longDescription": "Macro is one workspace for documents, chat, email, tasks, and agents. Connect it to ChatGPT to search across your workspace, read documents and channel conversations, and create documents and tasks without leaving the chat. You sign in with your own Macro account, and ChatGPT sees only what that account can see.",
+        "developerName": "Coparse, Inc. dba Macro",
+        "category": "Productivity",
+        "capabilities": ["Search your workspace", "Read documents and channels", "Create documents and tasks"],
+        "websiteURL": "https://macro.com",
+        "supportURL": "https://docs.macro.com/support",
+        "privacyPolicyURL": "https://macro.com/privacy",
+        "termsOfServiceURL": "https://macro.com/terms",
+        "defaultPrompt": ["Find my recent Macro documents", "Search Macro for the onboarding guide", "Create a Macro doc with these notes"],
+        "brandColor": "#000000",
+        "brandColorDark": "#FFFFFF",
+        "composerIcon": "./assets/icon.png",
+        "composerIconDark": "./assets/icon-dark.png",
+        "logo": "./assets/logo.png"
+      },
+      "onboardingSkill": "./skills/get-started/SKILL.md",
+      "review": {
+        "test_cases": {
+          "positive": [
+            { "description": "Search the workspace", "prompt": "Search Macro for how tasks work.", "tools_triggered": "search_read", "expected_behavior": "Returns matching items from the demo account, including the Intro to tasks document, with links." },
+            { "description": "List recent documents", "prompt": "List my recent Macro documents.", "tools_triggered": "documents_read", "expected_behavior": "Lists the demo account's recently opened documents with links." },
+            { "description": "Read and summarize a document", "prompt": "Find the Macro document Advanced task features and summarize it.", "tools_triggered": "search_read, documents_read", "expected_behavior": "Finds the document, reads it, and summarizes its real contents with a link." },
+            { "description": "Create a document", "prompt": "Create a Macro document titled Meeting notes that says we ship Friday.", "tools_triggered": "documents_write", "expected_behavior": "Confirms first, then creates the document and returns its link." },
+            { "description": "Create a task", "prompt": "Create a Macro task called Review the launch notes.", "tools_triggered": "tasks_write", "expected_behavior": "Confirms first, then creates the task and returns its link." }
+          ],
+          "negative": [
+            { "description": "Weather has nothing to do with Macro", "prompt": "What's the weather in Brooklyn today?" },
+            { "description": "General knowledge needs no workspace", "prompt": "Explain how photosynthesis works." },
+            { "description": "Math needs no workspace", "prompt": "What is 17 times 23?" }
+          ]
+        },
+        "commerce": false
+      },
+      "publication": {
+        "release_notes": "First release: search, read, and create in your Macro workspace."
+      }
+    }
+  }
+}
