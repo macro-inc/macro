@@ -206,6 +206,9 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
+  // Take this tab's id as the app starts, so this page answers a tab
+  // duplicated from it, which starts with a copy of the id, from the start.
+  uiClientId();
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();

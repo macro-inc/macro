@@ -1,0 +1,149 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * Each `loadPage` is a new page of a tab whose sessionStorage is what this
+ * test's storage holds at that moment: the next page after a reload, or a
+ * tab duplicated or opened from this one, which the browser gives a copy.
+ * Pages talk over real BroadcastChannels and each keeps its own page events.
+ */
+
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
+const NativeChannel = globalThis.BroadcastChannel;
+const opened: BroadcastChannel[] = [];
+let recording: BroadcastChannel[] | undefined;
+
+/** Records which page opened each channel, so a page can crash. */
+class RecordedChannel extends NativeChannel {
+  constructor(name: string) {
+    super(name);
+    opened.push(this);
+    recording?.push(this);
+  }
+}
+
+type Page = {
+  id: () => string;
+  /** The page goes; `persisted` keeps it in the back/forward cache. */
+  leave: (persisted: boolean) => void;
+  returnFromCache: () => void;
+  /** The page dies without `pagehide`: a crash, a discarded tab. */
+  crash: () => void;
+};
+
+function asPage<T>(channels: BroadcastChannel[], run: () => T): T {
+  recording = channels;
+  try {
+    return run();
+  } finally {
+    recording = undefined;
+  }
+}
+
+async function loadPage(): Promise<Page> {
+  vi.resetModules();
+  const { uiClientId } = await import('./ui-client');
+  const channels: BroadcastChannel[] = [];
+  const events = new EventTarget();
+  const listen = vi
+    .spyOn(window, 'addEventListener')
+    .mockImplementation((type, listener) =>
+      events.addEventListener(type, listener)
+    );
+  asPage(channels, uiClientId);
+  listen.mockRestore();
+
+  return {
+    id: uiClientId,
+    leave: (persisted) => {
+      events.dispatchEvent(new PageTransitionEvent('pagehide', { persisted }));
+    },
+    returnFromCache: () =>
+      asPage(channels, () =>
+        events.dispatchEvent(
+          new PageTransitionEvent('pageshow', { persisted: true })
+        )
+      ),
+    crash: () => {
+      for (const channel of channels) channel.close();
+    },
+  };
+}
+
+/** Long enough for any page to answer a hello. */
+const answered = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+beforeAll(() => vi.stubGlobal('BroadcastChannel', RecordedChannel));
+afterAll(() => vi.unstubAllGlobals());
+beforeEach(() => sessionStorage.clear());
+afterEach(() => {
+  for (const channel of opened.splice(0)) channel.close();
+});
+
+describe('uiClientId', () => {
+  it('stays the same through the life of a page', async () => {
+    const page = await loadPage();
+
+    expect(page.id()).toBe(page.id());
+  });
+
+  it('survives a reload of the tab', async () => {
+    const before = await loadPage();
+    const id = before.id();
+    before.leave(false);
+
+    const after = await loadPage();
+    await answered();
+
+    expect(after.id()).toBe(id);
+  });
+
+  it('survives a reload after the page died without pagehide', async () => {
+    const before = await loadPage();
+    const id = before.id();
+    before.crash();
+
+    const after = await loadPage();
+    await answered();
+
+    expect(after.id()).toBe(id);
+  });
+
+  it('gives a tab duplicated or opened from this one its own id', async () => {
+    const original = await loadPage();
+    const id = original.id();
+
+    const copy = await loadPage();
+
+    await vi.waitFor(() => expect(copy.id()).not.toBe(id));
+    expect(original.id()).toBe(id);
+
+    // The copy's own reloads keep its new id.
+    const minted = copy.id();
+    copy.leave(false);
+    expect((await loadPage()).id()).toBe(minted);
+  });
+
+  it('gives the copy its own id once the original comes back from the back/forward cache', async () => {
+    const original = await loadPage();
+    const id = original.id();
+    original.leave(true);
+    const copy = await loadPage();
+    await answered();
+    expect(copy.id()).toBe(id);
+
+    original.returnFromCache();
+
+    await vi.waitFor(() => expect(copy.id()).not.toBe(id));
+    expect(original.id()).toBe(id);
+  });
+});
