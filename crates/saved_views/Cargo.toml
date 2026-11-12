@@ -19,5 +19,4 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }

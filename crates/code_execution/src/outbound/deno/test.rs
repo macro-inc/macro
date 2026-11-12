@@ -133,7 +133,10 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
         )]),
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
-        hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
         unattended: None,
     };
     let source = r#"
@@ -216,7 +219,10 @@ async fn a_program_presents_a_view_through_its_session() {
         trace_headers: BTreeMap::new(),
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
-        hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
         unattended: None,
     };
     let source = r#"
@@ -266,6 +272,53 @@ async fn javascript_logs_result_and_cleanup() {
         |event| matches!(&event.kind, EventKind::Log { message, .. } if message == "working")
     ));
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn links_point_at_the_deployment_web_app() {
+    let (_root, service) = setup(Limits::default()).await;
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::new(),
+            web_app_url: "https://dev.macro.com".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+import { Macro } from '@macro-inc/sdk';
+export async function main({token, hosts, webAppUrl, macro: supplied}) {
+  const constructed = new Macro({token, hosts, webAppUrl});
+  return {
+    supplied: supplied.forms.byId('fixture-form').webUrl(),
+    constructed: constructed.documents.byId('fixture-document').webUrl(),
+  };
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "supplied": "https://dev.macro.com/app/form/fixture-form",
+            "constructed": "https://dev.macro.com/app/md/fixture-document",
+        })
+    );
     service.shutdown().await;
 }
 
@@ -387,7 +440,7 @@ async fn denies_unlisted_destinations_including_redirects() {
         read_request(&mut stream).await;
         stream.write_all(format!("HTTP/1.1 302 Found\r\nLocation: http://{forbidden_address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
     });
-    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..RunEnvironment::default() }).unwrap()).await;
+    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
     assert!(
         matches!(outcome, Outcome::Failed { .. }),
         "redirect escaped allowlist: {outcome:?}"
@@ -513,10 +566,10 @@ async fn oversized_result_data_is_summarized_and_reviews_kept() {
     assert!(data["bytes"].as_u64().unwrap() > max_result_bytes as u64);
     assert_eq!(
         data["outline"],
-        "{keys: Array(8) of string, items: Array(2000) of {id: number, name: string}}"
+        "{keys: Array(9) of string, items: Array(2000) of {id: number, name: string}}"
     );
     assert!(data["preview"].as_str().unwrap().starts_with(
-        r#"{"keys":["token","traceHeaders","sessionId","executionId","hosts","macro","session","execution"],"items":[{"id":0,"#
+        r#"{"keys":["token","traceHeaders","sessionId","executionId","hosts","webAppUrl","macro","session","execution"],"items":[{"id":0,"#
     ));
     assert!(serde_json::to_vec(&value).unwrap().len() <= max_result_bytes);
     service.shutdown().await;
@@ -621,10 +674,13 @@ fn unattended(
 ) -> RunEnvironment {
     RunEnvironment {
         token: token.into(),
-        hosts: hosts
-            .iter()
-            .map(|(name, url)| ((*name).to_owned(), url.clone()))
-            .collect(),
+        endpoints: SdkEndpoints {
+            hosts: hosts
+                .iter()
+                .map(|(name, url)| ((*name).to_owned(), url.clone()))
+                .collect(),
+            ..SdkEndpoints::default()
+        },
         unattended: Some(Unattended {
             arguments: arguments.as_object().unwrap().clone(),
             dry_run,

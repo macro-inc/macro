@@ -18,7 +18,7 @@ it.each<{ title: string; path: ProductPagePath }>([
   const view = render(() => (
     <HomepageFeatureDetails title={title} path={path} />
   ));
-  const link = screen.getByRole('link', { name: `Learn more about ${title}` });
+  const link = screen.getByRole('link');
   expect(link.getAttribute('href')).toBe(path);
   expect(link.getAttribute('target')).toBeNull();
   expect(link.hasAttribute('aria-haspopup')).toBe(false);

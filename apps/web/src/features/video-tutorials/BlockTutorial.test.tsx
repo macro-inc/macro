@@ -8,7 +8,11 @@ import {
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TUTORIALS } from './catalog';
-import { TutorialPill, TutorialRow } from './views/BlockTutorial';
+import {
+  TutorialPill,
+  TutorialRow,
+  TutorialSidebarItem,
+} from './views/BlockTutorial';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -32,11 +36,16 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
 
+// Phone layout (touch and under 640px), as `isMobile()` reports it.
+const layout = vi.hoisted(() => ({ phone: false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => layout.phone }));
+
 const play = vi.fn(() => Promise.resolve());
 const pause = vi.fn();
 
 beforeEach(() => {
   localStorage.clear();
+  layout.phone = false;
   channelList.channels = [];
   openWithSplit.mockClear();
   track.mockClear();
@@ -298,5 +307,64 @@ describe('block tutorial pill', () => {
     } finally {
       TUTORIALS.scheduling = scheduling;
     }
+  });
+});
+
+describe('block tutorial sidebar item', () => {
+  it('names its block among other tutorials and opens that video', async () => {
+    render(() => (
+      <>
+        <TutorialSidebarItem tutorial="docs" named />
+        <TutorialSidebarItem tutorial="spreadsheets" named />
+      </>
+    ));
+    const spreadsheets = screen.getByRole('button', {
+      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 0:56',
+    });
+    expect(spreadsheets.textContent).toContain('Macro Spreadsheets');
+    expect(spreadsheets.textContent).not.toContain('Watch tutorial');
+
+    fireEvent.click(spreadsheets);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Learn how to use Macro Spreadsheets');
+    expect(video()?.getAttribute('src')).toBe(TUTORIALS.spreadsheets?.videoUrl);
+    expect(track).toHaveBeenCalledWith('tutorial_video', {
+      tutorial: 'macro-spreadsheets',
+      action: 'opened',
+    });
+  });
+
+  it('says "Watch tutorial" on its own', () => {
+    render(() => <TutorialSidebarItem tutorial="docs" />);
+    const docs = screen.getByRole('button', {
+      name: /Learn how to use Macro Docs/,
+    });
+    expect(docs.textContent).toContain('Watch tutorial');
+  });
+});
+
+describe('block tutorials on phones', () => {
+  const renderEntries = () =>
+    render(() => (
+      <>
+        <TutorialRow tutorial="mail" />
+        <TutorialPill tutorial="crm" />
+        <TutorialSidebarItem tutorial="docs" />
+      </>
+    ));
+
+  it('shows every entry on desktop', () => {
+    renderEntries();
+    expect(
+      screen.getAllByRole('button', { name: /Learn how to use Macro/ })
+    ).toHaveLength(3);
+  });
+
+  it('mounts no entry, dialog or video on a phone', () => {
+    layout.phone = true;
+    renderEntries();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(video()).toBeNull();
   });
 });

@@ -240,6 +240,10 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity('agentSessions')).toContain('### SessionReview');
     expect(entity('agentSessions')).toContain('`SessionReview.submitAll`');
     expect(docs.symbols.ReviewRecord_Serialize).toContain('presentedAt');
+    // An operation vocabulary too large to read at once lists its members,
+    // each read on its own.
+    expect(docs.symbols.EditOp).toContain('`EditOp.setText`');
+    expect(docs.symbols['EditOp.setTransform']).toContain('`flipH?`');
     expect(docs.symbols.SessionReview).not.toContain('property-parent');
     expect(docs.symbols.SessionReview).not.toContain('property-client');
     expect(docs.symbols.SessionReview).not.toContain('private constructor');

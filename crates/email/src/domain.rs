@@ -22,6 +22,9 @@ pub mod mailbox;
 pub mod models;
 #[cfg(feature = "ports")]
 pub mod read_receipts;
+/// A user's newest inbox messages, read straight from the providers.
+#[cfg(feature = "mailbox")]
+pub mod recent_inbox;
 pub mod senders;
 pub mod shared_thread_replies;
 

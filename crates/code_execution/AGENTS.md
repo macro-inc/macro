@@ -25,6 +25,8 @@ completed API writes. SDK and Handlebars bundles, the operation catalog and
 the SDK's type declarations come from `crates/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads
 must be listed in the generator's `postReads`, or dry runs skip it.
+The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
+registry; the header is attached to that call's options before request dispatch.
 
 Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
 run under a plain user token (public MCP) has. APIs that ask a program to
@@ -33,6 +35,11 @@ mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
+
+`RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
+host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
+`new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
+local would point at macro.com.
 
 The bootstrap bans timers before importing `main.mjs`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is

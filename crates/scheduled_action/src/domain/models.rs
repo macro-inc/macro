@@ -164,13 +164,13 @@ pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 
 /// Client configuration, the create body. Ownership and execution state are
 /// server-owned.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub enabled: bool,
     /// Omitted by clients that predate the setting; runs then start unlisted.
@@ -179,6 +179,47 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+}
+
+/// What saving a routine would find wrong, without saving it: the answer to
+/// `POST /scheduled-actions/check`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    /// Whether saving it would succeed: no problems and no failing steps.
+    pub ok: bool,
+    /// Why saving it would fail, other than its code, for its author.
+    pub problems: Vec<String>,
+    /// Code steps that don't type-check against Macro's SDK.
+    pub steps: Vec<CheckedStepProblems>,
+    /// The routine as saving would store it: code steps named and the SDK
+    /// their code checks against stamped.
+    pub routine: ActionConfiguration,
+}
+
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
+}
+
+/// A code step that doesn't type-check.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedStepProblems {
+    /// Its place among the routine's steps, from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// What the type checker reports, first problems first.
+    pub problems: Vec<String>,
 }
 
 /// Configuration replacement, the update body. Activation has its own endpoint, so
@@ -190,7 +231,7 @@ pub struct ActionConfigurationUpdate {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     /// Still sent by clients deployed before the activation endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -238,6 +279,120 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
+    #[error(
+        "this routine already has {MAX_ACTIVE_SUB_ROUTINES} active sub-routines; \
+         delete or finish some before creating another"
+    )]
+    TooManySubRoutines,
+    #[error("a key names a routine created by a routine's run; create it without a key here")]
+    KeyOutsideRun,
+    #[error("a routine key must be 1 to {MAX_KEY_CHARS} characters")]
+    InvalidKey,
+    #[error("this routine was not created by another routine")]
+    NotSubRoutine,
+}
+
+/// Most active sub-routines one routine can have; finished one-time ones
+/// don't count.
+pub const MAX_ACTIVE_SUB_ROUTINES: i64 = 50;
+
+/// Longest key a run can name a sub-routine by.
+pub const MAX_KEY_CHARS: usize = 200;
+
+/// The name a run gives a routine it creates, so creating it again under the
+/// same parent updates it instead of adding a duplicate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+pub struct SubRoutineKey(String);
+
+impl SubRoutineKey {
+    /// A key of 1 to [`MAX_KEY_CHARS`] characters, trimmed.
+    pub fn new(key: &str) -> Result<Self, ActionPolicyError> {
+        let key = key.trim();
+        if key.is_empty() || key.chars().count() > MAX_KEY_CHARS {
+            return Err(ActionPolicyError::InvalidKey);
+        }
+        Ok(Self(key.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// How a routine created by a routine's run belongs to that routine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SubRoutine {
+    /// The top-level routine it follows: pausing that routine pauses it, and
+    /// deleting that routine deletes it. A routine a sub-routine's run
+    /// creates follows the same top-level routine.
+    #[schema(value_type = String, format = Uuid)]
+    pub parent_id: Uuid,
+    /// The run that created it: the id of that run's history record, which
+    /// exists once the run ends.
+    #[schema(value_type = String, format = Uuid)]
+    pub created_by_run_id: Uuid,
+    /// The name its creating code gave it, when it gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub key: Option<SubRoutineKey>,
+    /// It is off because its parent was switched off, and resumes with it.
+    #[serde(default)]
+    pub paused_by_parent: bool,
+}
+
+/// A routine's run that is in progress, as the caller of a create proves it:
+/// who a new routine would belong to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningRun {
+    /// The routine that is running.
+    pub routine_id: Uuid,
+    /// The routine it follows, when it is a sub-routine itself.
+    pub parent_id: Option<Uuid>,
+    /// Who the running routine belongs to.
+    pub owner: Owner,
+    /// The run: its claim's token, which becomes its history record's id.
+    pub run_id: Uuid,
+}
+
+/// How a create request says it comes from a routine's run. Both come from
+/// the request's signed credential, never from its body.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunCaller {
+    /// The routine a code step's credential is signed for.
+    pub routine: Option<Uuid>,
+    /// The code-mode invocation of an agent session, validated against it.
+    pub correlation: Option<Uuid>,
+}
+
+/// Which of a person's routines a list holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ListScope {
+    /// Routines nobody's run created, as the main list shows them.
+    #[default]
+    TopLevel,
+    /// One routine's sub-routines: the active ones and its newest finished
+    /// one-time ones.
+    ChildrenOf(Uuid),
+    /// Top-level routines and their active sub-routines.
+    WithChildren,
+}
+
+/// A routine a run created, as that run's history names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct CreatedRoutine {
+    #[schema(value_type = String, format = Uuid)]
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// A finished run with the routines it created that still exist.
+#[derive(Debug, Clone)]
+pub struct ListedRun {
+    pub record: ActionExecutionRecord,
+    pub created: Vec<CreatedRoutine>,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last
@@ -289,6 +444,10 @@ pub struct RunInfo {
     /// When the routine's previous finished run started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_at: Option<DateTime<Utc>>,
+    /// Who its code steps' writes were attributed to; absent when it had no
+    /// code steps, and on runs recorded before this was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_acts_as: Option<routine_program::CodeIdentity>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -311,7 +470,7 @@ pub struct ScheduledAction {
     pub configuration_revision: ConfigurationRevision,
     /// Event publication boundary; absent for cron actions.
     pub event_activated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
     /// Next cron firing, absent for event-triggered actions.
@@ -325,12 +484,33 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// The routine suggestion it was saved from, if any: a plain pointer
+    /// that stays after the suggestion is replaced.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// Set on a routine one of another routine's runs created: the routine
+    /// it follows and the run that created it.
+    #[serde(default)]
+    pub sub_routine: Option<SubRoutine>,
 }
 
 impl ScheduledAction {
+    /// The routine this one follows, when a routine's run created it.
+    pub fn parent_id(&self) -> Option<Uuid> {
+        self.sub_routine.as_ref().map(|link| link.parent_id)
+    }
+
+    /// Whether it ran its single time and has nothing left to run: a `once`
+    /// routine with no next run. A finished sub-routine leaves its parent's
+    /// active list and stops counting toward the parent's cap.
+    pub fn is_finished_once(&self) -> bool {
+        matches!(self.trigger, ActionTrigger::Once { .. }) && self.next_run_at.is_none()
+    }
+
     /// The user this action runs as.
     ///
     /// For every path that acts as the owner rather than merely naming them:

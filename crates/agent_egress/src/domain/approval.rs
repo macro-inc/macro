@@ -74,6 +74,30 @@ pub fn spends_owner_access(server_slug: &str, tool: &str) -> bool {
     server_slug != MACRO_SERVER_SLUG || !MACRO_TOOLS_WITHOUT_OWNER_ACCESS.contains(&tool)
 }
 
+/// Connected apps whose tools that change the owner's data wait for the
+/// owner even in a turn they prompted themselves, by tool name: Macro
+/// Connect's Google Drive, whose users confirm every change to their Drive.
+const OWNER_CONFIRMED_WRITES: [(&str, &[&str]); 1] = [(
+    "google_drive",
+    &[
+        "copy_file",
+        "create_file",
+        "edit_google_doc",
+        "restore_file",
+        "trash_file",
+        "update_file",
+    ],
+)];
+
+/// Whether calling `tool` on `server_slug` waits for the owner's approval
+/// even in their own turn: it changes their data in an app that asks first.
+#[must_use]
+pub fn owner_confirms(server_slug: &str, tool: &str) -> bool {
+    OWNER_CONFIRMED_WRITES
+        .iter()
+        .any(|(slug, tools)| *slug == server_slug && tools.contains(&tool))
+}
+
 /// Sends an approved call upstream. Built by the proxy over its own
 /// forwarder, so the hold never learns how.
 pub type ForwardOnce = Box<
@@ -163,10 +187,9 @@ pub struct RefuseHeldCalls;
 impl OwnerApprovals for RefuseHeldCalls {
     async fn hold(&self, call: HeldCall) -> Result<ProxyResponse, EgressError> {
         let text = format!(
-            "{tool} did not run. Someone other than {owner}, whose access this session uses, \
-             prompted this turn, and tool calls in such a turn need {owner} to approve them, \
-             which is not possible here. Tell the person who asked, and do not try to do the \
-             same thing another way.",
+            "{tool} did not run. It needs {owner}, whose access this session uses, to approve \
+             it, which is not possible here. Tell the person who asked, and do not try to do \
+             the same thing another way.",
             tool = call.call.name,
             owner = call.owner.email_str(),
         );

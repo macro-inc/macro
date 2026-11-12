@@ -30,6 +30,7 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 /** The composer an agent session block mounts. */
