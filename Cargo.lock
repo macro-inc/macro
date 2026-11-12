@@ -7755,6 +7755,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -7766,6 +7767,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env_var",
  "serde",
@@ -7774,6 +7776,7 @@ dependencies = [
  "strum 0.27.2",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -13768,6 +13771,7 @@ dependencies = [
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "call",
  "channels",
  "chrono",
