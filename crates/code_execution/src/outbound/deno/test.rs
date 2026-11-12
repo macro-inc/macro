@@ -907,3 +907,52 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_entity_knob_arrives_as_the_sdk_handle_for_its_item() {
+    let (_root, service) = setup(Limits::default()).await;
+    // What `routine_program`'s entity knob sends: the item, marked.
+    let knobs = serde_json::json!({
+        "bugs": { "$entity": { "type": "channel", "id": "c1" } },
+        "doc": { "$entity": { "type": "document", "id": "d1" } },
+        "folder": { "$entity": { "type": "project", "id": "p1" } },
+        "table": { "$entity": { "type": "database", "id": "db1" } },
+        "person": { "$entity": { "type": "user", "id": "macro|dana@macro.com" } },
+        "days": 7,
+    });
+    let source = r#"
+export async function main({ macro, knobs }: any) {
+  return {
+    channel: knobs.bugs.constructor === macro.channels.byId("x").constructor && knobs.bugs.id,
+    document: knobs.doc.constructor === macro.documents.byId("x").constructor && knobs.doc.id,
+    project: knobs.folder.constructor === macro.projects.byId("x").constructor && knobs.folder.id,
+    database: knobs.table.constructor === macro.databases.byId("x").constructor && knobs.table.id,
+    user: knobs.person.constructor === macro.users.byId("x").constructor && knobs.person.id,
+    days: knobs.days,
+  };
+}
+"#;
+    let (_, outcome) = run_unattended(
+        &service,
+        source,
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({ "knobs": knobs }),
+            true,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "channel": "c1", "document": "d1", "project": "p1", "database": "db1",
+            "user": "macro|dana@macro.com", "days": 7,
+        })
+    );
+    service.shutdown().await;
+}

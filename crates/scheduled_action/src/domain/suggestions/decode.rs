@@ -191,7 +191,8 @@ fn knob_values(
                 None => problems.push(format!(
                     "`{name}` doesn't fit its knob: a text knob is a name of at most \
                      {MAX_TEXT_KNOB_CHARS} characters, a question ends with ?, a number \
-                     stays in range, a choice is one of its options"
+                     stays in range, a choice is one of its options, and an entity \
+                     knob is left for its owner to pick"
                 )),
             },
         }
@@ -221,6 +222,8 @@ fn fit(knob: &Knob, value: &Value) -> Option<Value> {
                 .any(|option| option == choice)
                 .then(|| Value::String(choice.to_owned()))
         }
+        // The owner picks the item an entity knob names, before saving.
+        Knob::Entity { .. } => None,
     }
 }
 

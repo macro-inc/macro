@@ -802,7 +802,7 @@ Follow the routines guide, which every session follows when it sets up a routine
 
 For this draft:
 
-1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
+1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an entity knob with `value: null`) and they will pick it before saving.
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
@@ -810,7 +810,7 @@ For this draft:
 
 {steps}
 
-4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true, or all it reports is an item for them to pick. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 

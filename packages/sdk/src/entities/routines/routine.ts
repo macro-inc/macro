@@ -4,6 +4,8 @@ import type {
   AgentTask,
   CodeStep,
   EventFilter,
+  RoutineKnob,
+  RoutineKnobEntityType,
   RoutineModelId,
   RoutineStep,
   RoutineTask,
@@ -77,12 +79,30 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
 }
 
 /**
+ * A code step's knob. An `entity` knob holds one of the user's items, such
+ * as the channel the step posts in, as a reference to the handle the SDK
+ * returned: `{ type: 'channel', entity: channel }`, never an id. The step's
+ * code reads it as that handle (`knobs.bugs.send(...)`), and the user can
+ * pick another item without new code.
+ */
+export type RoutineKnobOptions =
+  | Exclude<RoutineKnob, { type: 'entity' }>
+  | (Omit<Extract<RoutineKnob, { type: 'entity' }>, 'value'> & {
+      value: Extract<EntityReference, { type: RoutineKnobEntityType }>;
+    });
+
+/** A code step, its entity knobs holding handles. */
+export type CodeStepOptions = Omit<CodeStep, 'knobs'> & {
+  knobs?: readonly RoutineKnobOptions[];
+};
+
+/**
  * A routine step. A `code` step runs TypeScript against this SDK, as the
  * routine's owner; an `agent` ("Ask AI") step hands the run to a model or
  * agent with instructions. A routine has at most one agent step.
  */
 export type RoutineStepOptions =
-  | ({ type: 'code' } & CodeStep)
+  | ({ type: 'code' } & CodeStepOptions)
   | {
       type: 'agent';
       /** What the model or agent should do; it also sees earlier steps' output. */
@@ -423,10 +443,19 @@ export class RoutineExecution {
   }
 }
 
+function knobBody(knob: RoutineKnobOptions): RoutineKnob {
+  if (knob.type !== 'entity') return knob;
+  const { value, ...rest } = knob;
+  return { ...rest, value: { type: value.type, id: value.entity.id } };
+}
+
 function stepBody(step: RoutineStepOptions): RoutineStep {
   return match(step)
     .returnType<RoutineStep>()
-    .with({ type: 'code' }, (code) => code)
+    .with({ type: 'code' }, ({ knobs, ...code }) => ({
+      ...code,
+      ...(knobs ? { knobs: knobs.map(knobBody) } : {}),
+    }))
     .with({ type: 'agent' }, ({ agent, ...rest }) => ({
       ...rest,
       agent: agent ? { bot_id: agent.id } : undefined,

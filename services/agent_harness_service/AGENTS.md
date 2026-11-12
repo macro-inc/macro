@@ -88,6 +88,8 @@ Pulumi stacks; they do not host extra agent processes.
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
   they never start routines.
+  Entity knobs' items are checked as the owner on save and before each code
+  step (`KnobEntityAccess`, people through notifications' user check).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected

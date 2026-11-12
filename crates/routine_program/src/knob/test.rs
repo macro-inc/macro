@@ -80,3 +80,56 @@ fn a_knob_takes_only_its_own_fields_and_a_camel_case_name() {
     );
     assert!(parse(json!({ "type": "slider", "name": "x", "label": "X", "value": 1 })).is_err());
 }
+
+#[test]
+fn an_entity_knob_names_an_item_and_reaches_code_as_a_handle() {
+    let stored = json!({
+        "type": "entity",
+        "name": "bugsChannel",
+        "label": "Channel to post in",
+        "entity_types": ["channel"],
+        "value": { "type": "channel", "id": "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
+    });
+    let knob: Knob = serde_json::from_value(stored.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&knob).unwrap(), stored);
+    // Marked, so the runner can tell it from an ordinary value and mint the
+    // SDK handle for it.
+    assert_eq!(
+        knob.value(),
+        json!({ "$entity": { "type": "channel", "id": "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" } })
+    );
+}
+
+#[test]
+fn an_entity_knob_names_only_items_code_can_get_a_handle_for() {
+    let parse = |knob: serde_json::Value| serde_json::from_value::<Knob>(knob);
+    let entity = |entity_types: serde_json::Value, value: serde_json::Value| json!({ "type": "entity", "name": "where", "label": "Where", "entity_types": entity_types, "value": value });
+    for kind in ["channel", "document", "project", "database", "user"] {
+        parse(entity(json!([kind]), json!({ "type": kind, "id": "a1" }))).unwrap();
+    }
+    assert!(
+        parse(entity(
+            json!(["email_thread"]),
+            json!({ "type": "email_thread", "id": "a1" })
+        ))
+        .is_err()
+    );
+    assert!(
+        parse(entity(
+            json!(["channel"]),
+            json!({ "type": "channel", "id": " " })
+        ))
+        .is_err()
+    );
+    assert!(
+        parse(entity(
+            json!(["channel"]),
+            json!({ "type": "channel", "id": "a1", "name": "bugs" })
+        ))
+        .is_err()
+    );
+    assert!(parse(entity(json!(["channel"]), json!("bug-reports"))).is_err());
+    // A starter's knob has nothing picked yet; its owner picks before saving.
+    let unpicked = parse(entity(json!(["channel"]), json!(null))).unwrap();
+    assert_eq!(unpicked.value(), json!(null));
+}

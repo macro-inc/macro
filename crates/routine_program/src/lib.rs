@@ -21,7 +21,10 @@ mod validate;
 
 pub use catalog::{CATALOG, CatalogRoutine, NamedItemKind, Surface, catalog_routine};
 pub use contract::{CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, STEP_CONTEXT, code_version};
-pub use knob::{InvalidKnobName, Knob, KnobName, SentenceSlot, SentenceSyntax, sentence_slots};
+pub use knob::{
+    EntityId, EntityKind, EntityValue, InvalidEntityId, InvalidKnobName, Knob, KnobName,
+    SentenceSlot, SentenceSyntax, sentence_slots,
+};
 pub use model::*;
 pub use plan::{CallRecord, CallStatus, StepPath, StepRecord, StepResult};
 pub use validate::{ProgramError, limits};

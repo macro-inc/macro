@@ -2782,9 +2782,71 @@
                 "description": "The question AI is asked, e.g. \"Is this email about money:\ninvestors, fundraising or finance?\"."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "One of the owner's items the code uses, such as the channel it posts\nin, which the owner swaps by picking another. The code gets an SDK\nhandle for it, never its id.",
+            "required": ["name", "label", "entity_types", "type"],
+            "properties": {
+              "entity_types": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RoutineKnobEntityType"
+                },
+                "description": "The kinds of item the owner may pick, at least one, each once."
+              },
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner, e.g. \"Channel to post in\"."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["entity"]
+              },
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineKnobEntity",
+                    "description": "The item picked; none yet in a starter, which its owner picks\nbefore saving."
+                  }
+                ]
+              }
+            }
           }
         ],
         "description": "A value a code step reads as `knobs.<name>`, which its owner can change\nwithout the step being rewritten: the label it adds, a priority, a\nnumber of days, a question it asks AI. Its type is part of the step's\ntype-checked contract; its value is not, so changing it needs no check."
+      },
+      "RoutineKnobEntity": {
+        "type": "object",
+        "description": "The item an entity knob names: its kind and id.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/RoutineKnobEntityId",
+            "description": "Its id."
+          },
+          "type": {
+            "$ref": "#/components/schemas/RoutineKnobEntityType",
+            "description": "Its kind."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutineKnobEntityId": {
+        "type": "string",
+        "description": "An item's id: not blank, without spaces, at most 256 characters."
+      },
+      "RoutineKnobEntityType": {
+        "type": "string",
+        "description": "A kind of item an entity knob names: one Macro's SDK has a handle for.",
+        "enum": ["channel", "document", "project", "database", "user"]
       },
       "RoutineModelId": {
         "type": "string",

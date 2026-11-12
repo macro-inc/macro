@@ -163,7 +163,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             surfaces: &[Surface::Chat, Surface::Tasks],
             title: "Share updates",
             description: "Post finished tasks to a channel",
-            request: "When a task is marked completed, post \"Done: <task name>\" in the updates channel.",
+            request: "When a task is marked completed, post \"Done: <task name>\" in a channel.",
             action: "Post in a channel",
             trigger: json!({
                 "type": "events",
@@ -174,14 +174,14 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             }),
             code: Some(code_step(
                 "Post the update",
-                "Posts the completed task's name in the updates channel.",
+                "Posts the completed task's name in the channel picked.",
                 include_str!("catalog/updates.ts"),
                 json!([
-                    { "type": "text", "name": "channel", "label": "Channel to post in", "value": "updates" },
+                    { "type": "entity", "name": "channel", "label": "Channel to post in", "entity_types": ["channel"], "value": null },
                 ]),
                 "Post \u{201c}Done:\u{201d} and the task's name in {channel}.",
             )),
-            named_knobs: &[("channel", NamedItemKind::Channel)],
+            named_knobs: &[],
             instructions: "Post \u{201c}Done:\u{201d} and this task\u{2019}s name in the updates channel.",
             affects_others: true,
             safe_default: false,

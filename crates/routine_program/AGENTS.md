@@ -22,9 +22,10 @@ no I/O.
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
 - `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
-  code (text, number, boolean, choice, or a question for AI), which `main`
-  reads as `knobs.<name>`, typed from the knob but not its value; and
-  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`.
+  code (text, number, boolean, choice, a question for AI, or an entity: one
+  of their items, by kind and id), which `main` reads as `knobs.<name>`,
+  typed from the knob but not its value; and `sentence_slots`, the `{name}`
+  / `{?name}` slots of a step's `sentence`.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
   routines: surface, title, trigger (cron without a zone), a code step and/or
@@ -80,6 +81,12 @@ no I/O.
 - `dangerously_operate_as_user` only changes code steps' attribution; agent
   steps keep their agent's. Only the owner sets it: drafts never carry it and
   sharing a routine as a template drops it.
+- An entity knob reaches code marked `{"$entity": {type, id}}`, which the
+  harness's Deno bootstrap turns into the SDK handle (`macro.<kind>s.byId`),
+  and is typed as that handle (`ReturnType<Macro['channels']['byId']>`), so
+  a new kind needs a namespace in both. Its item may be unpicked (`null`, in
+  starters); validation here only checks its kind, and the scheduler checks
+  the owner can open it (`scheduled_action::domain::knob_entities`).
 - `RoutineModelId` rejects blank models while parsing, so a single agent task
   with a blank model fails `from_task` rather than validation.
 - Only a code routine that affects no one else may be `safe_default` (a

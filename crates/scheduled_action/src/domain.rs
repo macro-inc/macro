@@ -5,6 +5,7 @@ pub mod drafts;
 pub mod event_runs;
 pub mod event_trigger;
 pub mod execution;
+pub mod knob_entities;
 pub mod lambda;
 pub mod models;
 pub mod ports;

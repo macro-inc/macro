@@ -12,6 +12,7 @@ service. Session authentication, token issuance and execution storage belong to
 - `src/domain/service.rs`: admission and cancellation.
 - `src/outbound/deno.rs`: process lifecycle and restricted permissions.
 - `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+  (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles)
   and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,

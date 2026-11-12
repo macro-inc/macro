@@ -634,6 +634,134 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
+    async fn a_step_reads_an_entity_knob_as_the_sdk_handle_for_its_item() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let knobbed = |source: &str, entity_types: serde_json::Value| {
+            program(json!([{
+                "type": "code", "title": "Post bugs", "source": source,
+                "knobs": [{
+                    "type": "entity", "name": "bugs", "label": "Channel to post in",
+                    "entity_types": entity_types, "value": { "type": "channel", "id": "c1" },
+                }],
+            }]))
+        };
+        let posts = "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); return knobs.bugs.id; }";
+        assert_eq!(
+            code.check_program(&knobbed(posts, json!(["channel"])))
+                .await
+                .unwrap(),
+            Vec::new()
+        );
+        // A channel is a Channel: code can't treat it as an id or another
+        // kind, and a knob that may be a document can't be posted to.
+        for (wrong, entity_types, problem) in [
+            (
+                "export async function main({ knobs }: StepContext) { return knobs.bugs.toUpperCase(); }",
+                json!(["channel"]),
+                "Property 'toUpperCase' does not exist",
+            ),
+            (
+                "export async function main({ knobs }: StepContext) { return knobs.bugs.rows(); }",
+                json!(["channel"]),
+                "Property 'rows' does not exist",
+            ),
+            (
+                posts,
+                json!(["channel", "document"]),
+                "Property 'send' does not exist",
+            ),
+        ] {
+            let failing = code
+                .check_program(&knobbed(wrong, entity_types))
+                .await
+                .unwrap();
+            assert_eq!(failing.len(), 1, "{wrong}");
+            assert!(failing[0].problems[0].contains(problem), "{failing:?}");
+        }
+        let routine = knobbed(
+            "export async function main({ macro, knobs }: StepContext) { return { id: knobs.bugs.id, handle: knobs.bugs.constructor === macro.channels.byId('x').constructor }; }",
+            json!(["channel"]),
+        );
+        let outcome = code
+            .run(
+                &owner(),
+                CodeRun {
+                    step: routine.code_steps()[0],
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
+                },
+            )
+            .await;
+        assert_eq!(
+            outcome.result.unwrap(),
+            json!({ "id": "c1", "handle": true })
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_step_posts_in_the_channel_its_knob_names_and_follows_a_swap() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let host = format!("http://{}", listener.local_addr().unwrap());
+        let (paths, mut posted) = tokio::sync::mpsc::unbounded_channel();
+        let server = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let text = request(&mut stream).await;
+                paths
+                    .send(text.lines().next().unwrap_or_default().to_owned())
+                    .unwrap();
+                respond(&mut stream, r#"{"id":"message-1"}"#).await;
+            }
+        });
+        let (_root, code) = code(&host).await;
+        let posting = |channel: &str| {
+            program(json!([{
+                "type": "code", "title": "Post open bugs",
+                "source": "export async function main({ knobs }: StepContext) { await knobs.bugs.send('3 open bugs'); return { posted: knobs.bugs.id }; }",
+                "knobs": [{
+                    "type": "entity", "name": "bugs", "label": "Channel to post in",
+                    "entity_types": ["channel"], "value": { "type": "channel", "id": channel },
+                }],
+                "sentence": "Post open bugs in {bugs}.",
+            }]))
+        };
+        // The owner swaps bug-reports for triage in the settings; the code
+        // is the same, and the next run posts in the new channel.
+        for channel in [
+            "0199a1b2-0000-7000-8000-00000000b065",
+            "0199a1b2-0000-7000-8000-0000000071a6",
+        ] {
+            let routine = posting(channel);
+            assert_eq!(code.check_program(&routine).await.unwrap(), Vec::new());
+            let outcome = code
+                .run(
+                    &owner(),
+                    CodeRun {
+                        step: routine.code_steps()[0],
+                        context: &json!({ "run": {} }),
+                        steps: &json!({}),
+                        dry_run: false,
+                        acts_as: CodeIdentity::Agent,
+                        routine_id: Uuid::from_u128(1),
+                    },
+                )
+                .await;
+            assert_eq!(outcome.result.unwrap(), json!({ "posted": channel }));
+            let line = posted.recv().await.unwrap();
+            assert!(
+                line.starts_with(&format!("POST /messages/channel/{channel} ")),
+                "{line}"
+            );
+        }
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
     async fn a_dry_run_shows_what_the_step_would_change() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let host = format!("http://{}", listener.local_addr().unwrap());
