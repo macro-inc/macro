@@ -112,6 +112,21 @@ number |
 /**  A string id. */
 string;
 
+export type AgentSessionRef = {
+	id: string,
+};
+
+/**  One item of macro.agentSessions.updates(); its other fields are ignored. */
+export type AgentUpdateItem = {
+	session: AgentSessionRef,
+	sessionName: string,
+	harness: string,
+	kind: AgentUpdateKind,
+	since: string,
+};
+
+export type AgentUpdateKind = "permission" | "elicitation" | "tool_approval" | "stalled";
+
 /**  How a container aligns its children across its axis. */
 export type Align = "start" | "center" | "end" | "stretch";
 
@@ -2897,6 +2912,13 @@ messageId: string }) & { align?: never; botId?: never; children?: never; directi
  */
 ({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
 /**
+ *  Live cards on which the user answers coding agents' waiting
+ *  permission requests and questions, and sees stalled sessions. Pass the
+ *  items macro.agentSessions.updates() returned, unchanged, whenever it
+ *  returns any: these cards are the only place the user can answer them.
+ */
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+/**
  *  A card on which the user mints a new token for a bot they manage and
  *  sees its secret, which never reaches you. Present it whenever the user
  *  asks for a bot token or credential.
@@ -2961,6 +2983,13 @@ messageId: string }) & { align?: never; botId?: never; children?: never; directi
  *  table or a list in markdown.
  */
 ({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+/**
+ *  Live cards on which the user answers coding agents' waiting
+ *  permission requests and questions, and sees stalled sessions. Pass the
+ *  items macro.agentSessions.updates() returned, unchanged, whenever it
+ *  returns any: these cards are the only place the user can answer them.
+ */
+({ type: "agentUpdates"; items: AgentUpdateItem[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**
  *  A card on which the user mints a new token for a bot they manage and
  *  sees its secret, which never reaches you. Present it whenever the user

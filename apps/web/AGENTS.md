@@ -706,7 +706,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
-- Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
+- Keep contact address edits (add, remove, make primary) and company edits (personal-provider
+  link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
   durable writes before clearing storage, while starting independent local/server
@@ -740,8 +741,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
-  Keep Files scoped to the contact when its optional email is absent; emit an
-  email-attachment participant literal only for a present address.
+  Keep Files scoped to the contact when it has no email; emit one
+  email-attachment participant literal per address the contact holds.
   Put Archive beside Copy link for visible CRM records; put the Archived chip and
   separate compact secondary Restore button in the identity heading for archived records.
   Match record metadata to the 24px property-control scale while reserving separate
@@ -1351,6 +1352,9 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 3. **Run it on the device, not the Simulator**, with Safari Web Inspector attached (Develop → the iPhone → the Macro webview), filter the console by the prefix, reproduce, and read the order. A `mousedown` arriving after a `pointerdown` logged with `defaultPrevented: true`, followed by `focusout` whose `relatedTarget` is a container, is this bug.
 
 4. **Strip the instrumentation before committing.**
+
+## iOS gotcha: a detached file input loses its picker's result
+WebKit drops a file picker's result when it garbage-collects the `<input type="file">` that opened it, and nothing keeps an input created with `document.createElement` alive unless it is in the document. The iOS app's photo and file pickers stay open long enough for that, so the pick vanishes with no `change` and no error. Keep the input in the document until `change` or `cancel`, as `fileSelector` does. Check it in the iOS Simulator by sending `Heap.gc` over the Web Inspector protocol while the picker is open.
 
 ## iOS gotcha: WebKit never collects a stream its own callbacks can reach
 In WebKit, a `ReadableStream` or `TransformStream` whose `start`, `pull`, `cancel` or `flush` callback can reach the stream is never garbage-collected, and neither is anything else those callbacks can reach. Chromium collects it. Reaching includes the scope the callbacks were made in: every closure made in one function call shares that scope, so a callback made beside `const clone = response.clone.bind(response)` holds the response without mentioning it. The published `@tauri-apps/plugin-http` `fetch` has that shape, which kept the `Response` object of every native request alive for the life of the page on iOS, read or not.

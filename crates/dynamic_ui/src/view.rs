@@ -86,6 +86,11 @@ pub enum Widget {
         title: Option<String>,
         tags: Vec<TagNode>,
     },
+    /// Live cards on which the user answers coding agents' waiting
+    /// permission requests and questions, and sees stalled sessions. Pass the
+    /// items macro.agentSessions.updates() returned, unchanged, whenever it
+    /// returns any: these cards are the only place the user can answer them.
+    AgentUpdates { items: Vec<AgentUpdateItem> },
     /// A card on which the user mints a new token for a bot they manage and
     /// sees its secret, which never reaches you. Present it whenever the user
     /// asks for a bot token or credential.
@@ -167,6 +172,31 @@ pub struct AgendaEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[specta(optional, type = String)]
     pub occurrence_key: Option<String>,
+}
+
+/// One item of macro.agentSessions.updates(); its other fields are ignored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUpdateItem {
+    pub session: AgentSessionRef,
+    pub session_name: String,
+    pub harness: String,
+    pub kind: AgentUpdateKind,
+    pub since: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+pub struct AgentSessionRef {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentUpdateKind {
+    Permission,
+    Elicitation,
+    ToolApproval,
+    Stalled,
 }
 
 /// A workspace item a card shows.

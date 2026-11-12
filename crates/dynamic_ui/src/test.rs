@@ -50,6 +50,16 @@ fn a_view_of_every_widget_decodes() {
                 }]
             },
             {
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "tool_approval",
+                    "since": "2026-10-30T20:00:00Z"
+                }]
+            },
+            {
                 "type": "botCredential",
                 "botId": "bot-1",
                 "label": "github-webhook",
@@ -102,6 +112,41 @@ fn a_negated_combination_decodes() {
     assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }
 
+/// The model passes macro.agentSessions.updates() items unchanged.
+#[test]
+fn agent_updates_take_the_sdk_items_as_they_serialize() {
+    let view = json!({
+        "widgets": [{
+            "type": "agentUpdates",
+            "items": [{
+                "session": { "id": "session-1", "url": "https://macro.com/app/agent/session-1" },
+                "sessionName": "Signing",
+                "harness": "opencode",
+                "pullRequestUrl": "https://github.com/o/r/pull/1",
+                "kind": "permission",
+                "summary": "Signing wants to run codesign",
+                "since": "2026-10-30T20:00:00Z",
+                "options": ["Allow"]
+            }]
+        }]
+    });
+    assert_eq!(
+        serde_json::to_value(decode_view(&view).unwrap()).unwrap(),
+        json!({
+            "widgets": [{
+                "type": "agentUpdates",
+                "items": [{
+                    "session": { "id": "session-1" },
+                    "sessionName": "Signing",
+                    "harness": "opencode",
+                    "kind": "permission",
+                    "since": "2026-10-30T20:00:00Z"
+                }]
+            }]
+        })
+    );
+}
+
 #[test]
 fn fields_the_types_do_not_name_are_dropped() {
     let view = json!({
@@ -124,7 +169,7 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `botCredential`, `container`";
+    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `botCredential`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),

@@ -9,6 +9,7 @@ import type {
   WidgetOf,
   WidgetType,
 } from './view';
+import { AgentUpdates } from './widgets/AgentUpdates';
 import { BotCredential } from './widgets/BotCredential';
 import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
@@ -34,6 +35,7 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'events' }, (n) => <Events {...n} />)
     .with({ type: 'cards' }, (n) => <Cards {...n} />)
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
+    .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
     .with({ type: 'botCredential' }, (n) => <BotCredential {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
     .exhaustive();
@@ -48,6 +50,7 @@ const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
   'list',
   'events',
   'tags',
+  'agentUpdates',
 ]);
 
 /**
