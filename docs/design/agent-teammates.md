@@ -15,7 +15,7 @@ work); each agent's code starts as a copy of `packages/starter-agent`.
 | Enrollment | `crates/hosted_runtimes` + `crates/team_agents` | On every enrollment generation, the computer of an agent gets `agent.env`: its Macro key, gateway and service addresses, its repo URL and token, and, in Macro-credits mode, its Anthropic gateway access. The key and repo token rotate with each generation. |
 | Repository | `crates/agent_git` | One bare repo per agent, over smart HTTP, seeded from `packages/starter-agent` with `agent.json` (owner = the inviting admin, the agent itself) and, when the invite described it, the agent's identity. |
 | Runtime | `packages/muppet` | Behaviors, event sources, typed capability modules, the code mode, the Claude Code agent. Pure: IO comes from an injected context. |
-| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, screen, calls, secrets. |
+| The agent's code | `packages/starter-agent` → the agent's repo | Chat, schedules, people, identity, heartbeat (commit, land), tools, browser, calls, secrets. |
 | Image | `nix/macro-box` | The agent service (a hardened system unit), its launcher, Claude Code, Chromium, Xvnc, ffmpeg, PulseAudio, bubblewrap, xclip, computer-use-linux. |
 
 ## The repo

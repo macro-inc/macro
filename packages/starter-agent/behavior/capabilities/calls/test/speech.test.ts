@@ -73,7 +73,7 @@ test("hearing opens the relay's stt socket with its capability, and asks for Nov
   socket.close();
   expect(opened).toEqual([
     {
-      path: '/agent-harness/brain/inference/stt',
+      path: '/speech/stt',
       capability: 'cap',
       first: {
         type: 'session.create',
@@ -86,6 +86,7 @@ test("hearing opens the relay's stt socket with its capability, and asks for Nov
             endpointing: 300,
             interim_results: true,
             smart_format: true,
+            utterance_end: true,
             keyterm: 'Ada',
           },
         },
@@ -106,7 +107,7 @@ test("speaking opens the relay's tts socket and asks for the chosen Aura-2 voice
   socket.close();
   expect(opened).toEqual([
     {
-      path: '/agent-harness/brain/inference/tts',
+      path: '/speech/tts',
       capability: 'cap',
       first: {
         type: 'session.create',

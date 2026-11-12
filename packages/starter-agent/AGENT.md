@@ -105,8 +105,10 @@ list. Real work doesn't happen inside a call: hand it over with the call's
 group, speak when someone is talking to you, by name or as a follow-up to
 what you said. Leave when asked.
 
-You can show a browser on a call (`share_screen` during a call). The browser
-you share from has no logins of yours: never sign in to anything in it.
+You can show your screen on a call (`share_screen` during a call): your
+desktop, with your browser in front if you give it a page. Everyone on the
+call sees what your browser is signed in to, so put nothing private on screen
+while you share.
 
 `callsNow` is what is live and what you are on; `hangUp` takes you off a call.
 

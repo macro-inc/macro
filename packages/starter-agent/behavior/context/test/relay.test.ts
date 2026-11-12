@@ -187,8 +187,16 @@ describe('startRelay', () => {
       fetch: (request) =>
         Response.json({ key: request.headers.get('x-macro-user-api-key') }),
     });
-    const first = startRelay({ targets: { auth: macro.url.href }, apiKey });
-    const second = startRelay({ targets: {}, apiKey });
+    const first = startRelay({
+      targets: { auth: macro.url.href },
+      egress: 'https://egress.example',
+      apiKey,
+    });
+    const second = startRelay({
+      targets: {},
+      egress: 'https://egress.example',
+      apiKey,
+    });
     try {
       expect(new URL(first.url).hostname).toBe('127.0.0.1');
       expect(first.token).not.toBe(second.token);
@@ -211,10 +219,7 @@ const upgrade = (path: string, headers: Record<string, string> = {}) =>
   });
 
 const target = socketTarget({
-  targets: {
-    'agent-harness': 'https://gateway.example/agent-harness/',
-    storage: 'https://macro.example/dss',
-  },
+  egress: 'https://gateway.example/agent-harness-egress/',
   capability,
   apiKey,
   equal: constantTimeEqual,
@@ -233,7 +238,7 @@ describe('socketTarget', () => {
     ] as const) {
       const found = relayed(
         target(
-          upgrade(`/agent-harness/brain/inference/${path}?model=evil&x=1`, {
+          upgrade(`/speech/${path}?model=evil&x=1`, {
             'x-macro-user-api-key': capability,
             authorization: 'Bearer forged',
             cookie: 'session=forged',
@@ -244,7 +249,7 @@ describe('socketTarget', () => {
         )
       );
       expect(found.url).toBe(
-        `wss://gateway.example/agent-harness/brain/inference/${path}?model=${model}`
+        `wss://gateway.example/agent-harness-egress/brain/inference/${path}?model=${model}`
       );
       expect(found.headers).toEqual({
         authorization: `Bearer ${apiKey}`,
@@ -267,11 +272,12 @@ describe('socketTarget', () => {
   test('refuses every other path and service, and any method but GET', () => {
     const headers = { 'x-macro-user-api-key': capability };
     for (const path of [
-      '/agent-harness/brain/inference',
-      '/agent-harness/brain/inference/stt/',
-      '/agent-harness/brain/inference/%73tt',
+      '/speech',
+      '/speech/stt/',
+      '/speech/%73tt',
+      '/agent-harness/brain/inference/stt',
       '/agent-harness/agent-session/socket',
-      '/storage/brain/inference/stt',
+      '/storage/speech/stt',
       '/connection/socket',
       '/',
     ]) {
@@ -279,26 +285,12 @@ describe('socketTarget', () => {
       expect(refused instanceof Response && refused.status).toBe(403);
     }
     const posted = target(
-      new Request('http://127.0.0.1:9/agent-harness/brain/inference/stt', {
+      new Request('http://127.0.0.1:9/speech/stt', {
         method: 'POST',
         headers: { ...headers, connection: 'Upgrade', upgrade: 'websocket' },
       })
     );
     expect(posted instanceof Response && posted.status).toBe(405);
-  });
-
-  test('refuses speech when it has no address for agent-harness', () => {
-    const refused = socketTarget({
-      targets: {},
-      capability,
-      apiKey,
-      equal: constantTimeEqual,
-    })(
-      upgrade('/agent-harness/brain/inference/tts', {
-        'x-macro-user-api-key': capability,
-      })
-    );
-    expect(refused instanceof Response && refused.status).toBe(404);
   });
 });
 
@@ -324,12 +316,13 @@ describe('startRelay sockets', () => {
       },
     });
     const relay = startRelay({
-      targets: { 'agent-harness': harness.url.href },
+      targets: {},
+      egress: harness.url.href,
       apiKey,
     });
     try {
       const socket = new WebSocket(
-        `${relay.url.replace('http', 'ws')}/agent-harness/brain/inference/stt`,
+        `${relay.url.replace('http', 'ws')}/speech/stt`,
         { headers: { 'x-macro-user-api-key': relay.token } }
       );
       const answers: string[] = [];
@@ -374,7 +367,8 @@ describe('startRelay sockets', () => {
       },
     });
     const relay = startRelay({
-      targets: { 'agent-harness': harness.url.href },
+      targets: {},
+      egress: harness.url.href,
       apiKey,
     });
     try {

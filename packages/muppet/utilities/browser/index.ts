@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { behavior } from '../../core/behavior.ts';
 import { npm, program } from '../../core/capability.ts';
 
+export * from './tab.ts';
+
 /** A Chromium this process started, reachable over the DevTools protocol. */
 export type Running = {
   /** The browser's DevTools WebSocket, for `chromium.connectOverCDP`. */

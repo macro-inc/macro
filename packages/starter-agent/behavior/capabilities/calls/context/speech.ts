@@ -33,7 +33,7 @@ export const openSpeech = (
 ): Promise<WebSocket> =>
   new Promise((resolve, reject) => {
     const socket = new WebSocket(
-      `${relay.url.replace(/^http/, 'ws')}/agent-harness/brain/inference/${path}`,
+      `${relay.url.replace(/^http/, 'ws')}/speech/${path}`,
       { headers: { [keyHeader]: relay.token } }
     );
     const timer = setTimeout(() => {
@@ -62,6 +62,8 @@ export const hearing = (name: string) => ({
       endpointing: 300,
       interim_results: true,
       smart_format: true,
+      // Documented by LiveKit Inference, missing from the pinned SDK's option type.
+      utterance_end: true,
       keyterm: name,
     },
   },
