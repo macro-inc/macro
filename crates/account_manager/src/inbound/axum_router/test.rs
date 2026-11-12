@@ -41,9 +41,8 @@ impl MacroAuthorizationService for Credentials {
         let mut credential = ValidatedCredential::session(self.authorize(jwt).await?);
         if jwt == "agent" {
             credential.origin = CredentialOrigin::MacroApiJwt;
-            credential.identity.agent_id = Some(
-                serde_json::from_value(serde_json::json!(Uuid::from_u128(1))).unwrap(),
-            );
+            credential.identity.agent_id =
+                Some(serde_json::from_value(serde_json::json!(Uuid::from_u128(1))).unwrap());
         }
         Ok(credential)
     }
@@ -166,7 +165,11 @@ async fn an_agents_program_cannot_request_answer_or_claim_a_grant() {
             let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let message: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
             assert_eq!(message["message"], PROGRAM_ACCOUNT_MANAGER_REFUSAL);
-            assert_eq!(grants.calls.load(Ordering::SeqCst), 0, "{uri} reached the service");
+            assert_eq!(
+                grants.calls.load(Ordering::SeqCst),
+                0,
+                "{uri} reached the service"
+            );
         }
     }
 }

@@ -50,9 +50,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                 .await
                 .map(macro_authorization::ValidatedCredential::session)?;
             credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
-            credential.identity.agent_id = Some(
-                serde_json::from_value(serde_json::json!(uuid::Uuid::from_u128(1))).unwrap(),
-            );
+            credential.identity.agent_id =
+                Some(serde_json::from_value(serde_json::json!(uuid::Uuid::from_u128(1))).unwrap());
             return Ok(credential);
         }
         self.authorize(jwt)

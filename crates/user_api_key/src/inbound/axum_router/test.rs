@@ -40,9 +40,8 @@ impl MacroAuthorizationService for Credentials {
         let mut credential = ValidatedCredential::session(self.authorize(jwt).await?);
         if jwt == "agent" {
             credential.origin = CredentialOrigin::MacroApiJwt;
-            credential.identity.agent_id = Some(
-                serde_json::from_value(serde_json::json!(uuid::Uuid::from_u128(1))).unwrap(),
-            );
+            credential.identity.agent_id =
+                Some(serde_json::from_value(serde_json::json!(uuid::Uuid::from_u128(1))).unwrap());
         }
         Ok(credential)
     }

@@ -31,7 +31,8 @@ pub struct SendInviteBody {
 
 /// Why an agent's program may not send a referral invite: the email reaches
 /// an address outside the workspace.
-pub const PROGRAM_REFERRAL_REFUSAL: &str = "An agent's program cannot send referral invites. Ask the user to invite them from Macro.";
+pub const PROGRAM_REFERRAL_REFUSAL: &str =
+    "An agent's program cannot send referral invites. Ask the user to invite them from Macro.";
 
 /// Handler for `POST /referral/send`.
 ///
@@ -61,12 +62,8 @@ pub async fn post_referral_invite_handler<
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
 ) -> Result<StatusCode, Response> {
     let user = authorization.authorization.user;
-    refuse_agent_run(
-        user.agent_id.is_some(),
-        &headers,
-        PROGRAM_REFERRAL_REFUSAL,
-    )
-    .map_err(IntoResponse::into_response)?;
+    refuse_agent_run(user.agent_id.is_some(), &headers, PROGRAM_REFERRAL_REFUSAL)
+        .map_err(IntoResponse::into_response)?;
     let () = state
         .service
         .send_referral_invite(user.macro_user_id.clone(), recipient)

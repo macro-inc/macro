@@ -753,6 +753,9 @@ async fn an_agents_program_cannot_create_or_change_webhooks() {
             response_json(response).await["message"],
             super::PROGRAM_WEBHOOK_REFUSAL
         );
-        assert!(service.calls().is_empty(), "{method} {uri} reached the service");
+        assert!(
+            service.calls().is_empty(),
+            "{method} {uri} reached the service"
+        );
     }
 }

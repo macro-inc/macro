@@ -18,7 +18,8 @@ fn refuse_agent_run_forbids_programs_and_admits_people() {
     let browser = HeaderMap::new();
 
     for (agent_attributed, headers) in [(true, &browser), (false, &program)] {
-        let refused = refuse_agent_run(agent_attributed, headers, "do this in the app").unwrap_err();
+        let refused =
+            refuse_agent_run(agent_attributed, headers, "do this in the app").unwrap_err();
         assert_eq!(refused.status, StatusCode::FORBIDDEN);
         assert_eq!(refused.message, "do this in the app");
     }

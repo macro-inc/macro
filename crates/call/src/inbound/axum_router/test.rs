@@ -346,7 +346,10 @@ mod authenticated_join_routes {
 
     #[tokio::test]
     async fn meeting_invite_refuses_an_agents_program() {
-        for request in [meeting_invite("agent", false), meeting_invite("member", true)] {
+        for request in [
+            meeting_invite("agent", false),
+            meeting_invite("member", true),
+        ] {
             let mut service = MockCallService::new();
             service.expect_invite_to_meeting().never();
 

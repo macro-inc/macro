@@ -103,7 +103,8 @@ pub struct DeleteUserApiKeyParams {
 
 /// Why an agent's program may not mint an API key: the key outlives the run
 /// and its secret would be in the program's hands.
-pub const PROGRAM_API_KEY_REFUSAL: &str = "An agent's program cannot create API keys. Ask the user to create one in Macro's settings.";
+pub const PROGRAM_API_KEY_REFUSAL: &str =
+    "An agent's program cannot create API keys. Ask the user to create one in Macro's settings.";
 
 /// Mint a new API key for the caller. An agent's program is refused (403).
 #[utoipa::path(
