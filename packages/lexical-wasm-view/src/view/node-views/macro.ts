@@ -81,8 +81,9 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
     'reply-target': ['data-reply-target-node', 'targetMessageId'],
   };
   const attribute = attributes[node.type];
-  if (attribute)
-    dom.setAttribute(attribute[0], String(props[attribute[1]] ?? ''));
+  // Source setAttribute(name, this.__field): a stored null or omitted field
+  // becomes "null" or "undefined", not an empty attribute.
+  if (attribute) dom.setAttribute(attribute[0], String(props[attribute[1]]));
   if (
     [
       'agent-session-mention',
