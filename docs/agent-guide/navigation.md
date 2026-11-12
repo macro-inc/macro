@@ -36,7 +36,9 @@ a background tab; adding Shift also switches to it. Every menu that offers
 project rows, Reviews) also offers **Open in new tab**, which opens the item in
 a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
 selected item. Tabs are not draggable.
-Tabs persist per user and restore on launch. In the browser and on other
+Tabs persist per user and restore on launch. Call pages (`/app/meet/...`) keep
+the strip although they hide the rest of the app chrome; switching tabs there
+leaves the call running in the background. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a

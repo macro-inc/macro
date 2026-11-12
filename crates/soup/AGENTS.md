@@ -99,8 +99,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   drop just the failing domains and keep the scope.
 - Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
   `agentSession` and its log use, and `by_ids`) also accept a grant on the
-  document or call whose live thread the session runs in, matching
-  `entity_access`. Broad lists use session grants only, and leave out
+  document or call whose live thread the session runs in, and the session's
+  public or team link share, matching `entity_access`. Broad lists use
+  session grants only, and leave out
   `hidden` sessions (thread-started, DM contexts) except for their followers
   (`agent_session_follower`, people who prompted the session from the session
   itself), who may also read them through the thread's parent. The notified
