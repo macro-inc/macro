@@ -15,7 +15,7 @@ pub mod context;
 
 // Routes
 mod health;
-pub(crate) mod manual_notification;
+pub(crate) mod ping;
 mod unsubscribe;
 pub(crate) mod user_notification;
 
@@ -24,12 +24,12 @@ pub(crate) mod swagger;
 pub async fn setup_and_serve<S: ::notification::domain::service::NotificationReader>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S, AuthorizationService>,
-    manual_notification_state: manual_notification::ManualNotificationState,
+    ping_state: ping::PingState,
 ) -> anyhow::Result<()> {
     let port = state.config.port;
     let correlation = state.correlation.clone();
     let env = state.config.environment;
-    let app = api_router(state.clone(), ingress_state, manual_notification_state)
+    let app = api_router(state.clone(), ingress_state, ping_state)
         .with_state(state)
         .layer(axum::middleware::from_fn_with_state(
             correlation,
@@ -78,7 +78,7 @@ fn swagger_ui() -> Router {
 fn api_router<S: ::notification::domain::service::NotificationReader>(
     _state: ApiContext,
     ingress_state: NotificationRouterState<S, AuthorizationService>,
-    manual_notification_state: manual_notification::ManualNotificationState,
+    ping_state: ping::PingState,
 ) -> Router<ApiContext> {
     let middleware = {
         ServiceBuilder::new().layer(axum::middleware::from_fn(
@@ -93,8 +93,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
         )
         .nest(
             "/user_notifications",
-            user_notification::router()
-                .merge(manual_notification::router(manual_notification_state)),
+            user_notification::router().merge(ping::router(ping_state)),
         )
         .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())

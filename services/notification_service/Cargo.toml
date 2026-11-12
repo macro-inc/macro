@@ -23,7 +23,7 @@ local_queue = []
 push_notification_event_handler = []
 
 [dependencies]
-attention_feed = { path = "../../crates/attention_feed", features = ["outbound"] }
+attention_feed = { path = "../../crates/attention_feed", features = ["inbound", "outbound"] }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -31,7 +31,6 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
-axum-extra = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 chrono = { workspace = true }
@@ -49,6 +48,8 @@ macro_authorization = { path = "../../crates/macro_authorization", features = [
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
 doppler-config = { workspace = true }
+feature_flags = { path = "../../crates/feature_flags" }
+futures = { workspace = true }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
@@ -58,7 +59,7 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
 macro_queues = { path = "../../crates/macro_queues" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
-strum = { workspace = true }
+messages = { path = "../../crates/messages", features = ["outbound"] }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model-error-response = { path = "../../crates/model-error-response" }
@@ -79,7 +80,7 @@ frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"]
 github_pull_requests = { path = "../../crates/github_pull_requests" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 soup = { path = "../../crates/soup", features = ["outbound"] }
-rate_limit = { path = "../../crates/rate_limit", features = ["axum"] }
+rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true }
 rootcause = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
@@ -96,7 +97,6 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["chrono"] }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-work_feed = { path = "../../crates/work_feed" }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
@@ -105,3 +105,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 attention_feed = { path = "../../crates/attention_feed", features = ["outbound", "test-utils"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+rate_limit = { path = "../../crates/rate_limit", features = ["testing"] }
+work_feed = { path = "../../crates/work_feed" }

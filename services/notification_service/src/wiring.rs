@@ -8,7 +8,9 @@ use call::domain::service::CallRecordQueryServiceImpl;
 use call::outbound::pg_call_repo::PgCallRepo;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use crm::domain::service::NoOpCrmService;
+use crm::domain::service::{CrmServiceImpl, NoOpCrmService};
+use crm::outbound::companies_repo::CompaniesRepositoryImpl;
+use crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
 use email::domain::ports::{NoOpEnqueuer, ReadonlyEmailPreviewAdapter};
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
@@ -38,7 +40,7 @@ type Soup = SoupImpl<
     ReadonlyEmailPreviewAdapter<Mail>,
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
     CallRecordQueryServiceImpl<PgCallRepo>,
-    NoOpCrmService,
+    CrmServiceImpl<CompaniesRepositoryImpl, NoOpCompanyMetadataResolver>,
     GithubPullRequestServiceImpl<
         ForeignEntityServiceImpl<PgForeignEntityRepo>,
         PgGithubPullRequestRepo,
@@ -74,7 +76,11 @@ pub(crate) fn soup_candidates(primary: PgPool) -> SoupCandidates {
             frecency_storage,
         ),
         CallRecordQueryServiceImpl::new(PgCallRepo::new(primary.clone())),
-        NoOpCrmService,
+        // The real one: the inbox lists CRM records through it.
+        CrmServiceImpl::new(
+            CompaniesRepositoryImpl::new(primary.clone()),
+            NoOpCompanyMetadataResolver,
+        ),
         GithubPullRequestServiceImpl::new(
             ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(primary.clone())),
             PgGithubPullRequestRepo::new(primary),
