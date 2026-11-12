@@ -73,6 +73,8 @@ pub enum AiFeature {
     AgentRepositoryChoice,
     /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
     AgentModeChoice,
+    /// The live one-line status summarizing a running agent session's tool calls.
+    AgentActivitySummary,
     /// User-confirmed audio transcription.
     Dictation,
     /// Image generation and editing.
