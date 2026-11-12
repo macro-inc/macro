@@ -532,6 +532,7 @@ dependencies = [
  "macro_uuid",
  "mcp_client",
  "mcp_select",
+ "message_write_gate",
  "messages",
  "model",
  "model-entity",
@@ -4041,6 +4042,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "message_write_gate",
  "messages",
  "mockall",
  "model-entity",
@@ -6755,6 +6757,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "message_write_gate",
  "messages",
  "mockall",
  "model",
@@ -13108,6 +13111,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "message_write_gate"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "messages"
 version = "0.1.0"
 dependencies = [
@@ -13130,6 +13142,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "message_write_gate",
  "mockall",
  "model",
  "model-entity",
@@ -18884,6 +18897,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
+ "message_write_gate",
  "messages",
  "reqwest 0.13.4",
  "rootcause",
