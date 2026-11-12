@@ -1645,8 +1645,8 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   the mobile picker, which has no drag, each row's menu has Move up/Move down.
   The order is personal and follows the account. A dot marks a view whose first
   unread page has unread mail.
-- **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
-  views. The filter drawer shows "Save these filters as a view" with Save view
+- **Touch.** Views are listed and managed in the sidebar sheet opened by
+  **Show sidebar**; the list header has no saved-view pill. The filter drawer shows "Save these filters as a view" with Save view
   and Revert above its footer, and Save changes/Reset in the footer while a view
   is edited.
 

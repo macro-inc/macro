@@ -47,7 +47,6 @@ import {
   type SavedViewRowReorder,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -647,28 +646,6 @@ export function EmailSavedViewsSection() {
           <EmailSavedViewRows draggable />
         </SavedViewList.Content>
       </SavedViewList.Root>
-    </Show>
-  );
-}
-
-/** The mobile pill after Filters; its drawer lists and manages views. */
-export function EmailSavedViewsPicker() {
-  const { savedViewsEnabled, savedViewsList, savedViewActive } = useEmailView();
-  const viewerId = useUserId();
-  const title = useEmailSavedViewTitle();
-  // The drawer closes before its action opens a dialog; keep the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViewsList && savedViewsEnabled()}>
-      <SavedViewPicker
-        active={savedViewActive()}
-        scopeKey={viewerId()}
-        label={title() ?? t('viewMenus.savedViews')}
-      >
-        {(onAction) => (
-          <EmailSavedViewRows onAction={onAction} dialogOwner={owner} />
-        )}
-      </SavedViewPicker>
     </Show>
   );
 }

@@ -22,7 +22,7 @@ the Soup-backed thread list, and saved email views (flag
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
-- `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the
+- `views/email-saved-views.tsx`: sidebar section (also the touch sidebar sheet), menus, the
   builder dialog, header actions, unavailable and skipped-setting states.
 
 ## Gotchas

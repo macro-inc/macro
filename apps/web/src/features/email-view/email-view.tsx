@@ -61,7 +61,6 @@ import {
 } from './use-reading-pane-list-width';
 import { useVisibleEmailTab } from './use-visible-email-tab';
 import {
-  EmailSavedViewsPicker,
   EmailSavedViewUnavailable,
   EmailSavedViewWarning,
 } from './views/email-saved-views';
@@ -276,7 +275,6 @@ function EmailMobileLayout(props: ParentProps) {
             <>
               <ViewSidebar.Toggle action="expand" presentation="pill" />
               <EmailFilterDrawer />
-              <EmailSavedViewsPicker />
             </>
           }
           items={tabs()}
