@@ -101,7 +101,9 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 - Link previews follow the `enable-link-previews` flag (`LinkPreviewGate`,
   `outbound/flagged_link_previews.rs`), read for the message's author: its
   sender, or the person who triggered a bot's reply. Unprompted bot posts and
-  call guests get none, and a flag that can't be read counts as off. Removal
+  call guests get none (a refresh clears cards stored while the author had
+  them), and a flag that can't be read counts as off. A message linking
+  nothing never reads the flag. Removal
   checks the caller's flag and answers 404 while it is off. The web app reads
   the same key to show the cards and the remove button.
 

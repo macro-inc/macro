@@ -3,6 +3,7 @@
 
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument;
 
 use crate::domain::ports::LinkPreviewGate;
 
@@ -21,14 +22,18 @@ impl<F: FeatureFlags + 'static> LinkPreviewGate for FlaggedLinkPreviews<F> {
         &'a self,
         person: &'a MacroUserIdStr<'static>,
     ) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
-        Box::pin(async move {
-            match self.0.load(person).await {
-                Ok(flags) => flags.is_enabled(ENABLE_LINK_PREVIEWS),
-                Err(error) => {
-                    tracing::warn!(error = ?error, "failed to load the link preview flag");
-                    false
+        Box::pin(
+            async move {
+                match self.0.load(person).await {
+                    Ok(flags) => flags.is_enabled(ENABLE_LINK_PREVIEWS),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "failed to load the link preview flag");
+                        false
+                    }
                 }
             }
-        })
+            // The PostHog request, timed apart from the refresh around it.
+            .instrument(tracing::info_span!("message.link_previews.flag")),
+        )
     }
 }

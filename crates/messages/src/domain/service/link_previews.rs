@@ -38,7 +38,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// the parent's own audience. Safe to repeat: an unchanged set writes and
     /// publishes nothing, and a message edited or deleted meanwhile is left to
     /// the newer change. A message whose sender removed its previews keeps
-    /// none, and so does one whose author doesn't have link previews.
+    /// none, and one whose author doesn't have link previews loses any it
+    /// has.
     #[tracing::instrument(
         name = "message.link_previews.refresh",
         err,
@@ -66,20 +67,28 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if self.repo.link_previews_suppressed(parent, id).await? {
             return Ok(());
         }
+
         let span = tracing::Span::current();
+        let urls = sources.links.extract(&message.content).await?;
+        span.record("links", urls.len());
+        // Most messages link nothing: they have no cards to add or take down,
+        // so their author's flag isn't read.
+        if urls.is_empty() && message.link_previews.is_empty() {
+            return Ok(());
+        }
         let enabled = match author(&message) {
             Some(author) => sources.gate.enabled_for(&author).await,
             None => false,
         };
         span.record("enabled", enabled);
-        if !enabled {
-            return Ok(());
-        }
+        // An author without link previews gets none, and loses any stored
+        // while they had them.
+        let previews = if enabled {
+            previews_for(sources, &message, &urls).await
+        } else {
+            Vec::new()
+        };
 
-        let urls = sources.links.extract(&message.content).await?;
-        let previews = previews_for(sources, &message, &urls).await;
-
-        span.record("links", urls.len());
         span.record("previews", previews.len());
         let changed = previews != message.link_previews;
         span.record("changed", changed);
@@ -113,7 +122,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ///
     /// Safe to repeat: a message already without previews stays so, and its
     /// viewers are told again.
-    #[tracing::instrument(name = "message.link_previews.remove", err, skip(self, access))]
+    #[tracing::instrument(
+        name = "message.link_previews.remove",
+        err,
+        skip(self, access),
+        fields(enabled)
+    )]
     pub async fn remove_link_previews(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -125,6 +139,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             (Some(sources), Some(caller)) => sources.gate.enabled_for(caller).await,
             _ => false,
         };
+        tracing::Span::current().record("enabled", enabled);
         if !enabled {
             return Err(MessageError::NotFound);
         }

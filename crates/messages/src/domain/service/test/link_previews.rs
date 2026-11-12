@@ -418,3 +418,45 @@ async fn removing_previews_is_not_found_for_a_sender_without_link_previews() {
     assert!(!*repo.link_previews_suppressed.lock().unwrap());
     assert!(events.0.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn an_author_without_link_previews_loses_the_stored_ones() {
+    let repo = channel_repo(vec![preview(ARTICLE, "stored")]);
+    let events = Events::default();
+    let pages = Pages::default();
+    let message = repo.message.clone();
+    gated_service(
+        repo.clone(),
+        vec![ARTICLE],
+        pages.clone(),
+        events.clone(),
+        People::on(vec![]),
+    )
+    .refresh_link_previews(&message.parent, message.id)
+    .await
+    .unwrap();
+
+    assert!(pages.0.lock().unwrap().is_empty());
+    assert_eq!(*repo.link_preview_writes.lock().unwrap(), vec![vec![]]);
+    assert_eq!(events.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_message_without_links_does_not_read_the_flag() {
+    let repo = channel_repo(vec![]);
+    let people = People::on(vec![AUTHOR]);
+    let message = repo.message.clone();
+    gated_service(
+        repo.clone(),
+        vec![],
+        Pages::default(),
+        Events::default(),
+        people.clone(),
+    )
+    .refresh_link_previews(&message.parent, message.id)
+    .await
+    .unwrap();
+
+    assert!(people.asked.lock().unwrap().is_empty());
+    assert!(repo.link_preview_writes.lock().unwrap().is_empty());
+}
