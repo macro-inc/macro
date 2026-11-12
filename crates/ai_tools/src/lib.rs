@@ -69,13 +69,13 @@ pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env, build_web_search_provider_from_env,
 };
+pub use chat_tools::{ChatTools, ChatToolsets};
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
-pub use chat_tools::{ChatTools, ChatToolsets};
 pub use mcp_app_catalog::{
     CHAT_CODE_MODE_FLAG, PipedreamMcpAppCatalog, canvas_artifacts_rollout,
-    canvas_artifacts_rollout_from_env, chat_code_mode_rollout,
-    connect_adapter, connector_backends_from_env, macro_connect_rollout, pipedream_client_from_env,
+    canvas_artifacts_rollout_from_env, chat_code_mode_rollout, connect_adapter,
+    connector_backends_from_env, macro_connect_rollout, pipedream_client_from_env,
 };
 pub use search::search_toolset;
 pub use tool_context::{
@@ -407,9 +407,10 @@ fn tools_for_inner(host: AiHost, mode: ToolsMode) -> ToolSetWithPrompt {
                         toolset.user_tools.contains_key(name),
                     )
             });
-            toolset = toolset.add_subtoolset::<agent_code_mode::inbound::toolset::UserCodeModeToolContext>(
-                agent_code_mode::inbound::toolset::user_toolset(),
-            );
+            toolset = toolset
+                .add_subtoolset::<agent_code_mode::inbound::toolset::UserCodeModeToolContext>(
+                    agent_code_mode::inbound::toolset::user_toolset(),
+                );
         }
         (AiHost::ChannelBot | AiHost::Mcp, ToolsMode::Code) | (_, ToolsMode::Direct) => {}
     }

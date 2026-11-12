@@ -1,6 +1,6 @@
 //! Which toolset the in-app chat runs for a user: its direct tools, or code
 //! mode for users the `ai-chat-code-mode` rollout is on for.
-use crate::{AiToolSet, ToolSetWithPrompt, tools_for, tools_for_chat_code_mode, AiHost};
+use crate::{AiHost, AiToolSet, ToolSetWithPrompt, tools_for, tools_for_chat_code_mode};
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectRollout;
 use std::sync::Arc;

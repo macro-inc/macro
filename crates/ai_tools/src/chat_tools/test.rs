@@ -30,7 +30,10 @@ async fn flag_off_unset_or_without_a_runner_keeps_the_direct_chat_tools() {
     for (label, toolsets) in [
         ("flag off", ChatToolsets::new(Some(rollout(false)), true)),
         ("no flag client", ChatToolsets::new(None, true)),
-        ("no code runner", ChatToolsets::new(Some(rollout(true)), false)),
+        (
+            "no code runner",
+            ChatToolsets::new(Some(rollout(true)), false),
+        ),
     ] {
         let tools = toolsets.for_user(&user()).await;
         assert_eq!(names(&tools), direct, "{label}");

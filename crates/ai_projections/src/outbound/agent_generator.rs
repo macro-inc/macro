@@ -68,12 +68,7 @@ impl AgentProjectionGenerator {
         }
 
         let mut session = agent_loop
-            .session(
-                toolset,
-                Arc::new(tool_context),
-                &*tools.prompt,
-                usage_ctx,
-            )
+            .session(toolset, Arc::new(tool_context), &*tools.prompt, usage_ctx)
             .await;
 
         let messages = vec![agent::types::ChatMessage {
