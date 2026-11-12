@@ -388,12 +388,17 @@ describe('Task.findSimilar', () => {
     expect(requests).toHaveLength(0);
   });
 
-  test('refuses a missing title', async () => {
+  test('refuses a missing title and a missing options object', async () => {
     const macro = new Macro({ token: 'user-token' });
 
     await expect(
       macro.tasks.findSimilar({} as unknown as { title: string }),
     ).rejects.toThrow('tasks.findSimilar needs `title`');
+    await expect(
+      macro.tasks.findSimilar(undefined as unknown as { title: string }),
+    ).rejects.toThrow(
+      'tasks.findSimilar takes an options object, { title, body }.',
+    );
   });
 });
 

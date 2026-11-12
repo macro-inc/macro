@@ -60,11 +60,11 @@ export class TaskNamespace {
   }
 
   /**
-   * Existing tasks of yours or your team's that look like the same work as a
-   * task with this title and body, most similar first. Call it in the same
-   * program as `create`: create only when nothing is a likely duplicate, and
-   * otherwise return the matches and ask the user instead of creating. It
-   * takes `title` and `body`, not `create`'s `name` and `markdown`.
+   * Existing tasks like a task with this `title` and `body` (not `create`'s
+   * `name` and `markdown`), yours or your team's, most similar first. Call it
+   * in the same program as `create`: create only when nothing is a likely
+   * duplicate, and otherwise return the matches and ask the user instead of
+   * creating.
    *
    * @readonly
    */

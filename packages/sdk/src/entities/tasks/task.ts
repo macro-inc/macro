@@ -87,6 +87,10 @@ export class Task extends Document {
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.create takes an options object, { name, markdown, ... }.',
+      );
     rejectUnknownOptions('tasks.create', opts, {
       name: true,
       markdown: true,
@@ -158,6 +162,10 @@ export class Task extends Document {
     client: MacroClient,
     opts: { title: string; body?: string },
   ): Promise<SimilarTask[]> {
+    if (typeof opts !== 'object' || opts === null)
+      throw new MacroError(
+        'tasks.findSimilar takes an options object, { title, body }.',
+      );
     rejectUnknownOptions('tasks.findSimilar', opts, {
       title: true,
       body: true,
