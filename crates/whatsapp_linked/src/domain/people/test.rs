@@ -183,32 +183,35 @@ fn people_and_members_show_the_owners_picture_stored_under_any_of_their_jids() {
 }
 
 #[test]
-fn a_direct_chats_peer_has_the_chats_picture_under_any_jid_and_its_owner_never_does() {
+fn a_direct_chats_picture_is_only_for_the_person_with_its_remote_id() {
     let chat_picture = Uuid::from_u128(902);
-    let owner = "macro|owner@example.com";
     let names = ChatNames::new(
         HashMap::new(),
         HashMap::from([(phone("5550001"), chat_picture)]),
         vec![
-            // The peer wrote by LID only.
+            // The chat's person, known by the chat's remote id and a LID.
             SeenPerson {
                 person_id: Uuid::from_u128(1),
                 user_id: None,
                 whatsapp_name: Some("Ana".to_owned()),
-                jids: vec![ANA_LID.to_owned()],
+                jids: vec![phone("5550001"), ANA_LID.to_owned()],
             },
+            // The owner under an alias that never matched their account.
             SeenPerson {
                 person_id: Uuid::from_u128(2),
-                user_id: Some(owner.to_owned()),
+                user_id: None,
                 whatsapp_name: Some("Me".to_owned()),
                 jids: vec![phone("5550009")],
             },
+            // Someone known only by a LID.
+            SeenPerson {
+                person_id: Uuid::from_u128(3),
+                user_id: None,
+                whatsapp_name: Some("Ben".to_owned()),
+                jids: vec![BEN_LID.to_owned()],
+            },
         ],
-    )
-    .in_direct_chat(DirectPeer {
-        remote_id: phone("5550001"),
-        owner: owner.to_owned(),
-    });
+    );
 
     let people = names.people(None);
 
@@ -218,4 +221,5 @@ fn a_direct_chats_peer_has_the_chats_picture_under_any_jid_and_its_owner_never_d
     );
     assert_eq!(people.get(ANA_LID).picture_file_id, Some(chat_picture));
     assert_eq!(people.person(&stored(2)).picture_file_id, None);
+    assert_eq!(people.person(&stored(3)).picture_file_id, None);
 }

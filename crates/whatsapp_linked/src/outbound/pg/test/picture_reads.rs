@@ -135,7 +135,7 @@ async fn everyone_sees_the_pictures_the_owner_sees_and_initials_once_hidden(pool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_direct_chat_and_its_person_show_the_chats_picture_and_never_the_owner(pool: PgPool) {
+async fn a_direct_chat_and_its_person_show_the_chats_picture_and_no_owner_alias_does(pool: PgPool) {
     workspace(&pool).await;
     let (linked, session, repository) = services(&pool);
     let alice = pair(&linked, &session, ALICE, ALICE_JID).await;
@@ -177,6 +177,25 @@ async fn a_direct_chat_and_its_person_show_the_chats_picture_and_never_the_owner
         .await
         .unwrap();
     let customer = file_of(&files, "1700000001");
+    // The owner's earlier messages, stored under a number that no longer
+    // matches their linked account (as after re-pairing with a new one):
+    // their own alias rows, not the chat's person.
+    sqlx::query!(
+        "UPDATE external_chat_person SET user_id = NULL WHERE chat_id = $1 AND user_id IS NOT NULL",
+        binding.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE whatsapp_identity_alias SET jid = $2 WHERE chat_id = $1 AND jid = $3",
+        binding.id,
+        format!("{}@s.whatsapp.net", 15550000099u64),
+        ALICE_JID
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let detail = linked
         .chats

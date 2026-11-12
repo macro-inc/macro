@@ -36,17 +36,6 @@ pub struct ChatNames {
     /// The profile pictures the owner's account has stored, by JID.
     pictures: HashMap<String, Uuid>,
     seen: Vec<SeenPerson>,
-    peer: Option<DirectPeer>,
-}
-
-/// A direct chat's other person: the owner's account stores their picture
-/// under the chat's remote id only, so it is theirs under any JID.
-#[derive(Debug, Clone)]
-pub struct DirectPeer {
-    /// The chat's remote id.
-    pub remote_id: String,
-    /// The chat's owner, who is the chat's only other person.
-    pub owner: String,
 }
 
 impl ChatNames {
@@ -61,32 +50,14 @@ impl ChatNames {
             contacts,
             pictures,
             seen,
-            peer: None,
         }
     }
 
-    /// In a direct chat, the person who isn't its owner has the chat's
-    /// picture.
-    pub fn in_direct_chat(mut self, peer: DirectPeer) -> Self {
-        self.peer = Some(peer);
-        self
-    }
-
-    /// The owner's stored picture of someone with these JIDs.
+    /// The owner's stored picture of someone with these JIDs. A direct
+    /// chat's picture is stored under its remote id, so its other person,
+    /// who has that id among their JIDs, shows it; nobody else does.
     fn picture(&self, jids: &[&str]) -> Option<Uuid> {
         jids.iter().find_map(|jid| self.pictures.get(*jid).copied())
-    }
-
-    /// A seen person's picture: under one of their JIDs, else, the peer of
-    /// a direct chat, the chat's.
-    fn seen_picture(&self, person: &SeenPerson, jids: &[&str]) -> Option<Uuid> {
-        self.picture(jids).or_else(|| {
-            let peer = self.peer.as_ref()?;
-            if person.user_id.as_deref() == Some(peer.owner.as_str()) {
-                return None;
-            }
-            self.pictures.get(&peer.remote_id).copied()
-        })
     }
 
     /// The seen person behind any of `jids`.
@@ -139,7 +110,7 @@ impl ChatNames {
             let Some(name) = self.name(&jids, person.whatsapp_name.as_deref()) else {
                 continue;
             };
-            let picture = self.seen_picture(person, &jids);
+            let picture = self.picture(&jids);
             people.name_person(person.person_id, name.clone(), picture);
             for jid in jids {
                 people.learn(

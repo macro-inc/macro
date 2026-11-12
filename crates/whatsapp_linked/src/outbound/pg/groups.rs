@@ -1,7 +1,7 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::people::{ChatNames, ChatRoster, DirectPeer, SeenPerson};
+use crate::domain::people::{ChatNames, ChatRoster, SeenPerson};
 use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -380,11 +380,20 @@ impl PgWhatsAppRepository {
         .await
         .map_err(failure)?
         .into_iter()
-        .map(|row| SeenPerson {
-            person_id: row.id,
-            user_id: row.user_id,
-            whatsapp_name: row.display_name,
-            jids: row.jids,
+        .map(|row| {
+            // The stand-in writes as the chat's remote id, so it goes by it:
+            // in a direct chat that is the other person, whose picture the
+            // chat's is.
+            let mut jids = row.jids;
+            if row.id == super::ingest::chat_stand_in(chat.id) {
+                jids.push(chat.remote_id.clone());
+            }
+            SeenPerson {
+                person_id: row.id,
+                user_id: row.user_id,
+                whatsapp_name: row.display_name,
+                jids,
+            }
         })
         .collect();
         let mut named: Vec<String> = seen
@@ -406,11 +415,6 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.chat_jid, row.name))
         .collect();
-        // A direct chat's picture is stored under its remote id alone.
-        let direct = chat.kind == ExternalChatKind::Direct;
-        if direct {
-            named.push(chat.remote_id.clone());
-        }
         let pictures = sqlx::query!(
             r#"SELECT p.jid, p.static_file_id AS "static_file_id!" FROM whatsapp_profile_picture p
             JOIN whatsapp_linked_account o ON o.id = p.account_id
@@ -425,15 +429,7 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.jid, row.static_file_id))
         .collect();
-        let names = ChatNames::new(contacts, pictures, seen);
-        Ok(if direct {
-            names.in_direct_chat(DirectPeer {
-                remote_id: chat.remote_id.clone(),
-                owner: chat.user_id.clone(),
-            })
-        } else {
-            names
-        })
+        Ok(ChatNames::new(contacts, pictures, seen))
     }
 }
 
