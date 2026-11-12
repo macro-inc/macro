@@ -105,6 +105,13 @@ An edit keeps the cards of the links it kept and fetches only new ones; a card
 of a link the edit removed disappears once the previews are recomputed.
 Document comments and GitHub PR comments show no cards.
 
+Cards are behind the `enable-link-previews` flag. A message gets cards only
+while the flag is on for its author (for an agent's reply, the person who asked
+it; unprompted bot posts get none), and a viewer sees them only while it is on
+for them. On a local stack the backend reads it from PostHog only with a real
+`POSTHOG_API_KEY`, and the web bundle, which has no PostHog key, needs
+`VITE_ENABLE_LINK_PREVIEWS=true`; otherwise both count it as off.
+
 A message's sender can remove its previews: every card on their own message has
 a **Remove link previews** button (an X at the end of the site line), shown
 while the card is hovered or focused and always on touch. It asks first, with

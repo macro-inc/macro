@@ -31,6 +31,7 @@ interface ImportMetaEnv {
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
+  readonly VITE_ENABLE_LINK_PREVIEWS?: string;
 }
 
 interface ImportMeta {

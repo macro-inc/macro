@@ -26,7 +26,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `MACRO_DEV_HTTPS=false bunx vite --port ${port} --strictPort`,
+    // The fixture shows the cards, which `enable-link-previews` gates.
+    command: `MACRO_DEV_HTTPS=false VITE_ENABLE_LINK_PREVIEWS=true bunx vite --port ${port} --strictPort`,
     cwd: fileURLToPath(new URL('../../../../../', import.meta.url)),
     url: `http://localhost:${port}/app/`,
     reuseExistingServer: false,
