@@ -3,6 +3,7 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
@@ -39,7 +40,12 @@ function entityDisplayName(item: EntityItem): string {
 }
 
 /** Whether a mention inserted into this editor is recorded as a document reference. */
-function tracksMentions(dependencies: HandlerDependencies): boolean {
+export function tracksMentions(
+  dependencies: Pick<
+    HandlerDependencies,
+    'blockId' | 'blockName' | 'disableMentionTracking'
+  >
+): boolean {
   const { blockId, blockName, disableMentionTracking } = dependencies;
   return Boolean(
     blockId &&
@@ -100,26 +106,68 @@ async function handleCrmMention(
 /**
  * Handle entity mention (documents, channels, emails, etc.).
  */
-async function handleEntityMention(
+export type EntityMentionInsertion = Pick<
+  HandlerDependencies,
+  'blockId' | 'onDocumentMention' | 'onEmailMention'
+> & {
+  tracksMentions(): boolean;
+  insert(buildPayload: () => DocumentMentionInfo): void | Promise<void>;
+  selectAgent?: (session: { id: string; name?: string }) => Promise<void>;
+  selectCrm?: (item: EntityItem) => Promise<void>;
+};
+
+function handleEntityMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
+  return handleEntityMentionWithInsertion(item, () => {
+    const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
+    return {
+      blockId,
+      onDocumentMention,
+      onEmailMention,
+      tracksMentions: () => tracksMentions(dependencies),
+      selectAgent: (session) =>
+        handleAgentSessionMention(session, dependencies),
+      selectCrm: (entity) => handleCrmMention(entity, dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+      },
+    };
+  });
+}
 
+/** Share entity mapping and tracking without supplying an editor facade. */
+export async function handleEntityMentionWithInsertion(
+  item: EntityItem,
+  prepare: () => EntityMentionInsertion
+): Promise<void> {
+  const {
+    blockId,
+    onDocumentMention,
+    onEmailMention,
+    tracksMentions,
+    insert,
+    selectAgent,
+    selectCrm,
+  } = prepare();
   const entity = item.data;
   if (entity.type === 'agent_session') {
-    return await handleAgentSessionMention(entity, dependencies);
+    if (!selectAgent)
+      throw new Error('Agent session mention insertion is unavailable');
+    return await selectAgent(entity);
   }
 
   if (entity.type === 'crm_contact' || entity.type === 'crm_company') {
-    return await handleCrmMention(item, dependencies);
+    if (!selectCrm) throw new Error('CRM mention insertion is unavailable');
+    return await selectCrm(item);
   }
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 
   let mentionId: string | undefined;
-  if (blockId && tracksMentions(dependencies)) {
+  if (blockId && tracksMentions()) {
     const trackType = match(item.bucket)
       .with('channel', 'dm', () => 'channel' as const)
       .with('initiative', () => 'initiative' as const)
@@ -136,7 +184,7 @@ async function handleEntityMention(
     onDocumentMention?.(entity as unknown as any);
   }
 
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: entity.id,
     documentName: itemName,
     blockName: blockNameForMention,
@@ -145,7 +193,8 @@ async function handleEntityMention(
       item.bucket === 'channel' || item.bucket === 'dm'
         ? (entity as ChannelEntity).channelType
         : undefined,
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**

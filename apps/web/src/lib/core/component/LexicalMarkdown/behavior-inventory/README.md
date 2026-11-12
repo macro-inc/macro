@@ -320,3 +320,11 @@ callbacks preserve body listener order and repeated equal term payloads. Missing
 owners are not adopted by import/query but may be authored by a later dirty
 transform. Local status is a real created-node follow-up. This is unit-level
 Source policy evidence, not rendered menus, physical keyboard or native proof.
+
+
+`entity-menu-insertion.test.ts` uses the actual Source menu handler, mention
+plugin and nodes to pin document/task/channel tracking, attachment callbacks,
+callee-before-payload getter order, opaque callback failures and accepted
+tracking across a UI-only read-only transition. Raw model and selection captures
+before and after the shared insertion seam remain separate from native and
+live-service browser evidence.
