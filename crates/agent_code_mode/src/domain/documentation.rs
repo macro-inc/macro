@@ -56,8 +56,21 @@ pub fn sdk_documentation() -> &'static [SdkDocumentation] {
     &GENERATED.entities
 }
 
-/// The reference for one symbol an entity index or another reference names.
+/// The `ReadCodeDocs` symbol for what Macro is and where its docs live.
+pub const ABOUT_MACRO_SYMBOL: &str = "AboutMacro";
+
+/// An overview of Macro and a routing map into the docs at docs.macro.com:
+/// `SelfKnowledge`'s answer, and [`ABOUT_MACRO_SYMBOL`]'s reference.
+pub fn about_macro() -> &'static str {
+    include_str!("about_macro.md")
+}
+
+/// The reference for one symbol an entity index or another reference names,
+/// or [`ABOUT_MACRO_SYMBOL`].
 pub fn symbol_reference(symbol: &str) -> Option<&'static str> {
+    if symbol == ABOUT_MACRO_SYMBOL {
+        return Some(about_macro());
+    }
     GENERATED.symbols.get(symbol).map(String::as_str)
 }
 

@@ -648,16 +648,6 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
-    let cognition_runtime = agent_harness_service::cognition::build(
-        agent_harness_service::cognition::config::Config::from_env()?,
-        pool.clone(),
-        event_broker_tracker.clone(),
-        import_jobs.clone(),
-        mcp_http,
-    )
-    .await
-    .context("failed to compose cognition APIs")?;
-    let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -711,6 +701,33 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
+    // Chat's code mode runs as the signed-in user on the sessions' executor:
+    // both are in-app agent work.
+    let chat_code_mode = code_runner.as_ref().map(|(sessions, _, _, _)| {
+        Ok::<_, anyhow::Error>(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(sessions.clone()),
+            Arc::new(code_mode::UserRunCredentials {
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+                signer: MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                endpoints: code_mode::sdk_endpoints()?,
+            }),
+        )) as Arc<dyn agent_code_mode::domain::UserCodeMode>)
+    });
+    let cognition_runtime = agent_harness_service::cognition::build(
+        agent_harness_service::cognition::config::Config::from_env()?,
+        pool.clone(),
+        event_broker_tracker.clone(),
+        import_jobs.clone(),
+        mcp_http,
+        chat_code_mode.transpose()?,
+    )
+    .await
+    .context("failed to compose cognition APIs")?;
+    let cognition_router = cognition_runtime.router.clone();
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
         Some((_, _, routines, checker)) => Some(

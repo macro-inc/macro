@@ -292,6 +292,18 @@ fn symbol_references_stay_within_one_result_budget() {
     assert!(result.unknown.is_empty());
 }
 
+#[test]
+fn about_macro_reads_as_a_symbol() {
+    assert!(
+        !GENERATED.symbols.contains_key(ABOUT_MACRO_SYMBOL),
+        "no SDK symbol shadows the about-page"
+    );
+    let result = read_symbols(&[ABOUT_MACRO_SYMBOL.to_owned()]);
+    assert_eq!(result.references.len(), 1);
+    assert_eq!(result.references[0].reference, about_macro());
+    assert!(about_macro().contains("https://docs.macro.com/llms.txt"));
+}
+
 #[tokio::test]
 async fn routed_turns_bring_each_selected_entitys_guidance_with_its_index() {
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {

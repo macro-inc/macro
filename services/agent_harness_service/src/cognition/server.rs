@@ -104,6 +104,7 @@ pub async fn build(
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
     mcp_http: mcp_client::outbound::guarded_http::McpHttp,
+    user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>>,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -956,15 +957,25 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        user_code_mode: user_code_mode.clone(),
         web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
-    let all_tools_toolset = all_tools.toolset.clone();
+    // Chat and projections move to code mode for the users the
+    // `ai-chat-code-mode` rollout is on for, where this process runs code.
+    let chat_tools = ai_tools::ChatToolsets::new(
+        ai_tools::chat_code_mode_rollout(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            config.environment,
+        )?,
+        user_code_mode.is_some(),
+    );
+    let all_tools_toolset = chat_tools.direct().toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
-        Arc::new(all_tools.prompt.to_string());
+        Arc::new(chat_tools.direct().prompt.clone());
 
     // Build memory service
     let memory_service = Arc::new(ai_tools::memory::build_memory_service(
@@ -990,7 +1001,7 @@ pub async fn build(
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
+            chat_tools.clone(),
         );
     // Notifier that pushes finished materializations to the target's connected
     // clients through the connection gateway.
@@ -1162,6 +1173,7 @@ pub async fn build(
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
+        chat_tools,
         entity_access_service,
         message_service,
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(

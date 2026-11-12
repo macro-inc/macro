@@ -51,7 +51,10 @@ Pulumi stacks; they do not host extra agent processes.
   with the user's team as the `team` group. At most 64 sends run at once
   (more are dropped) and each user's team is cached for 10 minutes.
 - `src/cognition/`: existing chat, completions, integrations, and projection
-  workers; the library also exports their OpenAPI document.
+  workers; the library also exports their OpenAPI document. Chat turns and
+  projections pick their tools per user with `ai_tools::ChatToolsets`: code
+  mode behind `ai-chat-code-mode`, run by a `UserCodeModeService` on the
+  sessions' executor that `main.rs` hands to `cognition::build`.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use agent::{AgentLoop, StreamAccumulator, to_rig_messages};
 use agent::{PredefinedModel, structured_output::DynamicSchema};
-use ai_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
+use ai_tools::{ChatTools, ChatToolsets, ToolServiceContext};
 use ai_usage::{AiFeature, UsageContext};
 use futures::StreamExt;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -31,19 +31,16 @@ use crate::domain::{
 #[derive(Clone)]
 pub struct AgentProjectionGenerator {
     tool_context: Arc<ToolServiceContext>,
-    toolset: Arc<AiToolSet>,
-    system_prompt: Arc<str>,
+    tools: ChatToolsets,
 }
 
 impl AgentProjectionGenerator {
-    /// Creates a generator from a pre-configured tool context and toolset, e.g.
-    /// [`ai_tools::build_tool_service_context_from_env`] and
-    /// [`ai_tools::all_tools`].
-    pub fn new(tool_context: ToolServiceContext, tools: ToolSetWithPrompt) -> Self {
+    /// Creates a generator from a pre-configured tool context and the chat's
+    /// toolsets, so a projection runs with the tools its user's chat does.
+    pub fn new(tool_context: ToolServiceContext, tools: ChatToolsets) -> Self {
         Self {
             tool_context: Arc::new(tool_context),
-            toolset: tools.toolset,
-            system_prompt: tools.prompt.to_string().into(),
+            tools,
         }
     }
 
@@ -53,6 +50,7 @@ impl AgentProjectionGenerator {
         &self,
         user_id: &MacroUserIdStr<'_>,
         request: &GenerationRequest<'_>,
+        tools: &ChatTools,
     ) -> Result<StreamAccumulator, AiProjectionError> {
         let usage_ctx = UsageContext::new(AiFeature::AiProjection, user_id.clone().into_owned());
 
@@ -62,7 +60,7 @@ impl AgentProjectionGenerator {
         tool_context.usage_context = usage_ctx.clone();
 
         let toolset: Arc<dyn ai_toolset::ToolSet<ToolServiceContext> + Send + Sync> =
-            self.toolset.clone();
+            tools.toolset.clone();
 
         let mut agent_loop = AgentLoop::new(self.tool_context.recorder.clone());
         if let Some(model) = request.model {
@@ -73,7 +71,7 @@ impl AgentProjectionGenerator {
             .session(
                 toolset,
                 Arc::new(tool_context),
-                &*self.system_prompt,
+                &*tools.prompt,
                 usage_ctx,
             )
             .await;
@@ -104,6 +102,7 @@ impl AgentProjectionGenerator {
         &self,
         user_id: &MacroUserIdStr<'_>,
         request: &GenerationRequest<'_>,
+        system_prompt: &str,
         accumulator: StreamAccumulator,
     ) -> Result<String, AiProjectionError> {
         let output_schema = request
@@ -141,7 +140,7 @@ impl AgentProjectionGenerator {
 
         let value = agent::structured_output::dynamic_structured_completion(
             model,
-            &self.system_prompt,
+            system_prompt,
             to_rig_messages(&conversation),
             DynamicSchema {
                 schema: output_schema.clone(),
@@ -174,10 +173,13 @@ impl ProjectionGenerator for AgentProjectionGenerator {
         user_id: &MacroUserIdStr<'_>,
         request: GenerationRequest<'_>,
     ) -> Result<String, AiProjectionError> {
-        let accumulator = self.run_agent_loop(user_id, &request).await?;
+        let tools = self.tools.for_user(&user_id.clone().into_owned()).await;
+        let accumulator = self.run_agent_loop(user_id, &request, &tools).await?;
 
         if request.output_schema.is_some() {
-            return self.structured_result(user_id, &request, accumulator).await;
+            return self
+                .structured_result(user_id, &request, &tools.prompt, accumulator)
+                .await;
         }
 
         // Free-text projection: concatenate the loop's text content.

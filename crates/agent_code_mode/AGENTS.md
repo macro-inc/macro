@@ -83,6 +83,8 @@ stacks. Process isolation belongs to
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
   carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
   carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+  The one hand-written symbol is `AboutMacro` (`src/domain/about_macro.md`),
+  the about-page `SelfKnowledge` also returns.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared

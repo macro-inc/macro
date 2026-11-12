@@ -429,7 +429,7 @@ impl DescribeCodeTools {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ReadCodeDocs",
-    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way."
+    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way. Read AboutMacro, before answering, for what Macro is, what it can do or how to do something in it: an overview and links into the docs at docs.macro.com."
 )]
 pub struct ReadCodeDocs {
     /// Symbols exactly as an index or reference names them.

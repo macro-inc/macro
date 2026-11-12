@@ -127,6 +127,7 @@ fn every_tool_schema_is_one_gemini_accepts() {
         tools_for(AiHost::ChannelBot),
         tools_for(AiHost::Mcp),
         tools_for_agent_code_mode(),
+        tools_for_chat_code_mode(),
     ] {
         let advertised = tools.toolset.request_schemas().unwrap_or_default();
         schemas.extend(advertised.into_iter().map(|tool| (tool.name, tool.schema)));
