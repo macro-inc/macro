@@ -253,7 +253,9 @@ async fn run_server() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect_with(macro_db_pool::with_request_timeouts(
+            config.database_url.parse()?,
+        ))
         .await
         .context("could not connect to db")?;
 
@@ -271,12 +273,18 @@ async fn run_server() -> anyhow::Result<()> {
         Environment::Production | Environment::Local => (min_connections, max_connections),
     };
 
-    let readonly_db = match PgPoolOptions::new()
-        .min_connections(readonly_min_connections)
-        .max_connections(readonly_max_connections)
-        .connect(&config.database_url_readonly)
-        .await
-    {
+    let readonly_pool = match config.database_url_readonly.parse() {
+        Ok(options) => {
+            PgPoolOptions::new()
+                .min_connections(readonly_min_connections)
+                .max_connections(readonly_max_connections)
+                .connect_with(macro_db_pool::with_request_timeouts(options))
+                .await
+        }
+        Err(error) => Err(error),
+    };
+
+    let readonly_db = match readonly_pool {
         Ok(pool) => {
             tracing::trace!(
                 min_connections = readonly_min_connections,

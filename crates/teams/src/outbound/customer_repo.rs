@@ -224,12 +224,13 @@ impl CustomerRepositoryImpl {
             sqlx::postgres::PgPoolOptions::new()
                 .max_connections(pool.options().get_max_connections().min(4))
                 .idle_timeout(std::time::Duration::from_secs(60))
-                .connect_lazy_with(
-                    pool.connect_options()
-                        .as_ref()
-                        .clone()
-                        .options([("lock_timeout", "30000")]),
-                )
+                .connect_lazy_with(pool.connect_options().as_ref().clone().options([
+                    ("lock_timeout", "30000"),
+                    (
+                        "idle_in_transaction_session_timeout",
+                        macro_db_pool::LOCK_GUARD_IDLE_IN_TRANSACTION_TIMEOUT,
+                    ),
+                ]))
         };
         let team_locks = lock_pool();
         let subscription_locks = lock_pool();

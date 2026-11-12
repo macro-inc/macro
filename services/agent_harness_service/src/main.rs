@@ -278,7 +278,9 @@ async fn run() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(config.database_max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_with(macro_db_pool::with_request_timeouts(
+            config.database_url.as_ref().parse()?,
+        ))
         .await
         .context("failed to connect to macrodb")?;
 
