@@ -290,7 +290,8 @@ the gateway `/email` prefix.
   under the gate's live cap. Don't record message content or addresses on
   its spans.
 - To run against `crates/gmail_emulator` instead of Google, set the
-  `OVERRIDE_*` variables its AGENTS.md lists. Without
+  `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
+  Google client sets them itself. Without
   `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL`, an `/email/init` with no OAuth
   attempt asks Google about the emulator's token: discovery fails with a
   warning, no calendar grant is recorded and calendar sync never starts,
