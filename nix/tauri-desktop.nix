@@ -441,6 +441,8 @@
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
+          # cache-turso embeds its SQL with `include_str!`.
+          (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
