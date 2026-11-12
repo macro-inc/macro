@@ -107,13 +107,6 @@ async fn allows_localhost_resolution_when_policy_permits_it() {
 }
 
 #[test]
-fn blocks_ipv6_link_local_addresses() {
-    let ip = "fe80::1".parse().expect("valid ipv6");
-
-    assert!(is_blocked_ip(ip));
-}
-
-#[test]
 fn accepts_public_https_endpoint() {
     let url = validate_endpoint_url(
         "https://example.com/webhook",

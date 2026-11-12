@@ -4,8 +4,9 @@
 #[path = "http_validator_test.rs"]
 mod http_validator_test;
 
-use super::address_guard::{BlockedAddressFilteringResolver, SystemResolver, is_blocked_ip};
+use super::address_guard::{BlockedAddressFilteringResolver, SystemResolver};
 use crate::domain::{
+    blocked_address::{is_blocked_host, is_blocked_ip},
     models::{
         Webhook, WebhookEndpointSchemePolicy, WebhookValidationResult, WebhookValidationTestEvent,
     },
@@ -16,7 +17,7 @@ use reqwest::{
     dns::{Name, Resolve},
     redirect::Policy,
 };
-use std::{net::IpAddr, str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 const EVENT_NAME: &str = "webhook.validation.test";
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -250,15 +251,6 @@ fn validate_endpoint_url(
     }
 
     Ok(url)
-}
-
-fn is_blocked_host(host: &str) -> bool {
-    let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
-    if host == "localhost" || host.ends_with(".localhost") {
-        return true;
-    }
-
-    host.parse::<IpAddr>().is_ok_and(is_blocked_ip)
 }
 
 pub(super) fn is_reserved_macro_header(name: &str) -> bool {
