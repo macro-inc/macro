@@ -134,7 +134,8 @@ impl SlackClient {
             "token".to_owned(),
             serde_json::Value::String(self.inner.credentials.token.expose().to_owned()),
         );
-        let body = serde_json::to_vec(&body).map_err(|source| SlackError::Decode { method, source })?;
+        let body =
+            serde_json::to_vec(&body).map_err(|source| SlackError::Decode { method, source })?;
         self.send_paced(method, || {
             self.inner
                 .http
@@ -180,13 +181,18 @@ impl SlackClient {
             let outcome = loop {
                 tokio::time::sleep(pacer.reserve(method)).await;
                 match send_once(method, build()).await {
-                    Err(SlackError::RateLimited { retry_after, .. }) if retries < MAX_RATE_LIMIT_RETRIES => {
+                    Err(SlackError::RateLimited { retry_after, .. })
+                        if retries < MAX_RATE_LIMIT_RETRIES =>
+                    {
                         retries += 1;
                         pacer.hold(method, retry_after);
                     }
                     Err(SlackError::RateLimited { retry_after, .. }) => {
                         pacer.hold(method, retry_after);
-                        break Err(SlackError::RateLimited { method, retry_after });
+                        break Err(SlackError::RateLimited {
+                            method,
+                            retry_after,
+                        });
                     }
                     other => break other,
                 }
@@ -213,11 +219,12 @@ impl SlackClient {
             slack.method = method.as_str(),
             slack.team_id = %self.inner.workspace.team_id,
             http.response.status_code = Empty,
-            slack.retry_count = 0,
+            slack.retry_count = Empty,
             slack.error = Empty,
             otel.status_code = Empty,
             file.size = Empty,
         );
+        span.record("slack.retry_count", 0);
         let request = self
             .inner
             .http
@@ -261,10 +268,13 @@ pub(crate) fn is_slack_url(url: &Url, configured: &[&Url]) -> bool {
         return false;
     };
     let is_configured = configured.iter().any(|known| {
-        known.host_str() == Some(host) && known.port_or_known_default() == url.port_or_known_default()
+        known.host_str() == Some(host)
+            && known.port_or_known_default() == url.port_or_known_default()
     });
     let is_slack = url.scheme() == "https"
-        && (host == "slack.com" || host.ends_with(".slack.com") || host.ends_with(".slack-edge.com"));
+        && (host == "slack.com"
+            || host.ends_with(".slack.com")
+            || host.ends_with(".slack-edge.com"));
     is_configured || is_slack
 }
 
@@ -366,7 +376,10 @@ pub(crate) fn retry_after(headers: &HeaderMap) -> Duration {
         .map_or(DEFAULT_RETRY_AFTER, Duration::from_secs)
 }
 
-async fn download(method: SlackMethod, request: reqwest::RequestBuilder) -> Result<DownloadedFile, SlackError> {
+async fn download(
+    method: SlackMethod,
+    request: reqwest::RequestBuilder,
+) -> Result<DownloadedFile, SlackError> {
     let response = request
         .send()
         .await
@@ -391,7 +404,10 @@ async fn download(method: SlackMethod, request: reqwest::RequestBuilder) -> Resu
         .map(str::to_owned);
     // Slack answers an expired or unauthorized file link with its HTML
     // sign-in page and a 200.
-    if content_type.as_deref().is_some_and(|value| value.starts_with("text/html")) {
+    if content_type
+        .as_deref()
+        .is_some_and(|value| value.starts_with("text/html"))
+    {
         return Err(SlackError::Api {
             method,
             code: SlackErrorCode::InvalidAuth,

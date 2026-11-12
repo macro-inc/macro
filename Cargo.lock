@@ -19059,9 +19059,6 @@ name = "slack_fake_server"
 version = "0.1.0"
 dependencies = [
  "axum",
- "bytes",
- "futures",
- "serde",
  "serde_json",
  "tokio",
  "tokio-util",
@@ -23416,6 +23413,7 @@ dependencies = [
  "chrono",
  "cipher 0.4.4",
  "cipher 0.5.2",
+ "cookie",
  "crossbeam-epoch",
  "crossbeam-utils",
  "crypto-bigint 0.5.5",

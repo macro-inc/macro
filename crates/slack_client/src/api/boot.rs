@@ -35,6 +35,7 @@ pub struct BootChannel {
     #[serde(flatten)]
     pub conversation: Conversation,
     /// The latest message.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub latest: Option<MessageTs>,
 }
 
@@ -60,8 +61,10 @@ pub struct ChannelCounts {
     /// The conversation.
     pub id: ChannelId,
     /// The user's read cursor.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub last_read: Option<MessageTs>,
     /// The latest message.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub latest: Option<MessageTs>,
     /// Unread messages exist.
     #[serde(default)]
@@ -102,7 +105,10 @@ impl SlackClient {
             ("thread_counts_by_channel", "true".to_owned()),
             ("org_wide_aware", "true".to_owned()),
             ("include_file_channels", "true".to_owned()),
-            ("_x_reason", "client-counts-api/fetchClientCounts".to_owned()),
+            (
+                "_x_reason",
+                "client-counts-api/fetchClientCounts".to_owned(),
+            ),
             ("_x_sonic", "true".to_owned()),
         ];
         self.call(SlackMethod::ClientCounts, form).await

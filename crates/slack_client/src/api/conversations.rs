@@ -186,7 +186,10 @@ impl SlackClient {
     }
 
     /// `conversations.view`.
-    pub async fn conversation_view(&self, channel: &ChannelId) -> Result<ConversationView, SlackError> {
+    pub async fn conversation_view(
+        &self,
+        channel: &ChannelId,
+    ) -> Result<ConversationView, SlackError> {
         let form = vec![
             ("channel", channel.to_string()),
             ("canonical_avatars", "true".to_owned()),

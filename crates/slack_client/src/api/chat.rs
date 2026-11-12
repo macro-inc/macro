@@ -73,7 +73,8 @@ fn push_blocks(form: &mut Form, method: SlackMethod, blocks: &[Block]) -> Result
     if blocks.is_empty() {
         return Ok(());
     }
-    let blocks = serde_json::to_string(blocks).map_err(|source| SlackError::Decode { method, source })?;
+    let blocks =
+        serde_json::to_string(blocks).map_err(|source| SlackError::Decode { method, source })?;
     form.push(("blocks", blocks));
     Ok(())
 }
@@ -98,7 +99,10 @@ impl SlackClient {
     }
 
     /// `chat.update`: edits one of the user's messages.
-    pub async fn update_message(&self, update: &UpdateMessage) -> Result<UpdatedMessage, SlackError> {
+    pub async fn update_message(
+        &self,
+        update: &UpdateMessage,
+    ) -> Result<UpdatedMessage, SlackError> {
         let method = SlackMethod::ChatUpdate;
         let mut form = vec![
             ("channel", update.channel.to_string()),
@@ -110,13 +114,22 @@ impl SlackClient {
     }
 
     /// `chat.delete`: deletes one of the user's messages.
-    pub async fn delete_message(&self, channel: &ChannelId, ts: &MessageTs) -> Result<DeletedMessage, SlackError> {
+    pub async fn delete_message(
+        &self,
+        channel: &ChannelId,
+        ts: &MessageTs,
+    ) -> Result<DeletedMessage, SlackError> {
         let form = vec![("channel", channel.to_string()), ("ts", ts.to_string())];
         self.call(SlackMethod::ChatDelete, form).await
     }
 
     /// `reactions.add`; `name` is the emoji name without colons.
-    pub async fn add_reaction(&self, channel: &ChannelId, ts: &MessageTs, name: &str) -> Result<(), SlackError> {
+    pub async fn add_reaction(
+        &self,
+        channel: &ChannelId,
+        ts: &MessageTs,
+        name: &str,
+    ) -> Result<(), SlackError> {
         let form = vec![
             ("channel", channel.to_string()),
             ("timestamp", ts.to_string()),
@@ -128,7 +141,12 @@ impl SlackClient {
     }
 
     /// `reactions.remove`.
-    pub async fn remove_reaction(&self, channel: &ChannelId, ts: &MessageTs, name: &str) -> Result<(), SlackError> {
+    pub async fn remove_reaction(
+        &self,
+        channel: &ChannelId,
+        ts: &MessageTs,
+        name: &str,
+    ) -> Result<(), SlackError> {
         let form = vec![
             ("channel", channel.to_string()),
             ("timestamp", ts.to_string()),

@@ -23,8 +23,10 @@ pub struct File {
     /// Slack's type (`png`, `pdf`).
     pub filetype: Option<String>,
     /// Uploader.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
     /// Uploader's workspace.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user_team: Option<TeamId>,
     /// Hosted, external, snippet, or a tombstone.
     pub mode: Option<FileMode>,
@@ -54,7 +56,9 @@ pub struct File {
 }
 
 /// Whether the file's metadata is visible.
-#[derive(Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
 #[serde(from = "String", into = "String")]
 pub enum FileAccess {
@@ -70,7 +74,9 @@ pub enum FileAccess {
 }
 
 /// How the file is stored.
-#[derive(Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
 #[serde(from = "String", into = "String")]
 pub enum FileMode {

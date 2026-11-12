@@ -43,7 +43,9 @@ fn cookies(headers: &HeaderMap) -> BTreeMap<String, String> {
 }
 
 fn decoded_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
-    cookies(headers).get(name).map(|value| percent_decode(value))
+    cookies(headers)
+        .get(name)
+        .map(|value| percent_decode(value))
 }
 
 fn percent_decode(value: &str) -> String {
@@ -51,8 +53,13 @@ fn percent_decode(value: &str) -> String {
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;
     while index < bytes.len() {
-        let hex = bytes.get(index + 1..index + 3).and_then(|hex| std::str::from_utf8(hex).ok());
-        match (bytes[index], hex.and_then(|hex| u8::from_str_radix(hex, 16).ok())) {
+        let hex = bytes
+            .get(index + 1..index + 3)
+            .and_then(|hex| std::str::from_utf8(hex).ok());
+        match (
+            bytes[index],
+            hex.and_then(|hex| u8::from_str_radix(hex, 16).ok()),
+        ) {
             (b'%', Some(byte)) => {
                 decoded.push(byte);
                 index += 3;
@@ -82,7 +89,9 @@ async fn read_fields(request: Request) -> Option<Fields> {
         }
         Some(fields)
     } else {
-        let axum::Form(pairs) = axum::Form::<Vec<(String, String)>>::from_request(request, &()).await.ok()?;
+        let axum::Form(pairs) = axum::Form::<Vec<(String, String)>>::from_request(request, &())
+            .await
+            .ok()?;
         Some(pairs.into_iter().collect())
     }
 }
@@ -98,7 +107,11 @@ fn json_response(body: Value, set_cookies: &[String]) -> Response {
 }
 
 /// Checks the token and `d` cookie of a signed-in call.
-fn authenticate(shared: &Shared, token: Option<&str>, headers: &HeaderMap) -> Result<Caller, Value> {
+fn authenticate(
+    shared: &Shared,
+    token: Option<&str>,
+    headers: &HeaderMap,
+) -> Result<Caller, Value> {
     let Some(token) = token.filter(|token| !token.is_empty()) else {
         return Err(error("not_authed"));
     };
@@ -119,7 +132,11 @@ fn authenticate(shared: &Shared, token: Option<&str>, headers: &HeaderMap) -> Re
     })
 }
 
-async fn api(Extract(shared): Extract<Arc<Shared>>, Path(method): Path<String>, request: Request) -> Response {
+async fn api(
+    Extract(shared): Extract<Arc<Shared>>,
+    Path(method): Path<String>,
+    request: Request,
+) -> Response {
     let headers = request.headers().clone();
     let Some(mut fields) = read_fields(request).await else {
         return json_response(error("invalid_form_data"), &[]);
@@ -136,7 +153,9 @@ async fn api(Extract(shared): Extract<Arc<Shared>>, Path(method): Path<String>, 
     shared.changed();
     match injected {
         Some(Injected::Error(code)) => return json_response(error(&code), &[]),
-        Some(Injected::RateLimited { retry_after_seconds }) => {
+        Some(Injected::RateLimited {
+            retry_after_seconds,
+        }) => {
             return (
                 StatusCode::TOO_MANY_REQUESTS,
                 [(header::RETRY_AFTER, retry_after_seconds.to_string())],
@@ -201,7 +220,11 @@ async fn magic_link(Extract(shared): Extract<Arc<Shared>>, Path(team): Path<Stri
     let Some(workspace) = workspace else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let mut response = (StatusCode::FOUND, [(header::LOCATION, format!("/client/{team}"))]).into_response();
+    let mut response = (
+        StatusCode::FOUND,
+        [(header::LOCATION, format!("/client/{team}"))],
+    )
+        .into_response();
     for cookie in login::session_cookies(workspace) {
         if let Ok(value) = cookie.parse() {
             response.headers_mut().append(header::SET_COOKIE, value);
@@ -212,7 +235,11 @@ async fn magic_link(Extract(shared): Extract<Arc<Shared>>, Path(team): Path<Stri
 
 /// The client page; like Slack's it doesn't always hold the token.
 async fn client_page() -> Response {
-    ([(header::CONTENT_TYPE, "text/html")], "<html><body>Slack</body></html>").into_response()
+    (
+        [(header::CONTENT_TYPE, "text/html")],
+        "<html><body>Slack</body></html>",
+    )
+        .into_response()
 }
 
 /// `GET /auth?teams=T`: the app hands the signed-in browser its token.
@@ -231,7 +258,10 @@ async fn app_auth(
         .find(|workspace| workspace.team_id == team && Some(&workspace.cookie) == cookie.as_ref())
         .map(|workspace| workspace.token.clone());
     match token {
-        Some(token) => json_response(json!({ "ok": true, "teams": { team: { "token": token } } }), &[]),
+        Some(token) => json_response(
+            json!({ "ok": true, "teams": { team: { "token": token } } }),
+            &[],
+        ),
         None => json_response(json!({ "ok": true, "teams": {} }), &[]),
     }
 }
@@ -257,15 +287,25 @@ async fn edge_users_info(
     let mut state = shared.lock();
     state.calls.push(RecordedCall {
         method: "edgeapi.users.info".to_owned(),
-        fields: requested.iter().map(|id| (id.clone(), String::new())).collect(),
+        fields: requested
+            .iter()
+            .map(|id| (id.clone(), String::new()))
+            .collect(),
     });
-    let results: Vec<Value> = requested.iter().filter_map(|id| state.users.get(id).cloned()).collect();
+    let results: Vec<Value> = requested
+        .iter()
+        .filter_map(|id| state.users.get(id).cloned())
+        .collect();
     drop(state);
     shared.changed();
     json_response(json!({ "ok": true, "results": results }), &[])
 }
 
-async fn upload(Extract(shared): Extract<Arc<Shared>>, Path(file): Path<String>, body: Bytes) -> Response {
+async fn upload(
+    Extract(shared): Extract<Arc<Shared>>,
+    Path(file): Path<String>,
+    body: Bytes,
+) -> Response {
     let mut state = shared.lock();
     let Some(stored) = state.files.get_mut(&file) else {
         return StatusCode::NOT_FOUND.into_response();
@@ -285,7 +325,11 @@ async fn download(
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "));
-    let sign_in_page = ([(header::CONTENT_TYPE, "text/html")], "<html>Sign in</html>").into_response();
+    let sign_in_page = (
+        [(header::CONTENT_TYPE, "text/html")],
+        "<html>Sign in</html>",
+    )
+        .into_response();
     if authenticate(&shared, token, &headers).is_err() {
         return sign_in_page;
     }
@@ -299,7 +343,11 @@ async fn download(
         .and_then(Value::as_str)
         .unwrap_or("application/octet-stream")
         .to_owned();
-    ([(header::CONTENT_TYPE, content_type)], Body::from(stored.bytes.clone())).into_response()
+    (
+        [(header::CONTENT_TYPE, content_type)],
+        Body::from(stored.bytes.clone()),
+    )
+        .into_response()
 }
 
 async fn websocket(

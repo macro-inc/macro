@@ -37,11 +37,17 @@ fn ok(mut body: Value) -> Value {
 }
 
 fn account<'state>(state: &'state State, email: &str) -> Option<&'state LoginAccount> {
-    state.login_accounts.iter().find(|account| account.email == email)
+    state
+        .login_accounts
+        .iter()
+        .find(|account| account.email == email)
 }
 
 /// The workspace whose magic login code (`magic-<team>`) this is.
-pub(crate) fn workspace_by_magic<'state>(state: &'state State, magic: &str) -> Option<&'state LoginWorkspace> {
+pub(crate) fn workspace_by_magic<'state>(
+    state: &'state State,
+    magic: &str,
+) -> Option<&'state LoginWorkspace> {
     state
         .login_accounts
         .iter()
@@ -52,13 +58,20 @@ pub(crate) fn workspace_by_magic<'state>(state: &'state State, magic: &str) -> O
 /// `Set-Cookie` values handing out a workspace's session.
 pub(crate) fn session_cookies(workspace: &LoginWorkspace) -> Vec<String> {
     vec![
-        format!("d={}; Domain=.slack.com; Path=/; Secure; HttpOnly", encode_cookie(&workspace.cookie)),
+        format!(
+            "d={}; Domain=.slack.com; Path=/; Secure; HttpOnly",
+            encode_cookie(&workspace.cookie)
+        ),
         "d-s=1700000000; Domain=.slack.com; Path=/; Secure; HttpOnly".to_owned(),
     ]
 }
 
 fn encode_cookie(value: &str) -> String {
-    value.replace('%', "%25").replace('/', "%2F").replace('+', "%2B").replace('=', "%3D")
+    value
+        .replace('%', "%25")
+        .replace('/', "%2F")
+        .replace('+', "%2B")
+        .replace('=', "%3D")
 }
 
 /// Dispatches a sign-in API call.
@@ -98,7 +111,11 @@ pub(crate) fn call(
                 None => true,
                 Some(captcha) => fields.get("captcha_response") == Some(&captcha.solution),
             };
-            LoginResponse::json(if solved { ok(json!({})) } else { error("captcha_failed") })
+            LoginResponse::json(if solved {
+                ok(json!({}))
+            } else {
+                error("captcha_failed")
+            })
         }
         "signin.confirmCode" => {
             if cookies.get(BROWSER_COOKIE).is_none() {
@@ -114,7 +131,10 @@ pub(crate) fn call(
             }
         }
         "signin.findWorkspaces" => {
-            let Some(account) = cookies.get(EMAIL_SESSION_COOKIE).and_then(|email| account(state, email)) else {
+            let Some(account) = cookies
+                .get(EMAIL_SESSION_COOKIE)
+                .and_then(|email| account(state, email))
+            else {
                 return Some(LoginResponse::json(error("invalid_auth")));
             };
             let teams: Vec<Value> = account
@@ -123,7 +143,10 @@ pub(crate) fn call(
                 .map(|workspace| {
                     let (code, link) = match workspace.magic {
                         LoginMagic::Code => (format!("magic-{}", workspace.team_id), String::new()),
-                        LoginMagic::Link => (String::new(), format!("{}magic/{}", state.base_url, workspace.team_id)),
+                        LoginMagic::Link => (
+                            String::new(),
+                            format!("{}magic/{}", state.base_url, workspace.team_id),
+                        ),
                         LoginMagic::None => (String::new(), String::new()),
                     };
                     json!({
@@ -145,13 +168,18 @@ pub(crate) fn call(
             })))
         }
         "auth.loginMagic" => {
-            let magic = fields.get("magic_token").map(String::as_str).unwrap_or_default();
+            let magic = fields
+                .get("magic_token")
+                .map(String::as_str)
+                .unwrap_or_default();
             let Some(workspace) = workspace_by_magic(state, magic) else {
                 return Some(LoginResponse::json(error("invalid_magic_token")));
             };
             match (&workspace.two_factor_pin, fields.get("two_factor_pin")) {
                 (Some(_), None) => LoginResponse::json(error("missing_pin_app")),
-                (Some(expected), Some(pin)) if expected != pin => LoginResponse::json(error("invalid_pin")),
+                (Some(expected), Some(pin)) if expected != pin => {
+                    LoginResponse::json(error("invalid_pin"))
+                }
                 _ => LoginResponse {
                     body: ok(json!({ "token": workspace.token })),
                     set_cookies: session_cookies(workspace),

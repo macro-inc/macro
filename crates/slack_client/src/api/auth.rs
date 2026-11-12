@@ -4,7 +4,9 @@ use tracing::Instrument;
 use tracing::field::Empty;
 use url::Url;
 
-use crate::client::{Acknowledged, Form, SlackClient, build_http_client, invalid_request, record_error, send_once};
+use crate::client::{
+    Acknowledged, Form, SlackClient, build_http_client, invalid_request, record_error, send_once,
+};
 use crate::credentials::SessionCredentials;
 use crate::endpoints::{SlackEndpoints, SlackWorkspace};
 use crate::error::SlackError;
@@ -25,6 +27,7 @@ pub struct AuthTest {
     /// The user.
     pub user_id: UserId,
     /// The Grid org, if any.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub enterprise_id: Option<EnterpriseId>,
 }
 
@@ -55,10 +58,11 @@ pub async fn validate_session(
         slack.method = method.as_str(),
         slack.team_id = Empty,
         http.response.status_code = Empty,
-        slack.retry_count = 0,
+        slack.retry_count = Empty,
         slack.error = Empty,
         otel.status_code = Empty,
     );
+    span.record("slack.retry_count", 0);
     let mut cookie = reqwest::header::HeaderValue::from_str(credentials.cookie_header().expose())
         .map_err(|error| invalid_request(method, error))?;
     cookie.set_sensitive(true);

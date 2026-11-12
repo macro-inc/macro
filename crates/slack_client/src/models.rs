@@ -25,6 +25,8 @@ pub struct ResponseMetadata {
 impl ResponseMetadata {
     /// The next page's cursor, if there is one.
     pub fn next_cursor(&self) -> Option<&str> {
-        self.next_cursor.as_deref().filter(|cursor| !cursor.is_empty())
+        self.next_cursor
+            .as_deref()
+            .filter(|cursor| !cursor.is_empty())
     }
 }

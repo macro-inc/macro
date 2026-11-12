@@ -54,7 +54,10 @@ impl SlackClient {
 
     /// `users.profile.get` for `user`, or the signed-in user.
     pub async fn user_profile(&self, user: Option<&UserId>) -> Result<UserProfile, SlackError> {
-        let form = user.map(|user| ("user", user.to_string())).into_iter().collect();
+        let form = user
+            .map(|user| ("user", user.to_string()))
+            .into_iter()
+            .collect();
         self.call::<ProfileEnvelope>(SlackMethod::UsersProfileGet, form)
             .await
             .map(|envelope| envelope.profile)
@@ -64,15 +67,27 @@ impl SlackClient {
     /// users `users.info` can't see. `updated` is the newest `User::updated`
     /// the caller has per user (0 when unknown); Slack omits users that
     /// haven't changed since.
-    pub async fn edge_users_info(&self, updated: &BTreeMap<UserId, i64>) -> Result<Vec<User>, SlackError> {
+    pub async fn edge_users_info(
+        &self,
+        updated: &BTreeMap<UserId, i64>,
+    ) -> Result<Vec<User>, SlackError> {
         let updated_ids: serde_json::Map<String, serde_json::Value> = updated
             .iter()
             .map(|(user, updated)| (user.to_string(), serde_json::Value::from(*updated)))
             .collect();
         let mut body = serde_json::Map::new();
-        body.insert("check_interaction".to_owned(), serde_json::Value::Bool(true));
-        body.insert("include_profile_only_users".to_owned(), serde_json::Value::Bool(true));
-        body.insert("updated_ids".to_owned(), serde_json::Value::Object(updated_ids));
+        body.insert(
+            "check_interaction".to_owned(),
+            serde_json::Value::Bool(true),
+        );
+        body.insert(
+            "include_profile_only_users".to_owned(),
+            serde_json::Value::Bool(true),
+        );
+        body.insert(
+            "updated_ids".to_owned(),
+            serde_json::Value::Object(updated_ids),
+        );
         self.call_edge::<EdgeUsers>(SlackMethod::EdgeUsersInfo, "users/info", body)
             .await
             .map(|users| users.results)
@@ -80,7 +95,10 @@ impl SlackClient {
 
     /// `team.info` for `team`, or the client's workspace.
     pub async fn team_info(&self, team: Option<&TeamId>) -> Result<Team, SlackError> {
-        let form = team.map(|team| ("team", team.to_string())).into_iter().collect();
+        let form = team
+            .map(|team| ("team", team.to_string()))
+            .into_iter()
+            .collect();
         self.call::<TeamEnvelope>(SlackMethod::TeamInfo, form)
             .await
             .map(|envelope| envelope.team)

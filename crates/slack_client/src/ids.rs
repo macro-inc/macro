@@ -157,3 +157,20 @@ impl fmt::Debug for MessageTs {
         fmt::Debug::fmt(&self.0, formatter)
     }
 }
+
+/// Deserializes an optional id that Slack writes as `""` when absent.
+pub(crate) fn empty_as_none<'de, Deserializer, Id>(
+    deserializer: Deserializer,
+) -> Result<Option<Id>, Deserializer::Error>
+where
+    Deserializer: serde::Deserializer<'de>,
+    Id: TryFrom<String, Error = InvalidId>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    match value.filter(|value| !value.is_empty()) {
+        None => Ok(None),
+        Some(value) => Id::try_from(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}

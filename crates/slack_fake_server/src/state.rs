@@ -162,7 +162,11 @@ impl State {
     /// Sends `event` to every socket of `user_id`.
     pub(crate) fn push_to_user(&mut self, user_id: &str, event: &Value) {
         self.sockets.retain(|socket| {
-            socket.user_id != user_id || socket.commands.send(SocketCommand::Send(event.clone())).is_ok()
+            socket.user_id != user_id
+                || socket
+                    .commands
+                    .send(SocketCommand::Send(event.clone()))
+                    .is_ok()
         });
     }
 
@@ -193,7 +197,10 @@ impl State {
         let conversation = self.conversations.get(channel)?;
         let mut info = conversation.info.clone();
         if let Some(object) = info.as_object_mut() {
-            object.insert("is_member".to_owned(), json!(conversation.members.iter().any(|member| member == user_id)));
+            object.insert(
+                "is_member".to_owned(),
+                json!(conversation.members.iter().any(|member| member == user_id)),
+            );
             if let Some(last_read) = conversation.last_read.get(user_id) {
                 object.insert("last_read".to_owned(), json!(last_read));
             }

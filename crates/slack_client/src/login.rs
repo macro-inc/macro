@@ -277,17 +277,29 @@ impl EmailLogin {
     }
 
     /// Advances `state` with `input`.
-    pub async fn step(&self, state: LoginState, input: LoginInput) -> Result<LoginStep, LoginError> {
+    pub async fn step(
+        &self,
+        state: LoginState,
+        input: LoginInput,
+    ) -> Result<LoginStep, LoginError> {
         match (state, input) {
             (LoginState::AwaitingEmail, LoginInput::Email(email)) => self.submit_email(email).await,
-            (LoginState::AwaitingCaptcha { email, site_key, jar }, LoginInput::CaptchaSolution(solution)) => {
-                self.submit_captcha(email, site_key, jar, solution).await
-            }
+            (
+                LoginState::AwaitingCaptcha {
+                    email,
+                    site_key,
+                    jar,
+                },
+                LoginInput::CaptchaSolution(solution),
+            ) => self.submit_captcha(email, site_key, jar, solution).await,
             (LoginState::AwaitingEmailCode { email, jar }, LoginInput::EmailCode(code)) => {
                 self.submit_code(email, jar, code).await
             }
             (LoginState::ChoosingWorkspace { workspaces, jar }, LoginInput::Workspace(team_id)) => {
-                let Some(workspace) = workspaces.iter().find(|workspace| workspace.team_id == team_id).cloned()
+                let Some(workspace) = workspaces
+                    .iter()
+                    .find(|workspace| workspace.team_id == team_id)
+                    .cloned()
                 else {
                     return Err(LoginError {
                         kind: LoginErrorKind::UnknownWorkspace,
@@ -313,7 +325,10 @@ impl EmailLogin {
     async fn submit_email(&self, email: String) -> Result<LoginStep, LoginError> {
         let email = Secret::new(email.trim().to_owned());
         if !lazy_regex::regex_is_match!(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.expose()) {
-            return Err(rejected(LoginErrorKind::InvalidEmail, LoginState::AwaitingEmail));
+            return Err(rejected(
+                LoginErrorKind::InvalidEmail,
+                LoginState::AwaitingEmail,
+            ));
         }
         let mut jar = CookieJar::default();
         let checked: Result<CheckEmail, SlackError> = self
@@ -328,15 +343,28 @@ impl EmailLogin {
         let needs_captcha = match checked {
             Ok(checked) => checked.challenge_response,
             Err(error) if error.code() == Some(&SlackErrorCode::CaptchaRequired) => true,
-            Err(error) => return Err(classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail)),
+            Err(error) => {
+                return Err(classify(
+                    error,
+                    LoginState::AwaitingEmail,
+                    LoginState::AwaitingEmail,
+                ));
+            }
         };
 
         if needs_captcha {
             let captcha: Captcha = self
                 .http
-                .post_api(SlackMethod::AuthCaptcha, Some("fetch-auth-captcha-signin"), &[], &mut jar)
+                .post_api(
+                    SlackMethod::AuthCaptcha,
+                    Some("fetch-auth-captcha-signin"),
+                    &[],
+                    &mut jar,
+                )
                 .await
-                .map_err(|error| classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail))?;
+                .map_err(|error| {
+                    classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail)
+                })?;
             return Ok(LoginStep::Next(LoginState::AwaitingCaptcha {
                 email,
                 site_key: captcha.sitekey,
@@ -346,8 +374,13 @@ impl EmailLogin {
 
         self.confirm_email(&email, None, &mut jar)
             .await
-            .map_err(|error| classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail))?;
-        Ok(LoginStep::Next(LoginState::AwaitingEmailCode { email, jar }))
+            .map_err(|error| {
+                classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail)
+            })?;
+        Ok(LoginStep::Next(LoginState::AwaitingEmailCode {
+            email,
+            jar,
+        }))
     }
 
     async fn submit_captcha(
@@ -359,9 +392,16 @@ impl EmailLogin {
     ) -> Result<LoginStep, LoginError> {
         let outcome = self.confirm_email(&email, Some(&solution), &mut jar).await;
         match outcome {
-            Ok(()) => Ok(LoginStep::Next(LoginState::AwaitingEmailCode { email, jar })),
+            Ok(()) => Ok(LoginStep::Next(LoginState::AwaitingEmailCode {
+                email,
+                jar,
+            })),
             Err(error) => {
-                let same = LoginState::AwaitingCaptcha { email, site_key, jar };
+                let same = LoginState::AwaitingCaptcha {
+                    email,
+                    site_key,
+                    jar,
+                };
                 Err(classify(error, same, LoginState::AwaitingEmail))
             }
         }
@@ -387,7 +427,12 @@ impl EmailLogin {
             .map(|_| ())
     }
 
-    async fn submit_code(&self, email: Secret, mut jar: CookieJar, code: Secret) -> Result<LoginStep, LoginError> {
+    async fn submit_code(
+        &self,
+        email: Secret,
+        mut jar: CookieJar,
+        code: Secret,
+    ) -> Result<LoginStep, LoginError> {
         let code = Secret::new(code.expose().trim().to_uppercase().replace('-', ""));
         if !lazy_regex::regex_is_match!(r"^[A-Z0-9]{6}$", code.expose()) {
             return Err(rejected(
@@ -427,12 +472,19 @@ impl EmailLogin {
 
         let workspaces = flatten_workspaces(found);
         match workspaces.as_slice() {
-            [] => Err(rejected(LoginErrorKind::NoWorkspaces, LoginState::AwaitingEmail)),
+            [] => Err(rejected(
+                LoginErrorKind::NoWorkspaces,
+                LoginState::AwaitingEmail,
+            )),
             [only] => {
                 let only = only.clone();
-                self.finish_workspace(only, jar, LoginState::AwaitingEmail).await
+                self.finish_workspace(only, jar, LoginState::AwaitingEmail)
+                    .await
             }
-            _ => Ok(LoginStep::Next(LoginState::ChoosingWorkspace { workspaces, jar })),
+            _ => Ok(LoginStep::Next(LoginState::ChoosingWorkspace {
+                workspaces,
+                jar,
+            })),
         }
     }
 
@@ -452,14 +504,24 @@ impl EmailLogin {
         }
         if workspace.two_factor_required {
             return match self.start_two_factor(&workspace, &mut jar).await {
-                Ok(()) => Ok(LoginStep::Next(LoginState::AwaitingTwoFactor { workspace, jar })),
+                Ok(()) => Ok(LoginStep::Next(LoginState::AwaitingTwoFactor {
+                    workspace,
+                    jar,
+                })),
                 Err(error) => Err(classify(error, back.clone(), back)),
             };
         }
         match self.login_workspace(&workspace, &mut jar).await {
-            Ok(WorkspaceLogin::Signed(credentials)) => Ok(LoginStep::Complete { workspace, credentials }),
-            Ok(WorkspaceLogin::NeedsBrowser) => Ok(self.browser_required(workspace, BrowserReason::NoMagicLogin)),
-            Ok(WorkspaceLogin::Incomplete) => Err(rejected(LoginErrorKind::SessionIncomplete, back)),
+            Ok(WorkspaceLogin::Signed(credentials)) => Ok(LoginStep::Complete {
+                workspace,
+                credentials,
+            }),
+            Ok(WorkspaceLogin::NeedsBrowser) => {
+                Ok(self.browser_required(workspace, BrowserReason::NoMagicLogin))
+            }
+            Ok(WorkspaceLogin::Incomplete) => {
+                Err(rejected(LoginErrorKind::SessionIncomplete, back))
+            }
             Err(error) => Err(classify(error, back.clone(), back)),
         }
     }
@@ -480,7 +542,11 @@ impl EmailLogin {
 
     /// `auth.loginMagic` without a PIN: Slack answers that it wants one and
     /// sends the SMS, if that's the user's method.
-    async fn start_two_factor(&self, workspace: &LoginWorkspace, jar: &mut CookieJar) -> Result<(), SlackError> {
+    async fn start_two_factor(
+        &self,
+        workspace: &LoginWorkspace,
+        jar: &mut CookieJar,
+    ) -> Result<(), SlackError> {
         let Some(magic) = &workspace.magic_login_code else {
             return Err(SlackError::Api {
                 method: SlackMethod::AuthLoginMagic,
@@ -521,7 +587,10 @@ impl EmailLogin {
             ));
         }
         let Some(magic) = workspace.magic_login_code.clone() else {
-            return Err(rejected(LoginErrorKind::TwoFactorExpired, LoginState::AwaitingEmail));
+            return Err(rejected(
+                LoginErrorKind::TwoFactorExpired,
+                LoginState::AwaitingEmail,
+            ));
         };
         let outcome = self
             .http
@@ -550,7 +619,11 @@ impl EmailLogin {
                         LoginErrorKind::TwoFactorExpired,
                         LoginState::AwaitingTwoFactor { workspace, jar },
                     )),
-                    Err(error) => Err(classify(error, LoginState::AwaitingEmail, LoginState::AwaitingEmail)),
+                    Err(error) => Err(classify(
+                        error,
+                        LoginState::AwaitingEmail,
+                        LoginState::AwaitingEmail,
+                    )),
                 };
             }
             Err(error) => {
@@ -559,7 +632,10 @@ impl EmailLogin {
             }
         };
         match credentials(signed.token, &jar) {
-            Some(credentials) => Ok(LoginStep::Complete { workspace, credentials }),
+            Some(credentials) => Ok(LoginStep::Complete {
+                workspace,
+                credentials,
+            }),
             None => Err(rejected(
                 LoginErrorKind::SessionIncomplete,
                 LoginState::AwaitingTwoFactor { workspace, jar },
@@ -587,25 +663,32 @@ impl EmailLogin {
                 .append_pair("magic_tokens", code.expose())
                 .append_pair("ssb", "1");
             let page = self.http.get_page(method, url, jar).await?;
-            let bulk: MagicLoginBulk = crate::client::decode(method, reqwest::StatusCode::OK, &page.body)?;
+            let bulk: MagicLoginBulk =
+                crate::client::decode(method, reqwest::StatusCode::OK, &page.body)?;
             let result = bulk
                 .token_results
                 .get(code.expose())
                 .or_else(|| bulk.token_results.values().next());
             match result {
-                Some(MagicLoginResult { error: Some(code), .. }) => {
+                Some(MagicLoginResult {
+                    error: Some(code), ..
+                }) => {
                     return Err(SlackError::Api {
                         method,
                         code: code.clone(),
                     });
                 }
-                Some(MagicLoginResult { auth_redir: Some(_), .. }) => return Ok(WorkspaceLogin::NeedsBrowser),
+                Some(MagicLoginResult {
+                    auth_redir: Some(_),
+                    ..
+                }) => return Ok(WorkspaceLogin::NeedsBrowser),
                 _ => {}
             }
             page
         } else if let Some(link) = &workspace.magic_login_url {
             let method = SlackMethod::LoginPage;
-            let url = Url::parse(link.expose()).map_err(|error| crate::client::invalid_request(method, error))?;
+            let url = Url::parse(link.expose())
+                .map_err(|error| crate::client::invalid_request(method, error))?;
             self.http.get_page(method, url, jar).await?
         } else {
             return Ok(WorkspaceLogin::NeedsBrowser);
@@ -639,7 +722,8 @@ impl EmailLogin {
             .append_pair("return_to", &format!("/client/{}", workspace.team_id))
             .append_pair("teams", workspace.team_id.as_str());
         let page = self.http.get_page(method, url, jar).await?;
-        let auth: AppAuth = serde_json::from_slice(&page.body).map_err(|source| SlackError::Decode { method, source })?;
+        let auth: AppAuth = serde_json::from_slice(&page.body)
+            .map_err(|source| SlackError::Decode { method, source })?;
         Ok(auth
             .teams
             .get(workspace.team_id.as_str())
@@ -669,7 +753,10 @@ fn credentials(token: Option<Secret>, jar: &CookieJar) -> Option<SessionCredenti
 }
 
 fn flatten_workspaces(found: FoundWorkspaces) -> Vec<LoginWorkspace> {
-    let grouped = found.current_teams.into_iter().flat_map(|group| group.teams);
+    let grouped = found
+        .current_teams
+        .into_iter()
+        .flat_map(|group| group.teams);
     let orgs = found
         .current_orgs
         .into_iter()
@@ -686,8 +773,14 @@ fn flatten_workspaces(found: FoundWorkspaces) -> Vec<LoginWorkspace> {
             url: found.url.and_then(|url| Url::parse(&url).ok()),
             sso_required: found.sso_required,
             two_factor_required: found.two_factor_required,
-            magic_login_code: found.magic_login_code.filter(|code| !code.is_empty()).map(Secret::new),
-            magic_login_url: found.magic_login_url.filter(|url| !url.is_empty()).map(Secret::new),
+            magic_login_code: found
+                .magic_login_code
+                .filter(|code| !code.is_empty())
+                .map(Secret::new),
+            magic_login_url: found
+                .magic_login_url
+                .filter(|url| !url.is_empty())
+                .map(Secret::new),
         });
     }
     workspaces
@@ -722,18 +815,26 @@ fn classify(error: SlackError, same: LoginState, restart: LoginState) -> LoginEr
         return rejected(LoginErrorKind::Slack(error), same);
     };
     match code {
-        SlackErrorCode::Ratelimited | SlackErrorCode::RateLimited | SlackErrorCode::CodeRequestLimitReached => {
+        SlackErrorCode::Ratelimited
+        | SlackErrorCode::RateLimited
+        | SlackErrorCode::CodeRequestLimitReached => {
             rejected(LoginErrorKind::RateLimited { retry_after: None }, same)
         }
-        SlackErrorCode::CaptchaRequired | SlackErrorCode::CaptchaFailed | SlackErrorCode::InvalidCaptcha => {
-            rejected(LoginErrorKind::CaptchaRejected, same)
+        SlackErrorCode::CaptchaRequired
+        | SlackErrorCode::CaptchaFailed
+        | SlackErrorCode::InvalidCaptcha => rejected(LoginErrorKind::CaptchaRejected, same),
+        SlackErrorCode::InvalidEmail => {
+            rejected(LoginErrorKind::InvalidEmail, LoginState::AwaitingEmail)
         }
-        SlackErrorCode::InvalidEmail => rejected(LoginErrorKind::InvalidEmail, LoginState::AwaitingEmail),
-        SlackErrorCode::InvalidCode | SlackErrorCode::InvalidEmailCode | SlackErrorCode::CodeAlreadyUsed => {
-            rejected(LoginErrorKind::InvalidCode, same)
+        SlackErrorCode::InvalidCode
+        | SlackErrorCode::InvalidEmailCode
+        | SlackErrorCode::CodeAlreadyUsed => rejected(LoginErrorKind::InvalidCode, same),
+        SlackErrorCode::ExpiredCode | SlackErrorCode::CodeExpired => {
+            rejected(LoginErrorKind::CodeExpired, restart)
         }
-        SlackErrorCode::ExpiredCode | SlackErrorCode::CodeExpired => rejected(LoginErrorKind::CodeExpired, restart),
-        SlackErrorCode::InvalidPin | SlackErrorCode::Invalid2faCode | SlackErrorCode::InvalidTwoFactorCode => {
+        SlackErrorCode::InvalidPin
+        | SlackErrorCode::Invalid2faCode
+        | SlackErrorCode::InvalidTwoFactorCode => {
             rejected(LoginErrorKind::InvalidTwoFactorCode, same)
         }
         _ => rejected(LoginErrorKind::Slack(error), same),

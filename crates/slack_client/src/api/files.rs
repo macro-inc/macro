@@ -71,7 +71,8 @@ impl SlackClient {
                 ],
             )
             .await?;
-        self.upload_bytes(&target.upload_url, upload.body.clone()).await?;
+        self.upload_bytes(&target.upload_url, upload.body.clone())
+            .await?;
 
         let method = SlackMethod::FilesCompleteUploadExternal;
         let title = upload.title.as_deref().unwrap_or(&upload.filename);
@@ -107,11 +108,12 @@ impl SlackClient {
             slack.method = method.as_str(),
             slack.team_id = %self.workspace().team_id,
             http.response.status_code = Empty,
-            slack.retry_count = 0,
+            slack.retry_count = Empty,
             slack.error = Empty,
             otel.status_code = Empty,
             file.size = body.len(),
         );
+        span.record("slack.retry_count", 0);
         let request = self.http().post(url.clone()).body(body);
         async move {
             let span = tracing::Span::current();
@@ -143,4 +145,3 @@ impl SlackClient {
             .map(|envelope| envelope.file)
     }
 }
-

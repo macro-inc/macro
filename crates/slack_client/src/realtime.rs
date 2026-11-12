@@ -147,7 +147,11 @@ impl SlackClient {
         let mut reconnect_url: Option<Secret> = None;
         let mut attempt: u32 = 0;
         loop {
-            if sender.send(RealtimeEvent::Connecting { attempt }).await.is_err() {
+            if sender
+                .send(RealtimeEvent::Connecting { attempt })
+                .await
+                .is_err()
+            {
                 return;
             }
             let resumed = reconnect_url.is_some();
@@ -160,7 +164,14 @@ impl SlackClient {
             let reason = match dialed {
                 Ok(socket) => {
                     let started = Instant::now();
-                    let session = self.run_session(socket, &config, &cancel, &sender, &mut reconnect_url, resumed);
+                    let session = self.run_session(
+                        socket,
+                        &config,
+                        &cancel,
+                        &sender,
+                        &mut reconnect_url,
+                        resumed,
+                    );
                     match session.await {
                         SessionOutcome::Cancelled => return,
                         SessionOutcome::Disconnected(reason) => {
@@ -177,7 +188,9 @@ impl SlackClient {
                     match self.auth_test().await {
                         Err(error) if error.is_session_ended() => {
                             if let Some(code) = error.code() {
-                                let _ = sender.send(RealtimeEvent::SessionEnded { code: code.clone() }).await;
+                                let _ = sender
+                                    .send(RealtimeEvent::SessionEnded { code: code.clone() })
+                                    .await;
                             }
                             return;
                         }
@@ -197,7 +210,11 @@ impl SlackClient {
                 _ => backoff(&config, attempt).max(retry_after.unwrap_or_default()),
             };
             attempt = attempt.saturating_add(1);
-            if sender.send(RealtimeEvent::Disconnected { reason }).await.is_err() {
+            if sender
+                .send(RealtimeEvent::Disconnected { reason })
+                .await
+                .is_err()
+            {
                 return;
             }
             tokio::select! {
@@ -219,7 +236,11 @@ impl SlackClient {
         Ok(Secret::new(url.into()))
     }
 
-    async fn dial(&self, reconnect_url: Option<&Secret>, attempt: u32) -> Result<Socket, DialError> {
+    async fn dial(
+        &self,
+        reconnect_url: Option<&Secret>,
+        attempt: u32,
+    ) -> Result<Socket, DialError> {
         let span = tracing::info_span!(
             "slack.websocket.connect",
             slack.team_id = %self.workspace().team_id,
@@ -282,7 +303,10 @@ impl SlackClient {
             slack.close_reason = Empty,
         );
         let session = async {
-            let mut ping = tokio::time::interval_at(Instant::now() + config.ping_interval, config.ping_interval);
+            let mut ping = tokio::time::interval_at(
+                Instant::now() + config.ping_interval,
+                config.ping_interval,
+            );
             let mut last_received = Instant::now();
             let mut ping_id: u64 = 0;
             let mut events: u64 = 0;
@@ -370,7 +394,8 @@ impl SlackClient {
     }
 }
 
-type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type Socket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 enum DialError {
     Rejected(u16),
@@ -388,4 +413,3 @@ fn backoff(config: &RealtimeConfig, attempt: u32) -> Duration {
     let jitter_millis = u64::try_from(half.as_millis()).unwrap_or(u64::MAX);
     half + Duration::from_millis(rand::rng().random_range(0..=jitter_millis))
 }
-

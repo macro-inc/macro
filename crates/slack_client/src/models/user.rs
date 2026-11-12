@@ -9,6 +9,7 @@ pub struct User {
     /// The user.
     pub id: UserId,
     /// The user's home workspace, which differs from yours for external users.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub team_id: Option<TeamId>,
     /// The handle.
     #[serde(default)]
@@ -82,8 +83,10 @@ pub struct UserProfile {
     /// Original avatar upload.
     pub image_original: Option<String>,
     /// The profile's team.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub team: Option<TeamId>,
     /// The bot behind a bot user.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub bot_id: Option<BotId>,
 }
 
@@ -91,8 +94,10 @@ pub struct UserProfile {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct EnterpriseUser {
     /// The user's org-wide id.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub id: Option<UserId>,
     /// The org.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub enterprise_id: Option<EnterpriseId>,
     /// The org's name.
     pub enterprise_name: Option<String>,
@@ -107,11 +112,13 @@ pub struct BotProfile {
     /// The bot.
     pub id: BotId,
     /// The bot's app.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub app_id: Option<AppId>,
     /// Display name.
     #[serde(default)]
     pub name: String,
     /// The bot's workspace.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub team_id: Option<TeamId>,
     /// Deactivated.
     #[serde(default)]
@@ -132,6 +139,7 @@ pub struct Team {
     /// Web URL.
     pub url: Option<String>,
     /// The Grid org, if any.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub enterprise_id: Option<EnterpriseId>,
     /// The Grid org's name.
     pub enterprise_name: Option<String>,

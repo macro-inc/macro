@@ -46,14 +46,18 @@ impl CookieJar {
             let Ok(cookie) = cookie::Cookie::parse(value) else {
                 continue;
             };
-            let expired = cookie.max_age().is_some_and(|max_age| max_age.is_zero() || max_age.is_negative())
+            let expired = cookie
+                .max_age()
+                .is_some_and(|max_age| max_age.is_zero() || max_age.is_negative())
                 || cookie.value().is_empty()
                 || cookie.value() == "deleted";
             if expired {
                 self.0.remove(cookie.name());
             } else {
-                self.0
-                    .insert(cookie.name().to_owned(), Secret::new(cookie.value().to_owned()));
+                self.0.insert(
+                    cookie.name().to_owned(),
+                    Secret::new(cookie.value().to_owned()),
+                );
             }
         }
     }
@@ -112,7 +116,11 @@ impl LoginHttp {
         jar: &mut CookieJar,
     ) -> Result<Response, SlackError> {
         let now = chrono::Utc::now();
-        let request_id = format!("noversion-{}.{:03}", now.timestamp(), now.timestamp_subsec_millis());
+        let request_id = format!(
+            "noversion-{}.{:03}",
+            now.timestamp(),
+            now.timestamp_subsec_millis()
+        );
         let mut url = self
             .endpoints
             .slack
@@ -193,7 +201,12 @@ impl LoginHttp {
         .await
     }
 
-    async fn follow(&self, method: SlackMethod, mut url: Url, jar: &mut CookieJar) -> Result<Page, SlackError> {
+    async fn follow(
+        &self,
+        method: SlackMethod,
+        mut url: Url,
+        jar: &mut CookieJar,
+    ) -> Result<Page, SlackError> {
         for _ in 0..=MAX_REDIRECTS {
             if !self.is_trusted(&url) {
                 return Err(invalid_request(method, "login redirected off Slack"));
@@ -217,7 +230,9 @@ impl LoginHttp {
                     .get(header::LOCATION)
                     .and_then(|location| location.to_str().ok())
                     .ok_or_else(|| invalid_request(method, "redirect without a location"))?;
-                url = url.join(location).map_err(|error| invalid_request(method, error))?;
+                url = url
+                    .join(location)
+                    .map_err(|error| invalid_request(method, error))?;
                 continue;
             }
             if status == StatusCode::TOO_MANY_REQUESTS {
@@ -249,7 +264,10 @@ fn login_span(method: SlackMethod) -> tracing::Span {
     )
 }
 
-async fn read_body(method: SlackMethod, response: reqwest::Response) -> Result<Vec<u8>, SlackError> {
+async fn read_body(
+    method: SlackMethod,
+    response: reqwest::Response,
+) -> Result<Vec<u8>, SlackError> {
     if response
         .content_length()
         .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)

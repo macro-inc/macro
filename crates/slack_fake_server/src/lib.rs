@@ -96,7 +96,10 @@ impl FakeSlack {
 
     /// `ws://127.0.0.1:<port>/websocket/`.
     pub fn websocket_url(&self) -> String {
-        format!("{}websocket/", self.base_url.replacen("http://", "ws://", 1))
+        format!(
+            "{}websocket/",
+            self.base_url.replacen("http://", "ws://", 1)
+        )
     }
 
     /// Adds a workspace (`team.info` shape; needs `id`).
@@ -155,7 +158,10 @@ impl FakeSlack {
 
     /// Adds a custom emoji.
     pub fn add_emoji(&self, name: &str, value: &str) {
-        self.shared.lock().emoji.insert(name.to_owned(), value.to_owned());
+        self.shared
+            .lock()
+            .emoji
+            .insert(name.to_owned(), value.to_owned());
         self.shared.changed();
     }
 
@@ -257,7 +263,10 @@ impl FakeSlack {
 
     /// Calls of one method.
     pub fn calls_of(&self, method: &str) -> Vec<RecordedCall> {
-        self.calls().into_iter().filter(|call| call.method == method).collect()
+        self.calls()
+            .into_iter()
+            .filter(|call| call.method == method)
+            .collect()
     }
 
     /// A conversation's stored messages, oldest first (replies included).
@@ -272,7 +281,11 @@ impl FakeSlack {
 
     /// An uploaded file's bytes.
     pub fn file_bytes(&self, file_id: &str) -> Option<Vec<u8>> {
-        self.shared.lock().files.get(file_id).map(|file| file.bytes.clone())
+        self.shared
+            .lock()
+            .files
+            .get(file_id)
+            .map(|file| file.bytes.clone())
     }
 
     /// Websocket connections accepted so far.
@@ -283,13 +296,19 @@ impl FakeSlack {
     /// Waits until at least `count` websocket connections were accepted
     /// (connected and greeted with `hello`), or `timeout` passes.
     pub async fn wait_for_socket_connections(&self, count: u64, timeout: Duration) -> bool {
-        self.wait_for(timeout, |state| state.socket_connections >= count).await
+        self.wait_for(timeout, |state| state.socket_connections >= count)
+            .await
     }
 
     /// Waits until `method` was called at least `count` times.
     pub async fn wait_for_calls(&self, method: &str, count: usize, timeout: Duration) -> bool {
         self.wait_for(timeout, |state| {
-            state.calls.iter().filter(|call| call.method == method).count() >= count
+            state
+                .calls
+                .iter()
+                .filter(|call| call.method == method)
+                .count()
+                >= count
         })
         .await
     }

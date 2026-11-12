@@ -28,11 +28,16 @@ pub(crate) fn error(code: &str) -> Value {
 }
 
 fn field<'fields>(fields: &'fields Fields, name: &str) -> Option<&'fields str> {
-    fields.get(name).map(String::as_str).filter(|value| !value.is_empty())
+    fields
+        .get(name)
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
 }
 
 fn limit(fields: &Fields) -> usize {
-    field(fields, "limit").and_then(|limit| limit.parse().ok()).unwrap_or(100)
+    field(fields, "limit")
+        .and_then(|limit| limit.parse().ok())
+        .unwrap_or(100)
 }
 
 fn offset(fields: &Fields) -> usize {
@@ -52,28 +57,43 @@ fn page(items: Vec<Value>, fields: &Fields) -> (Vec<Value>, Option<String>) {
 
 fn is_thread_reply(message: &Value) -> bool {
     match (message.get("thread_ts"), message.get("ts")) {
-        (Some(thread_ts), Some(ts)) => thread_ts != ts && message.get("subtype") != Some(&json!("thread_broadcast")),
+        (Some(thread_ts), Some(ts)) => {
+            thread_ts != ts && message.get("subtype") != Some(&json!("thread_broadcast"))
+        }
         _ => false,
     }
 }
 
 fn in_range(ts: &str, fields: &Fields) -> bool {
     let inclusive = field(fields, "inclusive") == Some("true");
-    let after_oldest = field(fields, "oldest").is_none_or(|oldest| ts > oldest || (inclusive && ts == oldest));
-    let before_latest = field(fields, "latest").is_none_or(|latest| ts < latest || (inclusive && ts == latest));
+    let after_oldest =
+        field(fields, "oldest").is_none_or(|oldest| ts > oldest || (inclusive && ts == oldest));
+    let before_latest =
+        field(fields, "latest").is_none_or(|latest| ts < latest || (inclusive && ts == latest));
     after_oldest && before_latest
 }
 
 fn ts_of(message: &Value) -> &str {
-    message.get("ts").and_then(Value::as_str).unwrap_or_default()
+    message
+        .get("ts")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
 }
 
 /// Dispatches one Web API call.
 pub(crate) fn call(state: &mut State, method: &str, fields: &Fields, caller: &Caller) -> Value {
     match method {
         "auth.test" => {
-            let team_name = state.teams.get(&caller.team_id).and_then(|team| team.get("name")).cloned();
-            let user_name = state.users.get(&caller.user_id).and_then(|user| user.get("name")).cloned();
+            let team_name = state
+                .teams
+                .get(&caller.team_id)
+                .and_then(|team| team.get("name"))
+                .cloned();
+            let user_name = state
+                .users
+                .get(&caller.user_id)
+                .and_then(|user| user.get("name"))
+                .cloned();
             ok(json!({
                 "url": state.base_url,
                 "team": team_name,
@@ -91,19 +111,29 @@ pub(crate) fn call(state: &mut State, method: &str, fields: &Fields, caller: &Ca
         "client.userBoot" => user_boot(state, caller),
         "client.counts" => counts(state, caller),
         "users.conversations" => users_conversations(state, fields, caller),
-        "conversations.info" => match field(fields, "channel").and_then(|channel| state.conversation_for(channel, &caller.user_id)) {
+        "conversations.info" => match field(fields, "channel")
+            .and_then(|channel| state.conversation_for(channel, &caller.user_id))
+        {
             Some(channel) => ok(json!({ "channel": channel })),
             None => error("channel_not_found"),
         },
         "conversations.view" => conversation_view(state, fields, caller),
-        "conversations.members" => match field(fields, "channel").and_then(|channel| state.conversations.get(channel)) {
-            Some(conversation) => {
-                let members = conversation.members.iter().map(|member| json!(member)).collect();
-                let (members, next) = page(members, fields);
-                ok(json!({ "members": members, "response_metadata": { "next_cursor": next.unwrap_or_default() } }))
+        "conversations.members" => {
+            match field(fields, "channel").and_then(|channel| state.conversations.get(channel)) {
+                Some(conversation) => {
+                    let members = conversation
+                        .members
+                        .iter()
+                        .map(|member| json!(member))
+                        .collect();
+                    let (members, next) = page(members, fields);
+                    ok(
+                        json!({ "members": members, "response_metadata": { "next_cursor": next.unwrap_or_default() } }),
+                    )
+                }
+                None => error("channel_not_found"),
             }
-            None => error("channel_not_found"),
-        },
+        }
         "conversations.history" => history(state, fields),
         "conversations.replies" => replies(state, fields),
         "conversations.mark" => mark(state, fields, caller),
@@ -126,7 +156,9 @@ pub(crate) fn call(state: &mut State, method: &str, fields: &Fields, caller: &Ca
         "users.profile.get" => {
             let user_id = field(fields, "user").unwrap_or(&caller.user_id);
             match state.users.get(user_id) {
-                Some(user) => ok(json!({ "profile": user.get("profile").cloned().unwrap_or(json!({})) })),
+                Some(user) => {
+                    ok(json!({ "profile": user.get("profile").cloned().unwrap_or(json!({})) }))
+                }
                 None => error("user_not_found"),
             }
         }
@@ -161,7 +193,11 @@ fn user_boot(state: &State, caller: &Caller) -> Value {
             channels.push(info);
         }
     }
-    let team = state.teams.get(&caller.team_id).cloned().unwrap_or(json!({ "id": caller.team_id }));
+    let team = state
+        .teams
+        .get(&caller.team_id)
+        .cloned()
+        .unwrap_or(json!({ "id": caller.team_id }));
     ok(json!({
         "self": state.users.get(&caller.user_id),
         "team": team,
@@ -180,7 +216,11 @@ fn counts(state: &State, caller: &Caller) -> Value {
         if !conversation.members.contains(&caller.user_id) {
             continue;
         }
-        let latest = conversation.messages.last().map(ts_of).unwrap_or("0000000000.000000");
+        let latest = conversation
+            .messages
+            .last()
+            .map(ts_of)
+            .unwrap_or("0000000000.000000");
         let last_read = conversation
             .last_read
             .get(&caller.user_id)
@@ -209,7 +249,10 @@ fn counts(state: &State, caller: &Caller) -> Value {
 }
 
 fn users_conversations(state: &State, fields: &Fields, caller: &Caller) -> Value {
-    let types: Vec<&str> = field(fields, "types").map_or_else(|| vec!["public_channel"], |types| types.split(',').collect());
+    let types: Vec<&str> = field(fields, "types").map_or_else(
+        || vec!["public_channel"],
+        |types| types.split(',').collect(),
+    );
     let mut channels = Vec::new();
     for (id, conversation) in &state.conversations {
         if !conversation.members.contains(&caller.user_id) {
@@ -226,29 +269,40 @@ fn users_conversations(state: &State, fields: &Fields, caller: &Caller) -> Value
         } else {
             "public_channel"
         };
-        if types.contains(&kind) {
-            if let Some(info) = state.conversation_for(id, &caller.user_id) {
-                channels.push(info);
-            }
+        if types.contains(&kind)
+            && let Some(info) = state.conversation_for(id, &caller.user_id)
+        {
+            channels.push(info);
         }
     }
     let (channels, next) = page(channels, fields);
-    ok(json!({ "channels": channels, "response_metadata": { "next_cursor": next.unwrap_or_default() } }))
+    ok(
+        json!({ "channels": channels, "response_metadata": { "next_cursor": next.unwrap_or_default() } }),
+    )
 }
 
 fn conversation_view(state: &State, fields: &Fields, caller: &Caller) -> Value {
     let Some(channel) = field(fields, "channel") else {
         return error("channel_not_found");
     };
-    let (Some(info), Some(conversation)) = (state.conversation_for(channel, &caller.user_id), state.conversations.get(channel)) else {
+    let (Some(info), Some(conversation)) = (
+        state.conversation_for(channel, &caller.user_id),
+        state.conversations.get(channel),
+    ) else {
         return error("channel_not_found");
     };
-    let users: Vec<&Value> = conversation.members.iter().filter_map(|member| state.users.get(member)).collect();
+    let users: Vec<&Value> = conversation
+        .members
+        .iter()
+        .filter_map(|member| state.users.get(member))
+        .collect();
     ok(json!({ "channel": info, "users": users }))
 }
 
 fn history(state: &State, fields: &Fields) -> Value {
-    let Some(conversation) = field(fields, "channel").and_then(|channel| state.conversations.get(channel)) else {
+    let Some(conversation) =
+        field(fields, "channel").and_then(|channel| state.conversations.get(channel))
+    else {
         return error("channel_not_found");
     };
     let newest_first: Vec<Value> = conversation
@@ -267,7 +321,9 @@ fn history(state: &State, fields: &Fields) -> Value {
 }
 
 fn replies(state: &State, fields: &Fields) -> Value {
-    let Some(conversation) = field(fields, "channel").and_then(|channel| state.conversations.get(channel)) else {
+    let Some(conversation) =
+        field(fields, "channel").and_then(|channel| state.conversations.get(channel))
+    else {
         return error("channel_not_found");
     };
     let Some(thread_ts) = field(fields, "ts") else {
@@ -278,7 +334,8 @@ fn replies(state: &State, fields: &Fields) -> Value {
         .iter()
         .filter(|message| {
             let ts = ts_of(message);
-            let in_thread = ts == thread_ts || message.get("thread_ts").and_then(Value::as_str) == Some(thread_ts);
+            let in_thread = ts == thread_ts
+                || message.get("thread_ts").and_then(Value::as_str) == Some(thread_ts);
             in_thread && (ts == thread_ts || in_range(ts, fields))
         })
         .cloned()
@@ -301,7 +358,9 @@ fn mark(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
     let Some(conversation) = state.conversations.get_mut(channel) else {
         return error("channel_not_found");
     };
-    conversation.last_read.insert(caller.user_id.clone(), ts.to_owned());
+    conversation
+        .last_read
+        .insert(caller.user_id.clone(), ts.to_owned());
     let info = &conversation.info;
     let event_type = if info.get("is_im") == Some(&json!(true)) {
         "im_marked"
@@ -312,13 +371,18 @@ fn mark(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
     } else {
         "channel_marked"
     };
-    let event = json!({ "type": event_type, "channel": channel, "ts": ts, "unread_count_display": 0 });
+    let event =
+        json!({ "type": event_type, "channel": channel, "ts": ts, "unread_count_display": 0 });
     state.push_to_user(&caller.user_id, &event);
     ok(json!({}))
 }
 
 fn mark_thread(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
-    let (Some(channel), Some(thread_ts), Some(ts)) = (field(fields, "channel"), field(fields, "thread_ts"), field(fields, "ts")) else {
+    let (Some(channel), Some(thread_ts), Some(ts)) = (
+        field(fields, "channel"),
+        field(fields, "thread_ts"),
+        field(fields, "ts"),
+    ) else {
         return error("invalid_arguments");
     };
     if !state.conversations.contains_key(channel) {
@@ -335,7 +399,9 @@ fn mark_thread(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
 fn parse_json_field(fields: &Fields, name: &str) -> Result<Option<Value>, Value> {
     match field(fields, name) {
         None => Ok(None),
-        Some(raw) => serde_json::from_str(raw).map(Some).map_err(|_| error(&format!("invalid_{name}"))),
+        Some(raw) => serde_json::from_str(raw)
+            .map(Some)
+            .map_err(|_| error(&format!("invalid_{name}"))),
     }
 }
 
@@ -389,11 +455,18 @@ pub(crate) fn add_message(state: &mut State, channel: &str, message: Value) {
     let Some(conversation) = state.conversations.get_mut(channel) else {
         return;
     };
-    let thread_ts = message.get("thread_ts").and_then(Value::as_str).map(str::to_owned);
+    let thread_ts = message
+        .get("thread_ts")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     let ts = ts_of(&message).to_owned();
     if let Some(thread_ts) = thread_ts.filter(|thread_ts| *thread_ts != ts) {
         let replier = message.get("user").cloned().unwrap_or(Value::Null);
-        if let Some(root) = conversation.messages.iter_mut().find(|root| ts_of(root) == thread_ts) {
+        if let Some(root) = conversation
+            .messages
+            .iter_mut()
+            .find(|root| ts_of(root) == thread_ts)
+        {
             let replies = root.get("reply_count").and_then(Value::as_u64).unwrap_or(0) + 1;
             let mut reply_users: Vec<Value> = root
                 .get("reply_users")
@@ -412,7 +485,9 @@ pub(crate) fn add_message(state: &mut State, channel: &str, message: Value) {
         }
     }
     conversation.messages.push(message.clone());
-    conversation.messages.sort_by(|left, right| ts_of(left).cmp(ts_of(right)));
+    conversation
+        .messages
+        .sort_by(|left, right| ts_of(left).cmp(ts_of(right)));
     let mut event = message;
     if let Some(object) = event.as_object_mut() {
         object.insert("channel".to_owned(), json!(channel));
@@ -434,7 +509,11 @@ fn update_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value 
     let Some(conversation) = state.conversations.get_mut(channel) else {
         return error("channel_not_found");
     };
-    let Some(message) = conversation.messages.iter_mut().find(|message| ts_of(message) == ts) else {
+    let Some(message) = conversation
+        .messages
+        .iter_mut()
+        .find(|message| ts_of(message) == ts)
+    else {
         return error("message_not_found");
     };
     if message.get("user").and_then(Value::as_str) != Some(&caller.user_id) {
@@ -446,7 +525,10 @@ fn update_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value 
         if let Some(blocks) = blocks {
             object.insert("blocks".to_owned(), blocks);
         }
-        object.insert("edited".to_owned(), json!({ "user": caller.user_id, "ts": edit_ts }));
+        object.insert(
+            "edited".to_owned(),
+            json!({ "user": caller.user_id, "ts": edit_ts }),
+        );
     }
     let updated = message.clone();
     let event = json!({
@@ -472,10 +554,18 @@ fn delete_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value 
     let Some(conversation) = state.conversations.get_mut(channel) else {
         return error("channel_not_found");
     };
-    let Some(index) = conversation.messages.iter().position(|message| ts_of(message) == ts) else {
+    let Some(index) = conversation
+        .messages
+        .iter()
+        .position(|message| ts_of(message) == ts)
+    else {
         return error("message_not_found");
     };
-    if conversation.messages[index].get("user").and_then(Value::as_str) != Some(&caller.user_id) {
+    if conversation.messages[index]
+        .get("user")
+        .and_then(Value::as_str)
+        != Some(&caller.user_id)
+    {
         return error("cant_delete_message");
     }
     let previous = conversation.messages.remove(index);
@@ -495,22 +585,40 @@ fn delete_message(state: &mut State, fields: &Fields, caller: &Caller) -> Value 
 }
 
 fn react(state: &mut State, fields: &Fields, caller: &Caller, add: bool) -> Value {
-    let (Some(channel), Some(ts), Some(name)) = (field(fields, "channel"), field(fields, "timestamp"), field(fields, "name")) else {
+    let (Some(channel), Some(ts), Some(name)) = (
+        field(fields, "channel"),
+        field(fields, "timestamp"),
+        field(fields, "name"),
+    ) else {
         return error("invalid_arguments");
     };
     let Some(conversation) = state.conversations.get_mut(channel) else {
         return error("channel_not_found");
     };
-    let Some(message) = conversation.messages.iter_mut().find(|message| ts_of(message) == ts) else {
+    let Some(message) = conversation
+        .messages
+        .iter_mut()
+        .find(|message| ts_of(message) == ts)
+    else {
         return error("message_not_found");
     };
     let item_user = message.get("user").cloned();
-    let mut reactions: Vec<Value> = message.get("reactions").and_then(Value::as_array).cloned().unwrap_or_default();
-    let existing = reactions.iter().position(|reaction| reaction.get("name") == Some(&json!(name)));
+    let mut reactions: Vec<Value> = message
+        .get("reactions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let existing = reactions
+        .iter()
+        .position(|reaction| reaction.get("name") == Some(&json!(name)));
     let user = json!(caller.user_id);
     match (add, existing) {
         (true, Some(index)) => {
-            let users = reactions[index].get("users").and_then(Value::as_array).cloned().unwrap_or_default();
+            let users = reactions[index]
+                .get("users")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             if users.contains(&user) {
                 return error("already_reacted");
             }
@@ -520,7 +628,11 @@ fn react(state: &mut State, fields: &Fields, caller: &Caller, add: bool) -> Valu
         }
         (true, None) => reactions.push(json!({ "name": name, "users": [user], "count": 1 })),
         (false, Some(index)) => {
-            let mut users = reactions[index].get("users").and_then(Value::as_array).cloned().unwrap_or_default();
+            let mut users = reactions[index]
+                .get("users")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             let Some(position) = users.iter().position(|reactor| *reactor == user) else {
                 return error("no_reaction");
             };
@@ -566,7 +678,13 @@ fn upload_url(state: &mut State, fields: &Fields, caller: &Caller) -> Value {
         "url_private": format!("{}files/{file_id}/{filename}", state.base_url),
         "url_private_download": format!("{}files/{file_id}/{filename}?download=1", state.base_url),
     });
-    state.files.insert(file_id.clone(), StoredFile { info, bytes: Vec::new() });
+    state.files.insert(
+        file_id.clone(),
+        StoredFile {
+            info,
+            bytes: Vec::new(),
+        },
+    );
     ok(json!({ "upload_url": format!("{}upload/{file_id}", state.base_url), "file_id": file_id }))
 }
 

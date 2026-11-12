@@ -4,7 +4,9 @@ use std::time::Duration;
 
 /// A Slack call: a Web API method, or one of the few non-method requests
 /// (edge API, file transfer) that share the same instrumentation and errors.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, strum::Display, strum::IntoStaticStr, strum::EnumIter)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Hash, Debug, strum::Display, strum::IntoStaticStr, strum::EnumIter,
+)]
 pub enum SlackMethod {
     /// `auth.test`
     #[strum(serialize = "auth.test")]

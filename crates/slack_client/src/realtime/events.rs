@@ -67,7 +67,7 @@ impl Event {
 pub enum SlackEvent {
     /// A message, an edit (`message_changed`), a delete (`message_deleted`),
     /// a thread root update (`message_replied`) or another subtype.
-    Message(MessageEvent),
+    Message(Box<MessageEvent>),
     /// A reaction was added.
     ReactionAdded(ReactionEvent),
     /// A reaction was removed.
@@ -161,8 +161,10 @@ pub struct MessageEvent {
     /// The message before the change or delete.
     pub previous_message: Option<Box<Message>>,
     /// The deleted message (`message_deleted`).
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub deleted_ts: Option<MessageTs>,
     /// When the event happened.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub event_ts: Option<MessageTs>,
 }
 
@@ -174,10 +176,12 @@ pub struct ReactionEvent {
     /// Emoji name without colons.
     pub reaction: String,
     /// The author of the reacted item.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub item_user: Option<UserId>,
     /// The reacted item.
     pub item: ReactionItem,
     /// When.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub event_ts: Option<MessageTs>,
 }
 
@@ -246,6 +250,7 @@ pub struct ChannelEvent {
     /// The conversation.
     pub channel: ChannelId,
     /// Who did it, when Slack says.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
 }
 
@@ -312,8 +317,10 @@ pub struct MemberChannelEvent {
     /// The conversation.
     pub channel: ChannelId,
     /// The member's workspace.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub team: Option<TeamId>,
     /// Who added them.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub inviter: Option<UserId>,
 }
 
@@ -323,6 +330,7 @@ pub struct ImEvent {
     /// The DM: an id, or the full conversation on `im_created`.
     pub channel: ImChannel,
     /// The other person.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
 }
 
@@ -351,6 +359,7 @@ pub struct TypingEvent {
     /// Who is typing.
     pub user: UserId,
     /// The thread, when typing a reply.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub thread_ts: Option<MessageTs>,
 }
 
@@ -360,8 +369,10 @@ pub struct FileEvent {
     /// The file.
     pub file_id: FileId,
     /// The conversation, on shares.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub channel_id: Option<ChannelId>,
     /// Who did it.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user_id: Option<UserId>,
 }
 

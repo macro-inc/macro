@@ -11,13 +11,15 @@ use crate::api::{
     ConversationType, FileUpload, HistoryRequest, PostMessage, RepliesRequest, UpdateMessage,
     UsersConversationsRequest, validate_session,
 };
-use crate::models::{Block, FileAccess, KnownBlock, MessageSubtype, RichTextElement, RichTextInline};
+use crate::models::{
+    Block, FileAccess, KnownBlock, MessageSubtype, RichTextElement, RichTextInline,
+};
 use crate::realtime::{
     DisconnectReason, Event, MarkedEvent, ReactionItem, RealtimeConfig, RealtimeEvent, SlackEvent,
 };
 use crate::{
-    ChannelId, CookieToken, MessageTs, SessionCredentials, SessionToken, SlackClient, SlackEndpoints,
-    SlackError, SlackErrorCode, TeamId, UserId,
+    ChannelId, CookieToken, MessageTs, SessionCredentials, SessionToken, SlackClient,
+    SlackEndpoints, SlackError, SlackErrorCode, TeamId, UserId,
 };
 
 mod login;
@@ -60,6 +62,7 @@ async fn seeded_fake() -> FakeSlack {
             "conversation_host_id": "T0HOME",
             "connected_team_ids": ["T0PARTNER"],
             "shared_team_ids": ["T0HOME", "T0PARTNER"],
+            "topic": { "value": "", "creator": "", "last_set": 0 },
         }),
         &["U0SELF", "U0EXT"],
     );
@@ -91,7 +94,9 @@ fn credentials() -> SessionCredentials {
 
 async fn signed_in_client(fake: &FakeSlack) -> SlackClient {
     let endpoints = fake_endpoints(fake);
-    let auth = validate_session(&credentials(), &endpoints).await.expect("auth.test");
+    let auth = validate_session(&credentials(), &endpoints)
+        .await
+        .expect("auth.test");
     SlackClient::new(credentials(), auth.workspace(), endpoints).expect("client")
 }
 
@@ -122,7 +127,9 @@ async fn a_session_boots_reads_sends_and_follows_events() {
     let fake = seeded_fake().await;
     let endpoints = fake_endpoints(&fake);
 
-    let auth = validate_session(&credentials(), &endpoints).await.expect("auth.test");
+    let auth = validate_session(&credentials(), &endpoints)
+        .await
+        .expect("auth.test");
     assert_eq!(auth.team_id, TeamId::new("T0HOME").expect("team"));
     assert_eq!(auth.user_id, UserId::new("U0SELF").expect("user"));
     assert_eq!(auth.url.as_str(), fake.base_url());
@@ -134,7 +141,10 @@ async fn a_session_boots_reads_sends_and_follows_events() {
     assert_eq!(boot.channels.len(), 1);
     let shared = &boot.channels[0].conversation;
     assert!(shared.is_slack_connect());
-    assert_eq!(shared.connected_team_ids, vec![TeamId::new("T0PARTNER").expect("team")]);
+    assert_eq!(
+        shared.connected_team_ids,
+        vec![TeamId::new("T0PARTNER").expect("team")]
+    );
     assert_eq!(boot.ims.len(), 1);
 
     let page = client
@@ -147,7 +157,11 @@ async fn a_session_boots_reads_sends_and_follows_events() {
         .await
         .expect("users.conversations");
     assert_eq!(page.channels.len(), 1);
-    let cursor = page.response_metadata.next_cursor().expect("a second page").to_owned();
+    let cursor = page
+        .response_metadata
+        .next_cursor()
+        .expect("a second page")
+        .to_owned();
     let second = client
         .users_conversations(&UsersConversationsRequest {
             types: vec![ConversationType::PrivateChannel, ConversationType::Im],
@@ -163,8 +177,14 @@ async fn a_session_boots_reads_sends_and_follows_events() {
     let tracker = TaskTracker::new();
     let cancel = CancellationToken::new();
     let mut events = client.connect_realtime(quick_reconnects(), cancel.clone(), &tracker);
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connecting { attempt: 0 }));
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connected { resumed: false }));
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connecting { attempt: 0 })
+    );
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connected { resumed: false })
+    );
 
     let channel = ChannelId::new("C0SHARED").expect("channel");
     let incoming_ts = fake.receive_message(
@@ -191,7 +211,10 @@ async fn a_session_boots_reads_sends_and_follows_events() {
     };
     assert_eq!(incoming.channel, channel);
     assert_eq!(incoming.message.ts.as_str(), incoming_ts);
-    assert_eq!(incoming.message.user_team, Some(TeamId::new("T0PARTNER").expect("team")));
+    assert_eq!(
+        incoming.message.user_team,
+        Some(TeamId::new("T0PARTNER").expect("team"))
+    );
     assert_eq!(
         incoming.message.blocks,
         vec![Block::Known(KnownBlock::RichText {
@@ -225,7 +248,10 @@ async fn a_session_boots_reads_sends_and_follows_events() {
         })
         .await
         .expect("chat.postMessage");
-    assert_eq!(posted.message.client_msg_id, Some(client_msg_id.to_string()));
+    assert_eq!(
+        posted.message.client_msg_id,
+        Some(client_msg_id.to_string())
+    );
     let SlackEvent::Message(echo) = next_slack_event(&mut events).await else {
         panic!("expected our own message echoed");
     };
@@ -308,7 +334,11 @@ async fn a_session_boots_reads_sends_and_follows_events() {
         })
         .await
         .expect("conversations.replies");
-    let texts: Vec<&str> = thread.messages.iter().map(|message| message.text.as_str()).collect();
+    let texts: Vec<&str> = thread
+        .messages
+        .iter()
+        .map(|message| message.text.as_str())
+        .collect();
     assert_eq!(texts, vec!["hello from the partner", "an edited reply"]);
 
     let counts = client.counts().await.expect("client.counts");
@@ -327,7 +357,10 @@ async fn a_session_boots_reads_sends_and_follows_events() {
     let SlackEvent::Message(deleted) = next_slack_event(&mut events).await else {
         panic!("expected message_deleted");
     };
-    assert_eq!(deleted.message.subtype, Some(MessageSubtype::MessageDeleted));
+    assert_eq!(
+        deleted.message.subtype,
+        Some(MessageSubtype::MessageDeleted)
+    );
     assert_eq!(deleted.deleted_ts, Some(posted.ts.clone()));
 
     cancel.cancel();
@@ -342,13 +375,22 @@ async fn a_revoked_session_ends_calls_and_the_socket() {
     let tracker = TaskTracker::new();
     let cancel = CancellationToken::new();
     let mut events = client.connect_realtime(quick_reconnects(), cancel.clone(), &tracker);
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connecting { attempt: 0 }));
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connected { resumed: false }));
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connecting { attempt: 0 })
+    );
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connected { resumed: false })
+    );
 
     fake.end_session("xoxc-111-222-333-abc", "token_revoked");
 
     let mut reports = Vec::new();
-    while let Some(event) = tokio::time::timeout(WAIT, events.recv()).await.expect("reports in time") {
+    while let Some(event) = tokio::time::timeout(WAIT, events.recv())
+        .await
+        .expect("reports in time")
+    {
         reports.push(event);
     }
     assert_eq!(
@@ -358,7 +400,10 @@ async fn a_revoked_session_ends_calls_and_the_socket() {
         })
     );
 
-    let error = client.auth_test().await.expect_err("the session is revoked");
+    let error = client
+        .auth_test()
+        .await
+        .expect_err("the session is revoked");
     assert!(error.is_session_ended());
     assert!(matches!(
         error,
@@ -378,8 +423,14 @@ async fn goodbye_reconnects_through_the_reconnect_url() {
     let tracker = TaskTracker::new();
     let cancel = CancellationToken::new();
     let mut events = client.connect_realtime(quick_reconnects(), cancel.clone(), &tracker);
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connecting { attempt: 0 }));
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connected { resumed: false }));
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connecting { attempt: 0 })
+    );
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connected { resumed: false })
+    );
 
     fake.goodbye();
     assert_eq!(
@@ -388,11 +439,22 @@ async fn goodbye_reconnects_through_the_reconnect_url() {
             reason: DisconnectReason::Goodbye
         })
     );
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connecting { attempt: 1 }));
-    assert_eq!(events.recv().await, Some(RealtimeEvent::Connected { resumed: true }));
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connecting { attempt: 1 })
+    );
+    assert_eq!(
+        events.recv().await,
+        Some(RealtimeEvent::Connected { resumed: true })
+    );
 
-    fake.push_event("U0SELF", json!({ "type": "huddle_started", "channel": "C0SHARED" }));
-    let unknown = tokio::time::timeout(WAIT, events.recv()).await.expect("in time");
+    fake.push_event(
+        "U0SELF",
+        json!({ "type": "huddle_started", "channel": "C0SHARED" }),
+    );
+    let unknown = tokio::time::timeout(WAIT, events.recv())
+        .await
+        .expect("in time");
     assert_eq!(
         unknown,
         Some(RealtimeEvent::Event(Event::Unknown {
@@ -401,8 +463,13 @@ async fn goodbye_reconnects_through_the_reconnect_url() {
         }))
     );
 
-    fake.push_event("U0SELF", json!({ "type": "reaction_added", "user": "not an id" }));
-    let malformed = tokio::time::timeout(WAIT, events.recv()).await.expect("in time");
+    fake.push_event(
+        "U0SELF",
+        json!({ "type": "reaction_added", "user": "not an id" }),
+    );
+    let malformed = tokio::time::timeout(WAIT, events.recv())
+        .await
+        .expect("in time");
     assert!(matches!(
         malformed,
         Some(RealtimeEvent::Event(Event::Malformed { ref event_type, .. })) if event_type == "reaction_added"
@@ -443,7 +510,10 @@ async fn rate_limits_are_waited_out_and_errors_are_typed() {
         .user_info(&UserId::new("U0EXT").expect("user"))
         .await
         .expect_err("injected failure");
-    assert_eq!(unknown.code(), Some(&SlackErrorCode::Other("some_new_error".to_owned())));
+    assert_eq!(
+        unknown.code(),
+        Some(&SlackErrorCode::Other("some_new_error".to_owned()))
+    );
 }
 
 #[tokio::test]
@@ -464,7 +534,10 @@ async fn files_upload_download_and_external_users_resolve() {
         .await
         .expect("upload");
     assert_eq!(uploaded.title.as_deref(), Some("Notes"));
-    assert_eq!(fake.file_bytes(uploaded.id.as_str()), Some(b"file body".to_vec()));
+    assert_eq!(
+        fake.file_bytes(uploaded.id.as_str()),
+        Some(b"file body".to_vec())
+    );
 
     let info = client.file_info(&uploaded.id).await.expect("files.info");
     assert_eq!(info.file_access, Some(FileAccess::Visible));
@@ -473,18 +546,31 @@ async fn files_upload_download_and_external_users_resolve() {
     assert_eq!(&downloaded.body[..], b"file body");
 
     let elsewhere = Url::parse("https://example.com/files/F1/notes.txt").expect("URL");
-    let refused = client.download_file(&elsewhere).await.expect_err("token stays on Slack");
+    let refused = client
+        .download_file(&elsewhere)
+        .await
+        .expect_err("token stays on Slack");
     assert!(matches!(refused, SlackError::InvalidRequest { .. }));
 
     let users = client
-        .edge_users_info(&[(UserId::new("U0EXT").expect("user"), 0)].into_iter().collect())
+        .edge_users_info(
+            &[(UserId::new("U0EXT").expect("user"), 0)]
+                .into_iter()
+                .collect(),
+        )
         .await
         .expect("edge users/info");
     assert_eq!(users.len(), 1);
     assert!(users[0].is_stranger);
-    assert_eq!(users[0].team_id, Some(TeamId::new("T0PARTNER").expect("team")));
+    assert_eq!(
+        users[0].team_id,
+        Some(TeamId::new("T0PARTNER").expect("team"))
+    );
 
-    fake.add_emoji("partyparrot", "https://emoji.slack-edge.com/T0HOME/partyparrot.gif");
+    fake.add_emoji(
+        "partyparrot",
+        "https://emoji.slack-edge.com/T0HOME/partyparrot.gif",
+    );
     fake.add_emoji("parrot", "alias:partyparrot");
     let emoji = client.emoji_list().await.expect("emoji.list");
     assert_eq!(
@@ -492,11 +578,20 @@ async fn files_upload_download_and_external_users_resolve() {
         Some(&crate::api::CustomEmoji::Alias("partyparrot".to_owned()))
     );
 
-    let view = client.conversation_view(&channel).await.expect("conversations.view");
+    let view = client
+        .conversation_view(&channel)
+        .await
+        .expect("conversations.view");
     assert_eq!(view.users.len(), 2);
 
     client.sign_out().await.expect("auth.signout");
-    assert!(client.auth_test().await.expect_err("signed out").is_session_ended());
+    assert!(
+        client
+            .auth_test()
+            .await
+            .expect_err("signed out")
+            .is_session_ended()
+    );
 }
 
 #[test]

@@ -13,12 +13,15 @@ pub struct Message {
     /// Absent for plain user messages.
     pub subtype: Option<MessageSubtype>,
     /// Sender; absent for some bot messages.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
     /// Sending bot.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub bot_id: Option<BotId>,
     /// Sending bot's profile.
     pub bot_profile: Option<BotProfile>,
     /// Sending app.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub app_id: Option<AppId>,
     /// Display name override for bot messages.
     pub username: Option<String>,
@@ -35,8 +38,10 @@ pub struct Message {
     #[serde(default)]
     pub files: Vec<File>,
     /// Set on a reply: the thread's root `ts`. Equal to `ts` on the root.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub thread_ts: Option<MessageTs>,
     /// The thread root's author, on replies.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub parent_user_id: Option<UserId>,
     /// Replies in the thread (on the root).
     pub reply_count: Option<u32>,
@@ -44,8 +49,10 @@ pub struct Message {
     #[serde(default)]
     pub reply_users: Vec<UserId>,
     /// The latest reply's `ts` (on the root).
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub latest_reply: Option<MessageTs>,
     /// The caller's read cursor in the thread (on the root).
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub last_read: Option<MessageTs>,
     /// The caller follows the thread.
     pub subscribed: Option<bool>,
@@ -55,10 +62,13 @@ pub struct Message {
     #[serde(default)]
     pub reactions: Vec<Reaction>,
     /// The sender's workspace; differs from yours for Slack Connect senders.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user_team: Option<TeamId>,
     /// The workspace the message was sent from.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub source_team: Option<TeamId>,
     /// The workspace that stores the message.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub team: Option<TeamId>,
     /// An inline profile, sent for senders the client may not know (external).
     pub user_profile: Option<UserProfile>,
@@ -71,13 +81,16 @@ pub struct Message {
     #[serde(default)]
     pub is_locked: bool,
     /// The conversation, on `message_replied`'s embedded root.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub channel: Option<ChannelId>,
 }
 
 impl Message {
     /// A reply in a thread (not the root and not a top-level message).
     pub fn is_thread_reply(&self) -> bool {
-        self.thread_ts.as_ref().is_some_and(|thread_ts| *thread_ts != self.ts)
+        self.thread_ts
+            .as_ref()
+            .is_some_and(|thread_ts| *thread_ts != self.ts)
     }
 }
 
@@ -85,6 +98,7 @@ impl Message {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Edited {
     /// The editor.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
     /// When.
     pub ts: MessageTs,
@@ -135,13 +149,17 @@ pub struct LegacyAttachment {
     #[serde(default)]
     pub is_msg_unfurl: bool,
     /// The shared message's channel.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub channel_id: Option<ChannelId>,
     /// The shared message's ts.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub ts: Option<MessageTs>,
 }
 
 /// A message's subtype. Plain messages have none.
-#[derive(Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
 #[serde(from = "String", into = "String")]
 pub enum MessageSubtype {

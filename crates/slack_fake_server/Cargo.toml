@@ -7,9 +7,6 @@ description = "Test support: an in-process fake Slack (Web API, login, edge API,
 
 [dependencies]
 axum = { workspace = true, features = ["multipart", "ws"] }
-bytes = { workspace = true }
-futures = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }

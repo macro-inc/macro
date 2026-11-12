@@ -7,9 +7,13 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde::Deserialize;
-use slack_client::api::{ConversationType, UsersConversationsRequest, validate_session};
+use slack_client::api::{
+    ConversationType, HistoryRequest, UsersConversationsRequest, validate_session,
+};
 use slack_client::realtime::{Event, RealtimeConfig, RealtimeEvent};
-use slack_client::{CookieToken, Secret, SessionCredentials, SessionToken, SlackClient, SlackEndpoints};
+use slack_client::{
+    CookieToken, Secret, SessionCredentials, SessionToken, SlackClient, SlackEndpoints,
+};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -32,10 +36,16 @@ struct SessionTeam {
 #[ignore = "talks to real Slack; needs SLACK_LIVE_SESSION"]
 async fn live_session_smoke() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    let path = std::env::var_os("SLACK_LIVE_SESSION").expect("SLACK_LIVE_SESSION names a session file");
+    let path =
+        std::env::var_os("SLACK_LIVE_SESSION").expect("SLACK_LIVE_SESSION names a session file");
     let file: SessionFile =
-        serde_json::from_slice(&std::fs::read(path).expect("session file is readable")).expect("session file parses");
-    let team = file.teams.into_iter().next().expect("one team in the session file");
+        serde_json::from_slice(&std::fs::read(path).expect("session file is readable"))
+            .expect("session file parses");
+    let team = file
+        .teams
+        .into_iter()
+        .next()
+        .expect("one team in the session file");
     let credentials = SessionCredentials {
         token: SessionToken::new(team.token).expect("token shape"),
         cookie: CookieToken::new(file.d).expect("cookie shape"),
@@ -43,7 +53,9 @@ async fn live_session_smoke() {
     };
     let endpoints = SlackEndpoints::production();
 
-    let auth = validate_session(&credentials, &endpoints).await.expect("auth.test");
+    let auth = validate_session(&credentials, &endpoints)
+        .await
+        .expect("auth.test");
     println!("auth.test: team {} user {}", auth.team_id, auth.user_id);
     let client = SlackClient::new(credentials, auth.workspace(), endpoints).expect("client");
 
@@ -62,7 +74,13 @@ async fn live_session_smoke() {
     );
 
     let counts = client.counts().await.expect("client.counts");
-    let unread = counts.channels.iter().chain(&counts.ims).chain(&counts.mpims).filter(|counts| counts.has_unreads).count();
+    let unread = counts
+        .channels
+        .iter()
+        .chain(&counts.ims)
+        .chain(&counts.mpims)
+        .filter(|counts| counts.has_unreads)
+        .count();
     println!(
         "client.counts: {} channels, {} ims, {} mpims, {} with unreads",
         counts.channels.len(),
@@ -97,6 +115,42 @@ async fn live_session_smoke() {
         page.response_metadata.next_cursor().is_some()
     );
 
+    for channel in page.channels.iter().take(3) {
+        let view = client
+            .conversation_view(&channel.id)
+            .await
+            .expect("conversations.view");
+        let history = client
+            .history(&HistoryRequest {
+                channel: channel.id.clone(),
+                latest: None,
+                oldest: None,
+                inclusive: false,
+                limit: 20,
+                cursor: None,
+            })
+            .await
+            .expect("conversations.history");
+        let blocks = history
+            .messages
+            .iter()
+            .map(|message| message.blocks.len())
+            .sum::<usize>();
+        let threads = history
+            .messages
+            .iter()
+            .filter(|message| message.reply_count.is_some())
+            .count();
+        println!(
+            "{}: view {} users; history {} messages, {} blocks, {} thread roots",
+            channel.id,
+            view.users.len(),
+            history.messages.len(),
+            blocks,
+            threads
+        );
+    }
+
     let tracker = TaskTracker::new();
     let cancel = CancellationToken::new();
     let mut events = client.connect_realtime(RealtimeConfig::default(), cancel.clone(), &tracker);
@@ -108,9 +162,15 @@ async fn live_session_smoke() {
                 RealtimeEvent::Connected { resumed } => format!("connected(resumed={resumed})"),
                 RealtimeEvent::Disconnected { reason } => format!("disconnected({reason:?})"),
                 RealtimeEvent::SessionEnded { code } => format!("session_ended({code})"),
-                RealtimeEvent::Event(Event::Known(event)) => format!("{:?}", std::mem::discriminant(&*event)),
-                RealtimeEvent::Event(Event::Unknown { event_type, .. }) => format!("unknown:{event_type:?}"),
-                RealtimeEvent::Event(Event::Malformed { event_type, .. }) => format!("malformed:{event_type}"),
+                RealtimeEvent::Event(Event::Known(event)) => {
+                    format!("{:?}", std::mem::discriminant(&*event))
+                }
+                RealtimeEvent::Event(Event::Unknown { event_type, .. }) => {
+                    format!("unknown:{event_type:?}")
+                }
+                RealtimeEvent::Event(Event::Malformed { event_type, .. }) => {
+                    format!("malformed:{event_type}")
+                }
             };
             *seen.entry(kind).or_default() += 1;
         }
@@ -120,5 +180,8 @@ async fn live_session_smoke() {
     tracker.close();
     tracker.wait().await;
     println!("websocket over {LISTEN:?}: {seen:?}");
-    assert!(seen.keys().any(|kind| kind.starts_with("connected")), "the websocket said hello");
+    assert!(
+        seen.keys().any(|kind| kind.starts_with("connected")),
+        "the websocket said hello"
+    );
 }

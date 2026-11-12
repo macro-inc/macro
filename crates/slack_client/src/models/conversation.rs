@@ -53,8 +53,10 @@ pub struct Conversation {
     /// Why the conversation is frozen.
     pub frozen_reason: Option<FrozenReason>,
     /// The workspace the caller sees it from.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub context_team_id: Option<TeamId>,
     /// The hosting workspace or org.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub conversation_host_id: Option<TeamId>,
     /// Every workspace the conversation is shared with.
     #[serde(default)]
@@ -69,14 +71,18 @@ pub struct Conversation {
     #[serde(default)]
     pub pending_connected_team_ids: Vec<TeamId>,
     /// The Grid org that owns it.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub enterprise_id: Option<EnterpriseId>,
     /// The other person in a DM.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub user: Option<UserId>,
     /// Creation time (unix seconds).
     pub created: Option<i64>,
     /// Creator.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub creator: Option<UserId>,
     /// The caller's read cursor.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub last_read: Option<MessageTs>,
     /// Unread messages (DMs only).
     pub unread_count: Option<u32>,
@@ -133,13 +139,16 @@ pub struct ConversationText {
     #[serde(default)]
     pub value: String,
     /// Who set it.
+    #[serde(default, deserialize_with = "crate::ids::empty_as_none")]
     pub creator: Option<UserId>,
     /// When (unix seconds).
     pub last_set: Option<i64>,
 }
 
 /// Why a conversation is frozen.
-#[derive(Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
 #[serde(from = "String", into = "String")]
 pub enum FrozenReason {

@@ -12,11 +12,11 @@ mod credentials;
 mod endpoints;
 mod error;
 mod ids;
-mod method;
 pub mod login;
+mod method;
 pub mod models;
-pub mod realtime;
 mod pacing;
+pub mod realtime;
 
 pub use client::{DownloadedFile, SlackClient};
 pub use credentials::{CookieToken, InvalidCredential, Secret, SessionCredentials, SessionToken};

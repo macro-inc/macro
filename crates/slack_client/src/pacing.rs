@@ -22,7 +22,10 @@ impl Pacer {
         let Some(interval) = method.tier().interval() else {
             return Duration::ZERO;
         };
-        let burst = method.tier().per_minute().map_or(1, |per_minute| (per_minute / 4).max(1));
+        let burst = method
+            .tier()
+            .per_minute()
+            .map_or(1, |per_minute| (per_minute / 4).max(1));
         let tolerance = interval * (burst - 1);
         let now = Instant::now();
 
@@ -42,7 +45,10 @@ impl Pacer {
         let Some(interval) = method.tier().interval() else {
             return;
         };
-        let burst = method.tier().per_minute().map_or(1, |per_minute| (per_minute / 4).max(1));
+        let burst = method
+            .tier()
+            .per_minute()
+            .map_or(1, |per_minute| (per_minute / 4).max(1));
         let tolerance = interval * (burst - 1);
         let held_until = Instant::now() + retry_after + tolerance;
 

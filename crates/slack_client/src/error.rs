@@ -9,7 +9,17 @@ use crate::method::SlackMethod;
 
 /// Slack's `error` string from an `ok: false` response. Codes this client
 /// acts on are variants; anything else is kept verbatim in `Other`.
-#[derive(Clone, PartialEq, Eq, Hash, Debug, strum::EnumString, strum::IntoStaticStr, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    Serialize,
+    Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
 #[serde(from = "String", into = "String")]
 pub enum SlackErrorCode {
