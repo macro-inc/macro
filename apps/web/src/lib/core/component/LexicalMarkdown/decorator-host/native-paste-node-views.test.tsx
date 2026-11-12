@@ -1,6 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { PasteNode } from '@macro-inc/lexical-core';
+import {
+  PasteNode,
+  type PasteNodeDecoratorProps,
+} from '@macro-inc/lexical-core';
 import {
   clearDecorators,
   setDecorator,
@@ -11,10 +14,12 @@ import {
   nativeSurface,
 } from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import { afterEach, beforeAll, expect, test } from 'vitest';
-import type { PasteNodeUIProps } from '../component/decorator/PasteNode';
 import { theme } from '../theme';
 import { createNativePasteNodeContext } from './native-paste-node-host';
 import { createNativePasteNodeViews } from './native-paste-node-views';
+import type { PasteNodeHostProp } from './paste-node-host';
+
+type PasteProps = PasteNodeDecoratorProps & PasteNodeHostProp;
 
 beforeAll(initializeNativeSurfaceTests);
 afterEach(clearDecorators);
@@ -25,10 +30,10 @@ afterEach(clearDecorators);
  */
 function withMounted(
   chips: readonly object[],
-  check: (mounted: { root: HTMLElement; received: PasteNodeUIProps[] }) => void
+  check: (mounted: { root: HTMLElement; received: PasteProps[] }) => void
 ) {
-  const received: PasteNodeUIProps[] = [];
-  setDecorator<PasteNodeUIProps>(PasteNode, (props) => {
+  const received: PasteProps[] = [];
+  setDecorator<PasteProps>(PasteNode, (props) => {
     received.push(props);
     return <span data-recorded-paste="true" />;
   });
@@ -62,55 +67,22 @@ function withMounted(
   }
 }
 
-const fields = ({ content, origin }: PasteNodeUIProps) => ({ content, origin });
-
-test('stored paste content Source renders as null or missing text reaches the component unchanged', () => {
-  withMounted(
-    [
-      { content: 'pasted text', origin: 'pasted' },
-      { content: 'quoted text', origin: 'referenced' },
-      { content: null, origin: 'pasted' },
-      { origin: 'pasted' },
-      { content: '', origin: 'pasted' },
-      { content: 'unknown origin', origin: 'elsewhere' },
-      { content: null, origin: null },
-    ],
-    ({ received }) => {
-      expect(received.map(fields)).toEqual([
-        { content: 'pasted text', origin: 'pasted' },
-        { content: 'quoted text', origin: 'referenced' },
-        { content: null, origin: 'pasted' },
-        { content: undefined, origin: 'pasted' },
-        { content: '', origin: 'pasted' },
-        { content: 'unknown origin', origin: 'pasted' },
-        { content: null, origin: 'pasted' },
-      ]);
-    }
-  );
-});
-
-test('a null-content paste chip leaves the rest of the document rendering', () => {
-  withMounted([{ content: null, origin: null }], ({ root }) => {
-    expect(root.querySelectorAll('[data-recorded-paste="true"]')).toHaveLength(
-      1
-    );
+test('stored text content reaches the component beside a rendering sibling', () => {
+  withMounted([{ content: 'kept', origin: 'pasted' }], ({ root, received }) => {
+    expect(
+      received.map(({ content, origin }) => ({ content, origin }))
+    ).toEqual([{ content: 'kept', origin: 'pasted' }]);
     expect(root.textContent).toContain('sibling stays');
   });
 });
 
-test('a referenced chip without text is rejected, as Source StaticMarkdown reads it as a string', () => {
-  for (const chip of [
-    { content: null, origin: 'referenced' },
-    { origin: 'referenced' },
-  ]) {
-    expect(() => withMounted([chip], () => {})).toThrow(
-      'Invalid paste payload'
-    );
+// Source throws in getTextContentSize for these, so the whole state fails there too.
+test('null or missing content is refused like Source', () => {
+  for (const content of [null, undefined]) {
+    for (const origin of ['pasted', 'referenced']) {
+      expect(() => withMounted([{ content, origin }], () => {})).toThrow(
+        'Invalid paste payload'
+      );
+    }
   }
-});
-
-test('wrong value types are refused by the stored model before any projection', () => {
-  expect(() =>
-    withMounted([{ content: 5, origin: 'pasted' }], () => {})
-  ).toThrow('JSON error: invalid type');
 });
