@@ -11,7 +11,7 @@ The single-row desktop header contains the title, `Filter`, a separate
 (`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
-and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
 clicking a row or its checkbox toggles and stays open, Enter adds and closes, and
 Shift/Only selects just one option and stays open. Escape dismisses the menu.
 Assignee uses the team/agent roster and retains selected outsiders. Created by
@@ -20,6 +20,15 @@ open; search and Next options replace that window without losing selections. Me
 is a semantic viewer choice, distinct from the named fixed self option.
 Unavailable selected IDs remain selected, and Only changes its own group without
 clearing other restrictions.
+With Projects enabled, Project offers accessible task projects (not Drive folders),
+including read-only projects, with their existing cube icon and name. Search and
+Next options use the same paginated source as the project picker; selected projects
+stay available across pages. Multiple projects are ORed and combine with other
+facets using AND, including in text search and saved views. A project's own task
+list hides this redundant facet. There is no No project filter because the search
+API cannot express project absence. AI does not resolve projects: choose these
+manually after applying an AI filter. Verify selection, clearing, save/reopen, and
+search in both the desktop menu and phone filter drawer.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
 description such as `urgent and high priority tasks that are not completed` and press
 Enter. It replaces the current selection with the matching Status, Priority, Assignee,
@@ -42,17 +51,17 @@ search field above New. It shares the current Tasks or Projects list query.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
-when the user has a team. The Projects list uses the same menu. Mobile creation
-controls are unchanged. With Projects enabled, the collapsible `Projects` section
-appears above `Saved views`. It contains `My projects` (assigned to the viewer),
-`All projects` (all accessible projects), and `Created by me` (owned by the viewer).
-These replace the old Projects tab and individual-project shortcut list. The plus
-beside the section opens the project composer even while collapsed.
-On mobile, one `Projects` pill opens a drawer with the same three views; the
-active pill shows the selected view's name. Selecting a task or saved view clears
-the project pill's active state. Project scoping applies before pagination and
-cannot be removed by clearing editable filters. Opening a project and returning
-through its breadcrumb retains the selected project view.
+when the user has a team. The Projects list uses the same menu. With Projects
+enabled, the collapsible `Projects` section appears above task `Saved views`.
+It contains `My projects` (assigned to the viewer), `All projects`, `Created by me`,
+and saved project views. The plus beside the section opens the project composer.
+Phones have a separate `Projects` destination in the bottom navigation's More
+menu (or dock after customization), not a Projects pill inside Tasks. Its picker
+contains the same built-in and saved project views; the leading filter button
+opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
+use the same 44px phone height and narrow insets as task rows. Opening a project
+pushes its detail and Back returns to the collection. Project scope applies
+before pagination and cannot be removed by clearing editable filters.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
@@ -1063,12 +1072,13 @@ including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar; below 600px they collapse to icons, with tooltips on
 desktop, and the project name truncates instead. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
-Close or Escape clears the query and restores focus to the button. The task
-toolbar stays the same height and scrolls
-horizontally in narrow splits, keeping list controls, Add existing tasks, and New
-task accessible. Opening an associated task extends the breadcrumb trail; choose
-the project breadcrumb to return, or Projects to restore the collection and its
-filters, groups, and scroll position. Project URLs retain identity and section:
+Close or Escape clears the query and restores focus to the button. The desktop
+task toolbar stays the same height in narrow splits and keeps its combined
+New task split button accessible. Its primary action creates a task; the caret
+menu offers New task and Add existing tasks. On phones this becomes the bottom
+floating add menu. Opening an associated task extends the breadcrumb trail;
+choose the project breadcrumb to return, or Projects to restore the collection.
+Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
 in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
 which opens the project in Tasks; pasting it, or an older
@@ -1153,15 +1163,30 @@ when URL parameters are absent. Use
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears
 once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. The section tabs
-use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`; both actions use bordered buttons with a background. `Add existing
-tasks` opens an anchored task-selector dropdown: search, select several, and
+disabled. The section tabs use the same control as Channels. Editors choose
+`Add existing tasks` from the New task caret menu (the floating add menu on a
+phone). It opens the existing task selector: search, select several, and
 confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
 the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
+When the project has no tasks, a subtly bordered rounded empty state offers
+New task and Add existing tasks without an explanatory paragraph. Filter-empty
+results do not show this project-empty state. Read-only projects omit add actions.
+
+### Saved project views
+
+Change project filters, sort, grouping, or layout and choose Save view. Name the
+view and optionally share it with the current team. The view appears below the
+built-in views in the desktop Projects section and in the phone Projects picker.
+Opening it reapplies its settings; search text and scroll are not saved. Assigned
+to me and Created by me remain relative to whoever opens the definition.
+Use a row's menu to Edit its name/sharing, Duplicate a private copy, or Delete.
+Owners use Save changes for temporary setting edits; Reset restores the confirmed
+settings. Leaving the collection discards temporary edits without changing the
+saved definition. On phones Gantt definitions render as List without rewriting
+the saved layout. Unknown definitions show an error instead of unfiltered rows.
 
 The regular Tasks list includes a Project column. Its cell is a regular property
 cell: clicking it opens the same entity dropdown as the other property columns,

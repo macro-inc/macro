@@ -9,6 +9,8 @@ import { ConnectorImportSidebar } from '@app/features/connector-import/connector
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
+import { ProjectSavedViewRows } from '@app/features/projects/views/project-saved-views';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useParams } from '@app/lib/split-router';
@@ -35,7 +37,7 @@ import {
   TASK_TABS,
   type TaskTabItem,
 } from '../constants';
-import { isProjectTab } from '../core/task-navigation';
+import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
@@ -55,14 +57,24 @@ function TasksNavigation(props: {
   label: string;
 }) {
   const { state, setTab } = useTasksView();
+  const projectViews = useProjectSavedViews();
+  const isActive = (id: TasksTab) =>
+    !state.savedViewActive &&
+    state.tab === id &&
+    (!isProjectTab(id) || !projectViews?.selectedId());
+  const select = (id: TasksTab) => {
+    if (isProjectTab(id) && projectViews)
+      projectViews.selectScope(projectScopeForTab(id));
+    else setTab(id);
+  };
 
   return (
     <ViewSidebar.Nav aria-label={props.label}>
       <For each={props.items}>
         {(item) => (
           <ViewSidebar.Item
-            active={!state.savedViewActive && state.tab === item.id}
-            onClick={() => setTab(item.id)}
+            active={isActive(item.id)}
+            onClick={() => select(item.id)}
           >
             <ViewSidebar.Icon>
               <Dynamic component={TAB_ICONS[item.id]} class="size-4" />
@@ -245,6 +257,7 @@ export function TasksSidebar() {
                 items={PROJECT_TABS}
                 label={t('viewMenus.projectViews')}
               />
+              <ProjectSavedViewRows />
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
         </Show>

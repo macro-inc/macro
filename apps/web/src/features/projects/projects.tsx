@@ -6,6 +6,7 @@ import {
 import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -28,13 +29,13 @@ import {
   createEffect,
   createSignal,
   ErrorBoundary,
-  type JSX,
   on,
   onCleanup,
   type ParentProps,
   Show,
   Suspense,
 } from 'solid-js';
+import { useProjectSavedViews } from './context/project-saved-views-context';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -107,7 +108,6 @@ type ProjectsTabProps = {
   search?: Parameters<typeof createProjectCollection>[0]['search'];
   scope?: () => ProjectScope;
   title?: string;
-  mobileNavigation?: JSX.Element;
 };
 
 export function ProjectsTab(props: ProjectsTabProps) {
@@ -122,6 +122,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const context = useProjectsContext();
+  const savedViews = useProjectSavedViews();
   const ganttFlag = useFeatureFlag(enableGantt);
   const [search, setSearch] = createSearchParams(projectCollectionSearch);
   const activation = withSplitPanelOwner(
@@ -138,18 +139,37 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   onCleanup(() => {
     if (activation.current === open) activation.current = undefined;
   });
+  const persistence = createProjectCollectionPersistence(panel.handle);
   const collection = withSplitPanelOwner(
     listOwnedSlotName('initiatives:collection'),
     () =>
       createProjectCollection({
-        ...createProjectCollectionPersistence(panel.handle),
+        ...persistence,
+        captureState: (read) =>
+          persistence.captureState(() => {
+            const snapshot = read();
+            if (!savedViews) return snapshot;
+            return {
+              ...snapshot,
+              ...savedViews.persistentSettings(),
+              search: savedViews.selectedId() ? '' : snapshot.search,
+            };
+          }),
         createSource: context.createCollectionSource,
         search: props.search,
-        scope: () => props.scope?.() ?? 'all',
+        settings: savedViews
+          ? { value: savedViews.settings, update: savedViews.updateSettings }
+          : undefined,
+        scope: () => savedViews?.scope() ?? props.scope?.() ?? 'all',
+        enabled: savedViews?.ready,
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
   );
+  usePending('projects.collection', () => {
+    if (savedViews && !savedViews.ready()) return false;
+    return collection.state().kind === 'loading';
+  });
   // URL history restores the entry snapshot, not the latest layout selection.
   const entryLayout = collection.layout();
   createEffect(
@@ -180,7 +200,6 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         onOpen={open}
         collection={displayCollection}
         title={props.title}
-        mobileNavigation={props.mobileNavigation}
         ganttEnabled={ganttFlag().enabled}
         createAssigneeName={(id) => usePropertyUserDisplay(id).name}
         onCreate={(initialDraft) =>

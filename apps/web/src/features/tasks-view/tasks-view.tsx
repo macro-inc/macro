@@ -1,5 +1,6 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { openProject } from '@app/features/projects/open-project';
+import { ProjectSavedViewsProvider } from '@app/features/projects/project-saved-views';
 import { ProjectsTab } from '@app/features/projects/projects';
 import {
   useSavedView,
@@ -8,7 +9,7 @@ import {
 import { ViewTour, ViewTourAction } from '@app/features/tours/ViewTour';
 import { TutorialRow } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
-import { projectDetailRoute } from '@app/routes/routes';
+import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -25,10 +26,14 @@ import {
   Suspense,
 } from 'solid-js';
 import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
-import { TasksMobileTabs } from './components/TasksMobileTabs';
+
 import { TasksSidebar } from './components/TasksSidebar';
 import { TASK_TABS } from './constants';
-import { isProjectTab } from './core/task-navigation';
+import {
+  isProjectTab,
+  projectScopeForTab,
+  projectTabForScope,
+} from './core/task-navigation';
 import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
@@ -80,6 +85,41 @@ function TasksViewBreadcrumbs(props: ParentProps) {
       <TaskViewBreadcrumbItem />
       {props.children}
     </ViewBreadcrumbs.Root>
+  );
+}
+
+function TasksProjectViews(props: ParentProps) {
+  const { state, projectsEnabled } = useTasksView();
+  const navigate = useNavigate();
+  const params = useParams<{ projectId?: string; taskId?: string }>();
+  return (
+    <ProjectSavedViewsProvider
+      enabled={projectsEnabled}
+      active={() => isProjectTab(state.tab) && !state.savedViewActive}
+      scope={() => projectScopeForTab(state.tab)}
+      location={() => ({
+        projectId: params.projectId,
+        taskId: params.taskId,
+        tab: state.tab,
+      })}
+      onSelect={(id, scope = 'all') => {
+        const tab = projectTabForScope(scope);
+        fireAndForget(
+          navigate(
+            { route: tasksProjectsRoute, params: { projectsTab: 'projects' } },
+            {
+              search: {
+                tasks: { tab: [tab] },
+                projects: id ? { savedView: [id] } : {},
+              },
+            }
+          ),
+          'project-views'
+        );
+      }}
+    >
+      {props.children}
+    </ProjectSavedViewsProvider>
   );
 }
 
@@ -170,17 +210,10 @@ function TasksViewRoot() {
                     fallback={taskList()}
                   >
                     <ProjectsTab
-                      scope={() =>
-                        state.tab === 'my-projects'
-                          ? 'assigned-to-me'
-                          : state.tab === 'created-projects'
-                            ? 'created-by-me'
-                            : 'all'
-                      }
+                      scope={() => projectScopeForTab(state.tab)}
                       title={
                         TASK_TABS.find((tab) => tab.id === state.tab)?.label
                       }
-                      mobileNavigation={<TasksMobileTabs />}
                       search={{
                         value: () => state.search,
                         onChange: (search) => setState('search', search),
@@ -239,9 +272,11 @@ export function TasksView(props: TasksViewProps) {
           return team ? { id: team.id, name: team.name } : undefined;
         }}
       >
-        <TasksViewBreadcrumbs>
-          <TasksViewRoot />
-        </TasksViewBreadcrumbs>
+        <TasksProjectViews>
+          <TasksViewBreadcrumbs>
+            <TasksViewRoot />
+          </TasksViewBreadcrumbs>
+        </TasksProjectViews>
       </TasksViewProvider>
     </ListEntityMetadataQueryProvider>
   );

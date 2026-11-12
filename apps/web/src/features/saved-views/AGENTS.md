@@ -2,7 +2,7 @@
 
 ## What it is
 
-Reusable named view definitions. Consumers are main Tasks and Email; the generic feature does not interpret consumer configuration.
+Reusable named view definitions. Consumers are main Tasks, Projects, and Email; the generic feature does not interpret consumer configuration.
 
 ## Start here
 
@@ -12,10 +12,11 @@ Reusable named view definitions. Consumers are main Tasks and Email; the generic
 - `queries/saved-view-actions.ts`: independent create, update, delete, and reorder hooks using the shared GraphQL client, native mutation state, authoritative confirmation, and cursor reconciliation.
 - `views/saved-view-dialogs.tsx`: one create/edit dialog owns separate mutation hooks, a shared wide responsive form, and lifetime checks; deletion keeps its confirmation.
 - `components/`: presentational forms/confirmation, compound list, shared styled context/overflow items, and mobile picker.
+- `primitives/create-saved-view-draft.ts`: shared revision-aware baseline and retained-draft reconciliation; consumers provide their codecs, defaults, and setting application.
 
 ## Boundaries
 
-- Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, and Email's in `features/email-view`.
+- Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, Project definitions in `features/projects`, and Email definitions in `features/email-view`.
 - Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
 - Readers re-read on focus, after a gateway reconnect, and on a `saved_views_changed` push for their kind (`queries/saved-view-changes.ts`), which is how writes made outside the page, such as an agent's, appear; the push carries no definition.
 - Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers (Email passes them only where rows can't be dragged); rows never create drag items themselves, since only a desktop list mounts the drag provider. Pass `onCopyLink` only when a link can open the view for someone else (Tasks shares with teams; Email views are private).

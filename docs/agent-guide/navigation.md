@@ -366,6 +366,10 @@ title, matching other mobile routes.
 
 Projects are enabled by default in development; production uses the PostHog
 `enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
+Phones expose Projects as its own dock/More destination, separate from Tasks.
+It opens the shared project collection, whose picker includes saved project views.
+Project definitions use the `sN.projects.savedView` search parameter; opening a
+project pushes detail and Back returns to that collection.
 When disabled, project navigation,
 creation, assignment, chips, and Cmd+K results are hidden; direct project links
 return to Tasks after flags resolve. Existing Files folders stay available.

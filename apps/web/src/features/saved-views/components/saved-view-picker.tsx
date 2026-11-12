@@ -7,6 +7,7 @@ import { createSignal, type JSX, onCleanup } from 'solid-js';
 /** Restores the picker focus before opening a row's next dialog or view. */
 export function SavedViewPicker(props: {
   label: string;
+  title?: string;
   active: boolean;
   scopeKey: string | undefined;
   children: (onAction: (action: () => void) => void) => JSX.Element;
@@ -61,7 +62,7 @@ export function SavedViewPicker(props: {
         <MobileDrawer.Content>
           <MobileDrawer.Handle />
           <MobileDrawer.Title class="px-6 pb-3 text-base font-medium">
-            {t('viewMenus.savedViews')}
+            {props.title ?? t('viewMenus.savedViews')}
           </MobileDrawer.Title>
           <MobileDrawer.ScrollBody class="px-3">
             {props.children((action) => {

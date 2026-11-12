@@ -1,4 +1,4 @@
-# Saved views: reusable storage, Tasks and Email
+# Saved views: reusable storage, Tasks, Projects and Email
 
 **Status:** Approved design, implemented on the task-saved-views branch. The
 starting point below describes the code before this change; rollout requires
@@ -92,10 +92,10 @@ Keep separate create, update, and delete mutation hooks in `features/saved-views
 Keep `useSavedViews` (paginated list) and `useSavedView` (single definition)
 independent and compose them in the host. Read and mutation hooks resolve the
 shared GraphQL client reactively; callers supply feature inputs, not clients.
-The Task draft primitive receives only the detail source and owns confirmed
-filter/layout/grouping/sort snapshots, dirty state, diagnostics, and revision-aware
-reconciliation. The Tasks host owns selection, navigation,
-and account/task lifecycle. Task actions capture the host request scope before
+The shared draft primitive owns confirmed definition snapshots, dirty state,
+retained edits, and revision-aware reconciliation. Task and Project adapters own
+their codecs, defaults, diagnostics, and application to feature settings.
+The Tasks host owns navigation and account/task lifecycle. Task actions capture the host request scope before
 writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.
 Compose the list through compound components and reuse styled menu items across
@@ -146,6 +146,23 @@ compiled Soup AST. A compiled AST bakes in the current user, requires reverse
 parsing to restore editable controls, and couples persisted definitions to query
 transport details. Reuse the existing compiler at execution time instead.
 
+### Project definition v1
+
+Projects use `kind: "projects"`, `version: 1`, a viewer-relative `scope` (`all`,
+`assigned-to-me`, or `created-by-me`), and `settings` containing layout, status,
+priority, assigned-to-me refinement, due-date bounds, sort, and grouping. The
+existing GraphQL saved-view API accepts this consumer kind without backend or
+schema changes. Project views reuse shared queries, dialogs, menu/list components,
+and draft reconciliation rather than creating another persistence API.
+
+Project views appear below built-in views in the desktop Tasks sidebar's Projects
+section. Phones have a separate Projects navigation destination and picker that
+contains both built-in and saved views. Search and scroll stay local, temporary
+settings stay out of entry snapshots, and phone List fallback preserves stored
+Gantt layout. Unsupported project definitions display an error instead of quietly
+broadening the result set. Sharing controls definition discovery only; every
+project read retains its existing authorization.
+
 ### Task definition v1
 
 The proposed shape below uses explanatory UUID placeholders, not real IDs:
@@ -160,6 +177,7 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   "filters": {
     "statusOptionIds": ["<in-progress-option-uuid>"],
     "priorityOptionIds": [],
+    "projectIds": ["<project-uuid>"],
     "assignees": [{ "type": "viewer" }],
     "creators": [{ "type": "user", "id": "macro|example@example.com" }],
     "tags": [{
@@ -181,6 +199,9 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   with AND. An empty facet adds no restriction.
 - Persist stable status and priority option IDs, not display labels. Persist
   both tag IDs so inaccessible or deleted tag metadata cannot erase a clause.
+- Persist Project selections as optional `projectIds`, never project names. Missing
+  or empty `projectIds` adds no restriction, preserving existing v1 definitions.
+  Unavailable project metadata does not remove a selected ID or its predicate.
 - Capture the actual open-status selection when present. Do not depend on
   whatever default statuses a future client chooses.
 - Capturing My Tasks with an additional assignee uses normal OR matching: tasks

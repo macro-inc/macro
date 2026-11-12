@@ -38,6 +38,31 @@ export type ProjectFilters = {
   descending?: boolean;
 };
 
+export type ProjectListGroupBy = 'none' | 'status' | 'priority' | 'assignee';
+
+/** Persisted presentation and editable filters, separate from search and scroll. */
+export type ProjectCollectionSettings = {
+  layout: 'list' | 'gantt';
+  status: string;
+  priority: string;
+  dueBefore: string;
+  dueAfter: string;
+  mine: boolean;
+  sort: NonNullable<ProjectFilters['sort']>;
+  groupBy: ProjectListGroupBy;
+};
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectCollectionSettings = {
+  layout: 'list',
+  status: '',
+  priority: '',
+  dueBefore: '',
+  dueAfter: '',
+  mine: false,
+  sort: 'updated',
+  groupBy: 'status',
+};
+
 export type TaskProjectReference =
   | { state: 'none' }
   | { state: 'unavailable' }

@@ -8,7 +8,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 - `tasks-view.tsx` and `tasks-view-context.tsx`: independent saved-view list/detail query composition, filter state, router integration, and task-list source ownership.
 - `filters/task-saved-view.ts`: strict capture and permissive reading of supported filters, with diagnostics for skipped conditions.
-- `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
+- `primitives/create-task-saved-view-draft.ts`: task encoding and confirmed tag bindings over `saved-views/primitives/create-saved-view-draft.ts`, which owns dirty state, retained edits, and revision-aware reconciliation.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
 
@@ -16,7 +16,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep Priority groups in Urgent, High, Medium, Low order with unset priority last through the shared Soup group comparator; group presentation does not follow item sort direction or stored option display order.
-- Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
+- Filter tasks by Project through the existing Project entity-reference property, with OR within projects and AND across facets; keep IDs in saved views and entry state, use the authorized paged project picker source (including read-only projects), and omit the facet in a single-project host. No project and AI project resolution remain unsupported.
+- Keep desktop project navigation in the Projects section above task Saved views, with assigned-to-me, all-accessible, created-by-me, and saved project views; give phones a separate Projects dock destination and picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Align wide desktop group-header glyphs with the first row control; keep caret containers square and preserve each header's caret-to-content gap and value-icon slot across widths without changing padding, the 44px touch target, or the layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
