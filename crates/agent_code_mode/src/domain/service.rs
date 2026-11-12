@@ -374,9 +374,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateCompany"
                 | "CreateContact"
                 | "ImportCompaniesCsv"
-                // macro.crm.pipelines and CrmPipeline. CreatePipeline stays:
-                // the SDK's create() takes no stages or fields.
+                // macro.crm.pipelines and CrmPipeline.
                 | "ListPipelines"
+                | "CreatePipeline"
                 | "FindPipelineEntries"
                 | "AddToPipeline"
                 | "UpdatePipelineEntries"
