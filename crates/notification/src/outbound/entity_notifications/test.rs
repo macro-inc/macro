@@ -624,3 +624,128 @@ async fn channel_and_top_level_feeds_badge_requests_to_join(pool: PgPool) {
         );
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn event_type_filter_limits_unseen_mentions_past_newer_sends(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let quiet = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let thread = EntityType::ChannelMessage.with_entity_string(Uuid::now_v7().to_string());
+    let top = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "top".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    let reply = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        Some(thread.clone()),
+        Mention {
+            message_id: "reply".into(),
+            thread_id: Some("root".into()),
+        },
+    )
+    .await;
+    let seen = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "seen".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    pool.mark_notifications_seen(&viewer, &[seen])
+        .await
+        .unwrap();
+    insert(
+        &pool,
+        &other,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "other-viewer".into(),
+            thread_id: None,
+        },
+    )
+    .await;
+    for index in 0..5 {
+        insert(
+            &pool,
+            &viewer,
+            channel.clone(),
+            Some(thread.clone()),
+            Message {
+                message_id: format!("newer-{index}"),
+            },
+        )
+        .await;
+    }
+    insert(
+        &pool,
+        &viewer,
+        quiet.clone(),
+        None,
+        Message {
+            message_id: "quiet".into(),
+        },
+    )
+    .await;
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        event_types: vec![Mention::TYPE_NAME.into()],
+        limit: Some(10),
+        ..Default::default()
+    };
+    let ids = |rows: &[UserNotificationRow<serde_json::Value>]| -> Vec<Uuid> {
+        rows.iter().map(|row| row.notification_id).collect()
+    };
+    let result = get_filtered_entity_notifications(
+        &pool,
+        viewer.clone(),
+        vec![channel.clone(), quiet.clone(), thread.clone()],
+        query.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        ids(&result[&channel]),
+        vec![reply, top],
+        "thread and top-level mentions, newest first, past newer sends"
+    );
+    assert!(result[&quiet].is_empty());
+    assert_eq!(
+        ids(&result[&thread]),
+        vec![reply],
+        "the secondary path filters event types too"
+    );
+    let capped = get_filtered_entity_notifications(
+        &pool,
+        viewer.clone(),
+        vec![channel.clone()],
+        EntityNotificationQuery {
+            limit: Some(1),
+            ..query.clone()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(ids(&capped[&channel]), vec![reply]);
+    pool.mark_notifications_seen(&viewer, &[reply, top])
+        .await
+        .unwrap();
+    let read = get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], query)
+        .await
+        .unwrap();
+    assert!(read[&channel].is_empty(), "reading the mentions clears them");
+}
