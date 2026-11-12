@@ -32,7 +32,8 @@ export function mapChannelMessage(
       .with('CALL_ROOT', () => 'call_root' as const)
       .otherwise(() => 'message' as const),
     sender_id: record.senderId,
-    guest_name: record.guestName,
+    // REST leaves the field out for everyone but call guests.
+    ...(record.guestName !== null && { guest_name: record.guestName }),
     imported_author:
       record.importedAuthorName === null
         ? null
