@@ -13,7 +13,9 @@ import { SettingsCard } from '../primitives';
 import { RuntimeName } from './connected-runtimes-section';
 import { RuntimeOptions } from './runtime-options';
 
+/** A Macro computer belongs to its team and is listed under Macro computers. */
 function ownerId(harness: RegisteredHarness): string | undefined {
+  if (harness.computer_id) return undefined;
   return harness.owner.type === 'user' ? harness.owner.user_id : undefined;
 }
 

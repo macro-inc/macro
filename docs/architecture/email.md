@@ -612,7 +612,9 @@ format to migrate. Unsupported journal records retain their contents and
 recognizable draft reservations for recovery.
 
 `email-send-dispatcher.ts` submits immediately online through the fetch-only
-GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+GraphQL client in `service-storage/email-send.ts`. It keeps polling whatever
+`navigator.onLine` says, which native webviews can report as offline while the
+API is reachable; offline attempts back off. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
 A thread shows an approved send as sent before the provider confirms it, while

@@ -132,3 +132,7 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+The in-process egress MCP client accepts the primary and explicitly configured
+external egress bases, so tool catalogs can inspect paired-runtime sessions.
+Keep route parsing limited to those configured bases.
