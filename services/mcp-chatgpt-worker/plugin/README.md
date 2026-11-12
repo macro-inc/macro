@@ -11,7 +11,7 @@ cd services/mcp-chatgpt-worker/plugin && zip -r -X ../macro-plugin.zip plugin.js
 ```
 
 Upload the ZIP at platform.openai.com/plugins. Not in the package, entered in
-the dashboard: the demo video URL and the reviewer login (a password account
+the dashboard: the reviewer login (a password account
 with sample data, no MFA or email codes).
 
 ## Rules

@@ -34,8 +34,8 @@
             { "description": "Search the workspace", "prompt": "Search Macro for how tasks work.", "tools_triggered": "search_read", "expected_behavior": "Returns matching items from the demo account, including the Intro to tasks document, with links." },
             { "description": "List recent documents", "prompt": "List my recent Macro documents.", "tools_triggered": "documents_read", "expected_behavior": "Lists the demo account's recently opened documents with links." },
             { "description": "Read and summarize a document", "prompt": "Find the Macro document Advanced task features and summarize it.", "tools_triggered": "search_read, documents_read", "expected_behavior": "Finds the document, reads it, and summarizes its real contents with a link." },
-            { "description": "Create a document", "prompt": "Create a Macro document titled Meeting notes that says we ship Friday.", "tools_triggered": "documents_write", "expected_behavior": "Confirms first, then creates the document and returns its link." },
-            { "description": "Create a task", "prompt": "Create a Macro task called Review the launch notes.", "tools_triggered": "tasks_write", "expected_behavior": "Confirms first, then creates the task and returns its link." }
+            { "description": "Create a document", "prompt": "Create a Macro document titled Meeting notes that says we ship Friday.", "tools_triggered": "documents_write", "expected_behavior": "Creates a document titled Meeting notes saying we ship Friday in the demo account; it opens in Macro with that title and text." },
+            { "description": "Create a task", "prompt": "Create a Macro task called Review the launch notes.", "tools_triggered": "tasks_write", "expected_behavior": "Creates a task called Review the launch notes in the demo account; it shows in Macro with that name." }
           ],
           "negative": [
             { "description": "Weather has nothing to do with Macro", "prompt": "What's the weather in Brooklyn today?" },
@@ -43,6 +43,7 @@
             { "description": "Math needs no workspace", "prompt": "What is 17 times 23?" }
           ]
         },
+        "demo_recording_url": "https://youtu.be/UegUim6f9cw",
         "commerce": false
       },
       "publication": {
