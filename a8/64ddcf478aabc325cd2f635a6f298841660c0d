@@ -1,0 +1,23 @@
+agent-teammates/muppet/packages/lib/core/behavior.ts
+  s_c2dd90bc639ef1::t_7f4d5bd7c13a52 353-355,360,363-366,377,379,387,398-399,427,436-440,443-452
+agent-teammates/muppet/packages/lib/runtimes/factory.ts
+  s_c2dd90bc639ef1::t_dbc1e8180e1fec 18-21,38-49
+agent-teammates/muppet/packages/lib/runtimes/test/factory.test.ts
+  s_c2dd90bc639ef1::t_79f15ced4c075f 3,5,7,119,172-204,246-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a864ddcf478aabc325cd2f635a6f298841660c0d",
+  "prompts": {},
+  "sessions": {
+    "s_c2dd90bc639ef1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9eee9b3a-8588-4de9-b7a9-56ec0050a2bb",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
