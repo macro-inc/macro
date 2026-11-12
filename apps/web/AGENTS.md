@@ -474,6 +474,8 @@ It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
 native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
+The desktop app's channel picker carries no `accept` filter
+(`channelFilePickerAccept`): in the macOS app a filtered picker attached nothing.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
