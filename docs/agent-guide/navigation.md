@@ -1317,8 +1317,9 @@ The event menu groups Macro activity triggers by surface:
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
-same panel to choose any accessible item or specific channels/documents/tasks. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
+same panel to choose any accessible item or specific channels/documents/tasks.
+Specific-item pickers use Next options/PageDown to append later loaded pages.
+Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
