@@ -216,16 +216,22 @@ async fn removing_an_agent_keeps_what_it_owns_and_its_key_stops_working(pool: Pg
     );
     assert_eq!(repo.get(&account.user_id).await.unwrap(), None);
     assert_eq!(repo.account_facts(&account.user_id).await.unwrap(), None);
-    let surviving: (i64, i64, i64) = sqlx::query_as(
+    let surviving = sqlx::query!(
         r#"
-        SELECT (SELECT count(*) FROM "User" WHERE id = $1),
-               (SELECT count(*) FROM "Document" WHERE id = '0193a1b2-0000-7000-8000-0000000000d0' AND owner = $1),
-               (SELECT count(*) FROM entity_access WHERE entity_id = '0193a1b2-0000-7000-8000-0000000000d0' AND source_type = 'team')
+        SELECT (SELECT count(*) FROM "User" WHERE id = $1) AS "account!",
+               (SELECT count(*) FROM "Document"
+                WHERE id = '0193a1b2-0000-7000-8000-0000000000d0' AND owner = $1) AS "document!",
+               (SELECT count(*) FROM entity_access
+                WHERE entity_id = '0193a1b2-0000-7000-8000-0000000000d0'
+                  AND source_type = 'team') AS "team_share!"
         "#,
+        agent,
     )
-    .bind(agent)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(surviving, (1, 1, 1));
+    assert_eq!(
+        (surviving.account, surviving.document, surviving.team_share),
+        (1, 1, 1)
+    );
 }

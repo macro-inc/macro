@@ -57,4 +57,25 @@ impl ComputerAgents for PgComputerRepo {
         .await?;
         Ok(id.map(ComputerId::new_from_uuid))
     }
+
+    #[tracing::instrument(skip(self, agent), err)]
+    async fn has_live_computer(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<bool, PgComputerError> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM hosted_runtime
+                WHERE team_id = $1 AND agent_user_id = $2
+                  AND (state->'phase'->>'phase') <> 'destroying'
+            ) AS "live!"
+            "#,
+            team_id,
+            agent.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
 }

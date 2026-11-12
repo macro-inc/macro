@@ -7,13 +7,16 @@
 //! (not an agent) created it, and a computer that isn't released runs it:
 //! a `hosted_runtime` whose `agent_user_id` is the agent. A purchase still
 //! confirming is not a computer yet. Any dependency failing fails closed.
+//!
+//! It needs only two reads, both on the database pool, so the storage
+//! service composes it without the computer service.
 
+use hosted_runtimes::domain::agent::ComputerAgents;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::models::ComputerState;
-use super::ports::{AgentAccounts, Computers};
+use super::ports::AgentAccounts;
 
 #[cfg(test)]
 mod test;
@@ -61,12 +64,9 @@ pub enum NotAdmitted {
     /// Its creator is gone, or is an agent.
     #[error("no human is responsible for it")]
     NoResponsibleHuman,
-    /// No computer runs it, or only a purchase still confirming.
-    #[error("no computer runs it")]
-    NoComputer,
-    /// Its computer is released.
-    #[error("its computer is released")]
-    ComputerReleased,
+    /// No computer runs it: none, a purchase still confirming, or released.
+    #[error("no live computer runs it")]
+    NoLiveComputer,
 }
 
 /// Admission's outcome when it isn't an admitted agent.
@@ -86,7 +86,7 @@ pub fn decide(
     agent_user_id: &MacroUserIdStr<'_>,
     team_id: Uuid,
     account: Option<AgentAccountFacts>,
-    computer: Option<ComputerState>,
+    live_computer: bool,
 ) -> Result<AdmittedAgent, NotAdmitted> {
     let account = account.ok_or(NotAdmitted::NotAnAgent)?;
     if !account.is_agent {
@@ -102,15 +102,8 @@ pub fn decide(
         Some(creator) if !account.created_by_is_agent => creator,
         _ => return Err(NotAdmitted::NoResponsibleHuman),
     };
-    match computer {
-        None | Some(ComputerState::Purchasing) => return Err(NotAdmitted::NoComputer),
-        Some(ComputerState::Released) => return Err(NotAdmitted::ComputerReleased),
-        Some(
-            ComputerState::SettingUp
-            | ComputerState::Ready
-            | ComputerState::Paused
-            | ComputerState::Failed,
-        ) => {}
+    if !live_computer {
+        return Err(NotAdmitted::NoLiveComputer);
     }
     Ok(AdmittedAgent {
         agent_user_id: agent_user_id.clone().into_owned(),
@@ -119,15 +112,15 @@ pub fn decide(
     })
 }
 
-/// Agent admission over the account and computer ports.
-pub struct AgentAdmission<Accounts, Computer> {
+/// Agent admission over the account and computer reads.
+pub struct AgentAdmission<Accounts, Computers> {
     accounts: Accounts,
-    computers: Computer,
+    computers: Computers,
 }
 
-impl<Accounts: AgentAccounts, Computer: Computers> AgentAdmission<Accounts, Computer> {
+impl<Accounts: AgentAccounts, Computers: ComputerAgents> AgentAdmission<Accounts, Computers> {
     /// Build it.
-    pub fn new(accounts: Accounts, computers: Computer) -> Self {
+    pub fn new(accounts: Accounts, computers: Computers) -> Self {
         Self {
             accounts,
             computers,
@@ -160,43 +153,53 @@ impl<Accounts: AgentAccounts, Computer: Computers> AgentAdmission<Accounts, Comp
         result
     }
 
-    async fn read_and_decide(
+    /// The agent behind an account, admitted to the team its `team_agents`
+    /// row is for; none when the account isn't an admitted agent. For callers
+    /// that know only the account, such as the vault's directory, which
+    /// compares the team itself.
+    pub async fn resolve(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-        team_id: Uuid,
-    ) -> Result<AdmittedAgent, AdmissionError> {
-        let account = self
-            .accounts
+    ) -> Result<Option<AdmittedAgent>, AdmissionError> {
+        let Some(account) = self.account(agent_user_id).await? else {
+            return Ok(None);
+        };
+        match self.admit(agent_user_id, account.team_id).await {
+            Ok(admitted) => Ok(Some(admitted)),
+            Err(AdmissionError::NotAdmitted(_)) => Ok(None),
+            Err(AdmissionError::Unavailable) => Err(AdmissionError::Unavailable),
+        }
+    }
+
+    async fn account(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<AgentAccountFacts>, AdmissionError> {
+        self.accounts
             .account_facts(agent_user_id)
             .await
             .map_err(|error| {
                 tracing::warn!(error = %error, "agent account facts unavailable");
                 AdmissionError::Unavailable
-            })?;
+            })
+    }
+
+    async fn read_and_decide(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<AdmittedAgent, AdmissionError> {
+        let account = self.account(agent_user_id).await?;
         // Decide on the account first, so a non-agent never costs a computer lookup.
-        decide(
-            agent_user_id,
-            team_id,
-            account.clone(),
-            Some(ComputerState::Ready),
-        )?;
-        let computer = self
+        decide(agent_user_id, team_id, account.clone(), true)?;
+        let live = self
             .computers
-            .computer_for_agent(team_id, agent_user_id)
+            .has_live_computer(team_id, agent_user_id)
             .await
             .map_err(|error| {
                 tracing::warn!(error = %error, "agent computer lookup unavailable");
                 AdmissionError::Unavailable
             })?;
-        let state = match computer {
-            None => None,
-            Some(computer) => Some(self.computers.state(team_id, computer).await.map_err(
-                |error| {
-                    tracing::warn!(error = %error, "agent computer state unavailable");
-                    AdmissionError::Unavailable
-                },
-            )?),
-        };
-        Ok(decide(agent_user_id, team_id, account, state)?)
+        Ok(decide(agent_user_id, team_id, account, live)?)
     }
 }
