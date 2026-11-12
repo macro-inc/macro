@@ -62,12 +62,14 @@ impl CompaniesRepositoryImpl {
             .map_err(|error| CrmError::StorageLayerError(error.into()))?;
         // Every step is a probe by key, so the cost stays with the team's own
         // records whatever the planner knows about the tables. The teams are
-        // collected into an array first, so both arms start from their team
+        // collected into an array first, so every arm starts from its team
         // index. Each contact's addresses and each company's domains are read
         // behind an `OFFSET 0` fence: unfenced, the planner can hash the whole
         // address or domain table, which holds every team's rows. Contacts
         // without a company are narrowed to the team behind a fence too, so
         // the scan cannot start from every team's company-less contacts.
+        // Domains and contacts are separate arms so neither is read once per
+        // row of the other.
         let rows = sqlx::query!(
             r#"
             WITH scope AS (
@@ -75,16 +77,23 @@ impl CompaniesRepositoryImpl {
                 UNION ALL
                 SELECT $2::uuid
             )
-            SELECT co.id AS "company_id?", ct.id AS "contact_id?",
-                   LOWER(BTRIM(d.domain)) AS "domain?", address.email AS "email?"
+            SELECT co.id AS "company_id?", NULL::uuid AS "contact_id?",
+                   LOWER(BTRIM(d.domain)) AS "domain?", NULL::text AS "email?"
             FROM crm_companies co
-            LEFT JOIN crm_contacts ct ON ct.company_id = co.id AND NOT ct.hidden
-            LEFT JOIN LATERAL (
-                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
-            ) address ON TRUE
             LEFT JOIN LATERAL (
                 SELECT d.domain FROM crm_domains d WHERE d.company_id = co.id OFFSET 0
             ) d ON TRUE
+            WHERE NOT co.hidden
+              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+            UNION ALL
+            -- Contacts under a visible company.
+            SELECT NULL, ct.id, NULL, address.email
+            FROM crm_companies co
+            JOIN crm_contacts ct
+                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden
+            LEFT JOIN LATERAL (
+                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
+            ) address ON TRUE
             WHERE NOT co.hidden
               AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
             UNION ALL
