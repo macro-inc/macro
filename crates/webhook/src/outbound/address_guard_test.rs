@@ -37,7 +37,10 @@ fn blocks_internal_ipv6_ranges() {
         "100::1",
         "2001::1",
         "2001:db8::1",
+        "3fff::1",
         "64:ff9b:1::1",
+        "::127.0.0.1",
+        "::8.8.8.8",
     ] {
         assert!(is_blocked_ip(ip.parse().unwrap()), "{ip} should be blocked");
     }
@@ -49,7 +52,6 @@ fn judges_ipv6_wrapped_ipv4_by_the_wrapped_address() {
         "::ffff:127.0.0.1",
         "::ffff:10.0.0.1",
         "::ffff:169.254.169.254",
-        "::127.0.0.1",
         "64:ff9b::7f00:1",
         "64:ff9b::a9fe:a9fe",
         "2002:7f00:1::1",
@@ -74,6 +76,7 @@ fn allows_public_addresses() {
         "100.63.255.255",
         "100.128.0.1",
         "2606:4700:4700::1111",
+        "3fff:1000::1",
     ] {
         assert!(
             !is_blocked_ip(ip.parse().unwrap()),

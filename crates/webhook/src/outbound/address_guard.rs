@@ -91,8 +91,7 @@ fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
     }
 
     let segments = ip.segments();
-    ip.is_unspecified()
-        || ip.is_loopback()
+    segments[0] == 0 // ::/16: unspecified, loopback, deprecated IPv4-compatible
         || ip.is_multicast()
         || ip.is_unique_local() // includes fd00:ec2::254 metadata
         || (segments[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
@@ -101,29 +100,27 @@ fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
         || segments[..3] == [0x0064, 0xff9b, 0x0001] // local-use NAT64 64:ff9b:1::/48
         || segments[..2] == [0x2001, 0] // Teredo 2001::/32
         || segments[..2] == [0x2001, 0x0db8] // documentation 2001:db8::/32
-        || segments[0] == 0 // remaining ::/16, including deprecated IPv4-compatible
+        || (segments[0] == 0x3fff && segments[1] & 0xf000 == 0) // documentation 3fff::/20
 }
 
+/// IPv4 address wrapped by an IPv4-mapped, NAT64 or 6to4 IPv6 address.
 fn embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
     if let Some(mapped) = ip.to_ipv4_mapped() {
         return Some(mapped);
     }
 
     let segments = ip.segments();
-    let low = || Ipv4Addr::from(((segments[6] as u32) << 16) | segments[7] as u32);
     if segments[..6] == [0x0064, 0xff9b, 0, 0, 0, 0] {
         // NAT64 well-known prefix 64:ff9b::/96
-        return Some(low());
-    }
-    if segments[..6] == [0, 0, 0, 0, 0, 0] && !ip.is_loopback() && !ip.is_unspecified() {
-        // Deprecated IPv4-compatible ::a.b.c.d
-        return Some(low());
+        return Some(ipv4_from_segments(segments[6], segments[7]));
     }
     if segments[0] == 0x2002 {
         // 6to4 2002:AABB:CCDD::/48 wraps AA.BB.CC.DD
-        return Some(Ipv4Addr::from(
-            ((segments[1] as u32) << 16) | segments[2] as u32,
-        ));
+        return Some(ipv4_from_segments(segments[1], segments[2]));
     }
     None
+}
+
+fn ipv4_from_segments(high: u16, low: u16) -> Ipv4Addr {
+    Ipv4Addr::from((u32::from(high) << 16) | u32::from(low))
 }
