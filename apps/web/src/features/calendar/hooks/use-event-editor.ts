@@ -497,10 +497,9 @@ export function useEventEditor(props: UseEventEditorProps) {
         setDetailEditsRefused(true);
         toast.failure(GUEST_EDITS_RESTRICTED);
       } else {
-        toast.failure(
-          event ? 'Failed to update event' : 'Failed to create event',
-          { subtext }
-        );
+        toast.failure(event ? 'Update failed' : 'Failed to create event', {
+          subtext,
+        });
       }
     } finally {
       setPending(false);

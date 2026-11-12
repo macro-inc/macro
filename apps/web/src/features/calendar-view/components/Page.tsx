@@ -269,7 +269,7 @@ export function Page(props: {
         toast.failure(GUEST_EDITS_RESTRICTED);
         return;
       }
-      toast.failure('Failed to update event', {
+      toast.failure('Update failed', {
         subtext: error instanceof Error ? error.message : undefined,
       });
     },

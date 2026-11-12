@@ -505,7 +505,10 @@ switches the open details.
 
 Editable recurring events can also be dragged and resized in the grid. The
 `Save repeating event` dialog keeps the dropped position visible until Save or
-Cancel. After Save, cached occurrences update immediately and the grid stays
+Cancel. Scope confirmations for time changes and RSVP share a wider, padded
+layout with wrapping descriptions, no header divider or close icon, and footer
+actions. On phones they use the standard bottom sheet. After Save, cached
+occurrences update immediately and the grid stays
 editable while the provider saves and refreshes, including timed/all-day moves.
 Newly opened ranges reuse known occurrence baselines without applying saved
 moves twice. Previously unseen occurrences keep provider times while the series

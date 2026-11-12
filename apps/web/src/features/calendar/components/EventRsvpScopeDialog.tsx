@@ -26,11 +26,9 @@ export function EventRsvpScopeDialog(props: {
       onScopeChange={props.onScopeChange}
       onClose={props.onClose}
       onConfirm={props.onConfirm}
-      confirmLabel="OK"
-      mobileConfirmLabel="Save response"
+      confirmLabel="Save response"
       description="Apply your response to:"
       scopeLabel="Response applies to"
-      closeLabel="Close RSVP"
     />
   );
 }

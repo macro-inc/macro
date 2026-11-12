@@ -1203,7 +1203,7 @@ describe('guests of an event the viewer was invited to', () => {
         ...unchanged,
         guestEmails: ['host@example.com', 'dana@example.com'],
       });
-      expect(mocks.failure).toHaveBeenCalledWith('Failed to update event', {
+      expect(mocks.failure).toHaveBeenCalledWith('Update failed', {
         subtext: 'Only the organizer can invite guests.',
       });
     } finally {
