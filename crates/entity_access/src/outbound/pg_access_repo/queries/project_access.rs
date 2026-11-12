@@ -4,24 +4,26 @@
 mod test;
 
 #[cfg(feature = "explain_binary")]
+use crate::outbound::pg_access_repo::queries::SourceIds;
+#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
-/// Get the highest access level a user has for a project.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_project_access(
+/// Get the highest access level a viewer has for a project.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_project_access(
     pool: &PgPool,
     project_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     // Check share permission access only
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
@@ -50,7 +52,7 @@ pub async fn get_project_access(
                 access_level::text FROM entity_access
             WHERE entity_id = $1
             AND entity_type = 'project'
-            AND source_id = ANY($2)
+            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $4))
 
             UNION ALL
             -- Source 2: project link share permission
@@ -70,15 +72,16 @@ pub async fn get_project_access(
                         FROM "Project" p
                         CROSS JOIN owner_team(p."userId") owner_team
                         WHERE p.id = $3
-                        AND owner_team.team_id::text = ANY($2)
+                        AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $4))
                     )
                 )
             )
         ) AS combined_access
         "#,
         project_id,
-        &source_ids.0,
-        &project_id.to_string()
+        viewer.id(),
+        &project_id.to_string(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;

@@ -166,7 +166,7 @@ async fn typed_owner_team_links_allow_only_the_resolved_audience(
                 "legacy {suffix}"
             );
             assert_eq!(
-                project_access::get_project_access(&pool, &id, &sources).await?,
+                project_access::get_project_access(&pool, &id, viewer).await?,
                 expected,
                 "project {suffix}"
             );

@@ -1,4 +1,8 @@
 use super::*;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -180,18 +184,6 @@ async fn insert_team_entity_access(
     Ok(())
 }
 
-fn anonymous_source_ids() -> SourceIds {
-    SourceIds(Vec::new())
-}
-
-fn authenticated_source_ids(team_id: Option<Uuid>) -> SourceIds {
-    let mut source_ids = vec![REQUESTER.to_string()];
-    if let Some(team_id) = team_id {
-        source_ids.push(team_id.to_string());
-    }
-    SourceIds(source_ids)
-}
-
 async fn setup_project(pool: &PgPool, link_share: Option<&str>) -> anyhow::Result<Uuid> {
     let project_id = Uuid::new_v4();
     insert_user(pool, OWNER).await?;
@@ -204,7 +196,7 @@ async fn setup_project(pool: &PgPool, link_share: Option<&str>) -> anyhow::Resul
 async fn public_link_grants_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
     let project_id = setup_project(&pool, Some("PUBLIC")).await?;
 
-    let access = get_project_access(&pool, &project_id, &anonymous_source_ids()).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -214,7 +206,7 @@ async fn public_link_grants_anonymous_access(pool: PgPool) -> anyhow::Result<()>
 async fn public_link_grants_authenticated_access(pool: PgPool) -> anyhow::Result<()> {
     let project_id = setup_project(&pool, Some("PUBLIC")).await?;
 
-    let access = get_project_access(&pool, &project_id, &authenticated_source_ids(None)).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -224,7 +216,7 @@ async fn public_link_grants_authenticated_access(pool: PgPool) -> anyhow::Result
 async fn null_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
     let project_id = setup_project(&pool, None).await?;
 
-    let access = get_project_access(&pool, &project_id, &anonymous_source_ids()).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -234,7 +226,7 @@ async fn null_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
 async fn null_link_denies_authenticated_access(pool: PgPool) -> anyhow::Result<()> {
     let project_id = setup_project(&pool, None).await?;
 
-    let access = get_project_access(&pool, &project_id, &authenticated_source_ids(None)).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -244,7 +236,7 @@ async fn null_link_denies_authenticated_access(pool: PgPool) -> anyhow::Result<(
 async fn team_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
     let project_id = setup_project(&pool, Some("TEAM")).await?;
 
-    let access = get_project_access(&pool, &project_id, &anonymous_source_ids()).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -259,8 +251,7 @@ async fn team_link_grants_same_team_access(pool: PgPool) -> anyhow::Result<()> {
     add_team_user(&pool, team_id, OWNER, "owner").await?;
     add_team_user(&pool, team_id, REQUESTER, "member").await?;
 
-    let access =
-        get_project_access(&pool, &project_id, &authenticated_source_ids(Some(team_id))).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -277,12 +268,7 @@ async fn team_link_denies_other_team_access(pool: PgPool) -> anyhow::Result<()> 
     insert_team(&pool, requester_team_id, REQUESTER).await?;
     add_team_user(&pool, requester_team_id, REQUESTER, "owner").await?;
 
-    let access = get_project_access(
-        &pool,
-        &project_id,
-        &authenticated_source_ids(Some(requester_team_id)),
-    )
-    .await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -296,12 +282,7 @@ async fn team_link_denies_when_owner_has_no_team(pool: PgPool) -> anyhow::Result
     insert_team(&pool, requester_team_id, REQUESTER).await?;
     add_team_user(&pool, requester_team_id, REQUESTER, "owner").await?;
 
-    let access = get_project_access(
-        &pool,
-        &project_id,
-        &authenticated_source_ids(Some(requester_team_id)),
-    )
-    .await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -312,7 +293,7 @@ async fn explicit_project_access_is_preserved(pool: PgPool) -> anyhow::Result<()
     let project_id = setup_project(&pool, None).await?;
     insert_entity_access(&pool, project_id, REQUESTER, AccessLevel::Edit, None).await?;
 
-    let access = get_project_access(&pool, &project_id, &authenticated_source_ids(None)).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())
@@ -332,7 +313,7 @@ async fn inherited_project_access_is_preserved(pool: PgPool) -> anyhow::Result<(
     )
     .await?;
 
-    let access = get_project_access(&pool, &project_id, &authenticated_source_ids(None)).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())
@@ -350,9 +331,31 @@ async fn direct_team_grant_without_link_share_grants_teammate_access(
     add_team_user(&pool, team_id, REQUESTER, "member").await?;
     insert_team_entity_access(&pool, project_id, team_id, AccessLevel::Edit).await?;
 
-    let access =
-        get_project_access(&pool, &project_id, &authenticated_source_ids(Some(team_id))).await?;
+    let access = get_project_access(&pool, &project_id, Viewer::User(REQUESTER)).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_project")
+    )
+)]
+async fn project_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let projects = sqlx::query_scalar!(r#"SELECT id FROM "Project" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+    let projects: Vec<Uuid> = projects.iter().filter_map(|id| id.parse().ok()).collect();
+
+    assert_matrix_agrees(&viewers, &projects, async |viewer, project_id| {
+        Ok((
+            source_list_oracle::get_project_access(&pool, project_id, &viewer.sources).await?,
+            get_project_access(&pool, project_id, viewer.viewer()).await?,
+        ))
+    })
+    .await
 }
