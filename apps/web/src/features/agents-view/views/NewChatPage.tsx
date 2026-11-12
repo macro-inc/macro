@@ -2,6 +2,7 @@ import { promptActionOf } from '@app/features/block-agent/component/prompt-actio
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
 import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { t } from '@app/lib/i18n';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -284,6 +285,15 @@ export function NewChatPage(props: {
     const agent = selected();
     if (!agent) return 'Choose an agent to start';
     if (agent.unavailableReason) return agent.unavailableReason;
+    // A paid tier would otherwise be dropped silently while the model's
+    // options are still loading.
+    if (
+      capabilityTarget()?.harness === 'in-memory' &&
+      capabilities.isPending &&
+      preferredSpeed() !== 'standard'
+    ) {
+      return t('agentControls.loadingTiers');
+    }
     if (canSelectRepository() && repoUrl()) {
       if (reachable.loading()) return 'Loading repositories';
       if (reachable.error()) return 'Retry loading repositories before sending';

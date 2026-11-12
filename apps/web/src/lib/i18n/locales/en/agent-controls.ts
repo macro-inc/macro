@@ -13,4 +13,5 @@ export default {
   speedPriorityDescription: 'Faster, more reliable processing · 2× usage',
   speedFastDescription: 'Faster output · 2× usage',
   speedUltrafastDescription: 'Fastest output · 6× usage',
+  loadingTiers: 'Loading priority tiers',
 };
