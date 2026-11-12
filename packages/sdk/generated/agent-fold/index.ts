@@ -29,7 +29,10 @@ export type ActivityRow = ActivityRow_Serialize | ActivityRow_Deserialize;
 
 /**  One step of work, worded for a person reading a conversation. */
 export type ActivityRow_Deserialize = {
-	/**  The tool call's id, stable across updates; `plan` for a plan update. */
+	/**
+	 *  The tool call's id, stable across updates; `<call>:<operation>` for an
+	 *  SDK request; `plan` for a plan update.
+	 */
 	id: string,
 	/**  What happened, as a verb phrase: `Ran`, `Reading`, `Search documents`. */
 	label: string,
@@ -40,13 +43,21 @@ export type ActivityRow_Deserialize = {
 	detail: string | null,
 	/**  Where it got to. */
 	status: ActivityStatus,
+	/**
+	 *  The model's tool call this step ran inside: set on each SDK request a
+	 *  code execution made, absent for a call the model made itself.
+	 */
+	call?: string | null,
 	/**  What the step put in front of the person, shown where it ran. */
 	card?: ActivityCard_Deserialize | null,
 };
 
 /**  One step of work, worded for a person reading a conversation. */
 export type ActivityRow_Serialize = {
-	/**  The tool call's id, stable across updates; `plan` for a plan update. */
+	/**
+	 *  The tool call's id, stable across updates; `<call>:<operation>` for an
+	 *  SDK request; `plan` for a plan update.
+	 */
 	id: string,
 	/**  What happened, as a verb phrase: `Ran`, `Reading`, `Search documents`. */
 	label: string,
@@ -57,6 +68,11 @@ export type ActivityRow_Serialize = {
 	detail: string | null,
 	/**  Where it got to. */
 	status: ActivityStatus,
+	/**
+	 *  The model's tool call this step ran inside: set on each SDK request a
+	 *  code execution made, absent for a call the model made itself.
+	 */
+	call: string | null,
 	/**  What the step put in front of the person, shown where it ran. */
 	card: ActivityCard_Serialize | null,
 };
