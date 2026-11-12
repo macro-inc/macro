@@ -119,7 +119,8 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
             Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
             &[link],
             None,
-            0
+            0,
+            true
         )
         .await?
         .is_none()

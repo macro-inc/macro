@@ -372,8 +372,8 @@ impl EmailRepo for EmailPgRepo {
         thread_db_id: Uuid,
         link_ids: &[Uuid],
         actor: Option<&str>,
-
         expected_generation: i32,
+        discard: bool,
     ) -> Result<Option<DraftDeletion>, Self::Err> {
         message::delete_draft_message(
             &self.pool,
@@ -382,6 +382,7 @@ impl EmailRepo for EmailPgRepo {
             link_ids,
             actor,
             expected_generation,
+            discard,
         )
         .await
     }
