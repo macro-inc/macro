@@ -66,3 +66,61 @@ async fn concurrent_purchases_share_the_sold_unit_limit(pool: PgPool) {
     }
     assert_eq!(accepted, 3);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn allocation_counts_what_reserve_counts(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool, policy());
+    // 24 GB: 3 awake units, sold 3x.
+    let host = host(&repo, "capacity-test", 24, 0, 3).await;
+
+    // Awaiting its charge.
+    reserve(&repo, standard(1)).await;
+    // Bought.
+    bought(&repo, 2).await;
+    // Bought and two units.
+    let mut large = standard(3);
+    large.resources.memory_gib = MemoryGib::new(16);
+    let large = reserve(&repo, large).await;
+    repo.convert_reservation(large.id, active(3), now())
+        .await
+        .unwrap()
+        .unwrap();
+    // Charge never landed.
+    let refused = reserve(&repo, standard(4)).await;
+    assert!(repo.delete_reservation(refused.id).await.unwrap());
+    // Released.
+    let released = bought(&repo, 5).await.id;
+    changed(&repo, released, Event::ReleaseNow, now()).await;
+
+    assert_eq!(
+        repo.allocation().await.unwrap(),
+        vec![HostAllocation {
+            host,
+            sold_units: 4,
+            vcpus: 12,
+            memory_gib: 32,
+            disk_gib: 300,
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_pending_reservation_counts_toward_allocation(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool, policy());
+    let host = host(&repo, "capacity-test", 24, 0, 3).await;
+
+    reserve(&repo, standard(1)).await;
+
+    assert_eq!(
+        repo.allocation().await.unwrap(),
+        vec![HostAllocation {
+            host,
+            sold_units: 1,
+            vcpus: 4,
+            memory_gib: 8,
+            disk_gib: 100,
+        }]
+    );
+}
