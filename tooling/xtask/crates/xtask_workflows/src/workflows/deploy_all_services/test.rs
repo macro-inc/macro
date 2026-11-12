@@ -74,10 +74,15 @@ fn email_and_document_storage_deploy_in_the_shared_matrix() {
         String::from_utf8_lossy(&output.stderr)
     );
     let result = std::fs::read_to_string(output_path).unwrap();
-    assert!(
-        result.lines().any(
-            |line| line == r#"matrix=["document-storage-service","email-service","unrelated"]"#
-        ),
+    let matrix = result
+        .lines()
+        .find_map(|line| line.strip_prefix("matrix="))
+        .unwrap();
+    let mut services: Vec<String> = serde_json::from_str(matrix).unwrap();
+    services.sort();
+    assert_eq!(
+        services,
+        ["document-storage-service", "email-service", "unrelated"],
         "{result}"
     );
 
