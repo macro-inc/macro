@@ -1,3 +1,4 @@
+import type { DocumentOp } from '@ai-ops/editor';
 import { FROM_LORO_TAG } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import { registerLoroHistory } from '@core/component/LexicalMarkdown/collaboration/undo';
@@ -5,7 +6,6 @@ import { loroSyncState } from '@core/component/LexicalMarkdown/utils';
 import { registerList } from '@lexical/list';
 import { $convertFromMarkdownString } from '@lexical/markdown';
 import { registerRichText } from '@lexical/rich-text';
-import type { DocumentOp } from '@ai-ops/editor';
 import { SyncDirection } from '@loro-mirror/core';
 import {
   createLoroManager,
@@ -264,7 +264,13 @@ describe('Source applyAiOps controls', () => {
     const captures = [
       await capture('empty', SEED, () => []),
       await capture('success', SEED, ([a]) => [
-        { kind: 'replaceText', node: a, find: 'Alpha', to: 'ALPHA', scope: all },
+        {
+          kind: 'replaceText',
+          node: a,
+          find: 'Alpha',
+          to: 'ALPHA',
+          scope: all,
+        },
         { kind: 'appendText', node: a, text: ' (AI)' },
       ]),
       await capture('first refusal', SEED, ([a]) => [
