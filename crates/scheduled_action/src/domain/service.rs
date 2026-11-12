@@ -707,11 +707,11 @@ where
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
-    async fn get_action(&self, id: Uuid) -> Result<ScheduledAction> {
-        self.repo
-            .get_action(&id)
-            .await?
-            .ok_or_else(|| ActionPolicyError::NotFound.into())
+    async fn get_action<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> Result<ScheduledAction> {
+        self.load_granted(receipt).await
     }
 
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
