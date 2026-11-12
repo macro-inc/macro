@@ -1,7 +1,7 @@
 use agent_fold::domain::lifecycle::LifecycleFold;
 use agent_fold::domain::model::Author;
 use agent_runtime_protocol::domain::action::{
-    AgentAction, AgentActionId, AgentSetConfigOptionAction,
+    AgentAction, AgentActionId, AgentSetConfigOptionAction, REASONING_EFFORT_CONFIG_ID,
 };
 use model_owner::Owner;
 
@@ -15,9 +15,6 @@ use crate::domain::ports::{
     SelectedPersona, SessionOpener, persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
-
-/// The session option runtimes advertise for how much their model reasons.
-const REASONING_EFFORT_CONFIG_ID: &str = "reasoning_effort";
 
 /// Domain orchestration using the same provisioning and controls as interactive sessions.
 #[derive(Clone)]

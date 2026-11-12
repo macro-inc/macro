@@ -78,8 +78,7 @@ pub fn speed_config_option(model: &str, current: ModelSpeed) -> Option<SessionCo
     ))
 }
 
-/// ACP id for Macro's portable reasoning-effort selector.
-pub const REASONING_EFFORT_CONFIG_ID: &str = "reasoning_effort";
+pub use agent_runtime_protocol::domain::action::REASONING_EFFORT_CONFIG_ID;
 
 /// Build the effort option at its current value.
 #[must_use]

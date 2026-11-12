@@ -23,6 +23,9 @@ mod test;
 /// ACP session config option used to select the agent's model.
 pub const MODEL_CONFIG_ID: &str = "model";
 
+/// ACP session config option for Macro's portable reasoning-effort selector.
+pub const REASONING_EFFORT_CONFIG_ID: &str = "reasoning_effort";
+
 /// Marks server-added execution context that runtimes read but transcripts omit.
 pub const INVOCATION_CONTEXT_META: &str = "macro/invocation-context";
 
