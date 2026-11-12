@@ -79,6 +79,7 @@ pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBacke
     if let Some(rollout) = macro_connect_rollout(
         env.posthog_api_key.as_ref().and_then(|value| value.value()),
         env.posthog_host.as_ref().and_then(|value| value.value()),
+        Environment::new_or_prod(),
     )? {
         backends = backends.with_rollout(rollout);
     }
@@ -99,6 +100,7 @@ const ROLLOUT_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 pub fn macro_connect_rollout(
     api_key: Option<&str>,
     host: Option<&str>,
+    environment: Environment,
 ) -> anyhow::Result<Option<ConnectRollout>> {
     let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
         return Ok(None);
@@ -107,6 +109,7 @@ pub fn macro_connect_rollout(
         host.unwrap_or("https://us.i.posthog.com"),
         api_key.to_owned(),
         std::time::Duration::from_secs(3),
+        environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     Ok(Some(rollout_from(flags, MACRO_CONNECT_FLAG)))
@@ -122,6 +125,7 @@ pub const CANVAS_ARTIFACTS_FLAG: &str = "enable-canvas-artifacts";
 pub fn canvas_artifacts_rollout(
     api_key: Option<&str>,
     host: Option<&str>,
+    environment: Environment,
 ) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
     let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
         return Ok(None);
@@ -130,6 +134,7 @@ pub fn canvas_artifacts_rollout(
         host.unwrap_or("https://us.i.posthog.com"),
         api_key.to_owned(),
         std::time::Duration::from_secs(3),
+        environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     Ok(Some(rollout_from(flags, CANVAS_ARTIFACTS_FLAG)))
@@ -142,6 +147,7 @@ pub fn canvas_artifacts_rollout_from_env()
     canvas_artifacts_rollout(
         env.posthog_api_key.as_ref().and_then(|value| value.value()),
         env.posthog_host.as_ref().and_then(|value| value.value()),
+        Environment::new_or_prod(),
     )
 }
 

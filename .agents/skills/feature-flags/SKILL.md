@@ -98,6 +98,11 @@ These are the mistakes past flagged launches had to fix:
   can no longer be turned off from PostHog; use `undefined` so PostHog stays in
   control.
 
+Dev and prod share one PostHog project and the same user IDs. To roll out to
+dev only, target the person property `environment = dev` (values `dev`,
+`prod`, `local`); a release condition on user IDs alone also matches in prod.
+Web (`analytics.ts`) and backend (`crates/feature_flags`) both send it.
+
 ## 5. Backend
 
 - **Per-user remote flags** use `crates/feature_flags` (read its `README.md`):

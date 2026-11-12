@@ -36,6 +36,7 @@ Construct once at the service composition root and clone to share its HTTP pool:
 
 ```rust
 use feature_flags::outbound::posthog::PostHogFeatureFlags;
+use macro_env::Environment;
 use std::time::Duration;
 
 # fn example() -> Result<(), rootcause::Report> {
@@ -43,6 +44,7 @@ let feature_flags = PostHogFeatureFlags::new(
     "https://us.i.posthog.com", // Use the project's regional ingestion origin.
     "injected-project-token".to_owned(),
     Duration::from_secs(3),
+    Environment::Develop, // The service config's `environment`.
 )?;
 # Ok(())
 # }
@@ -56,8 +58,14 @@ configuration is loaded from the environment by this crate.
 Each load makes one POST to `/flags/?v=2` with the project token and exact Macro
 user ID. `evaluation_runtime: "server"` requests server/all-runtime flags;
 `geoip_disable: true` prevents targeting by the backend's IP. Person targeting
-uses PostHog's stored properties. Group targeting and property overrides are
-not supported. Reads do not emit `$feature_flag_called` events, so this adapter
+uses PostHog's stored properties plus one override, `environment` (`prod`,
+`dev`, or `local`), from the environment passed at construction; nothing
+request-supplied can set it. Group targeting and other property overrides are
+not supported.
+
+Dev and prod share one PostHog project and the same Macro user IDs, so a flag
+targeted only at user IDs turns on in both. Target dev-only rollouts with
+`environment = dev`; the web client sends the same property. Reads do not emit `$feature_flag_called` events, so this adapter
 alone does not provide experiment exposure tracking.
 
 The response must contain a `flags` map and explicit boolean
