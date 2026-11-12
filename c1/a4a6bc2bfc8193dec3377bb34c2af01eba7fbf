@@ -1,0 +1,27 @@
+.github/workflows/web-app-check-main.yml
+  s_4486610b4f3a97::t_fe1c7659c7647c 368
+agent-teammates/muppet/packages/lib/utilities/telemetry/index.ts
+  s_4486610b4f3a97::t_e51623c5895b3b 64-65
+agent-teammates/muppet/packages/lib/utilities/telemetry/macro.ts
+  s_4486610b4f3a97::t_fa876a6479eaaa 38-43
+packages/observability/src/muppet.test.ts
+  s_4486610b4f3a97::t_3a8f05666f3e43 1-15
+agent-teammates/muppet/packages/lib/utilities/telemetry/framework.ts
+  s_4486610b4f3a97::t_5312b9dc00d973 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c1a4a6bc2bfc8193dec3377bb34c2af01eba7fbf",
+  "prompts": {},
+  "sessions": {
+    "s_4486610b4f3a97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e07751b0-6706-4d89-b62e-01d8640f7d9d",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
