@@ -7,7 +7,11 @@ import { err } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import { createFakePasswordSource } from '../tests/fake-source';
-import { FIXTURE_SCOPE } from '../tests/fixture-scope';
+import { parseExportFile } from '@core/password-import/client';
+import {
+  createMemoryImportResume,
+  FIXTURE_SCOPE,
+} from '../tests/fixture-scope';
 import { VaultView } from '../views/vault-view';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
@@ -77,6 +81,9 @@ const View = () => (
         writeClipboard: async (value) => {
           document.body.dataset.copied = value;
         },
+        // The real wasm parser in its worker (`just ensure-password-import-wasm`).
+        parseExport: parseExportFile,
+        importResume: createMemoryImportResume(),
       }}
     >
       <div class="relative h-dvh bg-panel text-ink">

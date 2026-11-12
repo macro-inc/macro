@@ -5,6 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import TrayArrowDownIcon from '@icon/system/regular/tray-arrow-down.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -20,6 +21,7 @@ export function NewItemMenu(props: {
   presentation: 'sidebar' | 'toolbar';
   destination: string;
   onCreate: (kind: PasswordKind) => void;
+  onImport: () => void;
 }) {
   const label = () =>
     t('passwords.newItemOrFolder', { destination: props.destination });
@@ -68,6 +70,11 @@ export function NewItemMenu(props: {
             )}
           </For>
         </Dropdown.Group>
+        <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted" />
+        <Dropdown.Item onSelect={props.onImport}>
+          <TrayArrowDownIcon class="size-4 shrink-0" />
+          <span class="truncate">{t('passwords.import')}</span>
+        </Dropdown.Item>
       </Dropdown.Content>
     </Dropdown>
   );

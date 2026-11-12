@@ -22,6 +22,7 @@ import type { PasswordUsername } from '@service-storage/generated/schemas/passwo
 import type { PasswordVersion as VersionDto } from '@service-storage/generated/schemas/passwordVersion';
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
 import { err, ok } from 'neverthrow';
+import type { ImportBatchResult } from '../core/import';
 import type {
   PasswordFailure,
   PasswordResult,
@@ -187,6 +188,15 @@ export function createPasswordSource(
       if (!isCurrent()) throw new PasswordScopeChangedError();
       return items.map(metadata);
     },
+    async search(text) {
+      if (!isCurrent()) return err('failed' as const);
+      const items = await fetchWithToken<PasswordItemMetadata[]>(
+        `${root}/items?search=${encodeURIComponent(text)}`,
+        { signal: scope.signal, retry: { maxTries: 1 } }
+      );
+      if (items.isErr() || !isCurrent()) return err('failed' as const);
+      return ok(items.value.map(metadata));
+    },
     async folders() {
       if (!isCurrent()) throw new PasswordScopeChangedError();
       const folders = await throwOnErr(() =>
@@ -334,6 +344,14 @@ export function createPasswordSource(
     },
     totp(id) {
       return currentCode(id);
+    },
+    importBatch(importId, batch) {
+      // Spanned by the caller's `passwords.import`; values never reach attributes.
+      return request<ImportBatchResult>(
+        `/imports/${encodeURIComponent(importId)}/items`,
+        'POST',
+        batch
+      );
     },
     async logo(domain) {
       const response = await fetchWithToken<Uint8Array>(

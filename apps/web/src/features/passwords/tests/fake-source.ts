@@ -1,5 +1,6 @@
 import { err, ok } from 'neverthrow';
 import type { PasswordSource } from '../context/passwords-context';
+import type { ImportBatchBody, ImportBatchResult } from '../core/import';
 import {
   folderSubtree,
   type PasswordFolder,
@@ -11,8 +12,16 @@ import {
 /** An item the fake starts with, such as one the viewer may only view. */
 export type FakeSeed = { item: PasswordItem; values: PasswordValues };
 
+/** Scripted import answers: busy rounds per source key, failed requests. */
+export type FakeImportScript = {
+  busy?: Map<string, number>;
+  failRequests?: number;
+  requests?: ImportBatchBody[];
+};
+
 export function createFakePasswordSource(
-  seed: FakeSeed[] = []
+  seed: FakeSeed[] = [],
+  script: FakeImportScript = {}
 ): PasswordSource {
   let items: PasswordItem[] = seed.map((entry) => entry.item);
   let folders: PasswordFolder[] = [];
@@ -23,6 +32,12 @@ export function createFakePasswordSource(
   return {
     async list() {
       return [...items];
+    },
+    async search(text) {
+      const query = text.toLocaleLowerCase();
+      return ok(
+        items.filter((item) => item.name.toLocaleLowerCase().includes(query))
+      );
     },
     async folders() {
       return [...folders];
@@ -166,6 +181,82 @@ export function createFakePasswordSource(
     },
     async logo() {
       return err('failed');
+    },
+    async importBatch(importId, batch) {
+      script.requests?.push(structuredClone(batch));
+      if (script.failRequests && script.failRequests > 0) {
+        script.failRequests--;
+        return err('failed');
+      }
+      let targetFolderId: string | null = null;
+      if (batch.target.kind === 'new') {
+        const id = `${importId}:target`;
+        if (!folders.some((folder) => folder.id === id))
+          folders.push({ id, name: batch.target.name, parentId: null });
+        targetFolderId = id;
+      } else if (batch.target.kind === 'existing') {
+        targetFolderId = batch.target.folderId;
+      }
+      const folderIds = new Map<string, string>();
+      for (const source of batch.folders) {
+        const id = `${importId}:${source.key}`;
+        const parentId = source.parentKey
+          ? (folderIds.get(source.parentKey) ?? null)
+          : targetFolderId;
+        if (!folders.some((folder) => folder.id === id))
+          folders.push({ id, name: source.name, parentId });
+        folderIds.set(source.key, id);
+      }
+      const answers: ImportBatchResult['items'] = batch.items.map((entry) => {
+        const busy = script.busy?.get(entry.sourceKey) ?? 0;
+        if (busy > 0) {
+          script.busy?.set(entry.sourceKey, busy - 1);
+          return {
+            sourceKey: entry.sourceKey,
+            outcome: 'failed',
+            errorCode: 'busy',
+          };
+        }
+        const id = `${importId}:${entry.sourceKey}`;
+        if (items.some((item) => item.id === id))
+          return {
+            sourceKey: entry.sourceKey,
+            outcome: 'already_present',
+            itemId: id,
+          };
+        const timestamp = new Date().toISOString();
+        items = [
+          ...items,
+          {
+            id,
+            teamId: 'fixture-team',
+            name: entry.name,
+            kind: entry.kind,
+            url: entry.url,
+            folderId: entry.folderKey
+              ? (folderIds.get(entry.folderKey) ?? null)
+              : targetFolderId,
+            favorite: entry.favorite,
+            shared: false,
+            shareCount: 0,
+            sharedWithTeam: !batch.private,
+            canManage: true,
+            canEdit: true,
+            version: 1,
+            hasTotp: entry.totp !== null,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            lastUsedAt: null,
+          },
+        ];
+        values.set(id, structuredClone(entry.values));
+        return { sourceKey: entry.sourceKey, outcome: 'created', itemId: id };
+      });
+      return ok({
+        targetFolderId,
+        folders: [...folderIds].map(([key, folderId]) => ({ key, folderId })),
+        items: answers,
+      });
     },
   };
 }

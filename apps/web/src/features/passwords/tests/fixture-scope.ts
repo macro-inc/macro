@@ -1,4 +1,9 @@
-import type { PasswordScope } from '../context/passwords-context';
+import type {
+  ImportResume,
+  ImportResumeStore,
+  PasswordCapabilities,
+  PasswordScope,
+} from '../context/passwords-context';
 
 /** A viewer scope a test can end, as a sign-in to another account would. */
 export function createFixtureScope(key = 'fixture-account:1:fixture-team') {
@@ -13,3 +18,28 @@ export function createFixtureScope(key = 'fixture-account:1:fixture-team') {
 }
 
 export const FIXTURE_SCOPE = createFixtureScope().scope;
+
+/** Unfinished imports kept in memory, as sessionStorage keeps them in a tab. */
+export function createMemoryImportResume(): ImportResumeStore {
+  const entries = new Map<string, ImportResume>();
+  return {
+    get: (key) => entries.get(key),
+    set: (key, value) => {
+      entries.set(key, value);
+    },
+    remove: (key) => {
+      entries.delete(key);
+    },
+  };
+}
+
+/** Import capabilities for tests that never import. */
+export function noImport(): Pick<
+  PasswordCapabilities,
+  'parseExport' | 'importResume'
+> {
+  return {
+    parseExport: async () => ({ outcome: 'unreadable' }),
+    importResume: createMemoryImportResume(),
+  };
+}
