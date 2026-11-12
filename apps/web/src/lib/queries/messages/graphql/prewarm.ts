@@ -39,6 +39,8 @@ const PREWARM_CHANGE_PAGES = 2;
 const CHANNEL_SPACING_MS = 500;
 /** Warming waits this long after the person last pressed, typed or scrolled. */
 const INPUT_QUIET_MS = 1_000;
+/** How long warming waits on a timeline read before going on beside it. */
+const READ_WAIT_MS = 30_000;
 /** A channel not opened for this long loses its cached page. */
 const KEEP_OPENED_DAYS = 30;
 /** Channels whose cached pages one idle moment looks up for eviction. */
@@ -157,16 +159,20 @@ function timelineReadInFlight(): boolean {
   return queryClient.isFetching({ queryKey: messageKeys.messages._def }) > 0;
 }
 
-/** Resolves once no timeline read is in flight. */
-function timelineReadsSettled(): Promise<void> {
-  if (!timelineReadInFlight()) return Promise.resolve();
-  return new Promise((resolve) => {
-    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-      if (timelineReadInFlight()) return;
-      unsubscribe();
-      resolve();
+/**
+ * Resolves once no timeline read is in flight, or after `READ_WAIT_MS`: a
+ * read that never settles must not park warming for the session.
+ */
+async function timelineReadsSettled(): Promise<void> {
+  if (!timelineReadInFlight()) return;
+  let unsubscribe = () => {};
+  const settled = new Promise<void>((resolve) => {
+    unsubscribe = queryClient.getQueryCache().subscribe(() => {
+      if (!timelineReadInFlight()) resolve();
     });
   });
+  await Promise.race([settled, sleep(READ_WAIT_MS)]);
+  unsubscribe();
 }
 
 /**
@@ -181,6 +187,8 @@ async function nextQuietMoment(): Promise<void> {
       await sleep(INPUT_QUIET_MS - quietFor);
     } else if (timelineReadInFlight()) {
       await timelineReadsSettled();
+      // Still reading after the wait: go on beside it.
+      if (timelineReadInFlight()) return;
     } else {
       return;
     }
@@ -302,11 +310,13 @@ async function readWarmPage(
     return { outcome: 'failed' };
   }
   try {
-    if (!cached) {
+    // An emptied page marks a refused channel: its number and cursor
+    // describe rows that are gone, so it is read whole like a miss.
+    if (!cached || cached.page.entries.length === 0) {
       const latest = await span.run(() => fetchLatestChannelPage(channelId));
       return { outcome: 'fetched', latest };
     }
-    noteCachedPage(host, channelId, cached.page.entries.length > 0);
+    noteCachedPage(host, channelId, true);
     const caughtUp = await catchUpCachedPage(channelId, cached, span);
     if (caughtUp) {
       return caughtUp.seq === cached.seq
@@ -450,6 +460,7 @@ async function evictStaleChannelPages(
           if (isChannelTimelineLoaded(channelId)) continue;
           channels += 1;
           keys.push(...pageKeys);
+          noteCachedPage(current.host, channelId, false);
         }
         if (keys.length > 0) await current.host.deleteRecords(keys);
         records += keys.length;

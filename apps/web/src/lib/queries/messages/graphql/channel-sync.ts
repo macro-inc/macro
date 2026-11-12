@@ -66,7 +66,7 @@ const ANSWERED_CACHE_HEAD_START_MS = 2_000;
 export const CURSOR_PAGE_LIMIT = 100;
 const FIRST_PAGE_LIMIT = 50;
 /** Change pages one catch-up reads before it gives up and reads the page again. */
-export const MAX_CATCH_UP_PAGES = 20;
+const MAX_CATCH_UP_PAGES = 20;
 const PERSIST_DELAY_MS = 1_000;
 /** A changes read that has not answered by now is treated as failed. */
 const CHANGES_TIMEOUT_MS = 15_000;

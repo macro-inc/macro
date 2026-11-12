@@ -17,7 +17,7 @@ pub const MAX_SOUP_PAGE_BYTES: usize = 2 * 1024 * 1024;
 /// Maximum channel message pages linked from one viewer. Each links to the
 /// channel's own record, which holds its latest page; the client deletes those
 /// records, and this bounds the viewer's links to them, deleted or not. Above
-/// what the web client warms at once (up to 500 unread channels and 20 recent
+/// what the web client warms at once (up to 40 unread channels and 20 recent
 /// ones), so warming never drops the links it just wrote.
 pub const MAX_CHANNEL_PAGES: usize = 1024;
 /// Encoded budget for channel page links and their write-recency metadata:

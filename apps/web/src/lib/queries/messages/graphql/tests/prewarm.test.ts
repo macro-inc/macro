@@ -230,6 +230,24 @@ describe('warming a channel', () => {
     expect(writtenIds()).toEqual({ channelId: 'a', seq: 9, ids: ['m2'] });
   });
 
+  it('reads the whole page for a channel whose cached page was emptied', async () => {
+    knownChannels({ a: daysAgo(1) });
+    // What a refused read leaves: no rows under the old number.
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 7,
+      userId: 'user',
+      page: page([]),
+    });
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 12,
+      userId: 'user',
+      page: page([messageEntry('m5', 5)]),
+    });
+    await maintain();
+    expect(mocks.fetchChannelChanges).not.toHaveBeenCalled();
+    expect(writtenIds()).toEqual({ channelId: 'a', seq: 12, ids: ['m5'] });
+  });
+
   it('writes nothing for a cached page that is already current', async () => {
     knownChannels({ a: daysAgo(1) });
     mocks.readCachedLatestPage.mockResolvedValue({
