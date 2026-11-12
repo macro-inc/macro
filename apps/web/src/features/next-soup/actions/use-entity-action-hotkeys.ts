@@ -548,7 +548,9 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.email.blockSender,
     scopeId,
     description: () => t('entityActions.blockSender'),
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // A held key would queue one block request per repeat.
+      if (event?.repeat) return true;
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;

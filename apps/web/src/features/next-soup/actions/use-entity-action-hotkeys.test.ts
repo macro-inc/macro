@@ -154,7 +154,11 @@ it('blocks the sender of the focused row with shift+b', () => {
       )![0];
     expect(options.hotkey).toEqual(['shift+b']);
     expect(options.condition!()).toBe(true);
+    const repeat = new KeyboardEvent('keydown', { key: 'B', repeat: true });
+    expect(options.keyDownHandler!(repeat)).toBe(true);
+    expect(blockSender.executeWithSoup).not.toHaveBeenCalled();
     expect(options.keyDownHandler!()).toBe(true);
+    expect(blockSender.executeWithSoup).toHaveBeenCalledOnce();
     expect(blockSender.executeWithSoup).toHaveBeenCalledWith([thread], list);
     dispose();
   });

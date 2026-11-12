@@ -89,7 +89,8 @@ export function registerEmailHotkeys(
     hotkey: 'shift+b',
     scopeId: scopeId,
     description: 'Block sender',
-    keyDownHandler: handlers.blockSender,
+    // A held key would queue one block request per repeat.
+    keyDownHandler: (event) => (event?.repeat ? true : handlers.blockSender()),
     hotkeyToken: TOKENS.email.blockSender,
     displayPriority: 5,
     condition: () => handlers.canActOnSender(),
