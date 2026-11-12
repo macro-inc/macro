@@ -58,8 +58,10 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 authenticated Macro user through `feature_flags`. Missing providers, missing
 flags and load errors refuse team purchase, quote and offers with 403.
 Composition roots inject it with `with_rollout`; `quote_for_team` takes the
-caller user id. Existing reads and management, internal purchase/quote, Stripe
-reconciliation and workers remain available when rollout is off.
+caller user id. Existing reads and management, Stripe reconciliation and workers remain
+available when rollout is off. The web hides the computer UI with the flag off
+while existing computers keep running and billing: the flag is a sales kill
+switch, not a way to manage computers.
 
 ## Explicit configuration
 

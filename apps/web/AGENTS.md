@@ -1381,7 +1381,8 @@ computer, total and next-invoice amounts; never calculate a bill from catalog
 quotes. Format provider minor units using currency precision and Stripe's
 ISK/UGX wire-format exceptions.
 `TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
-null breakdown or the flag off keeps the existing plan and computers UI.
+null breakdown keeps the existing plan and computers UI. With the flag off the
+backend returns no breakdown and the page shows only the plan.
 
 Reuse `PriceBreakdown` for Macro computer purchase and
 subscription billing: item/spec subline/amount, divider, total and billing note.
