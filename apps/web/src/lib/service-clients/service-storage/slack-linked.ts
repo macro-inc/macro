@@ -2,18 +2,16 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ObjectLike } from '@core/util/result';
-import type { ExternalChatAdded } from './generated/schemas/externalChatAdded';
-import { type SlackErrorCode, slackErrorResponse } from './slack-errors';
 import type {
-  SlackAccount,
-  SlackAccountDisconnectRequest,
-  SlackAccountList,
-  SlackChatAdd,
+  SlackAccounts,
   SlackConversationList,
+  SlackDisconnect,
+  SlackDisconnectRequest,
   SlackHistoryImport,
   SlackLogin,
-  SlackSessionLoginRequest,
-} from './slack-linked-wire';
+  SlackSessionSubmission,
+} from './generated/schemas';
+import { type SlackErrorCode, slackErrorResponse } from './slack-errors';
 
 const host = SERVER_HOSTS['document-storage-service'];
 const root = `${host}/slack-linked`;
@@ -40,7 +38,7 @@ export const slackLinkedClient = {
   startEmailLogin: (email: string) =>
     send<SlackLogin>(`${root}/login`, 'POST', { email }),
   /** Signs in with a pasted session, or one Macro desktop captured. */
-  startSessionLogin: (request: SlackSessionLoginRequest) =>
+  startSessionLogin: (request: SlackSessionSubmission) =>
     send<SlackLogin>(`${root}/login/session`, 'POST', request),
   login: (id: string) =>
     fetchWithToken<SlackLogin, SlackErrorCode>(login(id), {
@@ -57,11 +55,11 @@ export const slackLinkedClient = {
     send<SlackLogin>(`${login(id)}/two-factor`, 'POST', { code }),
   cancelLogin: (id: string) => send<SlackLogin>(login(id), 'DELETE'),
   accounts: () =>
-    fetchWithToken<SlackAccountList, SlackErrorCode>(`${root}/accounts`, {
+    fetchWithToken<SlackAccounts, SlackErrorCode>(`${root}/accounts`, {
       errorResponseHandler: slackErrorResponse,
     }),
-  disconnect: (accountId: string, request: SlackAccountDisconnectRequest) =>
-    send<SlackAccount>(
+  disconnect: (accountId: string, request: SlackDisconnectRequest) =>
+    send<SlackDisconnect>(
       `${root}/accounts/${encodeURIComponent(accountId)}/disconnect`,
       'POST',
       request
@@ -79,8 +77,4 @@ export const slackLinkedClient = {
       'POST',
       {}
     ),
-  // TODO(slack-web): use `externalChatsClient.add` once the generated
-  // `ExternalChatProvider` has `slack`.
-  addChat: (request: SlackChatAdd) =>
-    send<ExternalChatAdded>(`${host}/external-chats`, 'POST', request),
 };

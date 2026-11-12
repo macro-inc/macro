@@ -3,7 +3,7 @@ import type {
   SlackLogin,
   SlackAccount as WireAccount,
   SlackConversation as WireConversation,
-} from '@service-storage/slack-linked-wire';
+} from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 import type { SlackAccount } from '../core/account';
 import type { AddFailure, SlackConversation } from '../core/conversation';

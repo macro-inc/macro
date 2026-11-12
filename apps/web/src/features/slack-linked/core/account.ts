@@ -1,7 +1,7 @@
 import type {
   SlackAccountState,
   SlackEndedReason,
-} from '@service-storage/slack-linked-wire';
+} from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
 /** One Slack workspace the person signed in to. */

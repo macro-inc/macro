@@ -5,7 +5,7 @@ import type {
   SlackLogin,
   SlackLoginStep,
   SlackLoginWorkspace,
-} from '../../src/lib/service-clients/service-storage/slack-linked-wire';
+} from '../../src/lib/service-clients/service-storage/generated/schemas';
 
 const USER_ID = 'macro|slack-tester@example.test';
 

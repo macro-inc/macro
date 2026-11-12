@@ -1,9 +1,10 @@
 import { throwOnErr } from '@core/util/result';
-import { slackLinkedClient as client } from '@service-storage/slack-linked';
+import { externalChatsClient } from '@service-storage/external-chats';
 import type {
-  SlackChatAdd,
-  SlackSessionLoginRequest,
-} from '@service-storage/slack-linked-wire';
+  ExternalChatAdd,
+  SlackSessionSubmission,
+} from '@service-storage/generated/schemas';
+import { slackLinkedClient as client } from '@service-storage/slack-linked';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -101,7 +102,7 @@ function storeLogin(userId: string) {
 
 export type SlackLoginInput =
   | { step: 'email'; email: string }
-  | { step: 'session'; session: SlackSessionLoginRequest }
+  | { step: 'session'; session: SlackSessionSubmission }
   | { step: 'captcha'; loginId: string; solution: string }
   | { step: 'code'; loginId: string; code: string }
   | { step: 'workspaces'; loginId: string; teamIds: string[] }
@@ -168,9 +169,11 @@ export function useDisconnectSlackMutation() {
 /** Adds a Slack Connect conversation to Macro as an external chat. */
 export function useAddSlackChatMutation() {
   return useMutation(() => ({
-    mutationFn: (chat: Omit<SlackChatAdd, 'provider'>) =>
+    mutationFn: (chat: Omit<ExternalChatAdd, 'provider'>) =>
       slackOperation('add_chat', () =>
-        throwOnErr(() => client.addChat({ provider: 'slack', ...chat }))
+        throwOnErr(() =>
+          externalChatsClient.add({ provider: 'slack', ...chat })
+        )
       ),
     onSuccess: () =>
       Promise.all([invalidateConversations(), invalidateExternalChatList()]),

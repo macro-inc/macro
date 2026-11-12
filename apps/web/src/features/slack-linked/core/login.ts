@@ -2,7 +2,7 @@ import type {
   SlackLoginFailure,
   SlackLoginStep,
   SlackLoginWorkspace,
-} from '@service-storage/slack-linked-wire';
+} from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
 
 export type { SlackLoginFailure, SlackLoginStep, SlackLoginWorkspace };
