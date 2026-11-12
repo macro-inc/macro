@@ -101,6 +101,13 @@ All routes need the person's bearer session (`UserOnly`); API credentials,
 bots and internal callers can't sign in, list or disconnect. Errors use the
 generic `ApiError` JSON (`{code, message}`). Times are RFC 3339.
 
+Error codes the web maps, for `/slack` and Slack chats on `/external-chats`:
+`invalid_input` (400), `not_found` (404), `forbidden` (403: not the person's
+own session), `conflict` (409, including a sign-in input sent in the wrong
+step), `disconnected` (no active Slack account), `cannot_add_archived`,
+`cannot_add_frozen`, `cannot_add_not_member`, `rate_limited` (429),
+`temporarily_unavailable` (503) and `internal_error` (500).
+
 ### Sign-in
 
 A sign-in is a `slack_login_attempt` that DSS creates and updates and a
@@ -119,8 +126,9 @@ as the WhatsApp pairing dialog does) until `step` is no longer `working`.
 | `POST /slack/login/{id}/two-factor` | `{code}` (six digits) | `two_factor` |
 | `DELETE /slack/login/{id}` | | any open step |
 
-Every route returns the `SlackLogin` DTO; a `POST` in the wrong step is
-`409 wrong_step`; an expired attempt is `410 expired`.
+Every route returns the `SlackLogin` DTO; a `POST` in the wrong step (or to
+an attempt that is over) is `409 conflict`; an attempt past `expiresAt` reads
+as `failed: expired`.
 
 ```ts
 type SlackLogin = {
@@ -192,7 +200,7 @@ the person already had one for that team: `generation` +1, state
 
 | Route | Purpose |
 | --- | --- |
-| `GET /slack/accounts` | the person's accounts, any state |
+| `GET /slack/accounts` | `{accounts: SlackAccount[]}`: the person's accounts, any state, oldest first |
 | `POST /slack/accounts/{accountId}/disconnect` | `{authorizationGeneration, signOut: boolean}`: end consent; `signOut` also signs the session out at Slack |
 
 ```ts
@@ -269,9 +277,9 @@ the cursor, another 1,000 messages per call, and returns
 | Slack | Macro |
 | --- | --- |
 | message `ts` | `source_id`; `source_at` from `ts` |
-| `text` / `blocks` (mrkdwn, `rich_text`) | `body` as Markdown, via `crates/slack_integration`'s mrkdwn parser; `rich.mentions` |
-| `<@U…>` | `mentions` (Slack user ids), named through `slack_user` |
-| `<#C…>`, `<!here>`, `<!channel>`, links, `:emoji:` | text: `#name`, `@here`, links, Unicode emoji (custom emoji as `:name:`) |
+| `text` (mrkdwn; `rich_text` blocks rendered to mrkdwn when `text` is empty) | `body` as Slack's raw mrkdwn; the web converts and escapes it, as for WhatsApp. Server-side readers that need text (notifications, task from message) take plain text from `crates/slack_integration`'s mrkdwn parser |
+| `<@U…>` | `mentions` (the Slack user ids, the token is the id), named through `slack_user` |
+| `<#C…>`, `<!here>`, `<!channel>`, links, `:emoji:` | left in `body`; the web renders them |
 | `thread_ts` ≠ `ts` | a thread reply: `thread_root` = the root message (see below) |
 | `subtype: message_changed` | revision (edited) |
 | `subtype: message_deleted` / `tombstone` | permanent tombstone |
@@ -283,7 +291,8 @@ the cursor, another 1,000 messages per call, and returns
 | `thread_marked` | the owner's thread read position |
 | `channel_id_changed` | `external_chat.remote_id` and memberships follow the new id |
 
-Sending maps back: Markdown → mrkdwn, mentions as `<@U…>`, replies in a
+Sending maps back: the composer sends mrkdwn with mentions written `<@U…>`
+(each listed in `mentions`), replies in a
 thread as `thread_ts` (optionally `reply_broadcast`), edits as `chat.update`,
 deletes as `chat.delete`, reactions as `reactions.add/remove`, files with
 `files.getUploadURLExternal` + upload + `files.completeUploadExternal`.

@@ -165,6 +165,9 @@ impl ChatProvider for WhatsAppProvider {
     ) -> ExternalChatResult<ChatRef> {
         match request.provider {
             ExternalChatProvider::WhatsApp => {}
+            ExternalChatProvider::Slack => {
+                return Err(ExternalChatError::Invalid("not a WhatsApp chat").into());
+            }
         }
         let jid = request.remote_id.as_str();
         let kind = if is_group_jid(jid) {
