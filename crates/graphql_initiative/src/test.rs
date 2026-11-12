@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 mod soup;
+mod telemetry;
 
 use self::soup::RecordingSoupService;
 
@@ -229,6 +230,8 @@ struct RecordingApi {
     viewers: Mutex<Vec<String>>,
     denied_ids: Mutex<Vec<Uuid>>,
     task_count: Mutex<Option<u32>>,
+    /// The span each domain read ran in, by name.
+    read_spans: Mutex<Vec<Option<&'static str>>>,
 }
 
 impl RecordingApi {
@@ -259,6 +262,10 @@ impl RecordingApi {
 impl InitiativeApi for RecordingApi {
     fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
+            self.read_spans
+                .lock()
+                .unwrap()
+                .push(tracing::Span::current().metadata().map(|span| span.name()));
             self.record(&user, "read")?;
             if self.denied_ids.lock().unwrap().contains(&id) {
                 return Err(InitiativeError::Unauthorized);

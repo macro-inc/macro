@@ -1,0 +1,19 @@
+id: rust-dataloader-batch-in-request-span
+language: rust
+severity: error
+message: Spawn DataLoader batches in the current span, `|batch| tokio::spawn(batch.in_current_span())`, not bare `tokio::spawn`.
+note: |-
+  async-graphql spawns each DataLoader batch as its own task. A bare
+  `tokio::spawn` starts that task outside every span, so the batch's spans
+  become separate root traces and the request's trace shows a gap where the
+  load ran. `tracing::Instrument::in_current_span` keeps the batch under the
+  field that asked for it. See `.agents/rules/observability.md`.
+files:
+  - crates/**
+  - services/**
+rule:
+  any:
+    - pattern: DataLoader::new($LOADER, tokio::spawn)
+    - pattern: DataLoader::with_cache($LOADER, tokio::spawn, $CACHE)
+    - pattern: async_graphql::dataloader::DataLoader::new($LOADER, tokio::spawn)
+    - pattern: async_graphql::dataloader::DataLoader::with_cache($LOADER, tokio::spawn, $CACHE)

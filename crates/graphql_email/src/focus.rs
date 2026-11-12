@@ -6,6 +6,7 @@ use async_graphql::{Context, Enum, SimpleObject, dataloader::DataLoader, dataloa
 use email::domain::focus::{FocusCategory, FocusQueries, FocusStore, ImportanceTrend, ThreadFocus};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Instrument;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -184,8 +185,10 @@ pub fn email_thread_focus_loader(
     user_id: MacroUserIdStr<'static>,
     reader: Arc<dyn EmailFocusReader>,
 ) -> DataLoader<EmailThreadFocusLoader> {
-    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, tokio::spawn)
-        .max_batch_size(MAX_FOCUS_KEYS);
+    let loader = DataLoader::new(EmailThreadFocusLoader { user_id, reader }, |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
+    .max_batch_size(MAX_FOCUS_KEYS);
     // Subscription connection data outlives one payload; never serve a stale verdict.
     loader.enable_all_cache(false);
     loader
