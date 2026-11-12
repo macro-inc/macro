@@ -1,7 +1,8 @@
 use super::*;
 
 fn client() -> RedisClient {
-    RedisClient::new(redis::Client::open("redis://127.0.0.1:6379/").unwrap(), 60)
+    let url = std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379/".into());
+    RedisClient::new(redis::Client::open(url).unwrap(), 60)
 }
 
 /// A slot set of its own, so tests never touch the fleet's slots or each other's.

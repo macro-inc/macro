@@ -15,6 +15,7 @@ use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
+use enterprise::domain::MemberAccess;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;
@@ -47,6 +48,9 @@ pub enum InitError {
 
     #[error("A mailbox handle must be claimed before initializing Rox mail")]
     HandleRequired,
+
+    #[error("Rox mailbox writes are not enabled in the reader-only rollout stage")]
+    RoxWriterDisabled,
 
     #[error("Failed to enqueue backfill message")]
     EnqueueError,
@@ -110,6 +114,7 @@ impl InitError {
             | InitError::HandleRequired
             | InitError::BadRequest(_)
             | InitError::Parse(_) => StatusCode::BAD_REQUEST,
+            InitError::RoxWriterDisabled => StatusCode::SERVICE_UNAVAILABLE,
             InitError::ProviderError(EmailApiError::RateLimited { .. }) => {
                 StatusCode::TOO_MANY_REQUESTS
             }
@@ -245,10 +250,17 @@ pub async fn handler(
             &ctx.db,
             &authorization.authorization.user.user_context.fusion_user_id,
             authorization.authorization.user.macro_user_id.clone(),
+            ctx.config.rox_mailbox_writes_enabled,
         )
         .await
         .map_err(InitError::DatabaseError)?
-        .ok_or(InitError::HandleRequired)?;
+        .ok_or_else(|| {
+            if ctx.config.rox_mailbox_writes_enabled {
+                InitError::HandleRequired
+            } else {
+                InitError::RoxWriterDisabled
+            }
+        })?;
         return Ok(Json(InitResponse {
             link_id: link.id,
             backfill_job_id: None,

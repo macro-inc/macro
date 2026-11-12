@@ -772,6 +772,12 @@ async fn run_server() -> anyhow::Result<()> {
         Arc::new(auth_client.clone()),
         teams_repo_impl.clone(),
     ));
+    let auth_client = auth_client.with_login_audit(Arc::new(
+        crate::outbound::enterprise::EnterpriseLoginAudit::new(
+            enterprise.clone(),
+            jwt_args.clone(),
+        ),
+    ));
 
     let server_result = api::setup_and_serve(
         ApiContext {

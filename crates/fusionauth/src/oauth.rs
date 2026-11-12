@@ -127,7 +127,7 @@ impl FusionAuthClient {
     /// Completes the OAuth2 authorization code grant flow.
     #[tracing::instrument(skip(self, code), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<OAuth2Grant> {
-        complete(
+        let grant = complete(
             &self.unauth_client,
             &self.fusion_auth_base_url,
             AuthorizationCodeGrantCompleteRequest {
@@ -138,7 +138,9 @@ impl FusionAuthClient {
                 grant_type: Cow::Borrowed("authorization_code"),
             },
         )
-        .await
+        .await?;
+        self.audit_completed_login(&grant.access_token).await?;
+        Ok(grant)
     }
 
     /// complete the OAuth2 Refresh token grant flow.

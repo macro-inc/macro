@@ -30,6 +30,10 @@ pub struct Config {
     /// Pause new provider writes; send outcome reconciliation always continues.
     #[macro_config_default(false)]
     pub outlook_writes_enabled: bool,
+    /// Create first-party ROX links only after every reader accepts ROX rows.
+    /// Disabled is the reader-only rollout stage: existing ROX links still load.
+    #[macro_config_default(false)]
+    pub rox_mailbox_writes_enabled: bool,
     /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
     /// Enable only after every email-service pubsub worker runs a release that
     /// decodes them; older workers delete the batch form. Off, each message is

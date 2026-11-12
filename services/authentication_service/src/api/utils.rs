@@ -1,38 +1,15 @@
 use crate::api::context::ApiContext;
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
 use cookie::{Cookie, SameSite};
 use email::domain::ports::{FirstInboxProvisionOutcome, FirstInboxProvisioner};
-use macro_auth::{
-    constant::{MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE},
-    middleware::decode_jwt::decode_macro_access_token_allow_expired,
-};
+use macro_auth::constant::{MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE};
 use macro_env::Environment;
 use macro_env_var::maybe_env_vars;
-use macro_user_id::user_id::MacroUserIdStr;
 use rand::{Rng, seq::SliceRandom};
 use url::Url;
 
 maybe_env_vars! {
     struct FrontendPort;
     struct FrontendOrigin;
-}
-
-/// Record a completed login through the audit service; the token is only decoded and never stored.
-pub(crate) async fn record_login_audit(
-    ctx: &ApiContext,
-    access_token: &str,
-) -> Result<(), Response> {
-    let failure = || (StatusCode::INTERNAL_SERVER_ERROR, "unable to record login").into_response();
-    let decoded = decode_macro_access_token_allow_expired(access_token, &ctx.jwt_args)
-        .map_err(|_| failure())?;
-    let actor = MacroUserIdStr::parse_from_str(decoded.as_ref()).map_err(|_| failure())?;
-    ctx.enterprise
-        .record_login(&actor)
-        .await
-        .map_err(|_| failure())
 }
 
 /// Generates a random 25 character session code

@@ -1,5 +1,5 @@
 use super::MACRO_DB_MIGRATIONS;
-use sqlx::{PgPool, migrate::Migrator};
+use sqlx::{PgPool, migrate::Migrator, types::Uuid};
 use std::borrow::Cow;
 
 /// CI clones every test database from a `template1` that already holds the macrodb
@@ -224,4 +224,123 @@ async fn generic_call_entities_preserve_native_identity_and_optional_resources(p
         .await
         .unwrap();
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explicit_primary_preserves_legacy_writes_and_crm_consent_guard(pool: PgPool) {
+    let owner = "macro|legacy@example.com";
+    let link = Uuid::new_v4();
+    let team = Uuid::new_v4();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $3, $4)",
+        Uuid::new_v4(),
+        owner,
+        "legacy@example.com",
+        "crm-guard-fixture"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let macro_user = sqlx::query_scalar!(
+        "SELECT id FROM macro_user WHERE email = $1",
+        "legacy@example.com"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ($1, $2, $3)",
+        owner,
+        "legacy@example.com",
+        macro_user
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'CRM guard fixture', $2)",
+        team,
+        owner
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'owner')",
+        team,
+        owner
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider) VALUES ($1, $2, $3, $4, 'GMAIL')",
+        link,
+        owner,
+        "legacy-fusion-user",
+        "legacy@example.com"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        sqlx::query_scalar!("SELECT is_primary FROM email_links WHERE id = $1", link)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "an old writer that omits is_primary keeps the legacy primary predicate"
+    );
+    sqlx::query!(
+        "INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled) VALUES ($1, $2, $3, true)",
+        team,
+        owner,
+        link
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let link_id = link.to_string();
+    for lifecycle_change in [
+        "UPDATE email_links SET is_primary = false".to_owned(),
+        "UPDATE email_links SET is_primary = true".to_owned(),
+        "UPDATE email_links SET macro_id = 'macro|other@example.com'".to_owned(),
+        "UPDATE email_links SET macro_id = 'macro|legacy@example.com', email_address = 'changed@example.com'".to_owned(),
+        "UPDATE email_links SET deleting_at = now()".to_owned(),
+        "UPDATE email_links SET deleting_at = NULL, disconnect_requested_at = now()".to_owned(),
+        "UPDATE email_links SET disconnect_requested_at = NULL, needs_reauth = true".to_owned(),
+    ] {
+        sqlx::query!("UPDATE crm_email_consent SET enabled = true WHERE link_id = $1", link)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::raw_sql(&format!("{lifecycle_change} WHERE id = '{link_id}'"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            !sqlx::query_scalar!("SELECT enabled FROM crm_email_consent WHERE link_id = $1", link)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "consent survived lifecycle change: {lifecycle_change}"
+        );
+    }
+
+    sqlx::raw_sql(&format!(
+        "UPDATE email_links SET is_primary = true, deleting_at = NULL, disconnect_requested_at = NULL, needs_reauth = false WHERE id = '{link_id}'"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT enabled FROM crm_email_consent WHERE link_id = $1",
+            link
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "returning to a connected primary mailbox cannot resurrect an old grant"
+    );
 }

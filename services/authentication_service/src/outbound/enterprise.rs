@@ -4,10 +4,16 @@ use enterprise::domain::{
     EnterpriseError, EnterpriseService, HarnessRevoker, MemberDirectory, Result, TeamDirectory,
     UserLifecycle,
 };
-use fusionauth::FusionAuthClient;
+use fusionauth::{
+    FusionAuthClient,
+    error::{FusionAuthClientError, GenericErrorResponse},
+};
 use harnesses::{
     domain::{models::HarnessOwner, ports::HarnessRepo},
     outbound::pg_harness_repo::PgHarnessRepo,
+};
+use macro_auth::middleware::decode_jwt::{
+    JwtValidationArgs, decode_macro_access_token_allow_expired,
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
@@ -101,6 +107,54 @@ impl HarnessRevoker for ServerHarnessRevocation {
             }
         }
         Ok(revoked)
+    }
+}
+
+/// Credential-free audit observer invoked inside FusionAuth login persistence functions.
+pub struct EnterpriseLoginAudit {
+    enterprise: Arc<EnterpriseServiceType>,
+    jwt_args: JwtValidationArgs,
+}
+
+impl EnterpriseLoginAudit {
+    /// Compose the recorder without retaining tokens or login payloads.
+    pub fn new(enterprise: Arc<EnterpriseServiceType>, jwt_args: JwtValidationArgs) -> Self {
+        Self {
+            enterprise,
+            jwt_args,
+        }
+    }
+}
+
+impl std::fmt::Debug for EnterpriseLoginAudit {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("EnterpriseLoginAudit")
+            .finish_non_exhaustive()
+    }
+}
+
+impl fusionauth::LoginAudit for EnterpriseLoginAudit {
+    fn record<'a>(
+        &'a self,
+        access_token: &'a str,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = std::result::Result<(), FusionAuthClientError>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let failure = || {
+                FusionAuthClientError::Generic(GenericErrorResponse {
+                    message: "login audit unavailable".into(),
+                })
+            };
+            let decoded = decode_macro_access_token_allow_expired(access_token, &self.jwt_args)
+                .map_err(|_| failure())?;
+            let actor = MacroUserIdStr::parse_from_str(decoded.as_ref()).map_err(|_| failure())?;
+            self.enterprise
+                .record_login(&actor)
+                .await
+                .map_err(|_| failure())
+        })
     }
 }
 
