@@ -141,8 +141,8 @@ pub struct ProjectedSegment {
 /// `closed` is whether the reply's turn has ended; until it has, the last
 /// segment stays open. Thoughts, attachments and controls belong to no
 /// segment, nor does the agent looking up its own tools, and whitespace-only
-/// prose is not a passage: a newline the agent
-/// emitted between two tool calls must not split their activity in two.
+/// prose is not a passage: a newline the agent emitted between two tool calls
+/// must not split their activity in two.
 #[must_use]
 pub fn segments(parts: &[MessagePart], closed: bool) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
