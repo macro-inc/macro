@@ -309,3 +309,87 @@ async fn a_url_that_is_not_under_the_proxys_base_is_refused() {
     );
     assert!(egress.seen().is_empty());
 }
+
+#[tokio::test]
+async fn configured_external_urls_route_without_accepting_other_origins() {
+    let egress = Arc::new(StubEgress::default());
+    let client = EgressMcpClient::new(Arc::clone(&egress), BASE_URL)
+        .with_external_base_url(Some("http://localhost:41027/"));
+    for uri in [
+        "http://localhost:41027/mcp/hubspot",
+        "https://gateway.example/agent-harness-egress/mcp/hubspot",
+    ] {
+        client
+            .clone()
+            .delete_session(
+                Arc::from(uri),
+                Arc::from("stub-session"),
+                Some("session-token".to_owned()),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
+    }
+    for uri in [
+        "http://unconfigured.test/mcp/hubspot",
+        "http://localhost:41027.evil.test/mcp/hubspot",
+    ] {
+        assert!(
+            client
+                .delete_session(
+                    Arc::from(uri),
+                    Arc::from("stub-session"),
+                    Some("session-token".to_owned()),
+                    HashMap::new()
+                )
+                .await
+                .is_err()
+        );
+    }
+    assert_eq!(
+        egress.seen(),
+        vec![
+            ("session-token".to_owned(), hubspot()),
+            ("session-token".to_owned(), hubspot())
+        ]
+    );
+}
+
+#[tokio::test]
+async fn external_internal_route_dispatches_with_its_authority_and_session_token() {
+    let egress = Arc::new(StubEgress::default());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let recorded = seen.clone();
+    let client = EgressMcpClient::new(egress.clone(), BASE_URL)
+        .with_external_base_url(Some("http://localhost:41027"))
+        .with_internal_mcp(Arc::new(move |request| {
+            recorded.lock().unwrap().push((
+                request.uri().to_string(),
+                request.headers()[HOST].to_str().unwrap().to_owned(),
+                request.headers()[AUTHORIZATION]
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            ));
+            Box::pin(async { http::Response::new(empty_body()) })
+        }));
+    client
+        .clone()
+        .delete_session(
+            Arc::from("http://localhost:41027/mcp/internal"),
+            Arc::from("stub-session"),
+            Some("session-token".into()),
+            HashMap::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![(
+            "/mcp/internal".to_owned(),
+            "localhost:41027".to_owned(),
+            "Bearer session-token".to_owned()
+        )]
+    );
+    assert!(egress.seen().is_empty());
+}

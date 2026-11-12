@@ -52,7 +52,11 @@ impl<Ingress: NotificationIngress> RoutineRunNotifications<Ingress> {
             secondary_notification_entity: None,
             notification: RoutineRunFinishedMetadata {
                 routine_id: run.routine_id,
-                routine_name: run.routine_name,
+                // A sub-routine's run names the routine it follows.
+                routine_name: match run.parent_name {
+                    Some(parent) => format!("{} · from {parent}", run.routine_name),
+                    None => run.routine_name,
+                },
                 outcome,
             },
             sender_id: None,

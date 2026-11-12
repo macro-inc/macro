@@ -5,7 +5,8 @@
 //! `macrod.toml` (the same `~/.macrod/macrod.toml` the TUI uses, locked while
 //! serving) without a TUI, state changes stream to stdout as one JSON
 //! object per line, and the process shuts down on SIGTERM, Ctrl-C, or stdin
-//! closing (the embedder exited). `macrod detect-agents` and `macrod inspect`
+//! closing (the embedder exited), unless `--ignore-stdin-eof` is set for a
+//! system service. `macrod detect-agents` and `macrod inspect`
 //! are the matching one-shot queries.
 
 use std::path::{Path, PathBuf};
@@ -30,8 +31,9 @@ const DAEMON_WATCH: Duration = Duration::from_secs(5);
 /// Everything `macrod service` accepts. Runtime settings (name, ownership,
 /// permission bypass) are set on the web, never here.
 pub struct ServiceOptions {
-    /// Config file; absent uses [`default_config_path`], the one the TUI
-    /// also uses.
+    /// Keep running without an embedder holding stdin open.
+    pub ignore_stdin_eof: bool,
+    /// Config file; absent uses [`default_config_path`], the one the TUI also uses.
     pub config: Option<PathBuf>,
     /// Agent preset id from `detect-agents` to configure.
     pub agent: Option<String>,
@@ -104,13 +106,13 @@ fn fatal_root_message(message: &str) -> String {
         .to_owned()
 }
 
-/// Run headless until SIGTERM, Ctrl-C, or stdin closes.
+/// Run headless until signaled or the monitored stdin closes.
 pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
     let path = config_path(&options)?;
     // Held until exit: the TUI shares this config, and one harness must not
     // be served twice.
     let _lock: ConfigLock = config::lock(&path)?;
-    let shutdown = shutdown_requested();
+    let shutdown = shutdown_requested(options.ignore_stdin_eof);
     tokio::pin!(shutdown);
 
     let daemon = tokio::select! {
@@ -237,7 +239,7 @@ fn config_path(options: &ServiceOptions) -> rootcause::Result<PathBuf> {
 
 /// Create or edit the config from setup flags, comment-preservingly.
 /// `agent` is the resolved launch for `options.agent`, when one was named.
-fn configure(
+pub(crate) fn configure(
     path: &Path,
     options: &ServiceOptions,
     agent: Option<DetectedAgent>,
@@ -266,6 +268,7 @@ fn configure(
         return ConfigForm::create(path, agent, workspace);
     }
     let mut form = ConfigForm::load(path)?;
+    form.drop_retired_settings();
     if let Some(agent) = &agent {
         form.apply_agent(agent);
     }
@@ -276,7 +279,7 @@ fn configure(
     form.save()
 }
 
-fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
+pub(crate) fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
     let commands = PathCommands::discover();
     agent_catalog::discover(&commands)
         .into_iter()
@@ -290,17 +293,8 @@ fn installed_agent(id: &str) -> rootcause::Result<DetectedAgent> {
 
 /// Resolve when the embedder or operator asks the service to stop: SIGTERM,
 /// Ctrl-C, or stdin reaching EOF (the embedding process exited).
-async fn shutdown_requested() {
-    let stdin_eof = async {
-        let mut stdin = tokio::io::stdin();
-        let mut buffer = [0u8; 256];
-        loop {
-            match stdin.read(&mut buffer).await {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
-            }
-        }
-    };
+async fn shutdown_requested(ignore_stdin_eof: bool) {
+    let stdin_eof = stdin_closed(tokio::io::stdin(), ignore_stdin_eof);
     #[cfg(unix)]
     {
         let mut terminate =
@@ -316,6 +310,19 @@ async fn shutdown_requested() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         () = stdin_eof => {}
+    }
+}
+
+async fn stdin_closed(mut stdin: impl tokio::io::AsyncRead + Unpin, ignore_eof: bool) {
+    if ignore_eof {
+        std::future::pending::<()>().await;
+    }
+    let mut buffer = [0u8; 256];
+    loop {
+        match stdin.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
     }
 }
 
@@ -376,6 +383,7 @@ struct Inspection {
 /// Inspect the config at `path` (or the default location) as a JSON document.
 pub fn inspect_json(config: Option<PathBuf>) -> rootcause::Result<String> {
     let path = config_path(&ServiceOptions {
+        ignore_stdin_eof: false,
         config,
         agent: None,
         workspace: None,

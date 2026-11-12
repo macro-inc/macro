@@ -602,7 +602,7 @@ service_url! {
         pub McpChatgptServiceUrl {
             local: "http://localhost:8103",
             dev: "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
-            prod: "https://mcp-chatgpt.macro.com",
+            prod: "https://mcp-chatgpt-worker.macroverse.workers.dev",
         },
         /// Public integration callback base, preserving registered OAuth redirect URIs.
         pub CognitionPublicUrl {
@@ -666,6 +666,36 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Gmail REST API base. Google's host in every environment; override it
+    /// to run against `crates/gmail_emulator`.
+    pub struct GmailApiUrl {
+        local: "https://www.googleapis.com/gmail/v1",
+        dev: "https://www.googleapis.com/gmail/v1",
+        prod: "https://www.googleapis.com/gmail/v1",
+    }
+}
+
+service_url! {
+    /// Google People API base. Google's host in every environment; override
+    /// it to run against `crates/gmail_emulator`.
+    pub struct GooglePeopleApiUrl {
+        local: "https://people.googleapis.com/v1",
+        dev: "https://people.googleapis.com/v1",
+        prod: "https://people.googleapis.com/v1",
+    }
+}
+
+service_url! {
+    /// Google's public keys for verifying Gmail push tokens. Google's host in
+    /// every environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthCertsUrl {
+        local: "https://www.googleapis.com/oauth2/v3/certs",
+        dev: "https://www.googleapis.com/oauth2/v3/certs",
+        prod: "https://www.googleapis.com/oauth2/v3/certs",
     }
 }
 

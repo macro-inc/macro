@@ -34,8 +34,8 @@ gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
-mail-builder = "0.4.3"
-mailparse = { version = "0.16.1", optional = true }
+mail-builder = { workspace = true }
+mailparse = { workspace = true, optional = true }
 models_email = { path = "../models_email" }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }

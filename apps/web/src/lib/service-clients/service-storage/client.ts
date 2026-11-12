@@ -62,6 +62,7 @@ import type { ChannelAccessRequestState } from './generated/schemas/channelAcces
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import { ChannelType } from './generated/schemas/channelType';
 import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
+import type { ClaudeMode } from './generated/schemas/claudeMode';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
@@ -127,6 +128,7 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GetUploadExtractStatusHandler200 } from './generated/schemas/getUploadExtractStatusHandler200';
 import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/githubPullRequestChangesPatchResponse';
 import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
 import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
@@ -135,6 +137,7 @@ import type { GithubPullRequestTasksResponse } from './generated/schemas/githubP
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { HarnessComputerId } from './generated/schemas/harnessComputerId';
 import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
@@ -371,6 +374,10 @@ export type Harness = {
   updated_at: string;
   connected: boolean;
   last_connected_at: string | null;
+  /** Set when this is a team's Macro computer. */
+  computer_id?: HarnessComputerId;
+  /** How Claude Code on a Macro computer is paid for. */
+  claude_mode?: ClaudeMode;
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */
@@ -2746,6 +2753,13 @@ export const storageServiceClient = {
             method: 'POST',
             body: JSON.stringify(args),
           }
+        )
+      ).map((result) => result.data);
+    },
+    async getUploadExtractStatus({ requestId }) {
+      return (
+        await dssFetch<GetUploadExtractStatusHandler200>(
+          `/projects/upload_extract/${encodeURIComponent(requestId)}`
         )
       ).map((result) => result.data);
     },

@@ -11,6 +11,8 @@ type Setting = {
   title: string;
   target?: string;
   keywords: string;
+  /** Listed only with `enable-macro-computers` on. */
+  macroComputers?: true;
 };
 export type SettingsSearchResult = Setting & {
   id: string;
@@ -59,6 +61,7 @@ const SETTINGS: Setting[] = [
       title: `${event.label} · ${group.label}`,
       target: group.label,
       keywords: `${group.label} ${event.description}`,
+      macroComputers: event.macroComputers,
     }))
   ),
   {
@@ -396,7 +399,11 @@ function tokenScore(query: string, candidate: string): number {
 export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
-  options: { emailSignatures?: boolean; outlook?: boolean } = {}
+  options: {
+    emailSignatures?: boolean;
+    outlook?: boolean;
+    macroComputers?: boolean;
+  } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
   if (!tokens.length) return [];
@@ -417,7 +424,8 @@ export function searchSettings(
         setting.tab === page.tab &&
         (options.emailSignatures !== false ||
           setting.title !== 'Email signatures') &&
-        (options.outlook !== false || setting.title !== 'Outlook')
+        (options.outlook !== false || setting.title !== 'Outlook') &&
+        (options.macroComputers !== false || !setting.macroComputers)
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

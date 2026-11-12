@@ -39,14 +39,11 @@ trigger a background cache refresh: rows should not disappear and return. A
 confirmed archive still removes its row. Cached pagination preserves its position
 while those server-confirmed rows load their canonical previews.
 
-Email's Tags sidebar uses the [nested tag tree](tasks.md#nested-sidebar-tags).
-Carets and folder-only parents expand branches; actual tags select their exact ID
-and switch the mailbox to All. Parent selection does not include descendant tags.
-While tags scope All, the header and breadcrumb show the tag names instead of
-`All`. A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag
-filter on any other tab keeps that tab's title.
-Unlike Calls, it lists only personal tags; team-shared tags are hidden,
-and its `New tag` action creates a personal tag with no Team sharing option.
+Email has no Tags section in its inner sidebar. Filter by tag through
+**Filters → Tags** on desktop or the mobile filter drawer; this keeps the current
+mailbox tab. On All, selected tag names appear in the header and breadcrumb.
+A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
+on any other tab keeps that tab's title.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
@@ -55,7 +52,7 @@ Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
 `Archived`, and `Shared`, then **Saved views** (flagged, see
-[Saved email views](#saved-email-views)), then **Tags**. Sidebar number shortcuts follow that
+[Saved email views](#saved-email-views)). Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
@@ -63,11 +60,12 @@ While the email list itself has focus, `Tab` moves browser focus instead; use
 existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
-(`TutorialRow` from `features/video-tutorials`, shared by every block). Clicking it opens the tutorial video in a dialog at 80% of
-the window (a bottom sheet on phones) that never autoplays: the play pill
+(`TutorialRow` from `features/video-tutorials`, shared by every block). No block shows a tutorial entry on a touch device (`isTouchDevice()`: phones,
+tablets and the native iOS and Android apps), so they never load a tutorial video. Clicking it opens the tutorial video in a dialog at 80% of
+the window that never autoplays: the play pill
 (play disc, then the presenter's photo and name over "Watch demo · 1:27")
-starts it and brings up the native controls. When it ends, the last frame dims under a shelf, "More videos from Macro", of the other tutorials (each block's nav icon on a pastel tile with its length); a card switches the dialog to that video, paused, and Replay or a click on the frame restarts it. Under the video, three Macro team faces (stacked like a block's live viewers) and "Have questions about Macro Mail? **Talk to us in your support channel →**" open the person's own `Macro Support x …` channel and close the dialog; the line is left out when they own no such channel. The row's X (on hover, always on
-touch) hides it on that device for good (`localStorage`
+starts it and brings up the native controls. When it ends, the last frame dims under a shelf, "More videos from Macro", of the other tutorials (each block's nav icon on a pastel tile with its length); a card switches the dialog to that video, paused, and Replay or a click on the frame restarts it. Under the video, three Macro team faces (stacked like a block's live viewers) and "Have questions about Macro Mail? **Talk to us in your support channel →**" open the person's own `Macro Support x …` channel and close the dialog; the line is left out when they own no such channel. The row's X (on hover or keyboard
+focus) hides it on that device for good (`localStorage`
 `email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
@@ -1553,10 +1551,7 @@ is active. Verify that
 sidebar and menu selection stay in sync and that clearing preserves the current tab and other filters.
 Sidebar rows, `New`, and the panel's back, forward and close controls act on primary-button
 mousedown, so the selection changes before the click completes; a normal click
-still works. The sidebar ends with a collapsible `Tags` section (every personal and
-team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
-threads carrying it, clicking it again clears it, and choosing any tab clears it like
-the other filters.
+still works. Tags are available in the filter controls, not the sidebar.
 Rows have trailing selection checkmarks; Close filters dismisses the sheet
 without resetting its selections.
 
@@ -1633,13 +1628,6 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
 Check: create a view for a contact and a domain, open it, mark a
 thread read and watch the dot, reorder two views and reload, then search inside
 the view and confirm results stay within it.
-
-## Dragging sidebar tags
-
-On desktop, drag a tag from the sidebar onto an email row. Its existing tags
-remain; dropping onto a selected row applies the tag to every taggable selected
-row. The dragged chip shows the tag color and name, and the target gets an outline.
-Clicking the tag still filters the list. Mobile uses the existing tag menu.
 
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,

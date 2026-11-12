@@ -222,7 +222,7 @@ Required for anything people act on; Recent is built from activity.
   `crates/<kind>/src/domain/activity.rs` with an exhaustive match. Shared actions
   use `CommonAction`; new `Action` variants go in
   `crates/activity/src/domain/models.rs` (codec and `ActionTag`),
-  `crates/activity/src/inbound/toolset/read_activity.rs`, and
+  `crates/activity/src/domain/activity_range.rs` (`ToolActivityAction`), and
   `crates/graphql_activity/src/objects.rs`.
 - Register the topic in `services/document_storage_service/src/service/activity.rs`
   (`declare_topics!` and an `ingest` arm). Hard deletes return `Ingest::Purge`.
@@ -376,7 +376,7 @@ Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
 and `crates/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/ai_tools/src/lib.rs` (`subagent_toolset()` or the
+- Register it in `crates/ai_tools/src/lib.rs` (`base_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai_tools/src/build_context.rs`,

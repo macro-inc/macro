@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_sync_streams s SET position = $4,\n                initial_complete = s.initial_complete OR $5,\n                -- A round's first page records the reader revision it started at.\n                reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,\n                last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,\n                next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)\n                    THEN now() + interval '2 minutes' ELSE now() END,\n                -- A checkpoint that started reading after the notification has\n                -- answered it; a deferred or partial read leaves it pending.\n                notified_at = CASE WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL ELSE s.notified_at END,\n                lease_id = NULL, lease_until = NULL\n            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3\n                AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation\n                AND l.is_sync_active AND l.grant_generation = $6\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6096feeb31cffc25867e88ee2bcf62ba073476dc7323091f7cad35c5fb89de16"
+}
