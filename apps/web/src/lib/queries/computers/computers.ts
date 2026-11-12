@@ -224,6 +224,15 @@ export function useUndoCancelComputerMutation() {
 }
 
 /** Bills a released computer again while its disk is still retained. */
+export function useRetryComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.retry(computerId)),
+    onSuccess: storeComputer,
+  }));
+}
+
 export function useRestoreComputerMutation() {
   return useMutation(() => ({
     gcTime: 0,

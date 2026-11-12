@@ -18,6 +18,7 @@ import {
   useComputerOffersQuery,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
+  useRetryComputerMutation,
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
@@ -164,6 +165,7 @@ function ManagedComputerRow(props: {
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
   const restore = useRestoreComputerMutation();
+  const retry = useRetryComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
   // Claude's long-lived credential names no account; it only expires.
@@ -285,6 +287,14 @@ function ManagedComputerRow(props: {
     }
   };
 
+  const retrySetup = async () => {
+    try {
+      await retry.mutateAsync(props.computer.id);
+    } catch (error) {
+      toast.failure(failureMessage(error, t('computers.retryFailed')));
+    }
+  };
+
   const run = (work: Promise<void>) => fireAndForget(work, 'macro-computers');
   const billingPending = () =>
     cancel.isPending || undoCancel.isPending || restore.isPending;
@@ -329,6 +339,14 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
+    if (props.canManage && computer.status === 'failed') {
+      items.push({
+        label: t('computers.retry'),
+        icon: 'retry',
+        disabled: retry.isPending,
+        onSelect: () => run(retrySetup()),
+      });
+    }
     if (props.canManage && canPower) {
       items.push(
         computer.poweredOn

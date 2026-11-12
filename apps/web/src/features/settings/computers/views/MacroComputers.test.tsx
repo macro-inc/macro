@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   computers: [] as ComputerStatus[],
   release: vi.fn(),
   restore: vi.fn(),
+  retry: vi.fn(),
   confirm: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
@@ -53,6 +54,10 @@ vi.mock('@queries/computers/computers', () => ({
   useReleaseComputerMutation: () => ({
     isPending: false,
     mutateAsync: mocks.release,
+  }),
+  useRetryComputerMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.retry,
   }),
 }));
 
@@ -278,6 +283,36 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   fireEvent.click(restore);
   await waitFor(() => expect(mocks.restore).toHaveBeenCalledWith('computer-1'));
   expect(screen.getByRole('menuitem', { name: 'Release now' })).toBeTruthy();
+});
+
+it('offers Retry on a failed computer, and only there', async () => {
+  const failed: ComputerStatus = {
+    id: 'computer-1',
+    name: 'Build machine',
+    size: 'standard',
+    vcpus: 4,
+    memoryGib: 8,
+    diskGib: 100,
+    catalogEntry: 'standard@2026-11',
+    status: 'failed',
+    billing: 'active',
+    poweredOn: true,
+    agentCount: 0,
+    canUndoCancel: false,
+    canRestore: false,
+    purchasedBy: 'viewer',
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+  mocks.computers = [failed, { ...failed, id: 'computer-2', status: 'ready' }];
+  mocks.retry.mockResolvedValueOnce({ ...failed, status: 'setting_up' });
+
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+
+  const retry = screen.getAllByRole('menuitem', { name: 'Retry' });
+  expect(retry).toHaveLength(1);
+  fireEvent.click(retry[0]);
+  await waitFor(() => expect(mocks.retry).toHaveBeenCalledWith('computer-1'));
+  expect(mocks.toastFailure).not.toHaveBeenCalled();
 });
 
 it('offers no power, cancel or release while a purchase is being confirmed', () => {

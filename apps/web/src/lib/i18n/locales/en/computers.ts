@@ -88,6 +88,8 @@ export default {
   stopped: 'Powered off',
   failed: 'Failed',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
+  retry: 'Retry',
+  retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',

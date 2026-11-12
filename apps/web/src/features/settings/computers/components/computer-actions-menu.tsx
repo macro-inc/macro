@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import SignInIcon from '@icon/system/regular/arrow-square-in.svg';
 import SwitchIcon from '@icon/system/regular/arrows-left-right.svg';
@@ -25,6 +26,7 @@ export type ComputerMenuIcon =
   | 'credits'
   | 'cancel'
   | 'undo'
+  | 'retry'
   | 'release';
 
 export type ComputerMenuItem = {
@@ -43,6 +45,7 @@ function ItemIcon(props: { icon: ComputerMenuIcon }): JSX.Element {
     .with('credits', () => <SwitchIcon class="size-4" />)
     .with('cancel', () => <CalendarXIcon class="size-4" />)
     .with('undo', () => <ArrowCounterClockwiseIcon class="size-4" />)
+    .with('retry', () => <ArrowClockwiseIcon class="size-4" />)
     .with('release', () => <TrashIcon class="size-4" />)
     .exhaustive();
 }
