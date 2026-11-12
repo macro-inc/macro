@@ -6,9 +6,9 @@ import type {
   RenderContext,
 } from '../registry';
 import { themeClass } from '../registry';
-import { applyElementDirection } from './builtins';
 import type { ViewNode } from '../types';
 import { applyElementDirection } from './builtins';
+import { setDOMStyleFromCSS } from './dom-style';
 
 export const macroDecoratorTypes = [
   'account-manager-request',
@@ -257,7 +257,8 @@ function customCodeView(svgPreview: boolean): NodeView {
       if (language) dom.setAttribute('data-language', language);
       const theme = stringProp(node, 'theme');
       if (theme) dom.setAttribute('data-theme', theme);
-      if (node.elementProps?.style) dom.style.cssText = node.elementProps.style;
+      const style = node.elementProps?.style ?? '';
+      if (style) setDOMStyleFromCSS(dom.style, style);
       if (preview(node)) {
         dom.classList.toggle('preview-mode', true);
         // Source assigns contentEditable; the reflected attribute is the same.
@@ -278,6 +279,10 @@ function customCodeView(svgPreview: boolean): NodeView {
       if (theme) {
         if (theme !== previousTheme) dom.setAttribute('data-theme', theme);
       } else if (previousTheme) dom.removeAttribute('data-theme');
+      const style = next.elementProps?.style ?? '';
+      const previousStyle = previous.elementProps?.style ?? '';
+      if (style !== previousStyle)
+        setDOMStyleFromCSS(dom.style, style, previousStyle);
       if (preview(previous) !== preview(next)) {
         dom.classList.toggle('preview-mode', preview(next));
         dom.setAttribute('contenteditable', preview(next) ? 'false' : 'true');
