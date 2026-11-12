@@ -41,6 +41,7 @@ import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg?component-solid';
 import KeyIcon from '@icon/system/regular/key.svg?component-solid';
+import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
 import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
@@ -287,6 +288,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('manual', () => () => <PaperPlaneIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
     ))

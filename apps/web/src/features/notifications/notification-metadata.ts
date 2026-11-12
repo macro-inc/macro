@@ -123,6 +123,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
+      .with('manual', () => 'notified you')
       .with('runtime_access_removed', () => 'removed your access to')
       // The computer, or the agent teammate it runs, is the actor:
       // "<computer> is ready", "<agent> couldn't be set up".
@@ -200,6 +201,7 @@ export function getNotificationTargetName(
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
+      .with({ tag: 'manual' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -303,6 +305,7 @@ export function getNotificationContent(
           .exhaustive();
         return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
       })
+      .with({ tag: 'manual' }, (m) => manualText(m.content))
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -403,6 +406,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)
+      .with({ tag: 'manual' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -423,6 +427,14 @@ function agentDisplayName(agent: AgentProvider): string {
   return match(agent)
     .with('claude', () => 'Claude')
     .exhaustive();
+}
+
+/** A manual notification's words: its title, then its body when it has one. */
+export function manualText(content: {
+  title: string;
+  body?: string | null;
+}): string {
+  return content.body ? `${content.title} — ${content.body}` : content.title;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

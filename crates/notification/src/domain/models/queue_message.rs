@@ -515,6 +515,10 @@ pub enum DeliveryFailure {
 pub struct IngressQueueMessage {
     /// The type-erased notification request.
     pub request: SendNotificationRequest<'static, serde_json::Value, serde_json::Value>,
+    /// W3C trace context of the request that sent it; empty in messages from
+    /// senders that predate it.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub trace_context: HashMap<String, String>,
 }
 
 impl IngressQueueMessage {
@@ -524,7 +528,20 @@ impl IngressQueueMessage {
     ) -> Result<Self, serde_json::Error> {
         let value = serde_json::to_value(req)?;
         let request = serde_json::from_value(value)?;
-        Ok(Self { request })
+        Ok(Self {
+            request,
+            trace_context: crate::trace_context::current(),
+        })
+    }
+
+    /// The notification id this message writes.
+    pub fn notification_id(&self) -> Uuid {
+        self.request.uuid_to_write
+    }
+
+    /// The notification type this message sends, e.g. `manual`.
+    pub fn event_type(&self) -> &str {
+        self.request.req.notification.tag.as_ref()
     }
 }
 

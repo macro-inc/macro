@@ -29,281 +29,6 @@
         }
       }
     },
-    "/notification_settings/channels": {
-      "get": {
-        "tags": ["notification_settings"],
-        "summary": "List the authenticated user's channels that have notification settings.",
-        "operationId": "list_channel_notification_settings",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListChannelNotificationSettingsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/notification_settings/channels/{channel_id}": {
-      "delete": {
-        "tags": ["notification_settings"],
-        "summary": "Remove the authenticated user's settings for one channel, including a\nlegacy mentions-only preference, so it follows its sections again.",
-        "operationId": "reset_channel_notification_settings",
-        "parameters": [
-          {
-            "name": "channel_id",
-            "in": "path",
-            "description": "The channel the settings apply to.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": ["notification_settings"],
-        "summary": "Change the authenticated user's notification settings for one channel.",
-        "operationId": "update_channel_notification_settings",
-        "parameters": [
-          {
-            "name": "channel_id",
-            "in": "path",
-            "description": "The channel the settings apply to.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateChannelNotificationSettingsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChannelNotificationSettingsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/notification_settings/sections": {
-      "get": {
-        "tags": ["notification_settings::sections"],
-        "summary": "List the authenticated user's Chat sections that have notification settings.",
-        "operationId": "list_section_notification_settings",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListSectionNotificationSettingsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": ["notification_settings::sections"],
-        "summary": "Change the authenticated user's notification settings for one Chat section.",
-        "operationId": "update_section_notification_settings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSectionNotificationSettingsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SectionNotificationSettingsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/unsubscribe": {
       "get": {
         "tags": ["unsubscribe::get_unsubscribes"],
@@ -1323,6 +1048,81 @@
         }
       }
     },
+    "/v1/user_notifications/send": {
+      "post": {
+        "tags": ["manual_notification"],
+        "summary": "Send a notification the caller wrote, to themselves or to someone who can\nalready see what it links to. Delivered like any other notification and\nsubject to the recipient's notification preferences.",
+        "operationId": "send_manual_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendManualNotificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Queued for delivery"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The recipient cannot see the link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The link does not exist or the caller cannot see it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many manual notifications from this sender, or to this recipient"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/user_notifications/{notification_id}": {
       "get": {
         "tags": ["user_notification"],
@@ -2000,41 +1800,6 @@
           }
         ]
       },
-      "ChannelNotificationKind": {
-        "type": "string",
-        "description": "A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.",
-        "enum": [
-          "channel_message_send",
-          "channel_message_reply",
-          "channel_mention",
-          "channel_message_reaction",
-          "call_started",
-          "channel_access_requested"
-        ]
-      },
-      "ChannelNotificationSettingsResponse": {
-        "type": "object",
-        "description": "One channel's own notification settings.",
-        "required": ["channelId", "enabled", "overridesSectionMute"],
-        "properties": {
-          "channelId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "enabled": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections.",
-            "uniqueItems": true
-          },
-          "overridesSectionMute": {
-            "type": "boolean",
-            "description": "The channel notifies even when the sections holding it are muted."
-          }
-        }
-      },
       "ChannelReplyMetadata": {
         "allOf": [
           {
@@ -2074,60 +1839,6 @@
             }
           }
         ]
-      },
-      "ChannelSection": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "A custom section, team-shared or personal, manual or rule-based.",
-            "required": ["labelId", "type"],
-            "properties": {
-              "labelId": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The section's `channel_label` id."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["label"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "The user's favorite channels.",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["favorites"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Direct messages and group chats.",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["direct_messages"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Team channels in none of the user's custom sections.",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["team_channels"]
-              }
-            }
-          }
-        ],
-        "description": "A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these."
       },
       "ChannelType": {
         "type": "string",
@@ -3069,34 +2780,68 @@
           }
         }
       },
-      "ListChannelNotificationSettingsResponse": {
-        "type": "object",
-        "required": ["channels"],
-        "properties": {
-          "channels": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationSettingsResponse"
-            },
-            "description": "Every channel with settings; any other channel follows its sections."
-          }
-        }
-      },
-      "ListSectionNotificationSettingsResponse": {
-        "type": "object",
-        "required": ["sections"],
-        "properties": {
-          "sections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SectionNotificationSettingsResponse"
-            },
-            "description": "Every section with settings; any other section allows everything and\nis unmuted."
-          }
-        }
-      },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "ManualMetadata": {
+        "type": "object",
+        "description": "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves.",
+        "required": ["title"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ManualNotificationAgent",
+                "description": "The agent whose code sent it, when one did."
+              }
+            ]
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "More detail, as the sender wrote it."
+          },
+          "title": {
+            "type": "string",
+            "description": "The headline, as the sender wrote it."
+          }
+        }
+      },
+      "ManualNotificationAgent": {
+        "type": "object",
+        "description": "The agent a manual notification reads as being from, as it was when sent.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "The agent's avatar."
+          },
+          "id": {
+            "type": "string",
+            "description": "A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
+      },
+      "ManualNotificationLink": {
+        "type": "object",
+        "description": "What a manual notification opens.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The entity's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "One of document, chat, channel, project, email_thread or agent_session:\nthe kinds the inbox and Home list. The recipient's inbox and Home must\nboth list it: their access comes from a share the feeds read (not a\nlink share or an attachment), it is not deleted, a session is listed,\na document is not a snippet, and an email thread is the recipient's own\nSignal mail in the inbox."
+          }
+        }
       },
       "MentionedInDocumentCommentMetadata": {
         "type": "object",
@@ -3738,6 +3483,21 @@
           },
           {
             "type": "object",
+            "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ManualMetadata",
+                "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped.",
             "required": ["content", "tag"],
             "properties": {
@@ -4115,67 +3875,26 @@
           }
         }
       },
-      "SectionMute": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "The section's channels notify.",
-            "required": ["state"],
-            "properties": {
-              "state": {
-                "type": "string",
-                "enum": ["unmuted"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Muted until the user unmutes it.",
-            "required": ["state"],
-            "properties": {
-              "state": {
-                "type": "string",
-                "enum": ["muted"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Muted until a deadline.",
-            "required": ["until", "state"],
-            "properties": {
-              "state": {
-                "type": "string",
-                "enum": ["snoozed"]
-              },
-              "until": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When the section notifies again."
-              }
-            }
-          }
-        ],
-        "description": "Whether a section is muted."
-      },
-      "SectionNotificationSettingsResponse": {
+      "SendManualNotificationRequest": {
         "type": "object",
-        "description": "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted.",
-        "required": ["section", "disabled", "mute"],
+        "description": "A notification written by the caller.",
+        "required": ["title", "link"],
         "properties": {
-          "disabled": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds the section does not allow.",
-            "uniqueItems": true
+          "body": {
+            "type": ["string", "null"],
+            "description": "More detail, at most 1000 characters."
           },
-          "mute": {
-            "$ref": "#/components/schemas/SectionMute"
+          "link": {
+            "$ref": "#/components/schemas/ManualNotificationLink",
+            "description": "What the notification opens; the caller must be able to see it."
           },
-          "section": {
-            "$ref": "#/components/schemas/ChannelSection"
+          "recipientId": {
+            "type": ["string", "null"],
+            "description": "Who gets it; the caller when omitted. Anyone else must already be able\nto see `link`."
+          },
+          "title": {
+            "type": "string",
+            "description": "The headline, at most 120 characters."
           }
         }
       },
@@ -4237,65 +3956,6 @@
           },
           "item_type": {
             "$ref": "#/components/schemas/EntityType"
-          }
-        }
-      },
-      "UpdateChannelNotificationSettingsRequest": {
-        "type": "object",
-        "description": "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them.",
-        "properties": {
-          "enabled": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.",
-            "uniqueItems": true
-          },
-          "inherit": {
-            "type": "boolean",
-            "description": "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
-          },
-          "overridesSectionMute": {
-            "type": ["boolean", "null"],
-            "description": "Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value."
-          }
-        }
-      },
-      "UpdateSectionNotificationSettingsRequest": {
-        "type": "object",
-        "description": "A change to one section's settings. Kinds the change does not name keep\ntheir setting.",
-        "required": ["section"],
-        "properties": {
-          "disable": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds to stop allowing.",
-            "uniqueItems": true
-          },
-          "enable": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds to allow.",
-            "uniqueItems": true
-          },
-          "mute": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SectionMute",
-                "description": "The new mute. Omit to keep the current one."
-              }
-            ]
-          },
-          "section": {
-            "$ref": "#/components/schemas/ChannelSection"
           }
         }
       },

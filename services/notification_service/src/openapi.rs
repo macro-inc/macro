@@ -1,10 +1,13 @@
+#![recursion_limit = "256"]
 #![allow(unused)]
 
 mod api;
 mod config;
 mod env;
+mod manual;
 mod model;
 mod notification;
+mod wiring;
 
 use utoipa::OpenApi;
 

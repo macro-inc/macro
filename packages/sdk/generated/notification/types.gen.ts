@@ -424,34 +424,6 @@ export type ChannelMessageSendMetadata = CommonChannelMetadata & {
     senderProfilePictureUrl?: string | null;
 };
 
-/**
- * A channel notification a user can turn off for one channel.
- *
- * Each kind is one notification event type, which is also its wire form.
- * A message that mentions a document follows the kind of its message: a
- * top-level message outside a thread, a thread reply inside one (its
- * producer says which, see [`crate::domain::models::request`]). Channel
- * invites are not here: they reach people as they join, before they could
- * have chosen anything.
- */
-export type ChannelNotificationKind = 'channel_message_send' | 'channel_message_reply' | 'channel_mention' | 'channel_message_reaction' | 'call_started' | 'channel_access_requested';
-
-/**
- * One channel's own notification settings.
- */
-export type ChannelNotificationSettingsResponse = {
-    channelId: string;
-    /**
-     * The channel's own settings: exactly the kinds it notifies for,
-     * whatever its sections say. `null` follows the sections.
-     */
-    enabled: Array<ChannelNotificationKind> | null;
-    /**
-     * The channel notifies even when the sections holding it are muted.
-     */
-    overridesSectionMute: boolean;
-};
-
 export type ChannelReplyMetadata = CommonChannelMetadata & {
     /**
      * The message content
@@ -478,24 +450,6 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
      * The sender id of the reply, when sent by a user
      */
     userId?: string | null;
-};
-
-/**
- * A Chat sidebar section a user can set notifications for. The catch-all
- * "All channels" section has no settings and is not one of these.
- */
-export type ChannelSection = {
-    /**
-     * The section's `channel_label` id.
-     */
-    labelId: string;
-    type: 'label';
-} | {
-    type: 'favorites';
-} | {
-    type: 'direct_messages';
-} | {
-    type: 'team_channels';
 };
 
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
@@ -1207,22 +1161,62 @@ export type ItemSharedMetadata = {
     userIds: Array<string>;
 };
 
-export type ListChannelNotificationSettingsResponse = {
-    /**
-     * Every channel with settings; any other channel follows its sections.
-     */
-    channels: Array<ChannelNotificationSettingsResponse>;
-};
-
-export type ListSectionNotificationSettingsResponse = {
-    /**
-     * Every section with settings; any other section allows everything and
-     * is unmuted.
-     */
-    sections: Array<SectionNotificationSettingsResponse>;
-};
-
 export type MacroUserIdStr = string;
+
+/**
+ * A notification written by its sender: a title, an optional body, and the
+ * entity it opens. The sender is the notification's `sender_id`, or nobody
+ * when people notify themselves.
+ */
+export type ManualMetadata = {
+    agent?: null | ManualNotificationAgent;
+    /**
+     * More detail, as the sender wrote it.
+     */
+    body?: string | null;
+    /**
+     * The headline, as the sender wrote it.
+     */
+    title: string;
+};
+
+/**
+ * The agent a manual notification reads as being from, as it was when sent.
+ */
+export type ManualNotificationAgent = {
+    /**
+     * The agent's avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * A string on the wire: system bots have fixed ids that are not RFC 4122
+     * uuids.
+     */
+    id: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
+
+/**
+ * What a manual notification opens.
+ */
+export type ManualNotificationLink = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * One of document, chat, channel, project, email_thread or agent_session:
+     * the kinds the inbox and Home list. The recipient's inbox and Home must
+     * both list it: their access comes from a share the feeds read (not a
+     * link share or an attachment), it is not deleted, a session is listed,
+     * a document is not a snippet, and an email thread is the recipient's own
+     * Signal mail in the inbox.
+     */
+    entityType: EntityType;
+};
 
 /**
  * Notification sent when a user is mentioned in a document comment.
@@ -1513,6 +1507,13 @@ export type NotifEvent = {
     tag: 'computer_setup';
 } | {
     /**
+     * Someone, usually agent code through the SDK, sent the user a
+     * notification they wrote.
+     */
+    content: ManualMetadata;
+    tag: 'manual';
+} | {
+    /**
      * A runtime's owner removed the user's access to it, and agents of
      * theirs living there stopped.
      */
@@ -1784,32 +1785,26 @@ export type RuntimeAccessRemovedMetadata = {
 };
 
 /**
- * Whether a section is muted.
+ * A notification written by the caller.
  */
-export type SectionMute = {
-    state: 'unmuted';
-} | {
-    state: 'muted';
-} | {
-    state: 'snoozed';
+export type SendManualNotificationRequest = {
     /**
-     * When the section notifies again.
+     * More detail, at most 1000 characters.
      */
-    until: string;
-};
-
-/**
- * One section's settings. They apply to every channel the section holds for
- * the user: a channel notifies for a kind when any of its sections allows
- * it, and its sections mute it only when all of them are muted.
- */
-export type SectionNotificationSettingsResponse = {
+    body?: string | null;
     /**
-     * Kinds the section does not allow.
+     * What the notification opens; the caller must be able to see it.
      */
-    disabled: Array<ChannelNotificationKind>;
-    mute: SectionMute;
-    section: ChannelSection;
+    link: ManualNotificationLink;
+    /**
+     * Who gets it; the caller when omitted. Anyone else must already be able
+     * to see `link`.
+     */
+    recipientId?: string | null;
+    /**
+     * The headline, at most 120 characters.
+     */
+    title: string;
 };
 
 /**
@@ -1851,45 +1846,6 @@ export type UnsubscribeItemPathParams = {
     item_type: EntityType;
 };
 
-/**
- * A change to one channel's settings. A channel either follows its sections
- * for every kind or has its own setting for all of them.
- */
-export type UpdateChannelNotificationSettingsRequest = {
-    /**
-     * Give the channel its own settings: exactly these kinds notify,
-     * whatever its sections say. Omit to keep the current kinds.
-     */
-    enabled?: Array<ChannelNotificationKind> | null;
-    /**
-     * Drop the channel's own kinds so it follows its sections again. Can't
-     * be combined with `enabled`.
-     */
-    inherit?: boolean;
-    /**
-     * Keep notifying while the sections holding the channel are muted.
-     * Omit to keep the current value.
-     */
-    overridesSectionMute?: boolean | null;
-};
-
-/**
- * A change to one section's settings. Kinds the change does not name keep
- * their setting.
- */
-export type UpdateSectionNotificationSettingsRequest = {
-    /**
-     * Kinds to stop allowing.
-     */
-    disable?: Array<ChannelNotificationKind>;
-    /**
-     * Kinds to allow.
-     */
-    enable?: Array<ChannelNotificationKind>;
-    mute?: null | SectionMute;
-    section: ChannelSection;
-};
-
 export type UserUnsubscribe = {
     /**
      * The item id
@@ -1924,120 +1880,6 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
-
-export type ListChannelNotificationSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/notification_settings/channels';
-};
-
-export type ListChannelNotificationSettingsErrors = {
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListChannelNotificationSettingsError = ListChannelNotificationSettingsErrors[keyof ListChannelNotificationSettingsErrors];
-
-export type ListChannelNotificationSettingsResponses = {
-    200: ListChannelNotificationSettingsResponse;
-};
-
-export type ListChannelNotificationSettingsResponse2 = ListChannelNotificationSettingsResponses[keyof ListChannelNotificationSettingsResponses];
-
-export type ResetChannelNotificationSettingsData = {
-    body?: never;
-    path: {
-        /**
-         * The channel the settings apply to.
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/notification_settings/channels/{channel_id}';
-};
-
-export type ResetChannelNotificationSettingsErrors = {
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ResetChannelNotificationSettingsError = ResetChannelNotificationSettingsErrors[keyof ResetChannelNotificationSettingsErrors];
-
-export type ResetChannelNotificationSettingsResponses = {
-    200: EmptyResponse;
-};
-
-export type ResetChannelNotificationSettingsResponse = ResetChannelNotificationSettingsResponses[keyof ResetChannelNotificationSettingsResponses];
-
-export type UpdateChannelNotificationSettingsData = {
-    body: UpdateChannelNotificationSettingsRequest;
-    path: {
-        /**
-         * The channel the settings apply to.
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/notification_settings/channels/{channel_id}';
-};
-
-export type UpdateChannelNotificationSettingsErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdateChannelNotificationSettingsError = UpdateChannelNotificationSettingsErrors[keyof UpdateChannelNotificationSettingsErrors];
-
-export type UpdateChannelNotificationSettingsResponses = {
-    200: ChannelNotificationSettingsResponse;
-};
-
-export type UpdateChannelNotificationSettingsResponse = UpdateChannelNotificationSettingsResponses[keyof UpdateChannelNotificationSettingsResponses];
-
-export type ListSectionNotificationSettingsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/notification_settings/sections';
-};
-
-export type ListSectionNotificationSettingsErrors = {
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListSectionNotificationSettingsError = ListSectionNotificationSettingsErrors[keyof ListSectionNotificationSettingsErrors];
-
-export type ListSectionNotificationSettingsResponses = {
-    200: ListSectionNotificationSettingsResponse;
-};
-
-export type ListSectionNotificationSettingsResponse2 = ListSectionNotificationSettingsResponses[keyof ListSectionNotificationSettingsResponses];
-
-export type UpdateSectionNotificationSettingsData = {
-    body: UpdateSectionNotificationSettingsRequest;
-    path?: never;
-    query?: never;
-    url: '/notification_settings/sections';
-};
-
-export type UpdateSectionNotificationSettingsErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpdateSectionNotificationSettingsError = UpdateSectionNotificationSettingsErrors[keyof UpdateSectionNotificationSettingsErrors];
-
-export type UpdateSectionNotificationSettingsResponses = {
-    200: SectionNotificationSettingsResponse;
-};
-
-export type UpdateSectionNotificationSettingsResponse = UpdateSectionNotificationSettingsResponses[keyof UpdateSectionNotificationSettingsResponses];
 
 export type GetUnsubscribesData = {
     body?: never;
@@ -2467,6 +2309,42 @@ export type EnableNotificationTypeError = EnableNotificationTypeErrors[keyof Ena
 export type EnableNotificationTypeResponses = {
     200: unknown;
 };
+
+export type SendManualNotificationData = {
+    body: SendManualNotificationRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/send';
+};
+
+export type SendManualNotificationErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The recipient cannot see the link
+     */
+    403: ErrorResponse;
+    /**
+     * The link does not exist or the caller cannot see it
+     */
+    404: ErrorResponse;
+    /**
+     * Too many manual notifications from this sender, or to this recipient
+     */
+    429: unknown;
+    500: ErrorResponse;
+};
+
+export type SendManualNotificationError = SendManualNotificationErrors[keyof SendManualNotificationErrors];
+
+export type SendManualNotificationResponses = {
+    /**
+     * Queued for delivery
+     */
+    204: void;
+};
+
+export type SendManualNotificationResponse = SendManualNotificationResponses[keyof SendManualNotificationResponses];
 
 export type DeleteUserNotificationV2Data = {
     body?: never;

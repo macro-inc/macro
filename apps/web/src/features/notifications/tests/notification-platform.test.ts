@@ -194,6 +194,43 @@ describe('maybeHandlePlatformNotification', () => {
     expect(resolveDocumentName).not.toHaveBeenCalled();
   });
 
+  it('shows a manual notification as written, from the agent that sent it', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'task-1',
+        entity_type: 'document',
+        sender_id: 'macro|sender@macro.com',
+        notification_event_type: 'manual',
+        notification_metadata: {
+          tag: 'manual',
+          content: {
+            title: 'Deploy finished',
+            body: 'All 3 services are live.',
+            agent: {
+              id: '01a00000-0000-7000-8000-0000000000b7',
+              name: 'Deploy bot',
+              avatarUrl: 'https://example.com/bot.png',
+            },
+          },
+        },
+      }),
+      async () => 'Sender',
+      async () => 'Unexpected document',
+      async () => undefined
+    );
+
+    expect(result).toEqual({
+      title: 'Deploy finished',
+      options: { body: 'All 3 services are live.', icon: 'favicon.ico' },
+      sender: {
+        id: 'macro|sender@macro.com',
+        name: 'Deploy bot',
+        avatarUrl: 'https://example.com/bot.png',
+      },
+      conversation: { id: 'task-1' },
+    });
+  });
+
   it('skips GitHub PR events so they do not render as browser notifications', async () => {
     const showNotification = vi.fn<
       PlatformNotificationState['showNotification']

@@ -26,6 +26,27 @@ mod test;
 /// Most candidate pages one feed page reads while refilling after drops.
 pub const MAX_FILL_ROUNDS: usize = 4;
 
+/// Whether `request`'s feed would list a new notification about `entity`,
+/// through the source's own gates and hydration, before any notification
+/// exists: `entity` is probed as if one were pending now.
+pub async fn would_list<S: CandidateSource>(
+    source: &S,
+    request: CandidateRequest,
+    entity: Entity<'static>,
+) -> Result<bool, Report> {
+    let page = source
+        .page(CandidateRequest {
+            own_work: false,
+            limit: 1,
+            after: None,
+            only: Some(vec![entity]),
+            assume_attention: true,
+            ..request
+        })
+        .await?;
+    Ok(!page.items.is_empty())
+}
+
 /// Most candidate keys recomputed per source request.
 const RECOMPUTE_CHUNK: usize = 200;
 
