@@ -63,8 +63,8 @@ fn database_error(error: sqlx::Error) -> MessageError {
             Some("23514") => {
                 return MessageError::Invalid("invalid message parent, thread, or anchor");
             }
-            // Only the channel's turn in `change_log::append` waits under a
-            // lock timeout: the writer ahead of this one did not commit.
+            // `change_log::append` bounds lock waits from the channel's turn
+            // to the end of its transaction: a writer ahead did not commit.
             Some("55P03") => return MessageError::Busy,
             _ => {}
         }

@@ -87,6 +87,27 @@ pub(super) async fn defer_thread_references(
     Ok(())
 }
 
+/// [`append`] for a transaction the caller keeps open afterwards. `append`
+/// bounds lock waits for the rest of its transaction, which is right when the
+/// append is the last statement; here the caller's later statements get back
+/// the wait they had.
+pub(super) async fn append_in_open_transaction(
+    tx: &mut Transaction<'_, Postgres>,
+    channel_id: Uuid,
+    ops: &[ChannelChangeOp],
+) -> Result<i64, MessageError> {
+    let callers_wait = sqlx::query_scalar!(r#"SELECT current_setting('lock_timeout') AS "wait!""#)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(database_error)?;
+    let seq = append(tx, channel_id, ops).await?;
+    sqlx::query_scalar!("SELECT set_config('lock_timeout', $1, true)", callers_wait)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(database_error)?;
+    Ok(seq)
+}
+
 /// Append `ops` to the channel's log as one contiguous block and return the
 /// sequence number of the last one.
 pub(super) async fn append(

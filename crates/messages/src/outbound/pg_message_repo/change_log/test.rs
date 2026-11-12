@@ -562,6 +562,12 @@ async fn imported_history_makes_every_reader_start_over(pool: PgPool) {
     )
     .await
     .unwrap();
+    // The importer's transaction goes on with the lock wait it came with.
+    let wait = sqlx::query_scalar!(r#"SELECT current_setting('lock_timeout') AS "wait!""#)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert_eq!(wait, "0");
     tx.commit().await.unwrap();
     assert!(patched);
     let changes = service

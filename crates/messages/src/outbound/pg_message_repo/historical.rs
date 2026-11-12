@@ -90,7 +90,7 @@ impl PgMessageRepository {
         };
         // No live event announces the patch; the log is how an open channel
         // learns the body changed.
-        super::change_log::append(
+        super::change_log::append_in_open_transaction(
             tx,
             patch.channel_id,
             &[ChannelChangeOp::Message {
@@ -144,7 +144,12 @@ async fn log_import(
 ) -> Result<(), MessageError> {
     super::change_log::check_thread_references(tx).await?;
     super::change_log::defer_thread_references(tx).await?;
-    super::change_log::append(tx, channel_id, &[ChannelChangeOp::HistoryImported]).await?;
+    super::change_log::append_in_open_transaction(
+        tx,
+        channel_id,
+        &[ChannelChangeOp::HistoryImported],
+    )
+    .await?;
     Ok(())
 }
 
