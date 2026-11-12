@@ -122,23 +122,9 @@ pub(super) trait BotComputers: Send + Sync + 'static {
     ) -> impl Future<Output = sqlx::Result<Option<ComputerId>>> + Send;
 }
 
-/// [`BotComputers`] over the bot's live harness binding.
-pub(super) struct PgBotComputers(pub(super) sqlx::PgPool);
-
-impl BotComputers for PgBotComputers {
+impl BotComputers for harnesses::outbound::pg_harness_repo::PgHarnessRepo {
     async fn computer_for(&self, bot: BotId) -> sqlx::Result<Option<ComputerId>> {
-        let computer = sqlx::query_scalar!(
-            r#"
-            SELECT h.computer_id
-            FROM agent_configs ac
-            JOIN harnesses h ON h.id = ac.harness_id
-            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
-            "#,
-            bot.as_uuid(),
-        )
-        .fetch_optional(&self.0)
-        .await?;
-        Ok(computer.flatten().map(ComputerId::new_from_uuid))
+        self.computer_for_bot(bot).await
     }
 }
 

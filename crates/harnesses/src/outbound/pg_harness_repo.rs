@@ -47,6 +47,26 @@ impl PgHarnessRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// The Macro computer behind the live harness `bot` runs on, if any: a
+    /// bot on a paired machine, on a deleted harness or on none has none.
+    pub async fn computer_for_bot(
+        &self,
+        bot: bot_id::BotId,
+    ) -> sqlx::Result<Option<ComputerId>> {
+        let computer = sqlx::query_scalar!(
+            r#"
+            SELECT h.computer_id
+            FROM agent_configs ac
+            JOIN harnesses h ON h.id = ac.harness_id
+            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
+            "#,
+            bot.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(computer.flatten().map(ComputerId::new_from_uuid))
+    }
 }
 
 struct HarnessRow {
