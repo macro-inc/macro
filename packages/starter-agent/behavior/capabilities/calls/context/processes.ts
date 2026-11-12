@@ -11,6 +11,26 @@ import { type CallsPaths, joinCapability } from '../config.ts';
 import type { JoinInput } from '../join.ts';
 import type { LeaveSignal } from '../watch.ts';
 
+type Environment = Readonly<Record<string, string | undefined>>;
+
+/**
+ * What a call's process runs with besides the child baseline: the way back
+ * through the agent's relay, telemetry, and `LD_LIBRARY_PATH`, which
+ * LiveKit's native audio libraries (blingfire, the VAD) need on a computer
+ * and which the baseline leaves out; the call's brain drops it again
+ * (`brainEnvironment`). `NODE_ENV=production`, or rtc-node logs debug lines
+ * to stdout.
+ */
+export const joinEnvironment = (
+  own: Environment,
+  relayed: Readonly<Record<string, string>>
+): Record<string, string> => ({
+  ...relayed,
+  ...telemetryEnvironment(own),
+  ...(own.LD_LIBRARY_PATH ? { LD_LIBRARY_PATH: own.LD_LIBRARY_PATH } : {}),
+  NODE_ENV: 'production',
+});
+
 /** Where Linux lists processes, and the file holding one's arguments. */
 const processDirectory = '/proc';
 const argumentsFile = 'cmdline';
@@ -129,12 +149,7 @@ export const startJoin =
       ],
       {
         cwd: config.root,
-        // rtc-node logs debug lines to stdout otherwise.
-        env: {
-          ...(await relayed()),
-          ...telemetryEnvironment(process.env),
-          NODE_ENV: 'production',
-        },
+        env: joinEnvironment(process.env, await relayed()),
         detached: true,
       }
     );
