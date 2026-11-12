@@ -39,10 +39,11 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
   `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
   its `Authorization: Bearer` header (re-minted on every attach, so restart
-  the runtime with the latest one). Only sessions whose bot runs on a Macro
-  computer (`harnesses.computer_id`), for an owner with
-  `enable-macro-computers`, are served; anything else, a failed lookup
-  included, is a 403 with nothing forwarded. Requests pass through unchanged with
+  the runtime with the latest one). Only sessions whose bot runs on a live Macro
+  computer harness (`harnesses.computer_id`) are served; anything else, a
+  failed lookup included, is a 403 with nothing forwarded. The
+  `enable-macro-computers` rollout is not checked: it limits selling
+  computers, not using them. Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6

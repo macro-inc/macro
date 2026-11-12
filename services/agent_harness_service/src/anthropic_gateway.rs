@@ -4,8 +4,7 @@
 //! and sends its session's egress token as `ANTHROPIC_AUTH_TOKEN`. The request
 //! is forwarded unchanged with Macro's key; the response streams back
 //! unchanged while its `usage` is read and recorded against the session owner.
-//! Only sessions running on a Macro computer, for an owner with the computer
-//! rollout, are served.
+//! Only sessions whose bot runs on a Macro computer are served.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -30,7 +29,6 @@ use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use bot_id::BotId;
 use computer_id::ComputerId;
 use futures::StreamExt;
-use hosted_runtimes::domain::rollout::ComputerRollout;
 use tracing::{Instrument, Span, field::Empty};
 
 use usage::{SseUsage, TokenUsage};
@@ -117,44 +115,37 @@ const MESSAGES_PATH: &str = "/v1/messages";
 const COUNT_TOKENS_PATH: &str = "/v1/messages/count_tokens";
 
 /// Which Macro computer serves a bot right now, if any.
-pub(super) trait BotComputers: Send + Sync {
+pub(super) trait BotComputers: Send + Sync + 'static {
     fn computer_for(
         &self,
         bot: BotId,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<ComputerId>>> + Send + '_>>;
+    ) -> impl Future<Output = sqlx::Result<Option<ComputerId>>> + Send;
 }
 
-/// [`BotComputers`] over the bot's harness binding.
+/// [`BotComputers`] over the bot's live harness binding.
 pub(super) struct PgBotComputers(pub(super) sqlx::PgPool);
 
 impl BotComputers for PgBotComputers {
-    fn computer_for(
-        &self,
-        bot: BotId,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<ComputerId>>> + Send + '_>> {
-        Box::pin(async move {
-            use bots::domain::ports::HarnessAssignments;
-            use harnesses::domain::ports::HarnessRepo;
-
-            let assignments = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.0.clone());
-            let Some(harness) = assignments.harness_for(bot).await? else {
-                return Ok(None);
-            };
-            let harnesses =
-                harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.0.clone());
-            Ok(harnesses
-                .get_harness(harness)
-                .await?
-                .and_then(|harness| harness.computer_id))
-        })
+    async fn computer_for(&self, bot: BotId) -> sqlx::Result<Option<ComputerId>> {
+        let computer = sqlx::query_scalar!(
+            r#"
+            SELECT h.computer_id
+            FROM agent_configs ac
+            JOIN harnesses h ON h.id = ac.harness_id
+            WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
+            "#,
+            bot.as_uuid(),
+        )
+        .fetch_optional(&self.0)
+        .await?;
+        Ok(computer.flatten().map(ComputerId::new_from_uuid))
     }
 }
 
 /// Everything the gateway routes share.
-pub(super) struct GatewayState<Sessions> {
+pub(super) struct GatewayState<Sessions, Computers> {
     sessions: Arc<Sessions>,
-    computers: Arc<dyn BotComputers>,
-    rollout: ComputerRollout,
+    computers: Computers,
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,
     client: reqwest::Client,
@@ -163,11 +154,10 @@ pub(super) struct GatewayState<Sessions> {
     api_key: Option<HeaderValue>,
 }
 
-impl<Sessions> GatewayState<Sessions> {
+impl<Sessions, Computers> GatewayState<Sessions, Computers> {
     pub(super) fn new(
         sessions: Arc<Sessions>,
-        computers: Arc<dyn BotComputers>,
-        rollout: ComputerRollout,
+        computers: Computers,
         admission: Arc<dyn AiAdmissionService>,
         recorder: Arc<dyn UsageRecorder>,
         upstream_url: &str,
@@ -184,7 +174,6 @@ impl<Sessions> GatewayState<Sessions> {
         Ok(Self {
             sessions,
             computers,
-            rollout,
             admission,
             recorder,
             client: reqwest::Client::builder()
@@ -197,12 +186,17 @@ impl<Sessions> GatewayState<Sessions> {
 }
 
 /// The gateway's routes, mounted at the listener root.
-pub(super) fn router<Sessions: AgentSessionRepo>(state: GatewayState<Sessions>) -> Router {
+pub(super) fn router<Sessions: AgentSessionRepo, Computers: BotComputers>(
+    state: GatewayState<Sessions, Computers>,
+) -> Router {
     Router::new()
-        .route("/anthropic/v1/messages", post(messages::<Sessions>))
+        .route(
+            "/anthropic/v1/messages",
+            post(messages::<Sessions, Computers>),
+        )
         .route(
             "/anthropic/v1/messages/count_tokens",
-            post(count_tokens::<Sessions>),
+            post(count_tokens::<Sessions, Computers>),
         )
         .route("/anthropic/{*rest}", any(unsupported))
         .with_state(Arc::new(state))
@@ -223,8 +217,8 @@ impl Endpoint {
     }
 }
 
-async fn messages<Sessions: AgentSessionRepo>(
-    State(state): State<Arc<GatewayState<Sessions>>>,
+async fn messages<Sessions: AgentSessionRepo, Computers: BotComputers>(
+    State(state): State<Arc<GatewayState<Sessions, Computers>>>,
     request: Request,
 ) -> Response {
     let span = tracing::info_span!(
@@ -249,8 +243,8 @@ async fn messages<Sessions: AgentSessionRepo>(
     respond(state, request, Endpoint::Messages, span).await
 }
 
-async fn count_tokens<Sessions: AgentSessionRepo>(
-    State(state): State<Arc<GatewayState<Sessions>>>,
+async fn count_tokens<Sessions: AgentSessionRepo, Computers: BotComputers>(
+    State(state): State<Arc<GatewayState<Sessions, Computers>>>,
     request: Request,
 ) -> Response {
     let span = tracing::info_span!(
@@ -281,8 +275,8 @@ async fn unsupported() -> Response {
     .into_response()
 }
 
-async fn respond<Sessions: AgentSessionRepo>(
-    state: Arc<GatewayState<Sessions>>,
+async fn respond<Sessions: AgentSessionRepo, Computers: BotComputers>(
+    state: Arc<GatewayState<Sessions, Computers>>,
     request: Request,
     endpoint: Endpoint,
     span: Span,
@@ -312,8 +306,8 @@ struct RequestShape {
     model: String,
 }
 
-async fn forward<Sessions: AgentSessionRepo>(
-    state: &GatewayState<Sessions>,
+async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
+    state: &GatewayState<Sessions, Computers>,
     request: Request,
     endpoint: Endpoint,
     span: &Span,
@@ -334,10 +328,10 @@ async fn forward<Sessions: AgentSessionRepo>(
         .inspect_err(|error| tracing::warn!(error = ?error, "session computer lookup failed"))
         .map_err(|_| Rejection::NOT_ON_A_COMPUTER)?
         .ok_or(Rejection::NOT_ON_A_COMPUTER)?;
+    // The computer is the gate: the rollout limits selling computers, not
+    // using them, so a teammate outside it, or anyone once it is off, still
+    // runs Claude on a team computer.
     span.record("agent.computer.id", tracing::field::display(computer));
-    if !state.rollout.enabled(&owner).await {
-        return Err(Rejection::NOT_ON_A_COMPUTER);
-    }
 
     let body = to_bytes(body, MAX_REQUEST_BYTES)
         .await
@@ -401,14 +395,12 @@ async fn forward<Sessions: AgentSessionRepo>(
     }
 
     let body = if streaming {
-        let (caller, mut chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
+        let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
         let metering = meter.map(|meter| (meter, SseUsage::default()));
         tokio::spawn(
             pump(Box::pin(upstream.bytes_stream()), metering, caller).instrument(span.clone()),
         );
-        Body::from_stream(futures::stream::poll_fn(move |context| {
-            chunks.poll_recv(context)
-        }))
+        Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(chunks))
     } else {
         let bytes = read_limited(upstream).await?;
         if let Some(mut meter) = meter
@@ -592,8 +584,8 @@ impl Rejection {
         ),
     };
 
-    /// Fails closed: the session is not on a Macro computer, its lookup
-    /// failed, or its owner does not have the computer rollout.
+    /// Fails closed: the session is not on a Macro computer, or its lookup
+    /// failed.
     const NOT_ON_A_COMPUTER: Self = Self {
         status: StatusCode::FORBIDDEN,
         kind: "permission_error",
