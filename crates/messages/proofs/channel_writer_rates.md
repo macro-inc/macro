@@ -100,7 +100,7 @@ composition admits sorted target channels before acquiring its fence and
 checks the fenced target before writing
 ([`channel_sink.rs:100`](../../../services/slack_import_worker/src/composition/channel_sink.rs#L100)).
 A nonempty helper batch logs one reset, not one sequence per imported message
-([`historical.rs:120`](../src/outbound/pg_message_repo/historical.rs#L120)).
+([`historical.rs:123`](../src/outbound/pg_message_repo/historical.rs#L123)).
 
 Reference repair attempts at most 50 jobs per pass
 ([`reference_reconciliation.rs:102`](../../../services/slack_import_worker/src/composition/reference_reconciliation.rs#L102));
@@ -117,12 +117,12 @@ allocates a sequence; unchanged/invalidated guards remain silent.
 
 Call archival removes a live call and appends one canonical call-root change
 before commit
-([`lifecycle.rs:254`](../../call/src/outbound/pg_call_repo/lifecycle.rs#L254)).
+([`lifecycle.rs:258`](../../call/src/outbound/pg_call_repo/lifecycle.rs#L258)).
 Deleting active or recorded calls likewise logs only actual deletion
-([`pg_call_repo.rs:1063`](../../call/src/outbound/pg_call_repo.rs#L1063),
-[`:2269`](../../call/src/outbound/pg_call_repo.rs#L2269)). Channel discovery is a
+([`pg_call_repo.rs:1067`](../../call/src/outbound/pg_call_repo.rs#L1067),
+[`:2273`](../../call/src/outbound/pg_call_repo.rs#L2273)). Channel discovery is a
 released primary-key read; admission precedes the transaction and the channel
-is rechecked (`lifecycle.rs:281`). Other call mutations do not enter this
+is rechecked (`lifecycle.rs:285`). Other call mutations do not enter this
 sequence path. The new-call start budget remains 20/hour **per account**
 ([`axum_router.rs:76`](../../call/src/inbound/axum_router.rs#L76)); it is not a
 channel-wide rate limit.

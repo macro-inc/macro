@@ -257,8 +257,8 @@ snapshot: old methods at `354da677b5` versus `5743b47a10`. Reproducing those
 historical results requires a separate checkout of that original source and
 benchmark harness. The commands in this section and the next describe that
 snapshot; they do not establish behavior of the historical deadline implementation, or the later admission implementation.
-For current below-ceiling and saturation evidence, use the result-recording
-bounded-write and shared-pool tests documented below.
+For current measurements, use the commands and separate outputs under
+**Admission proof** below.
 
 The ignored `repository_open_loop_write_latency` test runs on the explicit
 sixteen-worker runtime with sixteen database connections. Run it in release
@@ -300,8 +300,9 @@ before `COMMIT`, equally for `before` and `after`:
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_commit_delay_write_latency -- --ignored --nocapture'
 ```
 
-This uses benchmark-only copies of the pinned old and current write methods
-in `src/outbound/pg_message_repo/test/benchmark/delayed.rs`. Their SQL and
+At that historical revision this uses benchmark-only copies of the pinned old
+and sampled new write methods in
+`src/outbound/pg_message_repo/test/benchmark/delayed.rs`. Their SQL and
 hydration paths are unchanged. Only these copies insert the async timer;
 production methods and the ordinary benchmark baseline have no delay hook.
 Verify the copies before running the synthetic cases:
@@ -331,10 +332,13 @@ than requested; use the reported actual interval when interpreting the result.
 Query tracing is disabled. These synthetic results remain separate from both
 the ordinary latency comparison and the traced commit-phase diagnostic.
 
-## Shared-pool channel isolation
+## Historical closed-loop shared-pool isolation
 
-The ignored `repository_shared_pool_isolation` test measures whether one busy
-channel delays writes to another through their shared connection pool:
+The recorded deadline-phase command below requires a separate checkout of
+`70d9301ff9ed571d2c849624f02a2c4f9fc60802`. Do not apply its `deadline50ms` label to
+the current admission implementation; use **Admission proof** for that source.
+At the historical revision, `repository_shared_pool_isolation` measures whether
+one busy channel delays writes to another through their shared connection pool:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_POOL_LABEL=deadline50ms cargo test -p messages --all-features --release repository_shared_pool_isolation -- --ignored --nocapture'
@@ -346,8 +350,8 @@ runtime. One shared pool has the document storage service's settings: minimum
 these actual settings and the initial pool size; all 50 connections are opened
 before measurement. Setup and cleanup are outside the measured interval.
 
-Each of three repetitions runs the pinned `before` and current `after` methods
-for 30 seconds each. One hundred closed-loop writers each edit their own root
+Each of three repetitions runs the pinned `before` and historical `after`
+methods for 30 seconds each. One hundred closed-loop writers each edit their own root
 message in the flood channel. Independently, five scheduled writes per second
 each edit a distinct root in a second channel: 150 probe samples per case.
 Distinct rows avoid message-row contention between writers; only `after`
@@ -390,17 +394,20 @@ rates; it does not pool percentile samples across runs. Error totals remain
 sums. Pass multiple log paths to compare distinct labels. The generated report
 records the pinned old source and the known `baseline`, `bounded5ms`,
 `bounded50ms` and `deadline50ms` source states, their measurement environment, and the repository
-error classification. Current logs append failed-attempt p50/p95/p99 as columns
-35–37; the parser also reads legacy 34-column logs and marks their unavailable
+error classification. The captured 37-column logs append failed-attempt
+p50/p95/p99 as columns 35–37; the parser also reads legacy 34-column logs and marks their unavailable
 failed latencies `NA`. Failure fractions use errors divided by all attempts,
 including for the legacy logs.
 For a diagnostic duration other than 30 seconds, pass `--expected-seconds` with
 the same value used by the benchmark.
 
-## Current writes below the synthetic ceiling
+## Historical deadline writes below the synthetic ceiling
 
-The ignored `repository_bounded_write_latency` test checks current repository
-writes with the total counter-allocation statement deadline enabled:
+The following command and recorded results require a separate checkout of
+`70d9301ff9ed571d2c849624f02a2c4f9fc60802`; they do not describe the current
+admission implementation. At that revision, `repository_bounded_write_latency`
+checks repository writes with the total counter-allocation statement deadline
+enabled:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_BOUNDED_LABEL=deadline50ms cargo test -p messages --all-features --release repository_bounded_write_latency -- --ignored --nocapture'
@@ -410,9 +417,9 @@ It uses sixteen workers and connections in one channel. Each of three
 repetitions measures 2,000 mixed writes per case: sixteen closed-loop writers
 without a synthetic hold; fixed arrivals at 1,000 and 3,000 writes/s without a
 hold; 20, 50 and 100 writes/s with a requested 5 ms pre-commit hold; and 200
-writes/s with a requested 2 ms hold. No-hold cases call the current repository
-methods directly. Delayed cases use the same audited current-method copies
-as the earlier synthetic proof. All cases preserve the current total statement
+writes/s with a requested 2 ms hold. No-hold cases call that revision's repository
+methods directly. Delayed cases use its audited method copies
+from the earlier synthetic proof. All cases preserve its total statement
 deadline: one preflight round trip sets a 50 ms timeout, or a stricter inherited
 timeout, before counter allocation; the append restores the old setting in the
 same statement. This is distinct from the discarded per-lock 50 ms timeout.
@@ -449,8 +456,8 @@ append statement: successive transaction-id lock waits could each finish below
 the cap while the whole statement kept a connection occupied. This incomplete
 experiment is [retained separately](channel_pool_isolation_bounded50ms_partial_results.md);
 it is not a completed three-run comparison.
-The `deadline50ms` phase replaces that per-lock cap with a total statement
-budget and must supply its own complete results.
+The historical `deadline50ms` phase replaced that per-lock cap with a total
+statement budget; its complete results are retained separately below.
 
 Extract the ten completed rows without inventing the missing third new case:
 
@@ -466,10 +473,11 @@ continues to require all twelve rows per label.
 
 ## Historical deadline repository matrix
 
-To reproduce the historical deadline candidate, run the normal release matrix
-from its original source after
-its source is fixed, compilation is complete, and other work on the dedicated
-database is idle:
+To reproduce the historical deadline candidate, use a separate checkout of
+`70d9301ff9ed571d2c849624f02a2c4f9fc60802`. Run the normal release matrix only
+after compilation is complete and other work on the dedicated database is
+idle. These commands must not label current admission measurements as deadline
+results:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_write_latency -- --ignored --nocapture' > /tmp/deadline-repository-writes.log 2>&1
@@ -492,8 +500,9 @@ before counter acquisition; this is part of the measured repository write.
 
 ## Historical deadline fixed-arrival comparison
 
-On the same fixed deadline source used for the final repository matrix, rerun
-the no-hold old/current fixed-arrival comparison separately:
+On the same historical source `70d9301ff9ed571d2c849624f02a2c4f9fc60802`, rerun
+the no-hold old/new fixed-arrival comparison separately. The current admission
+source uses the separate commands and output mode under **Admission proof**:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture' > /tmp/deadline-arrival-writes.log 2>&1
@@ -511,11 +520,12 @@ wall time. It writes `channel_deadline_arrival_latency_runs.csv` and
 of each run's p50/p95/p99 and achieved rates. Runs with p99 at least 10 ms
 also appear in an explicit tail table so medians do not hide them. Historical
 arrival/commit-delay files are unchanged. The old saturation-with-delay runner remains historical;
-use the result-recording shared-pool runner for current saturation evidence.
+use the fixed-arrival admission shared-pool runner for current saturation
+evidence.
 
 
 The recorded complete shared-pool comparison combines the pre-timeout,
-5 ms per-lock, and final total-deadline phases; the discarded incomplete
+5 ms per-lock, and historical total-deadline phases; the discarded incomplete
 50 ms per-lock experiment stays in its separate artifact:
 
 ```sh
@@ -525,13 +535,20 @@ python3 crates/messages/proofs/summarize_pool_isolation.py \
   /tmp/channel-seq-pool-deadline.log
 ```
 
-The [combined report](channel_pool_isolation_results.md) records the final
+The [combined report](channel_pool_isolation_results.md) records the historical
 source revision and the dedicated server-log cross-check for those three
-final deadline runs. Its failed-request latency includes pool acquisition
+deadline runs. Its failed-request latency includes pool acquisition
 before the statement deadline begins.
 
 
 ## Admission proof
+
+Recorded results: [shared-pool isolation](channel_admission_pool_results.md),
+[repository writes](channel_admission_write_latency_results.md), and
+[fixed arrivals](channel_admission_arrival_latency_results.md). Each report
+identifies its measured source and retains every run, including latency spikes.
+The [validation report](channel_admission_validation.md) records package checks,
+coverage and remaining limitations.
 
 Run the new fixed-arrival shared-pool proof on the fixed admission source,
 after compilation and other database work are idle:
