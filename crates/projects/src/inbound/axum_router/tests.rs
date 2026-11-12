@@ -49,7 +49,7 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{ProjectRouterState, projects_router};
+use super::{ProjectRouterState, internal_upload_router, projects_router};
 use crate::domain::{
     models::{ProjectError, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult},
     ports::ProjectService,
@@ -1069,8 +1069,7 @@ async fn internal_upload_selects_internal_destinations_with_exact_lambda_json() 
     );
 }
 
-#[tokio::test]
-async fn internal_upload_accepts_a_ten_thousand_file_folder() {
+fn ten_thousand_file_folder() -> Value {
     let content: Vec<Value> = (0..10_000)
         .map(|index| {
             json!({
@@ -1088,16 +1087,53 @@ async fn internal_upload_accepts_a_ten_thousand_file_folder() {
         "uploadRequestId": "lambda-request"
     });
     assert!(body.to_string().len() > 2 * 1024 * 1024);
+    body
+}
 
+#[tokio::test]
+async fn internal_upload_accepts_a_ten_thousand_file_folder() {
     let service = FakeProjectService::with_project(USER_ID, false);
     let flags = service.upload_internal_flags.clone();
-    let response = router(service, None)
-        .oneshot(internal_identity_json_request("POST", "/upload", body))
+    let router = internal_upload_router::<
+        FakeProjectService,
+        FakeEntityAccessService,
+        FakeAuthorizationService,
+        (),
+    >(ProjectRouterState {
+        service: Arc::new(service),
+        access_service: Arc::new(FakeEntityAccessService { access_level: None }),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+        non_user_owners: NonUserOwners::Disabled,
+    });
+
+    let response = router
+        .oneshot(internal_identity_json_request(
+            "POST",
+            "/upload",
+            ten_thousand_file_folder(),
+        ))
         .await
         .expect("router should respond");
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(&*flags.lock().expect("upload flag lock poisoned"), &[true]);
+}
+
+#[tokio::test]
+async fn user_upload_keeps_the_default_body_limit() {
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let flags = service.upload_internal_flags.clone();
+    let response = router(service, None)
+        .oneshot(authenticated_json_request(
+            "POST",
+            "/upload",
+            ten_thousand_file_folder(),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(flags.lock().expect("upload flag lock poisoned").is_empty());
 }
 
 #[tokio::test]
