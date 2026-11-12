@@ -267,8 +267,8 @@ the gateway `/email` prefix.
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
-- gmail_ops moves transient Gmail failures to the retry queue like rate limits;
-  the primary queue dead-letters after three receives.
+- gmail_ops and inbox sync move transient Gmail failures to the retry queue
+  like rate limits; the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see

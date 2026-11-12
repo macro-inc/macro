@@ -112,15 +112,15 @@ async fn each_provider_error_preserves_primary_retry_routing_and_reason() {
             EmailApiError::Transient {
                 message: "unavailable".into(),
             },
-            false,
-            FailureReason::GmailApiFailed,
+            true,
+            FailureReason::GmailApiUnavailable,
         ),
         (
             EmailApiError::CredentialsUnavailable {
                 message: "credentials".into(),
             },
-            false,
-            FailureReason::GmailApiFailed,
+            true,
+            FailureReason::GmailApiUnavailable,
         ),
         (
             EmailApiError::AuthRequired,

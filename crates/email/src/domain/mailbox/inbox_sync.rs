@@ -76,7 +76,7 @@ impl InboxSyncFailureLog {
     pub fn record(self, data: &InboxSyncPubsubMessage, e: &DetailedError) {
         match self {
             Self::Deferred => {
-                tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Rate-limited inbox sync message deferred. The message will be deleted.");
+                tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Deferred inbox sync message moved to the retry queue. The message will be deleted.");
             }
             Self::Permanent => {
                 tracing::error!(error = %e, payload = format!("{:?}", data.operation), "Non-retryable error processing inbox sync message. The message will be deleted.");
@@ -127,7 +127,13 @@ where
         match inner_process_message(self, &data).await {
             Ok(()) => InboxSyncDisposition::DoneDelete,
             Err(ProcessingError::NonRetryable(error)) => {
-                let log = if error.reason == FailureReason::GmailApiRateLimited {
+                // Only a refusal already moved to the retry queue is
+                // non-retryable with one of these reasons.
+                let deferred = matches!(
+                    error.reason,
+                    FailureReason::GmailApiRateLimited | FailureReason::GmailApiUnavailable
+                );
+                let log = if deferred {
                     InboxSyncFailureLog::Deferred
                 } else {
                     InboxSyncFailureLog::Permanent
