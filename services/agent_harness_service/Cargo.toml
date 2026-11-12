@@ -92,6 +92,7 @@ entity_access = { path = "../../crates/entity_access", features = ["inbound", "o
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
+enterprise = { path = "../../crates/enterprise", features = ["outbound"] }
 feature_flags = { path = "../../crates/feature_flags" }
 foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }

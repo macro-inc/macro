@@ -44,6 +44,37 @@ async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
 )]
+async fn enterprise_team_still_bills_member_seats(pool: PgPool) {
+    let entitlements = RolesTeamsEntitlementSource::new(
+        UserRolesAndPermissionsServiceImpl::new(
+            MacroDB::new(pool.clone()),
+            MacroDB::new(pool.clone()),
+        ),
+        TeamRepositoryImpl::new(pool),
+    );
+
+    let member =
+        MacroUserIdStr::try_from("macro|enterprise-member@example.com".to_string()).unwrap();
+    let entitlement = entitlements.entitlement(&member).await.unwrap();
+
+    assert!(entitlement.unlimited);
+    assert_eq!(
+        entitlement.scope,
+        PayerScope::TeamMember {
+            team_id: Uuid::parse_str("33333333-3333-3333-3333-333333333333").unwrap(),
+        }
+    );
+    assert_eq!(
+        entitlement.payer.as_ref(),
+        "macro|enterprise-owner@example.com"
+    );
+    assert_eq!(entitlement.billed_users.len(), 2);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
+)]
 async fn a_canceled_team_does_not_block_a_members_personal_subscription(pool: PgPool) {
     let entitlements = RolesTeamsEntitlementSource::new(
         UserRolesAndPermissionsServiceImpl::new(

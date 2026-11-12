@@ -455,6 +455,20 @@ impl TeamRepository for TeamRepositoryImpl {
     .fetch_all(&mut *transaction)
     .await?;
 
+        // Axiom: only newly committed invites are audited, in the same transaction; resends are not creations.
+        for (invite_id, _, _, _) in &created_invites {
+            enterprise::audit::append(
+                &mut transaction,
+                &enterprise::audit::AuditRecord::new(
+                    invited_by,
+                    enterprise::audit::AuditAction::Invite,
+                    invite_id.to_string(),
+                    enterprise::audit::AuditResult::Success,
+                ),
+            )
+            .await?;
+        }
+
         // Also re-send existing invites whose email rate limit has passed;
         // sooner, the email would be dropped while `last_sent_at` moved on.
         let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String, bool)> = sqlx::query!(

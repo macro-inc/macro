@@ -1818,6 +1818,11 @@ impl<
 
         self.repo
             .edit_document(EditDocumentRepoArgs {
+                actor_id: entity_access_receipt
+                    .get_authenticated_user()
+                    .map_err(|_| DocumentError::Unauthorized)?
+                    .as_ref()
+                    .to_owned(),
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 document_name: document_name.clone(),
                 project_id: args.project_id.clone(),

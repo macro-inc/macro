@@ -111,6 +111,7 @@ async fn team_edit_args(repo: &TestRepo, level: Option<AccessLevel>) -> EditDocu
     .unwrap()
     .unwrap();
     EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: Some("team-edit".to_string()),
         project_id: None,
@@ -1229,6 +1230,7 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("new-name".to_string()),
@@ -1255,6 +1257,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,
@@ -1281,6 +1284,7 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,
@@ -1307,6 +1311,7 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
@@ -1337,6 +1342,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
 
     // First set a project
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
@@ -1359,6 +1365,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
 
     // Then remove it by passing empty string
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
@@ -1386,6 +1393,7 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
@@ -1421,6 +1429,7 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
@@ -1456,6 +1465,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
@@ -1478,6 +1488,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
     assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
@@ -1515,6 +1526,7 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("renamed".to_string()),
         team_share: None,
@@ -2405,6 +2417,7 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     repo.edit_document(EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
@@ -2480,6 +2493,7 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     let make_args = || EditDocumentRepoArgs {
+        actor_id: "macro|owner@example.com".to_string(),
         team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,

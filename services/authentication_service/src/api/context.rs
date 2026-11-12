@@ -250,6 +250,7 @@ pub(crate) struct ApiContext {
     pub user_roles_and_permissions_service:
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
+    pub enterprise: Arc<crate::outbound::enterprise::EnterpriseServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,

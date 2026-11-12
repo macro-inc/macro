@@ -356,6 +356,13 @@ impl IntoResponse for AgentSessionApiError {
             // answers 409 with a reason rather than a 500 that reads as a bug
             // and buries the one fact worth showing a user.
             Self::Domain(AgentSessionError::Admission(error)) => error.into_response(),
+            Self::Domain(AgentSessionError::Enterprise(error)) => match error {
+                enterprise::domain::EnterpriseError::MemberDisabled
+                | enterprise::domain::EnterpriseError::RuntimePresetDenied => {
+                    (StatusCode::FORBIDDEN, error.to_string()).into_response()
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response(),
+            },
             Self::Domain(AgentSessionError::Disconnected(session_id)) => {
                 tracing::info!(%session_id, "action refused: the session's runtime is not connected");
                 (

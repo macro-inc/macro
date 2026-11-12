@@ -657,8 +657,40 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         .await?;
 
         if let Some(ref share_permission) = args.share_permission {
+            let share_link_created = if matches!(share_permission.link_share, Some(Some(_))) {
+                let existing = sqlx::query_scalar!(
+                    r#"
+                    SELECT sp."linkShare"
+                    FROM "DocumentPermission" dp
+                    JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+                    WHERE dp."documentId" = $1
+                    "#,
+                    &args.document_id,
+                )
+                .fetch_one(&mut *transaction)
+                .await?;
+                existing.is_none()
+            } else {
+                false
+            };
+
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
                 .await?;
+
+            if share_link_created {
+                let actor = MacroUserIdStr::parse_from_str(&args.actor_id)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+                enterprise::audit::append(
+                    &mut transaction,
+                    &enterprise::audit::AuditRecord::new(
+                        &actor,
+                        enterprise::audit::AuditAction::ShareLinkCreate,
+                        &args.document_id,
+                        enterprise::audit::AuditResult::Success,
+                    ),
+                )
+                .await?;
+            }
         }
 
         if args.revoke_non_owner_user_access {

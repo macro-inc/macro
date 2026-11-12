@@ -767,6 +767,12 @@ async fn run_server() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
+    let enterprise = Arc::new(crate::outbound::enterprise::enterprise_service(
+        db.clone(),
+        Arc::new(auth_client.clone()),
+        teams_repo_impl.clone(),
+    ));
+
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
@@ -813,6 +819,7 @@ async fn run_server() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            enterprise,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,

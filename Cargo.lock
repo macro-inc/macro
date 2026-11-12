@@ -629,6 +629,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_service_client",
+ "enterprise",
  "entity_access",
  "entity_access_management",
  "entity_registry",
@@ -890,6 +891,7 @@ dependencies = [
  "clap",
  "connection_gateway_client",
  "dashmap",
+ "enterprise",
  "entity_access",
  "entity_access_db_utils",
  "entity_registry",
@@ -2249,6 +2251,7 @@ dependencies = [
  "email",
  "email_db_client",
  "email_validator",
+ "enterprise",
  "entity_access",
  "entity_registry",
  "favorites",
@@ -2260,6 +2263,7 @@ dependencies = [
  "github",
  "github_pull_requests",
  "gtm_invite",
+ "harnesses",
  "hmac 0.12.1",
  "http-body-util",
  "initiative",
@@ -6934,6 +6938,7 @@ dependencies = [
  "document_sub_type",
  "docx_engine",
  "embedding",
+ "enterprise",
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
@@ -7614,6 +7619,7 @@ dependencies = [
  "email_api_client",
  "email_db_client",
  "email_utils",
+ "enterprise",
  "entity_access",
  "entity_access_management",
  "filter_ast",
@@ -7827,6 +7833,27 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "enterprise"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "entity_access",
+ "macro_authorization",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -20212,6 +20239,7 @@ dependencies = [
  "chrono",
  "contacts",
  "database_env_vars",
+ "enterprise",
  "entity_access",
  "entity_access_db_utils",
  "generic_email_domains",
