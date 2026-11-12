@@ -32,6 +32,10 @@ export type {
 export const TEAM_ON_TRIAL = 'TEAM_ON_TRIAL';
 type TeamOnTrialErrorCode = typeof TEAM_ON_TRIAL;
 
+/** Computers aren't sold here right now: no host is attached (503). */
+export const COMPUTERS_UNAVAILABLE = 'COMPUTERS_UNAVAILABLE';
+type OffersErrorCode = TeamOnTrialErrorCode | typeof COMPUTERS_UNAVAILABLE;
+
 type PurchaseComputerErrorCode =
   | 'PURCHASE_CONFLICT'
   | 'PAYMENT_FAILED'
@@ -73,8 +77,16 @@ async function teamOnTrial(
 
 async function offersError(
   response: Response
-): Promise<ResultError<BaseFetchErrorCode | TeamOnTrialErrorCode>> {
-  return (await teamOnTrial(response)) ?? statusError(response.status);
+): Promise<ResultError<BaseFetchErrorCode | OffersErrorCode>> {
+  const trial = await teamOnTrial(response);
+  if (trial) return trial;
+  if (response.status === 503) {
+    return {
+      code: COMPUTERS_UNAVAILABLE,
+      message: "Computers aren't available right now. Try again later.",
+    };
+  }
+  return statusError(response.status);
 }
 
 /** 409 is a sold-out size, or a purchase key that belongs to another purchase. */
@@ -141,7 +153,7 @@ async function releaseError(
 export const computersClient = {
   list: () => fetchWithToken<ComputerStatus[]>(base),
   offers: () =>
-    fetchWithToken<SizeOffer[], TeamOnTrialErrorCode>(`${base}/offers`, {
+    fetchWithToken<SizeOffer[], OffersErrorCode>(`${base}/offers`, {
       errorResponseHandler: offersError,
     }),
   purchase: (request: PurchaseBody) =>
@@ -160,10 +172,10 @@ export const computersClient = {
       method: 'POST',
     }),
   undoCancel: (id: string) =>
-    fetchWithToken<ComputerStatus, TeamOnTrialErrorCode>(
-      computerUrl(id, 'cancel'),
-      { method: 'DELETE', errorResponseHandler: offersError }
-    ),
+    fetchWithToken<ComputerStatus, OffersErrorCode>(computerUrl(id, 'cancel'), {
+      method: 'DELETE',
+      errorResponseHandler: offersError,
+    }),
   release: (id: string, confirmName: string) =>
     fetchWithToken<ComputerStatus, ReleaseComputerErrorCode>(
       computerUrl(id, 'release'),
