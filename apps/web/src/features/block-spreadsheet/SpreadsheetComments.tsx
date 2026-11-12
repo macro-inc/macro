@@ -20,6 +20,7 @@ import {
 } from '@queries/messages/document-messages';
 import {
   newMessageId,
+  storedMessage,
   usePatchThreadMutation,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
@@ -127,16 +128,18 @@ export function SpreadsheetComments(props: {
     if (!senderId || !canComment())
       throw new Error('Sign in with comment access to post');
     const payload = buildPostMessageSendPayload({ snapshot });
-    return send.mutateAsync({
-      parent: parent(),
-      senderId,
-      optimisticId: newMessageId(),
-      ...payload,
-      message: {
-        ...payload.message,
-        anchor: { type: 'spreadsheet', ...value },
-      },
-    });
+    return send
+      .mutateAsync({
+        parent: parent(),
+        senderId,
+        optimisticId: newMessageId(),
+        ...payload,
+        message: {
+          ...payload.message,
+          anchor: { type: 'spreadsheet', ...value },
+        },
+      })
+      .then(storedMessage);
   };
   const count = () =>
     threads()

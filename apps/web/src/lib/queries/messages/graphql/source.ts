@@ -20,6 +20,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
   getUncachedGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import type {
@@ -28,6 +29,7 @@ import type {
 } from '@service-storage/messages';
 import {
   type AnyVariables,
+  type Client,
   CombinedError,
   type DocumentInput,
   stringifyDocument,
@@ -64,6 +66,14 @@ export function channelCacheHost(): CacheHost | undefined {
   return host && !host.disabled ? host : undefined;
 }
 
+/**
+ * The client whose mutations go through the cache host's durable queue: the
+ * one `channelCacheHost` returns while it is defined.
+ */
+export function channelWriteClient(): Client {
+  return getGraphqlSoupClient();
+}
+
 /** The variables of the one page the cache keeps per channel. */
 function latestPageVariables(channelId: string) {
   return { channelId, input: null };
@@ -71,9 +81,9 @@ function latestPageVariables(channelId: string) {
 
 /**
  * Refusals keep the codes the REST client reports, which the timeline's
- * retry and missing-target handling read.
+ * retry and missing-target handling and the message hooks read.
  */
-function readError(error: unknown): unknown {
+export function readError(error: unknown): unknown {
   if (!(error instanceof CombinedError) || error.graphQLErrors.length === 0) {
     return error;
   }
