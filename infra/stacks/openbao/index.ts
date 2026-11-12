@@ -5,6 +5,7 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  DEFAULT_TARGET_GROUP_HEALTH_CHECK,
   EcsDeploymentFailureAlarm,
   withTelemetry,
 } from '../../packages/resources';
@@ -17,12 +18,10 @@ import {
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { API_PORT, DATA_MOUNT_PATH, renderServerConfig } from './server-config';
 
-const region = aws.config.requireRegion();
-if (stack !== 'dev' || region !== 'us-east-1') {
-  throw new Error(
-    'Hosted OpenBao is dev-only in us-east-1; prod is a separate design'
-  );
+if (stack !== 'dev') {
+  throw new Error('Hosted OpenBao is dev-only; prod is a separate design');
 }
+const region = aws.config.requireRegion();
 
 const BASE_NAME = pulumi.getProject();
 // Upstream 2.7.2 (the local stack's version), pinned by digest; Quay avoids
@@ -34,6 +33,8 @@ const OPENBAO_UID = 100;
 const OPENBAO_GID = 1000;
 const HOSTNAME = 'openbao-dev.macro-internal.com';
 const API_ADDRESS = `https://${HOSTNAME}`;
+const HTTPS_PORT = 443;
+const NFS_PORT = 2049;
 
 const tags = { project: BASE_NAME, environment: stack, tech_lead: 'wolf' };
 const durable = { protect: true, retainOnDelete: true };
@@ -43,7 +44,7 @@ const vpc = get_coparse_api_vpc();
 const cloudStorageService = new pulumi.StackReference('cloud-storage-service', {
   name: `macro-inc/cloud-storage-service/${stack}`,
 });
-const documentStorageSgId = cloudStorageService.requireOutput(
+const documentStorageSecurityGroupId = cloudStorageService.requireOutput(
   'cloudStorageServiceSgId'
 ) as pulumi.Output<string>;
 
@@ -117,6 +118,8 @@ const sealKey = new aws.kms.Key(
           ],
           resources: ['*'],
         },
+        // The only grant: the account root has no data-plane actions, so
+        // IAM policies cannot widen use of this key.
         {
           sid: 'AllowOpenBaoSeal',
           effect: 'Allow',
@@ -134,15 +137,6 @@ const sealKey = new aws.kms.Key(
 new aws.kms.Alias(`${BASE_NAME}-seal-key-alias`, {
   name: `alias/${BASE_NAME}-${stack}`,
   targetKeyId: sealKey.keyId,
-});
-new aws.iam.RolePolicy(`${BASE_NAME}-seal`, {
-  role: taskRole.id,
-  policy: {
-    Version: '2012-10-17',
-    Statement: [
-      { Effect: 'Allow', Action: SEAL_ACTIONS, Resource: sealKey.arn },
-    ],
-  },
 });
 // ECS Exec: the one-time `bao operator init` and the provisioning port-forward.
 new aws.iam.RolePolicy(`${BASE_NAME}-exec`, {
@@ -166,38 +160,45 @@ new aws.iam.RolePolicy(`${BASE_NAME}-exec`, {
 
 // --- Security groups ------------------------------------------------------
 
-const albSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-alb-sg`, {
-  name: `${BASE_NAME}-alb-sg-${stack}`,
-  vpcId: vpc.vpcId,
-  description: 'OpenBao internal ALB: HTTPS from the document storage service',
-  tags,
-});
-const taskSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-task-sg`, {
+const loadBalancerSecurityGroup = new aws.ec2.SecurityGroup(
+  `${BASE_NAME}-alb-sg`,
+  {
+    name: `${BASE_NAME}-alb-sg-${stack}`,
+    vpcId: vpc.vpcId,
+    description:
+      'OpenBao internal ALB: HTTPS from the document storage service',
+    tags,
+  }
+);
+const taskSecurityGroup = new aws.ec2.SecurityGroup(`${BASE_NAME}-task-sg`, {
   name: `${BASE_NAME}-task-sg-${stack}`,
   vpcId: vpc.vpcId,
   description: 'OpenBao task: API from its ALB only',
   tags,
 });
-const efsSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-efs-sg`, {
-  name: `${BASE_NAME}-efs-sg-${stack}`,
-  vpcId: vpc.vpcId,
-  description: 'OpenBao Raft volume: NFS from the OpenBao task only',
-  tags,
-});
+const fileSystemSecurityGroup = new aws.ec2.SecurityGroup(
+  `${BASE_NAME}-efs-sg`,
+  {
+    name: `${BASE_NAME}-efs-sg-${stack}`,
+    vpcId: vpc.vpcId,
+    description: 'OpenBao Raft volume: NFS from the OpenBao task only',
+    tags,
+  }
+);
 
 new aws.vpc.SecurityGroupIngressRule(`${BASE_NAME}-alb-in-dss`, {
-  securityGroupId: albSg.id,
+  securityGroupId: loadBalancerSecurityGroup.id,
   description: 'HTTPS from the document storage service',
-  referencedSecurityGroupId: documentStorageSgId,
+  referencedSecurityGroupId: documentStorageSecurityGroupId,
   ipProtocol: 'tcp',
-  fromPort: 443,
-  toPort: 443,
+  fromPort: HTTPS_PORT,
+  toPort: HTTPS_PORT,
   tags,
 });
 new aws.vpc.SecurityGroupEgressRule(`${BASE_NAME}-alb-out-task`, {
-  securityGroupId: albSg.id,
+  securityGroupId: loadBalancerSecurityGroup.id,
   description: 'OpenBao API',
-  referencedSecurityGroupId: taskSg.id,
+  referencedSecurityGroupId: taskSecurityGroup.id,
   ipProtocol: 'tcp',
   fromPort: API_PORT,
   toPort: API_PORT,
@@ -206,9 +207,9 @@ new aws.vpc.SecurityGroupEgressRule(`${BASE_NAME}-alb-out-task`, {
 const taskIngress = new aws.vpc.SecurityGroupIngressRule(
   `${BASE_NAME}-task-in-alb`,
   {
-    securityGroupId: taskSg.id,
+    securityGroupId: taskSecurityGroup.id,
     description: 'OpenBao API from the ALB',
-    referencedSecurityGroupId: albSg.id,
+    referencedSecurityGroupId: loadBalancerSecurityGroup.id,
     ipProtocol: 'tcp',
     fromPort: API_PORT,
     toPort: API_PORT,
@@ -219,36 +220,36 @@ const taskIngress = new aws.vpc.SecurityGroupIngressRule(
 const taskHttpsEgress = new aws.vpc.SecurityGroupEgressRule(
   `${BASE_NAME}-task-https-out`,
   {
-    securityGroupId: taskSg.id,
+    securityGroupId: taskSecurityGroup.id,
     description: 'HTTPS to AWS APIs, the image registry, and Datadog',
     cidrIpv4: '0.0.0.0/0',
     ipProtocol: 'tcp',
-    fromPort: 443,
-    toPort: 443,
+    fromPort: HTTPS_PORT,
+    toPort: HTTPS_PORT,
     tags,
   }
 );
 const taskNfsEgress = new aws.vpc.SecurityGroupEgressRule(
   `${BASE_NAME}-task-nfs-out`,
   {
-    securityGroupId: taskSg.id,
+    securityGroupId: taskSecurityGroup.id,
     description: 'NFS to the Raft volume',
-    referencedSecurityGroupId: efsSg.id,
+    referencedSecurityGroupId: fileSystemSecurityGroup.id,
     ipProtocol: 'tcp',
-    fromPort: 2049,
-    toPort: 2049,
+    fromPort: NFS_PORT,
+    toPort: NFS_PORT,
     tags,
   }
 );
 const efsIngress = new aws.vpc.SecurityGroupIngressRule(
   `${BASE_NAME}-efs-in-task`,
   {
-    securityGroupId: efsSg.id,
+    securityGroupId: fileSystemSecurityGroup.id,
     description: 'NFS from the OpenBao task',
-    referencedSecurityGroupId: taskSg.id,
+    referencedSecurityGroupId: taskSecurityGroup.id,
     ipProtocol: 'tcp',
-    fromPort: 2049,
-    toPort: 2049,
+    fromPort: NFS_PORT,
+    toPort: NFS_PORT,
     tags,
   }
 );
@@ -271,7 +272,7 @@ const mountTargets = vpc.privateSubnetIds.map(
     new aws.efs.MountTarget(`${BASE_NAME}-data-${index}`, {
       fileSystemId: fileSystem.id,
       subnetId,
-      securityGroups: [efsSg.id],
+      securityGroups: [fileSystemSecurityGroup.id],
     })
 );
 const accessPoint = new aws.efs.AccessPoint(`${BASE_NAME}-data`, {
@@ -377,12 +378,12 @@ const validatedCertificate = new aws.acm.CertificateValidation(
 
 // Not the public gateway: the vault API must never be reachable from outside
 // the VPC, so it gets its own internal ALB.
-const alb = new aws.lb.LoadBalancer(`${BASE_NAME}-alb`, {
+const loadBalancer = new aws.lb.LoadBalancer(`${BASE_NAME}-alb`, {
   name: `${BASE_NAME}-${stack}`,
   internal: true,
   loadBalancerType: 'application',
   subnets: vpc.privateSubnetIds,
-  securityGroups: [albSg.id],
+  securityGroups: [loadBalancerSecurityGroup.id],
   dropInvalidHeaderFields: true,
   tags,
 });
@@ -395,10 +396,8 @@ const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
   // One task: a new one starts only after the old one stops.
   deregistrationDelay: 5,
   healthCheck: {
+    ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
     path: '/v1/sys/health',
-    interval: 10,
-    timeout: 5,
-    healthyThreshold: 2,
     unhealthyThreshold: 3,
     // 200 active; 501 not yet initialized (first deploy, before `operator
     // init`). Sealed (503) is unhealthy, so ECS replaces the task.
@@ -407,8 +406,8 @@ const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
   tags,
 });
 const listener = new aws.lb.Listener(`${BASE_NAME}-https`, {
-  loadBalancerArn: alb.arn,
-  port: 443,
+  loadBalancerArn: loadBalancer.arn,
+  port: HTTPS_PORT,
   protocol: 'HTTPS',
   sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
   certificateArn: validatedCertificate.certificateArn,
@@ -420,7 +419,11 @@ new aws.route53.Record(`${BASE_NAME}-dns`, {
   name: HOSTNAME,
   type: 'A',
   aliases: [
-    { name: alb.dnsName, zoneId: alb.zoneId, evaluateTargetHealth: false },
+    {
+      name: loadBalancer.dnsName,
+      zoneId: loadBalancer.zoneId,
+      evaluateTargetHealth: false,
+    },
   ],
 });
 
@@ -444,7 +447,7 @@ const service = new awsx.ecs.FargateService(
     enableExecuteCommand: true,
     networkConfiguration: {
       subnets: vpc.privateSubnetIds,
-      securityGroups: [taskSg.id],
+      securityGroups: [taskSecurityGroup.id],
       assignPublicIp: false,
     },
     loadBalancers: [
@@ -502,7 +505,7 @@ const service = new awsx.ecs.FargateService(
               Host: 'http-intake.logs.us5.datadoghq.com',
               // Egress allows only 443; Fluent Bit defaults to plain 80.
               TLS: 'on',
-              Port: '443',
+              Port: String(HTTPS_PORT),
               apikey: DATADOG_API_KEY,
               dd_service: BASE_NAME,
               dd_source: 'openbao',
@@ -545,7 +548,7 @@ new aws.cloudwatch.MetricAlarm(`${BASE_NAME}-unhealthy-alarm`, {
   comparisonOperator: 'LessThanThreshold',
   treatMissingData: 'breaching',
   dimensions: {
-    LoadBalancer: alb.arnSuffix,
+    LoadBalancer: loadBalancer.arnSuffix,
     TargetGroup: targetGroup.arnSuffix,
   },
   alarmDescription: 'OpenBao has no healthy (unsealed, active) task.',

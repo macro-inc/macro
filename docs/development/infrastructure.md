@@ -141,7 +141,6 @@ Run it locally with `nix build --no-link .#code-mode-assets`.
 | DynamoDB | `ServiceDynamoDBTable` (least privilege), not `DynamoDBTable` (`dynamodb:*`) | `packages/service/src/dynamodb.ts` |
 | Bucket | `createBucketV2` | `packages/resources/src/resources/bucket.ts` |
 | Datadog monitor | `infra/stacks/monitoring` (prod only, manual deploy) | `monitoring/monitors/ai-editing.ts` |
-| Stateful single-task service reachable only inside the VPC | Own internal ALB + ACM certificate (never the public gateway), EFS volume, AWS Backup | `openbao/index.ts` |
 
 When you add a prod queue or bucket, also add it to the local catalog in
 `tooling/xtask/crates/xtask_local/src/local/resources.rs`; Pulumi does not create
@@ -188,6 +187,9 @@ build/deployment failure gates remain attempt-scoped.
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
   `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao` and a
   few others are manual.
+- `openbao` (dev only) is a deliberate exception to the gateway pattern: the
+  vault API must never be gateway-reachable, so it has its own internal ALB.
+  Don't copy it for ordinary services.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.

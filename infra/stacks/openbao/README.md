@@ -23,30 +23,41 @@ Time Sync).
 
 1. Deploy the stack (explicit permission required). The task becomes healthy
    while uninitialized.
-2. Initialize through ECS Exec, piping the output straight into Doppler without
-   printing it:
+2. Create the Doppler project `openbao` with a `dev` config only.
+3. Forward the task's API port over SSM (ECS Exec is enabled) and initialize
+   with a local `bao` CLI (`nix shell nixpkgs#openbao`). The credentials go
+   straight into Doppler and are never printed:
 
    ```sh
-   task=$(aws ecs list-tasks --cluster <cluster> --service-name openbao --query 'taskArns[0]' --output text)
-   aws ecs execute-command --cluster <cluster> --task "$task" --container openbao --interactive \
-     --command 'bao operator init -address=http://127.0.0.1:8200 -recovery-shares=1 -recovery-threshold=1 -format=json' \
-     | <extract JSON> | doppler secrets upload -p openbao -c dev ...
+   cluster=<cloudStorageClusterName output of the document-storage dev stack>
+   task=$(aws ecs list-tasks --cluster "$cluster" --service-name openbao \
+     --query 'taskArns[0]' --output text)
+   runtime=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" \
+     --query "tasks[0].containers[?name=='openbao'].runtimeId | [0]" --output text)
+   aws ssm start-session --target "ecs:${cluster}_${task##*/}_${runtime}" \
+     --document-name AWS-StartPortForwardingSession \
+     --parameters '{"portNumber":["8200"],"localPortNumber":["18200"]}' &
+   bao operator init -address=http://127.0.0.1:18200 \
+     -recovery-shares=1 -recovery-threshold=1 -format=json \
+     | jq '{OPENBAO_ROOT_TOKEN: .root_token, OPENBAO_RECOVERY_KEY: .recovery_keys_b64[0]}' \
+     | doppler secrets upload -p openbao -c dev /dev/stdin > /dev/null
+   kill %1
    ```
 
-   Store `OPENBAO_ROOT_TOKEN` and `OPENBAO_RECOVERY_KEY` in Doppler `openbao/dev`
-   (create the project with a `dev` config only). With KMS auto-unseal the vault
-   unseals itself on every restart; the recovery key is only for `generate-root`.
+   With KMS auto-unseal the vault unseals itself on every restart. The recovery
+   key is only for `bao operator generate-root`.
 
-## Provisioning
+## Provisioning (follow-up)
 
-Team namespaces, mounts, roles, and the JWT trust are applied by the hosted
-provisioning entrypoint that ships with Passwords. It reuses the local
-bootstrap's policy and role logic and talks only to this exact HTTPS origin. Its
-README covers the signing key, issuer, and per-team runs. The DSS Doppler values
-(`OPENBAO_ADDRESS=https://openbao-dev.macro-internal.com`,
-`PASSWORDS_JWT_ISSUER`, `PASSWORDS_JWT_SIGNING_KEY`) are written together, since
-DSS refuses a partial set. Only explicitly provisioned teams work: creating a
-team does not create its namespace.
+Team namespaces, mounts, JWT roles, and the lifecycle role are applied by a
+hosted provisioning entrypoint. It is not in this stack yet: it lands with the
+Passwords change, reuses the local bootstrap's policy and role logic, and
+accepts only this exact HTTPS origin. Until then, no team can use the vault.
+
+The document storage service's dev Doppler config gets `OPENBAO_ADDRESS`,
+`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together at
+provisioning time; it refuses a partial set. Only explicitly provisioned teams
+work, because creating a team does not create its namespace.
 
 ## Restore
 
