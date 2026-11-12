@@ -38,8 +38,6 @@ compatibility = ["lexical_model/foreign-nodes"]
 conformance = []
 # Simulation-only malformed projection producer; never ship enabled.
 test-faults = []
-# Test-only probes shared across the session stack; never in shipping artifacts.
-dev-probes = ["lexical_loro/dev-probes"]
 
 [[example]]
 name = "collab"
