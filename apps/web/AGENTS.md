@@ -58,6 +58,8 @@
 
 Require the maintained [six-step native preview install check](scripts/editor-live-check/README.md) before and after every native preview installation, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
 
+Verify Await ownership with the actual peer plugin and parsed stored state in `LexicalMarkdown/decorator-host/peer-ownership-source.test.ts`; distinguish the Created listener from the root-sensitive initialization command and preserve the ownerless fallback.
+
 Native editor surfaces share `EditorEngineProvider` and `EditorEngineBoundary`
 from `src/lib/core/document-session/editor-engine.tsx`. Keep shell chrome outside
 the readiness boundary and retain the cached boot engine choice; construct synchronous handles only after the shared

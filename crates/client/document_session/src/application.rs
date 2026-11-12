@@ -1,6 +1,11 @@
 //! Application registry composition; clocks and entropy enter through session inputs.
 use crate::{EditorConfig, with_session_plugins_excluding_root};
-use macro_document_model::{NodeClock, NodeHost, NodeRandom};
+use lexical_model::{Error, NodeKey, NodeType, SerializedNode, StateRef};
+use macro_document_model::{
+    NodeClock, NodeHost, NodeRandom,
+    nodes::AwaitNode,
+    peer::{PeerIdPlugin, PeerIdState},
+};
 use rand_chacha::{
     ChaCha20Rng,
     rand_core::{RngCore, SeedableRng},
@@ -20,6 +25,7 @@ pub fn application_editor_config(
 ) -> EditorConfig {
     if editor_type == macro_document_model::EditorType::MarkdownSync {
         config.namespace = "block-md-main".into();
+        config.diff.selected_state = Some(await_view_state);
         config.browser_history_awareness = config.mode == lexical_model::EditorMode::ViewAttached
             && config.view_host.engine != lexical_model::ViewEngine::Native;
     }
@@ -63,9 +69,13 @@ pub fn application_editor_config(
             })))
             .extension_state(NodeHost::default());
         let builder = if editor_type == macro_document_model::EditorType::MarkdownSync {
-            builder.extension_state(macro_document_model::peer::PeerIdState {
-                peer_id: Some(peer.to_string()),
-            })
+            PeerIdPlugin::register(
+                builder,
+                &[AwaitNode::TYPE],
+                PeerIdState {
+                    peer_id: Some(peer.to_string()),
+                },
+            )
         } else {
             builder
         };
@@ -78,6 +88,16 @@ pub fn application_editor_config(
         )
     });
     config
+}
+
+// Await imports omit local; the initial Created hook derives it for this peer.
+// Only the resulting local bit belongs in the native view, never all NodeState.
+fn await_view_state(view: StateRef<'_>, key: NodeKey) -> Result<Option<SerializedNode>, Error> {
+    if !view.is::<AwaitNode>(key) {
+        return Ok(None);
+    }
+    Ok(macro_document_model::peer::get_local(view, key)?
+        .map(|local| SerializedNode::from_iter([("local".into(), serde_json::Value::Bool(local))])))
 }
 
 /// Export application Markdown with the same transformer catalog on every host.
@@ -135,4 +155,6 @@ impl crate::EditorSurface {
     }
 }
 
+#[cfg(test)]
+mod await_ownership_test;
 mod checklist;

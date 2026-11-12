@@ -40,6 +40,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Match collaborative registerLoroHistory with Loro’s configured merge interval and the injected host wall clock; keep MergeTracker as the independent group classifier, without a second session interval override. Standalone lexical-history tests do not define collaborative Session boundaries. Pin immediate structural Undo and cold-reopened Undo separately, since reopening has no earlier local creation entry.
 - Checkpoint eligible local projections from their new oplog span instead of document events; retain full events for imports, fixups, paused/excluded edits and undo/redo.
 - Drain initial core output before accepting input; rebuild bindings and undo on reset.
+- Register Await peer ownership only for MarkdownSync and derive its local bit through the existing Created hooks on open; pass only that selected bit through Initialize, repaint and incremental diffs, without persisting local state or running a blanket ownership pass.
 - Forward native decorator observation sidecars even when no serialized property
   operation exists; consuming-view exposure, not model publication, owns signature
   observation revisions.

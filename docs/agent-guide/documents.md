@@ -88,6 +88,12 @@ group ownership, save/reopen and read-only transitions. The isolated paired
 controls are in `LexicalMarkdown/editing/drag-browser-test`; they use trusted
 mouse HTML5 dragging and do not establish touch dragging or a click block menu.
 
+When checking a creation composer, verify that its waiting placeholder is visible
+to the creating peer and hidden from another peer after reopen, including Read
+access. A stored `local:true` does not establish current ownership. Check the
+placeholder again after the pending creation resolves; an ownerless imported
+placeholder retains the existing visible fallback.
+
 Native body comments use the same margin, drawer and thread queries as the Off
 engine. Selecting text shows Comment in the body formatting popup; it opens a
 draft from the session's durable selection cursors. Native comment-only access
