@@ -73,7 +73,7 @@ export function ActivityLine(props: ActivityLineProps) {
             data-status={step().status}
           >
             <span class="min-w-0 truncate text-ink-muted">
-              <TextShimmer text={step().label} active />
+              <TextShimmer text={step().label} active truncate />
             </span>
           </span>
         )}
