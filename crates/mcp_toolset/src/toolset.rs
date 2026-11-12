@@ -29,8 +29,9 @@ pub enum Error {
     /// A tool invocation failed.
     #[error("tool call failed: {0}")]
     ToolCall(String),
-    /// The request was cancelled before the server answered.
-    #[error("the tool call was cancelled")]
+    /// The turn was cancelled before the server answered; the server may
+    /// still have done the work.
+    #[error("Stopped before the tool replied; the server may still have completed it.")]
     Cancelled,
 }
 
