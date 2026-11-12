@@ -16,6 +16,7 @@ use sqlx::PgPool;
 use super::*;
 
 mod changes;
+mod writes;
 
 const CHANNEL_ID: Uuid = Uuid::from_u128(0x01900000000070008000000000000001);
 const OTHER_CHANNEL_ID: Uuid = Uuid::from_u128(0x01900000000070008000000000000002);

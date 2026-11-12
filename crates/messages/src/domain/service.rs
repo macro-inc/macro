@@ -318,6 +318,61 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
     }
 
+    /// Post a client message once, for callers that retry until they hear an
+    /// answer. A repeat of an id this author already posted to the same parent
+    /// and thread returns the stored message, including a tombstone, without
+    /// another write, event, or clock-skew check on the id.
+    #[tracing::instrument(err, skip(self, access, input))]
+    pub async fn post_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        let Some(id) = input.id else {
+            return Err(MessageError::Invalid("message id required"));
+        };
+        validate_uuid_v7(id)?;
+        let parent = parent_from_receipt(&access)?;
+        let actor = actor_from_receipt(&access, &parent)?;
+        let thread_id = input.thread_id;
+        if let Some(message) = self.repo.get(&parent, id).await? {
+            return validate_event_message(message, &parent, &actor, thread_id);
+        }
+        match self.post(access, input).await {
+            Err(MessageError::Conflict) => {
+                let message = self
+                    .repo
+                    .get(&parent, id)
+                    .await?
+                    .ok_or(MessageError::Conflict)?;
+                validate_event_message(message, &parent, &actor, thread_id)
+            }
+            result => result,
+        }
+    }
+
+    /// Delete a message for callers that retry until they hear an answer: a
+    /// repeat on a message already tombstoned returns the tombstone without
+    /// another write or event.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn delete_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<Message, MessageError> {
+        let parent = parent_from_receipt(&access)?;
+        match self.delete(access, id, nonce).await {
+            Err(MessageError::NotFound) => match self.repo.get(&parent, id).await? {
+                Some(message) if message.parent == parent && message.deleted_at.is_some() => {
+                    Ok(message)
+                }
+                _ => Err(MessageError::NotFound),
+            },
+            result => result,
+        }
+    }
+
     /// Post a trusted server event once, including after long broker delays.
     /// Replays return the stored message even if its discussion was deleted;
     /// they never restore deleted content or publish another message event.

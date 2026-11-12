@@ -1156,6 +1156,7 @@ fn full_message(thread_id: Uuid) -> Message {
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
     viewable_channels: Arc<Mutex<std::collections::HashSet<Uuid>>>,
+    writable_channels: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
 }
@@ -1188,12 +1189,18 @@ impl EntityAccessService for CountingEntityAccessService {
                     },
                 );
             }
-            (EntityType::Channel, _) => self
-                .viewable_channels
-                .lock()
-                .unwrap()
-                .contains(&Uuid::parse_str(entity_id).unwrap())
-                .then_some(AccessLevel::View),
+            (EntityType::Channel, _) => {
+                let channel_id = Uuid::parse_str(entity_id).unwrap();
+                if self.writable_channels.lock().unwrap().contains(&channel_id) {
+                    Some(AccessLevel::Comment)
+                } else {
+                    self.viewable_channels
+                        .lock()
+                        .unwrap()
+                        .contains(&channel_id)
+                        .then_some(AccessLevel::View)
+                }
+            }
             (EntityType::EmailThread, _) => {
                 let thread_id = Uuid::parse_str(entity_id).unwrap();
                 self.email_thread_checks.lock().unwrap().push(thread_id);
