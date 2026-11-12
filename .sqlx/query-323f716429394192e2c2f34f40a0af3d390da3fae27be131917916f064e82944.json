@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.thread_root AS \"root!\", count(*) AS \"replies!\", max(m.source_at) AS \"last_reply_at!\",\n                bool_or(p.user_id IS DISTINCT FROM $2 AND (t.message_id IS NULL OR (m.source_at,m.id) > (t.read_at,t.message_id))) AS \"unread!\"\n            FROM external_chat_message m\n            JOIN external_chat_person p ON p.id = m.person_id\n            LEFT JOIN external_chat_thread_read_state t ON t.thread_root = m.thread_root AND t.user_id = $2\n            WHERE m.thread_root = ANY($1) AND m.message_id IS NOT NULL AND m.deleted_at IS NULL\n            GROUP BY m.thread_root",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "root!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "replies!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_reply_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "unread!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "323f716429394192e2c2f34f40a0af3d390da3fae27be131917916f064e82944"
+}

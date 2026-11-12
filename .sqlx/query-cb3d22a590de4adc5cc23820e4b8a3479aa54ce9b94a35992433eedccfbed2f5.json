@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE external_chat_attachment a SET claimed_until = now() + interval '5 minutes'\n            WHERE (a.chat_id, a.person_id, a.source_id, a.ordinal) IN (\n                SELECT chat_id, person_id, source_id, ordinal FROM external_chat_attachment\n                WHERE account_id = $1 AND state = 'pending' AND retry_at <= now()\n                  AND (claimed_until IS NULL OR claimed_until < now())\n                ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)\n            RETURNING a.chat_id, a.person_id, a.source_id, a.ordinal, a.mime AS \"mime!\", a.filename AS \"filename!\",\n                a.size AS \"size!\", a.sha256, a.locator AS \"locator!\"",
+  "query": "UPDATE external_chat_attachment a SET claimed_until = now() + interval '5 minutes'\n            WHERE (a.chat_id, a.person_id, a.source_id, a.ordinal) IN (\n                SELECT chat_id, person_id, source_id, ordinal FROM external_chat_attachment\n                WHERE account_id = $1 AND state = 'pending' AND retry_at <= now()\n                  AND (claimed_until IS NULL OR claimed_until < now())\n                ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)\n            RETURNING a.chat_id, a.person_id, a.source_id, a.ordinal, a.mime AS \"mime!\", a.filename AS \"filename!\",\n                a.size AS \"size!\", a.sha256 AS \"sha256!\", a.locator AS \"locator!\"",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       },
       {
         "ordinal": 7,
-        "name": "sha256",
+        "name": "sha256!",
         "type_info": "Bytea"
       },
       {
@@ -63,9 +63,9 @@
       true,
       true,
       true,
-      false,
+      true,
       true
     ]
   },
-  "hash": "36f12f13299bbd78e7cfaef5ecb0ecd15982e20607e7c24aedb3a58bc64243f0"
+  "hash": "cb3d22a590de4adc5cc23820e4b8a3479aa54ce9b94a35992433eedccfbed2f5"
 }

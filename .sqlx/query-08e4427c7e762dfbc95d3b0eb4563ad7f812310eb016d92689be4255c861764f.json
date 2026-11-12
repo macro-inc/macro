@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id,m.person_id,p.user_id,\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once\n            FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id\n            WHERE m.chat_id = $1 AND m.message_id IS NOT NULL\n              AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))\n              AND ($4::uuid IS NULL OR m.id = $4)\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $3",
+  "query": "SELECT m.id,m.person_id,p.user_id,\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,\n            m.thread_root,m.thread_broadcast\n            FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id\n            WHERE m.chat_id = $1 AND m.message_id IS NOT NULL\n              AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))\n              AND ($4::uuid IS NULL OR m.id = $4)\n              AND ($4::uuid IS NOT NULL OR m.thread_root = $5 OR ($5::uuid IS NULL AND (m.thread_root IS NULL OR m.thread_broadcast)))\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $3",
   "describe": {
     "columns": [
       {
@@ -72,6 +72,16 @@
         "ordinal": 13,
         "name": "view_once",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "thread_root",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "thread_broadcast",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -79,6 +89,7 @@
         "Uuid",
         "Uuid",
         "Int8",
+        "Uuid",
         "Uuid"
       ]
     },
@@ -96,8 +107,10 @@
       true,
       false,
       false,
+      false,
+      true,
       false
     ]
   },
-  "hash": "75bf2cc8fcdefd6252aa3339f0a2870c6371b1aeba2b2f954980b94b8024285a"
+  "hash": "08e4427c7e762dfbc95d3b0eb4563ad7f812310eb016d92689be4255c861764f"
 }
