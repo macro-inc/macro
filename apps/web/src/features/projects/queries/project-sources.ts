@@ -8,6 +8,7 @@ import {
   refetchGraphqlInitiativeProperties,
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
+import { removeSearchEntities } from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
 import type { initiativeClient } from '@service-storage/initiative';
 import { type QueryClient, useMutation } from '@tanstack/solid-query';
@@ -46,7 +47,12 @@ export function createProjectSources(
   userId: Accessor<string | undefined>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
-  const refresh = () => refreshProjectQueries(soup.client());
+  const refresh = () =>
+    refreshProjectQueries(
+      soup.client(),
+      cache,
+      soup.cacheHost ?? (() => undefined)
+    );
   const context: ProjectsContext = {
     userId,
     createPropertyDefinitionsSource() {
@@ -154,7 +160,15 @@ export function createProjectSources(
             return failures;
           },
           onSuccess: async (failures, ids) => {
-            if (failures.length < ids.length) await refresh();
+            if (failures.length === ids.length) return;
+            await refresh();
+            // Search reads an index that catches up asynchronously, so its
+            // refetch can still return the deleted projects.
+            const failed = new Set(failures.map(({ id }) => id));
+            removeSearchEntities(
+              new Set(ids.filter((id) => !failed.has(id))),
+              (item) => item.type === 'project'
+            );
           },
         }),
         () => cache

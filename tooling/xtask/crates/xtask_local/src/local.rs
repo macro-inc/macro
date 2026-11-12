@@ -19,6 +19,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod computers;
 pub mod content_key;
 pub mod db;
 pub mod docker;
@@ -226,6 +227,8 @@ pub(crate) struct BringUp {
     /// Stop after infra and init: no app services, proxy, or frontend.
     pub infra_only: bool,
     pub start: Start,
+    /// The computers fleet this stack runs.
+    pub computers: computers::Fleet,
 }
 
 /// What a finished [`bring_up`] leaves for its caller.
@@ -235,6 +238,8 @@ pub(crate) struct StackUp {
     /// Dropping these closes the tunnels, so they live as long as the stack does.
     pub tunnels: Vec<cf_tunnel::QuickTunnel>,
     pub shared_app_url: Option<String>,
+    /// The computers setup on the instance's final port window.
+    pub computers: computers::Computers,
 }
 
 /// The one bring-up every flow shares (`run_local` attached and detached, `run_dev`,
@@ -403,6 +408,7 @@ pub(crate) fn bring_up(
             egress: egress_url.as_deref(),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        plan.computers,
         pinned_base,
     )?;
 
@@ -479,6 +485,7 @@ pub(crate) fn bring_up(
             target,
             tunnels,
             shared_app_url,
+            computers: computers::Computers::new(mode, plan.computers, instance),
         });
     }
 
@@ -537,11 +544,13 @@ pub(crate) fn bring_up(
         target,
         tunnels,
         shared_app_url,
+        computers: computers::Computers::new(mode, plan.computers, instance),
     })
 }
 
 /// Print the ready summary for a finished [`bring_up`].
 pub(crate) fn print_stack_summary(
+    stage: &Stage,
     mode: Mode,
     instance: &Instance,
     up: &StackUp,
@@ -570,6 +579,7 @@ pub(crate) fn print_stack_summary(
         &mailpit_url,
         up.shared_app_url.as_deref(),
     );
+    up.computers.print_hint(stage);
     Ok(())
 }
 
@@ -640,7 +650,7 @@ fn run_attached(mut stage: Stage, mode: Mode, run: &cli::RunLocalArgs) -> Result
             None
         };
         stage.print_timings("bring-up");
-        print_stack_summary(mode, &instance, &up, &plan)?;
+        print_stack_summary(stage, mode, &instance, &up, &plan)?;
         Ok((up, frontend))
     })();
     let (up, frontend) = match &attached_run {
@@ -934,18 +944,25 @@ fn prepare(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    computers: &computers::Computers,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
         instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        static_frontend,
-        tunnels,
-        args.traces.enabled(),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend,
+            tunnels,
+            wire_otel: args.traces.enabled(),
+            computers,
+        },
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
+    if !infra_only {
+        computers.ensure_image(stage, args.build.no_build)?;
+    }
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
@@ -982,7 +999,14 @@ fn prepare(
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
         .is_some_and(|key| !key.trim().is_empty());
-    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    gen_compose::generate(
+        mode,
+        instance,
+        &binaries,
+        static_frontend,
+        gmail_forwarder,
+        computers,
+    )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
@@ -1019,6 +1043,7 @@ fn prepare_on_free_window(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    fleet: computers::Fleet,
     pinned_base: Option<u16>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     loop {
@@ -1031,6 +1056,7 @@ fn prepare_on_free_window(
             pull_app_images,
             infra_only,
             tunnels,
+            &computers::Computers::new(mode, fleet, instance),
         )?;
         let current = allocator::allocate(stage, mode, Some(instance.name()), pinned_base)?;
         if current.port_base() == instance.port_base() {
@@ -1601,6 +1627,7 @@ pub(crate) fn instance_has_volumes(instance: &Instance) -> Result<bool> {
 /// (best-effort and noisy); absent containers and volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    computers::remove_containers(instance);
     // Detach the global trace collector first or `down` can't remove the
     // instance's `services` network (foreign container = active endpoint).
     disconnect_tracing_network(instance);
@@ -1758,11 +1785,16 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 }
 
 /// `cargo x gen-compose`.
-pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
+pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        Mode::Local,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false, &computers)?;
     println!("{}", path.display());
     Ok(())
 }

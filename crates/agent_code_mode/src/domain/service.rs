@@ -385,7 +385,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ImportPipelineCsv"
                 | "ExportPipelineCsv"
                 // macro.initiatives and Initiative.update() and delete().
+                // ReadInitiative: initiatives.byId() detail, description() and
+                // properties through properties.bulkEntityProperties().
                 | "ListInitiatives"
+                | "ReadInitiative"
                 | "CreateInitiative"
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
