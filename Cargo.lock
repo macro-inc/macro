@@ -4266,7 +4266,6 @@ dependencies = [
  "code_execution",
  "cognition",
  "entity_access",
- "feature_flags",
  "futures",
  "lexical_client",
  "macro_user_id",
