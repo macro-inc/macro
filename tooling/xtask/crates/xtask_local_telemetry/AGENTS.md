@@ -38,7 +38,12 @@ crate buffers and sends it.
   bound it is given. Nothing on the sender thread prints.
 - Provisioning never replaces a settings file the user wrote: it links the new
   file into place only if none exists, and replaces only a `provisioned = true`
-  file whose token got a 401/403, once per process.
+  file that still holds the exact config whose token got a 401/403, once per
+  process.
+- Short commands exit before Doppler answers: the token command writes into a
+  hidden 0600 `.local-telemetry.toml.<id>.token` beside the settings, which
+  the next run reads. It is killed after 15 s; a stale empty one counts as a
+  failed fetch (an hour of backoff).
 - A buffer file is deleted only after a 2xx or a 4xx other than 401/403; a
   timeout, a 5xx or a rejected token keeps it for the next run. Bodies and
   times must stay identical across resends (Loki dedupes on them), and old

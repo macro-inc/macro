@@ -286,6 +286,18 @@ impl Config {
         self.provisioned
     }
 
+    /// Whether `token` is this config's token.
+    pub(crate) fn has_token(&self, token: &str) -> bool {
+        self.token.as_ref().is_some_and(|own| own.expose() == token)
+    }
+
+    /// Whether `other` sends to the same place with the same token and options.
+    pub(crate) fn same_as(&self, other: &Self) -> bool {
+        self.endpoint == other.endpoint
+            && self.traces == other.traces
+            && self.token.as_ref().map(Token::expose) == other.token.as_ref().map(Token::expose)
+    }
+
     /// The OTLP logs route, which Loki stores.
     pub(crate) fn logs_url(&self) -> String {
         format!("{}/v1/logs", self.endpoint)

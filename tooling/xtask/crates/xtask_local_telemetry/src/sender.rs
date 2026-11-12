@@ -53,7 +53,7 @@ pub(crate) fn run(config: Option<Config>, paths: &Paths, shared: &Shared) {
     let buffer_dir = paths.buffer_dir.as_path();
     let config = config.or_else(|| {
         let source = paths.provision.as_ref()?;
-        provision::provision(paths, source, false)
+        provision::provision(paths, source, None)
     });
     let Some(mut config) = config else {
         prune_left_behind(buffer_dir, &shared.own_file);
@@ -103,7 +103,7 @@ fn renew_if_rejected(
     let fresh = paths
         .provision
         .as_ref()
-        .and_then(|source| provision::provision(paths, source, true));
+        .and_then(|source| provision::provision(paths, source, Some(&*config)));
     match fresh {
         Some(fresh) => {
             *config = fresh;

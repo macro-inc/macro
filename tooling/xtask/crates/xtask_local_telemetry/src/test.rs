@@ -489,3 +489,59 @@ fn a_rejected_provisioned_token_is_fetched_again() {
         "sent with the fresh token"
     );
 }
+
+#[test]
+fn a_rejected_token_never_replaces_a_file_the_user_changed() {
+    const FRESH: &str = "fresh-token-0123456789abcdef0123456789";
+    let endpoint = Endpoint::start(ResponseTemplate::new(401));
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Provisioning would write a different endpoint than the one the user chose.
+    let paths = unprovisioned(
+        dir.path(),
+        "https://otlp.example.com",
+        &format!("echo {FRESH}"),
+    );
+    let users = format!(
+        "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\n",
+        endpoint.server.uri()
+    );
+    std::fs::write(&paths.config, &users).expect("write");
+    std::fs::set_permissions(&paths.config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    // The user swaps in their own file while the run holds the old one.
+    let own = format!(
+        "endpoint = \"{}\"\ntoken = \"{TOKEN}-mine\"\n",
+        endpoint.server.uri()
+    );
+    std::fs::write(&paths.config, &own).expect("write");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    assert_eq!(std::fs::read_to_string(&paths.config).expect("read"), own);
+    // Rejected events are kept, not dropped.
+    assert_eq!(buffered_files(&paths).len(), 1);
+}
+
+/// A short command exits before its token command does; the command's output
+/// file is read by the next run instead of fetching again.
+#[test]
+fn a_fetch_left_by_an_exited_process_is_used_by_the_next_run() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Fetching now would fail: only the leftover can provide the token.
+    let paths = unprovisioned(dir.path(), &endpoint.server.uri(), "exit 1");
+    let leftover = dir.path().join(".local-telemetry.toml.earlier.token");
+    std::fs::write(&leftover, format!("{TOKEN}\n")).expect("write");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    assert!(!leftover.exists());
+    let written = std::fs::read_to_string(&paths.config).expect("settings written");
+    assert!(written.contains(TOKEN));
+    assert!(!endpoint.requests("/v1/logs").is_empty());
+}
