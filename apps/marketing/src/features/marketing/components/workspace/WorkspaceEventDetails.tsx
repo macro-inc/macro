@@ -1,11 +1,11 @@
-import Bell from '@phosphor/bell.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import Check from '@phosphor/check.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users-three.svg';
-import X from '@phosphor/x.svg';
+import Bell from '@icon/system/regular/bell.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Check from '@icon/system/regular/check.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users-three.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';
@@ -107,7 +107,7 @@ export function WorkspaceEventDetails(props: {
               <span>4 attendees</span>
             </div>
             <div class="pl-7 pb-4 space-y-3">
-              <For each={['jacob', 'julia', 'teo', 'valentina'] as const}>
+              <For each={['jacob', 'julia', 'teo', 'austin'] as const}>
                 {(person) => (
                   <div class="flex items-center gap-3 text-xs text-ink-muted">
                     <img

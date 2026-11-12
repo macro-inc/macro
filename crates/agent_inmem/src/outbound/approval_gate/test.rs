@@ -79,6 +79,7 @@ async fn prompted_by(rig: &Rig, user: Option<MacroUserIdStr<'static>>) {
                 kind: agent_session::domain::model::PrompterKind::User,
                 action_id: AgentActionId::mint(),
                 user,
+                client: None,
             },
         )
         .await
@@ -200,6 +201,7 @@ async fn missing_actor_and_system_requester_are_refused_without_using_owner_acce
                 kind: agent_session::domain::model::PrompterKind::System,
                 action_id: AgentActionId::mint(),
                 user: Some(owner()),
+                client: None,
             },
         )
         .await

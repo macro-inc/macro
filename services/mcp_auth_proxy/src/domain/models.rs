@@ -323,6 +323,10 @@ pub struct AuthorizeRequest {
     /// Optional requested scopes.
     #[serde(default)]
     pub scope: Option<String>,
+    /// The MCP server the token is for (RFC 8707). Carried through consent;
+    /// `/token` decides the token from its own `resource`.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 /// OAuth callback request from the upstream auth server.
@@ -364,6 +368,10 @@ pub struct TokenRequest {
     /// and it must match the client the grant was issued to.
     #[serde(default)]
     pub client_id: Option<String>,
+    /// The MCP server the access token is for (RFC 8707), which decides what
+    /// kind of token it is.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 /// OAuth token response returned to the MCP client.

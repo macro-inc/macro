@@ -1,6 +1,12 @@
 //! Signature selection, sanitization, and atomic settings-patch policy.
 
-use email_api_client::domain::models::AccessToken;
+use email_api_client::domain::models::{AccessToken, EmailApiError};
+use gmail_images::{
+    GmailSignatureImages, PublicSignatureImages, SignatureImageReader, SignatureImageSource,
+};
+
+/// Mailbox image selection, caching, and retry policy.
+pub mod gmail_images;
 use email_utils::sanitize_html_fragment;
 use models_email::service::settings::{Settings, SettingsPatch};
 use uuid::Uuid;
@@ -29,17 +35,22 @@ pub trait SettingsWriter: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Settings, Self::Err>> + Send;
 }
 
-/// Rehosts publicly fetchable images using the existing shared image helper.
+/// Rehosts selected signature images using the existing shared image helper.
 pub trait SignatureImages: Send + Sync + 'static {
     /// Failure whose Debug representation preserves the helper's original error.
     type Err: std::error::Error + Send + Sync + 'static;
     /// Return rewritten HTML and the number of unresolved images.
-    fn rehost(&self, html: &str)
-    -> impl Future<Output = Result<(String, usize), Self::Err>> + Send;
+    fn rehost(
+        &self,
+        html: &str,
+        images: &impl SignatureImageSource,
+    ) -> impl Future<Output = Result<(String, usize), Self::Err>> + Send;
 }
 
 /// Provider credentials and send-as alias reads used by signature import.
 pub trait SignatureProvider: Send + Sync + 'static {
+    /// Borrow a reader for the image sources available to this provider.
+    fn image_reader(&self) -> impl SignatureImageReader + '_;
     /// Credential lookup failure.
     type TokenErr: std::error::Error + Send + Sync + 'static;
     /// Provider alias lookup failure.
@@ -73,6 +84,9 @@ pub enum SignatureImportError<W, T, P> {
     /// The preferred alias has no non-empty signature.
     #[error("No signature found in Gmail")]
     NoSignature,
+    /// Reading a mailbox image failed in a way that retrying may fix.
+    #[error("Failed to read signature images from Gmail")]
+    MailboxImagesUnavailable(EmailApiError),
     /// Fresh credentials could not be loaded.
     #[error("Failed to get Gmail access token")]
     Token(#[source] T),
@@ -97,7 +111,9 @@ pub struct SignatureSettingsService<W, I, P> {
     pub provider: P,
 }
 
-impl<W: SettingsWriter, I: SignatureImages, P> SignatureSettingsService<W, I, P> {
+impl<W: SettingsWriter, I: SignatureImages, P: SignatureProvider>
+    SignatureSettingsService<W, I, P>
+{
     /// Sanitize supplied HTML, preserve omitted fields, and reject unresolved images.
     pub async fn patch(
         &self,
@@ -105,7 +121,9 @@ impl<W: SettingsWriter, I: SignatureImages, P> SignatureSettingsService<W, I, P>
     ) -> Result<Settings, SettingsPatchError<W::Err>> {
         patch.signature = patch.signature.map(|html| sanitize_html_fragment(&html));
         if let Some(signature) = patch.signature.clone() {
-            match self.images.rehost(&signature).await {
+            let reader = self.provider.image_reader();
+            let images = PublicSignatureImages(&reader);
+            match self.images.rehost(&signature, &images).await {
                 Ok((rehosted, unresolved)) => {
                     if unresolved > 0 {
                         return Err(SettingsPatchError::UnresolvedImages(unresolved as u32));
@@ -152,9 +170,14 @@ impl<W: SettingsWriter, I: SignatureImages, P: SignatureProvider>
             .filter(|sig| !sig.trim().is_empty())
             .ok_or(SignatureImportError::NoSignature)?;
         let mut sanitized_signature = sanitize_html_fragment(&signature);
-        match self.images.rehost(&sanitized_signature).await {
+        let reader = self.provider.image_reader();
+        let images = GmailSignatureImages::new(&reader, link);
+        match self.images.rehost(&sanitized_signature, &images).await {
             Ok((rehosted, unresolved)) => {
                 if unresolved > 0 {
+                    if let Some(error) = images.into_retryable_failure() {
+                        return Err(SignatureImportError::MailboxImagesUnavailable(error));
+                    }
                     return Err(SignatureImportError::UnresolvedImages(unresolved as u32));
                 }
                 sanitized_signature = rehosted;

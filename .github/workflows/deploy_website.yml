@@ -34,6 +34,10 @@ on:
         - prod
         - both
         description: The environment to deploy to (both deploys dev, then prod)
+      preview_only:
+        type: boolean
+        default: false
+        description: Preview resource changes without publishing
 jobs:
   build-deploy:
     name: Build and Deploy Website
@@ -90,7 +94,7 @@ jobs:
     - name: Deploy with Pulumi
       uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
       with:
-        command: up
+        command: ${{ inputs.preview_only && 'preview' || 'up' }}
         stack-name: macro-inc/${{ matrix.environment }}
         work-dir: ./infra/stacks/website
       env:
