@@ -893,8 +893,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
-  Session `ExecuteCode` activity uses the same Calling N tools peek window as
-  ordinary consecutive tool calls.
+  Session `ExecuteCode` calls join their segment's tool group as their SDK
+  operation rows only; never show the program or code-mode wording.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
