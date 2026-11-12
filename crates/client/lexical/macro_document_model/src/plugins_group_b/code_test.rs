@@ -578,3 +578,154 @@ fn every_code_transform_run_reports_its_language_to_the_host() -> Result<(), Err
     );
     Ok(())
 }
+
+#[test]
+fn code_html_paste_clears_imported_text_format_but_keeps_clipboard_caret_format()
+-> Result<(), Error> {
+    use lexical_rich_nodes::clipboard::{
+        ClipboardEntry, MIME_HTML, insert_data_transfer_for_rich_text,
+    };
+
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)
+    })?;
+    // Actual host HTML-import draft for <pre><code>let x = 1;</code></pre>.
+    let draft = serde_json::json!({
+        "type": "code", "version": 1, "children": [{
+            "type": "text", "version": 1, "text": "let x = 1;",
+            "format": 16, "style": "", "mode": "normal", "detail": 0
+        }]
+    });
+    let drafts = [draft.as_object().expect("code draft").clone()];
+    let (handled, _) = editor.update(|tx| {
+        insert_data_transfer_for_rich_text(
+            tx,
+            "code-paste",
+            &[ClipboardEntry {
+                mime: MIME_HTML,
+                data: "<pre><code>let x = 1;</code></pre>",
+            }],
+            Some(&drafts),
+            SelectionSlot::Active,
+        )
+    })?;
+    assert!(handled);
+    let state = editor.state().view();
+    let code = state.first_child(NodeKey::ROOT).expect("code");
+    assert!(state.is::<lexical_rich_nodes::code::CodeNode>(code));
+    let child = state.first_child(code).expect("code text");
+    // Native deliberately retains the ordinary-text code profile and its key;
+    // Source Prism creates a CodeHighlightNode instead. Only formatting is pinned.
+    assert!(state.is::<Text>(child));
+    assert_eq!(state.text_content(child), "let x = 1;");
+    assert_eq!(state.text(child).expect("text").format, TextFormat::empty());
+    let range = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor, Point::text(child, Utf16Offset(10)));
+    assert_eq!(range.focus, range.anchor);
+    assert_eq!(range.format, TextFormat::CODE);
+    Ok(())
+}
+
+#[test]
+fn code_format_cleanup_retains_highlight_fields_keys_and_outside_inline_code() -> Result<(), Error>
+{
+    use lexical_rich_nodes::code::CodeHighlightNode;
+
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let ((code, ordinary, highlight, outside), _) = editor.update(|tx| {
+        let code = create_custom_code_node(tx, Some("plaintext"))?;
+        let ordinary = tx.create_text("ordinary")?;
+        tx.text(ordinary)?
+            .set_format(TextFormat::CODE)?
+            .set_style("color: blue;")?;
+        let highlight = tx.create(CodeHighlightNode {
+            highlight_type: Some("keyword".into()),
+        })?;
+        tx.text(highlight)?
+            .set_text_content("retained")?
+            .set_style("color: red;")?;
+        let paragraph = tx.create(Paragraph::default())?;
+        let outside = tx.create_text("inline")?;
+        tx.text(outside)?.set_format(TextFormat::CODE)?;
+        tx.append(code, &[ordinary.key(), highlight.key()])?;
+        tx.append(paragraph, &[outside.key()])?;
+        tx.append(NodeKey::ROOT, &[code.key(), paragraph.key()])?;
+        tx.select_end(outside)?;
+        Ok((code.key(), ordinary.key(), highlight.key(), outside.key()))
+    })?;
+    let state = editor.state().view();
+    assert_eq!(state.children_keys(code)?, [ordinary, highlight]);
+    assert_eq!(
+        state.text(ordinary).expect("ordinary").format,
+        TextFormat::empty()
+    );
+    assert_eq!(
+        state.text(outside).expect("outside").format,
+        TextFormat::CODE
+    );
+    assert_eq!(
+        state.text(ordinary).expect("ordinary").style.as_ref(),
+        "color: blue;"
+    );
+    assert_eq!(
+        state.text(highlight).expect("highlight").style.as_ref(),
+        "color: red;"
+    );
+    assert_eq!(
+        state
+            .get::<CodeHighlightNode>(highlight)
+            .expect("highlight")
+            .highlight_type
+            .as_deref(),
+        Some("keyword")
+    );
+    let before = editor.state().to_json()?;
+    let selection = editor.state().selection().cloned();
+    let (_, commit) = editor.update(|tx| tx.mark_dirty(code))?;
+    assert_eq!(editor.state().to_json()?, before);
+    assert_eq!(editor.state().selection(), selection.as_ref());
+    assert_eq!(
+        commit
+            .changes
+            .mutations
+            .iter()
+            .map(|(key, mutation)| (*key, *mutation))
+            .collect::<Vec<_>>(),
+        [(code, Mutation::Updated)]
+    );
+    editor.update(|tx| {
+        tx.text(highlight)?
+            .select(Some(Utf16Offset::ZERO), Some(Utf16Offset(8)))?;
+        tx.format_text(TextFormatType::Bold, None)
+    })?;
+    let state = editor.state().view();
+    assert_eq!(state.children_keys(code)?, [ordinary, highlight]);
+    assert_eq!(
+        state.text(highlight).expect("highlight").format,
+        TextFormat::empty()
+    );
+    assert_eq!(
+        state.text(highlight).expect("highlight").style.as_ref(),
+        "color: red;"
+    );
+    let range = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor, Point::text(highlight, Utf16Offset::ZERO));
+    assert_eq!(range.focus, Point::text(highlight, Utf16Offset(8)));
+    assert_eq!(range.format, TextFormat::BOLD);
+    Ok(())
+}

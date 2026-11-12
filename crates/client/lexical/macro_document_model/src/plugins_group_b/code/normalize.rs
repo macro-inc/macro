@@ -19,12 +19,29 @@ pub(super) fn normalize(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<
     if !tx.is_attached(code) {
         return Ok(());
     }
-    if !tx.children(code).any(|child| {
-        if tx.is_line_break(child) || tx.is::<Tab>(child) {
-            return false;
+    let mut needs_flattening = false;
+    let mut child = tx.first_child(code);
+    while let Some(key) = child {
+        child = tx.next_sibling(key);
+        // Prism replaces ordinary imported text with fresh unformatted tokens,
+        // but retains matching CodeHighlight nodes. Keep the native text key and
+        // selection format: token painting remains a view concern.
+        if tx
+            .view()
+            .node(key)
+            .is_some_and(|node| node.data_any().is::<Text>())
+            && tx
+                .view()
+                .text(key)
+                .is_some_and(|text| !text.format.is_empty())
+        {
+            tx.text(key)?.set_format(TextFormat::empty())?;
         }
-        !tx.is_text(child) || tx.text_content(child).contains(['\n', '\t'])
-    }) {
+        if !tx.is_line_break(key) && !tx.is::<Tab>(key) {
+            needs_flattening |= !tx.is_text(key) || tx.text_content(key).contains(['\n', '\t']);
+        }
+    }
+    if !needs_flattening {
         return Ok(());
     }
 

@@ -51,7 +51,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep wire-properties.json generated from actual source node exports and shared with conformance.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
 - Preserve raw code language/theme when the parent afterCloneFrom hook restores them.
-- Normalize dirty code content through the registered code-node transform, preserving Source text separators and caret restoration while leaving token painting in the view; retain a valid native caret when Source computes an invalid negative offset.
+- Normalize dirty code content through the registered code-node transform, preserving Source text separators and caret restoration while leaving token painting in the view; clear format only on exact native ordinary Text payloads, retaining keys, selection format and stored highlight fields, and retain a valid native caret when Source computes an invalid negative offset.
 - Keep named and full registration on the one source-ordered catalog in editor.rs.
 - Preserve caller object order in standalone JSON-to-markdown wire helpers.
 - Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
