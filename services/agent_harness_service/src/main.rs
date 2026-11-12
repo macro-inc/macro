@@ -669,6 +669,16 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // The in-app database assistant's programs get their own budget
+            // as well, so public MCP clients and chats cannot starve each other.
+            let database_assistant = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 4,
+                    max_queued: 8,
+                    ..Default::default()
+                },
+            )?;
             // Routines get their own budget too, below the host's priority and
             // with a CPU limit, so unattended code can't crowd out sessions.
             let routines = code_execution::domain::ExecutionService::new(
@@ -697,13 +707,14 @@ async fn run() -> anyhow::Result<()> {
                 public,
                 routines,
                 Arc::new(checker),
+                database_assistant,
             ))
         }
         None => None,
     };
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, checker, _)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -764,27 +775,34 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
+    // User-scoped code execution on `executor`: no session, the caller's
+    // attribution.
+    let user_code_mode = |executor: &code_execution::domain::ExecutionService| {
+        anyhow::Ok(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(executor.clone()),
+            Arc::new(code_mode::UserRunCredentials {
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+                signer: MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                endpoints: code_mode::sdk_endpoints()?,
+            }),
+        )) as Arc<dyn agent_code_mode::domain::UserCodeMode>)
+    };
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
-            service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
-                Arc::new(public.clone()),
-                Arc::new(code_mode::UserRunCredentials {
-                    correlations: agent_correlation::outbound::PgCorrelationRepository(
-                        pool.clone(),
-                    ),
-                    signer: MacroApiTokenSigner::new(
-                        pool.clone(),
-                        config.macro_api_token_issuer.as_ref(),
-                        config.macro_api_token_private_secret_key.as_ref(),
-                    ),
-                    endpoints: code_mode::sdk_endpoints()?,
-                }),
-            )),
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
+            service: user_code_mode(public)?,
         }),
         None => None,
     };
+    let database_assistant_code_mode = match &code_runner {
+        Some((_, _, _, _, database_assistant)) => Some(user_code_mode(database_assistant)?),
+        None => None,
+    };
     // `ai-db-assistant-code-mode` decides, per user, whether the database
-    // assistant runs code mode, on the public MCP's user code execution.
+    // assistant runs code mode, on its own user code execution budget.
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
         pool.clone(),
@@ -798,9 +816,7 @@ async fn run() -> anyhow::Result<()> {
                 ),
                 None => Arc::new(agent_harness_service::cognition::DirectDatabaseTools),
             },
-            service: public_code_mode
-                .as_ref()
-                .map(|code_mode| Arc::clone(&code_mode.service)),
+            service: database_assistant_code_mode,
         },
     )
     .await
@@ -837,7 +853,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&tool_approvals),
         ),
     );
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -2471,8 +2487,13 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
+    if let Some((sessions, public, routines, _, database_assistant)) = &code_runner {
+        tokio::join!(
+            sessions.shutdown(),
+            public.shutdown(),
+            routines.shutdown(),
+            database_assistant.shutdown()
+        );
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
