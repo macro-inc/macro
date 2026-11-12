@@ -115,11 +115,9 @@ export function MarkdownImage(props: MarkdownImageProps) {
       return;
     }
     fireAndForget(
-      // String() matches getMediaUrl's own use of a stored null: it compares
-      // the source type with literals and interpolates the id into a path.
       getMediaUrl({
-        type: String(props.srcType),
-        id: String(props.id),
+        type: props.srcType,
+        id: props.id,
         url: props.url,
       }).then((maybeUrl) => {
         if (maybeUrl.isErr()) {
@@ -354,7 +352,8 @@ export function MarkdownImage(props: MarkdownImageProps) {
           crossOrigin={
             isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
           }
-          imageId={() => String(props.id)}
+          // Its one reader names the download `image-${id}`; this converts alike.
+          imageId={() => `${props.id}`}
           navigationHidden
         />
       </Dialog.Portal>

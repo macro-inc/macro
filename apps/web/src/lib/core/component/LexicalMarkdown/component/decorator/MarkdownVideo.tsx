@@ -97,11 +97,9 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
       return;
     }
     fireAndForget(
-      // String() matches getMediaUrl's own use of a stored null: it compares
-      // the source type with literals and interpolates the id into a path.
       getMediaUrl({
-        type: String(props.srcType),
-        id: String(props.id),
+        type: props.srcType,
+        id: props.id,
         url: props.url,
       }).then((maybeUrl) => {
         if (maybeUrl.isErr()) {

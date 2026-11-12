@@ -22,19 +22,25 @@ export function validateMediaFile(
   return ext != null && blockNameToFileExtensionSet[mediaType].has(ext);
 }
 
-/** Resolve local, public, static-file and document-service media sources. */
+/**
+ * Resolve local, public, static-file and document-service media sources.
+ * Stored media can carry a null or omitted source type and id; the id reaches
+ * its endpoints by interpolation, as it always did.
+ */
 export async function getMediaUrl(src: {
-  type: string;
-  id: string;
+  type: string | null | undefined;
+  id: string | null | undefined;
   url: string;
 }): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
   if (src.type === 'local' || src.type === 'url') return ok(src.url);
   if (src.type === 'sfs') {
-    const url = staticFileIdEndpoint(src.id);
+    const url = staticFileIdEndpoint(`${src.id}`);
     return ok(url);
   }
   if (src.type === 'dss') {
-    return (await fetchBinaryDocumentData(src.id)).map((res) => res.blobUrl);
+    return (await fetchBinaryDocumentData(`${src.id}`)).map(
+      (res) => res.blobUrl
+    );
   }
   console.warn('Get media url failed for src:', src);
   return ok('');
