@@ -150,6 +150,8 @@ impl RepoRepository for FakeRepos {
 struct FakeStore {
     repos: Arc<Mutex<HashSet<String>>>,
     size_bytes: u64,
+    /// `main`'s files by agent and path, with the message that committed them.
+    files: Arc<Mutex<HashMap<(String, String), (Vec<u8>, String)>>>,
 }
 
 impl RepoStore for FakeStore {
@@ -176,6 +178,33 @@ impl RepoStore for FakeStore {
         _agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<u64, Infallible> {
         Ok(self.size_bytes)
+    }
+
+    async fn read_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+    ) -> Result<Option<Vec<u8>>, Infallible> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap()
+            .get(&(agent_user_id.as_ref().to_owned(), path.to_owned()))
+            .map(|(contents, _)| contents.clone()))
+    }
+
+    async fn commit_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+        contents: &[u8],
+        message: &str,
+    ) -> Result<(), Infallible> {
+        self.files.lock().unwrap().insert(
+            (agent_user_id.as_ref().to_owned(), path.to_owned()),
+            (contents.to_vec(), message.to_owned()),
+        );
+        Ok(())
     }
 }
 
@@ -282,6 +311,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 1_000,
+                files: Arc::default(),
             },
             admins: FakeAdmins {
                 admins: HashSet::from([(TEAM, ADMIN.to_owned())]),
@@ -426,6 +456,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
     let full_store = FakeStore {
         repos: Arc::default(),
         size_bytes: 500,
+        files: Arc::default(),
     };
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
@@ -486,6 +517,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 600,
+                files: Arc::default(),
             },
             admins: FakeAdmins::default(),
             limiter: FakeLimiter {
@@ -560,11 +592,95 @@ async fn deleting_removes_the_repo_and_the_row() {
     assert!(matches!(missing, Err(AgentGitError::InvalidToken)));
 }
 
+#[tokio::test]
+async fn voices_are_read_and_committed_only_for_the_repos_team() {
+    let store = FakeStore::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: store.clone(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let other_team = Uuid::from_u128(2);
+    let voice = VoiceConfig {
+        model: crate::domain::voice::VoiceModel::parse("aura-2-thalia-en").unwrap(),
+    };
+
+    assert!(matches!(
+        service.set_voice(&agent, TEAM, &voice).await,
+        Err(AgentGitError::NotFound)
+    ));
+    service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    assert!(matches!(
+        service.voice(&agent, TEAM).await,
+        Err(AgentGitError::NoVoice)
+    ));
+    assert!(matches!(
+        service.set_voice(&agent, other_team, &voice).await,
+        Err(AgentGitError::TeamMismatch)
+    ));
+    assert!(matches!(
+        service.voice(&agent, other_team).await,
+        Err(AgentGitError::TeamMismatch)
+    ));
+
+    service.set_voice(&agent, TEAM, &voice).await.unwrap();
+    assert_eq!(service.voice(&agent, TEAM).await.unwrap(), voice);
+    assert_eq!(
+        store.files.lock().unwrap()[&(AGENT.to_owned(), "config/voice.json".to_owned())],
+        (
+            b"{\n  \"model\": \"aura-2-thalia-en\"\n}\n".to_vec(),
+            "Set call voice".to_owned()
+        )
+    );
+
+    // The agent may commit anything to its own repo.
+    store.files.lock().unwrap().insert(
+        (AGENT.to_owned(), "config/voice.json".to_owned()),
+        (br#"{"model":"not-a-voice"}"#.to_vec(), "agent".to_owned()),
+    );
+    assert!(matches!(
+        service.voice(&agent, TEAM).await,
+        Err(AgentGitError::NoVoice)
+    ));
+}
+
+#[test]
+fn an_invite_voice_replaces_the_template_default() {
+    let mut chosen = seed();
+    chosen.voice = Some(crate::domain::voice::VoiceModel::parse("aura-2-thalia-en").unwrap());
+    let files = WORKSPACE_TEMPLATE.render(&agent(), &chosen).unwrap();
+    let voices: Vec<_> = files
+        .iter()
+        .filter(|file| file.path == "config/voice.json")
+        .collect();
+
+    assert_eq!(voices.len(), 1);
+    assert_eq!(
+        voices[0].contents,
+        "{\n  \"model\": \"aura-2-thalia-en\"\n}\n"
+    );
+}
+
 fn seed() -> PersonaSeed {
     PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        voice: None,
         creator_id: Some(
             MacroUserIdStr::parse_from_str("macro|admin@example.com")
                 .expect("creator id")
@@ -738,6 +854,24 @@ impl RepoStore for PausedStore {
 
     async fn repo_size_bytes(&self, agent: &MacroUserIdStr<'_>) -> Result<u64, Self::Err> {
         self.store.repo_size_bytes(agent).await
+    }
+
+    async fn read_file(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        path: &str,
+    ) -> Result<Option<Vec<u8>>, Self::Err> {
+        self.store.read_file(agent, path).await
+    }
+
+    async fn commit_file(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        path: &str,
+        contents: &[u8],
+        message: &str,
+    ) -> Result<(), Self::Err> {
+        self.store.commit_file(agent, path, contents, message).await
     }
 }
 

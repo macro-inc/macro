@@ -310,6 +310,32 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
     );
 }
 
+/// Orphan cleanup destroys by computer id, so an instance not named for the
+/// id it carries is never taken for that computer.
+#[test]
+fn listing_leaves_out_an_instance_not_named_for_its_computer() {
+    let instances = [instance(
+        "operator-copy",
+        incus_client::InstanceStatus::Running,
+        &[
+            ("user.macro.control_plane", "test-a"),
+            (
+                "user.macro.computer_id",
+                "01900000-0000-7000-8000-000000000001",
+            ),
+        ],
+    )];
+
+    assert_eq!(
+        computer_instances(
+            &instances,
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        )
+        .unwrap(),
+        []
+    );
+}
+
 #[test]
 fn listing_rejects_a_computer_id_that_is_not_a_uuid() {
     let instances = [instance(
@@ -386,7 +412,7 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
         },
         InstanceInfo {
             devices: BTreeMap::new(),
-            name: "mc-own".to_owned(),
+            name: "mc-01900000000070008000000000000001".to_owned(),
             status: incus_client::InstanceStatus::Running,
             kind: InstanceKind::VirtualMachine,
             config: BTreeMap::from([

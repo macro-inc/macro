@@ -509,6 +509,7 @@ dependencies = [
  "futures",
  "hex",
  "httparse",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_tower_layers",
@@ -577,6 +578,7 @@ dependencies = [
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_tower_layers",
@@ -603,6 +605,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -659,6 +662,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bot_id",
  "bots",
  "calendar_events",
@@ -678,7 +682,6 @@ dependencies = [
  "crm",
  "cursor_api_key",
  "cursor_cloud_agents",
- "dashmap",
  "database_env_vars",
  "databases",
  "databases_sql",
@@ -696,7 +699,6 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
- "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
@@ -714,6 +716,7 @@ dependencies = [
  "incus_client",
  "initiative",
  "jev",
+ "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
  "lexical_mention_extractor",
@@ -786,11 +789,14 @@ dependencies = [
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
+ "team_agents",
  "teams",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
+ "tokio-stream",
+ "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
@@ -8911,7 +8917,6 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb130435a959a8d525e6bca66ff6c40981a300ee96d70e3ef56f046556d614a3"
 dependencies = [
- "generic-array 0.14.9",
  "rustversion",
  "typenum",
 ]
@@ -10272,6 +10277,7 @@ dependencies = [
  "entity_access",
  "feature_flags",
  "harness_id",
+ "harnesses",
  "incus_client",
  "macro_authorization",
  "macro_db_migrator",
@@ -13078,6 +13084,7 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "macro_authorization",
+ "macro_env",
  "macro_env_var",
  "macro_user_id",
  "model-error-response",
@@ -17453,9 +17460,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.63.3"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
+checksum = "94be3d86c71b9ed220a675c405e35c7a02565a009bf8da2e9cc13a700320a5c5"
 dependencies = [
  "aes 0.9.3",
  "bitflags 2.11.1",

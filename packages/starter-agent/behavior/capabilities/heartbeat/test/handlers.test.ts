@@ -71,6 +71,7 @@ const setup = () => {
   };
   const base: Base = {
     config,
+    authority: { owner: () => config.owner, refresh: async () => {} },
     state,
     disk,
     files: disk,

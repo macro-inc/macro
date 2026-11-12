@@ -24,6 +24,11 @@ import {
 } from '@macro-inc/muppet/utilities/credentials';
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { Macro } from '@macro-inc/sdk';
+import {
+  type Authority,
+  authority,
+  authorityFiles,
+} from '../agent/authority.ts';
 import type { Trace } from '../agent/claude.ts';
 import {
   type Addresses,
@@ -58,6 +63,8 @@ type Environment = Readonly<Record<string, string | undefined>>;
 
 export type Base = {
   readonly config: Config;
+  /** Who gives orders; the agent's own process refreshes it before each wake. */
+  readonly authority: Authority;
   readonly state: State;
   readonly disk: Disk;
   /** The same disk, under the name lib's utilities ask for. */
@@ -355,13 +362,15 @@ export const base = (
     }
   })();
   if (settings.kind === 'invalid') return settings;
+  const state = makeState({ root, join });
+  let owners: Authority | undefined;
   const config = makeConfig({
     root,
     home: homedir(),
     join,
     settings: settings.value,
+    owner: () => owners?.owner() ?? settings.value.owner,
   });
-  const state = makeState({ root, join });
   const found = source(startup, { file: config.secrets, sops: config.sops });
   if (found.kind === 'invalid') return found;
   const { credentials, addresses, relay: given } = found.value;
@@ -396,9 +405,46 @@ export const base = (
       ...(await claude()),
     };
   };
+  const macroClient = () => {
+    macro ??=
+      given === undefined
+        ? Promise.all([addresses(), credentials.get(macroKey)]).then(
+            ([{ hosts }, apiKey]) =>
+              new Macro({ auth: { type: 'user', apiKey }, hosts })
+          )
+        : Promise.resolve(
+            new Macro({
+              auth: { type: 'user', apiKey: given.token },
+              hosts: relayHosts(given.url),
+            })
+          );
+    return macro;
+  };
+  // A script's process reads what the agent's process last decided.
+  const files = authorityFiles(state, join);
+  owners = authority({
+    configured: settings.value.owner,
+    initial: readText(files.current)?.trim() || undefined,
+    team: async () => {
+      const team = await (await macroClient()).teams.current();
+      const [owner, members] = await Promise.all([
+        team.owner(),
+        team.members(),
+      ]);
+      return { owner: owner.id, members: members.map(({ user }) => user.id) };
+    },
+    disk,
+    files,
+    tell: async (to, text) => {
+      const client = await macroClient();
+      const channel = await client.channels.dm(client.users.byId(to));
+      await channel.send(text);
+    },
+  });
   return configured({
     base: {
       config,
+      authority: owners,
       state,
       disk,
       files: disk,
@@ -407,21 +453,7 @@ export const base = (
       credentials,
       join,
       log: makeLog({ directory: state.log(logOwner), join, disk, clock }),
-      macro: () => {
-        macro ??=
-          given === undefined
-            ? Promise.all([addresses(), credentials.get(macroKey)]).then(
-                ([{ hosts }, apiKey]) =>
-                  new Macro({ auth: { type: 'user', apiKey }, hosts })
-              )
-            : Promise.resolve(
-                new Macro({
-                  auth: { type: 'user', apiKey: given.token },
-                  hosts: relayHosts(given.url),
-                })
-              );
-        return macro;
-      },
+      macro: macroClient,
       environment: () => agentEnvironment({ config, credentials }),
       relay: async () => given ?? (await ownRelay()),
       relayed,

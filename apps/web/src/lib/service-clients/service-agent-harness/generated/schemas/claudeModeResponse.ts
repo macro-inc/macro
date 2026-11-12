@@ -4,6 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ClaudeMode } from './claudeMode';
 import type { ClaudeModeResponseAccount } from './claudeModeResponseAccount';
 
 /**
@@ -12,6 +14,6 @@ uses its own.
  */
 export interface ClaudeModeResponse {
   account?: ClaudeModeResponseAccount;
-  /** `macro_credits` or `own_account`. */
-  mode: string;
+  /** How Claude Code is paid for. */
+  mode: ClaudeMode;
 }

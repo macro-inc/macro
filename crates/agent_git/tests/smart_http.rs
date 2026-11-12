@@ -358,6 +358,7 @@ fn seed() -> agent_git::domain::template::PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
+        voice: None,
         creator_id: Some(
             MacroUserIdStr::parse_from_str("macro|admin@example.com")
                 .expect("creator id")
@@ -450,6 +451,175 @@ async fn missing_repo_and_bad_token_have_the_same_authentication_response(pool: 
         missing.bytes().await.unwrap(),
         existing.bytes().await.unwrap()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_voice_change_is_one_server_commit_that_keeps_the_agents_work(pool: PgPool) {
+    use agent_git::domain::voice::{VoiceConfig, VoiceModel};
+
+    insert_fixtures(&pool).await;
+    let storage = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let base = start_server(pool, storage.path(), 1024 * 1024).await;
+    let client = AgentGitClient::new(base, INTERNAL_API_KEY.to_owned()).unwrap();
+    let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+    let mut chosen = seed();
+    chosen.voice = Some(VoiceModel::parse("aura-2-thalia-en").unwrap());
+    let repo = client
+        .create_repo(agent.clone(), TEAM_ID, chosen)
+        .await
+        .unwrap();
+    let clone_url = with_password(&repo.clone_url, repo.token.expose());
+    assert_eq!(
+        client
+            .voice(&agent, TEAM_ID)
+            .await
+            .unwrap()
+            .unwrap()
+            .model
+            .as_str(),
+        "aura-2-thalia-en"
+    );
+
+    // The agent pushes work the server commit must keep.
+    let cloned = git(work.path(), &["clone", &clone_url, "agent"]).await;
+    assert!(cloned.status.success(), "{cloned:?}");
+    let checkout = work.path().join("agent");
+    std::fs::write(checkout.join("memory.md"), "remembered\n").unwrap();
+    assert!(git(&checkout, &["add", "memory.md"]).await.status.success());
+    assert!(
+        git(&checkout, &["commit", "-m", "remember"])
+            .await
+            .status
+            .success()
+    );
+    assert!(
+        git(&checkout, &["push", "origin", "main"])
+            .await
+            .status
+            .success()
+    );
+
+    let arcas = VoiceConfig {
+        model: VoiceModel::parse("aura-2-arcas-en").unwrap(),
+    };
+    client
+        .set_voice(&agent, TEAM_ID, arcas.clone())
+        .await
+        .unwrap();
+    client
+        .set_voice(&agent, TEAM_ID, arcas.clone())
+        .await
+        .unwrap();
+    assert_eq!(client.voice(&agent, TEAM_ID).await.unwrap(), Some(arcas));
+
+    let pulled = git(&checkout, &["pull", "--ff-only", "origin", "main"]).await;
+    assert!(pulled.status.success(), "{pulled:?}");
+    let log = git(&checkout, &["log", "--format=%an %s", "-3"]).await;
+    assert_eq!(
+        String::from_utf8_lossy(&log.stdout),
+        "Macro Set call voice\nAgent remember\nMacro Initial workspace\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("memory.md")).unwrap(),
+        "remembered\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("config/voice.json")).unwrap(),
+        "{\n  \"model\": \"aura-2-arcas-en\"\n}\n"
+    );
+
+    assert!(matches!(
+        client
+            .set_voice(
+                &agent,
+                Uuid::from_u128(2),
+                VoiceConfig {
+                    model: VoiceModel::parse("aura-2-thalia-en").unwrap(),
+                },
+            )
+            .await,
+        Err(agent_git::client::AgentGitClientError::TeamMismatch)
+    ));
+}
+
+#[tokio::test]
+async fn voice_commits_never_follow_symlinks_the_agent_committed() {
+    use agent_git::domain::ports::RepoStore;
+
+    for config_is_a_link in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let storage = root.path().join("repos");
+        std::fs::create_dir(&storage).unwrap();
+        let directories = RepoDirectories::new(storage);
+        let store = BareRepoStore::new(directories.clone());
+        let agent = MacroUserIdStr::try_from("macro|agent-a@example.com".to_owned()).unwrap();
+        store
+            .create_repo(&agent, &WORKSPACE_TEMPLATE.render(&agent, &seed()).unwrap())
+            .await
+            .unwrap();
+        let repo = directories.repo_path(&agent);
+        assert!(
+            git(root.path(), &["clone", repo.to_str().unwrap(), "checkout"])
+                .await
+                .status
+                .success()
+        );
+        let checkout = root.path().join("checkout");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let protected = outside.join("voice.json");
+        std::fs::write(&protected, "protected\n").unwrap();
+        let config = checkout.join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        if config_is_a_link {
+            std::fs::remove_dir_all(&config).unwrap();
+            std::os::unix::fs::symlink(&outside, &config).unwrap();
+        } else {
+            if config.join("voice.json").exists() {
+                std::fs::remove_file(config.join("voice.json")).unwrap();
+            }
+            std::os::unix::fs::symlink(&protected, config.join("voice.json")).unwrap();
+        }
+        assert!(git(&checkout, &["add", "--all"]).await.status.success());
+        assert!(
+            git(&checkout, &["commit", "-m", "links"])
+                .await
+                .status
+                .success()
+        );
+        assert!(
+            git(&checkout, &["push", "origin", "main"])
+                .await
+                .status
+                .success()
+        );
+
+        // A symlink is never read as the voice.
+        assert_eq!(
+            store.read_file(&agent, "config/voice.json").await.unwrap(),
+            None
+        );
+        let committed = store
+            .commit_file(
+                &agent,
+                "config/voice.json",
+                b"{\"model\":\"aura-2-arcas-en\"}\n",
+                "Set call voice",
+            )
+            .await;
+
+        assert_eq!(committed.is_err(), config_is_a_link);
+        assert_eq!(std::fs::read_to_string(&protected).unwrap(), "protected\n");
+        if !config_is_a_link {
+            assert_eq!(
+                store.read_file(&agent, "config/voice.json").await.unwrap(),
+                Some(b"{\"model\":\"aura-2-arcas-en\"}\n".to_vec())
+            );
+        }
+        // Only the repo is left in the storage root: no scratch index.
+        assert_eq!(std::fs::read_dir(directories.root()).unwrap().count(), 1);
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

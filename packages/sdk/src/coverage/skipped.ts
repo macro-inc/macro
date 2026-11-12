@@ -36,11 +36,12 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
-  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
   'claudeSignOut', // Computer account credentials are managed in the app.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.
   'startClaudeSignIn', // Computer account credentials are managed in the app.
+  'getAgentVoices', // The agent voice picker is an admin app flow.
+  'getAgentVoiceSample', // The agent voice picker is an admin app flow.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -157,14 +158,14 @@ export const authBacklog = [
   'createTeamAgent', // Inviting an agent teammate buys a computer; an admin app flow for now.
   'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
   'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
+  'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
-  'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
-  'quoteTeamComputer', // Computer checkout belongs to the app.
   'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'setTeamComputerPower', // Computer lifecycle controls belong to the app.

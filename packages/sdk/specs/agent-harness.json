@@ -3877,47 +3877,6 @@
         }
       }
     },
-    "/harnesses/{harness_id}/claude-sign-in/cancel": {
-      "post": {
-        "tags": ["computers"],
-        "summary": "Cancel the computer's waiting sign-in, including one a completion is\nstill finishing.",
-        "operationId": "cancel_claude_sign_in",
-        "parameters": [
-          {
-            "name": "harness_id",
-            "in": "path",
-            "description": "Harness ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "403": {
-            "description": ""
-          },
-          "404": {
-            "description": ""
-          },
-          "409": {
-            "description": ""
-          },
-          "422": {
-            "description": ""
-          },
-          "503": {
-            "description": ""
-          },
-          "504": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/harnesses/{harness_id}/claude-sign-in/complete": {
       "post": {
         "tags": ["computers"],
@@ -4105,6 +4064,133 @@
           },
           "503": {
             "description": "Extraction unavailable"
+          }
+        }
+      }
+    },
+    "/voices": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "The voices an agent teammate can speak with on calls. Team admins only.",
+        "operationId": "get_agent_voices",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Voice"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voices/{model}/sample": {
+      "get": {
+        "tags": ["voices"],
+        "summary": "A catalog voice saying a fixed line, as WAV. Team admins only; the first\nplay of each voice is billed to the admin's team.",
+        "operationId": "get_agent_voice_sample",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "description": "An Aura-2 model, such as aura-2-thalia-en",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WAV audio",
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -5745,6 +5831,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "ClaudeModeResponse": {
         "type": "object",
         "description": "How Claude Code on a computer is paid for, and its Claude sign-in when it\nuses its own.",
@@ -5762,9 +5853,8 @@
             ]
           },
           "mode": {
-            "type": "string",
-            "description": "`macro_credits` or `own_account`.",
-            "example": "macro_credits"
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code is paid for."
           }
         }
       },
@@ -6625,6 +6715,17 @@
           "form",
           "external_chat"
         ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
       },
       "ExecutionActivity": {
         "type": "object",
@@ -8768,6 +8869,39 @@
           }
         }
       },
+      "Voice": {
+        "type": "object",
+        "description": "One voice of the provider's catalog.",
+        "required": ["model", "name", "accent", "tags", "languages"],
+        "properties": {
+          "accent": {
+            "type": "string",
+            "description": "The provider's accent label."
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Languages the voice speaks."
+          },
+          "model": {
+            "type": "string",
+            "description": "The model to save as the agent's voice."
+          },
+          "name": {
+            "type": "string",
+            "description": "The provider's name for the voice."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The provider's gender and character tags."
+          }
+        }
+      },
       "WarmAgentSessionRequest": {
         "type": "object",
         "description": "A client-minted id deduplicates warm calls without creating a conversation.",
@@ -8868,6 +9002,10 @@
     {
       "name": "computers",
       "description": "Claude sign-in on Macro computers"
+    },
+    {
+      "name": "voices",
+      "description": "Voices agent teammates speak with on calls"
     }
   ]
 }

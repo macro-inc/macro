@@ -15,6 +15,8 @@ import {
   teamAgentDraftProblems,
   teamAgentRequest,
 } from '../core/team-agent-draft';
+import { recommendedVoice, type VoicePickerSource } from '../core/voices';
+import { VoicePicker } from './voice-picker';
 
 /** Kobalte renders this only while its field is invalid. */
 function TooLong(props: { limit: number }) {
@@ -37,6 +39,8 @@ export function InviteAgentForm(props: {
   offers: readonly SizeOffer[] | undefined;
   offersFailed: boolean;
   onRetryOffers: () => void;
+  /** The voice catalog; without it the agent gets its template's voice. */
+  voices?: VoicePickerSource;
   /** Stores the picture and resolves to its URL. */
   uploadPicture: (file: File) => Promise<string>;
   pending: boolean;
@@ -59,6 +63,11 @@ export function InviteAgentForm(props: {
   const [avatarUrl, setAvatarUrl] = createSignal<string>();
   const [uploading, setUploading] = createSignal(false);
   const [pictureFailed, setPictureFailed] = createSignal(false);
+  // Until the admin picks one, the voice that suits the personality.
+  const [chosenVoice, setChosenVoice] = createSignal<string>();
+  const voice = () =>
+    chosenVoice() ??
+    recommendedVoice(props.voices?.choices() ?? [], personality())?.model;
 
   // Until the admin picks one, the first size that is for sale.
   const size = () =>
@@ -72,6 +81,7 @@ export function InviteAgentForm(props: {
     personality: personality(),
     size: offer()?.size,
     avatarUrl: avatarUrl(),
+    voice: voice(),
     purchaseKey,
   });
   const problems = () => teamAgentDraftProblems(draft());
@@ -86,6 +96,8 @@ export function InviteAgentForm(props: {
   const submit = () => {
     const request = teamAgentRequest(draft());
     if (busy() || !request) return;
+    // A retry after a failure sends the same voice, even if the suggestion moves.
+    if (request.voice) setChosenVoice(request.voice);
     props.onSubmit(request);
   };
 
@@ -223,6 +235,22 @@ export function InviteAgentForm(props: {
             />
             <TooLong limit={MAX_AGENT_PROFILE_CHARS} />
           </TextField>
+
+          <Show when={props.voices}>
+            {(source) => (
+              <div class="flex flex-col gap-1">
+                <VoicePicker
+                  source={source()}
+                  value={voice()}
+                  onChange={setChosenVoice}
+                  disabled={props.pending}
+                />
+                <p class="text-xs text-ink-muted">
+                  {t('teamAgents.voiceHint')}
+                </p>
+              </div>
+            )}
+          </Show>
 
           <div class="flex flex-col gap-2">
             <div class="text-sm font-medium text-ink">

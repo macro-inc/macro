@@ -41,6 +41,50 @@ pub(crate) fn answer_timeout(request: &Request) -> Duration {
     }
 }
 
+/// The most one answer may hold. harnessd answers one short JSON line; a
+/// guest that streams more is stopped rather than buffered.
+pub(crate) const MAX_ANSWER_BYTES: u64 = 1024 * 1024;
+
+/// Send `request` to a `harnessd` process and read its one answer line.
+/// Over [`MAX_ANSWER_BYTES`] the process is dropped, which stops it.
+pub(crate) async fn exchange<Err: std::fmt::Display>(
+    process: hosted_runtimes::domain::ports::GuestProcess<Err>,
+    request: &Request,
+) -> Result<Response, HarnessdError> {
+    use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _};
+
+    let mut line = serde_json::to_string(request)
+        .map_err(|error| HarnessdError::Unreadable(error.to_string()))?;
+    line.push('\n');
+    let mut stdin = process.stdin;
+    stdin
+        .write_all(line.as_bytes())
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    // A closed stdin tells harnessd this was the only request.
+    drop(stdin);
+
+    let mut answer = String::new();
+    tokio::io::BufReader::new(process.stdout.take(MAX_ANSWER_BYTES + 1))
+        .read_line(&mut answer)
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    if answer.len() as u64 > MAX_ANSWER_BYTES {
+        return Err(HarnessdError::AnswerTooLarge);
+    }
+    let exit = process
+        .exit
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    if answer.trim().is_empty() {
+        return Err(HarnessdError::Unreachable(format!(
+            "harnessd exited with {exit} without answering"
+        )));
+    }
+    serde_json::from_str::<Response>(answer.trim())
+        .map_err(|error| HarnessdError::Unreadable(error.to_string()))
+}
+
 /// Why harnessd gave no usable answer.
 #[derive(Debug, thiserror::Error)]
 pub enum HarnessdError {
@@ -50,12 +94,19 @@ pub enum HarnessdError {
     /// harnessd did not answer in time.
     #[error("harnessd did not answer in time")]
     Timeout,
+    /// harnessd's answer ran past [`MAX_ANSWER_BYTES`].
+    #[error("harnessd's answer is too large")]
+    AnswerTooLarge,
     /// harnessd answered something that is not a response.
     #[error("harnessd answered unexpectedly: {0}")]
     Unreadable(String),
     /// The computer's lock could not be taken.
     #[error("could not lock the computer: {0}")]
     Lock(String),
+    /// Another request holds the computer, or every lock connection is in
+    /// use, past the bounded wait.
+    #[error("the computer is busy with another request")]
+    Busy,
     /// The login rows could not be written.
     #[error(transparent)]
     Harness(#[from] HarnessError),
@@ -121,29 +172,12 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
         &self.harnesses
     }
 
-    /// Read and record the Claude sign-in of every awake computer. One
-    /// computer's failure is logged and the rest still refresh.
-    #[tracing::instrument(
-        name = "computer.harnessd.refresh_all",
-        skip_all,
-        fields(computers),
-        err
-    )]
-    pub async fn refresh_awake(&self, pool: &sqlx::PgPool) -> Result<(), HarnessdError> {
-        let awake = sqlx::query!(
-            r#"
-            SELECT id, harness_id AS "harness_id!"
-            FROM hosted_runtime
-            WHERE awake AND harness_id IS NOT NULL
-            "#,
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-        tracing::Span::current().record("computers", awake.len());
-        for computer in awake {
-            let harness_id = HarnessId::new_from_uuid(computer.harness_id);
-            let computer_id = ComputerId::new_from_uuid(computer.id);
+    /// Read and record the Claude sign-in of each of `computers`, as
+    /// `(harness, computer)`. One computer's failure is logged and the rest
+    /// still refresh.
+    #[tracing::instrument(name = "computer.harnessd.refresh_all", skip_all, fields(computers = computers.len()))]
+    pub async fn refresh_each(&self, computers: &[(HarnessId, ComputerId)]) {
+        for &(harness_id, computer_id) in computers {
             if let Err(error) = self
                 .refresh(harness_id, computer_id, AgentProvider::Claude)
                 .await
@@ -151,7 +185,6 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
                 tracing::warn!(%computer_id, error = ?error, "could not refresh a computer's sign-in");
             }
         }
-        Ok(())
     }
 
     /// Run `request` on the computer behind `harness_id` and record the
@@ -227,14 +260,17 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
                         credential_id,
                         expires_at,
                     }),
-            } => AccountLoginChange::SignedIn {
-                provider: AgentProvider::Claude,
-                account: ProviderAccountIdentity {
-                    external_account_id: credential_id.clone(),
-                },
-                expires_at: *expires_at,
-                signed_in_by,
-            },
+            } => {
+                plausible_claude_login(credential_id, *expires_at)?;
+                AccountLoginChange::SignedIn {
+                    provider: AgentProvider::Claude,
+                    account: ProviderAccountIdentity {
+                        external_account_id: credential_id.clone(),
+                    },
+                    expires_at: *expires_at,
+                    signed_in_by,
+                }
+            }
             Response::SignedIn {
                 agent: AgentProvider::Claude,
                 claude: None,
@@ -254,6 +290,37 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
             .await?;
         Ok(())
     }
+}
+
+/// Longest credential id harnessd sends (`sha256:` and a hex digest).
+const MAX_CREDENTIAL_ID: usize = 100;
+/// Latest plausible expiry: Claude's long-lived tokens last a year.
+const MAX_EXPIRY_AHEAD: chrono::Duration = chrono::Duration::days(400);
+
+/// Refuse what the guest reports unless it could be a real Claude login: the
+/// guest is not trusted, and these land in the login rows and drive notices.
+/// A past expiry is allowed: harnessd keeps reporting a credential after it
+/// expires, and that is what the expiry notices are for.
+fn plausible_claude_login(
+    credential_id: &str,
+    expires_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(), HarnessdError> {
+    let id_ok = !credential_id.is_empty()
+        && credential_id.len() <= MAX_CREDENTIAL_ID
+        && credential_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b":._-".contains(&byte));
+    if !id_ok {
+        return Err(HarnessdError::Unreadable(
+            "an implausible Claude credential id".to_owned(),
+        ));
+    }
+    if expires_at.is_some_and(|at| at > chrono::Utc::now() + MAX_EXPIRY_AHEAD) {
+        return Err(HarnessdError::Unreadable(
+            "a Claude expiry too far in the future".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn command_name(request: &Request) -> &'static str {
@@ -284,16 +351,44 @@ impl HarnessdTransport for NoFleet {
     }
 }
 
-/// [`ComputerLocks`] as a Postgres advisory lock, held by an open
-/// transaction until the lock is dropped.
+/// Connections the computer locks may hold at once, across every computer.
+const LOCK_CONNECTIONS: u32 = 4;
+/// How long a request waits for one of those connections.
+const LOCK_ACQUIRE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+/// How long a request waits for a computer another request holds.
+const LOCK_WAIT: &str = "30s";
+
+/// [`ComputerLocks`] as a session-level Postgres advisory lock, each on a
+/// connection from a small pool of its own: a sign-in can hold it for over a
+/// minute while Claude answers, and a burst of requests must neither starve
+/// the service's pool nor open unbounded connections. A held lock closes its
+/// connection when dropped, which releases it. Every wait is bounded and
+/// answers [`HarnessdError::Busy`].
 pub struct PgComputerLocks {
     pool: sqlx::PgPool,
+    lock_wait: &'static str,
 }
 
 impl PgComputerLocks {
-    /// Lock through `pool`.
-    pub fn new(pool: sqlx::PgPool) -> Self {
-        Self { pool }
+    /// Lock on connections made like `pool`'s.
+    pub fn new(pool: &sqlx::PgPool) -> Self {
+        Self::with_limits(pool, LOCK_CONNECTIONS, LOCK_ACQUIRE_TIMEOUT, LOCK_WAIT)
+    }
+
+    /// Lock with explicit bounds; `lock_wait` is a Postgres `lock_timeout`.
+    pub fn with_limits(
+        pool: &sqlx::PgPool,
+        connections: u32,
+        acquire_timeout: std::time::Duration,
+        lock_wait: &'static str,
+    ) -> Self {
+        Self {
+            pool: sqlx::postgres::PgPoolOptions::new()
+                .max_connections(connections)
+                .acquire_timeout(acquire_timeout)
+                .connect_lazy_with(pool.connect_options().as_ref().clone()),
+            lock_wait,
+        }
     }
 }
 
@@ -302,20 +397,45 @@ impl ComputerLocks for PgComputerLocks {
         &self,
         computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<ComputerLock, HarnessdError>> + Send + '_>> {
-        Box::pin(async move {
-            let mut transaction = self
-                .pool
-                .begin()
-                .await
-                .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-            sqlx::query!(
-                "SELECT pg_advisory_xact_lock(hashtext('harnessd'), hashtext($1::text))",
-                computer_id.to_string(),
-            )
-            .execute(&mut *transaction)
-            .await
-            .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-            Ok(Box::new(transaction) as ComputerLock)
-        })
+        Box::pin(lock_computer(&self.pool, self.lock_wait, computer_id))
     }
 }
+
+/// Take `computer_id`'s advisory lock on a connection from `pool`, waiting
+/// at most `lock_wait`.
+async fn lock_computer(
+    pool: &sqlx::PgPool,
+    lock_wait: &'static str,
+    computer_id: ComputerId,
+) -> Result<ComputerLock, HarnessdError> {
+    let mut connection = pool.acquire().await.map_err(|error| match error {
+        sqlx::Error::PoolTimedOut => HarnessdError::Busy,
+        error => HarnessdError::Lock(error.to_string()),
+    })?;
+    // The session lock outlives any transaction, so the connection must not
+    // go back to the pool holding it.
+    connection.close_on_drop();
+    sqlx::query("SELECT set_config('lock_timeout', $1, false)")
+        .bind(lock_wait)
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| HarnessdError::Lock(error.to_string()))?;
+    sqlx::query!(
+        "SELECT pg_advisory_lock(hashtext('harnessd'), hashtext($1::text))",
+        computer_id.to_string(),
+    )
+    .execute(&mut *connection)
+    .await
+    .map_err(|error| match &error {
+        sqlx::Error::Database(database)
+            if database.code().as_deref() == Some(LOCK_NOT_AVAILABLE) =>
+        {
+            HarnessdError::Busy
+        }
+        _ => HarnessdError::Lock(error.to_string()),
+    })?;
+    Ok(Box::new(connection))
+}
+
+/// Postgres's `lock_not_available`, raised when `lock_timeout` runs out.
+const LOCK_NOT_AVAILABLE: &str = "55P03";

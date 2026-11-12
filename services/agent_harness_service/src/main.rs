@@ -32,7 +32,9 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod speech_gateway;
 mod trigger;
+mod voice_gateway;
 
 #[cfg(test)]
 mod test;
@@ -558,6 +560,12 @@ async fn run() -> anyhow::Result<()> {
         connectors = connectors.with_rollout(rollout);
     }
 
+    // Session egress reaches only public addresses, except on a local stack
+    // whose MCP and preview services sit on the compose network.
+    let mcp_address_policy =
+        mcp_client::outbound::guarded_http::AddressPolicy::for_environment(config.environment);
+    let mcp_http = mcp_client::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
+
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream
     // connections. The `macro` credential is signed inline with the same key
@@ -567,6 +575,7 @@ async fn run() -> anyhow::Result<()> {
         WithCustomMcp::new(
             PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), connectors),
             Arc::clone(&mcp_servers),
+            mcp_http.clone(),
         ),
         MacroApiTokenSigner::new(
             pool.clone(),
@@ -615,7 +624,7 @@ async fn run() -> anyhow::Result<()> {
                 PgGithubSyncRepo::new(pool.clone()),
                 GithubSyncClientImpl::default(),
             )),
-            ReqwestForwarder::new()?,
+            ReqwestForwarder::new(mcp_address_policy)?,
         )
         .with_preview_mcp(
             url::Url::parse(&format!(
@@ -626,7 +635,7 @@ async fn run() -> anyhow::Result<()> {
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new()?,
+            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
         )),
     );
 
@@ -654,6 +663,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
+        mcp_http,
     )
     .await
     .context("failed to compose cognition APIs")?;
@@ -1364,18 +1374,36 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
+        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+    );
+    // Both brain routes serve only agents with agent teammates on.
+    let brain_rollout = feature_flags
+        .clone()
+        .map(anthropic_gateway::brain::BrainRollout::new)
+        .unwrap_or_default();
+    let speech = Arc::new(speech_gateway::SpeechGateway::new(
+        brains.clone(),
+        brain_rollout.clone(),
+        admission.clone(),
+        recorder.clone(),
+        config.livekit_api_key.as_ref(),
+        config.livekit_api_secret.as_ref(),
+        speech_gateway::LIVEKIT_INFERENCE_URL,
+        speech_gateway::DEEPGRAM_MODELS_URL,
+    )?);
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
+            anthropic_gateway::PgBotComputers(pool.clone()),
             admission.clone(),
             recorder.clone(),
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(Arc::new(
-            anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
-        )),
-    );
+        .with_brains(brains, brain_rollout),
+    )
+    .merge(speech_gateway::router(speech.clone()));
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
@@ -1393,7 +1421,7 @@ async fn run() -> anyhow::Result<()> {
             Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
             None => Arc::new(computers::harnessd::NoFleet),
         },
-        Arc::new(computers::harnessd::PgComputerLocks::new(pool.clone())),
+        Arc::new(computers::harnessd::PgComputerLocks::new(&pool)),
         Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
             PgHarnessRepo::new(pool.clone()),
         )),
@@ -1407,13 +1435,14 @@ async fn run() -> anyhow::Result<()> {
         computers::spawn_loops(
             Arc::clone(operator),
             computers::ClaudeSignInWatch {
-                sign_ins: computers::claude_expiry::PgClaudeSignIns::new(pool.clone()),
+                sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns::new(
+                    pool.clone(),
+                ),
                 notices: computers::claude_expiry::IngressClaudeSignInNotices::new(
                     Arc::clone(&notifications),
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
                 harnessd: harnessd.clone(),
-                pool: pool.clone(),
             },
             &computer_tasks,
             service_shutdown.clone(),
@@ -1541,6 +1570,8 @@ async fn run() -> anyhow::Result<()> {
         ))
         .with_conversation_turns(conversation_turns)
         .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
+        // Kill switch for retrying idle releases that kept their session.
+        .with_idle_release_flags(feature_flags.clone())
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
@@ -1829,6 +1860,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         &computer_tasks,
     );
+    let voices = voice_gateway::router(voice_gateway::VoiceState {
+        voices: Arc::new(team_agents::domain::voice::Voices::new(
+            speech_gateway::VoiceCatalog(speech),
+            feature_flags.clone(),
+        )),
+        access: entity_access.clone(),
+        authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    });
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -2032,6 +2071,7 @@ async fn run() -> anyhow::Result<()> {
             .with_coding_agents(coding_agents)
             .with_claude_access(computer_claude)
             .with_capabilities(capabilities)
+            .with_voices(voices)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_session_tasks(session_task_links)

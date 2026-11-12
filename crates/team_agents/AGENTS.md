@@ -23,6 +23,14 @@ computer, `issue_enrollment` mints a fresh API key and repo token and returns
 them with the computer-facing addresses. macrod writes them to
 `/var/lib/macrod/agent.env`, which the guest's `macro-brain.service` reads.
 
+An agent's call voice lives in its repo as `config/voice.json`, not here. The
+invite's optional `voice` seeds it (`PersonaSeed.voice`; none keeps the starter
+agent's default). `GET`/`PUT /team_agents/{agent_user_id}/voice` (team admin,
+flag) read and commit it through agent_git; the agent's next call uses it.
+`domain::voice::Voices` serves the provider catalog and spoken samples to team
+admins behind the same flag; agent_harness_service implements its
+`VoiceProvider` and mounts it at `/voices`.
+
 An agent's status comes from its computer (`provisioning`, `running`,
 `paused`, `failed`, `released`); nothing about it is stored here.
 

@@ -60,10 +60,10 @@ key issuance, and account merge/link flows.
 
 ## Macro computers billing
 
-Team computer purchase, quote and offers use the shared fail-closed
+Team computer purchase and offers use the shared fail-closed
 `enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
-it from the existing PostHog provider. Existing management and internal APIs keep
-their authorization policy. Every computer HTTP use case also requires a fresh
+it from the existing PostHog provider. Existing management keeps its authorization
+policy. Every computer HTTP use case also requires a fresh
 host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
 effects when detached. The five-minute freshness policy belongs to hosted runtimes;
 authentication has no fleet selector or startup availability latch. Pure catalog
@@ -80,7 +80,7 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `settle_computer_add` ends an unknown outcome for good (fencing a charge
   never sent); `charge_status` reads a key's receipt. Removing an item already
   gone, or from a deleted team, succeeds.
-- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - Every team subscription webhook re-reads the complete subscription (all item
   pages) and only reports a `SubscriptionObserved` (status, items with their
   `computer_id`, period end, read time) to `ComputerBillingObserver`

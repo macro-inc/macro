@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateTeamAgentAvatarUrl } from './createTeamAgentAvatarUrl';
+import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 
 /**
  * Input for inviting an agent teammate and buying its computer.
@@ -23,4 +24,7 @@ retry never buys a second computer. */
   purchaseKey: string;
   /** The computer to buy. */
   size: string;
+  /** The call voice picked in the invite; `None` keeps the starter
+agent's default. */
+  voice?: CreateTeamAgentVoice;
 }

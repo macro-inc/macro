@@ -50,6 +50,7 @@ import type {
   DiscoverConnectorsResponse,
   DiscoveryRequest,
   EditQueuedActionRequest,
+  ErrorResponse,
   ExecutionRecord,
   ExtractInputRequest,
   ExtractInputResponse,
@@ -81,6 +82,7 @@ import type {
   UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4560,87 +4562,6 @@ export const startClaudeSignIn = async (
 };
 
 /**
- * @summary Cancel the computer's waiting sign-in, including one a completion is
-still finishing.
- */
-export type cancelClaudeSignInResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type cancelClaudeSignInResponse403 = {
-  data: void;
-  status: 403;
-};
-
-export type cancelClaudeSignInResponse404 = {
-  data: void;
-  status: 404;
-};
-
-export type cancelClaudeSignInResponse409 = {
-  data: void;
-  status: 409;
-};
-
-export type cancelClaudeSignInResponse422 = {
-  data: void;
-  status: 422;
-};
-
-export type cancelClaudeSignInResponse503 = {
-  data: void;
-  status: 503;
-};
-
-export type cancelClaudeSignInResponse504 = {
-  data: void;
-  status: 504;
-};
-
-export type cancelClaudeSignInResponseSuccess =
-  cancelClaudeSignInResponse204 & {
-    headers: Headers;
-  };
-export type cancelClaudeSignInResponseError = (
-  | cancelClaudeSignInResponse403
-  | cancelClaudeSignInResponse404
-  | cancelClaudeSignInResponse409
-  | cancelClaudeSignInResponse422
-  | cancelClaudeSignInResponse503
-  | cancelClaudeSignInResponse504
-) & {
-  headers: Headers;
-};
-
-export type cancelClaudeSignInResponse =
-  | cancelClaudeSignInResponseSuccess
-  | cancelClaudeSignInResponseError;
-
-export const getCancelClaudeSignInUrl = (harnessId: string) => {
-  return `/harnesses/${harnessId}/claude-sign-in/cancel`;
-};
-
-export const cancelClaudeSignIn = async (
-  harnessId: string,
-  options?: RequestInit
-): Promise<cancelClaudeSignInResponse> => {
-  const res = await fetch(getCancelClaudeSignInUrl(harnessId), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: cancelClaudeSignInResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as cancelClaudeSignInResponse;
-};
-
-/**
  * @summary Finish the Claude sign-in with what the user pasted.
  */
 export type completeClaudeSignInResponse200 = {
@@ -4934,4 +4855,135 @@ export const extract = async (
 
   const data: extractResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as extractResponse;
+};
+
+/**
+ * @summary The voices an agent teammate can speak with on calls. Team admins only.
+ */
+export type getAgentVoicesResponse200 = {
+  data: Voice[];
+  status: 200;
+};
+
+export type getAgentVoicesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getAgentVoicesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentVoicesResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getAgentVoicesResponseSuccess = getAgentVoicesResponse200 & {
+  headers: Headers;
+};
+export type getAgentVoicesResponseError = (
+  | getAgentVoicesResponse401
+  | getAgentVoicesResponse403
+  | getAgentVoicesResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoicesResponse =
+  | getAgentVoicesResponseSuccess
+  | getAgentVoicesResponseError;
+
+export const getGetAgentVoicesUrl = () => {
+  return `/voices`;
+};
+
+export const getAgentVoices = async (
+  options?: RequestInit
+): Promise<getAgentVoicesResponse> => {
+  const res = await fetch(getGetAgentVoicesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoicesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoicesResponse;
+};
+
+/**
+ * @summary A catalog voice saying a fixed line, as WAV. Team admins only; the first
+play of each voice is billed to the admin's team.
+ */
+export type getAgentVoiceSampleResponse200 = {
+  data: number[];
+  status: 200;
+};
+
+export type getAgentVoiceSampleResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getAgentVoiceSampleResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getAgentVoiceSampleResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentVoiceSampleResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getAgentVoiceSampleResponseSuccess =
+  getAgentVoiceSampleResponse200 & {
+    headers: Headers;
+  };
+export type getAgentVoiceSampleResponseError = (
+  | getAgentVoiceSampleResponse400
+  | getAgentVoiceSampleResponse401
+  | getAgentVoiceSampleResponse403
+  | getAgentVoiceSampleResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoiceSampleResponse =
+  | getAgentVoiceSampleResponseSuccess
+  | getAgentVoiceSampleResponseError;
+
+export const getGetAgentVoiceSampleUrl = (model: string) => {
+  return `/voices/${model}/sample`;
+};
+
+export const getAgentVoiceSample = async (
+  model: string,
+  options?: RequestInit
+): Promise<getAgentVoiceSampleResponse> => {
+  const res = await fetch(getGetAgentVoiceSampleUrl(model), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoiceSampleResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoiceSampleResponse;
 };

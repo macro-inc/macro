@@ -41,6 +41,7 @@ fn billed(phase: Phase) -> ComputerState {
         recent_crashes: vec![],
         power_on_requested: false,
         capacity_wait: None,
+        retried_by_team: false,
     }
 }
 
@@ -70,6 +71,7 @@ fn stopped_computer_starts_on_power_on() {
         recent_crashes: vec![],
         power_on_requested: false,
         capacity_wait: None,
+        retried_by_team: false,
     };
 
     let (next, effects) = transition(&state, &Event::PowerOn, context(true)).unwrap();
@@ -90,6 +92,7 @@ fn stopped_computer_starts_on_power_on() {
             recent_crashes: vec![],
             power_on_requested: false,
             capacity_wait: None,
+            retried_by_team: false,
         }
     );
     assert_eq!(
@@ -836,6 +839,7 @@ fn check(cases: Vec<Case>) {
             recent_crashes: case.recent_crashes,
             power_on_requested: case.power_on_requested,
             capacity_wait: None,
+            retried_by_team: false,
         };
 
         let outcome = transition(&state, &case.event, context(case.host_has_room));
@@ -1015,3 +1019,68 @@ proptest! {
 mod generation;
 
 mod capacity;
+
+/// A computer that gave up, as a team or an operator retries it.
+fn gave_up() -> ComputerState {
+    billed(Phase::Crashed {
+        restarts: 3,
+        retry: None,
+    })
+}
+
+#[test]
+fn a_team_retry_that_gives_up_again_is_logged_not_paged() {
+    let (retried, _) = transition(&gave_up(), &Event::TeamRetry, context(true)).unwrap();
+    assert!(retried.retried_by_team);
+
+    let (again, effects) = transition(
+        &retried,
+        &Event::EffectFailed {
+            reason: "create failed".to_owned(),
+        },
+        context(true),
+    )
+    .unwrap();
+
+    assert_eq!(
+        again.phase,
+        Phase::Crashed {
+            restarts: 0,
+            retry: None,
+        }
+    );
+    assert_eq!(effects, vec![]);
+}
+
+#[test]
+fn a_boot_after_a_team_retry_pages_the_next_give_up_again() {
+    let (retried, _) = transition(&gave_up(), &Event::TeamRetry, context(true)).unwrap();
+    let (running, _) = transition(&retried, &Event::MacrodConnected, context(true)).unwrap();
+    assert_eq!(running.phase, Phase::Running);
+    assert!(!running.retried_by_team);
+
+    let (_, effects) = transition(&running, &Event::HostLost, context(true)).unwrap();
+
+    assert_eq!(
+        effects,
+        vec![Effect::PageOperator {
+            reason: "host lost".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn an_operator_retry_still_pages_a_later_give_up() {
+    let (retried, _) = transition(&gave_up(), &Event::OperatorRetry, context(true)).unwrap();
+    assert!(!retried.retried_by_team);
+}
+
+#[test]
+fn a_state_row_written_before_team_retries_still_decodes() {
+    let mut row = serde_json::to_value(billed(Phase::Running)).unwrap();
+    row.as_object_mut().unwrap().remove("retried_by_team");
+
+    let state: ComputerState = serde_json::from_value(row).unwrap();
+
+    assert!(!state.retried_by_team);
+}

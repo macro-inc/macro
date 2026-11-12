@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use agent_git::client::AgentGitClient;
 use agent_git::domain::template::PersonaSeed as RepoSeed;
+use agent_git::domain::voice::VoiceConfig;
 use macro_service_urls::AgentGitServiceUrl;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError};
+use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError, VoiceModel};
 use crate::domain::ports::AgentRepos;
 
 #[cfg(test)]
@@ -46,6 +47,7 @@ fn repo_seed(seed: &PersonaSeed) -> RepoSeed {
         name: seed.name.clone(),
         job_description: seed.job_description.clone(),
         personality: seed.personality.clone(),
+        voice: seed.voice.clone(),
     }
 }
 
@@ -115,5 +117,38 @@ impl AgentRepos for AgentGitRepos {
         self.client.delete_repo(agent).await.map_err(|error| {
             TeamAgentError::RepoUnavailable(rootcause::Report::new(error).into_dynamic())
         })
+    }
+
+    #[tracing::instrument(name = "team_agents.repo.voice", skip_all, err)]
+    async fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<Option<VoiceModel>, TeamAgentError> {
+        let voice = self.client.voice(agent, team_id).await.map_err(|error| {
+            TeamAgentError::VoiceUnavailable(rootcause::Report::new(error).into_dynamic())
+        })?;
+        Ok(voice.map(|voice| voice.model))
+    }
+
+    #[tracing::instrument(name = "team_agents.repo.set_voice", skip_all, err)]
+    async fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: &VoiceModel,
+    ) -> Result<(), TeamAgentError> {
+        self.client
+            .set_voice(
+                agent,
+                team_id,
+                VoiceConfig {
+                    model: voice.clone(),
+                },
+            )
+            .await
+            .map_err(|error| {
+                TeamAgentError::VoiceUnavailable(rootcause::Report::new(error).into_dynamic())
+            })
     }
 }

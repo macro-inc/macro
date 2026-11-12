@@ -83,7 +83,10 @@ const harnessdStateDirectory = 'HARNESSD_STATE_DIRECTORY';
 /**
  * Bubblewrap's argv prefix: the enrollment's credentials hidden, harnessd's
  * Claude sign-in readable but not writable, and nothing else changed (its
- * socket and the rest of the system as they are).
+ * socket and the rest of the system as they are). The pid namespace is
+ * shared on purpose (calls find their joins by pid): bwrap's own user
+ * namespace already keeps a child out of the agent's `/proc/<pid>/environ`,
+ * `root` and `mem`, and the agent's environment holds no credentials anyway.
  */
 export const hiding = (
   credentials: string,

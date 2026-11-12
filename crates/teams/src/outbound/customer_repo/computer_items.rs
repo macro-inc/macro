@@ -56,6 +56,42 @@ pub fn item_computer_id(item: &stripe::SubscriptionItem) -> Option<&str> {
     on_item.or(on_price).map(String::as_str)
 }
 
+/// The computer a subscription item bills, as a uuid. A malformed id is
+/// logged and read as none, so the item counts as an ordinary line.
+pub fn item_computer_uuid(item: &stripe::SubscriptionItem) -> Option<uuid::Uuid> {
+    let id = item_computer_id(item)?;
+    uuid::Uuid::parse_str(id)
+        .inspect_err(|_| {
+            tracing::warn!(subscription_item = %item.id, "subscription item has an invalid computer id");
+        })
+        .ok()
+}
+
+/// Every item on a subscription, read a page at a time.
+pub async fn list_subscription_items(
+    client: &stripe::Client,
+    subscription_id: &stripe::SubscriptionId,
+) -> Result<Vec<stripe::SubscriptionItem>, stripe::StripeError> {
+    let mut params = stripe::ListSubscriptionItems::new(subscription_id.clone());
+    params.limit = Some(ITEM_PAGE);
+    let mut items = Vec::new();
+    loop {
+        let page = stripe::SubscriptionItem::list(client, &params).await?;
+        if !page.has_more {
+            items.extend(page.data);
+            return Ok(items);
+        }
+        // More to read needs a cursor; an empty page has none to give.
+        let Some(last) = page.data.last() else {
+            return Err(stripe::StripeError::ClientError(
+                "missing subscription item cursor".to_owned(),
+            ));
+        };
+        params.starting_after = Some(last.id.clone());
+        items.extend(page.data);
+    }
+}
+
 impl CustomerRepositoryImpl {
     /// Apply `changes` in one update under the subscription guard, replaying
     /// an earlier attempt with the same key. `computer_item` marks the new
@@ -258,37 +294,25 @@ impl CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<Vec<SubscriptionItemView>, CustomerError> {
-        let mut params = stripe::ListSubscriptionItems::new(subscription_id.clone());
-        params.limit = Some(ITEM_PAGE);
-        let mut views = Vec::new();
-        loop {
-            let page = stripe::SubscriptionItem::list(&self.client, &params)
-                .await
-                .map_err(storage)?;
-            for item in &page.data {
+        let items = list_subscription_items(&self.client, subscription_id)
+            .await
+            .map_err(storage)?;
+        items
+            .iter()
+            .map(|item| {
                 let Some(price) = &item.price else {
                     return Err(SubscriptionDataError::Internal(rootcause::report!(
                         "subscription item has no price"
                     ))
                     .into());
                 };
-                views.push(SubscriptionItemView {
+                Ok(SubscriptionItemView {
                     id: item.id.clone(),
                     price_id: price.id.clone(),
                     quantity: item.quantity.unwrap_or(1),
                     computer_id: item_computer_id(item).map(str::to_owned),
-                });
-            }
-            if !page.has_more {
-                return Ok(views);
-            }
-            params.starting_after = Some(page.data.last().map(|item| item.id.clone()).ok_or_else(
-                || {
-                    SubscriptionDataError::Internal(rootcause::report!(
-                        "missing subscription item cursor"
-                    ))
-                },
-            )?);
-        }
+                })
+            })
+            .collect()
     }
 }

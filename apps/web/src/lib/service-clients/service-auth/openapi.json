@@ -4279,86 +4279,6 @@
         }
       }
     },
-    "/team/computers/quote": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "The price of one computer of a size for the team.",
-        "operationId": "quote_team_computer",
-        "parameters": [
-          {
-            "name": "size",
-            "in": "query",
-            "description": "Purchased catalog size.",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ComputerSize"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Quote"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/computers/{computer_id}": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "One computer, with setup progress until it first connects.",
-        "operationId": "get_team_computer",
-        "parameters": [
-          {
-            "name": "computer_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComputerStatus"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/team/computers/{computer_id}/cancel": {
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
@@ -4610,7 +4530,7 @@
     "/team/computers/{computer_id}/setup-complete": {
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the computer's buyer and the team owner.",
+        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the team's owner and admins, like Claude sign-in.",
         "operationId": "complete_team_computer_setup",
         "parameters": [
           {
@@ -5821,6 +5741,194 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{agent_user_id}/voice": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "The agent's call voice, as committed in its workspace repository.\nRequires a team admin or owner.",
+        "operationId": "get_team_agent_voice",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoice"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["team-agents"],
+        "summary": "Change the agent's call voice: a commit to its workspace repository that\nits next call picks up. Requires a team admin or owner.",
+        "operationId": "set_team_agent_voice",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentVoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoice"
+                }
+              }
+            }
           },
           "400": {
             "description": "",
@@ -7320,6 +7428,17 @@
           }
         }
       },
+      "AgentVoice": {
+        "type": "object",
+        "description": "The voice an agent speaks with on calls.",
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The Aura-2 model, `aura-2-<name>-<language>`."
+          }
+        }
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -7738,7 +7857,7 @@
           },
           "purchasedBy": {
             "type": "string",
-            "description": "The Macro user who bought it; with the team owner, the one who may\nfinish its setup and manage its Claude account."
+            "description": "The Macro user who bought it. The team's owner and admins, not the\nbuyer, finish its setup and manage its Claude account."
           },
           "retainedUntil": {
             "type": ["string", "null"],
@@ -7762,7 +7881,7 @@
             "description": "When the team finished the guided setup; null while it is unfinished."
           },
           "size": {
-            "type": "string",
+            "$ref": "#/components/schemas/ComputerSize",
             "description": "Purchased catalog size."
           },
           "status": {
@@ -7934,6 +8053,10 @@
           "size": {
             "type": "string",
             "description": "The computer to buy."
+          },
+          "voice": {
+            "type": ["string", "null"],
+            "description": "The call voice picked in the invite; `None` keeps the starter\nagent's default."
           }
         }
       },
@@ -10133,8 +10256,15 @@
             ]
           },
           "status": {
-            "type": ["string", "null"],
-            "description": "Computer status supplied by its owning service."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerStatusKind",
+                "description": "Computer status supplied by its owning service."
+              }
+            ]
           },
           "unitAmount": {
             "type": ["integer", "null"],

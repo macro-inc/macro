@@ -31,7 +31,7 @@ export type Config = {
   readonly model: string;
   /** What one run, and one day of the owner's, may spend. */
   readonly budget: Caps;
-  /** Who the agent is in Macro, and who its owner is. Only the owner's id gives orders. */
+  /** Who the agent is in Macro, and who its owner is: the one `agent.json` names while they are on the team, else the team's owner (`agent/authority.ts`). Only the owner's id gives orders. */
   readonly me: string;
   readonly owner: string;
   /** The agent's git identity, which lives only in the environment of its processes. */
@@ -62,11 +62,14 @@ export const config = ({
   home,
   join,
   settings,
+  owner = () => settings.owner,
 }: {
   readonly root: string;
   readonly home: string;
   readonly join: (...parts: readonly string[]) => string;
   readonly settings: Settings;
+  /** Who gives orders now; the owner `agent.json` names when not given. */
+  readonly owner?: () => string;
 }): Config => ({
   root,
   charter: join(root, charterFile),
@@ -82,7 +85,9 @@ export const config = ({
   model: settings.model,
   budget: capsOf(settings),
   me: settings.me,
-  owner: settings.owner,
+  get owner() {
+    return owner();
+  },
   identity: { name: settings.name, email: settings.email },
   timeZone: settings.timeZone,
   keep: { logDays: 30, logLines: 5000, historyLines: 1000 },

@@ -76,6 +76,21 @@ where
         caller: &MacroUserIdStr<'static>,
         harness: &Harness,
     ) -> Result<(), HarnessError> {
+        // A computer belongs to its team, whoever bought it: the access level
+        // makes the team's owner and admins its owners.
+        if harness.computer_id.is_some() {
+            let access = self
+                .repo
+                .harness_access(harness.id, caller.clone())
+                .await
+                .map_err(Into::into)?;
+            return match access {
+                HarnessAccess::Owner => Ok(()),
+                HarnessAccess::User | HarnessAccess::Read | HarnessAccess::None => {
+                    Err(HarnessError::Unauthorized)
+                }
+            };
+        }
         let HarnessOwner::User { user_id } = &harness.owner;
         if user_id == caller.as_ref() {
             return Ok(());
@@ -336,6 +351,16 @@ where
             .map_err(Into::into)?;
         if access != HarnessAccess::Owner {
             return Err(HarnessError::Unauthorized);
+        }
+        // A computer's team access is its team, fixed at purchase.
+        if self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .is_some_and(|harness| harness.computer_id.is_some())
+        {
+            return Err(HarnessError::ComputerHarness);
         }
         let is_member = self
             .repo

@@ -310,6 +310,7 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
             recent_crashes: vec![],
             power_on_requested: false,
             capacity_wait: None,
+            retried_by_team: false,
         },
         harness_id: None,
         created_by: admin(),

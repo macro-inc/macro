@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   computers: [] as ComputerStatus[],
   release: vi.fn(),
   restore: vi.fn(),
+  retry: vi.fn(),
   confirm: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
@@ -53,6 +54,10 @@ vi.mock('@queries/computers/computers', () => ({
   useReleaseComputerMutation: () => ({
     isPending: false,
     mutateAsync: mocks.release,
+  }),
+  useRetryComputerMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.retry,
   }),
 }));
 
@@ -204,7 +209,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     )
     .mockResolvedValueOnce({ computerId: 'computer-1', state: 'confirming' });
 
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
   await screen.findByText('Get a Macro computer', { selector: 'h2' });
@@ -219,8 +224,9 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });
 
   fireEvent.click(buyButton);
+  // The translated message, not the server's wording.
   expect((await screen.findByRole('alert')).textContent).toBe(
-    'That size just sold out.'
+    'That size just sold out, or an earlier attempt is still being confirmed.'
   );
   expect(mocks.purchase).toHaveBeenNthCalledWith(1, {
     purchaseKey: expect.any(String),
@@ -264,7 +270,7 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   mocks.confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   mocks.restore.mockResolvedValueOnce({ ...kept, billing: 'active' });
 
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
 
   expect(
     screen.queryByRole('menuitem', { name: 'Cancel at period end' })
@@ -278,6 +284,36 @@ it('offers Restore instead of Turn on for a released computer still kept, and co
   fireEvent.click(restore);
   await waitFor(() => expect(mocks.restore).toHaveBeenCalledWith('computer-1'));
   expect(screen.getByRole('menuitem', { name: 'Release now' })).toBeTruthy();
+});
+
+it('offers Retry on a failed computer, and only there', async () => {
+  const failed: ComputerStatus = {
+    id: 'computer-1',
+    name: 'Build machine',
+    size: 'standard',
+    vcpus: 4,
+    memoryGib: 8,
+    diskGib: 100,
+    catalogEntry: 'standard@2026-11',
+    status: 'failed',
+    billing: 'active',
+    poweredOn: true,
+    agentCount: 0,
+    canUndoCancel: false,
+    canRestore: false,
+    purchasedBy: 'viewer',
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+  mocks.computers = [failed, { ...failed, id: 'computer-2', status: 'ready' }];
+  mocks.retry.mockResolvedValueOnce({ ...failed, status: 'setting_up' });
+
+  render(() => <MacroComputers harnesses={[]} />);
+
+  const retry = screen.getAllByRole('menuitem', { name: 'Retry' });
+  expect(retry).toHaveLength(1);
+  fireEvent.click(retry[0]);
+  await waitFor(() => expect(mocks.retry).toHaveBeenCalledWith('computer-1'));
+  expect(mocks.toastFailure).not.toHaveBeenCalled();
 });
 
 it('offers no power, cancel or release while a purchase is being confirmed', () => {
@@ -302,7 +338,7 @@ it('offers no power, cancel or release while a purchase is being confirmed', () 
     },
   ];
 
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
 
   expect(screen.queryAllByRole('menuitem')).toEqual([]);
 });
@@ -328,7 +364,7 @@ it('keeps existing computers and release available with rollout off while hiding
       createdAt: '2026-01-01T00:00:00Z',
     },
   ];
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
   expect(screen.getByText('Build machine')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   expect(
@@ -340,7 +376,7 @@ it('keeps existing computers and release available with rollout off while hiding
 
 it('keeps a zero-price offer included through review and purchase', async () => {
   mocks.offers[0].quote.amount = 0;
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
   await screen.findByRole('radio', { name: 'Standard' });
   expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
@@ -392,9 +428,7 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
     setupCompletedAt: null,
   };
   mocks.computers = [computer];
-  const first = render(() => (
-    <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
-  ));
+  const first = render(() => <MacroComputers harnesses={[harness]} />);
   expect(screen.getByRole('button', { name: 'Finish setup' })).toBeTruthy();
   expect(
     screen.queryByRole('button', { name: 'Sign in with Claude' })
@@ -402,9 +436,7 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
   first.unmount();
 
   mocks.computers = [{ ...computer, setupCompletedAt: '2026-01-02T00:00:00Z' }];
-  const second = render(() => (
-    <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
-  ));
+  const second = render(() => <MacroComputers harnesses={[harness]} />);
   // Signed in with Claude and not expired: nothing to do.
   expect(
     screen.queryByRole('button', { name: 'Sign in with Claude' })
@@ -415,7 +447,6 @@ it('offers Finish setup until setup is done, and nothing once Claude is signed i
   render(() => (
     <MacroComputers
       harnesses={[{ ...harness, claude_mode: 'macro_credits' }]}
-      onSharingChange={() => {}}
     />
   ));
   expect(
@@ -433,7 +464,7 @@ it('tells a trialing team computers are for paid plans and links to Billing', as
         'Computers are available on paid plans. Your team is on a trial.',
     },
   ]);
-  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  render(() => <MacroComputers harnesses={[]} />);
 
   expect(
     await screen.findByText(

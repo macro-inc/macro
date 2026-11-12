@@ -15,7 +15,7 @@ inbound = [
   "entity_access/inbound",
 ]
 outbound = [
-  "dep:agent_git",
+  "agent_git/client",
   "dep:macro_service_urls",
   "dep:sqlx",
   "dep:teams",
@@ -24,7 +24,7 @@ outbound = [
 
 [dependencies]
 agent_credentials = { path = "../agent_credentials" }
-agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }
+agent_git = { path = "../agent_git", default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }

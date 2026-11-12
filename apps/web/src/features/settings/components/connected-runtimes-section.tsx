@@ -8,7 +8,7 @@ import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 import { RuntimeOptions } from './runtime-options';
 
-export const RuntimeShareDialog = lazy(async () => ({
+const RuntimeShareDialog = lazy(async () => ({
   default: (
     await import('@app/features/runtime-sharing/views/RuntimeShareDialog')
   ).RuntimeShareDialog,
@@ -186,6 +186,8 @@ function PairedRuntimeRow(props: {
   onSharingChange: (open: boolean) => void;
 }) {
   const isOwner = () => props.harness.access === 'owner';
+  // A Macro computer belongs to its team: it is never shared or removed here.
+  const isComputer = () => Boolean(props.harness.computer_id);
   const requests = useShareRequests(
     () => shareEntity('harness', props.harness.id),
     isOwner
@@ -221,7 +223,7 @@ function PairedRuntimeRow(props: {
       }
       actions={
         <>
-          <Show when={isOwner()}>
+          <Show when={isOwner() && !isComputer()}>
             <ShareRuntime
               harness={props.harness}
               pending={pending()}
@@ -236,11 +238,13 @@ function PairedRuntimeRow(props: {
               variant="neutral"
               onClick={props.onRename}
             />
-            <ConnectAction
-              label="Remove"
-              variant="danger"
-              onClick={props.onRemove}
-            />
+            <Show when={!isComputer()}>
+              <ConnectAction
+                label="Remove"
+                variant="danger"
+                onClick={props.onRemove}
+              />
+            </Show>
           </Show>
         </>
       }

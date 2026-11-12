@@ -13,7 +13,9 @@ use uuid::Uuid;
 use super::models::{
     AgentApiKey, AgentRepo, ComputerId, ComputerPurchase, ComputerState, CreateTeamAgent,
     NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord, TeamAgents,
+    VoiceModel,
 };
+use super::voice::AgentVoice;
 
 /// Agent accounts and their `team_agents` rows.
 pub trait TeamAgentRepository: Send + Sync + 'static {
@@ -96,6 +98,21 @@ pub trait AgentRepos: Send + Sync + 'static {
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// The voice committed in the agent's repository, if it has a valid one.
+    fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<VoiceModel>, TeamAgentError>> + Send;
+
+    /// Commit a voice to the agent's repository as Macro.
+    fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: &VoiceModel,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
 /// The agent's Macro computer, through hosted_runtimes.
@@ -165,6 +182,22 @@ pub trait TeamAgentService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// The voice an agent on the receipt's team speaks with on calls.
+    fn voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentVoice, TeamAgentError>> + Send;
+
+    /// Change the voice of an agent on the receipt's team; it applies from
+    /// the agent's next call.
+    fn set_voice(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+        voice: AgentVoice,
+    ) -> impl Future<Output = Result<AgentVoice, TeamAgentError>> + Send;
 
     /// The agent part of a computer's enrollment: fresh credentials and its
     /// environment, or `None` when the computer runs no agent.

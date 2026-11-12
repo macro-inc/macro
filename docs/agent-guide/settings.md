@@ -246,7 +246,14 @@ workspace that charged nothing). The new agent appears in **Team → Members** a
 its own row (name, **Agent** tag, job description) with a status in place of a
 role: **Setting up** with a spinner while its computer provisions (the list
 polls every 3 seconds), then **Running**, **Paused**, **Needs attention** or
-**Released**. Owners and admins remove an agent with its trash button and a
+**Released**. The invite form also has a **Voice** picker (`GET /voices` on the
+agent harness): it suggests a voice from the personality, **Play sample** plays
+a fixed line (the first play of a voice is billed to the team), and the chosen
+model goes out as `voice`. Owners and admins change a voice later with the
+row's waveform button (**Change voice**): **Save voice** calls
+`PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
+agent's repository and applies from its next call; a failed save keeps the
+pick for retry. Owners and admins remove an agent with its trash button and a
 confirmation; that releases its computer and deletes its account. On phones the
 dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
@@ -844,10 +851,12 @@ team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
 need a team: without one the page shows nothing about them. The flag follows
 PostHog in every environment unless explicitly overridden locally. With the
-flag off, existing computers stay listed and manageable in Machines and team
-Billing. Team purchase, quote and offers return 403 when the rollout is off,
+flag off, the computer UI is hidden (Machines, Billing, Agents and settings
+search show nothing about computers), while existing computers keep running and
+billing. Turning the flag off is a sales kill switch, not a way to manage
+computers. Team purchase and offers return 403 when the rollout is off,
 missing or unavailable. If the environment has no computer prices configured,
-offers, quotes, and purchases answer 503 with `computers are not available in
+offers and purchases answer 503 with `computers are not available in
 this environment`; partial price configuration prevents the authentication
 service from starting.
 
@@ -858,7 +867,7 @@ on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
-Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
+Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
 computer (1 of 3)`. Then the billing state: `Payment past due` while the team
@@ -869,10 +878,12 @@ computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
 The row's one action is **Finish setup** while guided setup is incomplete
-(only for the buyer and the team owner), else **Sign in with Claude** when the
+(only for the team's owner and admins), else **Sign in with Claude** when the
 computer is on its own Claude account but signed out, else none. **⋯** holds,
-in order: **Share** and **Don't ask before acting** (the runtime's Share menu
-and permission bypass, for its owner); **Turn off** (confirm: agents on it stop
+in order: **Don't ask before acting** (the computer's permission bypass, for
+the team's owner and admins; a computer belongs to its team, so it has no Share
+menu); **Retry** on a `failed` computer
+(sets it up again, billing untouched); **Turn off** (confirm: agents on it stop
 until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 **Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
 period end**, **Undo cancel** while the cancellation is pending, or **Restore**
@@ -896,8 +907,8 @@ To buy one as a team admin:
    computer**. Computers are for paying teams: on a trialing subscription the
    row instead reads "Computers are available on paid plans. Your team is on a
    trial." with **Go to Billing**, and the Agents entries are hidden. The API
-   answers 403 with `code: "team_on_trial"` to offers, quote, purchase, undo
-   and restore.
+   answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
+   restore.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
    to Try it. The Computer step has the size radios (**Standard**, **Large**,

@@ -7,6 +7,7 @@
 import type {
   AgentApiKey,
   AgentSetupResponse,
+  AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -95,8 +96,6 @@ import type {
   PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
-  Quote,
-  QuoteTeamComputerParams,
   RedeemGtmInviteLinkRequest,
   ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
@@ -4988,112 +4987,6 @@ export const listTeamComputerOffers = async (
 };
 
 /**
- * @summary The price of one computer of a size for the team.
- */
-export type quoteTeamComputerResponse200 = {
-  data: Quote;
-  status: 200;
-};
-
-export type quoteTeamComputerResponse503 = {
-  data: ErrorResponse;
-  status: 503;
-};
-
-export type quoteTeamComputerResponseSuccess = quoteTeamComputerResponse200 & {
-  headers: Headers;
-};
-export type quoteTeamComputerResponseError = quoteTeamComputerResponse503 & {
-  headers: Headers;
-};
-
-export type quoteTeamComputerResponse =
-  | quoteTeamComputerResponseSuccess
-  | quoteTeamComputerResponseError;
-
-export const getQuoteTeamComputerUrl = (params: QuoteTeamComputerParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/team/computers/quote?${stringifiedParams}`
-    : `/team/computers/quote`;
-};
-
-export const quoteTeamComputer = async (
-  params: QuoteTeamComputerParams,
-  options?: RequestInit
-): Promise<quoteTeamComputerResponse> => {
-  const res = await fetch(getQuoteTeamComputerUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: quoteTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as quoteTeamComputerResponse;
-};
-
-/**
- * @summary One computer, with setup progress until it first connects.
- */
-export type getTeamComputerResponse200 = {
-  data: ComputerStatus;
-  status: 200;
-};
-
-export type getTeamComputerResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getTeamComputerResponseSuccess = getTeamComputerResponse200 & {
-  headers: Headers;
-};
-export type getTeamComputerResponseError = getTeamComputerResponse404 & {
-  headers: Headers;
-};
-
-export type getTeamComputerResponse =
-  | getTeamComputerResponseSuccess
-  | getTeamComputerResponseError;
-
-export const getGetTeamComputerUrl = (computerId: string) => {
-  return `/team/computers/${computerId}`;
-};
-
-export const getTeamComputer = async (
-  computerId: string,
-  options?: RequestInit
-): Promise<getTeamComputerResponse> => {
-  const res = await fetch(getGetTeamComputerUrl(computerId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getTeamComputerResponse;
-};
-
-/**
  * @summary Stop billing at the end of the current period.
  */
 export type cancelTeamComputerResponse200 = {
@@ -5386,7 +5279,7 @@ export const retryTeamComputer = async (
 
 /**
  * @summary Mark the guided setup after buying the computer finished. Idempotent;
-allowed to the computer's buyer and the team owner.
+allowed to the team's owner and admins, like Claude sign-in.
  */
 export type completeTeamComputerSetupResponse200 = {
   data: ComputerStatus;
@@ -6820,6 +6713,169 @@ export const deleteTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary The agent's call voice, as committed in its workspace repository.
+Requires a team admin or owner.
+ */
+export type getTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type getTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getTeamAgentVoiceResponseSuccess = getTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentVoiceResponseError = (
+  | getTeamAgentVoiceResponse400
+  | getTeamAgentVoiceResponse401
+  | getTeamAgentVoiceResponse403
+  | getTeamAgentVoiceResponse404
+  | getTeamAgentVoiceResponse500
+  | getTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentVoiceResponse =
+  | getTeamAgentVoiceResponseSuccess
+  | getTeamAgentVoiceResponseError;
+
+export const getGetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const getTeamAgentVoice = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentVoiceResponse> => {
+  const res = await fetch(getGetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Change the agent's call voice: a commit to its workspace repository that
+its next call picks up. Requires a team admin or owner.
+ */
+export type setTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type setTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamAgentVoiceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setTeamAgentVoiceResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setTeamAgentVoiceResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type setTeamAgentVoiceResponseSuccess = setTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type setTeamAgentVoiceResponseError = (
+  | setTeamAgentVoiceResponse400
+  | setTeamAgentVoiceResponse401
+  | setTeamAgentVoiceResponse403
+  | setTeamAgentVoiceResponse404
+  | setTeamAgentVoiceResponse500
+  | setTeamAgentVoiceResponse502
+) & {
+  headers: Headers;
+};
+
+export type setTeamAgentVoiceResponse =
+  | setTeamAgentVoiceResponseSuccess
+  | setTeamAgentVoiceResponseError;
+
+export const getSetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const setTeamAgentVoice = async (
+  agentUserId: string,
+  agentVoice: AgentVoice,
+  options?: RequestInit
+): Promise<setTeamAgentVoiceResponse> => {
+  const res = await fetch(getSetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentVoice),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamAgentVoiceResponse;
 };
 
 /**

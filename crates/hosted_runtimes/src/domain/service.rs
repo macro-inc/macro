@@ -13,7 +13,7 @@ use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Event, Rejected};
 use crate::domain::models::{
     Computer, ComputerName, ComputerRecord, ComputerStatus, FleetUnavailable, InvalidComputerName,
-    PurchaseBilling, Quote, Reservation, RosterComputerStatus, SizeOffer,
+    PurchaseBilling, Quote, Reservation, SizeOffer,
 };
 use crate::domain::ports::{
     Applied, Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
@@ -69,9 +69,6 @@ pub enum ComputerError {
     /// The request could not be read (an invalid principal or identifier).
     #[error("{0}")]
     BadRequest(String),
-    /// The caller's team role does not allow this.
-    #[error("only the computer's buyer or the team owner can do this")]
-    Forbidden,
     /// Confirmation does not match the computer name.
     #[error("type the computer's name to release it")]
     ConfirmationMismatch,
@@ -93,15 +90,6 @@ pub(crate) fn internal<Err: std::error::Error + Send + Sync + 'static>(
     error: Err,
 ) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
-}
-
-/// The caller's role, as far as managing a computer's setup goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TeamMemberRole {
-    /// The team's owner.
-    Owner,
-    /// Any other member, including admins.
-    Other,
 }
 
 /// Clock seam so tests control time.
@@ -194,9 +182,34 @@ impl<
         Ok(())
     }
 
-    /// Team-agent lifecycle maintenance, independent of HTTP availability gates.
-    pub fn maintenance(&self) -> ComputerMaintenance<'_> {
-        ComputerMaintenance { service: self }
+    /// An agent teammate's computer status for the team roster, with the
+    /// fleet's current availability. Unlike `status`, a detached fleet is not
+    /// refused: the roster still shows the durable state.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(ComputerStatus, crate::domain::models::FleetAttachment), ComputerError> {
+        let availability = self
+            .attachment
+            .attachment(self.clock.now())
+            .await
+            .map_err(internal)?;
+        let record = self.team_record(team_id, computer_id).await?;
+        Ok((self.status_of(&record).await?, availability))
+    }
+
+    /// Release an agent teammate's computer when the agent is removed: the
+    /// lifecycle's normal release, without fleet access or name confirmation.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerStatus, ComputerError> {
+        self.apply_for_team(team_id, computer_id, Event::ReleaseNow)
+            .await
     }
 
     /// Configure the fail-closed rollout at the composition root.
@@ -253,23 +266,9 @@ impl<
         )
     }
 
-    /// Quote using server-side team policy.
-    #[tracing::instrument(skip(self, user_id), err)]
-    pub async fn quote_for_team(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        team_id: Uuid,
-        size: ComputerSize,
-    ) -> Result<Quote, ComputerError> {
-        self.require_rollout(user_id).await?;
-        self.require_attached().await?;
-        self.quote(team_id, size, &self.purchase_billing(team_id).await?)
-            .await
-    }
-
     /// The price of one computer of `size` for the team.
     #[tracing::instrument(skip(self, billing), err)]
-    pub async fn quote(
+    async fn quote(
         &self,
         team_id: Uuid,
         size: ComputerSize,
@@ -322,9 +321,10 @@ impl<
         Ok(offers)
     }
 
-    /// One of the team's computers, or its purchase while it is being confirmed.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn status(
+    /// One of the team's computers, or its purchase while it is being
+    /// confirmed. Tests read single computers through it; no route does.
+    #[cfg(test)]
+    pub(crate) async fn status(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
@@ -392,30 +392,21 @@ impl<
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        self.apply_for_team(team_id, computer_id, Event::OperatorRetry)
+        self.apply_for_team(team_id, computer_id, Event::TeamRetry)
             .await
     }
 
     /// Record that the team finished the guided setup after buying the
-    /// computer. Idempotent: the first time is kept. Allowed to whoever may
-    /// manage the computer's Claude Code sign-in, its buyer or the team owner.
+    /// computer. Idempotent: the first time is kept. Callers authorize the
+    /// team's owner or an admin, who manage its Claude Code sign-in too.
     #[tracing::instrument(skip(self), err)]
     pub async fn complete_setup(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
-        caller: MacroUserIdStr<'static>,
-        caller_role: TeamMemberRole,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        let computer = self.team_computer(team_id, computer_id).await?;
-        let allowed = match caller_role {
-            TeamMemberRole::Owner => true,
-            TeamMemberRole::Other => computer.created_by == caller,
-        };
-        if !allowed {
-            return Err(ComputerError::Forbidden);
-        }
+        self.team_computer(team_id, computer_id).await?;
 
         let computer = self
             .repo
@@ -533,86 +524,6 @@ impl<
             Applied::Changed(computer) => Ok(*computer),
             Applied::Rejected(rejected) => Err(rejected.into()),
         }
-    }
-}
-
-/// Team-agent maintenance only; no HTTP route exposes this capability.
-pub struct ComputerMaintenance<'a> {
-    service: &'a dyn MaintenanceOperations,
-}
-
-type MaintenanceFuture<'a, T> =
-    std::pin::Pin<Box<dyn Future<Output = Result<T, ComputerError>> + Send + 'a>>;
-
-trait MaintenanceOperations: Sync {
-    fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, RosterComputerStatus>;
-    fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, ComputerStatus>;
-}
-
-impl ComputerMaintenance<'_> {
-    /// Read durable roster status without refusing a detached fleet.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> Result<RosterComputerStatus, ComputerError> {
-        self.service.status_for_roster(team_id, computer_id).await
-    }
-
-    /// Queue release through the lifecycle without fleet access or name confirmation.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> Result<ComputerStatus, ComputerError> {
-        self.service.request_release(team_id, computer_id).await
-    }
-}
-
-impl<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
-> MaintenanceOperations for ComputerService<Repo, Bill, Time, Attachment, Policy>
-{
-    fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, RosterComputerStatus> {
-        Box::pin(async move {
-            let availability = self
-                .attachment
-                .attachment(self.clock.now())
-                .await
-                .map_err(internal)?;
-            let record = self.team_record(team_id, computer_id).await?;
-            let status = self.status_of(&record).await?;
-            Ok(RosterComputerStatus {
-                status,
-                availability,
-            })
-        })
-    }
-
-    fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, ComputerStatus> {
-        Box::pin(self.apply_for_team(team_id, computer_id, Event::ReleaseNow))
     }
 }
 

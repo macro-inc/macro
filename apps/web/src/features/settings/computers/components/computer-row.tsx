@@ -96,7 +96,6 @@ export function ComputerRow(props: {
   computer: ComputerStatus;
   claude: ComputerClaudeState;
   primary?: ComputerPrimaryAction;
-  share?: ComputerMenuItem;
   menu: readonly ComputerMenuItem[];
   /** Adds the runtime's Don't ask before acting to the menu. */
   harness?: RegisteredHarness;
@@ -134,7 +133,6 @@ export function ComputerRow(props: {
           </Show>
           <ComputerActionsMenu
             name={props.computer.name}
-            share={props.share}
             items={props.menu}
             harness={props.harness}
           />

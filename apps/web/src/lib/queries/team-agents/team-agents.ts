@@ -90,6 +90,7 @@ async function createTeamAgent(vars: CreateTeamAgentArgs) {
   return await Telemetry.span('team-agent.invite', async (span) => {
     span.setAttr('team.id', vars.teamId);
     span.setAttr('computer.size', vars.request.size);
+    if (vars.request.voice) span.setAttr('voice.model', vars.request.voice);
     try {
       const agent = await throwOnErr(() =>
         teamAgentsClient.create(vars.request)

@@ -4,6 +4,7 @@ use chrono::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::account_logins::{AccountLoginNotice, ComputerAccountLogin};
 use crate::domain::models::ClaudeMode;
 use crate::domain::{
     models::PairingClaimFacts,
@@ -208,6 +209,21 @@ impl HarnessRepo for FakeRepo {
         Ok(None)
     }
 
+    async fn computer_account_logins(
+        &self,
+        _provider: AgentProvider,
+    ) -> Result<Vec<ComputerAccountLogin>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn record_login_notice(
+        &self,
+        _login_id: Uuid,
+        _notice: AccountLoginNotice,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
     async fn pairing_claim_facts(
         &self,
         _pairing_id: PairingId,
@@ -245,8 +261,12 @@ impl HarnessRepo for FakeRepo {
         _harness_id: HarnessId,
         caller: MacroUserIdStr<'static>,
     ) -> Result<HarnessAccess, Self::Err> {
-        if self.harness.as_ref().is_some_and(|h| match &h.owner {
-            HarnessOwner::User { user_id } => user_id == caller.as_ref(),
+        // As `harness_access_level`: a computer's buyer is not its owner.
+        if self.harness.as_ref().is_some_and(|h| {
+            h.computer_id.is_none()
+                && match &h.owner {
+                    HarnessOwner::User { user_id } => user_id == caller.as_ref(),
+                }
         }) {
             return Ok(HarnessAccess::Owner);
         }
@@ -683,6 +703,7 @@ async fn a_computer_harness_cannot_be_removed_like_a_paired_machine() {
                 user_id: OWNER_ID.to_owned(),
             })
         }),
+        access: HarnessAccess::Owner,
         delete_result: true,
         ..FakeRepo::default()
     };
@@ -819,6 +840,39 @@ async fn only_the_owner_opens_a_runtime_to_a_team_they_belong_to() {
         .set_team_access(caller(OWNER_ID), HarnessId::TEST_A, request())
         .await;
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
+}
+
+/// A computer's harness belongs to its team: nobody opens it to another team
+/// or closes it to its own.
+#[tokio::test]
+async fn a_computer_harness_is_never_shared_or_unshared() {
+    for enabled in [true, false] {
+        let repo = FakeRepo {
+            harness: Some(Harness {
+                computer_id: Some(COMPUTER_ID),
+                shared_team_ids: vec![TEAM_ID],
+                ..harness(user_owner(OWNER_ID))
+            }),
+            access: HarnessAccess::Owner,
+            user_has_team: true,
+            ..FakeRepo::default()
+        };
+        let result = service(repo.clone())
+            .set_team_access(
+                caller(OWNER_ID),
+                HarnessId::TEST_A,
+                SetHarnessTeamAccessRequest {
+                    team_id: Uuid::from_u128(8),
+                    enabled,
+                },
+            )
+            .await;
+        assert!(
+            matches!(&result, Err(HarnessError::ComputerHarness)),
+            "{result:?}"
+        );
+        assert!(repo.calls.lock().unwrap().team_access.is_empty());
+    }
 }
 
 #[tokio::test]
@@ -1230,6 +1284,87 @@ async fn team_members_view_a_team_harness_but_only_managers_manage_it() {
         )
         .await;
     assert!(matches!(viewed, Err(HarnessError::Unauthorized)));
+}
+
+/// A computer belongs to its team: the team's owner and admins manage it,
+/// and its buyer only while still one of them.
+#[tokio::test]
+async fn a_computer_harness_is_managed_by_its_team_admins_not_its_buyer() {
+    let computer = || {
+        Some(Harness {
+            computer_id: Some(COMPUTER_ID),
+            shared_team_ids: vec![TEAM_ID],
+            ..harness(user_owner(OWNER_ID))
+        })
+    };
+
+    // Another admin of the computer's team.
+    let repo = FakeRepo {
+        harness: computer(),
+        access: HarnessAccess::Owner,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .authorize_harness(
+            caller(MEMBER_ID),
+            HarnessId::TEST_A,
+            HarnessPermission::Manage,
+        )
+        .await
+        .unwrap();
+    let patched = service(repo)
+        .patch_harness(
+            caller(MEMBER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("Team computer".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.name, "Team computer");
+
+    // The buyer, after leaving the team.
+    let repo = FakeRepo {
+        harness: computer(),
+        access: HarnessAccess::None,
+        ..FakeRepo::default()
+    };
+    let managed = service(repo.clone())
+        .authorize_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            HarnessPermission::Manage,
+        )
+        .await;
+    assert!(
+        matches!(managed, Err(HarnessError::Unauthorized)),
+        "{managed:?}"
+    );
+    let patched = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("Mine now".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await;
+    assert!(
+        matches!(patched, Err(HarnessError::Unauthorized)),
+        "{patched:?}"
+    );
+    let deleted = service(repo.clone())
+        .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
+        .await;
+    assert!(
+        matches!(deleted, Err(HarnessError::Unauthorized)),
+        "{deleted:?}"
+    );
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+    assert!(repo.calls.lock().unwrap().deleted.is_empty());
 }
 
 #[tokio::test]

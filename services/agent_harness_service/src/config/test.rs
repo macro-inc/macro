@@ -52,7 +52,9 @@ fn config_values() -> serde_json::Value {
         "GITHUB_SYNC_APP_PEM_SECRET_KEY": "github-secret-name",
         "REPO_STORAGE_ROOT": "/data/agent-git",
         "MAX_REPO_SIZE_BYTES": 524288000,
-        "PUSHES_PER_MINUTE": 30
+        "PUSHES_PER_MINUTE": 30,
+        "LIVEKIT_API_KEY": "livekit-key",
+        "LIVEKIT_API_SECRET": "livekit-secret"
     })
 }
 
@@ -133,7 +135,9 @@ fn values() -> serde_json::Value {
         "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25,
         "REPO_STORAGE_ROOT": "/data/agent-git",
         "MAX_REPO_SIZE_BYTES": 524288000,
-        "PUSHES_PER_MINUTE": 30
+        "PUSHES_PER_MINUTE": 30,
+        "LIVEKIT_API_KEY": "livekit-key",
+        "LIVEKIT_API_SECRET": "livekit-secret"
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -308,11 +312,13 @@ fn computer_retention_and_past_due_grace_default_to_two_weeks_and_a_week_and_ref
 }
 
 #[test]
-fn agent_repo_storage_and_limits_are_required() {
+fn agent_repo_storage_limits_and_speech_credentials_are_required() {
     for key in [
         "REPO_STORAGE_ROOT",
         "MAX_REPO_SIZE_BYTES",
         "PUSHES_PER_MINUTE",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
     ] {
         let mut incomplete = values();
         incomplete.as_object_mut().unwrap().remove(key);

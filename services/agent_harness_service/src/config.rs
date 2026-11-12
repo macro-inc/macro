@@ -50,6 +50,11 @@ macro_env_var::env_vars!(
     /// The authentication service's internal key for billing settlement and
     /// linked GitHub token lookups.
     pub struct AuthenticationServiceSecretKey;
+    /// LiveKit project key the speech gateway signs inference-only tokens
+    /// with.
+    pub struct LivekitApiKey;
+    /// LiveKit project secret; never leaves the speech gateway.
+    pub struct LivekitApiSecret;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -198,6 +203,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// LiveKit project key for agent call speech.
+    pub livekit_api_key: LivekitApiKey,
+    /// LiveKit project secret for agent call speech.
+    pub livekit_api_secret: LivekitApiSecret,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this

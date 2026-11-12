@@ -39,6 +39,16 @@ export type AgentSetupResponse = {
 };
 
 /**
+ * The voice an agent speaks with on calls.
+ */
+export type AgentVoice = {
+    /**
+     * The Aura-2 model, `aura-2-<name>-<language>`.
+     */
+    model: string;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -360,8 +370,8 @@ export type ComputerStatus = {
      */
     poweredOn: boolean;
     /**
-     * The Macro user who bought it; with the team owner, the one who may
-     * finish its setup and manage its Claude account.
+     * The Macro user who bought it. The team's owner and admins, not the
+     * buyer, finish its setup and manage its Claude account.
      */
     purchasedBy: string;
     /**
@@ -376,7 +386,7 @@ export type ComputerStatus = {
     /**
      * Purchased catalog size.
      */
-    size: string;
+    size: ComputerSize;
     /**
      * Observed guest status.
      */
@@ -505,6 +515,11 @@ export type CreateTeamAgent = {
      * The computer to buy.
      */
     size: string;
+    /**
+     * The call voice picked in the invite; `None` keeps the starter
+     * agent's default.
+     */
+    voice?: string | null;
 };
 
 /**
@@ -2186,10 +2201,7 @@ export type SubscriptionBillingLineItem = {
      */
     quantity: number;
     size?: null | ComputerSize;
-    /**
-     * Computer status supplied by its owning service.
-     */
-    status?: string | null;
+    status?: null | ComputerStatusKind;
     /**
      * Provider price per unit in minor units, when fixed.
      */
@@ -4563,51 +4575,6 @@ export type ListTeamComputerOffersResponses = {
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
 
-export type QuoteTeamComputerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Purchased catalog size.
-         */
-        size: ComputerSize;
-    };
-    url: '/team/computers/quote';
-};
-
-export type QuoteTeamComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type QuoteTeamComputerError = QuoteTeamComputerErrors[keyof QuoteTeamComputerErrors];
-
-export type QuoteTeamComputerResponses = {
-    200: Quote;
-};
-
-export type QuoteTeamComputerResponse = QuoteTeamComputerResponses[keyof QuoteTeamComputerResponses];
-
-export type GetTeamComputerData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query?: never;
-    url: '/team/computers/{computer_id}';
-};
-
-export type GetTeamComputerErrors = {
-    404: ErrorResponse;
-};
-
-export type GetTeamComputerError = GetTeamComputerErrors[keyof GetTeamComputerErrors];
-
-export type GetTeamComputerResponses = {
-    200: ComputerStatus;
-};
-
-export type GetTeamComputerResponse = GetTeamComputerResponses[keyof GetTeamComputerResponses];
-
 export type UndoCancelTeamComputerData = {
     body?: never;
     path: {
@@ -5211,6 +5178,64 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type GetTeamAgentVoiceData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type GetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetTeamAgentVoiceError = GetTeamAgentVoiceErrors[keyof GetTeamAgentVoiceErrors];
+
+export type GetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type GetTeamAgentVoiceResponse = GetTeamAgentVoiceResponses[keyof GetTeamAgentVoiceResponses];
+
+export type SetTeamAgentVoiceData = {
+    body: AgentVoice;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type SetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type SetTeamAgentVoiceError = SetTeamAgentVoiceErrors[keyof SetTeamAgentVoiceErrors];
+
+export type SetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type SetTeamAgentVoiceResponse = SetTeamAgentVoiceResponses[keyof SetTeamAgentVoiceResponses];
 
 export type AgentSetupData = {
     body?: never;
