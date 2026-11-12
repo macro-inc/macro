@@ -256,6 +256,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "EditPipeline",
         "ImportPipelineCsv",
         "ExportPipelineCsv",
+        "ReadChannelMessageContext",
         "ListInitiatives",
         "ReadInitiative",
         "CreateInitiative",

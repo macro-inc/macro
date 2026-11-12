@@ -119,9 +119,9 @@ impl<Context> AuthenticatedToolService<Context> {
         definitions(&self.toolset).collect()
     }
 
-    /// Tools listed for a mode. Code mode lists `ExecuteCode`,
-    /// `DescribeCodeTools` and `ReadCodeDocs`. Native tools stay callable if a client already
-    /// knows their names.
+    /// Tools listed for a mode. Code mode lists only its own tools
+    /// (`ExecuteCode`, `DescribeCodeTools`, `ReadCodeDocs`), and only those
+    /// can be called in it.
     fn tool_definitions_for(&self, mode: ToolMode) -> Vec<Tool> {
         match (mode, &self.code_mode) {
             (ToolMode::Code, Some(code_mode)) => definitions(&code_mode.tools).collect(),
@@ -181,10 +181,11 @@ const HIDDEN_FROM_CHATGPT: [&str; 5] = [
 ];
 
 /// Whether an OAuth caller might be ChatGPT: registered under its name, or
-/// holding a token with no recorded client, which fails closed until the next
-/// refresh records one. The name is self-reported, which is fine here: this
-/// picks how tools are presented and grants nothing, and a client naming itself
-/// ChatGPT only loses code mode and the tools above.
+/// holding a token with no recorded client, which gets ChatGPT's surface until
+/// the next refresh records one. The name is self-reported, which is fine here:
+/// this picks how tools are presented and grants nothing. A client naming
+/// itself ChatGPT trades code mode for the direct native tools, which reach
+/// the same data the SDK does, and loses the tools above.
 fn may_be_chatgpt(caller: &ToolCaller) -> bool {
     match caller {
         ToolCaller::McpClient { name: None } => true,
@@ -348,6 +349,26 @@ where
             );
         }
 
+        let mode = self.tool_mode(&context.extensions);
+        if mode == ToolMode::Code
+            && !self
+                .code_mode
+                .as_ref()
+                .is_some_and(|code_mode| code_mode.tools.tools.contains_key(request.name.as_ref()))
+        {
+            return (
+                ToolCallOutcome::InvalidRequest,
+                Err(rmcp::ErrorData::resource_not_found(
+                    format!(
+                        "tool {} is not available in code mode: call ExecuteCode with the SDK \
+                         instead (DescribeCodeTools lists what it can do)",
+                        request.name
+                    ),
+                    None,
+                )),
+            );
+        }
+
         let Some(arguments) = request.arguments.map(serde_json::Value::Object) else {
             return (
                 ToolCallOutcome::InvalidRequest,
@@ -358,7 +379,7 @@ where
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())
         {
-            if self.tool_mode(&context.extensions) != ToolMode::Code {
+            if mode != ToolMode::Code {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::resource_not_found(
