@@ -1,0 +1,29 @@
+apps/web/src/lib/core/util/platformFetch.test.ts
+  s_4fc08cbaf2b471::t_49d3247d9dd140 159-172
+apps/web/src/lib/core/util/platformFetch.ts
+  s_3d62a29a435862::t_b6d6f7ae6d97be 8,10-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7e4de9a143ed4cdbe23cdfab97fc6cd8ded4d76c",
+  "prompts": {},
+  "sessions": {
+    "s_3d62a29a435862": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a7afb95-242c-4b89-9801-849d6d6f2ccd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4fc08cbaf2b471": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6754975e-d60e-426f-a9aa-13fd3308c4ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
