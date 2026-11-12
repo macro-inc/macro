@@ -10,11 +10,11 @@ const SCOPES: &str =
     "openid https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar";
 /// Set only on the child process the override test starts.
 const PROBE_TOKEN_VAR: &str = "TOKEN_SCOPES_PROBE_ACCESS_TOKEN";
-const SCOPES_LINE: &str = "token scopes: ";
 
 /// The scope discovery `/email/init` runs, with the token-info URL resolved
-/// from this process's environment as startup resolves it. It does nothing
-/// unless `override_sends_scope_discovery_to_a_local_server` started it.
+/// from this process's environment by `GoogleOauthTokenInfoUrl::new()`, the
+/// call startup makes. It does nothing unless
+/// `override_sends_scope_discovery_to_a_local_server` started it.
 #[tokio::test]
 async fn token_scopes_probe_process() {
     let Some(access_token) = std::env::var_os(PROBE_TOKEN_VAR) else {
@@ -24,7 +24,7 @@ async fn token_scopes_probe_process() {
     let scopes = fetch_token_scopes(&token_info_url, access_token.to_str().unwrap())
         .await
         .unwrap();
-    println!("{SCOPES_LINE}{}", scopes.join(" "));
+    assert_eq!(scopes.join(" "), SCOPES);
 }
 
 #[tokio::test]
@@ -59,10 +59,14 @@ async fn override_sends_scope_discovery_to_a_local_server() {
         std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", probe.as_str(), "--nocapture"])
             .env_clear()
-            // Keep only the dynamic loader's search paths; the parent's
-            // configuration, credentials and proxies stay out.
+            // Keep only the dynamic loader's search paths and the CA bundle
+            // the HTTP client loads; the parent's configuration, credentials
+            // and proxies stay out.
             .envs(
                 [
+                    "SSL_CERT_FILE",
+                    "SSL_CERT_DIR",
+                    "NIX_SSL_CERT_FILE",
                     "LD_LIBRARY_PATH",
                     "NIX_LD",
                     "NIX_LD_LIBRARY_PATH",
@@ -84,17 +88,13 @@ async fn override_sends_scope_discovery_to_a_local_server() {
     .unwrap();
     server.abort();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
-        "{stdout}\n{}",
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let scopes = stdout
-        .lines()
-        .find_map(|line| line.strip_prefix(SCOPES_LINE))
-        .unwrap_or_else(|| panic!("the probe test did not run:\n{stdout}"));
-    assert_eq!(scopes, SCOPES);
+    // Also fails if the probe matched no test and ran nothing.
     assert_eq!(
         *received.lock().unwrap(),
         [HashMap::from([(

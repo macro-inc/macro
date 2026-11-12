@@ -290,9 +290,11 @@ the gateway `/email` prefix.
   under the gate's live cap. Don't record message content or addresses on
   its spans.
 - To run against `crates/gmail_emulator` instead of Google, set the
-  `OVERRIDE_*` variables its AGENTS.md lists; without
-  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL`, `/email/init` sends the emulator's
-  token to Google, finds no scopes and starts no calendar sync.
+  `OVERRIDE_*` variables its AGENTS.md lists. Without
+  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL`, an `/email/init` with no OAuth
+  attempt asks Google about the emulator's token: discovery fails with a
+  warning, no calendar grant is recorded and calendar sync never starts,
+  though init succeeds.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer
