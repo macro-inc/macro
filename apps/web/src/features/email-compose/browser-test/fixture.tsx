@@ -23,6 +23,7 @@ import { DraftRecoveryFixture } from './draft-recovery-fixture';
 import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
 import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
+import { SyncStatusFixture } from './sync-status-fixture';
 
 type ScheduledItem = {
   id: string;
@@ -363,6 +364,8 @@ render(
       <ScheduleRecoveryFixture />
     ) : new URLSearchParams(location.search).has('android-back') ? (
       <AndroidBackFixture />
+    ) : new URLSearchParams(location.search).has('sync-status') ? (
+      <SyncStatusFixture />
     ) : (
       <Fixture />
     ),
