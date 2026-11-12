@@ -4,28 +4,15 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 
-const originalAnimate = Object.getOwnPropertyDescriptor(
-  Element.prototype,
-  'animate'
-);
-
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  if (originalAnimate)
-    Object.defineProperty(Element.prototype, 'animate', originalAnimate);
-  else Reflect.deleteProperty(Element.prototype, 'animate');
 });
 
 it('keeps the context menu and keyboard focus during a pending copy', async () => {
   let finish!: () => void;
   const copy = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-  const animate = vi.fn(() => ({ cancel: vi.fn() }));
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({ matches: false }))
-  );
   vi.stubGlobal(
     'MutationObserver',
     class {
@@ -33,10 +20,6 @@ it('keeps the context menu and keyboard focus during a pending copy', async () =
       disconnect() {}
     }
   );
-  Object.defineProperty(Element.prototype, 'animate', {
-    configurable: true,
-    value: animate,
-  });
   render(() => (
     <ContextMenu>
       <ContextMenu.Trigger as="button">Actions</ContextMenu.Trigger>

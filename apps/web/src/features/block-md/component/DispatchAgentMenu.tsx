@@ -326,6 +326,12 @@ export function DispatchAgentButton(
   const [open, setOpen] = createSignal(false);
   const { blockId, isTask, lastUsed, executeAction, executeLastUsed } =
     useDispatchAgentAction();
+  const primaryIcon = () => (
+    <Dynamic
+      component={lastUsed().buttonIcon ?? lastUsed().icon}
+      class="size-3.5!"
+    />
+  );
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
@@ -339,15 +345,14 @@ export function DispatchAgentButton(
           component={
             lastUsed().key === 'copy' ? CopyButton : ButtonGroup.Button
           }
-          {...(lastUsed().key === 'copy' ? { as: ButtonGroup.Button } : {})}
+          {...(lastUsed().key === 'copy'
+            ? { as: ButtonGroup.Button, icon: primaryIcon() }
+            : {})}
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
           class="@max-[600px]/split-header:w-7 @max-[600px]/split-header:p-0"
         >
-          <Dynamic
-            component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3.5!"
-          />
+          <Show when={lastUsed().key !== 'copy'}>{primaryIcon()}</Show>
           <Show when={props.showPrimaryLabel}>
             <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
               {lastUsed().name}

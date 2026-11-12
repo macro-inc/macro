@@ -1,17 +1,16 @@
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
 import { mergeRefs } from '@solid-primitives/refs';
-import { children, type JSX, splitProps, type ValidComponent } from 'solid-js';
+import { type JSX, Show, splitProps, type ValidComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { cn } from '../utils/classname';
+import { createCopyState } from '../utils/create-copy-state';
 import { Button, type ButtonProps } from './Button';
-import { createCopyFeedback } from './CopyFeedback';
+import { CopyFeedback } from './CopyFeedback';
 
 export type CopyButtonProps<T extends ValidComponent = 'button'> =
-  PolymorphicProps<T, Omit<ButtonProps, 'as'>>;
+  PolymorphicProps<T, Omit<ButtonProps, 'as'>> & { icon?: JSX.Element };
 
 /**
- * Button with copy-success feedback, using the same props and children.
- * The first SVG fades to a check-circle without changing its layout or size.
+ * Button with an explicit icon that blurs and fades to a check on copy success.
  *
  * @do Return the clipboard promise from onClick so feedback waits for success.
  * @do Return false (or reject) when copying fails; report errors in the handler.
@@ -26,38 +25,34 @@ export function CopyButton<T extends ValidComponent = 'button'>(
     'children',
     'ref',
     'as',
-    'class',
+    'icon',
   ]);
   let button!: HTMLButtonElement;
-  const { activate, CopyFeedback } = createCopyFeedback(() => button);
+  const { copy, copied } = createCopyState();
 
   const onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent> = async (
     event
   ) => {
     const handler = local.onClick;
     if (!handler || button.disabled) return;
-    await activate(() =>
+    await copy(() =>
       typeof handler === 'function'
         ? handler(event)
         : handler[0](handler[1], event)
     );
   };
 
-  const content = children(() => (
-    <>
-      {local.children}
-      <CopyFeedback />
-    </>
-  ));
   return (
     <Dynamic
       component={local.as ?? Button}
       {...rest}
-      class={cn('relative', local.class)}
       ref={mergeRefs((element) => (button = element), local.ref)}
       on:click={onClick}
     >
-      {content()}
+      <Show when={local.icon}>
+        {(icon) => <CopyFeedback copied={copied()}>{icon()}</CopyFeedback>}
+      </Show>
+      {local.children}
     </Dynamic>
   );
 }

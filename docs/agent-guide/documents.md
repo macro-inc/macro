@@ -128,7 +128,7 @@ and Project when enabled. Defaults apply only without a saved pin list; customiz
 pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
-views. Successful copies briefly animate the icon to a solid green check-circle;
+views. Successful copies briefly blur and fade the icon to a plain green check;
 they do not show a success toast.
 
 Embedded code files, canvases, and PDFs in Markdown documents show their content

@@ -41,41 +41,26 @@ it('keeps an item with a disabled reason reachable, described, and inert', () =>
 it('keeps copy items open, waits for completion, and guards pending activations', async () => {
   let finish!: () => void;
   const copy = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
-  const animate = vi.fn<Element['animate']>(
-    () => ({ cancel: vi.fn() }) as unknown as Animation
-  );
-  const originalAnimate = Element.prototype.animate;
-  Element.prototype.animate = animate as unknown as Element['animate'];
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({ matches: true }))
-  );
-  try {
-    render(() => (
-      <Dropdown open>
-        <Dropdown.Trigger>Actions</Dropdown.Trigger>
-        <Dropdown.Content>
-          <Dropdown.CopyItem onCopy={copy}>Copy link</Dropdown.CopyItem>
-        </Dropdown.Content>
-      </Dropdown>
-    ));
-    const item = screen.getByRole('menuitem', { name: 'Copy link' });
-    item.focus();
-    fireEvent.keyDown(item, { key: 'Enter' });
-    fireEvent.click(item);
-    expect(copy).toHaveBeenCalledOnce();
-    expect(item.querySelector('[data-copy-feedback]')).toBeNull();
-    finish();
-    await Promise.resolve();
-    expect(item.querySelector('[data-copy-feedback]')).not.toBeNull();
-    expect(item.textContent).toBe('Copy link');
-    expect(document.activeElement).toBe(item);
-    expect(screen.getByRole('menu')).toBeTruthy();
-    expect(animate.mock.calls[0][1]).toMatchObject({ duration: 0 });
-  } finally {
-    Element.prototype.animate = originalAnimate;
-    vi.unstubAllGlobals();
-  }
+  render(() => (
+    <Dropdown open>
+      <Dropdown.Trigger>Actions</Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.CopyItem onCopy={copy}>Copy link</Dropdown.CopyItem>
+      </Dropdown.Content>
+    </Dropdown>
+  ));
+  const item = screen.getByRole('menuitem', { name: 'Copy link' });
+  item.focus();
+  fireEvent.keyDown(item, { key: 'Enter' });
+  fireEvent.click(item);
+  expect(copy).toHaveBeenCalledOnce();
+  expect(item.querySelector('[data-copy-feedback]')).toBeNull();
+  finish();
+  await Promise.resolve();
+  expect(item.querySelector('[data-copy-feedback]')).not.toBeNull();
+  expect(item.textContent).toBe('Copy link');
+  expect(document.activeElement).toBe(item);
+  expect(screen.getByRole('menu')).toBeTruthy();
 });
 
 it.each([() => false, () => Promise.reject(new Error('denied'))])(

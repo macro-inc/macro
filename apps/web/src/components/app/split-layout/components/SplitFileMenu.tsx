@@ -174,6 +174,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
     if (action.copy)
       return (
         <Dropdown.CopyItem
+          icon={<Dynamic component={action.icon ?? Copy} class="size-4" />}
           onCopy={async () => (await action.action?.()) !== false}
         >
           <SplitMenuItemContent {...action} icon={undefined} />
@@ -185,8 +186,8 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         when={children().length > 0}
         fallback={
           <Dropdown.Item
-            onSelect={async () => {
-              await action.action?.();
+            onSelect={() => {
+              fireAndForget(action.action?.(), 'split-file-menu');
               props.onOpenChange(false);
             }}
           >
@@ -283,8 +284,13 @@ function MobileRender(
           as={MobileDrawer.Item}
           class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
           onClick={() => action.action?.()}
+          icon={<Dynamic component={action.icon ?? Copy} class="size-4" />}
         >
-          <SplitMenuItemContent {...action} showHotkey={false} />
+          <SplitMenuItemContent
+            {...action}
+            icon={undefined}
+            showHotkey={false}
+          />
         </CopyButton>
       );
 
@@ -295,8 +301,8 @@ function MobileRender(
           <MobileDrawer.Item
             type="button"
             class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
-            onClick={async (e) => {
-              await action.action?.(e);
+            onClick={(e) => {
+              fireAndForget(action.action?.(e), 'split-file-menu');
               props.onOpenChange(false);
             }}
           >

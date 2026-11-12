@@ -23,8 +23,7 @@ export function CrmCopyLinkButton(props: {
       size={size()}
       tooltip={`Copy ${props.type} link`}
       onClick={copyLink}
-    >
-      <LinkIcon class="size-4 touch:size-6" />
-    </CopyButton>
+      icon={<LinkIcon class="size-4 touch:size-6" />}
+    ></CopyButton>
   );
 }

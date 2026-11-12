@@ -238,9 +238,8 @@ export function PrDetailActions(props: {
             tooltip="Copy Share Link"
             size="icon-sm"
             onClick={copyLink}
-          >
-            <IconLink class="size-3.5" />
-          </CopyButton>
+            icon={<IconLink class="size-3.5" />}
+          ></CopyButton>
         </HeaderActionGroup>
         <PullRequestActionsButton actions={props.actions} />
       </Show>

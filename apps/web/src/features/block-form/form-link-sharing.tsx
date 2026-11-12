@@ -32,8 +32,8 @@ export function FormLinkSharing(props: {
           <CopyButton
             variant="secondary"
             onClick={() => copy(props.editorLink, { silent: true })}
+            icon={<Copy class="size-4" />}
           >
-            <Copy class="size-4" />
             Copy editor link
           </CopyButton>
         </div>

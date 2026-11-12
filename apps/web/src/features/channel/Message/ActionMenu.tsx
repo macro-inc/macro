@@ -74,10 +74,15 @@ function ActionButton(props: {
 }) {
   const copy = () =>
     props.action.id === 'copy-link' || props.action.id === 'copy-message-text';
+  const icon = () =>
+    renderIcon(
+      props.action.icon,
+      cn(props.action.iconClass, props.action.class)
+    );
   return (
     <Dynamic
       component={copy() ? CopyButton : Toolbar.Button}
-      {...(copy() ? { as: Toolbar.Button } : {})}
+      {...(copy() ? { as: Toolbar.Button, icon: icon() } : {})}
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
@@ -85,10 +90,7 @@ function ActionButton(props: {
       tooltip={props.action.label}
       class={props.action.class}
     >
-      {renderIcon(
-        props.action.icon,
-        cn(props.action.iconClass, props.action.class)
-      )}
+      <Show when={!copy()}>{icon()}</Show>
     </Dynamic>
   );
 }

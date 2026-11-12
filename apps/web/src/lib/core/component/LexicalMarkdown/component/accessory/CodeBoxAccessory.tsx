@@ -283,9 +283,10 @@ export function CodeBoxAccessory(props: {
                 e.preventDefault();
                 return copyCode();
               }}
-            >
-              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-            </CopyButton>
+              icon={
+                <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
+            ></CopyButton>
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
@@ -450,9 +451,10 @@ export const StaticCodeBoxAccessory = (props: {
               e.preventDefault();
               return copyCode();
             }}
-          >
-            <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </CopyButton>
+            icon={
+              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            }
+          ></CopyButton>
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>

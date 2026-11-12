@@ -10,8 +10,8 @@ alwaysApply: false
 
 Components, styling, and interaction conventions.
 
-- Render More-menu actions with the appropriate shared interface icon, including Mute and Change icon.
-- Keep clipboard menu actions open and acknowledge successful copies with the shared green-check feedback instead of success toasts; preserve failure feedback and unchanged labels.
+- Give top-level More-menu actions one appropriate shared interface icon; keep simple choice lists such as mute durations text-only.
+- Keep clipboard menu actions open and transition their explicit icon to a plain green check with CSS blur/fade after success; share copy state, not DOM inspection, and preserve failure feedback and labels.
 
 - **FE-22** Pending or permission-gated actions render as a dimmed version of
   the real UI with inline accept/reject controls — not a generic placeholder

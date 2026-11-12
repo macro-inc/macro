@@ -10,8 +10,9 @@ import {
   highlightFirstMenuItemOnOpen,
   Layer,
 } from '@ui';
-import { createCopyFeedback } from '@ui/components/CopyFeedback';
+import { CopyFeedback } from '@ui/components/CopyFeedback';
 import { Hotkey } from '@ui/components/Hotkey';
+import { createCopyState } from '@ui/utils/create-copy-state';
 import {
   type Component,
   type ComponentProps,
@@ -42,7 +43,6 @@ type BaseMenuItemWrapperProps = {
   closeOnSelect?: boolean;
   selectorType?: 'checkbox' | 'radio';
   class?: string;
-  ref?: (element: HTMLElement) => void;
 };
 
 type CheckboxMenuItemWrapperProps = BaseMenuItemWrapperProps & {
@@ -93,7 +93,6 @@ function MenuItemWrapper(props: MenuItemWrapperProps) {
           disabled={props.disabled}
           onSelect={props.onClick}
           closeOnSelect={props.closeOnSelect}
-          ref={props.ref}
         >
           {props.children}
         </ContextMenu.Item>
@@ -112,8 +111,6 @@ type BaseMenuItemProps = {
   class?: string;
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
-  ref?: (element: HTMLElement) => void;
-  feedback?: JSX.Element;
 };
 
 type CheckboxMenuItemProps = BaseMenuItemProps & {
@@ -145,6 +142,25 @@ type MenuItemProps =
 
 export const MENU_ITEM_CLASS = `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`;
 
+function MenuItemIcon(props: Pick<BaseMenuItemProps, 'icon' | 'iconClass'>) {
+  return (
+    <Show when={props.icon}>
+      {typeof props.icon === 'function' ? (
+        <Dynamic
+          component={props.icon}
+          class={cn(
+            'shrink-0',
+            isMobile() ? 'size-5' : 'size-4',
+            props.iconClass
+          )}
+        />
+      ) : (
+        props.icon
+      )}
+    </Show>
+  );
+}
+
 /**
  * A context-menu item with consistent styling.
  *
@@ -162,7 +178,6 @@ export function MenuItem(props: MenuItemProps) {
         props.class
       )}
       onClick={props.onClick}
-      ref={props.ref}
       disabled={props.disabled}
       closeOnSelect={props.closeOnSelect}
       selectorType={props.selectorType}
@@ -205,23 +220,7 @@ export function MenuItem(props: MenuItemProps) {
           />
         </div>
       </Show>
-      <Show when={props.icon}>
-        <Show when={typeof props.icon === 'function'}>
-          <Dynamic
-            component={
-              props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-            }
-            class={cn(
-              'shrink-0',
-              isMobile() ? 'size-5' : 'size-4',
-              props.iconClass
-            )}
-          />
-        </Show>
-        <Show when={typeof props.icon === 'object'}>
-          {props.icon as JSX.Element}
-        </Show>
-      </Show>
+      <MenuItemIcon icon={props.icon} iconClass={props.iconClass} />
       <Show when={props.text}>
         <div class="flex-1 truncate pr-[2em]">{props.text}</div>
       </Show>
@@ -234,31 +233,30 @@ export function MenuItem(props: MenuItemProps) {
           showPlus
         />
       </Show>
-      {props.feedback}
     </MenuItemWrapper>
   );
 }
 
 /** Context-menu copy action with unchanged label and persistent focus. */
-export type CopyMenuItemProps = Omit<
-  GenericMenuItemProps,
-  'onClick' | 'ref' | 'feedback'
-> & {
+export type CopyMenuItemProps = Omit<GenericMenuItemProps, 'onClick'> & {
   onCopy: () => void | boolean | Promise<void | boolean>;
 };
 
 export function CopyMenuItem(props: CopyMenuItemProps) {
-  let item: HTMLElement | undefined;
-  const { activate, CopyFeedback } = createCopyFeedback(() => item);
+  const { copy, copied } = createCopyState();
   return (
     <MenuItem
       {...props}
-      class={cn('relative', props.class)}
-      icon={props.icon ?? CopyIcon}
-      ref={(element) => (item = element)}
+      icon={
+        <CopyFeedback copied={copied()}>
+          <MenuItemIcon
+            icon={props.icon ?? CopyIcon}
+            iconClass={props.iconClass}
+          />
+        </CopyFeedback>
+      }
       closeOnSelect={false}
-      onClick={() => activate(props.onCopy)}
-      feedback={<CopyFeedback />}
+      onClick={() => copy(props.onCopy)}
     />
   );
 }

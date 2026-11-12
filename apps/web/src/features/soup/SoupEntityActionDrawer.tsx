@@ -93,15 +93,17 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                                   as={MobileDrawer.Item}
                                   disabled={action.disabled}
                                   onClick={() => action.onClick()}
+                                  icon={
+                                    <Show when={action.icon}>
+                                      {(icon) => (
+                                        <Dynamic
+                                          component={icon()}
+                                          class="size-4 shrink-0"
+                                        />
+                                      )}
+                                    </Show>
+                                  }
                                 >
-                                  <Show when={action.icon}>
-                                    {(icon) => (
-                                      <Dynamic
-                                        component={icon()}
-                                        class="size-4 shrink-0"
-                                      />
-                                    )}
-                                  </Show>
                                   {action.label}
                                 </CopyButton>
                               }

@@ -12,8 +12,8 @@ function VariantsDemo() {
           <CopyButton
             variant={variant}
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
+            icon={<CopyIcon class="size-4" />}
           >
-            <CopyIcon class="size-4" />
             Copy {variant}
           </CopyButton>
         )}
@@ -35,8 +35,8 @@ function SizesDemo() {
             size={size}
             variant="secondary"
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
+            icon={<CopyIcon class="size-4" />}
           >
-            <CopyIcon class="size-4" />
             {size !== 'icon-md' && 'Copy'}
           </CopyButton>
         )}
@@ -50,7 +50,7 @@ export default defineDoc({
   name: 'CopyButton',
   category: 'Actions',
   description:
-    'A normal Button that fades its first icon to a solid green check-circle after its onClick handler succeeds. Return the copy promise; return false or reject on failure. Text-only buttons keep their content unchanged.',
+    'A normal Button with an explicit icon slot that blurs and fades to a green check after its onClick handler succeeds. Return the copy promise; return false or reject on failure. Feedback resets after the last successful copy; text-only buttons keep their content unchanged.',
   status: 'stable',
   exports: ['CopyButton'],
   import: "import { CopyButton } from '@ui';",

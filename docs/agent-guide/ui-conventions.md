@@ -50,20 +50,23 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 
 ## More menus
 
-Action rows use the appropriate shared interface icon, including Mute and Change
-icon. Copy actions retain the open menu and focused row; the original icon changes
-to a green check after the clipboard write succeeds, then returns. Labels remain
-unchanged and success toasts do not appear. A failed copy keeps the original icon
-and reports the error. The same behavior applies to mobile action sheets.
+Top-level action rows use one appropriate shared interface icon, including Mute
+and Change icon; simple choices such as mute durations stay text-only. Copy actions
+retain the open menu and focused row; the explicit icon blurs and fades to a plain
+green check after the clipboard write succeeds, then resets after the last copy.
+Labels remain unchanged and success toasts do not appear. A failed copy keeps the
+original icon and reports the error. The same behavior applies to mobile action
+sheets. Non-copy actions still close immediately without waiting for their work.
 
 ## Entity icons and colors
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
 **Change icon** after Rename in an entity menu, with its appearance icon.
-Document and task-project header icons open the picker separately from their
-breadcrumb name's navigation button. Header buttons are 24px with unchanged 16px glyphs and the
-shared larger touch targets. Row icons still navigate. Sidebar category icons do
+Editable document and task-project header icons open the picker separately from
+their breadcrumb name's navigation button. Read-only and flag-disabled icons stay
+inside that navigation button. Header buttons are 24px with unchanged 16px glyphs
+and the shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.
 Document content titles have no leading icon. Without a custom icon, **Add icon**

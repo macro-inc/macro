@@ -291,10 +291,12 @@ export function ActionDrawer() {
                                 silent: true,
                               });
                             }}
+                            icon={
+                              <span class="size-5 flex items-center justify-center shrink-0">
+                                {renderIcon(action.icon)}
+                              </span>
+                            }
                           >
-                            <span class="size-5 flex items-center justify-center shrink-0">
-                              {renderIcon(action.icon)}
-                            </span>
                             {action.label}
                           </CopyButton>
                         }

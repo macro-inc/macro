@@ -30,9 +30,8 @@ export function CopySubjectButton(props: {
         aria-label="Copy subject"
         class={cn('align-middle text-inherit', props.class)}
         onClick={handleCopy}
-      >
-        <CopyIcon class="size-3.5" />
-      </CopyButton>
+        icon={<CopyIcon class="size-3.5" />}
+      ></CopyButton>
     </Show>
   );
 }

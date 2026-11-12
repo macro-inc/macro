@@ -65,6 +65,7 @@ import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockw
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import CubeIcon from '@icon/system/regular/cube.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
@@ -78,7 +79,6 @@ import LinkIcon from '@icon/system/regular/link.svg';
 import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
-import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
@@ -376,7 +376,7 @@ export function createSoupEntityActions(
       if (openableEntity('split')) {
         topItems.push({
           id: 'open-in-split',
-          icon: SidebarIcon,
+          icon: SplitIcon,
           label: t('entityActions.openInNewSplit'),
           shortcut: 'shift+enter',
           // A layout with no room for another split cannot honor this: the open

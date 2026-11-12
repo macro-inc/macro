@@ -1,60 +1,32 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCopyState } from '../utils/create-copy-state';
 import { ButtonGroup } from './ButtonGroup';
 import { CopyButton } from './CopyButton';
 
-const cancel = vi.fn();
-const connectedAtAnimation: boolean[] = [];
-const animate = vi.fn<Element['animate']>(function (this: Element) {
-  connectedAtAnimation.push(this.isConnected);
-  return { cancel } as unknown as Animation;
-});
-const originalAnimate = Object.getOwnPropertyDescriptor(
-  Element.prototype,
-  'animate'
-);
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => ({ matches: false }))
-  );
-  Object.defineProperty(Element.prototype, 'animate', {
-    configurable: true,
-    value: animate,
-  });
-});
-
+beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-  vi.clearAllMocks();
-  connectedAtAnimation.length = 0;
-  if (originalAnimate)
-    Object.defineProperty(Element.prototype, 'animate', originalAnimate);
-  else Reflect.deleteProperty(Element.prototype, 'animate');
 });
 
 describe('CopyButton', () => {
   it('copies inside editor containers that stop native click propagation', async () => {
     const copy = vi.fn().mockResolvedValue(undefined);
-    const view = render(() => (
+    render(() => (
       <div on:click={(event) => event.stopPropagation()}>
-        <CopyButton aria-label="Copy code" tooltip="Copy code" onClick={copy}>
-          <svg />
-        </CopyButton>
+        <CopyButton aria-label="Copy code" onClick={copy} icon={<svg />} />
       </div>
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    const button = screen.getByRole('button', { name: 'Copy code' });
+    fireEvent.click(button);
     await Promise.resolve();
     expect(copy).toHaveBeenCalledOnce();
-    expect(view.container.querySelector('[data-copy-feedback]')).not.toBeNull();
+    expect(button.querySelector('[data-copy-feedback]')).not.toBeNull();
   });
 
-  it('waits for success, preserves the existing icon, and restores it after feedback', async () => {
+  it('waits for success and guards pending activations without replacing content', async () => {
     let complete!: () => void;
     const copy = vi.fn(
       () => new Promise<void>((resolve) => (complete = resolve))
@@ -66,52 +38,42 @@ describe('CopyButton', () => {
           as={ButtonGroup.Button}
           ref={(element) => (forwardedRef = element)}
           onClick={copy}
+          icon={<svg data-original-icon />}
         >
-          <svg aria-hidden="true" style={{ width: '18px', height: '18px' }} />
           Copy
         </CopyButton>
       </ButtonGroup>
     ));
     const button = screen.getByRole('button', { name: 'Copy' });
-    const original = button.querySelector('svg')!;
-    vi.spyOn(original, 'getBoundingClientRect').mockReturnValue({
-      left: 8,
-      top: 7,
-      width: 18,
-      height: 18,
-    } as DOMRect);
+    const original = button.querySelector('[data-original-icon]');
     expect(forwardedRef).toBe(button);
     expect(button.getAttribute('data-variant')).toBe('outline');
     expect(button.getAttribute('data-size')).toBe('md');
     fireEvent.click(button);
     fireEvent.click(button);
-    expect(copy).toHaveBeenCalledTimes(1);
+    expect(copy).toHaveBeenCalledOnce();
     expect(button.querySelector('[data-copy-feedback]')).toBeNull();
     complete();
     await Promise.resolve();
-    const check = button.querySelector<SVGElement>('[data-copy-feedback]')!;
-    expect(check.style.width).toBe('18px');
-    expect(check.style.height).toBe('18px');
-    expect(button.querySelector('svg')).toBe(original);
+    expect(button.querySelector('[data-copy-feedback]')).not.toBeNull();
+    expect(button.querySelector('[data-original-icon]')).toBe(original);
     expect(button.textContent).toBe('Copy');
-    expect(connectedAtAnimation).toEqual([true, true]);
-    await vi.advanceTimersByTimeAsync(1600);
+    await vi.advanceTimersByTimeAsync(1400);
     expect(button.querySelector('[data-copy-feedback]')).toBeNull();
-    expect(cancel).toHaveBeenCalled();
   });
 
   it.each([() => false, () => Promise.reject(new Error('denied'))])(
     'does not signal success on a failed copy',
     async (copy) => {
       render(() => (
-        <CopyButton onClick={copy}>
-          <svg />
+        <CopyButton onClick={copy} icon={<svg />}>
           Copy
         </CopyButton>
       ));
-      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+      const button = screen.getByRole('button', { name: 'Copy' });
+      fireEvent.click(button);
       await Promise.resolve();
-      expect(animate).not.toHaveBeenCalled();
+      expect(button.querySelector('[data-copy-feedback]')).toBeNull();
     }
   );
 
@@ -125,44 +87,63 @@ describe('CopyButton', () => {
     expect(button.querySelector('svg')).toBeNull();
   });
 
-  it('does not animate after unmount while a copy is pending', async () => {
-    let complete!: () => void;
-    const view = render(() => (
-      <CopyButton
-        onClick={() => new Promise<void>((resolve) => (complete = resolve))}
-      >
-        <svg />
-        Copy
-      </CopyButton>
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
-    view.unmount();
-    complete();
-    await Promise.resolve();
-    expect(animate).not.toHaveBeenCalled();
-  });
-
-  it('respects reduced motion and disabled buttons', async () => {
-    vi.mocked(window.matchMedia).mockReturnValue({
-      matches: true,
-    } as MediaQueryList);
+  it('does not activate disabled buttons', () => {
     const copy = vi.fn();
     render(() => (
-      <CopyButton onClick={copy}>
-        <svg />
+      <CopyButton disabled onClick={copy}>
         Copy
       </CopyButton>
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
-    await Promise.resolve();
-    expect(animate.mock.calls[0][1]).toMatchObject({ duration: 0 });
-    cleanup();
-    render(() => (
-      <CopyButton disabled onClick={copy}>
-        Disabled
-      </CopyButton>
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Disabled' }));
-    expect(copy).toHaveBeenCalledTimes(1);
+    expect(copy).not.toHaveBeenCalled();
+  });
+});
+
+describe('createCopyState', () => {
+  it('debounces reset from the latest successful copy', async () => {
+    const { copy, copied, dispose } = createRoot((dispose) => ({
+      ...createCopyState(),
+      dispose,
+    }));
+    await copy(() => true);
+    expect(copied()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    await copy(() => true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(copied()).toBe(true);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(copied()).toBe(false);
+    dispose();
+  });
+
+  it.each([() => false, () => Promise.reject(new Error('denied'))])(
+    'clears previous success when the next copy fails',
+    async (fail) => {
+      const { copy, copied, dispose } = createRoot((dispose) => ({
+        ...createCopyState(),
+        dispose,
+      }));
+      await copy(() => true);
+      await copy(fail);
+      expect(copied()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      dispose();
+    }
+  );
+
+  it('ignores pending completion after disposal', async () => {
+    let complete!: () => void;
+    const { copy, copied, dispose } = createRoot((dispose) => ({
+      ...createCopyState(),
+      dispose,
+    }));
+    const pending = copy(
+      () => new Promise<void>((resolve) => (complete = resolve))
+    );
+    dispose();
+    complete();
+    await pending;
+    expect(copied()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

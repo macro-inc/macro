@@ -16,6 +16,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { cn } from '../utils/classname';
+import { createCopyState } from '../utils/create-copy-state';
 import {
   addCtrlJKMenuNavigation,
   highlightFirstMenuItemOnOpen,
@@ -26,7 +27,7 @@ import {
   type SelectionDismissal,
 } from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
-import { createCopyFeedback } from './CopyFeedback';
+import { CopyFeedback } from './CopyFeedback';
 import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
 import { Tooltip } from './Tooltip';
@@ -116,6 +117,7 @@ export type DropdownCopyItemProps = Omit<
   'onSelect' | 'closeOnSelect' | 'disabledReason' | 'children'
 > & {
   onCopy: () => void | boolean | Promise<void | boolean>;
+  icon?: JSX.Element;
   children: JSX.Element;
 };
 export type DropdownMultiSelectItemProps = Omit<
@@ -516,24 +518,20 @@ function DropdownCopyItem(props: DropdownCopyItemProps) {
     'onCopy',
     'children',
     'ref',
-    'class',
+    'icon',
   ]);
-  let item: HTMLElement | undefined;
-  const { activate, CopyFeedback } = createCopyFeedback(() => item);
+  const { copy, copied } = createCopyState();
   return (
     <DropdownItem
       {...rest}
-      class={cn('relative', local.class)}
-      ref={(element: HTMLElement) => {
-        item = element;
-        callRef(local.ref, element);
-      }}
+      ref={local.ref}
       closeOnSelect={false}
-      onSelect={() => activate(local.onCopy)}
+      onSelect={() => copy(local.onCopy)}
     >
-      <CopyIcon class="size-4 shrink-0" aria-hidden="true" />
+      <CopyFeedback copied={copied()}>
+        {local.icon ?? <CopyIcon class="size-4 shrink-0" />}
+      </CopyFeedback>
       {local.children}
-      <CopyFeedback />
     </DropdownItem>
   );
 }
