@@ -6,14 +6,6 @@ import type {
   MessageVisibility,
 } from '@service-storage/messages';
 
-/**
- * A reaction as the row shows it; `names` names reactors outside Macro
- * (an external chat's people), by their id in `users`.
- */
-export type MessageReaction = CountedReaction & {
-  names?: Record<string, string>;
-};
-
 export type MessageData = {
   /** Set on a call's root, which stands for the call rather than a message. */
   kind?: 'message' | 'call_root';
@@ -32,7 +24,7 @@ export type MessageData = {
   edited_at?: string | null;
   thread_id?: string | null;
   attachments: MessageAttachment[];
-  reactions: MessageReaction[];
+  reactions: CountedReaction[];
 };
 
 export type MessageActionEvent = MouseEvent | KeyboardEvent;

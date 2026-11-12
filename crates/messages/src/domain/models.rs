@@ -372,6 +372,10 @@ pub struct CountedReaction {
     pub emoji: String,
     /// User identifiers.
     pub users: Vec<String>,
+    /// Display names for reactors whose account identity is not visible to this viewer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(nullable = false))]
+    pub names: Option<std::collections::HashMap<String, String>>,
 }
 
 /// An entity attached to a message.

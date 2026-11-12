@@ -57,6 +57,32 @@
   padding-inline: 26px;
 }
 
+/* The mail providers the inbox connects to, under the call to action. */
+.email-page-hero-providers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  margin-top: 20px;
+  color: var(--feature-copy-color, var(--color-ink-muted));
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.email-page-hero-providers span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink);
+}
+
+.email-page-hero-providers svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
 /* Get started, then the Block's "Watch demo" tutorial. */
 .feature-page-hero-actions {
   display: flex;

@@ -426,6 +426,11 @@ pub struct ReactionResult {
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
+    /// Profile display names for account senders in a guest-visible thread.
+    fn account_display_names(
+        &self,
+        sender_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, String>, MessageError>> + Send;
     /// Whether the parent still exists and permits messaging lifecycle-wise.
     fn parent_exists(
         &self,

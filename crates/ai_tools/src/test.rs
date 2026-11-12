@@ -259,6 +259,10 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "ExportPipelineCsv",
         "ReadChannelMessageContext",
         "ShareWithChannel",
+        "ListImportEntities",
+        "CreateImportEntity",
+        "DeleteImportEntity",
+        "ImportNotionPage",
         "ListInitiatives",
         "ReadInitiative",
         "CreateInitiative",
@@ -1071,7 +1075,6 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
         "ReadMemory",
         "UpdateMemory",
         "GetUserActivity",
-        "ReadActivity",
         "ReadInitiativeActivity",
     ];
     let code_mode = tools_for_agent_code_mode();
@@ -1080,4 +1083,14 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(direct.toolset.tools.contains_key(name), "{name}");
     }
+    // Deleted: the SDK's macro.activity.mine() reads the same range.
+    for host in [
+        AiHost::AgentSession,
+        AiHost::Chat,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        assert!(!tools_for(host).toolset.tools.contains_key("ReadActivity"));
+    }
+    assert!(!code_mode.toolset.tools.contains_key("ReadActivity"));
 }

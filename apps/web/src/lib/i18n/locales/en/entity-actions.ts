@@ -18,6 +18,7 @@ export default {
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',
   rename: 'Rename',
+  askMacro: 'Ask Macro',
   setChannelPicture: 'Set channel picture',
   removeChannelPicture: 'Remove channel picture',
   favorite: 'Favorite',
