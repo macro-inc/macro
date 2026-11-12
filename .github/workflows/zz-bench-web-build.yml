@@ -1,9 +1,10 @@
 # Temporary benchmark for the deploy web build. Not for merging: it lives on a
 # draft PR stacked on synoet/ci-web-build-2min and is closed after measuring.
 #   before-dev:  Build Web App as on main (every wasm package compiled)
-#   after-dev:   Build Web App from this branch (wasm packages from the Actions cache)
+#   after-dev:   Build Web App from this branch, building synoet/ci-web-combined-bench
+#                (wasm packages from the Actions cache)
 #   before-prod: the build job of release-production.yml as on main
-#   after-prod:  Build Web App from this branch for prod
+#   after-prod:  the same for prod
 name: Bench web build (temporary)
 on:
   pull_request:
@@ -25,6 +26,7 @@ jobs:
     uses: ./.github/workflows/build_web_app.yml
     with:
       environment: dev
+      ref: synoet/ci-web-combined-bench
     secrets:
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
@@ -62,6 +64,7 @@ jobs:
     uses: ./.github/workflows/build_web_app.yml
     with:
       environment: prod
+      ref: synoet/ci-web-combined-bench
     secrets:
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
