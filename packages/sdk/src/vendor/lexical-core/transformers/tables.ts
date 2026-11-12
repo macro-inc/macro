@@ -80,7 +80,7 @@ function positiveAttr(raw: string | undefined): number | undefined {
 function spanAttr(raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
   const value = Number(raw);
-  return Number.isInteger(value) && value >= 2 ? value : undefined;
+  return Number.isSafeInteger(value) && value >= 2 ? value : undefined;
 }
 
 // Upstream's exact definition from @lexical/table's LexicalTableCellNode.ts;

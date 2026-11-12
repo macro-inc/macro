@@ -80,14 +80,35 @@ export {
 
 /**
  * A headless editor with every node a Macro document can hold registered.
- * Errors thrown inside `update` and `read` propagate to the caller.
+ * Errors thrown inside `update`, `read` and `parseEditorState` propagate to
+ * the caller; a failed `update` leaves the editor state as it was.
  */
 export function createDocumentEditor(): LexicalEditor {
-  return createHeadlessEditor({
+  // Lexical rolls a failed update back only after `onError` returns, so
+  // `onError` records the error and the wrappers rethrow it once Lexical is done.
+  let failure: Error | undefined;
+  const editor = createHeadlessEditor({
     namespace: 'macro-document',
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
     onError: (error) => {
-      throw error;
+      failure ??= error;
     },
   });
+  const rethrow = () => {
+    const error = failure;
+    failure = undefined;
+    if (error) throw error;
+  };
+  const update = editor.update.bind(editor);
+  editor.update = (updateFn, options) => {
+    update(updateFn, options);
+    rethrow();
+  };
+  const parseEditorState = editor.parseEditorState.bind(editor);
+  editor.parseEditorState = (state, updateFn) => {
+    const parsed = parseEditorState(state, updateFn);
+    rethrow();
+    return parsed;
+  };
+  return editor;
 }
