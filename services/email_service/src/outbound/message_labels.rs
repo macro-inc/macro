@@ -8,6 +8,8 @@ use email::domain::message_labels::{
 use models_email::service;
 use uuid::Uuid;
 
+pub mod gmail_ops;
+
 #[cfg(test)]
 mod test;
 

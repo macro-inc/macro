@@ -1,10 +1,72 @@
 use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
+use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use tracing::instrument::WithSubscriber;
 
 const THREAD: Uuid = Uuid::from_u128(0xb1);
 const ARCHIVE: Uuid = Uuid::from_u128(0xf1);
 const UNARCHIVE: Uuid = Uuid::from_u128(0xf2);
+
+#[derive(Clone, Default)]
+struct EventOutput(Arc<Mutex<Vec<u8>>>);
+
+impl Write for EventOutput {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn retryable_listener_emits_one_debug_event_with_error_and_payload_in_its_handler_span() {
+    use models_email::gmail::gmail_ops::GmailOpsOperation;
+    use models_email::service::pubsub::{DetailedError, FailureReason};
+
+    let data = GmailOpsPubsubMessage {
+        link_id: Uuid::from_u128(0xa1),
+        operation: GmailOpsOperation::ModifyMessageLabels(ModifyMessageLabelsPayload {
+            db_message_id: Uuid::from_u128(0xb1),
+            provider_message_id: "message-1".into(),
+            labels_to_add: vec!["Label_work".into()],
+            labels_to_remove: vec!["INBOX".into()],
+            pending_write_id: Some(ARCHIVE),
+        }),
+    };
+    let error = DetailedError {
+        reason: FailureReason::DatabaseQueryFailed,
+        source: anyhow::anyhow!("database unavailable")
+            .context("Failed to fetch link from database"),
+    };
+    let output = EventOutput::default();
+    let writer = output.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .without_time()
+        .with_ansi(false)
+        .with_target(false)
+        .with_writer(move || writer.clone())
+        .finish();
+
+    crate::pubsub::gmail_ops::error_handlers::handle_retryable_error(&data, &error)
+        .with_subscriber(subscriber)
+        .await
+        .expect("retryable delivery remains unacknowledged");
+
+    assert_eq!(
+        String::from_utf8(output.0.lock().unwrap().clone()).unwrap(),
+        format!(
+            "DEBUG handle_retryable_error: Retryable error processing gmail ops message. error={error:?} payload={:?}\n",
+            data.operation
+        )
+    );
+}
 
 async fn messages_with_label(pool: &PgPool, provider_label_id: &str) -> Vec<Uuid> {
     sqlx::query_scalar!(
@@ -106,7 +168,7 @@ fn message_ids(payload: &ModifyMessageLabelsBatchPayload) -> Vec<Uuid> {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../fixtures", scripts("gmail_ops_label_revert"))
+    fixtures(path = "../../../../fixtures", scripts("gmail_ops_label_revert"))
 )]
 async fn an_older_write_waits_for_a_newer_one_and_sends_once_gmail_rejects_it(pool: PgPool) {
     unarchive_b(&pool).await;
@@ -141,7 +203,7 @@ async fn an_older_write_waits_for_a_newer_one_and_sends_once_gmail_rejects_it(po
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../fixtures", scripts("gmail_ops_label_revert"))
+    fixtures(path = "../../../../fixtures", scripts("gmail_ops_label_revert"))
 )]
 async fn a_confirmed_newer_write_supersedes_the_older_one(pool: PgPool) {
     unarchive_b(&pool).await;
@@ -161,7 +223,7 @@ async fn a_confirmed_newer_write_supersedes_the_older_one(pool: PgPool) {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../fixtures", scripts("gmail_ops_label_revert"))
+    fixtures(path = "../../../../fixtures", scripts("gmail_ops_label_revert"))
 )]
 async fn rejected_batch_reverts_only_the_messages_its_write_was_newest_on(pool: PgPool) {
     unarchive_b(&pool).await;
@@ -192,7 +254,7 @@ async fn rejected_batch_reverts_only_the_messages_its_write_was_newest_on(pool: 
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../fixtures", scripts("gmail_ops_label_revert"))
+    fixtures(path = "../../../../fixtures", scripts("gmail_ops_label_revert"))
 )]
 async fn rejected_mark_read_restores_the_unread_message_and_thread(pool: PgPool) {
     let mark_read = Uuid::from_u128(0xf3);
@@ -250,7 +312,7 @@ async fn rejected_mark_read_restores_the_unread_message_and_thread(pool: PgPool)
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../fixtures", scripts("gmail_ops_label_revert"))
+    fixtures(path = "../../../../fixtures", scripts("gmail_ops_label_revert"))
 )]
 async fn rejected_single_message_operation_reverts_its_message(pool: PgPool) {
     let batch = ModifyMessageLabelsBatchPayload::from(ModifyMessageLabelsPayload {
@@ -281,4 +343,37 @@ async fn rejected_single_message_operation_reverts_its_message(pool: PgPool) {
             (Uuid::from_u128(0xb), ARCHIVE),
         ]
     );
+}
+
+async fn label_write_turns(
+    pool: &PgPool,
+    payload: &ModifyMessageLabelsBatchPayload,
+    messages: &[Uuid],
+    write: Uuid,
+) -> Result<HashMap<Uuid, LabelWriteTurn>, InboxPersistenceError> {
+    let labels: Vec<_> = payload
+        .labels_to_add
+        .iter()
+        .chain(&payload.labels_to_remove)
+        .cloned()
+        .collect();
+    PgGmailOps(pool.clone())
+        .turns(messages, &labels, write)
+        .await
+}
+
+async fn revert_db_changes(
+    pool: &PgPool,
+    link: &Link,
+    payload: &ModifyMessageLabelsBatchPayload,
+    messages: Vec<Uuid>,
+) -> Result<(), InboxPersistenceError> {
+    PgGmailOps(pool.clone())
+        .revert(
+            link.id,
+            messages,
+            LabelWriteRevert::Pending(payload.pending_write_id.expect("marked fixture")),
+        )
+        .await
+        .map(|_| ())
 }
