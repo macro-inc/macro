@@ -75,11 +75,15 @@ aws ssm start-session --target "$target" \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
   --parameters '{"host":["openbao-dev.macro-internal.com"],"portNumber":["443"],"localPortNumber":["18443"]}'
 # in another shell:
-curl --resolve openbao-dev.macro-internal.com:18443:127.0.0.1 \
-  https://openbao-dev.macro-internal.com:18443/v1/sys/health
+curl --connect-to openbao-dev.macro-internal.com:443:127.0.0.1:18443 \
+  https://openbao-dev.macro-internal.com/v1/sys/health
 ```
 
-Use the tunnel for provisioning and any other administration. The plain
+Only the TCP endpoint moves to the local port. The origin stays exactly
+`https://openbao-dev.macro-internal.com`, with no port, in both the Host header
+and the TLS name, so you don't need to bind local port 443. Hosted provisioning
+connects the same way, through its `--connect 127.0.0.1:18443` option. Use the
+tunnel for provisioning and any other administration. The plain
 port-forward to 8200 in step 3 is only for the one-time init.
 
 ## Provisioning (follow-up, not in this stack yet)
