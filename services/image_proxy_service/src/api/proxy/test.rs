@@ -61,9 +61,55 @@ fn test_allows_octet_stream_content_type() {
 }
 
 #[test]
+fn test_allows_raster_image_content_types() {
+    for content_type in [
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+        "IMAGE/PNG",
+    ] {
+        assert!(is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
 fn test_rejects_non_image_content_types() {
     assert!(!is_allowed_content_type("text/html"));
     assert!(!is_allowed_content_type("application/json"));
+}
+
+#[test]
+fn test_rejects_non_raster_image_content_types() {
+    for content_type in [
+        "image/svg+xml",
+        "image/svg+xml; charset=utf-8",
+        "IMAGE/SVG+XML",
+        "image/x-xbitmap",
+        "image/",
+    ] {
+        assert!(!is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
+fn test_non_raster_content_type_is_unsupported_media_type() {
+    let response = ProxyError::NotAnImage("image/svg+xml".into()).into_response();
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
+
+#[test]
+fn test_image_response_headers() {
+    let response = image_response("image/png", Body::empty()).unwrap();
+    let headers = response.headers();
+    assert_eq!(headers["content-type"], "image/png");
+    assert_eq!(headers["x-content-type-options"], "nosniff");
+    assert_eq!(
+        headers["content-security-policy"],
+        "default-src 'none'; sandbox"
+    );
 }
 
 #[test]

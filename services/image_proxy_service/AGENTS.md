@@ -31,6 +31,8 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 - Never bypass or weaken `PrivateIpFilteringResolver` — it is the only thing
   stopping this service from being an SSRF vector into internal infra.
+- Serve only raster types (`ALLOWED_MEDIA_TYPES`) with `nosniff`. Never add
+  SVG or other document-like types: this origin would run their script.
 
 ## Related
 

@@ -117,7 +117,10 @@ impl fmt::Display for ProxyError {
                 write!(f, "network error fetching upstream image: {chain}")
             }
             Self::UpstreamStatus(status) => write!(f, "upstream returned status {status}"),
-            Self::NotAnImage(ct) => write!(f, "upstream content-type is not an image: {ct}"),
+            Self::NotAnImage(ct) => write!(
+                f,
+                "upstream content-type is not a supported raster image: {ct}"
+            ),
             Self::ImageTooLarge { content_length } => write!(
                 f,
                 "image exceeds max size of {MAX_IMAGE_SIZE} bytes (Content-Length: {content_length})"
@@ -196,11 +199,20 @@ pub async fn proxy_request_handler(
 
     let size_limited_stream = apply_size_limit(response.bytes_stream(), params.url.clone());
 
+    image_response(&content_type, Body::from_stream(size_limited_stream))
+}
+
+/// Wrap an upstream image body for re-serving from this origin. `nosniff` keeps
+/// browsers on the declared raster type, and the CSP sandboxes the response if
+/// it is ever opened as a document.
+fn image_response(content_type: &str, body: Body) -> Result<Response, ProxyError> {
     Response::builder()
-        .header("Content-Type", &content_type)
+        .header("Content-Type", content_type)
         .header("Cache-Control", "public, max-age=31536000, immutable")
         .header("Cross-Origin-Resource-Policy", "cross-origin")
-        .body(Body::from_stream(size_limited_stream))
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Content-Security-Policy", "default-src 'none'; sandbox")
+        .body(body)
         .map_err(|e| {
             tracing::error!(error=?e, "could not stream chunks");
             ProxyError::ResponseBuild(e)
@@ -372,6 +384,22 @@ fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyErr
     Ok(content_type)
 }
 
+/// Raster image types only: SVG and other document-like types can run script
+/// on this origin. `application/octet-stream` stays allowed because many image
+/// hosts send it (or no Content-Type at all); with `nosniff` a browser never
+/// renders it as a document.
+const ALLOWED_MEDIA_TYPES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "image/bmp",
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+    "application/octet-stream",
+];
+
 fn is_allowed_content_type(content_type: &str) -> bool {
     let media_type = content_type
         .split(';')
@@ -380,7 +408,7 @@ fn is_allowed_content_type(content_type: &str) -> bool {
         .trim()
         .to_ascii_lowercase();
 
-    media_type.starts_with("image/") || media_type == "application/octet-stream"
+    ALLOWED_MEDIA_TYPES.contains(&media_type.as_str())
 }
 
 fn check_content_length(
