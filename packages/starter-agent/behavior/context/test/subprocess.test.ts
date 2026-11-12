@@ -4,6 +4,7 @@
  * the agent's relay. The script's process never has the agent's key.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,6 +26,14 @@ const linked = [
 ];
 const settingsExample = 'agent.example.json';
 const settingsFile = 'agent.json';
+/**
+ * The settings to run with: the template's example, or in an agent's own
+ * repository (which has its rendered `agent.json` and no example) that.
+ */
+const settingsSource = (root: string): string =>
+  existsSync(join(root, settingsExample))
+    ? join(root, settingsExample)
+    : join(root, settingsFile);
 // The script's process type-checks the agent's code from cold.
 const coldCheckMs = 120_000;
 
@@ -56,7 +65,7 @@ beforeAll(async () => {
     await symlink(join(packageRoot, name), join(workspace, name));
   await Bun.write(
     join(workspace, settingsFile),
-    await Bun.file(join(packageRoot, settingsExample)).text()
+    await Bun.file(settingsSource(packageRoot)).text()
   );
 });
 
