@@ -84,6 +84,16 @@ const DEFERRED_ADMISSION_RETRY_MS = 1_000;
 // bound keeps a broken head from holding the queue.
 const MAX_ADMISSION_FAILURES = 3;
 const MAX_MUTATION_SERVER_FAILURES = 10;
+const RETRY_LATER_CODE = 'SERVICE_UNAVAILABLE';
+
+/** Whether every error says the server was busy and wrote nothing. */
+function askedToRetry(error: CombinedError | undefined): boolean {
+  const errors = error?.graphQLErrors ?? [];
+  return (
+    errors.length > 0 &&
+    errors.every((refusal) => refusal.extensions.code === RETRY_LATER_CODE)
+  );
+}
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
 async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
@@ -943,9 +953,12 @@ export function createMutationQueueRunner(
         }
         if (!isCurrent(attempt)) return detachedResult();
         // urql represents HTTP 5xx as networkError too. Count actual
-        // server responses, never connection failures or timeouts.
+        // server responses, never connection failures or timeouts, and
+        // never a server that did nothing and asked for another try.
         const serverFailure =
-          httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0;
+          httpServerFailure ||
+          ((result.error?.graphQLErrors.length ?? 0) > 0 &&
+            !askedToRetry(result.error));
         const exhausted =
           retry &&
           serverFailure &&

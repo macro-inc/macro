@@ -15,7 +15,7 @@ type RefusalRetry = {
 };
 
 // The queue head blocks every write behind it while it retries, so a write
-// the server keeps refusing gives up after a few seconds of backoff.
+// the server keeps faulting on gives up after a few seconds of backoff.
 const REFUSAL_RETRIES: readonly RefusalRetry[] = [
   // A draft write is a full-state upsert (or an idempotent delete) under its
   // own handle, so sending it again after the server faulted is safe.
@@ -25,7 +25,9 @@ const REFUSAL_RETRIES: readonly RefusalRetry[] = [
     attempts: 2,
   },
   // The channel write guard turns a write away before it runs when too many
-  // are in flight for the channel, and asks for another try.
+  // are in flight for the channel, and asks for another try. Nothing was
+  // refused, so the message waits like one typed offline: the queue backs
+  // off and never counts these toward its server-failure limit.
   {
     operations: [
       'SendChannelMessage',
@@ -34,7 +36,7 @@ const REFUSAL_RETRIES: readonly RefusalRetry[] = [
       'ReactToChannelMessage',
     ],
     code: 'SERVICE_UNAVAILABLE',
-    attempts: 3,
+    attempts: Number.POSITIVE_INFINITY,
   },
 ];
 const MAX_TRACKED_WRITES = 256;
@@ -57,6 +59,7 @@ function retriesRefusal(
   );
   if (!retry) return false;
 
+  if (retry.attempts === Number.POSITIVE_INFINITY) return true;
   const count = (refusals.get(writeKey(mutation)) ?? 0) + 1;
   if (count > retry.attempts) return false;
 
@@ -69,7 +72,7 @@ function retriesRefusal(
 /**
  * Retry transport failures. Application errors release the queue head, except
  * a server fault on an email draft write (retried twice in a row) and a busy
- * channel turning a message write away (retried three times in a row).
+ * channel turning a message write away (retried until it is let in).
  */
 export function shouldRetryGraphqlMutation(
   error: CombinedError,

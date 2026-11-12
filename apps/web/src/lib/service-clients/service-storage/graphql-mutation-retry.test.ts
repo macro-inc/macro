@@ -169,12 +169,12 @@ describe('GraphQL mutation retries', () => {
       'EditChannelMessage',
       'DeleteChannelMessage',
       'ReactToChannelMessage',
-    ])('retries a busy channel on %s three times, then gives up', (name) => {
+    ])('keeps retrying a busy channel on %s', (name) => {
       const mutation = write(name);
-      for (const expected of [true, true, true, false]) {
+      for (let attempt = 0; attempt < 50; attempt++) {
         expect(
           shouldRetryGraphqlMutation(refusal('SERVICE_UNAVAILABLE'), mutation)
-        ).toBe(expected);
+        ).toBe(true);
       }
     });
 
