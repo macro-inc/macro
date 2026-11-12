@@ -127,8 +127,15 @@ export class EditorSession {
     static createMacro(abi_major: number, config: Uint8Array, now: number, wall: number, hostname?: string | null): EditorSession;
     /**
      * Construct the application editor with the host's actual instance namespace.
+     *
+     * `code_token_provider(op, language, text, profile)` returns a JSON string: for `op`
+     * `"loaded"` (empty text) `{"kind":"loaded","loaded":bool}`, for `"tokenize"`
+     * `{"kind":"tokens","tokens":[...]}`. It is supported only when wrapped by the
+     * lexical-wasm-view `NativeEnterDispatcher.fenceCodeTokenProvider` (installed before
+     * construction). A raw provider that reenters or frees a session corrupts wasm-bindgen
+     * state; that use is unsupported.
      */
-    static createMacroWithNamespace(abi_major: number, config: Uint8Array, now: number, wall: number, namespace: string, hostname?: string | null, write_root_search_text?: boolean | null): EditorSession;
+    static createMacroWithNamespace(abi_major: number, config: Uint8Array, now: number, wall: number, namespace: string, hostname?: string | null, write_root_search_text?: boolean | null, code_token_provider?: Function | null, code_token_profile?: string | null): EditorSession;
     /**
      * Full development insertion predicate using the host's resolved selection.
      */
@@ -146,6 +153,11 @@ export class EditorSession {
      * This neither consumes output nor authorizes a later mutation.
      */
     effectiveAccess(): number;
+    /**
+     * Select listener-metadata transport for one actual ordinary Port binding.
+     * Does not admit editing, commit, initialize a view, or transfer pending output.
+     */
+    enableViewListenerMetadata(owner: bigint): void;
     /**
      * Lifecycle notification with fresh wall-clock origin.
      */
@@ -168,7 +180,7 @@ export class EditorSession {
      */
     keyDown(code: number, mods: number, routed: number, key: string, anchor_key: number, anchor_offset: number, anchor_type: number, focus_key: number, focus_offset: number, focus_type: number, selection_kind: number, now: number): number;
     /**
-     * Command listener priorities read once at open.
+     * Receipt-preserving metadata snapshot; root registrations may refresh it.
      */
     listenerTable(): Uint8Array;
     /**
@@ -188,6 +200,10 @@ export class EditorSession {
      * Copy the exact completed receipt without advancing or consuming output.
      */
     readInputCommitReceipt(entry_id: string): InputCommitReceipt;
+    /**
+     * Install the single block-navigation callback at fixed LOW/Before ordering.
+     */
+    registerViewBlockNavigation(down: boolean, callback: bigint): bigint;
     /**
      * Register Enter at the named native priority, after existing equal listeners.
      */
@@ -428,6 +444,11 @@ export class ViewCommandFailure {
 }
 
 /**
+ * Registered tokenizers on this thread; dev-probes builds only, never shipped.
+ */
+export function debugCodeTokenProviders(): number;
+
+/**
  * Install the ordinary synchronous Enter dispatcher and original-cause lookup.
  * The dispatcher owns its event stack and stores thrown values by issued scope.
  */
@@ -444,6 +465,21 @@ export function prepareMacroPaste(): void;
  * The native epilogue performs retirement after callback/model borrows end.
  */
 export function requestRetireViewObservation(owner: bigint, invocation: bigint, scope: bigint): void;
+
+/**
+ * Return only the issued DOM measurement key, never a mutable host target.
+ */
+export function viewCommandScopeBlockNavigationBlock(scope: bigint, plan: bigint): number | undefined;
+
+/**
+ * Consume an issued plan after host teardown or failed measurement, without selecting.
+ */
+export function viewCommandScopeCancelBlockNavigation(scope: bigint, plan: bigint): void;
+
+/**
+ * Consume the exact issued plan before validating optional fresh DOM geometry.
+ */
+export function viewCommandScopeCompleteBlockNavigation(scope: bigint, plan: bigint, block_top?: number | null, block_bottom?: number | null, caret_top?: number | null, caret_bottom?: number | null, caret_height?: number | null): boolean;
 
 /**
  * Dispatch a whitelisted ordinary command or current-generation application.
@@ -464,6 +500,11 @@ export function viewCommandScopeEscape(scope: bigint): boolean;
  * Export one pending node's own JSON through its actual configured hook.
  */
 export function viewCommandScopeOwnJSON(scope: bigint, key: number): string;
+
+/**
+ * Issue a one-shot plan from the current fixed vertical-navigation callback.
+ */
+export function viewCommandScopePrepareBlockNavigation(scope: bigint): bigint;
 
 /**
  * Append or deduplicate an Enter listener in the actual current transaction.
@@ -509,6 +550,7 @@ export interface InitOutput {
     readonly __wbg_inputcommitreceipt_free: (a: number, b: number) => void;
     readonly __wbg_syncrouter_free: (a: number, b: number) => void;
     readonly __wbg_viewcommandfailure_free: (a: number, b: number) => void;
+    readonly debugCodeTokenProviders: () => number;
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -536,11 +578,12 @@ export interface InitOutput {
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly editorsession_createMacro: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-    readonly editorsession_createMacroWithNamespace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number];
+    readonly editorsession_createMacroWithNamespace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly editorsession_debugViewChecksum: (a: number) => [number, number, number];
     readonly editorsession_effectiveAccess: (a: number) => number;
+    readonly editorsession_enableViewListenerMetadata: (a: number, b: bigint) => [number, number];
     readonly editorsession_host: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_initialize: (a: number) => [number, number, number, number];
     readonly editorsession_input: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -551,6 +594,7 @@ export interface InitOutput {
     readonly editorsession_nodeText: (a: number, b: number) => [number, number];
     readonly editorsession_query: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_readInputCommitReceipt: (a: number, b: number, c: number) => [number, number, number];
+    readonly editorsession_registerViewBlockNavigation: (a: number, b: number, c: bigint) => [bigint, number, number];
     readonly editorsession_registerViewEnter: (a: number, b: bigint, c: number) => [bigint, number, number];
     readonly editorsession_registerViewEscape: (a: number, b: bigint, c: number) => [bigint, number, number];
     readonly editorsession_retireViewObservation: (a: number) => void;
@@ -596,10 +640,14 @@ export interface InitOutput {
     readonly syncrouter_tick: (a: number, b: number, c: number) => [number, number, number];
     readonly syncrouter_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly syncrouter_wakeAt: (a: number) => number;
+    readonly viewCommandScopeBlockNavigationBlock: (a: bigint, b: bigint) => [number, number, number];
+    readonly viewCommandScopeCancelBlockNavigation: (a: bigint, b: bigint) => [number, number];
+    readonly viewCommandScopeCompleteBlockNavigation: (a: bigint, b: bigint, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly viewCommandScopeDispatch: (a: bigint, b: number, c: number) => [number, number, number];
     readonly viewCommandScopeEnter: (a: bigint) => [number, number, number];
     readonly viewCommandScopeEscape: (a: bigint) => [number, number, number];
     readonly viewCommandScopeOwnJSON: (a: bigint, b: number) => [number, number, number, number];
+    readonly viewCommandScopePrepareBlockNavigation: (a: bigint) => [bigint, number, number];
     readonly viewCommandScopeRegisterEnter: (a: bigint, b: bigint, c: number) => [bigint, number, number];
     readonly viewCommandScopeRegisterEscape: (a: bigint, b: bigint, c: number) => [bigint, number, number];
     readonly viewCommandScopeSelection: (a: bigint) => [number, number, number, number];
