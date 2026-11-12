@@ -7,6 +7,7 @@
 - Match the native body Apple/Other view OS to Macro IS_MAC while retaining the separate iOS/Android composition priorities; generic history and Select All shortcuts use Lexical navigator.platform detection.
 
 - Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope. Hide action rows until their native handler or document-owned request callback is installed, and check that capability before removing search text.
+- Keep native creation callbacks in a per-popover operation FIFO bound to their originating view/session generation; retain main-commit evidence separately from logical placeholder state, keep mention tracking outside the queue, and gate app activation on actual owner-local Await delivery and matched native artifacts.
 - Share floating-format markup through FormatMenuHost; retain actual Source wrapper/plugin registrations and require a qualified published-state observation before native metadata drives the menu.
 
 - Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.
