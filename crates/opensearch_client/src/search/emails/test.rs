@@ -3,55 +3,55 @@ use opensearch_query_builder::ToOpenSearchJson;
 use serde_json::json;
 
 #[test]
-fn test_build_keyword_query_string_single_term() {
-    let result = build_keyword_query_string(&["hello".to_string()]);
-    assert_eq!(result, "(hello | hello@*)");
+fn test_build_address_part_query_string_single_term_is_whole_segment() {
+    let result = build_address_part_query_string(&["Teo".to_string()]);
+    assert_eq!(result, "Teo");
 }
 
 #[test]
-fn test_build_keyword_query_string_multiple_terms() {
-    let result = build_keyword_query_string(&["hello".to_string(), "test".to_string()]);
-    assert_eq!(result, "(hello | hello@*) + (test | test@*)");
+fn test_build_address_query_string_single_term_is_lowercased_local_part() {
+    let result = build_address_query_string(&["Teo".to_string()]);
+    assert_eq!(result, "teo@*");
 }
 
 #[test]
-fn test_build_keyword_query_string_multi_word_term_uses_phrase() {
+fn test_build_address_query_strings_and_multiple_terms() {
+    let terms = ["hello".to_string(), "test".to_string()];
+    assert_eq!(build_address_part_query_string(&terms), "hello + test");
+    assert_eq!(build_address_query_string(&terms), "hello@* + test@*");
+}
+
+#[test]
+fn test_build_address_query_strings_multi_word_term_uses_phrase() {
     // Multi-word terms come from quoted phrases via `split_search_terms`
     // and must render as a phrase so simple_query_string's AND default
     // operator doesn't decompose them into independent tokens.
-    let result = build_keyword_query_string(&["hi there".to_string()]);
-    assert_eq!(result, "\"hi there\"");
+    let terms = ["hi there".to_string()];
+    assert_eq!(build_address_part_query_string(&terms), "\"hi there\"");
+    assert_eq!(build_address_query_string(&terms), "\"hi there\"");
 }
 
 #[test]
-fn test_build_keyword_query_string_uppercase_lowercased_for_email() {
-    let result = build_keyword_query_string(&["Teo".to_string()]);
-    assert_eq!(result, "(Teo | teo@*)");
+fn test_build_address_query_strings_dotted_and_email_terms_use_phrase() {
+    for term in ["example.com", "alice@example.com"] {
+        let terms = [term.to_string()];
+        let phrase = format!("\"{term}\"");
+        assert_eq!(build_address_part_query_string(&terms), phrase);
+        assert_eq!(build_address_query_string(&terms), phrase);
+    }
 }
 
 #[test]
-fn test_build_keyword_query_string_mixed_single_and_multi_word() {
-    let result = build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()]);
-    assert_eq!(result, "(Teo | teo@*) + \"hello world\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_dotted_term_uses_phrase() {
-    let result = build_keyword_query_string(&["example.com".to_string()]);
-    assert_eq!(result, "\"example.com\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_email_term_uses_phrase() {
-    let result = build_keyword_query_string(&["alice@example.com".to_string()]);
-    assert_eq!(result, "\"alice@example.com\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_email_term_mixed_with_word() {
-    let result =
-        build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
-    assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
+fn test_build_address_query_strings_mixed_phrase_and_word() {
+    let terms = ["alice@example.com".to_string(), "Review".to_string()];
+    assert_eq!(
+        build_address_part_query_string(&terms),
+        "\"alice@example.com\" + Review"
+    );
+    assert_eq!(
+        build_address_query_string(&terms),
+        "\"alice@example.com\" + review@*"
+    );
 }
 
 #[test]
@@ -175,31 +175,41 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         .as_array()
         .unwrap();
     assert_eq!(json["bool"]["must"][0]["bool"]["minimum_should_match"], 1);
-    assert_eq!(should.len(), 2);
+    assert_eq!(should.len(), 3);
 
-    let keyword_sqs = should
-        .iter()
-        .map(|s| &s["simple_query_string"])
-        .find(|s| {
-            s["fields"]
-                .as_array()
-                .is_some_and(|f| f.contains(&serde_json::json!("sender")))
-        })
-        .unwrap();
-    assert_eq!(keyword_sqs["query"], "(hello | hello@*) + (test | test@*)");
-    assert_eq!(keyword_sqs["default_operator"], "AND");
-    let keyword_fields = keyword_sqs["fields"].as_array().unwrap();
-    assert!(keyword_fields.contains(&serde_json::json!("sender")));
-    assert!(keyword_fields.contains(&serde_json::json!("reply_to")));
-    assert!(keyword_fields.contains(&serde_json::json!("recipients")));
-    assert!(keyword_fields.contains(&serde_json::json!("cc")));
-    assert!(keyword_fields.contains(&serde_json::json!("bcc")));
-    assert!(keyword_fields.contains(&serde_json::json!("sender.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("reply_to.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("recipients.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("cc.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("bcc.parts")));
-    assert!(!keyword_fields.contains(&serde_json::json!("subject")));
+    let sqs_on = |field: &str| {
+        should
+            .iter()
+            .map(|s| &s["simple_query_string"])
+            .find(|s| {
+                s["fields"]
+                    .as_array()
+                    .is_some_and(|f| f.contains(&serde_json::json!(field)))
+            })
+            .unwrap()
+    };
+
+    let part_sqs = sqs_on("sender.parts");
+    assert_eq!(part_sqs["query"], "hello + test");
+    assert_eq!(part_sqs["default_operator"], "AND");
+    assert_eq!(
+        part_sqs["fields"],
+        json!([
+            "sender.parts",
+            "reply_to.parts",
+            "recipients.parts",
+            "cc.parts",
+            "bcc.parts"
+        ])
+    );
+
+    let address_sqs = sqs_on("sender");
+    assert_eq!(address_sqs["query"], "hello@* + test@*");
+    assert_eq!(address_sqs["default_operator"], "AND");
+    assert_eq!(
+        address_sqs["fields"],
+        json!(["sender", "reply_to", "recipients", "cc", "bcc"])
+    );
 
     let text_sqs = should
         .iter()
@@ -295,8 +305,15 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                             {
                                 "simple_query_string": {
                                     "default_operator": "AND",
-                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
-                                    "query": "(test | test@*)"
+                                    "fields": ["sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
+                                    "query": "test"
+                                }
+                            },
+                            {
+                                "simple_query_string": {
+                                    "default_operator": "AND",
+                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                                    "query": "test@*"
                                 }
                             },
                             {
@@ -536,4 +553,204 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
         "empty tag_option_ids should emit no nested clause: {filter:?}"
     );
     Ok(())
+}
+
+/// A mailbox whose subjects hold more than 256 words for each of several
+/// short prefixes. Before single-word prefixes became `match_bool_prefix`,
+/// a five-word subject search on it expanded into 5 × 256 clauses, and a
+/// 50-word content search cost 26 clauses a word; both exceeded
+/// OpenSearch's 1024-clause limit and failed every search for the user.
+#[tokio::test]
+#[ignore = "requires local OpenSearch at http://localhost:9200"]
+async fn large_mailbox_search_stays_under_clause_limit() {
+    use crate::{
+        OpensearchClient,
+        error::{OpensearchClientError, ResponseExt},
+    };
+    use opensearch::{
+        BulkParts, SearchParts,
+        indices::{IndicesDeleteParts, IndicesRefreshParts},
+    };
+
+    const OWNER: &str = "large-mailbox-user";
+    const PREFIXES: [&str; 5] = ["inv", "rev", "pro", "con", "sta"];
+    const WORDS_PER_PREFIX: usize = 300;
+
+    let client =
+        OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
+    let index = format!("email-clause-limit-test-{}", uuid::Uuid::now_v7());
+    let address = json!({"type": "keyword", "fields": {"parts": {"type": "text", "analyzer": "email_parts"}}});
+    client
+        .ensure_index_exists(
+            &index,
+            json!({
+                "settings": {"number_of_shards": 1, "number_of_replicas": 0, "analysis": {
+                    "char_filter": {"email_separators": {
+                        "type": "mapping", "mappings": ["@ => \\u0020", ". => \\u0020", "+ => \\u0020"]
+                    }},
+                    "analyzer": {"email_parts": {
+                        "type": "custom", "tokenizer": "standard",
+                        "char_filter": ["email_separators"], "filter": ["lowercase"]
+                    }}
+                }},
+                "mappings": {"dynamic": false, "properties": {
+                    "entity_id": {"type": "keyword"},
+                    "user_id": {"type": "keyword"},
+                    "subject": {"type": "text"},
+                    "content": {"type": "text", "analyzer": "standard"},
+                    "sender": address, "reply_to": address, "recipients": address,
+                    "cc": address, "bcc": address,
+                    "sender_name": {"type": "text"}, "recipient_names": {"type": "text"},
+                    "cc_names": {"type": "text"}, "bcc_names": {"type": "text"}
+                }}
+            }),
+        )
+        .await
+        .unwrap();
+
+    let content_terms: Vec<String> = (0..50).map(|i| format!("topic{i}")).collect();
+    let target_subject = "invoice review project contract status";
+    let mut bulk = String::new();
+    let mut push = |id: &str, user_id: &str, subject: String, content: String| {
+        bulk.push_str(&json!({"index": {"_index": index, "_id": id}}).to_string());
+        bulk.push('\n');
+        bulk.push_str(
+            &json!({
+                "entity_id": id, "user_id": user_id, "subject": subject, "content": content,
+                "sender": "sender@example.com", "recipients": ["recipient@example.com"]
+            })
+            .to_string(),
+        );
+        bulk.push('\n');
+    };
+    for prefix in PREFIXES {
+        let words: Vec<String> = (0..WORDS_PER_PREFIX)
+            .map(|i| {
+                let letter = |n: usize| char::from(b'a' + (n % 26) as u8);
+                format!("{prefix}{}{}{}", letter(i / 676), letter(i / 26), letter(i))
+            })
+            .collect();
+        for (chunk_index, chunk) in words.chunks(25).enumerate() {
+            push(
+                &format!("{prefix}-{chunk_index}"),
+                OWNER,
+                chunk.join(" "),
+                "filler".into(),
+            );
+        }
+    }
+    push(
+        "target",
+        OWNER,
+        target_subject.into(),
+        content_terms.join(" "),
+    );
+    push(
+        "other-user-target",
+        "other-user",
+        target_subject.into(),
+        content_terms.join(" "),
+    );
+
+    let result: anyhow::Result<()> = async {
+        client
+            .inner
+            .bulk(BulkParts::None)
+            .body(vec![bulk])
+            .send()
+            .await?
+            .error_for_status_code()?;
+        client
+            .inner
+            .indices()
+            .refresh(IndicesRefreshParts::Index(&[&index]))
+            .send()
+            .await?
+            .error_for_status_code()?;
+
+        let search = |builder: EmailQueryBuilder| {
+            let client = &client;
+            let index = &index;
+            async move {
+                let mut query = builder.user_id(OWNER).build_bool_query()?.build().to_json();
+                let filters = query["bool"]["filter"].as_array_mut().unwrap();
+                let index_filter = filters
+                    .iter_mut()
+                    .find(|filter| filter["term"]["_index"].is_string())
+                    .unwrap();
+                index_filter["term"]["_index"] = json!(index);
+                let response: serde_json::Value = client
+                    .inner
+                    .search(SearchParts::Index(&[index]))
+                    .body(json!({
+                        "query": query,
+                        "highlight": {"fields": {"subject": {"type": "plain"}, "content": {"type": "plain"}}}
+                    }))
+                    .send()
+                    .await
+                    .map_client_error()
+                    .await?
+                    .json()
+                    .await?;
+                anyhow::Ok(response)
+            }
+        };
+
+        let subject_terms = PREFIXES.iter().map(|prefix| prefix.to_string()).collect();
+        let by_subject = search(
+            EmailQueryBuilder::new(subject_terms)
+                .match_type("partial")
+                .subject_only(true),
+        )
+        .await?;
+        assert_eq!(by_subject["hits"]["total"]["value"], 1, "{by_subject}");
+        let hit = &by_subject["hits"]["hits"][0];
+        assert_eq!(hit["_source"]["entity_id"], "target");
+        let snippet = hit["highlight"]["subject"][0].as_str().unwrap();
+        assert!(snippet.contains("<em>invoice</em>"), "{snippet}");
+
+        let by_content = search(
+            EmailQueryBuilder::new(content_terms.clone()).match_type("partial"),
+        )
+        .await?;
+        assert_eq!(by_content["hits"]["total"]["value"], 1, "{by_content}");
+        assert_eq!(by_content["hits"]["hits"][0]["_source"]["entity_id"], "target");
+
+        let phrase_prefixes: Vec<serde_json::Value> = PREFIXES
+            .iter()
+            .map(|prefix| json!({"match_phrase_prefix": {"subject": {"query": prefix, "max_expansions": 256}}}))
+            .collect();
+        let wide_bool: Vec<serde_json::Value> = (0..1100)
+            .map(|i| json!({"term": {"subject": format!("word{i}")}}))
+            .collect();
+        for query in [
+            json!({"bool": {"must": phrase_prefixes, "filter": [{"term": {"user_id": OWNER}}]}}),
+            json!({"bool": {"should": wide_bool}}),
+        ] {
+            let rejected = client
+                .inner
+                .search(SearchParts::Index(&[&index]))
+                .body(json!({"query": query}))
+                .send()
+                .await
+                .map_client_error()
+                .await;
+            assert!(
+                matches!(rejected, Err(OpensearchClientError::TooManyClauses { .. })),
+                "{rejected:?}"
+            );
+        }
+        Ok(())
+    }
+    .await;
+    client
+        .inner
+        .indices()
+        .delete(IndicesDeleteParts::Index(&[&index]))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status_code()
+        .unwrap();
+    result.unwrap();
 }

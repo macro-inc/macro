@@ -43,6 +43,19 @@ projects.
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+  Tests marked `#[ignore]` run against a local OpenSearch on
+  `localhost:9200`; add `-- --include-ignored` to run them.
+
+## Gotchas
+
+- OpenSearch rejects a search whose rewritten query has more than 1024
+  leaf clauses (`too_many_nested_clauses`); `map_client_error` returns it as
+  `TooManyClauses`. Each field a term reaches counts, and a one-word
+  `match_phrase_prefix` counts once per indexed term it expands to (up to
+  256), so it depends on the index's vocabulary, not the query. Partial
+  one-word terms therefore use `match_bool_prefix`, which counts once
+  (`query::create_query`); keep per-term field fan-out small and ID lists in
+  one `terms` clause.
 
 ## Related
 

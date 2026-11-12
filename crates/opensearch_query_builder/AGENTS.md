@@ -3,8 +3,9 @@
 ## What it is
 
 Part of the Search feature. Type-safe builders for OpenSearch query DSL
-and request bodies (bool, match, range, nested, terms, function_score,
-...), each implementing `ToOpenSearchJson`, used by `opensearch_client`.
+and request bodies (bool, match, match_bool_prefix, range, nested, terms,
+function_score, ...), each implementing `ToOpenSearchJson`, used by
+`opensearch_client`.
 
 ## Start here
 

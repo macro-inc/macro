@@ -21,19 +21,17 @@ impl SearchQueryConfig for EmailSearchConfig {
 }
 
 /// Email-address fields matched explicitly, never as a character prefix.
-/// The raw keyword-indexed addresses plus their `.parts` sub-fields, which
-/// the `email_parts` analyzer splits into positioned segment tokens
+/// The raw keyword-indexed addresses.
+const EMAIL_ADDRESS_FIELDS: &[&str] = &["sender", "reply_to", "recipients", "cc", "bcc"];
+
+/// The `.parts` sub-fields of [`EMAIL_ADDRESS_FIELDS`], which the
+/// `email_parts` analyzer splits into positioned segment tokens
 /// (`jane.doe@mail.foo.com` indexes `jane`, `doe`, `mail`, `foo`, `com`).
 /// A bare word matches only a whole segment, so `ali` won't match
 /// `alice@example.com` and `immipart` won't match `immipartner.com`.
 /// Dotted terms like `foo.com` are quoted into phrases and match any
 /// in-order adjacent run of segments.
-const EMAIL_KEYWORD_FIELDS: &[&str] = &[
-    "sender",
-    "reply_to",
-    "recipients",
-    "cc",
-    "bcc",
+const EMAIL_ADDRESS_PART_FIELDS: &[&str] = &[
     "sender.parts",
     "reply_to.parts",
     "recipients.parts",
@@ -68,32 +66,57 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
     "bcc_names",
 ];
 
-/// Builds the simple_query_string over the email-address fields.
-/// Single-word terms become `(term | term@*)` — an exact segment-token match
-/// on the `.parts` sub-fields OR an exact-local-part match on the raw
-/// address. The `term@*` pattern is redundant with `.parts` once the index
-/// carries the sub-fields but keeps the query compatible with an index that
-/// predates them. This deliberately does NOT use a trailing `*` on the bare
-/// term, so partial segments don't leak across addresses (e.g. `ali` won't
-/// match `alice@example.com` via this group).
 /// Terms containing `@`, `.`, or spaces (quoted phrases from
-/// `split_search_terms`) are wrapped in quotes to force phrase matching. On
+/// `split_search_terms`) are matched as phrases on the address fields. On
 /// the `.parts` sub-fields the `email_parts` analyzer splits such terms into
 /// segment tokens, so the phrase requires an in-order adjacent run —
 /// `mail.foo.com`, `foo.com`, and full addresses all match `x@mail.foo.com`,
 /// but reordered or gapped segments don't. Without the quotes,
 /// `default_operator: "AND"` would match each segment independently anywhere
 /// in the field.
-/// The email pattern is lowercased because email addresses are case-insensitive.
+fn is_address_phrase(term: &str) -> bool {
+    term.contains('@') || term.contains('.') || term.contains(' ')
+}
+
+/// Builds the simple_query_string over [`EMAIL_ADDRESS_PART_FIELDS`].
+/// Single-word terms are exact segment-token matches. This deliberately
+/// does NOT use a trailing `*`, so partial segments don't leak across
+/// addresses (e.g. `ali` won't match `alice@example.com`).
 /// Terms are ANDed together with `+`.
-fn build_keyword_query_string(terms: &[String]) -> String {
+fn build_address_part_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') || term.contains('.') || term.contains(' ') {
+            if is_address_phrase(term) {
                 format!("\"{}\"", term)
             } else {
-                format!("({} | {}@*)", term, term.to_lowercase())
+                term.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// Builds the simple_query_string over [`EMAIL_ADDRESS_FIELDS`]. Single-word
+/// terms become `term@*`, an exact-local-part match on the raw address,
+/// lowercased because email addresses are case-insensitive. It is redundant
+/// with [`build_address_part_query_string`] once the index carries the
+/// `.parts` sub-fields but keeps an index that predates them searchable, and
+/// it is what highlights the raw address fields.
+/// Terms are ANDed together with `+`.
+///
+/// Kept apart from the `.parts` query rather than one `(term | term@*)` over
+/// both field sets: every field and alternative a term reaches costs a clause
+/// against OpenSearch's 1024-clause limit, and a raw-address match always
+/// implies the same segments in `.parts`.
+fn build_address_query_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if is_address_phrase(term) {
+                format!("\"{}\"", term)
+            } else {
+                format!("{}@*", term.to_lowercase())
             }
         })
         .collect::<Vec<_>>()
@@ -258,9 +281,15 @@ impl EmailQueryBuilder {
             inner.should(title_query);
             content_bool_query.set_must(inner.build().into());
         } else {
-            let keyword_sqs = SimpleQueryStringQuery::new(
-                build_keyword_query_string(&self.inner.terms),
-                EMAIL_KEYWORD_FIELDS.iter().copied(),
+            let address_part_sqs = SimpleQueryStringQuery::new(
+                build_address_part_query_string(&self.inner.terms),
+                EMAIL_ADDRESS_PART_FIELDS.iter().copied(),
+            )
+            .default_operator("AND");
+
+            let address_sqs = SimpleQueryStringQuery::new(
+                build_address_query_string(&self.inner.terms),
+                EMAIL_ADDRESS_FIELDS.iter().copied(),
             )
             .default_operator("AND");
 
@@ -272,7 +301,8 @@ impl EmailQueryBuilder {
 
             let mut combined = BoolQueryBuilder::new();
             combined.minimum_should_match(1);
-            combined.should(keyword_sqs.into());
+            combined.should(address_part_sqs.into());
+            combined.should(address_sqs.into());
             combined.should(text_sqs.into());
             content_bool_query.set_must(combined.build().into());
         }
