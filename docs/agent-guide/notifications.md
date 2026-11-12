@@ -395,12 +395,14 @@ system sound.
 
 **Settings → Notifications → Quiet hours** silences those sounds and skips
 desktop and browser alerts on a weekly schedule. It is off until turned on,
-then covers every day from 10:00 PM to 8:00 AM in the device's time zone. The
-person picks the days, the start and end, and the time zone. A later start
-runs through midnight, and the window is the clock time on each selected day,
-so Tuesday morning is quiet only when Tuesday is selected. An equal start and
-end covers no time. Incoming calls still ring and still show an alert. Inbox
-items still arrive. The schedule is saved on this device with the sound
+then covers every day from 10:00 PM to 8:00 AM in the device's time zone. Each
+day has its own start and end. A day can instead be off, so it is never quiet,
+or quiet all day. A later start runs through midnight on that same calendar
+day, so Tuesday morning follows Tuesday's hours, not Monday's late window. An
+equal start and end covers no time. A schedule saved by the first release, one
+shared window plus a list of days, still applies: listed days keep that window
+and the others are off. Incoming calls still ring and still show an alert.
+Inbox items still arrive. The schedule is saved on this device with the sound
 settings, so a phone and a computer can differ. A sound preview still plays.
 Mobile push sent while the app is not open is unchanged.
 

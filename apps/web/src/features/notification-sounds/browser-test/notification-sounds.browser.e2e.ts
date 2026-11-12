@@ -105,30 +105,44 @@ test('quiet hours persist and silence sounds without stopping a preview', async 
   page,
 }) => {
   const quiet = page.getByRole('switch', { name: 'Quiet hours' });
+  const dayMode = (day: string) =>
+    page.getByRole('combobox', { name: `${day} quiet hours` });
   await expect(quiet).not.toBeChecked();
-  await expect(page.getByRole('group', { name: 'Days' })).toHaveCount(0);
+  await expect(dayMode('Monday')).toHaveCount(0);
 
   await toggle(page, 'Quiet hours');
-  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
+  await expect(dayMode('Monday')).toHaveValue('hours');
+  await dayMode('Saturday').selectOption('off');
+  await dayMode('Sunday').selectOption('all-day');
+  await page.getByRole('combobox', { name: 'Friday start' }).selectOption('0');
+  await page.getByRole('combobox', { name: 'Friday end' }).selectOption('600');
+  await expect(page.getByRole('combobox', { name: 'Friday end' })).toHaveValue(
+    '600'
   );
-  await page.getByRole('button', { name: 'Saturday' }).click();
-  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
-    'aria-pressed',
-    'false'
-  );
+  await expect(dayMode('Saturday')).toHaveValue('off');
+  await expect(
+    page.getByRole('combobox', { name: 'Saturday start' })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: 'Sunday start' })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: 'Monday start' })
+  ).toHaveValue(String(22 * 60));
 
   await page.reload();
   await expect(quiet).toBeChecked();
-  await expect(page.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
-    'aria-pressed',
-    'false'
+  await expect(dayMode('Saturday')).toHaveValue('off');
+  await expect(dayMode('Sunday')).toHaveValue('all-day');
+  await expect(
+    page.getByRole('combobox', { name: 'Friday start' })
+  ).toHaveValue('0');
+  await expect(page.getByRole('combobox', { name: 'Friday end' })).toHaveValue(
+    '600'
   );
-  await expect(page.getByRole('button', { name: 'Monday' })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
+  await expect(
+    page.getByRole('combobox', { name: 'Monday start' })
+  ).toHaveValue(String(22 * 60));
 
   await page.evaluate(() => {
     const key = 'macro:notification-sounds:fixture-user';
