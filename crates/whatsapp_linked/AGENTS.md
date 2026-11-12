@@ -42,7 +42,11 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   system lines and the stored senders, reactors and voters for
   `external_chat`'s timeline view, and `chat_roster` the members, both through
   `src/domain/people.rs` (`ChatNames`): the owner's chat-list name for any
-  alias, else the stored WhatsApp name, else the phone number. Poll votes are
+  alias, else the stored WhatsApp name, else the phone number, with the
+  profile picture the owner's account stored under any alias
+  (`whatsapp_profile_picture`, `state = 'ready'`); `pictures` gives a group's
+  or direct chat's own. DSS stores staged pictures as static files
+  (`src/domain/pictures.rs`, woken by `whatsapp_picture_staged`). Poll votes are
   stored per voter in `external_chat_poll_vote` through the reaction path of
   `reserve_in`. A re-ingested message fills in `rich`/`mentions`/`forwarded`
   an earlier copy lacked (re-importing history upgrades old placeholders).
