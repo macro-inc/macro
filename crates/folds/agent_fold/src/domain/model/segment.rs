@@ -65,7 +65,8 @@ pub enum ActivityStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityRow {
-    /// The tool call's id, stable across updates; `plan` for a plan update.
+    /// The tool call's id, stable across updates; `<call>:<operation>` for an
+    /// SDK request; `plan` for a plan update.
     pub id: String,
     /// What happened, as a verb phrase: `Ran`, `Reading`, `Search documents`.
     pub label: String,

@@ -23,6 +23,8 @@ to the browser via `inbound/wasm`.
   and deduplicate attachments by URI during replay.
 - `src/domain/model/segment/code_execution.rs`: expands internal code receipts
   into SDK activity rows for conversation snapshots, independent of harness.
+  Each carries its code execution's id in `call`, so readers count the
+  model's tool calls apart from the SDK requests they made.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
 - `src/domain/model/segment.rs`: activity rows for conversations. A row's
