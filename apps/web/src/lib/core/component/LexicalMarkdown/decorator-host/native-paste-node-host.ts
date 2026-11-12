@@ -1,4 +1,5 @@
 import type { EditorThemeClasses } from 'lexical';
+import { createSignal } from 'solid-js';
 import { dispatchApplicationCommandIfSessionEdit } from '../plugins/group-b/command';
 import type { NativeDecoratorContext } from './native-adapter';
 import {
@@ -12,6 +13,10 @@ export function createNativePasteNodeContext(
   theme: EditorThemeClasses
 ): NativeDecoratorContext<PasteNodeHost> & { dispose(): void } {
   const base = createNativeEnterDecoratorContext(theme);
+  // The view turns editable after decorators mount; publish it so the
+  // actions menu appears (Source reads editability once, an OFF bug kept out).
+  const [editable, setEditable] = createSignal(false);
+  let releaseEditable: (() => void) | undefined;
   const target = (key: string) => {
     const mounted = base.current();
     const node = nativeDecoratorTarget(mounted, key, 'paste');
@@ -28,7 +33,7 @@ export function createNativePasteNodeContext(
     theme,
     host: {
       isSelected: base.host.isSelected,
-      isEditable: () => base.current()?.isEditable ?? false,
+      isEditable: () => editable() && base.current() !== undefined,
       selectNode(key) {
         const found = target(key);
         if (!found?.mounted.isEditable) return;
@@ -40,7 +45,17 @@ export function createNativePasteNodeContext(
       convertToText: (key) => dispatch(key, 'group-b.paste-to-text'),
       deleteNode: (key) => dispatch(key, 'group-b.decorator-delete'),
     },
-    bindView: base.bindView,
-    dispose: base.dispose,
+    bindView(view) {
+      base.bindView(view);
+      if (releaseEditable) return;
+      setEditable(view.isEditable);
+      releaseEditable = view.onEditableChange(setEditable);
+    },
+    dispose() {
+      releaseEditable?.();
+      releaseEditable = undefined;
+      setEditable(false);
+      base.dispose();
+    },
   };
 }
