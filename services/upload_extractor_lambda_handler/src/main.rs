@@ -43,6 +43,10 @@ const CONCURRENT_FILE_TASKS: usize = 64;
 /// uploader's progress indicator.
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(2);
 
+/// Attempts at marking an extracted tree uploaded. Marking is idempotent, and a
+/// tree left unmarked stays hidden, so a brief DSS failure is retried.
+const MARK_UPLOADED_ATTEMPTS: u32 = 3;
+
 env_vars! {
     struct LocalZipPath;
     struct UploadBucketName;
@@ -108,10 +112,11 @@ async fn handler(
                 // not hear of success while the folder is still hidden.
                 let marked = match &upload_status {
                     UploadFolderStatus::Completed | UploadFolderStatus::PartiallyCompleted => {
-                        dss_client
-                            .mark_projects_uploaded(user_id, pid)
-                            .await
-                            .map(|_| ())
+                        with_retries(MARK_UPLOADED_ATTEMPTS, || {
+                            dss_client.mark_projects_uploaded(user_id, pid)
+                        })
+                        .await
+                        .map(|_| ())
                     }
                     _ => Ok(()),
                 };
@@ -178,6 +183,28 @@ async fn handler(
     }
 
     Ok(())
+}
+
+/// Runs `operation` up to `attempts` times, backing off between failures, and
+/// returns the first success or the last failure.
+async fn with_retries<T, E, F, Fut>(attempts: u32, mut operation: F) -> Result<T, E>
+where
+    E: std::fmt::Debug,
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+{
+    let mut attempt = 1;
+    loop {
+        match operation().await {
+            Ok(value) => return Ok(value),
+            Err(error) if attempt < attempts => {
+                tracing::warn!(error = ?error, attempt, "attempt failed, retrying");
+                tokio::time::sleep(Duration::from_secs(u64::from(attempt) * 2)).await;
+                attempt += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 #[tracing::instrument(skip_all)]
@@ -1158,10 +1185,13 @@ mod tests {
         );
     }
 
+    /// A path, and for a file its contents and their CRC-32.
+    type StreamedEntry<'a> = (&'a str, Option<(&'a [u8], u32)>);
+
     /// An archive laid out the way the web app streams a folder: every entry
     /// stored, files followed by a data descriptor that carries their CRC-32
     /// and size, then the central directory.
-    fn write_streamed_browser_zip(path: &Path, entries: &[(&str, Option<(&[u8], u32)>)]) {
+    fn write_streamed_browser_zip(path: &Path, entries: &[StreamedEntry]) {
         let mut bytes: Vec<u8> = Vec::new();
         let mut central: Vec<u8> = Vec::new();
         for (name, contents) in entries {
@@ -1264,6 +1294,39 @@ mod tests {
             tree.folders,
             vec!["Archive", "Archive/Empty", "Archive/Site"]
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn with_retries_returns_the_first_success() {
+        let calls = std::cell::Cell::new(0);
+        let result: Result<u32, &str> = with_retries(3, || {
+            calls.set(calls.get() + 1);
+            let call = calls.get();
+            async move {
+                if call < 3 {
+                    Err("unavailable")
+                } else {
+                    Ok(call)
+                }
+            }
+        })
+        .await;
+
+        assert_eq!(result, Ok(3));
+        assert_eq!(calls.get(), 3);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn with_retries_gives_up_after_the_last_attempt() {
+        let calls = std::cell::Cell::new(0);
+        let result: Result<(), &str> = with_retries(3, || {
+            calls.set(calls.get() + 1);
+            async { Err("unavailable") }
+        })
+        .await;
+
+        assert_eq!(result, Err("unavailable"));
+        assert_eq!(calls.get(), 3);
     }
 
     #[tokio::test]
