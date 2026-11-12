@@ -1,5 +1,9 @@
 # Email feature architecture
 
+This page covers the frontend and the service contracts it uses. The
+[email backend architecture](email-backend.md) describes service composition,
+worker ownership and persistence boundaries.
+
 Email applies the stronger composition and capability
 boundaries in [Frontend feature architecture](frontend-features.md).
 Its reusable packages live under `apps/web/src/features/`. The application still

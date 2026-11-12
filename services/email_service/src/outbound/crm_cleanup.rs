@@ -1,6 +1,6 @@
 //! Existing cleanup persistence, CRM domain, queue, and clock adapters.
 
-use crate::pubsub::context::CrmServiceType;
+use crate::composition::workers::CrmServiceType;
 use chrono::{DateTime, Utc};
 use crm::domain::{
     model::{CrmError, DepopulateContactOutcome},

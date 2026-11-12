@@ -1,5 +1,5 @@
+use crate::composition::workers::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::outbound::email_api::GmailApi;
-use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;

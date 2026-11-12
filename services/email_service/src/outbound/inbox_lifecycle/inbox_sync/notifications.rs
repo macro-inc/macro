@@ -10,15 +10,15 @@ impl InboxSyncNotifications for InboxSyncEffects {
             let apns = value.apns;
             let request = notification_request(value);
             if apns {
-                publish_new_email_notification(&self.worker, request.with_apns()).await;
+                publish_new_email_notification(self, request.with_apns()).await;
             } else {
-                publish_new_email_notification(&self.worker, request).await;
+                publish_new_email_notification(self, request).await;
             }
         })
     }
 }
 async fn publish_new_email_notification<U: serde::Serialize + Send + Sync + 'static>(
-    ctx: &PubSubContext,
+    ctx: &InboxSyncEffects,
     request: SendNotificationRequest<'_, NewEmailMetadata, U>,
 ) {
     if let Err(e) = ctx

@@ -143,7 +143,8 @@ export default {
   done: 'Done',
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
-  getComputerLine: 'Claude Code, a browser and Docker, ready to go',
+  getComputerLine:
+    'A full computer, with your Claude sub, and a Macro agent, ready to go',
   trialBlocked:
     'Computers are available on paid plans. Your team is on a trial.',
   trialBillingAction: 'Go to Billing',
@@ -152,6 +153,9 @@ export default {
   errorPaymentFailed: "Your team's payment method was declined.",
   errorNotPurchasable:
     "Your team's subscription can't add a computer. Check Billing, or contact support.",
+  errorComputersUnavailable:
+    "Computers aren't available right now. Try again later.",
+  offersFailed: "Couldn't load computer sizes. Try again.",
   errorSalesUnavailable:
     "Computers can't be bought right now. Try again later.",
   errorNotRestorable: "This computer can't be restored anymore.",

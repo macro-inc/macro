@@ -235,7 +235,7 @@ the existing gateway prefixes.
   enum variant names. Validate new filter examples against the real local API.
 - Code-mode programs are untyped JavaScript, so a mistyped option key is
   dropped silently. Create-style methods call `rejectUnknownOptions`
-  (`src/utils/options.ts`) so it throws instead; the documents namespace does.
+  (`src/utils/options.ts`) so it throws instead; the documents and tasks namespaces do.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.

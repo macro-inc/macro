@@ -1,7 +1,5 @@
+use crate::composition::workers::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::outbound::email_api::GmailApi;
-use crate::pubsub::context::{
-    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
-};
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
@@ -26,13 +24,6 @@ use email::domain::mailbox::inbox_sync::InboxSyncService;
 pub(crate) struct InboxSyncContext {
     pub(crate) sqs_worker: sqs_worker::SQSWorker,
     pub(crate) service: Arc<InboxSync>,
-}
-
-impl InboxSyncContext {
-    #[cfg(test)]
-    pub(crate) fn backfill_context(&self) -> PubSubContext {
-        self.service.effects.worker.clone()
-    }
 }
 
 /// method that ingests sqs messages and calls the process function for each
@@ -86,47 +77,41 @@ pub(crate) fn context(
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     email_api: GmailApi,
-    redis_client: RedisClient,
+    _redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
-    crm_service: CrmServiceType,
+    _crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
     retry_worker: bool,
 ) -> InboxSyncContext {
-    let leaves = PubSubContext {
+    let effects = InboxSyncEffects {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
-        invitation_extractor: crate::pubsub::invitation_extraction::compose(
+        invitation_extractor: crate::composition::workers::invitation_extractor(
             db.clone(),
             email_api.clone(),
         ),
-        db,
-        sqs_worker: worker.clone(),
-        sqs_client,
+        db: db.clone(),
         contacts_ingress,
-        email_api,
-        redis_client,
+        email_api: email_api.clone(),
         notification_ingress_service,
         sfs_client,
         connection_gateway_client,
         dss_client,
         system_properties_service,
-        crm_service,
         macro_event_broker,
-        notifications_enabled,
-        retry_worker,
     };
     let service = Arc::new(InboxSyncService {
-        links: PgGmailOps(leaves.db.clone()),
-        repository: PgInboxSync(leaves.db.clone()),
-        gmail: GmailInboxSync(leaves.email_api.clone()),
-        queue: InboxSyncSqs(leaves.sqs_client.clone()),
-        effects: InboxSyncEffects { worker: leaves },
+        links: PgGmailOps(db.clone()),
+        repository: PgInboxSync(db),
+        gmail: GmailInboxSync(email_api),
+        queue: InboxSyncSqs(sqs_client),
+        effects,
         retry_worker,
         features: email::domain::mailbox::inbox_sync::InboxSyncFeatures {
             attachment_upload: cfg!(feature = "attachment_upload"),
