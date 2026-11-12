@@ -378,18 +378,25 @@ including sign-in; accounts stay `connected` and sends expire unsent. Config:
 `DATABASE_URL` (RDS instance endpoint for the lease connection) and the KMS
 alias chosen from `ENVIRONMENT`.
 
-## Needs from the generic layer
+## Code
 
-Slack differs from WhatsApp in ways `external_chat` doesn't model yet:
+- `crates/slack_linked`: models (the `/slack-linked` DTOs), DSS use cases
+  (`SlackService`), `SlackProvider` (threads on; `read_advanced` queues
+  `slack_read_mark`), the session-service API and the mapping from Slack
+  messages and events, Postgres and KMS adapters.
+- `services/slack_session_service`: sign-in worker and account runner on
+  `crates/session_fleet` (the supervisor and advisory-lock leases it shares
+  with the WhatsApp session service); `slack_client` for Slack.
+- DSS composes it in `src/external_chat.rs` and sends
+  `external_chat_account_ended` (entity `User`, id stable per ended
+  generation) when `slack_account_ended` fires or its sweep finds one.
+- `crates/slack_e2e`: the fleet against `slack_fake_server`.
+- Threads, per-emoji reactions, the read hook and the account-ended
+  notification are generic (`external_chat`); see
+  [External chats](external-chats.md).
 
-- **Threads**: replies live outside the channel timeline. Needs
-  `external_chat_message.thread_root`, a timeline that leaves thread replies
-  out (except broadcast ones) with reply counts on roots, and a thread page
-  (`GET /external-chats/{id}/messages?thread=<message id>`).
-- **Reactions**: a person can add several emoji to one message;
-  `external_chat_reaction` is keyed `(message_id, person_id)`.
-- **Attachments**: Slack gives no hash before download; `sha256` is
-  `NOT NULL`. Download state is provider-owned (being generalized).
-- **Read marks out**: a `ChatProvider` hook when the owner's read position
-  advances.
-- **Account-ended notification**: a generic notification kind.
+## Follow-ups
+
+- Attachments: inbound files (`files.info` for Slack Connect, authenticated
+  download into the media pipeline) and files sent from Macro.
+- `rich_text` blocks for messages whose `text` is empty.

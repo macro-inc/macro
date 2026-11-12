@@ -36,6 +36,7 @@ on:
           - static-file-service
           - unfurl-service
           - whatsapp-session-service
+          - slack-session-service
           - opensearch
           - search-event-queue
           - search-text-extractor-queue

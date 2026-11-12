@@ -92,6 +92,10 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
             resources::WHATSAPP_SESSION_KMS_ALIAS,
             "WhatsApp session data key encryption key (local)",
         ),
+        (
+            resources::SLACK_SESSION_KMS_ALIAS,
+            "Slack session data key encryption key (local)",
+        ),
     ] {
         if existing
             .aliases()
