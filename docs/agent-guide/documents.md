@@ -309,6 +309,20 @@ Click a tick or press Enter to jump immediately to its heading without closing i
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
 
+## Markdown wide mode
+
+The document's title menu has **Turn on wide mode** (desktop and tablet only;
+phones already use the whole screen). It lifts the 768px reading column so the
+text, tables and code blocks fill the pane, with 64px side margins that keep the
+outline rail visible once the pane is wider than 896px. It is the viewer's own
+setting, saved in this browser, and applies to every Markdown document they
+open, including documents open side by side; it changes nothing for
+collaborators. Images keep their own size. With margin comments showing, the
+comments stay in their own column beside the text. Toggling keeps the reader's
+place in the document. The menu item then reads **Turn off wide mode**. The
+backend-free desktop/phone regression mounts the real document view:
+`bunx playwright test --config src/features/block-md/browser-test/playwright.config.ts`.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
