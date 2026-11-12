@@ -89,7 +89,10 @@ export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
-export type { DropdownMultiSelectItemProps } from './components/Dropdown';
+export type {
+  DropdownCopyItemProps,
+  DropdownMultiSelectItemProps,
+} from './components/Dropdown';
 export { Dropdown } from './components/Dropdown';
 export type {
   EmptyStateAction,

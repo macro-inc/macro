@@ -2,6 +2,7 @@ import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import CopyIcon from '@icon/system/regular/copy.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   addCtrlJKMenuNavigation,
@@ -9,6 +10,7 @@ import {
   highlightFirstMenuItemOnOpen,
   Layer,
 } from '@ui';
+import { createCopyFeedback } from '@ui/components/CopyFeedback';
 import { Hotkey } from '@ui/components/Hotkey';
 import {
   type Component,
@@ -40,6 +42,7 @@ type BaseMenuItemWrapperProps = {
   closeOnSelect?: boolean;
   selectorType?: 'checkbox' | 'radio';
   class?: string;
+  ref?: (element: HTMLElement) => void;
 };
 
 type CheckboxMenuItemWrapperProps = BaseMenuItemWrapperProps & {
@@ -90,6 +93,7 @@ function MenuItemWrapper(props: MenuItemWrapperProps) {
           disabled={props.disabled}
           onSelect={props.onClick}
           closeOnSelect={props.closeOnSelect}
+          ref={props.ref}
         >
           {props.children}
         </ContextMenu.Item>
@@ -108,6 +112,8 @@ type BaseMenuItemProps = {
   class?: string;
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
+  ref?: (element: HTMLElement) => void;
+  feedback?: JSX.Element;
 };
 
 type CheckboxMenuItemProps = BaseMenuItemProps & {
@@ -156,6 +162,7 @@ export function MenuItem(props: MenuItemProps) {
         props.class
       )}
       onClick={props.onClick}
+      ref={props.ref}
       disabled={props.disabled}
       closeOnSelect={props.closeOnSelect}
       selectorType={props.selectorType}
@@ -227,7 +234,32 @@ export function MenuItem(props: MenuItemProps) {
           showPlus
         />
       </Show>
+      {props.feedback}
     </MenuItemWrapper>
+  );
+}
+
+/** Context-menu copy action with unchanged label and persistent focus. */
+export type CopyMenuItemProps = Omit<
+  GenericMenuItemProps,
+  'onClick' | 'ref' | 'feedback'
+> & {
+  onCopy: () => void | boolean | Promise<void | boolean>;
+};
+
+export function CopyMenuItem(props: CopyMenuItemProps) {
+  let item: HTMLElement | undefined;
+  const { activate, CopyFeedback } = createCopyFeedback(() => item);
+  return (
+    <MenuItem
+      {...props}
+      class={cn('relative', props.class)}
+      icon={props.icon ?? CopyIcon}
+      ref={(element) => (item = element)}
+      closeOnSelect={false}
+      onClick={() => activate(props.onCopy)}
+      feedback={<CopyFeedback />}
+    />
   );
 }
 
