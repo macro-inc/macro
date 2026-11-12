@@ -1,4 +1,5 @@
 const codexAccess = vi.hoisted(() => ({ enabled: true }));
+const teamComputers = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => codexAccess.enabled,
 }));
@@ -52,7 +53,7 @@ vi.mock('./computers/views/MacroComputers', () => ({
 vi.mock('./computers/primitives/team-computers', () => ({
   useTeamComputers: () => ({
     // With computers on, a computer's harness is listed only under them.
-    enabled: () => true,
+    enabled: () => teamComputers.enabled,
     computers: () => [],
     failed: () => false,
   }),
@@ -227,6 +228,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  teamComputers.enabled = true;
   codexAccess.enabled = true;
   vi.clearAllMocks();
   mocks.status.data = {
@@ -637,6 +639,18 @@ describe('Harness', () => {
     expect(screen.queryByText('Dev box')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+  });
+
+  it('never offers Share or Remove on a Macro computer, even with computers off', () => {
+    teamComputers.enabled = false;
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, access: 'owner', computer_id: 'computer-1' },
+    ];
+
+    render(() => <Harness />);
+    expect(screen.getByText('Dev box')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
   });
 
   it('renames a paired runtime', async () => {
