@@ -193,16 +193,9 @@ async fn the_sdk_declarations_type_check() {
         .env("HOME", root.path())
         .env("NO_COLOR", "1")
         .current_dir(&checker.types)
-        .args([
-            "check",
-            "--quiet",
-            "--no-config",
-            "--no-lock",
-            "--no-remote",
-            "--no-npm",
-            "--unstable-sloppy-imports",
-            "src/macro.d.ts",
-        ])
+        .args(["check", "--quiet", "--no-config"])
+        .args(OFFLINE)
+        .arg("src/macro.d.ts")
         .output()
         .await
         .unwrap();

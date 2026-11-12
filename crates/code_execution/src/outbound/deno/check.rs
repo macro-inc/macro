@@ -19,6 +19,13 @@ const CONFIG: &str = r#"{"compilerOptions":{"skipLibCheck":true}}"#;
 /// The host's declarations, written as a module rather than a `.d.ts` so
 /// they are still checked. Not a name a program's file can take.
 const DECLARATIONS: &str = "context.global.ts";
+/// Nothing a check reads comes from outside the files it is given.
+const OFFLINE: [&str; 4] = [
+    "--no-lock",
+    "--no-remote",
+    "--no-npm",
+    "--unstable-sloppy-imports",
+];
 
 /// Checks with the pinned Deno against declarations written once at startup.
 pub struct DenoChecker {
@@ -129,13 +136,8 @@ impl DenoChecker {
             .current_dir(check)
             .args(["check", "--quiet"])
             .arg(config)
-            .args([
-                "--no-lock",
-                "--no-remote",
-                "--no-npm",
-                "--unstable-sloppy-imports",
-                "--import-map=imports.json",
-            ])
+            .args(OFFLINE)
+            .arg("--import-map=imports.json")
             .args(files.iter().map(|file| file.name.as_str()))
             .arg(DECLARATIONS)
             .stdin(Stdio::null())
