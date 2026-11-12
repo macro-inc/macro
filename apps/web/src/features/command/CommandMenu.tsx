@@ -29,10 +29,9 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -467,7 +466,10 @@ function CommandSearchMenu(
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
-  const query = debouncedDependent(CommandState.query, 60);
+  const [query, flushQuery] = flushableDebouncedDependent(
+    CommandState.query,
+    60
+  );
 
   useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
@@ -729,18 +731,14 @@ function CommandSearchMenu(
     hide: true,
   });
 
-  // The list trails the typed text by the query debounce. Enter pressed in
-  // that gap waits for the list of the text on screen.
-  const runWhenCurrent = createRunWhenCurrent(
-    () => query() !== CommandState.query(),
-    CommandState.isOpen
-  );
+  // The list trails the typed text by the query debounce. Enter brings it up
+  // to date first, then acts at once: a deferred action would be lost if the
+  // person kept typing.
   const actOnSelected = (openInNewSplit: boolean) => {
-    if (query() === CommandState.query() && !selectedItem()) return false;
-    runWhenCurrent(() => {
-      const item = selectedItem();
-      if (item) handleItemAction(item, openInNewSplit);
-    });
+    flushQuery();
+    const item = selectedItem();
+    if (!item) return false;
+    handleItemAction(item, openInNewSplit);
     return true;
   };
 
