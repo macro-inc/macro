@@ -79,14 +79,30 @@ echo "$head" > "$boot_head"
 # that differs because the image was updated is adopted (committed, so the
 # runtime pushes it); one that differs because the agent changed its
 # dependencies fails the boot, which rolls back: new packages need a new
-# image. The agent changed them if its package.json differs from the
-# template's (the repository's first commit) or has uncommitted changes; a
+# image. The agent changed them if its package.json's dependency fields (as
+# checked out, so uncommitted changes count) differ from the template's (the
+# repository's first commit); scripts and other fields don't matter. A
 # rollback restores the template's, so a rolled-back agent boots again.
+# `dependency_fields` prints them canonically (keys sorted) from stdin.
+dependency_fields() {
+  bun -e '
+    const sorted = (value) =>
+      Array.isArray(value) ? value.map(sorted)
+      : value !== null && typeof value === "object"
+        ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])]))
+        : value;
+    const json = JSON.parse(await Bun.stdin.text());
+    const fields = ["dependencies", "devDependencies", "optionalDependencies",
+      "peerDependencies", "workspaces", "overrides"];
+    console.log(JSON.stringify(fields.map((field) => [field, sorted(json[field] ?? null)])));
+  '
+}
 dependencies_edited() {
-  local template
-  ! wgit diff --quiet HEAD -- package.json && return 0
+  local template ours theirs
   template=$(wgit rev-list --max-parents=0 HEAD | tail -n 1)
-  ! wgit diff --quiet "$template" HEAD -- package.json
+  theirs=$(wgit show "$template:package.json" | dependency_fields) || return 0
+  ours=$(dependency_fields <"$workspace/package.json") || return 0
+  [[ $ours != "$theirs" ]]
 }
 if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
   if dependencies_edited; then
