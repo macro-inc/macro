@@ -183,40 +183,149 @@ const isNodeModule = (id: string) => id.includes('/node_modules/');
 const isGeneratedSource = (id: string) =>
   !isNodeModule(id) && /\/generated\//.test(id);
 
-type StartupPlan = {
-  /** Generated modules that go to `api-schemas`. */
-  schemas: Set<string>;
-  /** The `startup-*` chunk of each other startup module of the app's own code. */
-  appChunks: Map<string, { name: string; entries: number }>;
-};
+/** The startup chunk a module moves to, and the group that captures it. */
+type StartupPart = { name: string; rank: number };
 
 /**
- * Splits the code the HTML entries load at startup into a few chunks, so each
- * source map stays under PostHog's limit (one map with every startup module
- * was 44 MB, most of it library code and the embedded text of generated API
- * clients) and index.html preloads a handful of files. Left alone, Rolldown
- * splits startup code that lazy chunks also import into hundreds of small
- * chunks, and index.html preloads every one.
+ * Module code (before minification, about 2.2 times the emitted size) per
+ * startup chunk. Smaller chunks start the app sooner: Chrome compiles each one
+ * as it arrives while later ones download, and V8 re-parses a whole chunk on
+ * the main thread the first time code in it builds a stack trace, which some
+ * libraries do as they load. 800 KB parts beat 2 MB parts on a slow CPU, and
+ * both beat one chunk per kind.
+ */
+const STARTUP_PART_CODE_BYTES = 800_000;
+/** Groups available to startup chunks; the plan fails the build if it needs more. */
+const STARTUP_PART_GROUPS = 48;
+
+/** A module being visited and the next of its imports to visit. */
+type ImportFrame = { id: string; imports: readonly string[]; next: number };
+
+/**
+ * Positions of modules in an order where every module comes after the modules
+ * it imports. Modules that import each other in a cycle share one position.
+ * This is Tarjan's strongly connected components algorithm, which finishes a
+ * component only after every component it reaches. It keeps its own stack so
+ * a long import chain cannot overflow the call stack.
+ */
+function dependencyFirstPositions(
+  ids: Iterable<string>,
+  importsOf: (id: string) => readonly string[]
+): Map<string, number> {
+  const visitIndex = new Map<string, number>();
+  const lowLink = new Map<string, number>();
+  const open = new Set<string>();
+  const openStack: string[] = [];
+  const positions = new Map<string, number>();
+  let visited = 0;
+
+  for (const root of ids) {
+    if (visitIndex.has(root)) continue;
+    const frames: ImportFrame[] = [];
+    const enter = (id: string) => {
+      visitIndex.set(id, visited);
+      lowLink.set(id, visited);
+      visited += 1;
+      openStack.push(id);
+      open.add(id);
+      frames.push({ id, imports: importsOf(id), next: 0 });
+    };
+    const lower = (id: string, value: number | undefined) => {
+      if (value !== undefined && value < (lowLink.get(id) ?? value)) {
+        lowLink.set(id, value);
+      }
+    };
+
+    enter(root);
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1];
+      if (frame.next < frame.imports.length) {
+        const imported = frame.imports[frame.next];
+        frame.next += 1;
+        if (!visitIndex.has(imported)) enter(imported);
+        else if (open.has(imported)) lower(frame.id, visitIndex.get(imported));
+        continue;
+      }
+
+      frames.pop();
+      const parent = frames[frames.length - 1];
+      if (parent) lower(parent.id, lowLink.get(frame.id));
+      if (lowLink.get(frame.id) !== visitIndex.get(frame.id)) continue;
+
+      const position = positions.size;
+      let member = openStack.pop();
+      while (member !== undefined) {
+        open.delete(member);
+        positions.set(member, position);
+        if (member === frame.id) break;
+        member = openStack.pop();
+      }
+    }
+  }
+  return positions;
+}
+
+/**
+ * Cuts modules sorted by dependency-first position into parts of at least
+ * STARTUP_PART_CODE_BYTES of code (the last part may be smaller), never
+ * between modules that share a position because they import each other.
+ */
+function cutIntoParts(
+  ids: readonly string[],
+  positionOf: (id: string) => number,
+  bytesOf: (id: string) => number
+): string[][] {
+  const parts: string[][] = [[]];
+  let partBytes = 0;
+  for (const [index, id] of ids.entries()) {
+    const startsComponent =
+      index === 0 || positionOf(ids[index - 1]) !== positionOf(id);
+    if (partBytes >= STARTUP_PART_CODE_BYTES && startsComponent) {
+      parts.push([]);
+      partBytes = 0;
+    }
+    parts[parts.length - 1].push(id);
+    partBytes += bytesOf(id);
+  }
+  return parts;
+}
+
+/**
+ * Splits the code the HTML entries load at startup into chunks of about
+ * STARTUP_PART_CODE_BYTES of module code, so each source map stays well under
+ * PostHog's limit (one map with every startup module was 44 MB, most of it
+ * library code and the embedded text of generated API clients), startup stays
+ * fast, and index.html preloads a known set of files.
+ * Left alone, Rolldown splits startup code that lazy chunks also import into
+ * hundreds of small chunks, and index.html preloads every one.
  *
  * Only modules an entry already imports statically move, so startup loads the
  * same code and lazy code stays lazy:
- * - libraries go to `vendor`;
- * - generated API modules go to `api-schemas`, but only if they import nothing
- *   but libraries and other generated modules, so the chunks never import each
- *   other and read bindings before they are initialized;
- * - the rest of the app's code goes to one `startup-<entries>` chunk per set of
+ * - libraries go to `vendor-<n>`;
+ * - generated API modules go to `api-schemas-<n>`, but only if they import
+ *   nothing but libraries and other generated modules;
+ * - the rest of the app's code goes to `startup-<entries>-<n>` for the set of
  *   entries that loads it, except the modules an entry imports directly, which
  *   stay in its entry chunk.
  *
- * A module's static imports load with at least the same entries. Groups for
- * more entries run first (higher priority), so each chunk only imports chunks
- * for more entries, never the other way around.
+ * Chunks must never import each other in a cycle, or a module could read a
+ * binding before it is initialized. Each kind's modules are cut into parts
+ * along an order where a module follows everything it imports, and each part
+ * gets its own group: parts earlier in that order, libraries, and code for more
+ * entries (a module's static imports load with at least the same entries) get
+ * a higher priority. A group also captures the not yet captured modules its
+ * modules import, so a chunk only ever imports chunks captured before it.
+ * (Rolldown's own `maxSize` splits a group without that order and its parts
+ * import each other in cycles.)
  */
 function startupChunks(
   entries: Record<string, string>
 ): Rolldown.CodeSplittingOptions {
   const entryIds = new Set(Object.values(entries));
-  const planChunks = (context: Rolldown.ChunkingContext): StartupPlan => {
+  const entryCount = entryIds.size;
+  const planChunks = (
+    context: Rolldown.ChunkingContext
+  ): Map<string, StartupPart> => {
     const imports = (id: string) =>
       context.getModuleInfo(id)?.importedIds ?? [];
     const loadedBy = new Map<string, string[]>();
@@ -232,6 +341,7 @@ function startupChunks(
         pending.push(...imports(id));
       }
     }
+
     const schemas = new Set([...loadedBy.keys()].filter(isGeneratedSource));
     let changed = true;
     while (changed) {
@@ -246,19 +356,59 @@ function startupChunks(
         }
       }
     }
-    const appChunks = new Map<string, { name: string; entries: number }>();
+
+    // Each moving module's kind, ranked so a kind only imports earlier kinds.
+    const kinds = new Map<string, { order: number; ids: string[] }>();
+    const addToKind = (kind: string, order: number, id: string) => {
+      const members = kinds.get(kind) ?? { order, ids: [] };
+      members.ids.push(id);
+      kinds.set(kind, members);
+    };
     for (const [id, loaders] of loadedBy) {
-      if (isNodeModule(id) || schemas.has(id)) continue;
-      if (entryIds.has(id) || direct.has(id)) continue;
-      appChunks.set(id, {
-        name: `startup-${loaders.join('-')}`,
-        entries: loaders.length,
-      });
+      if (isNodeModule(id)) addToKind('vendor', 0, id);
+      else if (schemas.has(id)) addToKind('api-schemas', 1, id);
+      else if (!entryIds.has(id) && !direct.has(id)) {
+        addToKind(
+          `startup-${loaders.join('-')}`,
+          2 + entryCount - loaders.length,
+          id
+        );
+      }
     }
-    return { schemas, appChunks };
+
+    // Cut each kind into parts along the import order, never inside a cycle.
+    const positions = dependencyFirstPositions(loadedBy.keys(), (id) =>
+      imports(id).filter((imported) => loadedBy.has(imported))
+    );
+    const positionOf = (id: string) => positions.get(id) ?? 0;
+    const plan = new Map<string, StartupPart>();
+    let rank = 0;
+    const ordered = [...kinds].sort(([, a], [, b]) => a.order - b.order);
+    for (const [kind, { ids }] of ordered) {
+      ids.sort((a, b) => positionOf(a) - positionOf(b));
+      const parts = cutIntoParts(
+        ids,
+        positionOf,
+        (id) => context.getModuleInfo(id)?.code?.length ?? 0
+      );
+      for (const [index, part] of parts.entries()) {
+        const name = parts.length === 1 ? kind : `${kind}-${index + 1}`;
+        for (const id of part) plan.set(id, { name, rank });
+        rank += 1;
+      }
+    }
+    if (rank > STARTUP_PART_GROUPS) {
+      throw new Error(
+        `startupChunks() planned ${rank} startup chunks but has ${STARTUP_PART_GROUPS} groups; raise STARTUP_PART_GROUPS or STARTUP_PART_CODE_BYTES.`
+      );
+    }
+    return plan;
   };
   // Rolldown reuses one context for every call of a chunking pass.
-  const plans = new WeakMap<Rolldown.ChunkingContext, StartupPlan>();
+  const plans = new WeakMap<
+    Rolldown.ChunkingContext,
+    Map<string, StartupPart>
+  >();
   const planFor = (context: Rolldown.ChunkingContext) => {
     let plan = plans.get(context);
     if (!plan) {
@@ -267,40 +417,19 @@ function startupChunks(
     }
     return plan;
   };
-  const entryCount = entryIds.size;
-  const appGroups = Array.from(
-    { length: entryCount },
-    (_, index): Rolldown.CodeSplittingGroup => {
-      const loaders = entryCount - index;
-      return {
-        debugName: `startup chunks for ${loaders} entries`,
+  return {
+    groups: Array.from(
+      { length: STARTUP_PART_GROUPS },
+      (_, rank): Rolldown.CodeSplittingGroup => ({
+        debugName: `startup chunk ${rank + 1}`,
         name: (id, context) => {
-          const chunk = planFor(context).appChunks.get(id);
-          return chunk?.entries === loaders ? chunk.name : null;
+          const part = planFor(context).get(id);
+          return part?.rank === rank ? part.name : null;
         },
         tags: ['$initial'],
-        priority: loaders,
-      };
-    }
-  );
-  return {
-    groups: [
-      {
-        name: 'vendor',
-        test: isNodeModule,
-        tags: ['$initial'],
-        priority: entryCount + 2,
-      },
-      {
-        debugName: 'api-schemas',
-        name: (id, context) =>
-          planFor(context).schemas.has(id) ? 'api-schemas' : null,
-        test: isGeneratedSource,
-        tags: ['$initial'],
-        priority: entryCount + 1,
-      },
-      ...appGroups,
-    ],
+        priority: STARTUP_PART_GROUPS - rank,
+      })
+    ),
   };
 }
 
