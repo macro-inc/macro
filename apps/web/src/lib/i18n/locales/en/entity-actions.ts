@@ -69,6 +69,10 @@ export default {
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
+  shareCommand: {
+    one: 'Share',
+    other: 'Share items',
+  },
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
