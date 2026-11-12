@@ -14,8 +14,11 @@ Apply MacroDB migrations `20260918164303_calendar_scheduling.sql` and
 updated calendar service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
 The migration uses PostgreSQL multiranges (PostgreSQL 14+) and `btree_gist` for
 atomic host conflict exclusion. Each host needs a connected, writable primary
-calendar with calendar sync ready. All connected calendars are checked for busy
-time. Invitations and Google Meet links use the existing calendar mutation service.
+calendar with calendar sync ready. Busy time comes from every connected calendar
+the host has not turned off (the Busy switch in Settings → Calendar, stored in
+`calendar_availability_preferences` and read in process, never through the
+calendar service's HTTP listing), plus meetings the host organizes or attends on
+any calendar. Invitations and Google Meet links use the existing calendar mutation service.
 Deployed invitations include the private cancellation/rescheduling URL.
 
 The web entry points are Settings → Calendar, the calendar header shortcuts,

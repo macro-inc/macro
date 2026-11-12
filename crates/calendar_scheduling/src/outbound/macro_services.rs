@@ -4,10 +4,11 @@ use crate::domain::{
     ports::{Calendars, Directory},
 };
 use calendar_events::domain::{
+    labels::CalendarLabels,
     meeting_links::{create_event_with_macro_call, first_macro_call_url},
     models::{
-        CalendarAttendeeInput, CalendarEventDraft, CalendarSyncStatus, ConferenceChange, EventTime,
-        EventTransparency, OccurrenceRange,
+        CalendarAttendeeInput, CalendarEvent, CalendarEventDraft, CalendarSyncStatus,
+        ConferenceChange, EventTime, EventTransparency, OccurrenceRange,
     },
     ports::{
         CalendarCreationRecoveryService, CalendarDeletionScope, CalendarOccurrenceService,
@@ -131,8 +132,11 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
     ) -> Result<Vec<BusyRange>, Error> {
         let mut events = vec![];
         for host in hosts {
+            // Read in process, never through the calendar service's HTTP
+            // listing: a host on an older build would answer with an older
+            // default for the availability setting and free busy time.
             let calendars = self
-                .mutations
+                .occurrences
                 .list_visible_calendars(host)
                 .await
                 .map_err(|_| Error::CalendarUnavailable)?;
@@ -164,17 +168,18 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
+            let labels = Arc::new(CalendarLabels::from_calendars(calendars));
             events.extend(rows.into_iter().map(|listing| {
                 let (event, occurrence) = listing.into_occurrence_event();
-                (host.clone(), event, occurrence)
+                (host.clone(), labels.clone(), event, occurrence)
             }));
         }
         let excluded_uid = events
             .iter()
-            .find(|(_, event, _)| Some(event.id) == exclude_event)
-            .map(|(_, event, _)| event.ical_uid.clone());
+            .find(|(_, _, event, _)| Some(event.id) == exclude_event)
+            .map(|(_, _, event, _)| event.ical_uid.clone());
         let mut busy = vec![];
-        for (host, event, occurrence) in events {
+        for (host, labels, event, occurrence) in events {
             let mut owned = event.attendees.iter().filter(|a| a.is_self).peekable();
             let declined = owned.peek().is_some()
                 && owned.all(|a| {
@@ -188,6 +193,7 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
                     .is_some_and(|uid| !uid.is_empty() && *uid == event.ical_uid)
                 || event.transparency == EventTransparency::Transparent
                 || declined
+                || !occupies_host(&labels, &event)
             {
                 continue;
             }
@@ -438,6 +444,14 @@ where
         }
         Ok(())
     }
+}
+
+/// Whether an occurrence takes the host's time: a calendar holding it counts
+/// toward their availability (one such copy is enough, and a calendar the
+/// listing does not know counts), or they organize or attend it, as team
+/// availability reads it.
+fn occupies_host(labels: &CalendarLabels, event: &CalendarEvent) -> bool {
+    labels.event_on_schedule(event) != Some(false) || labels.role(event).is_some()
 }
 
 fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {
