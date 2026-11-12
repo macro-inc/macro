@@ -87,13 +87,22 @@ type Session = {
   entries: Awaited<ReturnType<typeof catalog>>;
 };
 
-async function open(instance: string, tempo: string): Promise<Session> {
+/**
+ * Sign in and set the workspace up. `readOnly` skips setting it up, so
+ * rereading results doesn't wait for a run holding the stack: it takes the
+ * databases the last setup chose.
+ */
+async function open(instance: string, tempo: string, readOnly = false): Promise<Session> {
   const at = stack(instance, tempo);
+  const saved = readOnly ? savedDatabases(instance) : undefined;
+  if (readOnly && !saved) throw new Error(`${instance} has no setup here; run a draft on it first`);
   // Due dates written on a new day are task changes another eval's run check would see.
-  const ids = await exclusive(instance, 'setup', async () => {
-    await index(at);
-    return setup(at, TIMEZONE);
-  });
+  const ids = saved
+    ? { ...SEEDED_IDS, ...saved }
+    : await exclusive(instance, 'setup', async () => {
+        await index(at);
+        return setup(at, TIMEZONE);
+      });
   const tokens: Tokens = {};
   for (const person of PERSON_KEYS) tokens[person] = await login(at, email(person));
   const judgeToken = await login(at, email(JUDGE));
@@ -514,7 +523,7 @@ async function reread(args: string[]) {
     allowPositionals: true,
     options: { ...STACK_OPTIONS, traces: { type: 'boolean', default: false }, judge: { type: 'boolean', default: false } },
   });
-  const session = values.traces || values.judge ? await open(values.instance, values.tempo) : undefined;
+  const session = values.traces || values.judge ? await open(values.instance, values.tempo, true) : undefined;
   // Agent steps' replies, for results saved before run checks read them.
   let db: SQL | undefined;
   for (const path of positionals) {
@@ -547,7 +556,8 @@ async function reread(args: string[]) {
           found,
           item.draft,
           item.reply,
-          session.names,
+          // The ids this file's drafts saw, which may predate the stack's setup.
+          glossary(ids),
           baseOf(session, found),
         );
       }
