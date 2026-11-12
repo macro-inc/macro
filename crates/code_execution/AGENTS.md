@@ -37,8 +37,9 @@ them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`). Routes that mint a credential, give
 account access away or reach people outside the workspace refuse them
 outright with `macro_authorization::refuse_agent_run`: API key, bot token,
-webhook and database webhook creation, webhook changes, external chat sends,
-account manager requests, answers and claims, and team, referral and meeting
+channel-scoped bot, webhook and database webhook creation, webhook changes,
+device pairing approval, external chat sends, account manager requests,
+answers and claims, team invite links, and team, referral and meeting
 invites.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
