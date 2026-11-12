@@ -783,10 +783,9 @@ describe('routine composer execution selection', () => {
       expect(screen.queryByRole('menuitem', { name, hidden: true })).toBeNull();
     }
     // Searching finds no events either.
-    fireEvent.input(
-      screen.getByRole('textbox', { name: 'Search triggers' }),
-      { target: { value: 'document' } }
-    );
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search triggers' }), {
+      target: { value: 'document' },
+    });
     expect(
       screen.queryByRole('menuitem', {
         name: /^Document created/,
