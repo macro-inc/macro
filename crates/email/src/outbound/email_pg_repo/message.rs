@@ -561,13 +561,14 @@ pub(super) async fn process_scheduled_message(
         sqlx::query!(
             r#"
             INSERT INTO email_scheduled_messages (
-                link_id, message_id, send_time, sent, actor_id,
+                link_id, message_id, send_time, sent, actor_id, agent_correlation_id,
                 created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
             ON CONFLICT (link_id, message_id) DO UPDATE SET
                 send_time = EXCLUDED.send_time,
                 actor_id = EXCLUDED.actor_id,
+                agent_correlation_id = EXCLUDED.agent_correlation_id,
                 updated_at = NOW()
             WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing
             "#,
@@ -576,6 +577,7 @@ pub(super) async fn process_scheduled_message(
             send_time,
             false,
             actor_id,
+            agent_correlation::context::current(),
         )
         .execute(&mut *tx)
         .await?;

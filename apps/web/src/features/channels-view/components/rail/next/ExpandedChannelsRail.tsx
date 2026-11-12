@@ -2,8 +2,11 @@ import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableChatSidebarSectionResize } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -32,7 +35,6 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -43,11 +45,7 @@ import {
   rowKeyForSection,
   useChannelsRail,
 } from '../ChannelsRailContext';
-import {
-  RailListError,
-  RailListLoading,
-  RailListLoadingMore,
-} from '../ChannelsRailSection';
+import { RailListError, RailListLoadingMore } from '../ChannelsRailSection';
 import {
   type ChannelRailSectionRows,
   groupChannelRailSections,
@@ -70,10 +68,11 @@ import {
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
 import { ResizableRailSection } from './ResizableRailSection';
+import { ExpandedSearchResults } from './SectionSearchResults';
 import { useFavoriteReorder } from './useFavoriteReorder';
 import { useSectionReorder } from './useSectionReorder';
 
-type ChannelRailSearch = {
+export type ChannelRailSearch = {
   isOpen: Accessor<boolean>;
   query: Accessor<string>;
   results: Accessor<readonly ChannelEntity[]>;
@@ -139,6 +138,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      <SidebarRoutineSuggestions
+        surface="chat"
+        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+      />
       <Show when={rail.labelsFailed()}>
         <div
           class="flex items-center gap-2 px-3 text-xs text-ink-muted"
@@ -168,6 +171,10 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
       if (teamName) {
         return t('channelSections.namedTeamChannels', { name: teamName });
       }
+    }
+
+    if (props.group === 'channels') {
+      return t('channelSections.allChannels');
     }
 
     return t(`channelSections.${props.group}`);
@@ -310,13 +317,18 @@ type SectionHandle = {
   root?: HTMLDivElement;
   virtualizer?: ChannelRailVirtualizerHandle;
   viewport?: HTMLDivElement;
+  outerScroll?: boolean;
 };
 
 function BrowseSection(props: {
   sectionKey: ChannelSectionKey;
   section: ChannelRailSectionRows;
   maxHeight: number;
+  resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
+  layoutVersion: number;
+  sectionStart: number;
+  sectionOrder: readonly ChannelSectionKey[];
   scrollVersion: number;
   savedScrollTop: number;
   onReady: () => void;
@@ -331,6 +343,15 @@ function BrowseSection(props: {
   const [virtualizer, setVirtualizer] =
     createSignal<ChannelRailVirtualizerHandle>();
   const size = createElementSize(scrollRoot);
+  const [resizing, setResizing] = createSignal(false);
+  const [startMargin, setStartMargin] = createSignal(0);
+  const outerScroll = () =>
+    !props.resizingEnabled ||
+    (props.maxHeight === Number.POSITIVE_INFINITY &&
+      rail.sectionPreferences(props.sectionKey).height === undefined &&
+      !resizing());
+  const rowsScrollRoot = () =>
+    outerScroll() ? props.outerScrollRoot : scrollRoot();
   const droppable = createDroppable(
     `${props.sectionReorder.scope}:${props.sectionKey}`,
     {
@@ -343,9 +364,41 @@ function BrowseSection(props: {
   onCleanup(props.register(props.sectionKey, handle));
   onMount(() => {
     const viewport = scrollRoot();
-    if (viewport) viewport.scrollTop = props.savedScrollTop;
+    if (viewport && !outerScroll()) viewport.scrollTop = props.savedScrollTop;
     props.onReady();
   });
+
+  createEffect(
+    on(
+      [
+        scrollRoot,
+        outerScroll,
+        () => props.layoutVersion,
+        () => props.sectionStart,
+        () => props.sectionOrder,
+        () => size.height,
+      ],
+      () => {
+        if (!outerScroll()) return;
+
+        const frame = requestAnimationFrame(() => {
+          let element: HTMLElement | undefined = scrollRoot();
+          let offset = 0;
+
+          while (element && element !== props.outerScrollRoot) {
+            offset += element.offsetTop;
+            element =
+              element.offsetParent instanceof HTMLElement
+                ? element.offsetParent
+                : undefined;
+          }
+
+          setStartMargin(offset);
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
 
   // Stable row IDs preserve in-flight pointer gestures during live updates.
   const rowsById = createMemo(
@@ -371,6 +424,11 @@ function BrowseSection(props: {
 
   const label = () => {
     const row = heading();
+
+    if (row.kind === 'section' && row.group === 'channels') {
+      return t('channelSections.allChannels');
+    }
+
     return row.kind === 'label'
       ? row.label.name
       : t(`channelSections.${row.group}`);
@@ -461,11 +519,14 @@ function BrowseSection(props: {
       section={props.sectionKey}
       label={label()}
       open={open()}
+      showCollapsedRows={!open() && itemCount() > 0}
+      resizingEnabled={props.resizingEnabled}
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
       outerScrollRoot={props.outerScrollRoot}
       itemCount={itemCount()}
+      onResizingChange={setResizing}
       rootRef={(element) => {
         handle.root = element;
         droppable.ref(element);
@@ -509,10 +570,17 @@ function BrowseSection(props: {
           ref={(current) => {
             handle.virtualizer = current;
             setVirtualizer(current);
-            if (current) props.onReady();
+            // The virtualizer clears its ref while the rail is disposed. A
+            // reactive read then can rerun the owner being disposed, so keep
+            // the last snapshot.
+            if (!current) return;
+
+            handle.outerScroll = outerScroll();
+            props.onReady();
           }}
           keys={rowIds()}
-          scrollRoot={scrollRoot()}
+          scrollRoot={rowsScrollRoot()}
+          scrollMargin={outerScroll() ? startMargin() : 0}
           scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
           estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
           keepMounted={keepRows()}
@@ -550,7 +618,9 @@ function BrowseSection(props: {
 
 function ExpandedBrowse() {
   const rail = useChannelsRail();
+  const resizeFlag = useFeatureFlag(enableChatSidebarSectionResize);
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
   const [handlesVersion, setHandlesVersion] = createSignal(0);
   const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
@@ -562,6 +632,7 @@ function ExpandedBrowse() {
   }>();
   const userId = useUserId();
   const scrollSize = createElementSize(scrollRoot);
+  const stackSize = createElementSize(stackContent);
   const scrollOffsets = new Map<ChannelSectionKey, number>();
   const sections = createMemo(() =>
     groupChannelRailSections(rail.list.items.all())
@@ -575,11 +646,22 @@ function ExpandedBrowse() {
     }
     return lookup;
   });
-  const maximumHeight = () =>
-    Math.min(
+  const maximumHeight = (key: ChannelSectionKey) => {
+    const paneHeight = Math.min(
       CHANNEL_SECTION_MAX_HEIGHT,
       Math.max(CHANNEL_SECTION_MIN_HEIGHT, (scrollSize.height ?? 300) - 48)
     );
+
+    if (key !== 'channels') {
+      return paneHeight;
+    }
+
+    if (keys().at(-1) === key) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return Math.max(paneHeight, rail.sectionPreferences(key).height ?? 0);
+  };
   const handles = new Map<ChannelSectionKey, SectionHandle>();
   const motion = createLayoutAnimation({
     viewport: scrollRoot,
@@ -691,7 +773,7 @@ function ExpandedBrowse() {
     handles.set(key, handle);
     return () => {
       if (handles.get(key) === handle) {
-        if (handle.viewport) {
+        if (handle.viewport && !handle.outerScroll) {
           scrollOffsets.set(key, handle.viewport.scrollTop);
         }
         handles.delete(key);
@@ -742,7 +824,7 @@ function ExpandedBrowse() {
         const target = document.getElementById(
           domIdForRow(rail.railId, request.rowId)
         );
-        if (container && target) {
+        if (container && target && (!handle.outerScroll || currentIndex < 0)) {
           const nextOffset =
             currentIndex >= 0
               ? handle.virtualizer?.getScrollOffsetForIndex(
@@ -777,7 +859,7 @@ function ExpandedBrowse() {
         class="scrollbar-hidden relative min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
-        <div>
+        <div ref={setStackContent}>
           <ChannelRailVirtualizer
             scrollRoot={scrollRoot()}
             keys={keys()}
@@ -785,14 +867,18 @@ function ExpandedBrowse() {
             keepMounted={keepSections()}
             overscan={3}
           >
-            {(key) => (
+            {(key, start) => (
               <Show when={sections().get(key)}>
                 {(section) => (
                   <BrowseSection
                     sectionKey={key}
                     section={section()}
-                    maxHeight={maximumHeight()}
+                    maxHeight={maximumHeight(key)}
+                    resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
+                    layoutVersion={stackSize.height ?? 0}
+                    sectionStart={start()}
+                    sectionOrder={keys()}
                     scrollVersion={scrollVersion()}
                     savedScrollTop={scrollOffsets.get(key) ?? 0}
                     onReady={ready}
@@ -811,94 +897,6 @@ function ExpandedBrowse() {
   );
 }
 
-function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
-  const rail = useChannelsRail();
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  let virtualizer: ChannelRailVirtualizerHandle | undefined;
-  let unregister: (() => void) | undefined;
-
-  onCleanup(() => unregister?.());
-
-  const channelsById = createMemo(
-    () =>
-      new Map(props.search.results().map((channel) => [channel.id, channel]))
-  );
-
-  const keepMounted = () => {
-    const row = rail.list.focus.item();
-    if (row?.kind !== 'conversation') return [];
-
-    const index = props.search
-      .results()
-      .findIndex(({ id }) => id === row.channel.id);
-    return index >= 0 ? [index] : [];
-  };
-
-  const loadMoreNearEnd = () => {
-    const metrics = virtualizer?.scrollMetrics();
-    const source = rail.sources.search;
-
-    if (
-      metrics &&
-      metrics.size - metrics.offset - metrics.viewport < 300 &&
-      source.hasMore() &&
-      !source.isFetching() &&
-      !source.error()
-    ) {
-      fireAndForget(source.loadMore(), 'channels-view');
-    }
-  };
-
-  createScrollTopFade(scrollRoot);
-
-  return (
-    <div
-      ref={setScrollRoot}
-      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
-    >
-      <Show
-        when={props.search.isLoading() && props.search.results().length === 0}
-      >
-        <RailListLoading />
-      </Show>
-      <Show when={props.search.error()}>
-        <RailListError retry={props.search.retry} />
-      </Show>
-      <ChannelRailVirtualizer
-        ref={(current) => {
-          unregister?.();
-          unregister = undefined;
-          virtualizer = current;
-          if (current) unregister = rail.registerVirtualizer('search', current);
-        }}
-        keys={[...channelsById().keys()]}
-        scrollRoot={scrollRoot()}
-        scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
-        estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
-        keepMounted={keepMounted()}
-        onRangeChange={loadMoreNearEnd}
-      >
-        {(id) => (
-          <Show when={channelsById().get(id)}>
-            {(channel) => <ChannelOption channel={channel()} />}
-          </Show>
-        )}
-      </ChannelRailVirtualizer>
-      <Show
-        when={
-          !props.search.isLoading() &&
-          !props.search.error() &&
-          props.search.results().length === 0
-        }
-      >
-        <p class="px-2 py-6 text-center text-sm text-ink-muted">
-          {t('channelSections.noResults')}
-        </p>
-      </Show>
-    </div>
-  );
-}
-
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const listTarget = tourTarget(CHANNELS_TOUR.list);
@@ -906,7 +904,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

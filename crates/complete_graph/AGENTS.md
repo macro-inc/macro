@@ -4,8 +4,10 @@
 
 Part of the web client's shared infrastructure: this crate composes the
 domain GraphQL adapter crates (`graphql_soup`, `graphql_properties`,
-`graphql_notification`, `graphql_email`, `graphql_entity_mutation`, with
-shared plumbing in `graphql_common`) into the complete GraphQL schema
+`graphql_notification`, `graphql_email`, `graphql_entity_mutation`,
+`graphql_work_feed`, `graphql_notification_inbox`, `graphql_registered_work`,
+with shared plumbing in
+`graphql_common`) into the complete GraphQL schema
 consumed by the client's **normalized cache** (`crates/client`, design doc:
 `apps/web/docs/graphql-normalized-cache-plan.md`). The conventions below are
 load-bearing for cache correctness and API consistency. The cache's build
@@ -114,6 +116,7 @@ keep persisted client caches; a change that makes stored records unsafe needs a
 bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
+`agentSessionActivityAppended` checks session view access as the log subscription does and filters correlated activity rows by the session bound in `agent_correlations`. Its first empty frame confirms listening, so clients refetch REST history to close the handoff gap. A lagging stream errors so clients refetch again.
 `GraphqlUser.pendingEmailSends` lists authorized inbox attempts with cursor pagination.
 Keep this viewer-scoped listing independent of normalized-cache initialization.
 
@@ -121,6 +124,15 @@ Never remove or narrow anything deployed clients send without a dated
 deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 `cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
 it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
+
+Personal contact pages/search and exact ID/email lookups flatten `graphql_contacts`
+under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
+only null means exhausted. Optional exact/first-name matching is applied in the
+contacts domain before the page limit; it does not change identity or the search
+work budget, and omitted `matching` retains the deployed subsequence behavior.
+`GraphqlContact.id` identifies the viewer/person pair, not the target user; names
+can differ by viewer. Keep the bounded read context in DSS HTTP and websocket
+request data and run the `contacts` schema tests after changes.
 
 Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
 

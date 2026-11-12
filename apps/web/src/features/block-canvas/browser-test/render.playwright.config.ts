@@ -5,7 +5,7 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const external = process.env.CANVAS_RENDER_BASE_URL;
 export default defineConfig({
   testDir: directory,
-  testMatch: 'text-layout.browser.e2e.ts',
+  testMatch: /(text-layout|artifact-sandbox)\.browser\.e2e\.ts/,
   timeout: 60_000,
   workers: 1,
   reporter: 'line',

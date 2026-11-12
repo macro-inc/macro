@@ -100,8 +100,9 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Harness',
-    title: 'Agent runtimes and credentials',
-    keywords: 'cursor harness runtime api key provider pairing daemon',
+    title: 'Agent machines and credentials',
+    keywords:
+      'cursor harness runtime machine computer api key provider pairing daemon',
   },
   {
     tab: 'Harness',
@@ -330,6 +331,11 @@ const SETTINGS: Setting[] = [
     tab: 'API Keys',
     title: 'Create and revoke API keys',
     keywords: 'token secret developer authentication',
+  },
+  {
+    tab: 'Account Managers',
+    title: 'See and revoke the agents managing your account',
+    keywords: 'agent manager token access revoke',
   },
   {
     tab: 'Desktop App',

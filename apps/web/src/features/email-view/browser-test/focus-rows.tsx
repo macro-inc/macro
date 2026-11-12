@@ -7,6 +7,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { formatLocalDate } from '@core/util/local-date';
 import {
   EntityProvider,
   ListEntity,
@@ -17,7 +18,8 @@ import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
-import { createSignal, For, type JSX } from 'solid-js';
+import { addDays } from 'date-fns';
+import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
@@ -27,7 +29,6 @@ import {
   EmailFocusReason,
   EmailFocusScore,
 } from '../components/EmailFocusBadges';
-import type { EmailFocusSort } from '../constants';
 
 const VIEWER_ID = 'macro|focus-rows@example.test';
 
@@ -111,10 +112,15 @@ function thread(
       importance: 50,
       needsReply: false,
       needsFollowUp: false,
+      importanceTrend: 'FLAT',
+      dueOn: null,
       ...focus,
     },
   };
 }
+
+/** The local calendar date `days` from today. */
+const dueIn = (days: number) => formatLocalDate(addDays(new Date(), days));
 
 const LONG_SUBJECT =
   'A subject long enough that it has to truncate somewhere on every row width we support';
@@ -127,11 +133,13 @@ const ROWS = mapEmailFocus({
         category: 'CUSTOMER',
         importance: 92,
         needsReply: true,
+        importanceTrend: 'UP',
       }),
       thread('follow-up', 'Blair Quinn', LONG_SUBJECT, {
         category: 'TEAM',
         importance: 71,
         needsFollowUp: true,
+        importanceTrend: 'DOWN',
       }),
       thread('both', 'Casey Moore', 'Both flags set', {
         category: 'KNOWN',
@@ -146,10 +154,12 @@ const ROWS = mapEmailFocus({
       thread('customer', 'Emery Lane', 'Question about our invoice', {
         category: 'CUSTOMER',
         importance: 44,
+        importanceTrend: 'UP',
       }),
       thread('team', 'Finley Ross', 'Notes from the review', {
         category: 'TEAM',
         importance: 33,
+        importanceTrend: 'DOWN',
       }),
       thread('contact', 'Gray Ellis', 'Good to see you last week', {
         category: 'KNOWN',
@@ -163,29 +173,44 @@ const ROWS = mapEmailFocus({
       thread('unknown', 'Indigo Hart', 'From a newer server', {
         category: JSON.parse('"NEWLY_ADDED"'),
         importance: 2,
+        importanceTrend: JSON.parse('"NEWLY_ADDED"'),
+      }),
+      thread('due-soon', 'Jordan Reed', LONG_SUBJECT, {
+        category: 'CUSTOMER',
+        importance: 90,
+        needsReply: true,
+        dueOn: dueIn(3),
+      }),
+      thread('due-today', 'Kai Lund', 'Signed contract', {
+        category: 'TEAM',
+        importance: 80,
+        needsFollowUp: true,
+        dueOn: dueIn(0),
+      }),
+      thread('due-tomorrow', 'Lane Ortiz', 'Budget sign-off', {
+        category: 'KNOWN',
+        importance: 60,
+        dueOn: dueIn(1),
+      }),
+      thread('overdue', 'Morgan Sato', 'Quarterly numbers', {
+        category: 'CUSTOMER',
+        importance: 88,
+        needsReply: true,
+        dueOn: dueIn(-2),
+      }),
+      thread('due-no-reason', 'Noor Hale', 'A row with no reason pill', {
+        category: 'OTHER',
+        importance: 12,
+        dueOn: dueIn(20),
       }),
     ],
   },
 });
 
 function Fixture() {
-  const [sort, setSort] = createSignal<EmailFocusSort>('recent');
   const [list, setList] = createSignal<HTMLElement>();
-  const sortButton = (value: EmailFocusSort, label: string): JSX.Element => (
-    <button
-      type="button"
-      aria-pressed={sort() === value}
-      onClick={() => setSort(value)}
-    >
-      {label}
-    </button>
-  );
   return (
     <main class="flex h-dvh flex-col bg-panel text-ink">
-      <div class="flex h-8 shrink-0 gap-2 px-2 text-xs text-ink-muted">
-        {sortButton('recent', 'Most recent')}
-        {sortButton('importance', 'Importance')}
-      </div>
       <div ref={setList} class="soup-list min-h-0 flex-1 overflow-y-auto">
         <ListLayoutProvider
           ref={list}
@@ -200,9 +225,9 @@ function Fixture() {
                   <ListEntity
                     entity={entity}
                     meta={<EmailFocusReason entity={entity} />}
-                    metaEnd={<EmailFocusScore entity={entity} sort={sort()} />}
+                    metaEnd={<EmailFocusScore entity={entity} />}
                     previewLeading={
-                      <EmailFocusPreviewLeading entity={entity} sort={sort()} />
+                      <EmailFocusPreviewLeading entity={entity} />
                     }
                   />
                 </div>

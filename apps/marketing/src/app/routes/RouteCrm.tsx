@@ -2,12 +2,6 @@ import { lazy } from 'solid-js';
 import { CrmCaptureDemo } from '../../features/marketing/components/crm/CrmCaptureDemo';
 import { CrmComparison } from '../../features/marketing/components/crm/CrmComparison';
 import { CrmEnrichmentDemo } from '../../features/marketing/components/crm/CrmEnrichmentDemo';
-import {
-  AgentIllustration,
-  CaptureIllustration,
-  ContextIllustration,
-  EnrichmentIllustration,
-} from '../../features/marketing/components/crm/CrmFeatureIllustrations';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import {
   DeferredDemo,
@@ -23,15 +17,11 @@ import {
   ProductHero,
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
-import { WorkspaceDesktopDemo } from '../../features/marketing/components/WorkspaceDesktopDemo';
 import { DEMO_BOOKING_URL } from '../../features/marketing/core/navigation';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/homepage-pipeline-demo.css';
 
-const loadPipeline = () =>
-  import('../../features/marketing/components/homepage/CrmPipelineScene');
-const PipelineDemo = lazy(loadPipeline);
 const loadFollowup = async () => ({
   default: (
     await import('../../features/marketing/components/crm/CrmFollowupDemo')
@@ -63,10 +53,7 @@ const faqItems = [
         Agents can read accessible customer emails, calls, chats, files, and
         tasks to draft follow-ups and identify next steps. They can also update
         CRM fields. See <a href="/agents">Macro Agents</a> or{' '}
-        <a href="https://docs.macro.com/AI/mcp/overview">
-          connect an AI client through MCP
-        </a>
-        .
+        <a href="/docs/AI/mcp/overview">connect an AI client through MCP</a>.
       </>
     ),
   },
@@ -81,8 +68,12 @@ const faqItems = [
     ),
   },
   {
+    q: 'Does CRM share my customer emails with the team?',
+    a: 'When Email Sync is on for a company, its threads are visible to your team in CRM. Turn it off to keep the threads private to their participants; the company record stays.',
+  },
+  {
     q: 'Who can see a pipeline I share?',
-    a: 'Share a pipeline with your team, specific people, or a channel and choose their access level. Viewers can read it; editors can update it. Review the Share dialog before sharing customer information.',
+    a: 'Share a pipeline with your team, specific people, or a channel. Viewers can read it; editors can update it.',
   },
   {
     q: 'Where can I check pricing and CRM access?',
@@ -98,69 +89,27 @@ const faqItems = [
 
 export function RouteCrm() {
   setPageSeo({
-    title: 'Macro CRM — The Self-Building CRM',
+    title: 'Macro CRM — Hands-free CRM',
     description:
-      'Companies and contacts built from your email, enriched automatically, and kept current by agents. Right in your workspace, so there’s no separate tool to check.',
+      'CRM is built into the core workspace. It updates automatically and is always one block away, alongside email, tasks, docs, and channels.',
     path: '/crm',
   });
   return (
     <ProductPage>
       <ProductHero
         product="CRM"
-        title={['The CRM connected', 'to your team’s work.']}
-        description={[
-          'Agents update customer records',
-          'from emails, calls, chats, and tasks.',
-        ]}
+        title="CRM that keeps itself up to date."
+        description="Macro CRM stays up to date from your email and team chat. No separate tool to maintain."
         cta="crm_hero_get_started"
+        tutorial="crm"
       />
-      <WorkspaceDesktopDemo
-        heroFrame
-        windowChrome={false}
-        view="crm"
-        label="Explore Macro CRM"
-        render={() => (
-          <DeferredDemo
-            preload={loadPipeline}
-            fallback={<DemoPlaceholder label="Sales pipeline" />}
-          >
-            <PipelineDemo hero />
-          </DeferredDemo>
-        )}
-      />
-      <nav
-        class="feature-page-jump-links crm-feature-links"
-        aria-label="On this page"
-      >
-        <a href="#crm-from-email">
-          <span class="crm-feature-illustration">
-            <CaptureIllustration />
-          </span>
-          <span>Updated by agents</span>
-        </a>
-        <a href="#crm-enrichment">
-          <span class="crm-feature-illustration">
-            <EnrichmentIllustration />
-          </span>
-          <span>Auto-enriched</span>
-        </a>
-        <a href="#crm-context">
-          <span class="crm-feature-illustration">
-            <ContextIllustration />
-          </span>
-          <span>The whole relationship</span>
-        </a>
-        <a href="#crm-agents">
-          <span class="crm-feature-illustration">
-            <AgentIllustration />
-          </span>
-          <span>Agents and MCP</span>
-        </a>
-      </nav>
       <FeaturePageSection
         id="crm-from-email"
-        title={['Keep your CRM', 'up to date with agents.']}
-        description="Your agent can read customer emails, calls, and chats, then update stages, owners, and next steps in your CRM."
+        demo={{
+          tone: 'crm',
+        }}
+        title="Tightly integrated with Macro Mail."
+        description="Open a customer email right from their record, using the same email client you already use. Mention a company or contact in a channel, document, or task."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -169,8 +118,11 @@ export function RouteCrm() {
       </FeaturePageSection>
       <FeaturePageSection
         id="crm-enrichment"
-        title={['Automatically add and', 'enrich new contacts.']}
-        description="When you email someone new, Macro creates the contact and company from their domain. Public company details fill in the record, so you have a starting point before the first meeting."
+        demo={{
+          tone: 'crm',
+        }}
+        title="Build customer records from email."
+        description="Macro creates records from your team’s email and adds publicly available company information. Agents combine that with your team’s emails and calls to summarize the relationship."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -179,8 +131,11 @@ export function RouteCrm() {
       </FeaturePageSection>
       <FeaturePageSection
         id="crm-context"
-        title={['Connect calls, emails, and', 'tasks to each customer.']}
-        description="Open a company to see the people, emails, calls, files, and tasks behind the relationship. Keep notes on the record so your team understands what happened and what comes next."
+        demo={{
+          tone: 'crm',
+        }}
+        title="Discuss customers on their records."
+        description="Conversations on companies and contacts use the same threading system as your team chat. @mention a teammate and they receive a ping just like in a channel; it all goes into one inbox."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -188,9 +143,17 @@ export function RouteCrm() {
         />
       </FeaturePageSection>
       <FeaturePageSection
+        id="crm-tasks"
+        title="Tightly integrated with Macro Tasks."
+        description="Keep follow-ups connected to the customer. Mention a company or contact in a task, assign it to a teammate or agent, and track the work through to completion."
+      />
+      <FeaturePageSection
         id="crm-agents"
-        title={['Draft follow-ups and plan', 'next steps with your agent.']}
-        description="Your agent can read the full customer relationship across emails, calls, chats, files, tasks, and GitHub pull requests. Use that context to draft better follow-up emails and move deals forward."
+        demo={{
+          tone: 'crm',
+        }}
+        title="Ask agents to update your CRM."
+        description="Our MCP support is just as important to us as the user interface. Ask your agent to update a deal or draft a follow-up from the customer’s emails, calls, and notes."
       >
         <DemoInteractionBoundary
           class="feature-page-visual crm-agent-scene"
@@ -206,6 +169,7 @@ export function RouteCrm() {
       </FeaturePageSection>
       <CrmComparison />
       <FeaturePageFaq
+        guide={{ href: '/crm#guide', label: 'CRM' }}
         id="crm-faq-title"
         title="Questions about Macro CRM"
         items={faqItems}

@@ -31,10 +31,17 @@ composer imports the URL matcher from this package; do not duplicate it.
 Human user mention Markdown requires only a nonempty string `userId`; the importer
 derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.
+Document mention Markdown requires only `documentId` (cards also need
+`blockName`); `documentName` is a cached label the chip replaces with the live
+name, and agents routinely omit it. A date mention body is the JSON object or,
+as models sometimes write it, a bare ISO date or timestamp;
+`parseDateMentionBody` in `nodes/DateMentionNode.ts` reads both.
 
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
-literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
+literal URLs; escapes of `*`, `_`, `` ` `` and `~` alone don't make a URL
+literal, because Lexical's export adds them to unlinked URL text (see
+`README.md`). Keep unlink state through both Markdown and Lexical JSON saves.
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 

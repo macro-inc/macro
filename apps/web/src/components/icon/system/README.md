@@ -2,9 +2,11 @@
 
 Original SVG drawings for Macro's interface. The source of truth is the SVG
 files in this directory. These drawings were authored on a blank coordinate
-grid; no Apple, OpenAI, Linear, or Phosphor vector paths were imported or traced.
-SF Symbols and ChatGPT were visual references for optical balance and clarity,
-not asset sources. The icons have no platform font or native symbol dependency.
+grid, except `regular/speaker-slash.svg`, which retains Phosphor's regular
+geometry and MIT notice for the recording mute state. No Apple, OpenAI, or
+Linear vector paths were imported or traced. SF Symbols and ChatGPT were visual
+references for optical balance and clarity, not asset sources. The icons have
+no platform font or native symbol dependency.
 
 Apple's design guidance informs optical balance, not asset reuse. Do not import,
 trace, or modify SF Symbols exports or templates for this cross-platform set.
@@ -100,6 +102,9 @@ flex-shrink. Group-header carets use 16 px; hit targets stay unchanged.
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,
 people variants two figures. The CRM icon retains its stepped building silhouette.
+The connector plug stands upright: two prongs over a 13-unit rounded body and a
+short cord, filling the same optical area as its navigation neighbors; `plugs`
+shares the drawing.
 Office glyphs use two sparse rows of windows and a baseline to avoid a face-like
 appearance. Keep the selected calendar header open around its binding posts,
 quote heads closed with trailing tails, and the filter recognizable as a funnel.
@@ -128,32 +133,13 @@ Review both variants at their actual size and contrast, following Apple's
 [SF Symbols guidance](https://developer.apple.com/design/human-interface-guidelines/sf-symbols#Design-variants).
 These are composition principles; the drawings remain independently authored.
 
-## Interaction motion
+## No interaction motion
 
-`icon-motion.ts` is installed once by the app shell. It delegates pointer presses
-and keyboard/assistive-technology clicks to the leading action glyph in buttons,
-links, tabs, command options, and menu items, including portal menus and newly mounted controls.
-All existing and newly authored `data-macro-icon` SVGs inherit this behavior.
-
-- Keep feedback brief and finite: 320 ms on press, 280 ms on hover. Use a small
-  press-and-settle, a restrained turn for settings, tilt for folders/mail,
-  or lift for sharing. Do not bounce continuously or delay the action.
-- Hover is limited to search, settings, and add glyphs after 160 ms of
-  pointer intent. Touch does not trigger hover. Most icons respond only to press.
-  The agent sparkle stays still.
-- Animate the drawing, never its label, hit target, selection background, or
-  layout. Individual transform properties preserve existing layout transforms.
-- Put `data-icon-motion-target` on a fixed-size wrapper when an action swaps SVGs
-  (as `NavGlyph` does). Both variants then move as one without a position jump.
-- Static glyphs, disclosure arrows, state/check indicators, loading spinners,
-  disabled/busy controls, and illustrations larger than 32 px stay still.
-  Add `data-icon-motion="none"` on a glyph or ancestor for other stateful icons
-  or controls that own their own motion. Do not add decorative motion to status.
-- Respect `prefers-reduced-motion` for every effect, including hover; preference
-  changes cancel in-flight animation. Rapid presses replace rather than stack.
-- New semantic motion belongs in this shared module, not individual consumers.
-  Draw original paths and motion; references such as Grok inform restraint and
-  timing, never asset reuse. No new animation runtime is needed.
+Interface glyphs never animate on press or hover. Do not add a shared motion
+module or per-control bounce, turn, tilt, lift, or scale effects; controls give
+feedback through their own hover and pressed fills. State-driven motion is
+separate: disclosure carets still turn with their expanded state, and loading
+spinners keep spinning.
 
 ## Review
 

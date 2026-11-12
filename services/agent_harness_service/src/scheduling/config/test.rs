@@ -1,11 +1,27 @@
 use super::*;
 use serde_json::{Value, json};
+use std::sync::Arc;
+
+struct TestSecretManager;
+
+impl secretsmanager_client::SecretManager for TestSecretManager {
+    type Err = std::io::Error;
+
+    async fn get_secret_value<T: AsRef<str> + Send>(
+        &self,
+        secret_name: T,
+    ) -> Result<Arc<str>, Self::Err> {
+        assert_eq!(secret_name.as_ref(), "auth-secret-name");
+        Ok(Arc::from("resolved-auth-key"))
+    }
+}
 
 fn config_values() -> Value {
     json!({
         "ENVIRONMENT": "local",
         "KAFKA_BROKERS": "existing-broker:9092",
         "INTERNAL_API_KEY": "test",
+        "AUTHENTICATION_SERVICE_SECRET_KEY": "auth-key",
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 2000,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 10000,
@@ -68,10 +84,10 @@ fn ai_usage_enforcement_defaults_off_and_requires_a_boolean() {
 }
 
 #[test]
-fn settlement_requests_need_billing_on_and_the_authentication_key() {
+fn settlement_requests_require_billing_enabled() {
     use ai_billing::composition::SettlementRoute;
 
-    // Default: billing off, no key, nothing requested.
+    // The key is always required; billing off sends no settlement requests.
     let config: Config = serde_json::from_value(config_values()).unwrap();
     assert_eq!(
         config.enable_ai_usage_billing,
@@ -82,26 +98,14 @@ fn settlement_requests_need_billing_on_and_the_authentication_key() {
         SettlementRoute::Off
     ));
 
-    // A key without billing is accepted and unused.
-    let mut values = config_values();
-    values["AUTHENTICATION_SERVICE_SECRET_KEY"] = json!("auth-key");
-    let config: Config = serde_json::from_value(values).unwrap();
-    assert!(matches!(
-        config.settlement_route().unwrap(),
-        SettlementRoute::Off
-    ));
-
     // Billing is loaded like enforcement: a raw boolean, once, at startup.
     let mut values = config_values();
     values["ENABLE_AI_USAGE_BILLING"] = json!(true);
-    let mut config: Config = serde_json::from_value(values).unwrap();
+    let config: Config = serde_json::from_value(values).unwrap();
     assert_eq!(
         config.enable_ai_usage_billing,
         ai_billing::AiUsageBilling::Enabled
     );
-    // Billing without the key is a startup error, not a silent downgrade.
-    assert!(config.settlement_route().is_err());
-    config.authentication_service_secret_key = serde_json::from_value(json!("auth-key")).unwrap();
     assert!(matches!(
         config.settlement_route().unwrap(),
         SettlementRoute::AuthService(_)
@@ -110,6 +114,46 @@ fn settlement_requests_need_billing_on_and_the_authentication_key() {
     let mut values = config_values();
     values["ENABLE_AI_USAGE_BILLING"] = json!("enabled");
     assert!(serde_json::from_value::<Config>(values).is_err());
+}
+
+#[test]
+fn authentication_key_is_required_with_billing_disabled_or_enabled() {
+    for billing in [false, true] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_BILLING"] = json!(billing);
+        values
+            .as_object_mut()
+            .unwrap()
+            .remove("AUTHENTICATION_SERVICE_SECRET_KEY");
+        let error = serde_json::from_value::<Config>(values).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("AUTHENTICATION_SERVICE_SECRET_KEY")
+        );
+
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!(billing);
+        values["AUTHENTICATION_SERVICE_SECRET_KEY"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Config>(values).is_err());
+    }
+}
+
+#[tokio::test]
+async fn authentication_key_resolves_before_settlement_client_is_built() {
+    let mut values = config_values();
+    values["ENVIRONMENT"] = json!("dev");
+    values["AUTHENTICATION_SERVICE_SECRET_KEY"] = json!("auth-secret-name");
+    let config: Config = serde_json::from_value(values).unwrap();
+
+    let config = config
+        .resolve_remote_secrets(Environment::Develop, &TestSecretManager)
+        .await
+        .unwrap();
+    assert_eq!(
+        config.authentication_service_secret_key.as_ref(),
+        "resolved-auth-key"
+    );
 }
 
 #[test]

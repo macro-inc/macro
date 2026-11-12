@@ -17,3 +17,7 @@ tokio-tungstenite = { workspace = true, default-features = false, features = ["c
 tracing = { workspace = true }
 tungstenite = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+
+[package.metadata.cargo-shear]
+# `macro_env_var` macros expand to `#[tracing::instrument]`.
+ignored = ["tracing"]

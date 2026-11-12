@@ -36,7 +36,7 @@ export function CompanyListsSection(props: { companyId: string }) {
     }
   }
   return (
-    <SidePanel.Section id="company-lists" title="Lists" order={18} defaultOpen>
+    <SidePanel.Section id="company-lists" title="Lists" order={40} defaultOpen>
       <div class="flex flex-col gap-3">
         <Show when={team.isError || lists.query.isError}>
           <div

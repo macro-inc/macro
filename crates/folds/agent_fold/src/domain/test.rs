@@ -17,6 +17,7 @@ mod tool_name;
 mod util;
 
 mod replay;
+mod review_updates;
 
 mod notifications;
 

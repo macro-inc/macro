@@ -25,10 +25,7 @@ import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -58,10 +55,7 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
-import {
-  PeopleDisplayMenu,
-  RemovedPeopleNotice,
-} from '../components/people-display-menu';
+import { PeopleDisplayMenu } from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -78,6 +72,7 @@ import { createCrmExportLoader } from '../primitives/export-source';
 import { CrmActivityView } from './activity';
 import { useApplyCrmView } from './apply-view';
 import { Crm as CrmSettings } from './crm-settings';
+import { CrmEmailOptInBanner } from './email-privacy';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
 import { CrmItemDetail } from './item-detail';
@@ -105,10 +100,10 @@ function NavigationToggle(props: {
         <Show
           when={shell.breakpoints.narrow?.()}
           fallback={
-            <Tooltip label="Expand CRM sidebar">
+            <Tooltip label={t('crm.expandSidebar')}>
               <Button
-                aria-label="Expand CRM sidebar"
-                tooltip="Expand CRM sidebar"
+                aria-label={t('crm.expandSidebar')}
+                tooltip={t('crm.expandSidebar')}
                 variant="ghost"
                 size="icon-sm"
                 ref={toggleTarget}
@@ -124,11 +119,11 @@ function NavigationToggle(props: {
             onOpenChange={setOpen}
             placement="bottom-start"
           >
-            <Tooltip label="Show CRM navigation">
+            <Tooltip label={t('crm.showNavigation')}>
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Show CRM navigation"
+                aria-label={t('crm.showNavigation')}
                 ref={toggleTarget}
               >
                 <ListIcon class="size-4" />
@@ -260,7 +255,6 @@ export function CrmWorkspaceView(props: {
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -333,9 +327,7 @@ export function CrmWorkspaceView(props: {
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const canCreatePipeline = () =>
-    pipelinesEnabled() &&
-    teamQuery.isSuccess &&
-    teamQuery.data?.team.crm_enabled === true;
+    pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined
   );
@@ -362,16 +354,10 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled &&
-      (tab !== 'databases' || databasesFlag().enabled) &&
-      isCrmActivityTab(tab)
-      ? tab
-      : undefined;
+    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
   };
   const activityPending = () =>
-    isCrmActivityTab(active()) &&
-    (activityFlag().loading ||
-      (active() === 'databases' && databasesFlag().loading));
+    isCrmActivityTab(active()) && activityFlag().loading;
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -414,9 +400,6 @@ export function CrmWorkspaceView(props: {
       : 'active';
   };
   const title = () =>
-    (view.peopleVisibility.showRemoved()
-      ? t('viewMenus.removedPeople')
-      : undefined) ??
     activeList()?.name ??
     [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
       (record) => record.id === activeRecord()
@@ -426,7 +409,6 @@ export function CrmWorkspaceView(props: {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -466,6 +448,8 @@ export function CrmWorkspaceView(props: {
   };
   onMount(() => {
     if (!listsEnabled() && active().startsWith('list:')) navigate('active');
+    // Saved and shared links to the retired Databases view open Companies.
+    if (active() === 'databases') navigate('active');
   });
   const toolbarCreateMenu = () => (
     <CrmCreateMenu
@@ -485,19 +469,9 @@ export function CrmWorkspaceView(props: {
   // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
   createEffect(
     on(
-      () =>
-        [
-          activityPending(),
-          activityFlag().enabled,
-          databasesFlag().enabled,
-          active(),
-        ] as const,
-      ([loading, activityEnabled, databasesEnabled, tab]) => {
-        if (
-          !loading &&
-          isCrmActivityTab(tab) &&
-          (!activityEnabled || (tab === 'databases' && !databasesEnabled))
-        )
+      () => [activityPending(), activityFlag().enabled, active()] as const,
+      ([loading, activityEnabled, tab]) => {
+        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
           navigate('active');
       }
     )
@@ -578,6 +552,9 @@ export function CrmWorkspaceView(props: {
         </Suspense>
       </ViewShell.Aside>
       <ViewShell.Main>
+        <Suspense>
+          <CrmEmailOptInBanner />
+        </Suspense>
         <Show
           when={!settings.isOpen()}
           fallback={
@@ -760,14 +737,16 @@ export function CrmWorkspaceView(props: {
             <Show
               when={!isTouchDevice()}
               fallback={
-                <Show when={peopleActive()}>
-                  <ViewShell.Header class="touch:pt-0">
-                    <div class="flex min-w-0 items-center justify-between gap-3">
+                <ViewShell.Header class="touch:pt-0">
+                  <div class="flex min-w-0 items-center justify-between gap-3">
+                    <Show when={peopleActive()}>
                       <PeopleSearchBar
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
-                      <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    <Show when={peopleActive()}>
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -776,9 +755,9 @@ export function CrmWorkspaceView(props: {
                         <PlusIcon class="size-4" />
                         New contact
                       </Button>
-                    </div>
-                  </ViewShell.Header>
-                </Show>
+                    </Show>
+                  </div>
+                </ViewShell.Header>
               }
             >
               <ListHeader
@@ -814,9 +793,7 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
-                <Show when={peopleActive()}>
-                  <PeopleDisplayMenu visibility={view.peopleVisibility} />
-                </Show>
+                <PeopleDisplayMenu visibility={view.peopleVisibility} />
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}
@@ -833,11 +810,6 @@ export function CrmWorkspaceView(props: {
                   <CrmFilterChips onReset={() => navigate(active())} />
                 </Suspense>
               </Show>
-            </Show>
-            <Show when={view.peopleVisibility.showRemoved()}>
-              <RemovedPeopleNotice
-                onShowActive={() => view.peopleVisibility.setShowRemoved(false)}
-              />
             </Show>
             {/* The header above already clears the status bar on touch. */}
             <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">

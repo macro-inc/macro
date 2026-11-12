@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projekt',
     newProject: 'Neues Projekt',
     contentAlreadyOpen: 'Inhalt bereits geöffnet',
-    unableToOpenConversation:
-      'Unterhaltung konnte nicht geöffnet werden. Bitte erneut versuchen.',
     mobileSearchPlaceholder: 'Suchen…',
     closeSearch: 'Suche schließen',
     searchFullTextFor: 'Volltextsuche nach „{{query}}“',
@@ -773,7 +771,7 @@ export default {
     tabMobileApp: 'Mobile App',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationen',
-    tabRuntimes: 'Laufzeitumgebungen',
+    tabRuntimes: 'Rechner',
     tabMcpServer: 'MCP-Server',
     tabApiKeys: 'API-Schlüssel',
     tabBots: 'Bots',

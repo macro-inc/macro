@@ -678,7 +678,12 @@ export type FailureNoticeKind =
  *  The provider ended the run in failure; its own page for the run is
  *  where any detail it kept lives.
  */
-"provider_run_failed";
+"provider_run_failed" |
+/**
+ *  The runtime accepted the prompt but never handed it to the agent;
+ *  the fix is to send it again.
+ */
+"prompt_not_delivered";
 
 /**
  *  Every filter, each over one field of one kind of item. Id lists match any
@@ -890,9 +895,10 @@ export type FoldedMessage_Deserialize = {
 	 */
 	phase: TurnPhase | null,
 	/**
-	 *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-	 *  messages, until the log confirms a prompt, and on history a runtime
-	 *  replayed on load.
+	 *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+	 *  an agent reply when its turn ends. Absent on control messages, on a
+	 *  reply still running, until the log confirms a prompt, and on history a
+	 *  runtime replayed on load.
 	 */
 	postedAt: string | null,
 };
@@ -938,9 +944,10 @@ export type FoldedMessage_Serialize = {
 	 */
 	phase: TurnPhase | null,
 	/**
-	 *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-	 *  messages, until the log confirms a prompt, and on history a runtime
-	 *  replayed on load.
+	 *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+	 *  an agent reply when its turn ends. Absent on control messages, on a
+	 *  reply still running, until the log confirms a prompt, and on history a
+	 *  runtime replayed on load.
 	 */
 	postedAt: string | null,
 };
@@ -1834,6 +1841,17 @@ import: ImportSettlement_Serialize } |
 /**  The decided actions' confirmed results. */
 ReviewOutcome_Serialize;
 
+/**
+ *  A review's saved record moved to `revision`: presented, edited, decided,
+ *  or an item's action finished.
+ */
+export type ReviewUpdatedNotification = {
+	/**  The review that changed. */
+	reviewId: string,
+	/**  Its saved revision after the change. */
+	revision: number,
+};
+
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = Segment_Serialize | Segment_Deserialize;
 
@@ -1938,6 +1956,11 @@ export type SessionMetadata = SessionMetadata_Serialize | SessionMetadata_Deseri
 export type SessionMetadata_Deserialize = {
 	/**  System events, projected independently of the conversation messages. */
 	notifications: SessionNotification_Deserialize[],
+	/**
+	 *  The newest saved revision of each review the log announced, in the
+	 *  order they were first announced.
+	 */
+	reviewRevisions: ReviewUpdatedNotification[],
 	/**  The last notification turn whose entire answer was suppressed. */
 	noopTurn: number | null,
 	/**  The agent that produced the log. See [`Harness`]. */
@@ -1990,6 +2013,11 @@ export type SessionMetadata_Deserialize = {
 export type SessionMetadata_Serialize = {
 	/**  System events, projected independently of the conversation messages. */
 	notifications: SessionNotification_Serialize[],
+	/**
+	 *  The newest saved revision of each review the log announced, in the
+	 *  order they were first announced.
+	 */
+	reviewRevisions: ReviewUpdatedNotification[],
 	/**  The last notification turn whose entire answer was suppressed. */
 	noopTurn: number | null,
 	/**  The agent that produced the log. See [`Harness`]. */

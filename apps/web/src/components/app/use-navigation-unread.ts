@@ -98,7 +98,9 @@ export function useNavigationUnread() {
   });
 
   return (id: string): boolean => {
-    if (id === 'home') return homeUnread();
+    // Notifications reads the same attention as Home's unread witness; a
+    // second live feed here would only duplicate it.
+    if (id === 'home' || id === 'notifications') return homeUnread();
     if (id === 'mail') return emailUnread();
     if (id === 'channels') return channelsUnread();
     return false;

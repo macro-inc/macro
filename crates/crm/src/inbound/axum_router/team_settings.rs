@@ -21,8 +21,8 @@ use crate::domain::{
 use super::CrmRouterState;
 
 /// The team's CRM configuration (everything on `team_crm_settings`
-/// except the `crm_enabled` killswitch, which is managed via
-/// `PATCH /team/crm` on the auth service).
+/// except the retired `crm_enabled` flag). Email contribution consent and
+/// exclusions are managed separately through `/crm/email-privacy`.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CrmTeamSettingsResponse {
     /// Who can change the deal stage set in CRM settings.

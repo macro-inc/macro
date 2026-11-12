@@ -9,7 +9,7 @@ import {
 } from '../components/list-state';
 import { useCrmContext } from '../context/crm-context';
 import { useCrmWorkspace } from '../context/workspace-context';
-import { useCurrentTeamQuery, useIsTeamAdmin } from './use-crm';
+import { useCurrentTeamQuery } from './use-crm';
 
 export function CrmEmptyState(
   props: {
@@ -32,9 +32,7 @@ export function CrmEmptyState(
   const { openCreateCompany, openCreateContact } = useCrmContext();
   const peopleSearch = () => queryFilters.state.include.crmContactSearch;
   const teamQuery = useCurrentTeamQuery();
-  const isTeamAdmin = useIsTeamAdmin();
   const teamResolved = () => teamQuery.data !== undefined;
-  const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
   const hasNoTeam = () => teamQuery.data === null;
   return (
     <Switch>
@@ -60,32 +58,11 @@ export function CrmEmptyState(
           }}
         />
       </Match>
-      <Match when={!crmEnabled()}>
-        <EmptyStatePanel
-          centered
-          topSpacerClass="grow-[0.5] basis-0 mobile:basis-0"
-          graphic={EmptyStateCompaniesGraphic}
-          title="CRM is disabled"
-          description={
-            isTeamAdmin()
-              ? 'Enable CRM in Settings > CRM to start tracking your customers.'
-              : 'Team owners and admins can enable CRM in Settings > CRM.'
-          }
-          primaryAction={
-            isTeamAdmin()
-              ? {
-                  label: 'Open CRM settings',
-                  onClick: () => host.settings.open(),
-                }
-              : undefined
-          }
-        />
-      </Match>
       <Match when={activeTab() === 'people' && !!peopleSearch()}>
         <CrmListSearchEmpty
           title={
             peopleVisibility.showRemoved()
-              ? 'No matching removed people'
+              ? 'No matching archived people'
               : 'No matching people'
           }
           description="Try a different name or email address."
@@ -94,12 +71,11 @@ export function CrmEmptyState(
       </Match>
       <Match when={peopleVisibility.showRemoved()}>
         <CrmListEmpty
-          title="No removed people"
-          description="Removed people from this team will appear here."
-          action={{
-            label: 'Show active people',
-            onClick: () => peopleVisibility.setShowRemoved(false),
-          }}
+          title={
+            activeTab() === 'people'
+              ? 'No archived people'
+              : 'No archived companies'
+          }
         />
       </Match>
       <Match when={activeTab() === 'people' && props.filtered}>
@@ -156,7 +132,7 @@ export function CrmEmptyState(
           }
           description={
             !activeTab() || activeTab() === 'active'
-              ? 'Customers your team emails will appear here.'
+              ? 'Add a company, or opt in to discover companies from eligible emails.'
               : activeTab()?.startsWith('list:')
                 ? 'Use Edit list to add companies to this collection.'
                 : 'Companies that match this view will appear here.'

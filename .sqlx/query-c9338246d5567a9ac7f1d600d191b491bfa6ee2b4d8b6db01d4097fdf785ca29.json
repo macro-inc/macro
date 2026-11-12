@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id\n                               WHERE d.team_id = $1 AND lower(d.domain) = $2 AND c.hidden) AS \"hidden!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hidden!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c9338246d5567a9ac7f1d600d191b491bfa6ee2b4d8b6db01d4097fdf785ca29"
+}

@@ -150,7 +150,8 @@ statuses on the PR's commits: `android-play/release` (set by the publisher
 around the production promotion) and `android-play/live` (set by the watcher
 once the release is live).
 
-**`Android Native Check`** runs on every PR against `main`. Its native tree
+**`Android Native Check`** runs whenever CI runs on a PR against `main` (the
+`run-ci` label), and the release starts only after CI has run on the head. Its native tree
 excludes platform-specific desktop/iOS files and Markdown docs, which do not
 ship in the Android binary (`apps/web/scripts/android-native.mjs` defines
 what counts). When the Android native code changed, it requires a
@@ -160,7 +161,7 @@ The watcher sets that status only once Google has **published** the release
 (through review and available to users; the edit API's `status: completed`
 only describes the rollout, so the watcher also reads the release list's
 `releaseLifecycleState`) with a provenance stamp matching the merge result.
-Until then the check fails and the required `Web App Status Check` fails with
+Until then the check fails and the required `CI gate` status fails with
 it. Web-only pushes after the release keep it valid: the status on an earlier
 commit still matches.
 
@@ -232,8 +233,8 @@ To release:
    and a link to the run.
 3. Wait for Google. The **`Android Release Watch`** workflow (every 30
    minutes) notices the version code being published on production, marks
-   the PR head `android-play/live`, re-runs the PR's failed
-   `Android Native Check` job, and comments; the PR merges if auto-merge is
+   the PR head `android-play/live`, re-runs the failed jobs of the PR's latest
+   `PR CI` run (the `Android Native Check` among them), and comments; the PR merges if auto-merge is
    on.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
@@ -999,12 +1000,15 @@ as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
-finds access granted; **Hide** stops the prompt on that device. The
+finds access granted; **Dismiss** stops the prompt on that device. The return
+check runs when the page becomes visible again: the Android WebView fires no
+window `focus` when the app comes back from Settings. The
 call notification is public, so the lock screen shows the call and its actions.
-Test both permission states. Microphone access is required to join;
-camera access is requested when enabling video, and Bluetooth access when selecting
-that route on Android 12 or newer. A denied permission does not silently enable
-capture.
+Test both permission states. Microphone access is required to join: a denied
+join shows the **Microphone access is off** toast with **Open Settings**, and a
+denied Answer leaves **Open settings** on the call screen. Camera access is
+requested when enabling video, and Bluetooth access when selecting that route on
+Android 12 or newer. A denied permission does not silently enable capture.
 
 While ringing, the native call activity fills the screen with an opaque themed
 background, caller initials and name (or channel name when unavailable), channel

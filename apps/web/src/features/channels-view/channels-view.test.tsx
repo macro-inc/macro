@@ -52,8 +52,24 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: mocks.prefetchTarget,
 }));
+vi.mock('@channel/ChannelAccessDenied', () => ({
+  ChannelAccessDenied: (props: {
+    channelId: string;
+    onRefreshChannel: () => void;
+  }) => (
+    <div data-testid="channel-access-denied" data-channel-id={props.channelId}>
+      <button type="button" onClick={props.onRefreshChannel}>
+        Complete approval
+      </button>
+    </div>
+  ),
+}));
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
+}));
+vi.mock('./components/rail/next/channel-discovery-source', () => ({
+  createSectionSearchSource: (options: { recent: () => ChannelsDataSource }) =>
+    options.recent(),
 }));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({
@@ -147,6 +163,9 @@ vi.mock('./components/ChannelDetailView', () => ({
     </div>
   ),
 }));
+vi.mock('./components/PendingDirectMessageDetail', () => ({
+  PendingDirectMessageDetail: () => null,
+}));
 vi.mock('./components/ChannelThreadsView', () => ({
   ChannelThreadsView: () => <div data-testid="channel-threads" />,
 }));
@@ -167,6 +186,23 @@ vi.mock('./components/ChannelsMobileView', () => ({
     </div>
   ),
 }));
+vi.mock('./components/rail/next/mobile/MobileSectionsView', () => ({
+  MobileSectionsView: (props: {
+    sources: { recents: ChannelsDataSource };
+    pinned: readonly ChannelEntity[];
+  }) => (
+    <div
+      data-testid="mobile-channels"
+      data-sections="true"
+      data-query=""
+      data-pinned={props.pinned.map((channel) => channel.id).join(',')}
+    >
+      <For each={props.sources.recents.items()}>
+        {(channel) => <div>{channel.name}</div>}
+      </For>
+    </div>
+  ),
+}));
 vi.mock('./components/rail/ChannelsRail', () => ({ ChannelsRail: () => null }));
 vi.mock('@channel/Channel/channel-entity', () => ({
   useChannelByIdQuery: mocks.selectedQuery,
@@ -181,7 +217,6 @@ vi.mock('./channels-view-context', () => ({
   ChannelsViewProvider: mocks.pass,
   useChannelsView: () => ({
     state: {
-      asideWidth: 256,
       tab: 'browse',
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
@@ -200,7 +235,6 @@ vi.mock('./channels-view-context', () => ({
             target: mocks.target(),
           }
         : undefined,
-    setAsideWidth: vi.fn(),
   }),
 }));
 vi.mock('./queries', () => ({
@@ -364,18 +398,33 @@ describe('Chat rollout source activation', () => {
     expect(mocks.sourceEnabled('channels')).toBe(true);
   });
 
-  it('keeps the mobile recent feed active while the desktop rollout is unresolved', () => {
+  it('waits for the mobile rollout result without mounting the legacy feed', () => {
     mocks.mobileLayout = () => true;
     mocks.sectionsLoading = () => true;
     render(() => <ChannelsView />);
-    expect(screen.getByTestId('mobile-channels')).toBeTruthy();
+    expect(screen.queryByTestId('mobile-channels')).toBeNull();
+    expect(screen.getByLabelText('Loading channels')).toBeTruthy();
     expect(mocks.sourceEnabled('recents')).toBe(true);
     expect(mocks.sourceEnabled('channels')).toBe(false);
   });
 });
 describe('mobile dock search wiring', () => {
-  it('shows only recent conversations independently of the dock search session', () => {
+  it('mounts phone sections and their direct-message source only when enabled', () => {
     mocks.mobileLayout = () => true;
+    const [enabled, setEnabled] = createSignal(true);
+    mocks.sectionsEnabled = enabled;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('mobile-channels').dataset.sections).toBe('true');
+    expect(mocks.sourceEnabled('direct_messages')).toBe(true);
+    setEnabled(false);
+    expect(
+      screen.getByTestId('mobile-channels').dataset.sections
+    ).toBeUndefined();
+    expect(mocks.sourceEnabled('direct_messages')).toBe(false);
+  });
+  it('keeps legacy recent conversations independent of the dock search session', () => {
+    mocks.mobileLayout = () => true;
+    mocks.sectionsEnabled = () => false;
     const [open, setOpen] = createSignal(true);
     const [text, setText] = createSignal('');
     const [active, setActive] = createSignal(true);
@@ -591,7 +640,7 @@ describe('channel selection loading and recovery', () => {
       setSelectedId('two');
       setQuery('error', error);
       render(() => <ChannelsView />);
-      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
       expect(screen.queryByTestId('channel-detail')).toBeNull();
       expect(mocks.markRead).not.toHaveBeenCalled();
 
@@ -599,11 +648,45 @@ describe('channel selection loading and recovery', () => {
       expect(screen.getByTestId('channel-detail').textContent).toBe('two');
       mocks.markRead.mockClear();
       setQuery('error', error);
-      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.getByTestId('channel-access-denied')).toBeTruthy();
       expect(screen.queryByTestId('channel-detail')).toBeNull();
       expect(mocks.markRead).not.toHaveBeenCalled();
     }
   );
+
+  it('loads an uncached private channel after its access request is approved', async () => {
+    setRows([]);
+    setSelectedId('private');
+    setQuery({ error: null, data: { entities: [] } });
+    render(() => <ChannelsView />);
+
+    expect(screen.getByTestId('channel-access-denied').dataset.channelId).toBe(
+      'private'
+    );
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete approval' }));
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    setQuery('data', { entities: [full('private', [])] });
+
+    expect(screen.getByTestId('channel-detail').textContent).toBe('private');
+    expect(screen.queryByTestId('channel-access-denied')).toBeNull();
+    expect(mocks.markRead).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an empty channel lookup on the same denied route during refresh', () => {
+    setRows([]);
+    setQuery({ error: null, data: { entities: [] } });
+    render(() => <ChannelsView />);
+    const denied = screen.getByTestId('channel-access-denied');
+
+    setQuery('isFetching', true);
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
+    setQuery('isFetching', false);
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
 
   it('keeps an uncached channel unavailable after a transient failure', () => {
     setRows([]);
@@ -654,17 +737,19 @@ describe('channel selection loading and recovery', () => {
     );
   });
 
-  it('offers recovery for a successful empty selection and retries normally', async () => {
+  it('refreshes a previously listed channel after access approval', async () => {
     render(() => <ChannelsView />);
-    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+    const denied = screen.getByTestId('channel-access-denied');
     expect(screen.queryByText('Loading conversation')).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Complete approval' })
+    );
     expect(mocks.refresh).toHaveBeenCalledOnce();
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     setQuery('isFetching', true);
+    expect(screen.getByTestId('channel-access-denied')).toBe(denied);
     expect(screen.queryByTestId('channel-detail')).toBeNull();
-    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
     batch(() => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);

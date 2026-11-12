@@ -1,32 +1,36 @@
 ---
 title: "Calendar"
 icon: "calendar"
-description: "Your Google Calendar as a Macro block alongside the email it came from."
+description: "Your Google and Microsoft calendars together, with team availability and agent scheduling."
 ---
 
-<Frame>
-  ![A week view of the calendar, with recurring standups, meetings and today's column highlighted](/images/calendar_image.png)
-</Frame>
+<GuideGraphic kind="calendar" label="Calendar events and a related team conversation." />
 
-Calendar is a Macro block that syncs with Google Calendar. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to Google.
+Calendar is a Macro block that brings your Google and Microsoft calendars into one view. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to the connected calendar.
 
 Open it from **Calendar** in the sidebar, or press <kbd>g</kbd> \+ <kbd>r</kbd>.
 
+Watch a 0:54 walkthrough of Macro Calendar.
+
+<video src="https://macro.com/video/tutorials/calendar.mp4" poster="https://macro.com/video/tutorials/calendar-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
 ### Connecting your calendar
 
-Connect your calendar in **Settings → Calendar**. Click **Connect calendar** next to an email account you've already linked, or **Connect account** to add a new Google account. You can also click **Enable calendar** next to an account in **Settings → Email**.
+Connect your calendar in **Settings → Calendar**. Click **Connect calendar** next to a Gmail or Outlook account you've already linked, or **Connect account** to add a new Google or Outlook account. You can also click **Enable calendar** next to an account in **Settings → Email**.
 
 Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to connect the calendar for each account separately.**
 
 In **Settings → Calendar** you can show or hide each account's calendars and pick their colors. The settings gear in the calendar topbar also toggles each calendar on or off, so you can view several at once or focus on just one.
 
-<Frame>
-  ![The Email settings page, with an Enable calendar button beside a linked Gmail account](/images/connect_email.png)
-</Frame>
-
 ### Booking links
 
 **Copy booking link** in the calendar topbar copies your personal booking link. Links are managed in **Settings → Booking links**. See [Booking links](/product/booking-links).
+
+### Find time with your team
+
+Ask the Macro agent in a channel to find a time with your teammates. It checks shared availability across the selected people and returns times when everyone is free.
+
+Under **Team sharing** in Calendar settings, use **Share with teammates** to choose **Busy blocks**, **Event details**, or **Nothing**. Private events stay as busy blocks. Under **Calendars that count as busy**, choose which calendars should block your time when teammates or agents check availability.
 
 ### Creating and editing events
 
@@ -43,18 +47,14 @@ You edit details inline on the event itself. Type the title and description dire
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Guests</strong> — who's invited, and who's optional</span></div>
 
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Conferencing</strong> — attach or remove a Google Meet link</span></div>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Conferencing</strong> — a new event starts as a <strong>Macro call</strong>. Switch it to Google Meet, Microsoft Teams, or no meeting link</span></div>
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Location</strong> — where it's happening</span></div>
 </div>
 
-Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to Google.
+Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to Google Calendar or Outlook.
 
 ### Copy availability
-
-<Frame>
-  ![Copied availability pasted into a message, listing free time ranges by day with the timezone noted](/images/availability.png)
-</Frame>
 
 Click **Copy availability** in the topbar to turn your open time into pasteable text, labeled with your timezone and ready to drop into a reply.
 
@@ -66,12 +66,13 @@ The [Macro agent](/product/agents) can read and change your calendar. Ask it to 
 
 You can use the same tools over Macro's MCP server:
 
-- [`ListCalendars`](/AI/mcp/tools/list-calendars)
-- [`ListCalendarEvents`](/AI/mcp/tools/list-calendar-events)
-- [`ReadCalendarEvent`](/AI/mcp/tools/read-calendar-event)
-- [`CreateCalendarEvent`](/AI/mcp/tools/create-calendar-event)
-- [`UpdateCalendarEvent`](/AI/mcp/tools/update-calendar-event)
-- [`DeleteCalendarEvent`](/AI/mcp/tools/delete-calendar-event)
+- `ListCalendars`
+- `ListCalendarEvents`
+- `ReadCalendarEvent`
+- `GetTeamAvailability`
+- `CreateCalendarEvent`
+- `UpdateCalendarEvent`
+- `DeleteCalendarEvent`
 
 To connect it, go to **Settings → MCP server**.
 
@@ -79,4 +80,4 @@ To connect it, go to **Settings → MCP server**.
 
 You can turn calendar off for a single account with **Disconnect** in **Settings → Calendar**, or from the calendar's settings menu.
 
-Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.
+Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar or Outlook calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.

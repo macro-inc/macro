@@ -413,6 +413,10 @@ pub async fn build_tool_service_context_from_env(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match crate::canvas_artifacts_rollout_from_env(environment)? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -572,7 +576,7 @@ pub async fn build_tool_service_context_from_env(
 
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
-    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env()?;
+    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env(environment)?;
     let native_servers = match maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
@@ -602,6 +606,9 @@ pub async fn build_tool_service_context_from_env(
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
             native_servers.clone(),
+            mcp_client::outbound::guarded_http::McpHttp::new(
+                mcp_client::outbound::guarded_http::AddressPolicy::for_environment(environment),
+            )?,
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));
@@ -758,22 +765,26 @@ pub async fn build_tool_service_context_from_env(
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
+        web_search_provider: build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }
 
+/// The vendor behind `WebSearch` and `WebFetch`: Tavily, keyed by
+/// `TAVILY_API_KEY`. Without the key the host still boots, logs an error, and
+/// every web call fails with a "not configured" error.
+pub fn build_web_search_provider_from_env() -> Arc<dyn web_search::domain::ports::SearchProvider> {
+    Arc::new(web_search::outbound::tavily::TavilyClient::from_env())
+}
+
 /// Build an [`AnthropicToolContext`] from environment variables.
 ///
-/// Reads `ANTHROPIC_API_KEY` and configures the client with the beta headers
-/// required for web fetch and code execution server tools.
+/// Reads `ANTHROPIC_API_KEY` and configures the client with the beta header
+/// required for the code execution server tools.
 pub fn build_anthropic_tool_context() -> AnthropicToolContext {
     let mut config = anthropic::config::Config::dangrously_try_from_env();
-    config.headers.append(
-        anthropic::prelude::WEB_FETCH_TOOL_HEADER.0.clone(),
-        anthropic::prelude::WEB_FETCH_TOOL_HEADER.1.clone(),
-    );
     config.headers.append(
         anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.0.clone(),
         anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.1.clone(),

@@ -28,7 +28,8 @@ belong to `features/external-view`. Architecture:
 - `context/`: source and action contracts; no production imports.
 - `primitives/conversation.ts`: optimistic sends, idempotency keys, quiet
   retries, reply/edit targets, uploads and read state.
-- `components/`: supplied values and callbacks only.
+- `components/`: supplied values and callbacks only; `message-media.tsx`
+  holds a row's inline media.
 - `views/`: conversation composition, scroll and read lifecycle.
 - `queries/`: generated wire decoding, write-failure classification and
   production source construction (spans live here).
@@ -43,6 +44,9 @@ belong to `features/external-view`. Architecture:
 
 ## Gotchas
 
+- Refetch a timeline through `invalidateExternalChatMessages`. A plain refetch
+  cancels an older page that is loading, and the page is lost. It waits at most
+  10 s, so a hung older page can't block refreshes; past that it cancels the page.
 - `kind` is `group` or `direct`. A direct chat has no members list (header
   shows the person) and only its owner sends; shared viewers see "Only
   <owner> can reply in this chat" (`sendReason: 'not_added'`).
@@ -51,9 +55,12 @@ belong to `features/external-view`. Architecture:
   `disconnected`, `not_added`, `not_allowed`, `unavailable`).
 - Members, sharing and Stop syncing live in the generic `SidePanel`
   (`components/chat-details.tsx`), floating and closed by default like an
-  in-view email thread. The header is `ViewShell.TopBar` (kept visible on
-  touch, under the safe area) with Share in a `HeaderActionGroup` and
-  `SidePanel.Toggle`. The host
+  in-view email thread. `components/chat-header.tsx` keeps `ViewShell.TopBar`
+  on desktop; touch uses `SplitHeaderLeft` / `SplitHeaderRight`,
+  `StaticSplitLabel`, and `HeaderIsland`, like an open channel. Preserve the
+  shared split header on the nested chat route and reserve its content inset
+  once, including while loading. Share and `SidePanel.Toggle` stay tappable
+  in their own islands. The host
   (`external-chat.tsx`, the functional fixture, tests) supplies
   `SidePanel.Root`; the view renders the `SidePanel.Layout`. While it is
   open on a pane at least 900px wide, the timeline and composer pad
@@ -65,6 +72,9 @@ belong to `features/external-view`. Architecture:
 - Refusals (`{code,message}` from DSS) remove the pending row, toast the
   reason and restore the draft only if the composer is empty.
 - Row actions are getters: `ChannelMessage` reads them once per row.
+  Create task (`core/task.ts`) needs only view access; it sets no Source,
+  because property entity references have no `external_chat` type, and its
+  content mentions the chat (no message-level link exists).
 - Reads do not poll; DSS pushes `external_chat_changed`, with one fallback
   re-fetch 3 s after opening. Only in-flight sends poll their progress.
 - History imported after adding (`backfill` on the detail) lands older than
@@ -112,9 +122,11 @@ belong to `features/external-view`. Architecture:
   menu lists the members (ids are JIDs, minus the sender) and nothing else;
   `composerMentions` turns the chips into `@<digits>` plus `mentions` on the
   text send.
-- Macro users (senders and system-line people with a `userId`) show their
-  Macro name and avatar; everyone else shows their provider name
-  (`imported_author`).
+- Macro users (senders, reactors and system-line people with a `userId`)
+  show their Macro name and avatar; everyone else shows the name DSS gives
+  (`imported_author`; reactors through the reaction's `names`, which
+  `ReactionChip` reads for ids outside Macro). DSS supplies sender and member
+  names; render them as sent without client-side fallbacks.
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

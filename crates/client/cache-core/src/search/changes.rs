@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 // Text fields and bucket eligibility come from the projection itself. These
 // additional fields affect ordering or the rows materialized from search hits.
 const PRESENTATION_FIELDS: &[&str] = &[
+    "userId",
     "ownerId",
     "teamId",
     "createdAt",

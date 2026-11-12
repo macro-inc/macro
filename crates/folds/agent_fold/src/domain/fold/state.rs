@@ -17,6 +17,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::context::ContextSummaryNotification;
+use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::domain::tool_approval::TOOL_APPROVAL_METHOD;
 use serde::Deserialize;
@@ -199,7 +200,7 @@ impl FoldState {
         self.pending_config_requests.clear();
         self.forget_interactions();
         self.pending_controls.clear();
-        self.close_turn(None);
+        self.close_turn(None, None);
     }
 
     /// Advance by one log entry, returning what it changed in emission order.
@@ -333,7 +334,9 @@ impl FoldState {
                             }
                         }
                     });
-                    StepChange::message(stop.and_then(|stop| self.close_turn(Some(stop))))
+                    StepChange::message(
+                        stop.and_then(|stop| self.close_turn(Some(stop), entry.logged_at)),
+                    )
                 }
                 // The agent summarized its own context.
                 RawJsonRpcMessage::Notification(notification)
@@ -374,6 +377,12 @@ impl FoldState {
                             Self::message_and_metadata(message, metadata)
                         })
                 }
+                // A saved review moved to a new revision.
+                RawJsonRpcMessage::Notification(notification)
+                    if ReviewUpdatedNotification::matches_method(&notification.method) =>
+                {
+                    StepChange::metadata(self.record_review_update(notification.params.as_ref()))
+                }
                 // The agent reporting that a URL interaction finished.
                 RawJsonRpcMessage::Notification(notification)
                     if CompleteElicitationNotification::matches_method(&notification.method) =>
@@ -397,7 +406,7 @@ impl FoldState {
                     } else if control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.end_turn(id, Some(result)))
+                        StepChange::message(self.end_turn(id, Some(result), entry.logged_at))
                     }
                 }
                 RawJsonRpcMessage::Response(Response::Error { id, error }) => {
@@ -407,7 +416,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.fail_turn(id, error))
+                        StepChange::message(self.fail_turn(id, error, entry.logged_at))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),

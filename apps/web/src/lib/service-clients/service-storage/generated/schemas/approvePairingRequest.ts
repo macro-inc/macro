@@ -15,6 +15,6 @@ export interface ApprovePairingRequest {
   allow_permission_bypass?: boolean;
   /** Display name override. Defaults to the daemon's requested name. */
   name?: ApprovePairingRequestName;
-  /** Owning team. Omit for a private, user-owned harness. */
+  /** Team to open the harness to. Omit to keep it to the approving user. */
   team_id?: ApprovePairingRequestTeamId;
 }

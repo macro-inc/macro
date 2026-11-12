@@ -109,7 +109,7 @@ impl Replay {
                     .as_ref()
                     .is_some_and(|id| self.completed_noops.contains(&id.to_string()))
         }) {
-            state.close_turn(Some(crate::domain::model::StopReason::EndTurn));
+            state.close_turn(Some(crate::domain::model::StopReason::EndTurn), None);
             state.refresh_turn_state();
         }
         state.replaying = false;
@@ -157,7 +157,7 @@ impl Replay {
             .as_ref()
             .is_some_and(|turn| turn.notification || turn.agent.is_some())
         {
-            state.close_turn(Some(crate::domain::model::StopReason::EndTurn));
+            state.close_turn(Some(crate::domain::model::StopReason::EndTurn), None);
         }
         if let Some((index, original)) = matched {
             *provenance = index + 1;
