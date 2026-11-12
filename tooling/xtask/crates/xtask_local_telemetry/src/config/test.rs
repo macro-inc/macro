@@ -1,7 +1,14 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use super::{Config, ConfigError};
+use super::{Config, ConfigError, Setting, Switch};
+
+fn on(setting: Setting) -> Config {
+    match setting {
+        Setting::On(config) => config,
+        other => panic!("expected settings that send, got {other:?}"),
+    }
+}
 
 const TOKEN: &str = "secret-0123456789abcdef0123456789abcdef";
 
@@ -13,10 +20,28 @@ fn write(dir: &Path, text: &str, mode: u32) -> PathBuf {
 }
 
 #[test]
-fn no_file_means_off() {
+fn no_file_means_provision_one() {
     let dir = tempfile::tempdir().expect("tempdir");
     let loaded = Config::load(&dir.path().join("local-telemetry.toml")).expect("load");
-    assert!(loaded.is_none());
+    assert!(matches!(loaded, Setting::Missing));
+}
+
+#[test]
+fn enabled_false_turns_it_off_without_an_endpoint() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write(dir.path(), "enabled = false\n", 0o644);
+    assert!(matches!(Config::load(&path).expect("load"), Setting::Off));
+}
+
+#[test]
+fn the_environment_switch() {
+    assert_eq!(Switch::parse(None, false), Switch::Default);
+    assert_eq!(Switch::parse(Some("off"), false), Switch::Off);
+    assert_eq!(Switch::parse(Some("0"), false), Switch::Off);
+    assert_eq!(Switch::parse(None, true), Switch::Off);
+    assert_eq!(Switch::parse(Some("on"), true), Switch::On);
+    assert_eq!(Switch::parse(Some("off"), true), Switch::Off);
+    assert_eq!(Switch::parse(Some("maybe"), false), Switch::Default);
 }
 
 #[test]
@@ -27,7 +52,7 @@ fn routes_follow_the_endpoint() {
         "endpoint = \"https://otlp.example.com/\"\ntoken = \"t\"\n",
         0o600,
     );
-    let config = Config::load(&path).expect("load").expect("on");
+    let config = on(Config::load(&path).expect("load"));
     assert_eq!(config.logs_url(), "https://otlp.example.com/v1/logs");
     assert_eq!(
         config.traces_url().as_deref(),
@@ -43,7 +68,7 @@ fn traces_can_be_turned_off() {
         "endpoint = \"http://127.0.0.1:3100/otlp\"\ntraces = false\n",
         0o644,
     );
-    let config = Config::load(&path).expect("load").expect("on");
+    let config = on(Config::load(&path).expect("load"));
     assert_eq!(config.logs_url(), "http://127.0.0.1:3100/otlp/v1/logs");
     assert_eq!(config.traces_url(), None);
 }

@@ -10,6 +10,10 @@ the gateway `/email` prefix.
 
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
+- `src/composition/api.rs`: production API dependencies and service wiring.
+- `src/outbound/message_reads.rs`: query adapter for the email domain's synced
+  read service; handlers retain only extraction and HTTP/error rendering.
+
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
   `scheduled` (scheduled sends),
@@ -51,6 +55,7 @@ the gateway `/email` prefix.
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
 - `just check` (from this directory) runs `cargo check` with `SQLX_OFFLINE=true`.
+
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
 
@@ -74,6 +79,10 @@ the gateway `/email` prefix.
   domain rechecks the scheduled actor's access before cross-inbox downloads.
 - Macro's own digest emails are filtered out of Signal/email notifications
   (#7039) — don't reintroduce a path that notifies on our own sends.
+- Remote signature images and contact photos are fetched only through
+  `util/process_pre_insert/sfs_map/public_http.rs`, whose resolver and
+  redirect policy refuse non-public addresses. Don't fetch them with another
+  client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving

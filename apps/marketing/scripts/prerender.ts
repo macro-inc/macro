@@ -98,6 +98,7 @@ const STATIC_ROUTES = [
 // the build manifest so prerendered pages link their stylesheets up front (no
 // flash of unstyled content) and preload their chunks.
 const ROUTE_MODULES: Array<[RegExp, string]> = [
+  [/^\/$/, 'src/features/marketing/components/HomepageSections.tsx'],
   [/^\/forms$/, 'src/features/marketing/views/ProductFormsPage.tsx'],
   [
     /^\/(spreadsheets|databases|canvas|snippets|calendar|booking-links|drive|routines|skills)$/,

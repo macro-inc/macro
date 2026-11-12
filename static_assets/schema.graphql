@@ -1901,6 +1901,16 @@ type GraphqlActivityUnknownAction {
 }
 
 """
+The coding agent a Macro computer signs in to an account for.
+"""
+enum GraphqlAgentProvider {
+	"""
+	An Anthropic Claude account, for Claude Code.
+	"""
+	CLAUDE
+}
+
+"""
 Last synchronized state of a session's linked GitHub pull request.
 """
 enum GraphqlAgentPullRequestState {
@@ -2204,6 +2214,50 @@ type GraphqlAgentSessionWaitingForInputMetadata {
 	The question, as the agent phrased it.
 	"""
 	question: String!
+}
+
+"""
+Metadata for a Macro computer's agent sign-in running out.
+"""
+type GraphqlAgentSignInExpiryMetadata {
+	"""
+	The agent whose sign-in is running out.
+	"""
+	agent: GraphqlAgentProvider!
+	"""
+	The computer's harness id.
+	"""
+	harnessId: ID!
+	"""
+	The computer's name when the notice was sent.
+	"""
+	computerName: String!
+	"""
+	How close the sign-in is to no longer working.
+	"""
+	stage: GraphqlAgentSignInExpiryStage!
+	"""
+	When the sign-in expires or expired; absent when the agent rejected it.
+	"""
+	expiresAt: String
+}
+
+"""
+How close a Macro computer's agent sign-in is to no longer working.
+"""
+enum GraphqlAgentSignInExpiryStage {
+	"""
+	It expires within three days.
+	"""
+	EXPIRES_SOON
+	"""
+	It expires within a day.
+	"""
+	EXPIRES_TODAY
+	"""
+	It expired, or the agent rejected it.
+	"""
+	EXPIRED
 }
 
 """
@@ -6689,7 +6743,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -8561,7 +8615,9 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	metadata: GraphqlEntityMetadata!
 	"""
-	The name.
+	The name the viewer sees: the stored name, or for an unnamed channel
+	one derived for the viewer (a DM shows the other participant, a group
+	its other participants). An agent DM shows its persona's name.
 	"""
 	name: String
 	"""
@@ -8580,6 +8636,15 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	The identifier of the team.
 	"""
 	teamId: ID
+	"""
+	Whether members of the channel's team join it automatically.
+	"""
+	autoJoinTeam: Boolean!
+	"""
+	The persona, when this is the viewer's private conversation with an
+	agent; null for every other channel.
+	"""
+	agentDm: GraphqlSoupChannelAgentDm
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -8646,6 +8711,26 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+The persona an agent DM shows, as the channel list reads it. Embedded in its
+channel, with no `id`. The name is "Unavailable agent" when the persona has no
+profile.
+"""
+type GraphqlSoupChannelAgentDm {
+	"""
+	The persona's bot identifier.
+	"""
+	botId: ID!
+	"""
+	The persona's display name.
+	"""
+	name: String!
+	"""
+	The persona's avatar URL, when it has one.
+	"""
+	avatarUrl: String
 }
 
 """
@@ -9192,6 +9277,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	Opaque authoritative server-only projection facts.
 	"""
 	cacheProjection: SoupCacheProjection
+	"""
+	Entity-owned icon and color overrides.
+	"""
+	appearance: JSON
 	"""
 	User-visible display name.
 	"""
@@ -10185,6 +10274,10 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	Opaque cache projection metadata, unavailable for this entity variant.
 	"""
 	cacheProjection: SoupCacheProjection
+	"""
+	Entity-owned icon and color overrides.
+	"""
+	appearance: JSON
 	"""
 	User-visible project name.
 	"""

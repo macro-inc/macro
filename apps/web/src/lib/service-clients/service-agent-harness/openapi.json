@@ -3787,6 +3787,205 @@
         ]
       }
     },
+    "/harnesses/{harness_id}/claude-mode": {
+      "get": {
+        "tags": ["computers"],
+        "summary": "How Claude Code on the computer is paid for.",
+        "operationId": "get_claude_mode",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeModeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/claude-sign-in": {
+      "post": {
+        "tags": ["computers"],
+        "summary": "Start a Claude sign-in on the computer and return its URL.",
+        "operationId": "start_claude_sign_in",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignInStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          },
+          "504": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/claude-sign-in/complete": {
+      "post": {
+        "tags": ["computers"],
+        "summary": "Finish the Claude sign-in with what the user pasted.",
+        "operationId": "complete_claude_sign_in",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaudeSignInComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeSignedIn"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          },
+          "504": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/claude-sign-out": {
+      "post": {
+        "tags": ["computers"],
+        "summary": "Forget the computer's Claude credential and return it to Macro credits.",
+        "operationId": "claude_sign_out",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeModeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          },
+          "504": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -5484,6 +5683,87 @@
           }
         }
       },
+      "ClaudeAccountStatus": {
+        "type": "object",
+        "description": "A computer's active Claude sign-in. Claude's long-lived credential names\nno account, so there is no email or plan to show.",
+        "required": ["signedInAt"],
+        "properties": {
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the credential stops working, as the computer last reported it."
+          },
+          "signedInAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was signed in."
+          },
+          "signedInBy": {
+            "type": ["string", "null"],
+            "description": "Who signed it in through Macro; absent once that user is deleted or\nwhen it was signed in on the computer itself."
+          }
+        }
+      },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
+      "ClaudeModeResponse": {
+        "type": "object",
+        "description": "How Claude Code on a computer is paid for, and its Claude sign-in when it\nuses its own.",
+        "required": ["mode"],
+        "properties": {
+          "account": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClaudeAccountStatus",
+                "description": "The active Claude sign-in; absent on Macro credits."
+              }
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code is paid for."
+          }
+        }
+      },
+      "ClaudeSignInComplete": {
+        "type": "object",
+        "description": "`POST /harnesses/{harness_id}/claude-sign-in/complete` body.",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The code Claude showed after the user signed in."
+          }
+        }
+      },
+      "ClaudeSignInStarted": {
+        "type": "object",
+        "description": "`POST /harnesses/{harness_id}/claude-sign-in` answer.",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Where the user signs in to Claude, in their own browser."
+          }
+        }
+      },
+      "ClaudeSignedIn": {
+        "type": "object",
+        "description": "`POST /harnesses/{harness_id}/claude-sign-in/complete` answer.",
+        "required": ["signedIn"],
+        "properties": {
+          "signedIn": {
+            "type": "boolean",
+            "description": "Always `true`."
+          }
+        }
+      },
       "CodingAgent": {
         "type": "object",
         "description": "Information used to choose a coding persona for a task.",
@@ -5808,7 +6088,7 @@
           },
           "prompt": {
             "type": ["string", "null"],
-            "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
+            "description": "First prompt to deliver once the session is running. The managed shape\nonly: a persona its operator runs gets it through the session's control\npath once its runtime opens the session, while a runtime opening its\nown (the `workspace` shape) sends its first prompt through the control\nendpoint. Omitted, the session opens idle."
           },
           "promptActionId": {
             "oneOf": [
@@ -5827,6 +6107,11 @@
               "$ref": "#/components/schemas/PromptAttachment"
             },
             "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
+          },
+          "promptClientId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The app tab the person typed `prompt` in, as `clientId` on a control\nrequest, so what the first turn opens in the app reaches that tab\nonly. Requires `prompt`. Only a person's own request may send it; a\nruntime's is refused, and a program using a person's credential has\nit dropped."
           },
           "repoBranch": {
             "type": ["string", "null"],
@@ -6769,6 +7054,11 @@
         "description": "Successful model-discovery response.",
         "required": ["status", "models"],
         "properties": {
+          "cachedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a paired runtime that is off or unreachable last reported this\ncatalog; null when it was probed live."
+          },
           "currentModel": {
             "type": ["string", "null"],
             "description": "Current provider model, if model selection is available."
@@ -8537,6 +8827,10 @@
     {
       "name": "agent-mode-choice",
       "description": "Whether a composer prompt goes to a chat or a coding agent"
+    },
+    {
+      "name": "computers",
+      "description": "Claude sign-in on Macro computers"
     }
   ]
 }

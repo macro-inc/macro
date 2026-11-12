@@ -46,6 +46,8 @@ const rows: RoutineRow[] = [
     status: 'Active',
     enabled: true,
     editable: true,
+    children: [],
+    pausedByParent: false,
   },
   {
     id: 'revenue',
@@ -64,6 +66,8 @@ const rows: RoutineRow[] = [
     status: 'Paused',
     enabled: false,
     editable: true,
+    children: [],
+    pausedByParent: false,
   },
 ];
 function setup(overrides: Partial<Parameters<typeof RoutinesList>[0]> = {}) {

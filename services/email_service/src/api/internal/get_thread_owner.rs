@@ -3,11 +3,9 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email::domain::message_reads::ThreadOwnerError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use macro_user_id::cowlike::CowLike;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
-use models_email::service::thread::GetThreadOwnerResponse;
 use uuid::Uuid;
 
 #[tracing::instrument(skip(ctx))]
@@ -16,38 +14,32 @@ pub async fn handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(thread_id): Path<Uuid>,
 ) -> Result<Response, Response> {
-    let user_id = email_db_client::threads::get::get_macro_id_from_thread_id(&ctx.db, thread_id)
+    let response = ctx
+        .message_reads
+        .thread_owner(thread_id)
         .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get owner for thread");
+        .map_err(|error| {
+            let (status, message) = match error {
+                ThreadOwnerError::NotFound => (StatusCode::NOT_FOUND, "thread not found"),
+                ThreadOwnerError::InvalidOwner => {
+                    (StatusCode::BAD_REQUEST, "invalid macro user id")
+                }
+                ThreadOwnerError::Query(error) => {
+                    let e = error.into_inner();
+                    tracing::error!(error=?e, "unable to get owner for thread");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "unable to get owner for thread",
+                    )
+                }
+            };
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                status,
                 Json(ErrorResponse {
-                    message: "unable to get owner for thread".into(),
-                }),
-            )
-                .into_response()
-        })?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "thread not found".into(),
+                    message: message.into(),
                 }),
             )
                 .into_response()
         })?;
-    let user_id = MacroUserIdStr::parse_from_str(&user_id)
-        .map_err(|_e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "invalid macro user id".into(),
-                }),
-            )
-                .into_response()
-        })?
-        .into_owned();
-
-    Ok((StatusCode::OK, Json(GetThreadOwnerResponse { user_id })).into_response())
+    Ok((StatusCode::OK, Json(response)).into_response())
 }

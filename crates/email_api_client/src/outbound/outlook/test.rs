@@ -3,7 +3,7 @@ use serde_json::json;
 use uuid::Uuid;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{header, method, path, query_param},
+    matchers::{header, headers, method, path, query_param, query_param_is_missing},
 };
 
 use super::*;
@@ -28,8 +28,12 @@ async fn delta_preserves_removals_as_stream_events_and_keeps_opaque_continuation
     Mock::given(method("GET"))
         .and(path("/v1.0/me/mailFolders/folder/messages/delta"))
         .and(header("authorization", "Bearer test-bearer"))
-        .and(header("prefer", "IdType=\"ImmutableId\""))
+        .and(headers(
+            "prefer",
+            vec!["IdType=\"ImmutableId\"", "odata.maxpagesize=100"],
+        ))
         .and(query_param("$select", "id"))
+        .and(query_param_is_missing("$top"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "value":[{"id":"m1"},{"id":"m2","@removed":{"reason":"deleted"}}],
             "@odata.nextLink":next
@@ -213,6 +217,7 @@ async fn inline_attachments_are_loaded_even_when_has_attachments_is_false() {
         name: "Boîte de réception".into(),
         role: FolderRole::Inbox,
         has_children: false,
+        total_items: None,
     };
     let message = api
         .message(
@@ -585,6 +590,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Trash".into(),
             role: FolderRole::Trash,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("parent").unwrap(),
@@ -592,6 +598,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Deleted project".into(),
             role: FolderRole::Other,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("child").unwrap(),
@@ -599,6 +606,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Invoices".into(),
             role: FolderRole::Other,
             has_children: false,
+            total_items: None,
         },
     ];
     let source =
@@ -749,6 +757,7 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
         name: "Inbox".into(),
         role: FolderRole::Inbox,
         has_children: false,
+        total_items: None,
     };
     let service = MailboxApiService::new(api, Tokens, AlwaysAllowRateLimiter);
 

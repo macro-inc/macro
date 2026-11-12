@@ -287,12 +287,21 @@ impl CompaniesRepositoryImpl {
         }
 
         // A personal email identifies a contact independently of its manually
-        // selected company. Count archived matches too; ambiguity never creates
-        // another identity or assigns a source to an arbitrary contact.
+        // selected company, whichever of the contact's addresses it is. Count
+        // archived matches too; ambiguity never creates another identity or
+        // assigns a source to an arbitrary contact.
         let matches = sqlx::query!(
-            "SELECT id, company_id FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2 LIMIT 2",
-            team_id, normalized_email,
-        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            r#"SELECT ct.id, ct.company_id
+               FROM crm_contact_emails ce
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               WHERE ce.email = $2 AND ct.team_id = $1
+               LIMIT 2"#,
+            team_id,
+            normalized_email,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let contact_id = match matches.as_slice() {
             [existing] => {
                 if let Some(company_id) = existing.company_id {
@@ -315,7 +324,11 @@ impl CompaniesRepositoryImpl {
                     r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
                         first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
                         last_interaction = GREATEST(last_interaction, $5)
-                       WHERE id = $1 AND team_id = $2 AND LOWER(email) = $7
+                       WHERE id = $1 AND team_id = $2
+                         AND EXISTS (
+                             SELECT 1 FROM crm_contact_emails ce
+                             WHERE ce.contact_id = crm_contacts.id AND ce.email = $7
+                         )
                        RETURNING id"#,
                     existing.id, team_id, name, first_at, last_at, is_sent, normalized_email,
                 ).fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?
@@ -468,10 +481,11 @@ impl CompaniesRepositoryImpl {
                 co.id AS "company_id?",
                 COALESCE(co.email_sync, TRUE) AS "email_sync!",
                 COALESCE(co.manually_created, FALSE) AS "company_manually_created!"
-            FROM crm_contacts ct
+            FROM crm_contact_emails ce
+            JOIN crm_contacts ct ON ct.id = ce.contact_id
             LEFT JOIN crm_companies co ON co.id = ct.company_id
-            WHERE ct.team_id = $1
-              AND LOWER(ct.email) = $2
+            WHERE ce.email = $2
+              AND ct.team_id = $1
               AND (
                   -- Company-less contacts are the personal-email ones
                   -- email sync files on their own.
@@ -481,8 +495,9 @@ impl CompaniesRepositoryImpl {
                       WHERE d.company_id = ct.company_id AND LOWER(d.domain) = $3
                   )
               )
-              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contacts other
-                   WHERE other.team_id = $1 AND LOWER(other.email) = $2) = 1)
+              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contact_emails other_email
+                   JOIN crm_contacts other ON other.id = other_email.contact_id
+                   WHERE other_email.email = $2 AND other.team_id = $1) = 1)
             ORDER BY ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
@@ -1385,11 +1400,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let rows = sqlx::query!(
             r#"
-            SELECT cs.link_id AS "link_id!", LOWER(ct.email) AS "email!"
-            FROM crm_contact_sources cs
-            JOIN crm_contacts ct ON ct.id = cs.contact_id
-            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
-              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)
+            SELECT DISTINCT cs.link_id AS "link_id!", ce.email AS "email!"
+            FROM UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
+            JOIN crm_contact_emails ce ON ce.email = p.email
+            JOIN crm_contact_sources cs
+              ON cs.contact_id = ce.contact_id AND cs.link_id = p.link_id
             "#,
             &link_ids,
             &emails,
@@ -2086,14 +2101,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)
                 LEFT JOIN (
                     SELECT
-                        ct.email AS email,
+                        ce.email AS email,
                         BOOL_OR(ct.hidden) AS contact_hidden,
                         BOOL_OR(COALESCE(c.hidden, FALSE)) AS company_hidden,
                         BOOL_AND(COALESCE(c.email_sync, TRUE)) AS email_sync
-                    FROM crm_contacts ct
+                    FROM crm_contact_emails ce
+                    JOIN crm_contacts ct ON ct.id = ce.contact_id
                     LEFT JOIN crm_companies c ON c.id = ct.company_id
-                    WHERE ct.team_id = $1 AND ct.email = ANY($2::text[])
-                    GROUP BY ct.email
+                    WHERE ce.email = ANY($2::text[]) AND ct.team_id = $1
+                    GROUP BY ce.email
                 ) m ON m.email = input.address
                 ORDER BY input.ord
                 "#,
@@ -2394,9 +2410,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         email: &str,
         include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
-        // Contacts are normalized to lowercase on every write path, so
-        // lowercasing the input preserves use of crm_contacts_email_idx. Team
-        // scope and hidden-row semantics mirror get_contact_for_team.
+        // Matches any of a contact's addresses, which are stored lowercased.
+        // Team scope and hidden-row semantics mirror get_contact_for_team.
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -2409,9 +2424,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ct.last_interaction,
                 ct.created_at,
                 ct.updated_at
-            FROM crm_contacts ct
+            FROM crm_contact_emails ce
+            JOIN crm_contacts ct ON ct.id = ce.contact_id
             LEFT JOIN crm_companies co ON co.id = ct.company_id
-            WHERE ct.email = LOWER($1)
+            WHERE ce.email = LOWER($1)
               AND ct.team_id = $2
               AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
             LIMIT 2

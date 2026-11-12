@@ -18,20 +18,54 @@ hierarchy is workflow → jobs → steps, stored in Tempo with
 triggering PR checkout, artifact download, raw build-log collection, or Datadog
 export. Individual test cases are outside this integration.
 
+### GitHub API budget
+
+Every workflow's `GITHUB_TOKEN` draws on one budget of 5,000 REST calls an hour
+for the repository, and PR CI fails to start without its own calls. Exporting
+every completion of about 50 workflows, most of them PR bookkeeping, once used
+nearly all of it. So:
+
+- PR bookkeeping that runs on most PR events (labels, statuses, comments, text
+  checks, preview cleanup; the `UNOBSERVED_PR_WORKFLOWS` list) is not observed.
+  It has no `job` or `step` lines or traces, so CI hours and the queue tables
+  leave out its runs, most of the tiny runner's work among them. It seldom
+  finishes last on a push that ran PR CI (2 of about 640 in a week). A test makes
+  every new PR workflow pick a list.
+- A run whose jobs were all skipped doesn't start the exporter.
+- The preflight reads the budget first, which GitHub doesn't count. Below 40% of
+  the limit it skips the export and makes no calls; the collector stops at the
+  same line. Otherwise it lists the run's jobs once, for both the collector and
+  its own checks of the upstream action's limits.
+- The trace step runs only on an attempt the pinned trace action can represent.
+  That action retries a failed assertion, and an API error, up to 240 times at
+  two calls a try, and sends a job that ends before it starts as a broken span,
+  so the preflight checks first. When it refuses, the exporter still ends green,
+  without an annotation, and the `export` line's `untraced` says why. The
+  common reason is `job_never_ran`: GitHub dates a skipped job, or one
+  cancelled before it started, as completed a second before it started, and most
+  PR CI runs skip some jobs. An API error during the trace can still start the
+  retry loop.
+
+An exporter run costs one call to list jobs, two for the trace, and, on a PR
+event, one to list the head's runs. The run that completes a push adds one call
+per other workflow that ran, one for the PR, one to three for its files and one
+for the push time.
+
 ### CI events in Loki
 
 Tempo refuses metrics queries over three hours and keeps traces for seven days, so
 it cannot answer daily percentiles. The exporter therefore also writes one log line
 per finished push, job and step to Loki, with `service_name="ci-telemetry"`. They
 keep for 30 days and give exact percentiles. Fields are structured metadata, read
-without a parser; each line's `trace_id` links to the run's trace.
+without a parser; each line's `trace_id` links to the run's trace, which exists
+only when the run's `export` line has no `untraced`.
 
 | `event` | Fields |
 | --- | --- |
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
 | `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
-| `export` | The exporter's own cost: `collect_seconds`, `api_calls`, `rate_remaining`, `rate_limit` |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, `skipped` (`budget`, `no_listing`) when it made no calls, and `untraced` when it sent no trace (`no_job_ran`, `job_never_ran`, `job_unfinished`, `no_conclusion`, `step_timing`, `duplicate_name`, `over_100_jobs`, `over_511_spans`) |
 
 `pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
 `other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
@@ -39,7 +73,9 @@ or any root manifest change. `wall_seconds` runs from the push, or from opening 
 PR when that came later, to the last job. If neither fits, such as a reopen or
 leaving draft, it runs from the first workflow run and `wall_start` says
 `first_run`. A push counts as finished when every workflow it started has finished,
-so a workflow a PR runs must be on the exporter's list; a test enforces this. A run
+and only an observed workflow's completion can notice that, so a push whose last
+workflow is unobserved PR bookkeeping has no `push` line. Neither does a push
+where only bookkeeping ran, or only one workflow. A run
 that starts after everything on its head has finished came from something else, such
 as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
 which also leaves a commit's first full run after draft out of the real PR numbers.
@@ -89,18 +125,21 @@ of an upstream limitation; do not treat it as attempt execution time.
 
 ### run_local events in Loki
 
-`just run_local` sends the same kind of events when a developer opts in
+`just run_local`, `just stack up`/`update` and `cargo x build-services` send the
+same kind of events by default, unless a developer opts out
 (`docs/development/running-locally.md`, `tooling/xtask/crates/xtask_local_telemetry`):
 one line per run, step, build and container health wait, with
 `service_name="local-telemetry"` and `deployment_environment="local"`, through
-the same OTLP route and token as CI. Fields are structured metadata; each line's
+the same OTLP route as CI. Each machine reads the ingest token from Doppler
+`observability/lcl` (`LOCAL_TELEMETRY_TOKEN`) into a 0600 per-user file; keep
+that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; each line's
 `trace_id` opens the run's step waterfall in Tempo. Runs that ended before their
 events were sent are sent by the developer's next run, clamped to 30 minutes old
 like CI's, and a killed run arrives with `outcome="interrupted"`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`), `detached`, `instance`, `instance_kind`, `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
 | `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
 | `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |
@@ -136,7 +175,8 @@ Grafana's OAuth credentials. The provider is account-wide and protected; import 
 into Pulumi if another stack creates it before this rollout.
 
 Deploy the host (see [Deploying](#deploying)) to provision the dashboard. The workflow starts observing after
-merge to `main`; add new workflow names to its list when they are introduced.
+merge to `main`; a test fails until a new PR workflow is in `OBSERVED_WORKFLOWS`
+or `UNOBSERVED_PR_WORKFLOWS`. Add other new workflows to `OBSERVED_WORKFLOWS`.
 GitHub's three-level `workflow_run` chaining limit still applies. Keep
 `trace-artifacts-glob` unset so the exporter never downloads PR-produced artifacts.
 
