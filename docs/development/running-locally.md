@@ -184,6 +184,11 @@ translate that public endpoint back to LocalStack internally. If a download or
 upload still attempts HTTP localhost, rebuild the services, reload the generated
 environment and proxy, and hard-refresh the browser to discard cached URLs.
 
+Static-file permalinks also use the
+machine's HTTPS proxy hostname at `/static-file`. This applies to headless
+stacks too, so a remote browser can load images even when the local frontend
+origin is localhost.
+
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
 `cargo x localstack-provision --instance <name>`. This restores resources, not
@@ -546,6 +551,161 @@ cannot retain the app's secure login cookies; use the printed HTTPS URL.
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
 upgrades. Bun is still used for dependency installation and builds.
+
+## Macro Computers
+
+`agent_harness_service` runs the Macro computer control plane when
+`COMPUTERS_FLEET` is `incus` or `docker`. The stack sets every `COMPUTERS_*`
+value from the fleet you pick. An enabled fleet requires explicit configuration;
+missing values fail startup with the variable name. With no attached fleet, omit
+`COMPUTERS_FLEET` and every `COMPUTERS_*` setting. Local orchestration emits none when
+computers are off. Each enrollment carries a typed deployment (agent harness,
+document storage, app and egress URLs) that the harness resolves through
+`macro_service_urls` when it issues the enrollment; xtask sets the harness's
+`OVERRIDE_*` values to the addresses the fleet's guests reach.
+
+`COMPUTER_RETENTION_DAYS` (default `14`) and `COMPUTER_PAST_DUE_GRACE_DAYS`
+(default `7`) set Macro computers' retention and past-due grace in both
+authentication_service and agent_harness_service; set them only to override.
+
+Harness config required for either fleet:
+`COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
+Local orchestration supplies reserve `7` GB and oversell factor `3` for both
+fleets. The Docker image is `macro-box:latest`; for Incus set
+`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
+(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when it is unset.
+
+Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
+`COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
+Incus additionally requires `COMPUTERS_INCUS_URL`,
+`COMPUTERS_INCUS_CLIENT_CERT`, `COMPUTERS_INCUS_CLIENT_KEY`,
+`COMPUTERS_INCUS_SERVER_CERT`, and these explicit settings:
+
+| Variable | Local value |
+| --- | --- |
+| `COMPUTERS_INCUS_PROFILE` | `macro-box` |
+| `COMPUTERS_INCUS_STORAGE_POOL` | `default` |
+| `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS` | `90` |
+| `COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS` | `10` |
+| `COMPUTERS_INCUS_OPERATION_WAIT_SECS` | `60` |
+| `COMPUTERS_INCUS_OPERATION_WAITS` | `15` |
+| `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS` | `60` |
+| `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS` | `60` |
+
+Authentication does not read a fleet selector. It resolves physical attachment on
+every computer HTTP request from the owning host heartbeat (fresh within five
+minutes); without attachment these routes answer typed 503 before reads, billing
+or queued effects. The operator refreshes its heartbeat at startup and every
+60-second reconcile pass. PostHog `enable-macro-computers` is the only product
+rollout gate. Absent attachment is not a feature switch.
+
+Configure all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none;
+partial groups and malformed IDs fail startup and Doppler validation even without
+a fleet. Preserve configured prices when detaching a fleet: billing cleanup and
+reconciliation still need them. Pure catalog/spec access does not require prices
+or attachment. No size or interval receives a fallback price. Local Doppler supplies test-mode prices.
+`--no-doppler` supplies explicit
+placeholder price IDs for startup only; replace them with real test prices
+before buying a computer.
+
+Provision the same required keys in each service's deployment Doppler config
+before enabling a fleet there. Request/connect/operation/state-change/shutdown
+deadlines are infrastructure config; lifecycle retention, retry and
+reconciliation timings remain named policy constants.
+
+Select a fleet with:
+
+| Flag | Fleet | Computers run on |
+| --- | --- | --- |
+| none (`run_local`), `--computers docker` | `docker` | this machine's Docker daemon |
+| `--computers-incus`, `--computers incus` | `incus` | VMs on `runtime-dev-1` |
+| `--no-computers`, `--computers off`, none (`stack up`) | off | nowhere; no control plane |
+
+`stack up` defaults to off so agents and CI do not build the computer image;
+`stack update` keeps the fleet `up` recorded. `run_dev` never runs computers.
+
+### Docker (default)
+
+`run_local` builds the image with `nix build .#macro-box-docker` and loads it
+as `macro-box:latest`. Nix caches the build, and the load only runs again when
+the store path or the daemon's image changes
+(`infra/local/generated/.macro-box-image`). The first build is slow; pass
+`--no-computers` to skip it.
+
+Computers are privileged `macro-box` containers named `macro-computer-<id>`
+on the instance's `<project>_services` network, so macrod dials the agent
+harness, document storage, and auth in-network. The harness drives the daemon
+through the Docker socket it already mounts for sandboxes. Enrollments are
+written to `infra/local/generated/<instance>/computers/enrollments`, which is
+mounted into the harness at the same absolute path, because the daemon resolves
+bind sources on the host. The harness writes them as root. Each computer's
+`/home` and `/var/lib/macrod` are named volumes (`macro-computer-<id>-home`,
+`-macrod`), like an Incus computer's data disk; releasing the computer
+deletes them. Starting the stack again removes the
+instance's computer containers and volumes along with its data.
+
+Computers use a separate local-only HTTP listener on the same Caddy proxy:
+`http://proxy:<ComputerGateway port>` inside Docker. Incus guests use the devbox's
+tailnet address and the published host port; the browser keeps its HTTPS origin. This
+avoids guest host-DNS entries, importing the local TLS CA, or bypassing TLS.
+`OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL` uses `ws(s)`;
+`OVERRIDE_MCP_SERVICE_URL` is a service base (the consumer appends `/mcp`).
+Regenerate the instance env and Compose config after changing fleets or URL
+mappings. A recreate consumes the current deployment addresses and fresh credentials.
+
+### Incus on runtime-dev-1
+
+```bash
+COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
+```
+
+Both the devbox and runtime must be logged into the same Tailscale tailnet.
+`tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
+xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
+to override discovery. Compose receives the numeric
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, so it needs no MagicDNS
+and no socat/IAP sidecars.
+
+This needs the control-plane identity
+`~/.config/macro-computers/dev-client.{crt,key}` (see
+[`nix/hosts/README.md`](../../nix/hosts/README.md) for enrollment, rebuild,
+firewall rules and IAP recovery). On first use xtask fetches the server
+certificate over Tailscale into `~/.config/macro-computers/dev-server.crt`,
+verifying the pinned SHA-256 fingerprint before saving it and on every start.
+The Incus client pins the certificate bytes, so SAN/name mismatch is expected
+and does not weaken verification.
+
+Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
+sessions use it for first-party MCP servers and the Anthropic gateway, while
+other paired runtimes keep the stack’s external egress URL.
+
+Boxes reach the stack directly over the devbox tailnet address, resolved once
+at stack start with `tailscale ip -4`. Missing, ambiguous, or non-tailnet output
+fails startup. This address must match the runtime's
+`macro.computers.controlPlaneAddress` (`100.116.73.13` in the checked-in config).
+The runtime permits only the control-plane TCP host ports (agent egress, harness,
+document storage, auth, computer gateway, connection gateway) and
+masquerades them to `tailscale0`; other tailnet destinations are dropped.
+Cognition and scheduled actions keep their harness route prefixes; MCP is the
+harness service base, and the connection endpoint uses `ws`. The launcher uses
+the same direct devbox address for the API gateway URL. Reused
+harness ports are emitted once in the host-port list; each of the default and
+120 standard named windows is checked against the evaluated Nix allowlist.
+Custom `--port-base` values need a matching `controlPlanePorts` option update.
+The devbox firewall must accept those ports from the runtime's tailnet address;
+see the exact INPUT and Docker forwarding rules in the host README.
+
+Existing VMs survive stack database replacement; handle their cleanup explicitly.
+
+
+Check the generated wiring without starting anything:
+
+```bash
+cargo x validate-local-compose --instance computers --computers-incus
+```
 
 ## Port Conflicts (macOS)
 

@@ -203,6 +203,16 @@ export const enableSlackArchiveImport = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Macro computers: the whole computer UI (Settings → Machines, Billing,
+ * Agents). Off hides it; existing computers keep running and billing.
+ * No dev default: dev follows PostHog like the backend, which fails closed.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',

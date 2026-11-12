@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionStatusBilling } from './subscriptionStatusBilling';
 import type { SubscriptionStatusRenewalDate } from './subscriptionStatusRenewalDate';
 import type { SubscriptionStatusScheduledChange } from './subscriptionStatusScheduledChange';
 
@@ -11,6 +12,7 @@ import type { SubscriptionStatusScheduledChange } from './subscriptionStatusSche
  * Current renewal and scheduled change; empty for accounts without a subscription.
  */
 export interface SubscriptionStatus {
+  billing?: SubscriptionStatusBilling;
   /** Provider-confirmed subscription renewal date. */
   renewalDate?: SubscriptionStatusRenewalDate;
   scheduledChange?: SubscriptionStatusScheduledChange;

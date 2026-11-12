@@ -485,7 +485,12 @@ export function Notebook(props: {
               setShowLexicalStateDebugger(false)
             }
           />
-          <DocumentDiscussion editorHasFocus={editorHasFocus()} />
+          {/* Wide mode widens only the document body: the discussion keeps the
+              standard column, centered under the text. Without wide mode the
+              column is already this width, so the box changes nothing. */}
+          <div class="mx-auto max-w-3xl">
+            <DocumentDiscussion editorHasFocus={editorHasFocus()} />
+          </div>
         </ParamsProvider>
       </div>
       <div

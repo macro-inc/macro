@@ -654,6 +654,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
 	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
+	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
 		inviteToTeamTeamId: teamId
