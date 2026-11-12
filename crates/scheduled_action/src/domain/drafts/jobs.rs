@@ -482,20 +482,22 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                     answer(&answered, Admission::Refused(error));
                 } else {
                     tracing::error!(error = ?error, "a routine draft failed after it started");
-                    updates
-                        .publish_draft(
-                            &owner,
-                            DraftUpdate {
-                                draft_id: id,
-                                state: DraftUpdateState::Removed,
-                                progress,
-                            },
-                        )
-                        .await;
                 }
+                // Whoever holds it hears it is gone: a start sent again
+                // answers with it drafting while the first start waits.
+                updates.publish_draft(&owner, removed(id, progress)).await;
             }
         }
         answer(&answered, Admission::Ended);
+    }
+}
+
+/// Job `id` is gone: cancelled, discarded or never admitted.
+fn removed(id: Uuid, progress: DraftJobProgress) -> DraftUpdate {
+    DraftUpdate {
+        draft_id: id,
+        state: DraftUpdateState::Removed,
+        progress,
     }
 }
 
@@ -676,14 +678,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             span.record("routine.draft.outcome", "cancelled");
         }
         self.updates
-            .publish_draft(
-                &owner,
-                DraftUpdate {
-                    draft_id: id,
-                    state: DraftUpdateState::Removed,
-                    progress: cancelled.progress,
-                },
-            )
+            .publish_draft(&owner, removed(id, cancelled.progress))
             .await;
         Ok(())
     }

@@ -130,6 +130,38 @@ impl DraftHandBacks for Rows {
     }
 }
 
+/// Holds whatever passes it, while it is held, until it is opened, and says
+/// when something reaches it.
+#[derive(Default)]
+pub(super) struct Gate {
+    held: std::sync::atomic::AtomicBool,
+    /// Signalled when something reaches the held gate.
+    pub(super) reached: tokio::sync::Notify,
+    opened: tokio::sync::Notify,
+}
+
+impl Gate {
+    pub(super) fn held() -> Self {
+        Self {
+            held: true.into(),
+            ..Self::default()
+        }
+    }
+
+    pub(super) async fn pass(&self) {
+        if self.held.load(std::sync::atomic::Ordering::SeqCst) {
+            self.reached.notify_one();
+            self.opened.notified().await;
+        }
+    }
+
+    /// Let through what waits, and all that comes after.
+    pub(super) fn open(&self) {
+        self.held.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.opened.notify_waiters();
+    }
+}
+
 /// What the draft's session does with its prompt: the routines it checks,
 /// in order, written from the prompt, each with what it says it created.
 pub(super) type Turn =
@@ -146,6 +178,8 @@ pub(super) struct Sessions {
     pub(super) hangs: bool,
     pub(super) unreadable: bool,
     pub(super) refuses: Option<RoutineSessionError>,
+    /// Where preparing waits for its admission.
+    pub(super) admitting: Gate,
     pub(super) prepared: Mutex<Vec<PrepareRoutineSession>>,
     pub(super) prompts: Mutex<Vec<String>>,
     pub(super) cancelled: Mutex<Vec<AgentSessionId>>,
@@ -163,6 +197,7 @@ impl Sessions {
             hangs: false,
             unreadable: false,
             refuses: None,
+            admitting: Gate::default(),
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
@@ -184,6 +219,7 @@ impl RoutineSessions for Sessions {
         &self,
         command: PrepareRoutineSession,
     ) -> Result<PreparedRoutineSession, RoutineSessionError> {
+        self.admitting.pass().await;
         if let Some(error) = self.refuses {
             return Err(error);
         }

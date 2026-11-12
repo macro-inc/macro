@@ -6,7 +6,7 @@ use chrono::DateTime;
 use serde_json::json;
 
 use super::super::test::{
-    BUG_REPORTS, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
+    BUG_REPORTS, Gate, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
     drafts, message_posted, owner, plain, routine,
 };
 use super::super::{ACTIVITY_SETTLE, InvalidDraft, POLL};
@@ -767,6 +767,55 @@ async fn a_refused_admission_is_an_error_and_leaves_nothing() {
     assert!(rows.drafts.lock().unwrap().is_empty());
     assert!(rows.jobs.lock().unwrap().is_empty());
     assert!(replica.jobs.jobs(owner()).await.unwrap().is_empty());
+}
+
+/// A start sent again while the first waits for its admission answers with
+/// the job drafting. The first's request is gone (the client resent because
+/// its connection dropped), so when the admission is refused, the client
+/// that holds the job hears it is removed rather than waiting forever.
+#[tokio::test(start_paused = true)]
+async fn a_refused_start_sent_again_hears_its_job_removed() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.refuses = Some(RoutineSessionError::Admission(
+        AiAdmissionError::Unavailable,
+    ));
+    sessions.admitting = Gate::held();
+    let sessions = Arc::new(sessions);
+    let replica = Replica::new(&rows, &sessions);
+    let other = Replica::new(&rows, &sessions);
+    let client_id = macro_uuid::generate_uuid_v7();
+
+    tokio::select! {
+        _ = replica.start_as(client_id, routine(BUG_REPORTS)) => {
+            panic!("a start answered before its admission");
+        }
+        () = sessions.admitting.reached.notified() => {}
+    }
+    let again = other
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
+    assert_eq!(again.state, DraftJobState::Drafting);
+
+    sessions.admitting.open();
+    replica.settled().await;
+
+    assert_eq!(
+        replica
+            .published
+            .of(again.id)
+            .iter()
+            .map(|update| update.state)
+            .collect::<Vec<_>>(),
+        [DraftUpdateState::Removed]
+    );
+    assert!(rows.jobs.lock().unwrap().is_empty());
+    let error = other.jobs.job(owner(), again.id).await.unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<DraftJobError>(),
+        Some(&DraftJobError::NotFound)
+    );
 }
 
 /// What the blocking route refuses, starting refuses too, before any row;
