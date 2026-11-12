@@ -95,11 +95,16 @@ const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v1-";
 /// actions/cache v5.0.5.
 const ACTIONS_CACHE_SHA: &str = "27d5ce7f107fe9357f9df03efb73ab90386fccae";
 
+/// The packages are tens of megabytes. A transfer that stalls gives up and the
+/// build goes on without them rather than holding the deploy.
+const WASM_CACHE_TIMEOUT_MINUTES: u32 = 3;
+
 fn restore_wasm_packages() -> Step<Use> {
     Step::new("Restore wasm packages")
         .uses("actions/cache", "restore", ACTIONS_CACHE_SHA)
         .id("restore-wasm")
         .continue_on_error(true)
+        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_with((
             "key",
@@ -128,6 +133,7 @@ fn save_wasm_packages() -> Step<Use> {
         .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
         .if_condition(Expression::new("steps.wasm.outputs.key != ''"))
         .continue_on_error(true)
+        .timeout_minutes(WASM_CACHE_TIMEOUT_MINUTES)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_with(("key", "${{ steps.wasm.outputs.key }}"))
 }

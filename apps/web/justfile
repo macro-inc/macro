@@ -296,8 +296,9 @@ cycles-ci:
     bunx --bun biome lint --changed --only=suspicious/noImportCycles
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
-# (gitignored). Unconditional — CI app builds must never skip it (schema or
-# engine changes alter the wasm without a cache-wasm version bump).
+# (gitignored). Unconditional: CI app builds must never gate it on the
+# cache-wasm version (schema or engine changes alter the wasm without a bump).
+# cached-wasm-build.sh reuses an earlier build only when its inputs match.
 build-cache-wasm:
     scripts/cached-wasm-build.sh cache-wasm {{justfile_directory()}}/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 

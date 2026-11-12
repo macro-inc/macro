@@ -6,8 +6,9 @@
 # behaves as before.
 #
 # PR check jobs keep WASM_PKG_CACHE_DIR on the node's cache volume and opt into
-# the HTTP cache. Deploy builds keep it in a GitHub Actions cache that only
-# branch runs write, and leave the HTTP cache off: PR jobs can write it.
+# the HTTP cache. Deploy builds keep it in a GitHub Actions cache, where a run
+# on main reads only what main's runs saved, and leave the HTTP cache off: PR
+# jobs can write it.
 #
 # wasm-cache-key.ts computes the key from the package's workspace dependency
 # closure (.github/workspace-dep-closures.json), its slice of Cargo.lock, the
@@ -46,7 +47,14 @@ store_locally() {
   local tmp
   tmp="$(mktemp -d "$WASM_PKG_CACHE_DIR/.tmp-XXXXXX")"
   cp -a "$1/." "$tmp/"
+  # `cp -a` copied the source directory's mtime, which can be old (an existing
+  # out dir, an HTTP cache archive). The prune above, in this or a parallel
+  # build, and the deploy build read an entry's mtime as when a build last used
+  # it.
+  touch "$tmp"
   mv -T "$tmp" "$entry" 2>/dev/null || rm -rf "$tmp"
+  # A concurrent job's copy won: this build used it too.
+  touch -c "$entry"
 }
 
 if [ -d "$entry" ]; then

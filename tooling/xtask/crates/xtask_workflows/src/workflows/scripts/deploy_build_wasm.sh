@@ -12,9 +12,9 @@ fi
 # current first, so cached-wasm-build.sh's pruning of week-old entries cannot
 # remove one before this build has looked it up.
 find "$WASM_PKG_CACHE_DIR" -mindepth 1 -maxdepth 1 -exec touch {} + 2>/dev/null || true
-# A package reused or stored below is newer than `started`
-# (cached-wasm-build.sh touches it), so older entries belong to builds of other
-# inputs and would only grow the saved cache.
+# cached-wasm-build.sh touches every entry it reuses or stores, so entries not
+# newer than `started` belong to builds of other inputs and would only grow the
+# saved cache.
 started="$(mktemp)"
 just build-wasm
 find "$WASM_PKG_CACHE_DIR" -mindepth 1 -maxdepth 1 \( -name '.tmp-*' -o ! -newer "$started" \) \

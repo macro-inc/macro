@@ -80,82 +80,115 @@ fn build_reuses_wasm_packages_only_from_the_actions_cache() {
     );
 }
 
-/// Runs the wasm packages step with `just` replaced by `build`, a shell
-/// snippet run in the cache directory, and returns what is left there and
-/// the save key it wrote, if any.
-fn run_wasm_step(
-    entries: &[&str],
-    restored_key: &str,
-    build: &str,
-) -> (Vec<String>, Option<String>) {
-    let dir = tempfile::tempdir().expect("temp dir");
-    let cache = dir.path().join("cache");
-    let bin = dir.path().join("bin");
-    std::fs::create_dir_all(&bin).expect("bin dir");
-    for entry in entries {
-        std::fs::create_dir_all(cache.join(entry)).expect("entry");
-        // Saved more than a week ago, so cached-wasm-build.sh would prune it.
-        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(10 * 24 * 3600);
-        std::fs::File::open(cache.join(entry))
-            .and_then(|file| file.set_modified(old))
-            .expect("age entry");
+const WEEK_AND_A_HALF: std::time::Duration = std::time::Duration::from_secs(10 * 24 * 3600);
+
+fn age(path: &std::path::Path) {
+    std::fs::File::open(path)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now() - WEEK_AND_A_HALF))
+        .expect("age path");
+}
+
+fn write_executable(path: &std::path::Path, script: &str) {
+    std::fs::write(path, format!("#!/usr/bin/env bash\nset -e\n{script}\n")).expect("write stub");
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("chmod stub");
+}
+
+/// One run of the wasm packages step: `just` runs `build`, a shell snippet, in
+/// the cache directory, `stubs` replace other commands, and `env` is added.
+struct WasmStep<'a> {
+    entries: &'a [&'a str],
+    restored_key: &'a str,
+    build: &'a str,
+    stubs: &'a [(&'a str, &'a str)],
+    env: &'a [(&'a str, &'a std::ffi::OsStr)],
+}
+
+impl WasmStep<'_> {
+    fn new<'a>(entries: &'a [&'a str], restored_key: &'a str, build: &'a str) -> WasmStep<'a> {
+        WasmStep {
+            entries,
+            restored_key,
+            build,
+            stubs: &[],
+            env: &[],
+        }
     }
-    let just = bin.join("just");
-    std::fs::write(
-        &just,
-        format!("#!/usr/bin/env bash\nset -e\nsleep 0.05\nmkdir -p \"$WASM_PKG_CACHE_DIR\"\ncd \"$WASM_PKG_CACHE_DIR\"\n{build}\n"),
-    )
-    .expect("fake just");
-    std::fs::set_permissions(&just, std::fs::Permissions::from_mode(0o755)).expect("chmod just");
-    let output = dir.path().join("output");
-    let status = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(include_str!("../scripts/deploy_build_wasm.sh"))
-        .env(
-            "PATH",
-            format!(
-                "{}:{}",
-                bin.display(),
-                std::env::var("PATH").unwrap_or_default()
+
+    /// What is left in the cache directory, and the save key, if any.
+    fn run(&self) -> (Vec<String>, Option<String>) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let cache = dir.path().join("cache");
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).expect("bin dir");
+        for entry in self.entries {
+            std::fs::create_dir_all(cache.join(entry)).expect("entry");
+            // Saved more than a week ago, so cached-wasm-build.sh would prune it.
+            age(&cache.join(entry));
+        }
+        write_executable(
+            &bin.join("just"),
+            &format!(
+                "sleep 0.05\nmkdir -p \"$WASM_PKG_CACHE_DIR\"\ncd \"$WASM_PKG_CACHE_DIR\"\n{}",
+                self.build
             ),
-        )
-        .env("WASM_PKG_CACHE_DIR", &cache)
-        .env("GITHUB_OUTPUT", &output)
-        .env("GITHUB_RUN_ID", "7")
-        .env("GITHUB_RUN_ATTEMPT", "1")
-        .env("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX)
-        .env("RESTORED_KEY", restored_key)
-        .status()
-        .expect("run the wasm step");
-    assert!(status.success());
-    let mut left: Vec<String> = std::fs::read_dir(&cache)
-        .expect("cache dir")
-        .map(|entry| {
-            entry
-                .expect("entry")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
-    left.sort();
-    let key = std::fs::read_to_string(&output)
-        .unwrap_or_default()
-        .lines()
-        .find_map(|line| line.strip_prefix("key=").map(str::to_owned));
-    (left, key)
+        );
+        for (name, script) in self.stubs {
+            write_executable(&bin.join(name), script);
+        }
+        let output = dir.path().join("output");
+        let mut command = std::process::Command::new("bash");
+        command
+            .arg("-c")
+            .arg(include_str!("../scripts/deploy_build_wasm.sh"))
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    bin.display(),
+                    std::env::var("PATH").unwrap_or_default()
+                ),
+            )
+            .env("WASM_PKG_CACHE_DIR", &cache)
+            .env("GITHUB_OUTPUT", &output)
+            .env("GITHUB_RUN_ID", "7")
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX)
+            .env("RESTORED_KEY", self.restored_key);
+        for (name, value) in self.env {
+            command.env(name, value);
+        }
+        assert!(command.status().expect("run the wasm step").success());
+        let mut left: Vec<String> = std::fs::read_dir(&cache)
+            .expect("cache dir")
+            .map(|entry| {
+                entry
+                    .expect("entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        left.sort();
+        let key = std::fs::read_to_string(&output)
+            .unwrap_or_default()
+            .lines()
+            .find_map(|line| line.strip_prefix("key=").map(str::to_owned));
+        (left, key)
+    }
 }
 
 #[test]
 fn wasm_step_keeps_the_packages_it_used_and_names_new_sets() {
     // A reused entry is touched, a rebuilt one stored, an unused one dropped,
     // and the restored entries survive the week-old pruning until looked up.
-    let (left, key) = run_wasm_step(
-        &["a-1", "b-2", ".tmp-x"],
+    let (left, key) = WasmStep::new(
+        &["a-1", "b-2"],
         "deploy-wasm-pkgs-v1-old-3-1",
-        // Another package's store prunes before this one is looked up.
-        "find . -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +\ntest -d a-1\ntouch a-1\nmkdir c-3",
-    );
+        // Another package's store prunes before this one is looked up, and a
+        // store it left unfinished is dropped too.
+        "find . -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +\ntest -d a-1\ntouch a-1\nmkdir c-3 .tmp-x",
+    )
+    .run();
     assert_eq!(left, ["a-1", "c-3"]);
     let key = key.expect("a new set is saved");
     assert!(
@@ -165,7 +198,8 @@ fn wasm_step_keeps_the_packages_it_used_and_names_new_sets() {
 
     // The same set again, restored from the entry that holds it: no save.
     let set = key.trim_end_matches("7-1");
-    let (left, key) = run_wasm_step(&["a-1", "c-3"], &format!("{set}5-2"), "touch a-1 c-3");
+    let restored = format!("{set}5-2");
+    let (left, key) = WasmStep::new(&["a-1", "c-3"], &restored, "touch a-1 c-3").run();
     assert_eq!(left, ["a-1", "c-3"]);
     assert_eq!(key, None);
 }
@@ -173,7 +207,48 @@ fn wasm_step_keeps_the_packages_it_used_and_names_new_sets() {
 #[test]
 fn wasm_step_drops_a_failed_restore() {
     // Nothing restored: whatever a failed extraction left is not reused.
-    let (left, key) = run_wasm_step(&["a-1"], "", "test ! -e a-1\nmkdir a-1");
+    let (left, key) = WasmStep::new(&["a-1"], "", "test ! -e a-1\nmkdir a-1").run();
     assert_eq!(left, ["a-1"]);
     assert!(key.is_some());
+}
+
+/// With the real `cached-wasm-build.sh`: a package reused from the restored
+/// cache and one rebuilt into an out dir an earlier build left both stay in the
+/// saved set, and the HTTP cache PR jobs write is never asked, though the job
+/// has its credentials.
+#[test]
+fn wasm_step_with_the_real_package_cache() {
+    let out = tempfile::tempdir().expect("out dir");
+    // wasm-pack overwrites the files of an existing out dir, which leaves the
+    // directory's own mtime old.
+    let stale = out.path().join("a");
+    std::fs::create_dir_all(&stale).expect("stale out dir");
+    std::fs::write(stale.join("a.wasm"), "old").expect("old output");
+    age(&stale);
+    let curl_called = out.path().join("curl-called");
+    let cached = xtask_paths::repo_root().join("apps/web/scripts/cached-wasm-build.sh");
+    let build = format!(
+        "for package in a b; do\n\
+         \x20 {cached} \"$package\" \"$OUT/$package\" -- sh -c 'mkdir -p \"$1\" && echo new > \"$1/$2.wasm\"' _ \"$OUT/$package\" \"$package\"\n\
+         done",
+        cached = cached.display()
+    );
+    let (left, key) = WasmStep {
+        stubs: &[
+            // wasm-cache-key.ts
+            ("bun", "echo k"),
+            ("curl", "touch \"$CURL_CALLED\"\nexit 22"),
+        ],
+        env: &[
+            ("OUT", out.path().as_os_str()),
+            ("CURL_CALLED", curl_called.as_os_str()),
+            ("SCCACHE_WEBDAV_ENDPOINT", "https://cache.invalid".as_ref()),
+            ("SCCACHE_WEBDAV_TOKEN", "token".as_ref()),
+        ],
+        ..WasmStep::new(&["b-k"], "deploy-wasm-pkgs-v1-old-3-1", &build)
+    }
+    .run();
+    assert_eq!(left, ["a-k", "b-k"]);
+    assert!(key.is_some());
+    assert!(!curl_called.exists(), "the deploy asked the HTTP cache");
 }
