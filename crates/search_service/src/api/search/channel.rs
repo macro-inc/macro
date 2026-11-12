@@ -503,7 +503,7 @@ pub async fn handler(
         .opensearch_client
         .search_channel(args)
         .await
-        .map_err(SearchError::Search)?;
+        .map_err(SearchError::from)?;
 
     let results = enrich_channels(&ctx, user_id.as_ref(), hits, req.sort).await?;
 

@@ -57,6 +57,9 @@ per-entity-type search plus a unified search across them — mounted into
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial
   queries; run new term handling through it.
+- An OpenSearch clause-limit rejection (`OpensearchClientError::TooManyClauses`)
+  becomes `SearchError::QueryTooComplex`, a 400; convert client errors with
+  `SearchError::from`, never by wrapping them in `SearchError::Search`.
 - Calendar events have two scopes (`calendar_event_scope` on the unified
   request): `own` matches the caller's own and delegated calendars by
   owner and inbox link; `shared_with_you` resolves the events shared with the

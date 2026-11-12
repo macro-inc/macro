@@ -63,9 +63,12 @@ pub enum SearchError {
     /// A channel type filter is not a known channel type.
     #[error("invalid channel type: {0}")]
     InvalidChannelType(String),
+    /// The query OpenSearch would run exceeds its clause limit
+    #[error("query is too complex to search; use fewer terms")]
+    QueryTooComplex(OpensearchClientError),
     /// Opensearch error occurred
     #[error("unable to search")]
-    Search(#[from] OpensearchClientError),
+    Search(OpensearchClientError),
     /// Name search error occurred
     #[error("unable to name search")]
     NameSearch(#[from] NameSearchError),
@@ -89,7 +92,8 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidChannelId(_)
             | SearchError::InvalidChannelType(_)
             | SearchError::NoQueryOrTermsProvided
-            | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
+            | SearchError::NoChannelIds
+            | SearchError::QueryTooComplex(_) => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -105,3 +109,18 @@ impl IntoResponse for SearchError {
             .into_response()
     }
 }
+
+impl From<OpensearchClientError> for SearchError {
+    fn from(err: OpensearchClientError) -> Self {
+        match err {
+            OpensearchClientError::TooManyClauses { .. } => {
+                tracing::warn!(error = ?err, "search query exceeded the opensearch clause limit");
+                SearchError::QueryTooComplex(err)
+            }
+            err => SearchError::Search(err),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;

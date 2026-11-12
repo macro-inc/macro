@@ -25,6 +25,12 @@ pub enum OpensearchClientError {
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 
+    /// OpenSearch rejected the query for exceeding its clause limit
+    /// (`indices.query.bool.max_clause_count`). The query, not the cluster,
+    /// is at fault, so retrying it cannot succeed.
+    #[error("query has more clauses than OpenSearch allows. message: {message}")]
+    TooManyClauses { message: String },
+
     #[error("invalid match type. match_type: {match_type}")]
     InvalidMatchType { match_type: String },
 
@@ -78,12 +84,39 @@ impl ResponseExt for Response {
         if self.status_code().is_success() {
             Ok(self)
         } else {
-            Err(OpensearchClientError::NetworkError {
-                status_code: self.status_code().as_u16(),
-                message: self.text().await.unwrap_or_default(),
-            })
+            let status_code = self.status_code().as_u16();
+            let message = self.text().await.unwrap_or_default();
+            if is_too_many_clauses(&message) {
+                Err(OpensearchClientError::TooManyClauses { message })
+            } else {
+                Err(OpensearchClientError::NetworkError {
+                    status_code,
+                    message,
+                })
+            }
         }
     }
+}
+
+/// Whether an OpenSearch error body is the clause limit: the total across the
+/// query tree (`too_many_nested_clauses`) or one bool query
+/// (`too_many_clauses`). The limit error can sit in `root_cause` or deeper in
+/// a `caused_by` chain, depending on the phase that hit it.
+fn is_too_many_clauses(body: &str) -> bool {
+    fn has_clause_error(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Object(map) => {
+                matches!(
+                    map.get("type").and_then(serde_json::Value::as_str),
+                    Some("too_many_nested_clauses" | "too_many_clauses")
+                ) || map.values().any(has_clause_error)
+            }
+            serde_json::Value::Array(values) => values.iter().any(has_clause_error),
+            _ => false,
+        }
+    }
+    serde_json::from_str::<serde_json::Value>(body)
+        .is_ok_and(|body| has_clause_error(&body["error"]))
 }
 
 impl ResponseExt for Result<Response, Error> {
@@ -97,3 +130,6 @@ impl ResponseExt for Result<Response, Error> {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
