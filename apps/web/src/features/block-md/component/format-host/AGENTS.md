@@ -28,6 +28,8 @@ Keep native FormatTools in the selected-body withinPopup path; its full-header t
 
 Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Keep its Link button hidden until the native link editor is qualified; do not expose requestLink to Actions from this mount.
 
+Co-dispose HostedFloatingLinkMenu with its actual native link host inside the overlay's FloatingMenuGroup and ErrorBoundary; registerMenu has no independent unbind. Gate interaction and deferred opening on the supplied document interaction accessor. A renderer unit checkpoint does not activate the body Link button or Actions callback.
+
 Use the actual document-body call chain MarkdownPopup → FormatTools withinPopup as the body toolbar oracle. HostedFloatingFormatMenu belongs to MarkdownTextarea/Shell; its component proofs do not establish body UI admission or the six-item body More menu.
 
 Render Comment inside NativeBodyFormatPopup, never a second toolbar: show it for commenters while the live root exists and the session draft capability is mounted, after one divider only when formatting controls are present; keep formatting gated on the host interaction accessor. Keep the popup open with the Source toast on failed insertion and close it on success.

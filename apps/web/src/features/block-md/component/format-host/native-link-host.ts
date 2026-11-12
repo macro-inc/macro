@@ -135,6 +135,7 @@ export function createNativeDocumentLinkMenuHost(
       setTimeout(() => {
         if (
           !active() ||
+          !options.canEdit() ||
           epoch !== openingEpoch ||
           view.mirror.keyGeneration !== accepted.generation ||
           !sameSelection(accepted.selection, view.selection().selection)
@@ -159,7 +160,7 @@ export function createNativeDocumentLinkMenuHost(
   return {
     isEditable: () =>
       active() && options.canEdit() && view.root.contentEditable === 'true',
-    isInteractable: active,
+    isInteractable: () => active() && options.canEdit(),
     root: () => (active() ? view.root : null),
     focus: () => {
       if (active()) view.focus();
@@ -174,10 +175,10 @@ export function createNativeDocumentLinkMenuHost(
           open: openExternalUrl,
           isTouchDevice,
           onHoverLink: (info) => {
-            if (active()) callbacks?.hover(info);
+            if (active() && options.canEdit()) callbacks?.hover(info);
           },
           onClickLink: (info) => {
-            if (!active()) return;
+            if (!active() || !options.canEdit()) return;
             target = actions.captureLinkTarget();
             callbacks?.click(info);
           },

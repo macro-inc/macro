@@ -1,3 +1,4 @@
+import { HostedFloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { toast } from '@core/component/Toast/Toast';
 import { Telemetry } from '@macro-inc/observability';
@@ -73,6 +74,14 @@ export function createNativeBodyFormattingOverlay(options: {
         }}
       >
         <FloatingMenuGroup>
+          <Show when={formatting.links()}>
+            {(links) => (
+              <HostedFloatingLinkMenu
+                host={links()}
+                autoLinkMatchMode="common-tlds"
+              />
+            )}
+          </Show>
           <Show when={formatting.controller()}>
             {(controller) => (
               <NativeBodyFormatPopup
@@ -101,6 +110,11 @@ export function createNativeBodyFormattingOverlay(options: {
         </FloatingMenuGroup>
       </ErrorBoundary>
     );
-    return { observer: formatting.observer, Overlay, dispose };
+    return {
+      observer: formatting.observer,
+      host: () => formatting.controller()?.host,
+      Overlay,
+      dispose,
+    };
   });
 }
