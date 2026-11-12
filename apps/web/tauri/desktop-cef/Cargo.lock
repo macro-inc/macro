@@ -8479,7 +8479,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-fs"
 version = "2.5.1"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=9b97eb97cffdf44671e45e18216f3e6be3d2613b#9b97eb97cffdf44671e45e18216f3e6be3d2613b"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=6d4b8233377c73ede09aa08d609a40796b5c35fa#6d4b8233377c73ede09aa08d609a40796b5c35fa"
 dependencies = [
  "anyhow",
  "dunce",
@@ -8516,7 +8516,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-http"
 version = "2.5.9"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=9b97eb97cffdf44671e45e18216f3e6be3d2613b#9b97eb97cffdf44671e45e18216f3e6be3d2613b"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=6d4b8233377c73ede09aa08d609a40796b5c35fa#6d4b8233377c73ede09aa08d609a40796b5c35fa"
 dependencies = [
  "bytes",
  "cookie_store",
@@ -8727,7 +8727,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-websocket"
 version = "2.4.2"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=9b97eb97cffdf44671e45e18216f3e6be3d2613b#9b97eb97cffdf44671e45e18216f3e6be3d2613b"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=6d4b8233377c73ede09aa08d609a40796b5c35fa#6d4b8233377c73ede09aa08d609a40796b5c35fa"
 dependencies = [
  "futures-util",
  "http",
