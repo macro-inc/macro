@@ -127,13 +127,11 @@
     "activity": [
       "crates/activity",
       "crates/agent_correlation",
-      "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
       "crates/channel_sender",
       "crates/cowlike",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/kafka_util",
@@ -7821,10 +7819,20 @@
       "crates/cowlike",
       "crates/email_utils",
       "crates/gmail_client",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/model-error-response",
       "crates/models_email",
       "crates/models_pagination",
+      "crates/workspace-hack"
+    ],
+    "gmail_emulator": [
+      "crates/gmail_emulator",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
       "crates/workspace-hack"
     ],
     "google_token": [
