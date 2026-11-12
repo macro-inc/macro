@@ -415,7 +415,7 @@ Macro may provide Partner with documentation, training material, beta software, 
 
 Unless expressly stated otherwise, Program resources and pre-release functionality are provided "as is" and may change or be discontinued.
 
-Partner may provide suggestions, suggestions, or feedback relating to Macro. Partner grants Macro a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
+Partner may provide ideas, suggestions, or feedback relating to Macro. Partner grants Macro a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
 
 This does not transfer ownership of Partner's pre-existing intellectual property to Macro.
 

@@ -387,7 +387,7 @@ type Msg = {
  * opens -- with no clock, no callouts and no label zones. It is the closing
  * hero's backdrop: the same list the section below animates, ghosted behind
  * the panels, so the two are the same picture rather than two drawings of
- * one suggestion.
+ * one idea.
  */
 export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
   const [t, setT] = createSignal(0);

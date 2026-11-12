@@ -30,7 +30,7 @@ export function PaperDatabaseQuery() {
                   stroke-linejoin="round"
                 />
               </svg>
-              <div class="paper-feature-node-35">Chart suggestions by stage</div>
+              <div class="paper-feature-node-35">Chart ideas by stage</div>
               <div class="paper-feature-node-219" />
             </div>
             <div class="paper-feature-node-220">
@@ -89,7 +89,7 @@ export function PaperDatabaseQuery() {
         </div>
         <div class="paper-feature-node-223">
           <div class="paper-feature-node-224 paper-feature-glass">
-            <div class="paper-feature-node-225">Suggestions by stage</div>
+            <div class="paper-feature-node-225">Ideas by stage</div>
             <div class="paper-feature-node-226">
               <div class="paper-feature-node-227">
                 <div class="paper-feature-node-77">4</div>

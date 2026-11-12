@@ -151,7 +151,7 @@ export function PaperDatabaseFields() {
                 <div class="paper-feature-node-131">1</div>
               </div>
               <div class="paper-feature-node-125">
-                <div class="paper-feature-node-132">Add your first suggestion</div>
+                <div class="paper-feature-node-132">Add your first idea</div>
               </div>
               <div class="paper-feature-node-127">
                 <div class="paper-feature-node-133">
