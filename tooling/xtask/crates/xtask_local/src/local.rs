@@ -1339,22 +1339,62 @@ fn collector_action(holder: Option<&str>, wanted_service: &str) -> CollectorActi
     }
 }
 
-/// The docker container publishing the OTLP HTTP port, as
+/// The docker container binding host port 4318, as
 /// `<name> <compose project> <compose service>`; `None` when the port is
 /// closed or held by a host process.
 fn otlp_port_holder() -> Option<String> {
     if !summary::port_open(4318) {
         return None;
     }
-    Command::new("docker")
+    let out = Command::new("docker")
         .args(["ps", "--filter", "publish=4318", "--format"])
         .arg(
-            r#"{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.service"}}"#,
+            "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}\t\
+             {{.Label \"com.docker.compose.service\"}}\t{{.Ports}}",
         )
         .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|line| !line.is_empty())
+        .ok()?;
+    pick_otlp_port_holder(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// From tab-separated `docker ps` rows (`name, project, service, ports`),
+/// the one binding host port 4318. `publish=4318` also matches containers
+/// that only expose container port 4318 on another host port (`14318:4318`),
+/// and those must never be taken for the collector.
+fn pick_otlp_port_holder(ps: &str) -> Option<String> {
+    ps.lines().find_map(|row| {
+        let mut fields = row.split('\t');
+        let (name, project, service, ports) = (
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+        );
+        binds_host_otlp_port(ports).then(|| format!("{name} {project} {service}"))
+    })
+}
+
+/// Whether a `{{.Ports}}` value such as `0.0.0.0:4317-4318->4317-4318/tcp,
+/// [::]:4317-4318->4317-4318/tcp` binds host port 4318 (Docker collapses
+/// consecutive ports into ranges).
+fn binds_host_otlp_port(ports: &str) -> bool {
+    ports.split(", ").any(|binding| {
+        // `<host ip>:<host ports>-><container ports>/<proto>`; an exposed but
+        // unpublished port (`4040/tcp`) has no `->`.
+        let Some((_, host_ports)) = binding
+            .split_once("->")
+            .and_then(|(host, _)| host.rsplit_once(':'))
+        else {
+            return false;
+        };
+        match host_ports.split_once('-') {
+            Some((low, high)) => matches!(
+                (low.parse::<u16>(), high.parse::<u16>()),
+                (Ok(low), Ok(high)) if (low..=high).contains(&4318)
+            ),
+            None => host_ports == "4318",
+        }
+    })
 }
 
 /// Start a profile-gated service from the base compose file under the global
@@ -1413,19 +1453,10 @@ fn ensure_headless_chrome(stage: &Stage) {
 /// errors. Best-effort: "already connected" (rerun) and other failures are
 /// ignored, they only mean traces don't flow.
 fn connect_tracing_network(instance: &Instance) {
-    if !summary::port_open(4318) {
+    let Some(holder) = otlp_port_holder() else {
         return;
-    }
-    // Find the collector container (Jaeger or Datadog agent — both publish the
-    // OTLP HTTP port) by that port rather than assuming a container name, in
-    // case it was started under a different project.
-    let Some(collector) = Command::new("docker")
-        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
-        .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|name| !name.is_empty())
-    else {
+    };
+    let Some(collector) = holder.split_whitespace().next() else {
         return;
     };
     let _ = Command::new("docker")
