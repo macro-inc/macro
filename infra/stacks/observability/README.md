@@ -57,7 +57,8 @@ Tempo refuses metrics queries over three hours and keeps traces for seven days, 
 it cannot answer daily percentiles. The exporter therefore also writes one log line
 per finished push, job and step to Loki, with `service_name="ci-telemetry"`. They
 keep for 30 days and give exact percentiles. Fields are structured metadata, read
-without a parser; each line's `trace_id` links to the run's trace.
+without a parser; each line's `trace_id` links to the run's trace, which exists
+only when the run's `export` line has no `untraced`.
 
 | `event` | Fields |
 | --- | --- |

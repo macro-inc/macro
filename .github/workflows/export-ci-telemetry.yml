@@ -95,6 +95,18 @@ jobs:
           const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
             ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
           });
+          // The event collector reads this listing instead of fetching it again. It is
+          // written before the checks below so that the job events survive a failing check.
+          const listing = {
+            limit,
+            remaining: remaining - 1,
+            reserve,
+            calls: 1,
+            trace: false,
+            untraced: null,
+            jobs: data.jobs,
+          };
+          writeFileSync(listingFile, JSON.stringify(listing));
           const { createHash } = require('node:crypto');
 
           function timed(entry) {
@@ -139,16 +151,8 @@ jobs:
           }
 
           const reason = untraced();
-          // The event collector reads this listing instead of fetching it again.
-          const listing = {
-            limit,
-            remaining: remaining - 1,
-            reserve,
-            calls: 1,
-            trace: !reason,
-            untraced: reason,
-            jobs: data.jobs,
-          };
+          listing.trace = !reason;
+          listing.untraced = reason;
           writeFileSync(listingFile, JSON.stringify(listing));
           core.setOutput('export', !reason);
           if (reason) core.info(`No execution trace for this attempt (${reason}); job events still export`);
