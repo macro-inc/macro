@@ -41,6 +41,9 @@ action in another tab and verify the feed retains its page-boundary rows while
 the action count and heatmap update. An open entity activity panel should also
 refresh for actions by another authorized user. After disconnecting and
 reconnecting the websocket, verify recovery without requiring another action.
+On a fresh load the feed reads once: its read waits for the websocket's
+subscriptions instead of reading again when the socket first connects, and an
+action made in another tab while the page loads still appears.
 Hidden tabs defer refresh until visible; purges refresh all mounted activity
 queries through the normal access checks.
 

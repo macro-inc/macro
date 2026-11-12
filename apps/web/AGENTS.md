@@ -832,6 +832,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   seconds (close 4499, retried). A phone can wake to a socket that reads open but
   is dead; the reconnect is what tells followers such as agent sessions
   (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
+- The first Soup websocket connection is not a reconnect, so it refetches
+  nothing that waited for it. A read its subscriptions keep current (its view
+  registers an activity revalidator or a channel notification reader) passes
+  `context: FOLLOWS_LIVE_UPDATES` and registers with `followsLiveUpdates: true`;
+  always set both or neither. `liveUpdatesGateExchange` holds such reads until
+  a pong after the subscribe frames (at most `LIVE_UPDATES_HOLD_MS`), so nothing
+  published in between is lost. A `cache-first` read sets neither and is read
+  again when the subscriptions go live; so is every read if the hold gave up.
+  Each held read records a `graphql_soup.live_updates.wait` span.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
