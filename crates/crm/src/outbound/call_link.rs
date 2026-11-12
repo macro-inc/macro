@@ -31,10 +31,12 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
         }
     }
 
-    /// CRM companies (and contacts, when the address is a known contact) that
-    /// the people on a call belong to, in the CRMs of the teams of the Macro
-    /// accounts on the call. A team's own members never match its CRM, and
-    /// hidden records are skipped. Email contribution consent is independent.
+    /// CRM companies whose domain a person's address is at, and CRM contacts
+    /// holding the address as any of their addresses, with or without a
+    /// company, in the CRMs of the teams of the Macro accounts on the call.
+    /// Every visible contact holding an address matches. A team's own members
+    /// never match its CRM, and hidden records are skipped, as is a contact
+    /// under a hidden company. Email contribution consent is independent.
     async fn matching_records(
         &self,
         people: &CallPeople,
@@ -53,6 +55,9 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             .chain(people.invitee_emails.iter().cloned())
             .collect();
 
+        // Contacts are found from the address index, then read by id: the
+        // `OFFSET 0` fences keep the planner from starting at every contact
+        // of the team, or of the table, instead.
         let rows = sqlx::query!(
             r#"
             WITH teams AS (
@@ -74,14 +79,24 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                     WHERE tu.team_id = t.team_id AND LOWER(tu.user_id) = 'macro|' || p.email
                 )
             )
-            SELECT DISTINCT co.id AS company_id, ct.id AS "contact_id?"
+            SELECT co.id AS "company_id?", NULL::uuid AS "contact_id?"
             FROM outsiders o
             JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
             JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
-            LEFT JOIN (
-                crm_contact_emails ce
-                JOIN crm_contacts ct ON ct.id = ce.contact_id AND NOT ct.hidden
-            ) ON ce.email = o.email AND ct.company_id = co.id
+            UNION
+            SELECT NULL, ct.id
+            FROM outsiders o
+            CROSS JOIN LATERAL (
+                SELECT ce.contact_id FROM crm_contact_emails ce WHERE ce.email = o.email OFFSET 0
+            ) held
+            CROSS JOIN LATERAL (
+                SELECT ct.id, ct.team_id
+                FROM crm_contacts ct
+                LEFT JOIN crm_companies co ON co.id = ct.company_id
+                WHERE ct.id = held.contact_id AND NOT ct.hidden AND co.hidden IS NOT TRUE
+                OFFSET 0
+            ) ct
+            WHERE ct.team_id = o.team_id
             "#,
             &user_ids,
             &emails,
@@ -89,7 +104,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
         .fetch_all(&self.pool)
         .await?;
 
-        let company_ids: BTreeSet<Uuid> = rows.iter().map(|row| row.company_id).collect();
+        let company_ids: BTreeSet<Uuid> = rows.iter().filter_map(|row| row.company_id).collect();
         let contact_ids: BTreeSet<Uuid> = rows.iter().filter_map(|row| row.contact_id).collect();
         Ok((
             company_ids.into_iter().collect(),

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH teams AS (\n                SELECT DISTINCT tu.team_id\n                FROM team_user tu\n                WHERE LOWER(tu.user_id) = ANY($1)\n            ),\n            people AS (\n                SELECT DISTINCT LOWER(email) AS email\n                FROM UNNEST($2::text[]) AS email\n                WHERE STRPOS(email, '@') > 0\n            ),\n            outsiders AS (\n                SELECT t.team_id, p.email, SPLIT_PART(p.email, '@', 2) AS domain\n                FROM teams t\n                CROSS JOIN people p\n                WHERE NOT EXISTS (\n                    SELECT 1 FROM team_user tu\n                    WHERE tu.team_id = t.team_id AND LOWER(tu.user_id) = 'macro|' || p.email\n                )\n            )\n            SELECT co.id AS \"company_id?\", NULL::uuid AS \"contact_id?\"\n            FROM outsiders o\n            JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain\n            JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden\n            UNION\n            SELECT NULL, ct.id\n            FROM outsiders o\n            CROSS JOIN LATERAL (\n                SELECT ce.contact_id FROM crm_contact_emails ce WHERE ce.email = o.email OFFSET 0\n            ) held\n            CROSS JOIN LATERAL (\n                SELECT ct.id, ct.team_id\n                FROM crm_contacts ct\n                LEFT JOIN crm_companies co ON co.id = ct.company_id\n                WHERE ct.id = held.contact_id AND NOT ct.hidden AND co.hidden IS NOT TRUE\n                OFFSET 0\n            ) ct\n            WHERE ct.team_id = o.team_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "208d2b52884a978a7953cc530b5ae2dba2e55241255d5b88a3f3962172ad497f"
+}
