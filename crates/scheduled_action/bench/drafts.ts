@@ -248,15 +248,10 @@ async function tryAttempt(session: Session, item: Case, arm: Arm, options: Attem
 
 const key = (item: { case: string; round: number }) => `${item.case}#${item.round}`;
 
-/**
- * The cases still to run in `round`: rounds up to `last` (the file's last
- * round) only get the cases the file already has, so resuming a run that
- * stopped fills its gaps without adding other cases to finished rounds.
- */
-function todo(results: Results, cases: Case[], round: number, last: number) {
+/** The cases still to run in `round`, so resuming a run that stopped fills its gaps. */
+function todo(results: Results, cases: Case[], round: number) {
   const have = new Set(results.attempts.map(key));
-  const known = new Set(results.attempts.map((item) => item.case));
-  return cases.filter((item) => !have.has(key({ case: item.id, round })) && (round > last || known.has(item.id)));
+  return cases.filter((item) => !have.has(key({ case: item.id, round })));
 }
 
 /** The databases' ids, which `setup` picks per stack. */
@@ -356,7 +351,7 @@ async function run(args: string[]) {
   // Round-robin over cases, so a slow stretch of the model's day spreads
   // across every case instead of landing on one.
   for (let round = 1; round <= last + Number(values.rounds); round++) {
-    for (const item of todo(results, selected(values), round, last)) {
+    for (const item of todo(results, selected(values), round)) {
       const result = await tryAttempt(session, item, which, {
         label: results.label,
         round,
@@ -393,6 +388,7 @@ async function ab(args: string[]) {
   if (!values.a || !values.b || !values['a-bin'] || !values['b-bin'] || !values.dir) {
     throw new Error('ab needs --a <label> --a-bin <dir> --b <label> --b-bin <dir> --dir <out dir>');
   }
+  if (values.a === values.b) throw new Error('ab needs two labels: each side writes <label>.<arm>.json');
   const which = arm(values.arm);
   const sides = [
     { label: values.a, bin: values['a-bin'] },
@@ -421,14 +417,14 @@ async function ab(args: string[]) {
       throw new Error(`${files[index]} holds ${results.label} ${results.arm} on ${results.model}; use another --dir`);
     }
   });
-  const last = Math.max(0, ...all.flatMap((results) => results.attempts.map((item) => item.round)));
   // Put back whatever the stack ran before, so a later `run` measures what it says.
   const before = currentHarness(at.instance);
   try {
-    for (let round = 1; round <= last + Number(values.rounds); round++) {
+    // `--rounds` is the total, so running the same command again finishes a stopped run.
+    for (let round = 1; round <= Number(values.rounds); round++) {
       const order = round % 2 === 1 ? [0, 1] : [1, 0];
       for (const index of order) {
-        const cases = todo(all[index], selected(values), round, last);
+        const cases = todo(all[index], selected(values), round);
         if (!cases.length) continue;
         console.log(`round ${round}: ${sides[index].label} (${sides[index].bin})`);
         // The segment holds the stack, so no other eval drafts on this build
@@ -615,7 +611,8 @@ const USAGE = `usage:
       [--cases a,b] [--model m] [--no-run-checks] [--no-judge] [--append]
   drafts.ts ab --a <label> --a-bin <dir> --b <label> --b-bin <dir> --dir <out>
       [--arm draft|bare] [--rounds 4] [...run options]
-      interleaved rounds of two harness builds, swapping the stack's harness
+      interleaved rounds of two harness builds, swapping the stack's harness;
+      --rounds is the total, so the same command again finishes a stopped run
   drafts.ts compare <a.json> [<b.json>...] [--margin 0.1] [--out report.md]
   drafts.ts noise <a.json> <b.json>    one build against itself: the margin to use
   drafts.ts reread [--traces] [--judge] <results.json>...
