@@ -659,7 +659,7 @@ describe('composeAgentContextPrompt', () => {
       '<anchor type="spreadsheet" sheetId="sheet-1" sheetName="Budget &amp; Forecast" range="B4:C9">'
     );
     expect(context).toContain(
-      'Use ReadSpreadsheet to read the live cells in this range.'
+      'Read the live cells in this range with macro.documents.spreadsheet(document).read().'
     );
   });
 

@@ -14,12 +14,12 @@ function createWith(config: ImportCategoryConfig): string {
     .with(
       'files',
       () =>
-        'Create each document with CreateDocument, converting its content to markdown. Keep the original title.'
+        'Create each document with macro.documents.create(), converting its content to markdown. Keep the original title.'
     )
     .with(
       'tasks',
       () =>
-        'Create each one with CreateDocument and isTask true. Keep the title, put the description in the body, and set status, assignee, and due date with SetEntityProperty when the source has them.'
+        'Create each one with macro.tasks.create(). Keep the title, put the description in the body, and set status, assignee, and due date with SetEntityProperty when the source has them.'
     )
     .with(
       'crm',
@@ -52,7 +52,7 @@ const NOTION_WORKSPACE_HANDOFF: AgentImportHandoff = {
   instructions: [
     "The user started this from Macro's import dialog and has just connected Notion.",
     'Import their workspace with ImportFromNotion: ask who should see it if the tool says to, plan it, and present the plan for review right away.',
-    'Never recreate Notion pages with CreateDocument or ImportNotionPage, and never edit or delete anything in Notion.',
+    'Never recreate Notion pages as documents or with ImportNotionPage, and never edit or delete anything in Notion.',
   ].join(' '),
 };
 

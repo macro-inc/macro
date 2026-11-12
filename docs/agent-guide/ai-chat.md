@@ -329,17 +329,14 @@ horizontal overflow.
 
 ## Uploading files with AI
 
-`UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
-decoded. An optional project ID places the file in a folder the caller can edit.
-Use `CreateDocument` (in code mode, `macro.documents.create`,
-`createSpreadsheet` and `upload`) for generated text and native Macro
-spreadsheets. Agents with
-code execution should construct the base64 argument from the original bytes;
-the tool cannot access an agent's local path or download a URL.
-
-Code mode hides `UploadFile`. Its programs call `macro.documents.upload({ name,
-content, project })`, which sends the raw bytes to the storage host's
-`POST /documents/upload` under the same limit and folder rule, read a stored
+Agents upload files in code: `macro.documents.upload({ name, content,
+project })` sends the raw bytes to the storage host's `POST /documents/upload`,
+up to 25 MiB, and an optional project places the file in a folder the caller
+can edit. `macro.documents.create` and `createSpreadsheet` make generated text
+and native Macro spreadsheets. Only the public MCP server's direct (ChatGPT)
+path still has the `UploadFile` tool (a filename and standard padded base64
+contents, under the same limit and folder rule) and `CreateDocument`. Programs
+read a stored
 file (including an email attachment's `toDocument()`) with `Document.bytes()`,
 and attach documents to messages with `channel.send(text, { documents })`. The
 sandbox reaches only Macro hosts, so presigned upload URLs fail there.
@@ -445,7 +442,7 @@ minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;
 agents cannot answer for you. To send a coding agent instructions the chat uses
 `ManageAgentSession`, and to recall earlier decisions it searches past agent
-conversations with `ContentSearch` and reads them with `ReadAgentSession`.
+conversations with `macro.search` and reads them with `ReadAgentSession`.
 
 ## Where chats live
 
@@ -1289,20 +1286,22 @@ to the direct tools and logs a warning; for owners with the
 `ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
-(`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
+(`document.edit(instructions)`) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
-`render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image; a program's
+`render`; `RenderCanvas` stays direct so the model can see the image; a program's
 render or generated image shows in the reply through the image's
 `toMarkdown()` `<m-image>` line, since a document mention of a static file id
 reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
 native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
-and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
-`EditSpreadsheet` are hidden in code mode), and
+and applies edit batches), and
 results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
-they remain discoverable through `DescribeCodeTools`. User-review
+they remain discoverable through `DescribeCodeTools`. The search, document
+(including canvas, spreadsheet, presentation, Word and design file) and skill
+tools are registered on no in-app host, direct or code mode: AI chat, agent
+sessions and the channel bot reach them only through the SDK, and only the
+public MCP server's direct (ChatGPT) path still lists them. User-review
 tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
@@ -1580,12 +1579,11 @@ item, addressed by `entityType` and `entityId` (a `document`, which includes tas
 PDFs, an `initiative`, which is a Tasks project, a `crm_company` or a `crm_contact`),
 or to reply with `threadId` alone: a thread id is enough to find its item. It reads any
 item's threads with `ReadDiscussion`, and edits, deletes and resolves comments by their
-ids with `EditComment`, `DeleteComment` and `ResolveComment`. For a document,
-`ReadContent` returns the same threads with the content. A reply row reads **Replied to
+ids with `EditComment`, `DeleteComment` and `ResolveComment`. A reply row reads **Replied to
 a comment on** (or **Commented on** for a new Discussion comment) followed by the item,
 and expands to the posted text; a resolve row reads **Resolved** or **Reopened a comment
 on** the item. Asked to comment on part of a markdown document, the agent uses
-`CommentOnText` with `quote` (`occurrence` picks a repeated passage): the row reads
+`document.commentOnText` with `quote` (`occurrence` picks a repeated passage): the row reads
 **Commented on text in** the document and expands to the quoted text and the comment,
 and the passage is highlighted in the document with the comment floating beside it.
 A passage that is missing, spans blocks, or repeats with no occurrence chosen is
@@ -1750,8 +1748,8 @@ does not pause to summarize unless the conversation would otherwise not fit its
 model, as after switching to a model with a smaller window, or the message that
 crosses 60% is itself long (a tenth of the window or more), as a large paste is:
 that message waits for the summary so it has room at once. To recover an exact
-detail from the summarized part, the agent runs a **ContentSearch** step scoped to
-its own session. A message that alone takes more than half of the model's
+detail from the summarized part, the agent searches its own session with
+`macro.search` (`agentSessions`). A message that alone takes more than half of the model's
 window is refused with "This message is too long. Split it into smaller messages
 or attach it as a file." `/compact` is an ordinary message to every agent: the
 transcript shows it as sent, followed by the agent's reply; a "Context compacted"
@@ -2385,15 +2383,15 @@ choices, because routine targets do not save an effort setting.
 
 ## Reading skills
 
-Agents in Macro and connected MCP harnesses can discover saved skill documents
-and built-in skills with `ListSkills`, then load the full instructions with
-`ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
-recently updated visible skill documents plus built-ins; `SearchSkills` finds a
-skill by name, including older skills outside that list. A skill mention's id can
-also be passed directly to `ReadSkill`. Code-mode agents get the same through the
-SDK instead: `macro.documents.skills({ query })` lists or searches skills,
-built-ins included (cognition `GET /skills`), and each result's
-`skill.content()` reads its instructions (`GET /skills/{id}` for built-ins).
+Agents discover saved skill documents and built-in skills through the SDK:
+`macro.documents.skills({ query })` lists or searches skills, built-ins
+included (cognition `GET /skills`), and each result's `skill.content()` reads
+its instructions (`GET /skills/{id}` for built-ins). The public MCP server's
+direct (ChatGPT) path keeps the `ListSkills`, `SearchSkills` and `ReadSkill`
+tools: `ListSkills` returns the 100 most recently updated visible skill
+documents plus built-ins, `SearchSkills` finds a skill by name, including older
+skills outside that list, and `ReadSkill` loads one by its `documentId` (a
+skill mention's id works too).
 
 ## Configuring agents from a conversation
 
@@ -2689,8 +2687,8 @@ row expands to show the returned conversation, runtime status, and archive state
 on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
-Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
+Use `ListEntities` with `includeTypes: ["agent_session"]` or `macro.search` to
+find sessions. `ListAgents` (`macro.agents.list()` in code
 mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit

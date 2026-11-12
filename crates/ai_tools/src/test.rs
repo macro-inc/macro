@@ -237,7 +237,6 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "OpenDirectMessage",
         "MuteNotifications",
         "GetTeamAvailability",
-        "CreateDocument",
         "UpdateSharing",
         "SaveDatabaseQuery",
         "GetCompany",
@@ -289,30 +288,61 @@ fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
     assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
 }
 
+/// The tools the SDK covers are left to the public MCP server's direct
+/// path; every other host reaches them through code. RenderCanvas stays
+/// everywhere: code cannot return the image it renders.
 #[test]
-fn code_mode_reads_and_edits_office_and_design_files_through_the_sdk() {
-    let tools = tools_for_agent_code_mode();
-    for name in [
+fn only_the_mcp_host_registers_the_tools_the_sdk_covers() {
+    let covered = [
+        "ContentSearch",
+        "NameSearch",
+        "ReadMetadata",
+        "ReadContent",
+        "CreateDocument",
+        "CreateSkill",
+        "UploadFile",
+        "RenameDocument",
+        "EditDocument",
+        "ReadCanvas",
+        "ApplyCanvasEdits",
+        "EditCanvas",
+        "CommentOnText",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
         "ReadPresentation",
         "EditPresentation",
-        "ReadWordDocument",
-        "EditWordDocument",
         "ReadDesign",
         "ReadPhotoshopDocument",
         "ReadIllustratorDocument",
+        "ReadWordDocument",
+        "EditWordDocument",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
+    ];
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for_agent_code_mode(),
     ] {
-        assert!(!tools.toolset.tools.contains_key(name), "{name}");
-        assert!(
-            !tools.deferred.iter().any(|tool| tool.name == name),
-            "{name}"
-        );
+        for name in covered {
+            assert!(!tools.toolset.tools.contains_key(name), "{name}");
+            assert!(
+                !tools.deferred.iter().any(|tool| tool.name == name),
+                "{name}"
+            );
+        }
+        assert!(tools.toolset.tools.contains_key("RenderCanvas"));
     }
-    assert!(
-        tools_for(AiHost::AgentSession)
-            .toolset
-            .tools
-            .contains_key("EditPresentation")
-    );
+    let mcp = tools_for(AiHost::Mcp);
+    for name in covered.into_iter().chain(["RenderCanvas"]) {
+        assert!(mcp.toolset.tools.contains_key(name), "{name}");
+    }
+    for name in covered {
+        assert!(!EAGER_TOOLS.contains(&name), "{name}");
+    }
 }
 
 #[test]
@@ -328,7 +358,6 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "SetEntityProperty",
         "ReadDiscussion",
         "Comment",
-        "CommentOnText",
         "ResolveComment",
         "CreateProject",
         "ReadProject",
@@ -368,7 +397,6 @@ fn app_item_actions_are_available_in_every_host() {
         "OpenDirectMessage",
         "EditComment",
         "DeleteComment",
-        "CreateSkill",
         "MoveToTrash",
         "DuplicateItem",
         "RenameItem",
@@ -398,29 +426,22 @@ fn app_item_actions_are_available_in_every_host() {
     }
 }
 
-/// Every host reads the design files the native engines open, and each
-/// reader's description says the file is read-only to tools.
+/// Each design file reader's description says the file is read-only to
+/// tools.
 #[test]
-fn design_file_readers_are_available_in_every_host_with_their_guidance() {
-    for host in [
-        AiHost::Chat,
-        AiHost::AgentSession,
-        AiHost::ChannelBot,
-        AiHost::Mcp,
+fn design_file_readers_say_the_files_are_read_only() {
+    let tools = tools_for(AiHost::Mcp);
+    for name in [
+        "ReadDesign",
+        "ReadPhotoshopDocument",
+        "ReadIllustratorDocument",
     ] {
-        let tools = tools_for(host);
-        for name in [
-            "ReadDesign",
-            "ReadPhotoshopDocument",
-            "ReadIllustratorDocument",
-        ] {
-            let tool = &tools.toolset.tools[name];
-            assert!(
-                tool.description
-                    .contains("describe changes for the user to make"),
-                "{host:?}: {name}"
-            );
-        }
+        let tool = &tools.toolset.tools[name];
+        assert!(
+            tool.description
+                .contains("describe changes for the user to make"),
+            "{name}"
+        );
     }
     assert!(base_toolset().tools.contains_key("ReadPhotoshopDocument"));
     assert!(base_toolset().tools.contains_key("ReadIllustratorDocument"));
@@ -627,27 +648,13 @@ fn every_host_exposes_agent_configuration() {
 }
 
 #[test]
-fn every_host_exposes_skill_discovery_and_reading() {
-    for host in [
-        AiHost::Chat,
-        AiHost::AgentSession,
-        AiHost::ChannelBot,
-        AiHost::Mcp,
-    ] {
-        let tools = tools_for(host);
-        for name in ["ListSkills", "SearchSkills", "ReadSkill"] {
-            assert!(
-                tools.toolset.tools.contains_key(name),
-                "{host:?} missing {name}"
-            );
-        }
-        assert!(
-            tools.toolset.tools["SearchSkills"]
-                .description
-                .contains("ReadSkill"),
-            "{host:?} missing skill reading instructions"
-        );
-    }
+fn skill_search_says_to_read_the_skill() {
+    let tools = tools_for(AiHost::Mcp);
+    assert!(
+        tools.toolset.tools["SearchSkills"]
+            .description
+            .contains("ReadSkill")
+    );
 }
 
 #[test]
@@ -668,10 +675,15 @@ fn hosts_with_tool_search_defer_all_but_the_core_tools() {
             .collect();
         let prompt = tools.prompt.to_string();
 
-        for name in ["ReadContent", "ContentSearch", "LoadTools", "SearchTools"] {
+        for name in [
+            "ReadChannelMessageContext",
+            "ShareWithChannel",
+            "LoadTools",
+            "SearchTools",
+        ] {
             assert!(sent.contains(&name.to_string()), "{host:?} sends {name}");
         }
-        for name in ["EditPresentation", "EditSpreadsheet", "QueryDatabase"] {
+        for name in ["RenderCanvas", "CreatePipeline"] {
             assert!(!sent.contains(&name.to_string()), "{host:?} defers {name}");
             assert!(
                 catalog.contains(&name.to_string()),
@@ -837,24 +849,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
     // macro.search, macro.workspace and macro.chats replace the search tools.
-    for name in [
-        "ReadContent",
-        "EditDocument",
-        "NameSearch",
-        "ListEntities",
-        "ContentSearch",
-        "DiscoverConnectors",
-        "ConnectMcpServer",
-        "ReadCanvas",
-        "EditCanvas",
-        "ApplyCanvasEdits",
-        "ReadSpreadsheet",
-        "CalculateSpreadsheet",
-        "EditSpreadsheet",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
-    ] {
+    for name in ["ListEntities", "DiscoverConnectors", "ConnectMcpServer"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");

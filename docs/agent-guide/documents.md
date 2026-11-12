@@ -146,8 +146,8 @@ current selection, or all content when nothing is selected. The zoom menu keeps
 no selection. Verify one item and multiple selected items, then deselect and
 check that **.** fits everything again.
 Canvas **Ask Macro**, including the Drive detail header, attaches the open canvas to the existing agent composer on
-desktop and mobile. Ask it to create or edit a diagram: `ReadCanvas` reads the
-current live scene and `EditCanvas` applies bounded commands through the same
+desktop and mobile. Ask it to create or edit a diagram: `canvas.scene()` reads the
+current live scene and `canvas.edit()` applies bounded commands through the same
 collaborative room. Expand the tool result to inspect its outcome; edits appear
 in the canvas while the agent works. A viewer can read but cannot edit. New
 media/document references and removal of embedded assets remain UI actions.
@@ -431,9 +431,9 @@ unused color; a dropdown saved without colors stays plain until one of its choic
 is colored. Cells showing a colored choice draw it as a chip, and the open list
 shows the same chips. **Save** replaces any validation on the selected cells;
 **Remove** clears it from them. Reopening the dialog on a dropdown cell shows its
-current choices and colors. Agents add the same dropdowns with `EditSpreadsheet`'s
+current choices and colors. Agents add the same dropdowns with `spreadsheet.applyEdits()`'s
 `set_dropdown` operation (choice colors in `colors: [{ item, color }]`), see them
-in `ReadSpreadsheet`, and remove them with `clear_validation`. Excel downloads
+in `spreadsheet.read()`, and remove them with `clear_validation`. Excel downloads
 write choice colors as conditional formatting fills; importing such a file
 restores them as choice colors.
 
@@ -497,8 +497,8 @@ row above. Formulas use structured references such as `=SUM(Table1[Amount])`,
 Renaming a header rewrites formulas that use the old name, and references to a
 missing table or column show `#REF!`. Scrolling past a table's header row shows
 its column names in the column headers. Agents create tables, with optional
-`columnTypes`, through `EditSpreadsheet`'s `create_table` operation, and
-`ReadSpreadsheet` lists each sheet's tables with their columns and types. Excel
+`columnTypes`, through `spreadsheet.applyEdits()`'s `create_table` operation, and
+`spreadsheet.read()` lists each sheet's tables with their columns and types. Excel
 tables with a header row import with their names, styles, totals and value or
 condition filters and download as Excel tables; a table without a header row
 imports as ordinary cells, with its references converted to cell ranges.
@@ -515,7 +515,7 @@ the selection without toggling it. Delete unchecks any checked boxes and, presse
 again, removes them; **Remove checkbox** in the cell menu (or Clear formatting)
 removes them and keeps their values. Formulas read the values, so
 `=COUNTIF(C:C,TRUE)` counts checked boxes. Agents add them with
-`EditSpreadsheet`'s `insert_checkboxes` operation and toggle them by setting
+`spreadsheet.applyEdits()`'s `insert_checkboxes` operation and toggle them by setting
 `TRUE` or `FALSE`. Downloads use Excel's checkbox format, and imported Excel
 checkboxes stay checkboxes.
 
@@ -922,10 +922,10 @@ waits for acknowledgement. A failed save leaves the draft editable and supports
 retry, without opening an empty chat. This path needs the updated native-document
 backend, just like Share.
 
-The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, tables,
-raw inputs, formulas, typed results, errors, and formatting. **CalculateSpreadsheet**
-evaluates scratch formulas and what-if inputs without changing the workbook.
-**EditSpreadsheet** applies a validated batch of cell/formula/format edits, fill,
+The AI uses `macro.documents.spreadsheet(document)`: `read()` inspects sheet names, used ranges, tables,
+raw inputs, formulas, typed results, errors, and formatting; `calculate()`
+evaluates scratch formulas and what-if inputs without changing the workbook;
+`applyEdits()` applies a validated batch of cell/formula/format edits, fill,
 row additions, column resizing, dropdowns, checkboxes, table creation, and sheet
 creation/rename/duplication/deletion.
 `format_cells` shows dates in any Excel date code with
@@ -1515,16 +1515,17 @@ gets the stored file read-only.
 
 **Ask Macro**, in the header beside **Share**, opens the agent composer in a
 split with the deck mentioned (nothing sends automatically).
-Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
+Macro AI reads decks with `document.readPresentation()` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
 chart type and data, picture crop and adjustments, and shadow, glow, soft edge,
 and reflection effects; an equation stands in text as U+FFFC, the engine
 outline lists each paragraph's `equations` (index, LaTeX-style text, display
 flag), and the `insertEquation` and `setEquation` operations write them;
-`ReadContent` returns the same description) and changes them with
-`EditPresentation`, an atomic batch of the editor's own operations saved as a
-new version (`saveAs` creates an edited copy instead). When an `EditPresentation` result arrives in chat, an open
+`document.content()` returns the same description) and changes them with
+`document.editPresentation()`, an atomic batch of the editor's own operations saved as a
+new version (`document.copyPresentation()` creates an edited copy instead). When a
+saved chat renders an `EditPresentation` tool result, an open
 editor of that deck reloads in place and says **Updated with changes made
 elsewhere.** If it holds unsaved edits it keeps them and says the deck also
 changed elsewhere; saving those edits replaces the other version.
@@ -1604,7 +1605,7 @@ version from before such a replacement) starts the shared design over on
 it, dropping the changes made on the file it replaced; people still in the
 design get a **Reload** bar and their copy turns read-only.
 
-Macro AI reads designs with `ReadDesign` (`ReadContent` returns the same
+Macro AI reads designs with `document.readDesign()` (`document.content()` returns the same
 description; attaching a design points the agent at it): the pages, numbered
 from 1, each page's top-level frames and sections with ids, sizes and
 positions, the text in each frame in reading order (instances' text
@@ -2390,9 +2391,9 @@ block and image attachments for the agent skip it. The backend reads these
 documents with the Rust `psd_engine` and `ai_engine`, the same engines the
 browser editors run as WebAssembly.
 
-Macro AI reads them with `ReadPhotoshopDocument` and
-`ReadIllustratorDocument` (`ReadContent` returns the same description, and
-attaching one points the agent at its tool):
+Macro AI reads them with `document.readPhotoshop()` and
+`document.readIllustrator()` (`document.content()` returns the same description, and
+attaching one points the agent at its reader):
 
 - Photoshop: the canvas size, color mode, bit depth, and resolution, then
   the layer tree from top to bottom with each layer's kind (pixels, group,
@@ -3077,9 +3078,9 @@ updates live and shows each collaborator's caret with their name
   the file on download; reply with a Macro comment.
 - Threads whose text was deleted are listed under `Comments on text that has
   changed`, above the `Discussion` composer.
-- AI `CommentOnText` works on DOCX by quote. The editor pins each quote to
+- AI `document.commentOnText()` works on DOCX by quote. The editor pins each quote to
   the first matching text the next time someone opens the file.
-- AI `EditWordDocument` can record its edits as tracked changes
+- AI `document.editWord()` can record its edits as tracked changes
   (`trackChanges`, or by default when the document tracks changes) and add
   Word comments (`addComment`), both attributed to the requesting user by
   name rather than to the agent. Its comments are written into the file, so
@@ -3089,17 +3090,17 @@ updates live and shows each collaborator's caret with their name
   not written into the file; Word comments (including the agent's
   `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
-  `ReadContent` still see the original file.
+  `document.content()` still see the original file.
 - **Ask Macro**, in the header beside **Share**, opens the agent composer in
   a split with the document mentioned (nothing sends automatically).
-- AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
-  open editors patch agent edits in as they land. `ReadWordDocument` lists
-  every paragraph, table cell and content control with its id. `EditWordDocument`
+- AI `document.readWord()` and `document.editWord()` read and edit the live copy, so
+  open editors patch agent edits in as they land. `readWord()` lists
+  every paragraph, table cell and content control with its id. `editWord()`
   applies an atomic batch of `replaceText`, `setText`, `formatText`,
   `insertParagraph`, `setStyle` and `delete` operations to those ids. A DOCX
   nobody has opened yet (an upload or a duplicate) gets its live copy from the
-  first tool call, seeded exactly as the editor seeds it, so nobody has to open
-  it first. `EditDocument` still rejects DOCX.
+  first read or edit, seeded exactly as the editor seeds it, so nobody has to open
+  it first. `document.edit()` still rejects DOCX.
 
 ## Document history
 
@@ -3163,11 +3164,10 @@ Opening any doc can crash with a full-screen dialog `expected instance of LoroDo
 (HMR leaves two copies of the loro wasm module alive). `Try Again` and a normal reload do NOT
 fix it; a **hard reload ignoring cache** (`navigate_page` with `ignoreCache: true`) does.
 
-AI can create a native workbook without an open editor using `CreateDocument`
-with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
-Read the returned document with `ReadSpreadsheet`, then populate it with
-`EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
-In code mode, `macro.documents.createSpreadsheet({ name })` does the same.
+AI can create a native workbook without an open editor using
+`macro.documents.createSpreadsheet({ name })`. Read it with `read()`, then
+populate it with `applyEdits()`; do not create a CSV as a substitute for a
+native workbook.
 Spreadsheet reads and edits run against server state even when no tab is open.
 An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:

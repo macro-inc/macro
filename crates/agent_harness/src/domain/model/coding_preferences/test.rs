@@ -60,9 +60,9 @@ fn both_put_tasks_before_pull_requests() {
 #[test]
 fn tasks_name_the_tools_they_rely_on() {
     for tool in [
-        "macro.NameSearch",
-        "macro.ContentSearch",
-        "macro.CreateDocument",
+        "macro.ExecuteCode",
+        "macro.search.page(query)",
+        "macro.tasks.create()",
         "macro_internal.task_pull_requests",
         "macro_internal.link_task",
     ] {

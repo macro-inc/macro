@@ -11,7 +11,13 @@ execution, display) that don't belong to a single domain.
 
 - `src/lib.rs`: the composition point — imports each domain crate's
   `inbound::toolset` module and builds the combined `AsyncToolCollection`
-  and frontend schema set.
+  and frontend schema set. `sdk_covered_toolset` holds the tools the Macro
+  SDK covers (search, documents, skills): only `AiHost::Mcp` (its direct
+  ChatGPT path) and memory research register them, through `base_toolset`;
+  AI chat, agent sessions and the channel bot start from `shared_toolset`.
+  Move a domain's tools there once the SDK covers them and drop their
+  `EAGER_TOOLS` entries; keep their `covered_by_code_sdk` arms while MCP
+  registers them.
 - `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
   in the base toolset every host and memory research share; keep its
   registration covered by the host tests.
@@ -70,8 +76,10 @@ execution, display) that don't belong to a single domain.
   `src/lib.rs`'s toolset assembly → regenerate schemas (see Checks).
 
 Canvas tools come from the Documents subtoolset and inherit its worker client,
-admission and usage recorder in every host. ApplyCanvasEdits uses the same
-edit capability but calls no nested model and emits no additional model charge; no new context or env vars are needed.
+admission and usage recorder. Every host keeps `RenderCanvas`
+(`render_canvas_toolset`), since code cannot return its image; the other
+canvas tools are SDK-covered. ApplyCanvasEdits uses the same edit capability
+but calls no nested model and emits no additional model charge.
 
 ## Tool contracts
 

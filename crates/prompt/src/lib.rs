@@ -338,7 +338,7 @@ mod tests {
         for surface in [
             "SendChannelMessage",
             "SendEmail",
-            "CreateDocument",
+            "macro.documents.create()",
             "agent session",
         ] {
             assert!(

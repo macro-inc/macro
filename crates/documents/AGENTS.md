@@ -35,6 +35,9 @@ word docs, Illustrator/Photoshop files).
   two in step.
 - `src/inbound/toolset.rs`: one submodule per AI document tool (`create_document`,
   `edit_document`, `word_document`, `spreadsheet`, `presentation`, ...).
+  `document_toolset` holds the SDK-covered tools, which only the public MCP
+  server's direct path registers; `render_canvas_toolset` holds
+  `RenderCanvas`, which every host keeps. Agents elsewhere use the SDK.
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export.

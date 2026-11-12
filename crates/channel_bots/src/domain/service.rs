@@ -185,7 +185,7 @@ fn append_document_anchor(prompt: &mut String, anchor: &DiscussionAnchor) {
                     .replace('>', "\\u003e");
             write!(
                 prompt,
-                "\n<anchor type=\"spreadsheet\">\nUse ReadSpreadsheet to read the live cells in this range.\n{location}\n</anchor>\n"
+                "\n<anchor type=\"spreadsheet\">\nRead the live cells in this range with macro.documents.spreadsheet(document).read().\n{location}\n</anchor>\n"
             )
         }
         DiscussionAnchor::PdfHighlight {

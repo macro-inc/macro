@@ -44,7 +44,7 @@ use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
 use display_results::DisplayResults;
-use documents::inbound::toolset::document_toolset;
+use documents::inbound::toolset::{document_toolset, render_canvas_toolset};
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use favorites::inbound::toolset::favorites_toolset;
 use import::inbound::toolset::import_toolset;
@@ -165,15 +165,30 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
-/// The tools every host shares, before host-specific email, calendar and
-/// discovery tools are added.
+/// The tools the public MCP server's direct path and memory research start
+/// from: [`shared_toolset`] plus [`sdk_covered_toolset`].
 pub(crate) fn base_toolset() -> AiToolSet {
+    shared_toolset().add_toolset(sdk_covered_toolset())
+}
+
+/// Tools whose operations the Macro SDK covers. Agents reach them through
+/// code, so only the hosts not on code mode register them: the public MCP
+/// server's direct path and memory research ([`base_toolset`]).
+fn sdk_covered_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
+        .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
+}
+
+/// The tools every host shares, before host-specific email, calendar and
+/// discovery tools are added.
+fn shared_toolset() -> AiToolSet {
+    AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
-        .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
+        .add_subtoolset::<ToolDocumentToolContext>(render_canvas_toolset())
         .add_subtoolset::<ToolImageGenerationToolContext>(
             image_generation::inbound::toolset::image_generation_toolset(),
         )
@@ -198,7 +213,6 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
         .add_subtoolset::<ToolFormsToolContext>(forms::inbound::toolset::authoring_toolset())
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
-        .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
         .add_subtoolset::<web_search::inbound::toolset::WebToolContext>(
             web_search::inbound::toolset::web_toolset(),
@@ -234,7 +248,9 @@ pub enum AiHost {
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —
-    /// and without the chat frontend's discovery/display tools.
+    /// and without the chat frontend's discovery/display tools. The only
+    /// host that still registers the tools the SDK covers, for its direct
+    /// (ChatGPT) clients.
     Mcp,
 }
 
@@ -244,24 +260,15 @@ pub enum AiHost {
 /// with `LoadTools` when needed.
 pub const EAGER_TOOLS: &[&str] = &[
     "BashCodeExecution",
-    "ContentSearch",
-    "CreateDocument",
     "DisplayResults",
     "DiscoverConnectors",
-    "EditDocument",
     "GetThread",
     "ListEntities",
-    "ListSkills",
     "LoadTools",
-    "NameSearch",
     "ReadChannelMessageContext",
     "ReadAgentSession",
     "ReadChannelMessages",
     "ReadChannelThread",
-    "ReadContent",
-    "ReadMetadata",
-    "ReadSkill",
-    "SearchSkills",
     "SearchTools",
     "SelfKnowledge",
     "SendChannelMessage",
@@ -290,7 +297,12 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
 }
 
 fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
-    let toolset = base_toolset()
+    // Every other host is, or is moving to, code mode.
+    let toolset = match host {
+        AiHost::Mcp => base_toolset(),
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => shared_toolset(),
+    };
+    let toolset = toolset
         .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
@@ -426,6 +438,8 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
+        // Saved transcripts of tools agents now reach through code still render.
+        .merge(&sdk_covered_toolset())
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<

@@ -38,9 +38,9 @@ The inspector also adds and edits styles and components shared across the canvas
 HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
 **Present** on a node opens the artifacts full screen in presentation order, which
 **Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
-before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+before and after clicking inside the frame. For an agent, `canvas.scene()` returns
 `artifactGuide` when the flag is on for the user, and artifact SDK operations in
-`ApplyCanvasEdits` fail without changing anything when it is off.
+`canvas.apply()` fail without changing anything when it is off.
 
 ## Multiplayer canvas
 
@@ -73,7 +73,7 @@ Use **Ask Macro** to attach the live Canvas. Ask for a visual layout or diagram:
 Macro can call **RenderCanvas** for an immutable PNG with crop/revision/object
 mapping, then edit and visually review the result. Embedded content is explicitly
 unavailable in scoped renders. A viewer can read/render but cannot edit.
-**ReadCanvas** also offers a compact approximate semantic overview with stable IDs.
+`canvas.scene()` also offers a compact approximate semantic overview with stable IDs.
 
 For a person mention, type `@` inside a text box or label and select the person.
 Ask Macro to insert that same person into another text box: it must resolve the
@@ -81,7 +81,7 @@ user ID/email and call `mentionUser`, rather than type literal `@Name`. Inspect
 `[data-user-mention]` and its `data-user-id`/`data-email`, reopen the Canvas, and
 check a second editor sees the same chip. Existing rich text and other chips
 remain intact. Test wrapped text and an ellipse after resizing; chips must fit.
-ReadCanvas returns `userMentions` offsets/identities (bounded with an explicit
+`canvas.scene()` returns `userMentions` offsets/identities (bounded with an explicit
 truncation flag). A concurrent human relabel during measurement rejects the
 whole AI batch. Canvas chips do not send notifications or change access.
 
@@ -97,18 +97,18 @@ ellipses after relabeling, font changes and narrowing width. Explicit fixed-size
 containment may scale text; an explicit overflow error commits no partial batch.
 The renderer regressions inspect actual text DOM bounds, including phone viewports.
 
-Create a fresh Canvas manually and through CreateDocument (`canvas`, empty
-fileContent). ReadCanvas and EditCanvas must work immediately before any editor
+Create a fresh Canvas manually and through `macro.documents.createCanvas()`.
+`canvas.scene()` and `canvas.edit()` must work immediately before any editor
 opens it. Open it as its owner and another editor, reload, and verify the same
 items persist. Reopen a legacy S3 Canvas and verify its scene migrates without
 replacement. Native sync-backed Canvas loading must never request a presigned
 blob URL. A missing native snapshot is an error, never an empty reseed.
 
 For precise changes, ask to move the fixed-pivot boxes down 20 units or restyle
-specific labels. The main agent should use **ApplyCanvasEdits** with the fresh
-ReadCanvas revision and one batch, without screenshots or a second model.
+specific labels. The main agent should use `canvas.apply()` with the fresh
+`canvas.scene()` revision and one batch, without screenshots or a second model.
 Check the returned geometry and text-layout effects. A stale revision must cause
-no mutation; reread before reconsidering the batch. For design tasks, EditCanvas
+no mutation; reread before reconsidering the batch. For design tasks, `canvas.edit()`
 receives an initial image and reviews its final layout; avoid extra outer renders
 of the same revision. A crop cannot verify changed objects outside its bounds.
 

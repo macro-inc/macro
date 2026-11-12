@@ -412,7 +412,8 @@ impl<
     }
 }
 
-/// Create a document toolset
+/// The document tools the Macro SDK covers, for the hosts that still call
+/// them directly. [`render_canvas_toolset`] holds the one every host keeps.
 pub fn document_toolset<DSvc, ESvc, EDSvc>()
 -> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
 where
@@ -429,7 +430,6 @@ where
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<RenderCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ApplyCanvasEdits, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CommentOnText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
@@ -443,6 +443,18 @@ where
         .add_tool::<ReadIllustratorDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+}
+
+/// `RenderCanvas`: code cannot return the image it renders, so every host
+/// keeps it as a tool.
+pub fn render_canvas_toolset<DSvc, ESvc, EDSvc>()
+-> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
+where
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+{
+    AsyncToolCollection::new().add_tool::<RenderCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }
 
 fn comment_access_error(err: AccessError) -> ToolCallError {

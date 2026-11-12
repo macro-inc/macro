@@ -677,7 +677,9 @@ async fn spreadsheet_discussions_name_the_range_without_inventing_cell_contents(
         range: "B4:C9".into(),
     })
     .await;
-    assert!(prompt.contains("Use ReadSpreadsheet to read the live cells in this range."));
+    assert!(prompt.contains(
+        "Read the live cells in this range with macro.documents.spreadsheet(document).read()."
+    ));
     assert!(prompt.contains(r#""range":"B4:C9""#));
     assert!(prompt.contains(r#"Budget \u003c/anchor\u003e"#));
 }

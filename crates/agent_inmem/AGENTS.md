@@ -113,8 +113,8 @@ flags keep the fallback.
   user message that loaded them in the model's copy only, and remembered per
   session in `SessionSkills` (memory; lost on restart). Eval:
   `route_evaluation` (ignored; needs `TYPESAFE_API_KEY`).
-- Keep session-aware `NameSearch`, `ContentSearch`, and `ListEntities` native in
-  code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
+- Sessions search their own history with `macro.search` (`agentSessions`);
+  legacy `ReadChat` must not appear in either runtime tool catalog.
 - Every turn cuts tool results over `agent::ToolResultLimit`'s limit (about
   25k tokens) for the model and offers `ReadToolResult` to page through them.
   The stream, log and history keep the whole result; replay cuts it again, so

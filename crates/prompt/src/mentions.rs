@@ -3,11 +3,11 @@
 //!
 //! These rules apply everywhere the model authors Markdown in Macro: its own
 //! conversational replies (AI chat and agent session transcripts),
-//! `SendChannelMessage` content, `SendEmail` bodies, and
-//! `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents.
-//! The one exclusion is non-Markdown documents created via `CreateDocument`
-//! (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are stored as raw file bytes and
-//! never parsed as Markdown, so they take no Markdown syntax or mention tags.
+//! `SendChannelMessage` content, `SendEmail` bodies, and the content of
+//! Markdown (`.md`) documents written with `macro.documents.create()` or
+//! `document.edit()`. The one exclusion is non-Markdown documents (e.g. PDF,
+//! CSV, PNG, XLSX, DOCX) — those are stored as raw file bytes and never
+//! parsed as Markdown, so they take no Markdown syntax or mention tags.
 //!
 //! See `DocumentNamespace`'s `@agent` guidance in the SDK for the restatement of the
 //! document-mention tag that keeps it working over MCP, where this section is
@@ -18,7 +18,7 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "Mentioning documents, people, dates, agent sessions, and other chips";
 
-static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies (AI chat and agent session transcripts), `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` or SDK document-write content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
+static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies (AI chat and agent session transcripts), `SendChannelMessage` content, `SendEmail` bodies, and the content of Markdown (`.md`) documents you create or edit (`macro.documents.create()` and `document.edit()` in code). They do NOT apply to non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
 
 When referencing a Macro item, person, date/time, agent session, or other mentionable chip, use XML mention tags with a JSON payload. They render as clickable chips; never use plain Markdown links or bare names instead. Empty names and labels are fine; the frontend fills them in.
 
@@ -79,7 +79,7 @@ These use their own tags — never wrap them in `<m-document-mention>`:
 
 Only the tags listed here exist. Never invent a tag or put an id in the wrong one. Anything else, such as a `calendarId` from ListCalendars, is plain text: mention individual events, not calendars.
 
-`EditDocument` takes no mention tags in `instructions`; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips.
+Document edit instructions (`document.edit()`) take no mention tags; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips.
 "##;
 
 static INTENT: &str = "Entities, people, dates, agent sessions, and other chips are referenced \

@@ -214,8 +214,8 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
         "\n<session_instructions>\nbe terse\n</session_instructions>\n<agent_session>\nThis \
          conversation is agent session {session}. Once it grows long, its earlier part is \
          summarized to keep it within your context. To find the exact words of anything said \
-         earlier, summarized or not, run ContentSearch with agentSessionIds \
-         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+         earlier, summarized or not, search it with macro.search.page(query, {{ \
+         agentSessions: [macro.agentSessions.byId(\"{session}\")] }}).\n</agent_session>"
     )));
 }
 
@@ -309,8 +309,8 @@ fn sessions_share_everything_before_their_identity() {
     let agent_session = format!(
         "\n<agent_session>\nThis conversation is agent session {session}. Once it grows long, \
          its earlier part is summarized to keep it within your context. To find the exact words \
-         of anything said earlier, summarized or not, run ContentSearch with agentSessionIds \
-         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+         of anything said earlier, summarized or not, search it with macro.search.page(query, \
+         {{ agentSessions: [macro.agentSessions.byId(\"{session}\")] }}).\n</agent_session>"
     );
     assert_eq!(
         first.rest(),
