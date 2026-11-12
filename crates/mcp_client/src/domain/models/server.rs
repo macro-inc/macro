@@ -3,7 +3,7 @@ use crate::domain::ports::{McpConnector, McpServerHttp, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
-use rmcp::model::{ClientConfig, Implementation};
+use rmcp::model::{ClientConfig, Implementation, ProtocolVersion};
 use rmcp::service::{ClientInitializeError, RunningService, ServiceExt};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::{AuthClient, StoredCredentials};
@@ -52,11 +52,18 @@ async fn handshake(
 pub type McpServer = RunningService<RoleClient, ClientConfig>;
 
 /// Build the client info sent to MCP servers during initialization.
+///
+/// Pins the protocol version to [`ProtocolVersion::LATEST_WITH_INITIALIZE`].
+/// rmcp's default is the newest version it knows (2026-07-28), which has no
+/// `initialize` call, yet `serve` always opens with `initialize`. Servers that
+/// know that version refuse the handshake instead of negotiating down (Google,
+/// Datadog, Zendesk, GitHub).
 pub fn client_info() -> ClientConfig {
     ClientConfig::new(
         Default::default(),
         Implementation::new(MCP_CLIENT_NAME, env!("CARGO_PKG_VERSION")),
     )
+    .with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE)
 }
 
 /// Connection details for an MCP server.
