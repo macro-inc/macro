@@ -1184,7 +1184,7 @@ export type MessageWithAttachments = {
 /**
  * The requested inference speed. Standard is backward compatible with old clients.
  */
-export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
+export type ModelSpeed = 'standard' | 'priority' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;
