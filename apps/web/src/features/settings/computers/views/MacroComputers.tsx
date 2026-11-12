@@ -423,12 +423,12 @@ export function MacroComputers(props: {
     return t('computers.fromPriceLower', { price: formatQuote(offer.quote) });
   };
 
-  const releaseNow = async (computer: ComputerStatus) => {
+  const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);
     try {
       await release.mutateAsync({
         computerId: computer.id,
-        confirmName: computer.name,
+        confirmName: typedName,
       });
       setReleasing(undefined);
       toast.success(t('computers.released', { name: computer.name }));
@@ -562,8 +562,8 @@ export function MacroComputers(props: {
             pending={release.isPending}
             error={releaseError()}
             onClose={closeRelease}
-            onRelease={() =>
-              fireAndForget(releaseNow(computer), 'macro-computers')
+            onRelease={(typedName) =>
+              fireAndForget(releaseNow(computer, typedName), 'macro-computers')
             }
           />
         )}
