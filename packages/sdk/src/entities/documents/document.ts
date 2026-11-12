@@ -671,6 +671,8 @@ export class Document
    * });
    * await lexical.commit();
    * ```
+   *
+   * @mcp-exclude Returns a live editor edited through callbacks, which an MCP result cannot carry.
    */
   lexical(): Promise<DocumentLexical> {
     return DocumentLexical.open(this.client, this);

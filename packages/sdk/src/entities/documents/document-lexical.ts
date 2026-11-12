@@ -130,6 +130,8 @@ async function loadLexical(): Promise<LexicalModules> {
  * A markdown document or task body loaded into a headless Lexical editor,
  * edited with the ordinary Lexical API and committed as a merge. Get one from
  * `document.lexical()`.
+ *
+ * @mcp-exclude A live editor edited through callbacks; MCP calls carry JSON only.
  */
 export class DocumentLexical {
   /**
