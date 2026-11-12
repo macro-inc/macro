@@ -303,9 +303,10 @@ impl<
         Ok(offers)
     }
 
-    /// One of the team's computers, or its purchase while it is being confirmed.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn status(
+    /// One of the team's computers, or its purchase while it is being
+    /// confirmed. Tests read single computers through it; no route does.
+    #[cfg(test)]
+    pub(crate) async fn status(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
