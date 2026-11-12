@@ -170,9 +170,10 @@ export function startPendingSession(
     !options.speedOverride
       ? uuidv7()
       : undefined;
-  // The tab the prompt was typed in, as a control prompt carries it, so
-  // what the first turn opens (`macro.ui.open`) reaches this tab.
-  const promptClientId = promptActionId ? typedInClientId() : undefined;
+  // The tab the prompt was typed in, sent with a prompt on the create as a
+  // control prompt carries it, so what the first turn opens
+  // (`macro.ui.open`) reaches this tab.
+  const promptClientId = typedInClientId();
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
   let navigation: AgentSession | undefined;
