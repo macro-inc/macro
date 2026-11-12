@@ -542,10 +542,8 @@ async fn rox_init_uses_the_claimed_handle_without_a_gmail_client(db: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        link.email_address.0.as_ref(),
-        format!("ada@{macro_user_id::handle::ROX_MAIL_DOMAIN}").as_str()
-    );
+    let expected_address = format!("ada@{}", macro_user_id::handle::ROX_MAIL_DOMAIN);
+    assert_eq!(link.email_address.0.as_ref(), expected_address);
     assert_eq!(
         link.provider,
         models_email::email::service::link::UserProvider::Rox

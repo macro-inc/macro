@@ -12,7 +12,6 @@ use calendar_events::domain::models::{CalendarGrantIntent, GoogleScopeSet};
 use email::domain::events::{EmailMacroEvent, LinkConnectedMetadata};
 use email::domain::mailbox::initialization::{InitializationError, InitializeMailbox};
 use email::domain::models::UserProvider;
-use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use enterprise::domain::MemberAccess;
@@ -40,9 +39,6 @@ pub enum InitError {
     Enterprise(#[from] enterprise::domain::EnterpriseError),
     #[error(transparent)]
     MailboxInitialization(InitializationError),
-    #[error("User is already initialized")]
-    AlreadyInitialized,
-
     #[error("No Gmail grant available to provision from")]
     NoGmailGrant,
 
@@ -75,9 +71,6 @@ pub enum InitError {
     },
 }
 
-/// Stable machine-readable code for [`InitError::AlreadyInitialized`].
-pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
-
 /// Stable machine-readable code for [`InitError::NoGmailGrant`].
 pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
 
@@ -109,8 +102,7 @@ impl InitError {
                 | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
                 InitializationError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             },
-            InitError::AlreadyInitialized
-            | InitError::NoGmailGrant
+            InitError::NoGmailGrant
             | InitError::HandleRequired
             | InitError::BadRequest(_)
             | InitError::Parse(_) => StatusCode::BAD_REQUEST,
@@ -145,14 +137,6 @@ impl IntoResponse for InitError {
                     email_address,
                     existing_owner_email,
                     existing_link_id,
-                }),
-            )
-                .into_response(),
-            InitError::AlreadyInitialized => (
-                status_code,
-                Json(InitErrorCodeResponse {
-                    code: ALREADY_INITIALIZED_CODE.to_string(),
-                    message: InitError::AlreadyInitialized.to_string(),
                 }),
             )
                 .into_response(),
@@ -326,8 +310,6 @@ pub async fn handler(
         let status = e.status_code();
         if status.is_server_error() {
             tracing::error!(error = ?e, "init failed");
-        } else if matches!(e, InitError::AlreadyInitialized) {
-            tracing::debug!(error = %e, "init declined");
         } else {
             tracing::info!(?link_id, status = status.as_u16(), outcome = %e, "init declined");
         }
@@ -374,7 +356,7 @@ async fn init_user(
 ) -> Result<Response, InitError> {
     let macro_user_id = authorization.authorization.user.macro_user_id.clone();
     let user_context = authorization.authorization.user.user_context.clone();
-    let mut completed_google_grant: Option<CompletedGoogleGrant> = None;
+    let completed_google_grant: Option<CompletedGoogleGrant>;
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());

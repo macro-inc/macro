@@ -122,9 +122,9 @@ pub async fn ensure_rox_mailbox(
         "UPDATE email_links SET is_primary = false WHERE macro_id = $1 AND provider <> 'ROX'",
         macro_id.as_ref(),
     )
-    .execute(&mut *tx)
+    .execute(tx.as_mut())
     .await?;
-    let link = email_db_client::links::insert::upsert_link(&mut *tx, link).await?;
+    let link = email_db_client::links::insert::upsert_link(tx.as_mut(), link).await?;
     sqlx::query!(
         "INSERT INTO enterprise_audit (id, actor_id, action, resource_id, result) VALUES ($1, $2, $3, $4, 'local_link_created')",
         macro_uuid::generate_uuid_v7(),

@@ -71,6 +71,40 @@ async fn case_variant_claimed_handle_is_taken_without_a_suffix(pool: sqlx::PgPoo
 }
 
 #[sqlx::test]
+async fn second_claim_of_the_same_handle_fails_without_renaming_the_owner(pool: sqlx::PgPool) {
+    let owner = uuid::Uuid::new_v4().to_string();
+    let second = uuid::Uuid::new_v4().to_string();
+    insert_user(&pool, &owner, "owner@example.com", "owner@example.com").await;
+    insert_user(&pool, &second, "second@example.com", "second@example.com").await;
+
+    let handle = MailboxHandle::parse("ada").unwrap();
+    claim_handle(&pool, &owner, &handle).await.unwrap();
+
+    assert!(matches!(
+        claim_handle(&pool, &second, &handle).await,
+        Err(ClaimHandleError::Taken)
+    ));
+
+    let owner_username = sqlx::query_scalar!(
+        "SELECT username FROM macro_user WHERE id = $1",
+        uuid::Uuid::parse_str(&owner).unwrap()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(owner_username, "ada");
+
+    let second_username = sqlx::query_scalar!(
+        "SELECT username FROM macro_user WHERE id = $1",
+        uuid::Uuid::parse_str(&second).unwrap()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(second_username, "second@example.com");
+}
+
+#[sqlx::test]
 async fn legacy_username_is_preserved_until_claimed(pool: sqlx::PgPool) {
     let user = uuid::Uuid::new_v4().to_string();
     insert_user(&pool, &user, "ada@example.com", "ada@example.com").await;

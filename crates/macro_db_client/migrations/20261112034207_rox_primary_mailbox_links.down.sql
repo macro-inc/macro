@@ -3,6 +3,10 @@ SET LOCAL lock_timeout = '5s';
 DROP TRIGGER email_links_preserve_legacy_primary ON email_links;
 DROP FUNCTION email_links_preserve_legacy_primary();
 
+-- The historical schema derives is_primary, so it has no single-primary fact to
+-- guard: dropping the partial unique index is the exact inverse of its creation.
+DROP INDEX email_links_one_primary_per_macro_id;
+
 -- Restore the historical generated fact without cascading into other objects.
 -- The consent trigger is deliberately detached and restored in this transaction.
 DROP TRIGGER IF EXISTS email_links_revoke_crm_consent ON email_links;
