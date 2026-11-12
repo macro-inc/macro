@@ -459,9 +459,12 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
     assert!(candidates.contains("FROM initiative i"));
     assert!(candidates.contains("LIMIT $3"));
+    assert!(candidates.contains("i.id = ANY(ARRAY("));
     assert!(candidates.contains("ea.entity_type = 'initiative'"));
     assert!(candidates.contains("sp.\"linkShare\" = 'TEAM'"));
-    assert!(details.contains("INNER JOIN initiative i ON i.id::text = t.id"));
+    assert!(details.contains(
+        "INNER JOIN initiative i ON i.id = (CASE WHEN t.item_type = 'initiative' THEN t.id END)::uuid"
+    ));
 }
 
 /// Rows a plan read from `table` (returned or filtered out) across all loops
@@ -566,6 +569,7 @@ async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
 
     // The viewer can list 8 initiatives and their team owns 17; the table holds 20,018.
     let read = rows_read(&plan[0]["Plan"], "initiative");
+    println!("initiative rows read by the first page: {read}");
     assert!(
         read < 100.0,
         "the listing read {read} initiative rows; it should start from the viewer's access: {plan}"

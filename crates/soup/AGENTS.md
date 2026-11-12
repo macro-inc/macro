@@ -136,13 +136,24 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Calendar access is `owner_id = $1 OR source_link_id = ANY(ARRAY(...))`, not
   an `EXISTS` over `macro_user_links`, so the planner can index both sides of
   the OR.
-- Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
-  listing (`initiative_access_clause`) check access per row with `EXISTS` on
+- Queries over a known id list (`*/by_ids.rs`, hydration, candidate gates
+  such as `initiative_gate`) check access per row with `EXISTS` on
   `entity_access`, matching sources with `= ANY(ARRAY(SELECT ...))` so they are
-  collected once rather than semi-joined per row. Building the caller's whole
-  accessible set first scans `entity_access` once per source, so cost grows
-  with the table and the caller's channels, not the page. A listing `EXISTS`
-  also needs `PER_CANDIDATE`, or Postgres hashes it back into the whole set.
+  collected once rather than semi-joined per row; cost follows the ids passed
+  in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
+  into the caller's whole accessible set.
+- The initiative listing starts from the caller's access instead
+  (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
+  index descent per source returns only that source's initiative grants, and
+  the owner's team link is reached through the caller's own `team_user` rows.
+  The set and the teammates are collected with `= ANY(ARRAY(...))`, which
+  keeps every table on an index under stale statistics; a plain `IN` or join
+  was planned as sequential scans of `initiative` there. The per-row form
+  tests every initiative in the table, each against every source. Never match
+  `team_user.team_id::text` against the source array: no index serves it, so
+  it reads all of `team_user`. Detail joins
+  compare the bare uuid (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id`
+  read the table once per page row.
 
 ## Related
 
