@@ -7,6 +7,7 @@ members = [
   "crates/accounts/account_manager",
   "crates/accounts/gtm_invite",
   "crates/accounts/onboarding",
+  "crates/accounts/passwords",
   "crates/accounts/system_status",
   "crates/accounts/user_api_key",
   "crates/accounts/user_language",
@@ -35,7 +36,10 @@ members = [
   "crates/agents/cursor_api_key",
   "crates/agents/cursor_cloud_agents",
   "crates/agents/dynamic_ui",
+  "crates/agents/harnessd",
+  "crates/agents/harnessd_protocol",
   "crates/agents/harnesses",
+  "crates/agents/hosted_runtimes",
   "crates/agents/macrod",
   "crates/agents/routine_program",
   "crates/agents/routines",
@@ -68,6 +72,7 @@ members = [
   "crates/clients/gmail_client",
   "crates/clients/incus_client",
   "crates/clients/loops_client",
+  "crates/clients/openbao_client",
   "crates/comms/channel_bots",
   "crates/comms/channel_labels",
   "crates/comms/contacts_core",
@@ -579,6 +584,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -698,6 +706,7 @@ cognition_public_url = { path = "crates/platform/service_urls/cognition_public_u
 collab_surface = { path = "crates/documents/collab_surface" }
 comms_db_client = { path = "crates/comms/comms_db_client" }
 complete_graph = { path = "crates/graphql/complete_graph" }
+computer_id = { path = "crates/types/computer_id" }
 connect_api_url = { path = "crates/platform/service_urls/connect_api_url" }
 connect_client = { path = "crates/clients/connect_client" }
 connection = { path = "crates/comms/connection", default-features = false }
@@ -807,7 +816,9 @@ graphql_work_feed = { path = "crates/graphql/graphql_work_feed" }
 grouping_types = { path = "crates/types/grouping_types" }
 gtm_invite = { path = "crates/accounts/gtm_invite" }
 harness_id = { path = "crates/types/harness_id" }
+harnessd_protocol = { path = "crates/agents/harnessd_protocol" }
 harnesses = { path = "crates/agents/harnesses", default-features = false }
+hosted_runtimes = { path = "crates/agents/hosted_runtimes", default-features = false }
 id_newtype = { path = "crates/types/id_newtype" }
 illustrator_engine = { path = "crates/engines/illustrator_engine" }
 image_generation = { path = "crates/ai/image_generation" }
@@ -817,6 +828,7 @@ import_jira = { path = "crates/integrations/import_jira" }
 import_linear = { path = "crates/integrations/import_linear" }
 import_notion = { path = "crates/integrations/import_notion" }
 import_tracker = { path = "crates/integrations/import_tracker" }
+incus_client = { path = "crates/clients/incus_client" }
 initiative_description = { path = "crates/projects/initiative_description" }
 invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
@@ -885,10 +897,13 @@ notification_outbound = { path = "crates/notifications/notification_outbound" }
 notification_service_url = { path = "crates/platform/service_urls/notification_service_url" }
 notification_state = { path = "crates/types/notification_state" }
 onboarding = { path = "crates/accounts/onboarding" }
+openbao_client = { path = "crates/clients/openbao_client" }
 opensearch_client = { path = "crates/clients/opensearch_client" }
 opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 opensearch_types = { path = "crates/types/opensearch_types" }
 pagination_types = { path = "crates/types/pagination_types" }
+pairing_id = { path = "crates/types/pairing_id" }
+passwords = { path = "crates/accounts/passwords" }
 permissions_types = { path = "crates/types/permissions_types" }
 pipedream_mcp = { path = "crates/ai/pipedream_mcp" }
 pptx_engine = { path = "crates/engines/pptx_engine", default-features = false }

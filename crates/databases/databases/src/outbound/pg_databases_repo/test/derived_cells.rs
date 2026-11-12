@@ -111,7 +111,7 @@ async fn insert(pool: &PgPool, guests: &Guests, rows: Vec<Vec<CellWrite>>) -> Ve
         guests,
         vec![DatabaseOp::Rows {
             table: guests.table_id,
-            change: RowsChange::Insert { rows },
+            change: RowsChange::Insert { rows, ids: None },
         }],
     )
     .await

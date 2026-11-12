@@ -1,0 +1,23 @@
+[package]
+name = "openbao_client"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+progenitor-client = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+zeroize = { workspace = true, features = ["derive"] }
+macro_tower_layers = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+wiremock = { workspace = true }
+axum = { workspace = true }
+jsonwebtoken = { workspace = true }

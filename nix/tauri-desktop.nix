@@ -201,7 +201,7 @@
         }
         {
           name = "database_sql";
-          crate = "crates/databases/database_sql_wasm";
+          crate = "crates/databases/databases/database_sql_wasm";
           dir = "database-sql";
         }
         {
@@ -244,47 +244,65 @@
         }
       ];
 
+      # A binary of the root workspace (not the nested Tauri one), built
+      # natively for this platform.
+      workspaceBinary =
+        {
+          pname,
+          package,
+        }:
+        craneLib.mkCargoDerivation {
+          inherit pname;
+          version = appVersion;
+          src = jsSrc;
+          cargoArtifacts = null;
+          cargoVendorDir = rootCargoVendorDir;
+          nativeBuildInputs = [
+            # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
+            # their C sources with cmake; see the matching notes on `libraries`
+            # in cloud-storage.nix.
+            pkgs.cmake
+            pkgs.git
+            pkgs.perl
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            pkgs.openssl
+            pkgs.openssl.dev
+            # librdkafka 2.12's bundled cmake-build needs curl headers even with
+            # WITH_CURL=0 (headers only; nothing links against libcurl).
+            pkgs.curl.dev
+            pkgs.libclang
+            pkgs.xz.out
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          OPENSSL_NO_VENDOR = "1";
+          doCheck = false;
+          SQLX_OFFLINE = "true";
+          buildPhaseCargoCommand = ''
+            cargo build --release --package ${package} --bin ${pname}
+          '';
+          installPhaseCommand = ''
+            install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+          '';
+          doInstallCargoArtifacts = false;
+        };
+
       # The macrod agent daemon, bundled with the desktop app as a Tauri
       # sidecar so "run agents on this computer" needs no separate download.
-      # Built from the root workspace (not the nested Tauri one), natively for
-      # the bundle's platform; the standalone release tarballs keep their own
-      # musl/darwin pipeline in build_agent_daemon_on_tag.yml.
-      macrodBinary = craneLib.mkCargoDerivation {
+      # The standalone release tarballs keep their own musl/darwin pipeline in
+      # build_agent_daemon_on_tag.yml.
+      macrodBinary = workspaceBinary {
         pname = "macrod";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
-          # their C sources with cmake; see the matching notes on `libraries`
-          # in cloud-storage.nix.
-          pkgs.cmake
-          pkgs.git
-          pkgs.perl
-          pkgs.pkg-config
-        ];
-        buildInputs = [
-          pkgs.openssl
-          pkgs.openssl.dev
-          # librdkafka 2.12's bundled cmake-build needs curl headers even with
-          # WITH_CURL=0 (headers only; nothing links against libcurl).
-          pkgs.curl.dev
-          pkgs.libclang
-          pkgs.xz.out
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-        OPENSSL_NO_VENDOR = "1";
-        doCheck = false;
-        SQLX_OFFLINE = "true";
-        buildPhaseCargoCommand = ''
-          cargo build --release --package macrod --bin macrod
-        '';
-        installPhaseCommand = ''
-          install -Dm0755 target/release/macrod "$out/bin/macrod"
-        '';
-        doInstallCargoArtifacts = false;
+        package = "macrod";
+      };
+
+      # The agent sign-in daemon baked into the Macro computer image
+      # (nix/macro-box).
+      harnessdBinary = workspaceBinary {
+        pname = "harnessd";
+        package = "harnessd";
       };
 
       # Tauri sidecar sources carry the target triple in the file name; the
@@ -1471,6 +1489,7 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
+        harnessd = harnessdBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

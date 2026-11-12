@@ -86,6 +86,7 @@ async fn an_anonymous_response_leaves_a_receipt_and_a_dated_ledger_entry_naming_
                             value: CellValue::Date(day),
                         },
                     ]],
+                    ids: None,
                 },
             }],
         }]

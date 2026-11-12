@@ -18,7 +18,7 @@ follow-up fix; those misses are called out inline.
 | --- | --- | --- |
 | The smallest correct registration | `CrmPipeline` (`crates/databases/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
 | A full-stack kind outside Soup | Forms (`crates/databases/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
-| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/project`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
+| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/folder/project`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
 | A kind on reusable storage | Databases (`crates/databases/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
 
 Collaborative markdown on the entity (descriptions, notes) follows the
@@ -376,7 +376,7 @@ Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
 and `crates/ai/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/ai/agent_tools/src/lib.rs` (`subagent_toolset()` or the
+- Register it in `crates/ai/agent_tools/src/lib.rs` (`base_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai/agent_tools/src/build_context.rs`,
@@ -469,8 +469,11 @@ so grep for the sibling kind.
   `features/command/Launcher.tsx`, and `create.<kind>` tokens in
   `lib/core/hotkey/tokens.ts`. Quick Access and Cmd+K are separate
   registrations; CRM contacts reached one weeks before the other.
-- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts`,
-  `GlobalShareModal.tsx`, `lib/core/component/TopBar/ShareButton.tsx`, and
+- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts` and
+  `GlobalShareModal.tsx`; `features/sharing/share-delivery/core/share-item.ts`
+  (`ShareKind`, `KIND_POLICY`) and `share-delivery/queries/channel-access.ts`
+  (`CHANNEL_GRANT_CLIENTS`) for the send policy and channel grant request;
+  `lib/core/component/TopBar/ShareButton.tsx` for per-kind copy; and
   `linkShare.ts` if team-shareable.
 - **Optional by capability:** properties (`features/property/utils/entityConversion.ts`,
   `editors/selectors/entityUtils.ts`, `hooks/usePropertyEntityDisplay.tsx`),

@@ -48,6 +48,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
                 table_id: table.id,
                 rows: vec![vec![]],
                 restored: vec![],
+                ids: Vec::new(),
             }],
         );
         let outcome = if core {
@@ -78,6 +79,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
                 table_id: table.id,
                 rows: vec![vec![(definition, PropertyValue::Str(String::new()))]],
                 restored: vec![],
+                ids: Vec::new(),
             }],
         ))
         .await

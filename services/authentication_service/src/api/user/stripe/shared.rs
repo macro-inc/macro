@@ -41,11 +41,15 @@ impl StripePrices {
     }
 
     /// The same prices, for the teams crate's per-plan seat items.
-    pub fn seat_prices(&self) -> SeatPrices {
-        SeatPrices {
-            premium: self.premium.clone(),
-            max: self.max.clone(),
-        }
+    pub fn seat_prices(&self) -> anyhow::Result<SeatPrices> {
+        Ok(SeatPrices {
+            premium: crate::config::configured_price_id(&self.premium)?,
+            max: self
+                .max
+                .as_deref()
+                .map(crate::config::configured_price_id)
+                .transpose()?,
+        })
     }
 }
 

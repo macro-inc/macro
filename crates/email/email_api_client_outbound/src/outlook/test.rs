@@ -3,7 +3,7 @@ use serde_json::json;
 use uuid::Uuid;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{header, method, path, query_param},
+    matchers::{header, headers, method, path, query_param, query_param_is_missing},
 };
 
 use super::*;
@@ -28,8 +28,12 @@ async fn delta_preserves_removals_as_stream_events_and_keeps_opaque_continuation
     Mock::given(method("GET"))
         .and(path("/v1.0/me/mailFolders/folder/messages/delta"))
         .and(header("authorization", "Bearer test-bearer"))
-        .and(header("prefer", "IdType=\"ImmutableId\""))
+        .and(headers(
+            "prefer",
+            vec!["IdType=\"ImmutableId\"", "odata.maxpagesize=100"],
+        ))
         .and(query_param("$select", "id"))
+        .and(query_param_is_missing("$top"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "value":[{"id":"m1"},{"id":"m2","@removed":{"reason":"deleted"}}],
             "@odata.nextLink":next

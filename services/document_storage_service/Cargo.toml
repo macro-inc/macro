@@ -46,6 +46,7 @@ location_check = []
 [dependencies]
 agent_correlation = { workspace = true, features = ["http", "postgres"] }
 access_requests = { workspace = true }
+passwords = { workspace = true }
 async-trait = { workspace = true }
 ai_billing = { workspace = true }
 teams = { workspace = true, features = ["outbound"] }

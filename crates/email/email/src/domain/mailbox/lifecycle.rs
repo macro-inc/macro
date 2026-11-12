@@ -7,6 +7,7 @@ use crate::domain::models::UserProvider;
 use email_types::service::pubsub::DeletionReason;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InboxLifecycleError {
@@ -25,6 +26,20 @@ pub enum InboxLifecycleError {
 pub struct InboxActor {
     pub macro_id: MacroUserIdStr<'static>,
     pub credential_owner: String,
+}
+
+/// The relationship that matched a deleted credential owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DeletedUserBindingKind {
+    Custodian,
+    Owner,
+}
+
+#[derive(Clone)]
+pub struct DeletedUserBinding {
+    pub actor: InboxActor,
+    pub link_id: Uuid,
+    pub kind: DeletedUserBindingKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,10 +140,11 @@ pub trait InboxLifecycleRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<InboxResync, InboxLifecycleError>> + Send;
     /// Includes consenting participants whose delegation edge was removed by
     /// account deletion. This input comes only from the internal deletion queue.
+    /// Returns relationship facts; the service decides their processing order.
     fn bindings_for_deleted_user(
         &self,
         owner: &str,
-    ) -> impl Future<Output = Result<Vec<(InboxActor, Uuid)>, InboxLifecycleError>> + Send;
+    ) -> impl Future<Output = Result<Vec<DeletedUserBinding>, InboxLifecycleError>> + Send;
     fn ready_for_delete(
         &self,
         link: Uuid,
@@ -190,7 +206,30 @@ impl<R: InboxLifecycleRepository, E: InboxLifecycleEffects> InboxLifecycleServic
         self.repo.resync(actor, &snapshot).await
     }
     pub async fn deleted_user(&self, owner: &str) -> Result<(), InboxLifecycleError> {
-        for (actor, link) in self.repo.bindings_for_deleted_user(owner).await? {
+        let mut bindings = self.repo.bindings_for_deleted_user(owner).await?;
+
+        // Detach custody before an owner disconnect makes subsequent removals
+        // no-ops. Repository row order must not decide which cleanup runs.
+        bindings.sort_unstable_by(|left, right| {
+            (left.link_id, left.kind, left.actor.macro_id.as_ref()).cmp(&(
+                right.link_id,
+                right.kind,
+                right.actor.macro_id.as_ref(),
+            ))
+        });
+
+        // A self-custodian matches both roles, but still has only one removal.
+        let mut seen_bindings = HashSet::new();
+        bindings.retain(|binding| {
+            seen_bindings.insert((binding.link_id, binding.actor.macro_id.clone()))
+        });
+
+        for DeletedUserBinding {
+            actor,
+            link_id: link,
+            ..
+        } in bindings
+        {
             let snapshot = match self.repo.snapshot(link).await {
                 Ok(snapshot) => snapshot,
                 Err(InboxLifecycleError::NotFound) => continue,

@@ -1,11 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createRoutesManifest, decodePane } from '@app/lib/split-router';
-import { routeDefinitions } from '@app/lib/split-router/solid/route';
-import { appRouteElements } from '@app/routes/app-router-view';
+import { decodePane } from '@app/lib/split-router';
 import { debugRoutes } from '@app/routes/routes';
-import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
+import { appRoutesManifest } from '../tests/app-routes';
 import { agentRouteTable, isNavigableByAgent } from './navigable-routes';
 
 /** Rewrite the server's copy instead of comparing: `UPDATE_AGENT_ROUTE_TABLE=1`. */
@@ -25,17 +23,7 @@ const SERVER_TABLE = resolve(
   '../../../../../../crates/agents/agent_code_mode/src/domain/ui_commands/navigable_routes.json'
 );
 
-function appManifest() {
-  return createRoot((dispose) => {
-    const definitions = routeDefinitions(appRouteElements());
-    dispose();
-
-    return createRoutesManifest({
-      definitions,
-      defaultRoute: () => ({ matches: [{ id: 'base', params: {} }] }),
-    });
-  });
-}
+const appManifest = appRoutesManifest;
 
 function navigable(path: string): boolean {
   const manifest = appManifest();
@@ -93,6 +81,7 @@ describe('agent route table', () => {
       '/component/settings',
       '/pipedream-connect.html',
       '/routines/new',
+      '/passwords',
     ]) {
       expect(navigable(path), path).toBe(false);
     }

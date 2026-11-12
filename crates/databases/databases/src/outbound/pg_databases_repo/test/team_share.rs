@@ -165,6 +165,7 @@ async fn a_teammate_reads_and_writes_a_team_shared_database_until_it_is_unshared
                         column: table.columns[0].column.id,
                         value: CellValue::Text("Launch".into()),
                     }]],
+                    ids: None,
                 },
             }]
             .into(),

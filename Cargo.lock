@@ -497,6 +497,7 @@ dependencies = [
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_tower_layers",
@@ -522,6 +523,7 @@ dependencies = [
  "shared_entity_registry",
  "shared_types",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -602,12 +604,14 @@ dependencies = [
  "channels_outbound",
  "chat_id",
  "chrono",
+ "clap",
  "code_execution_core",
  "code_execution_outbound",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
  "cognition_public_url",
+ "computer_id",
  "connection_gateway",
  "connection_gateway_client",
  "connection_gateway_url",
@@ -639,11 +643,15 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
+ "gmail_client",
  "granola_sync",
  "harness_id",
+ "harnessd_protocol",
  "harnesses",
+ "hosted_runtimes",
  "http 1.4.0",
  "http-body-util",
  "image_generation",
@@ -651,6 +659,7 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
+ "incus_client",
  "jev_classifier",
  "kafka_util",
  "lexical_client",
@@ -724,6 +733,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sqs_worker",
+ "sse-core",
  "static_file",
  "static_file_public_url",
  "static_file_service_client",
@@ -738,6 +748,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
+ "tokio-stream",
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
@@ -961,6 +972,7 @@ dependencies = [
  "entity_kind",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
  "futures",
  "genai_telemetry",
  "harness_id",
@@ -1655,6 +1667,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "genai_telemetry",
  "lazy_static",
  "macro_env_var",
  "macro_user_id",
@@ -1773,7 +1786,7 @@ dependencies = [
  "objc2-foundation",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -2454,8 +2467,10 @@ dependencies = [
  "github_pull_requests",
  "gtm_invite",
  "hmac 0.12.1",
+ "hosted_runtimes",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "loops_client",
  "macro_auth",
  "macro_authorization",
@@ -2485,6 +2500,7 @@ dependencies = [
  "notification",
  "notification_outbound",
  "onboarding",
+ "passwords",
  "permissions_types",
  "project",
  "rand 0.9.4",
@@ -4534,6 +4550,7 @@ dependencies = [
  "macro_user_id",
  "model_error_response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -6878,6 +6895,7 @@ dependencies = [
  "axum-extra",
  "backoff",
  "bytes",
+ "genai_telemetry",
  "infer 0.19.0",
  "macro_authorization",
  "macro_env_var",
@@ -7160,6 +7178,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pagination_types",
+ "passwords",
  "permissions_types",
  "project",
  "properties",
@@ -7230,6 +7249,7 @@ dependencies = [
  "anyhow",
  "bot_id",
  "bulk_upload_types",
+ "macro_tower_layers",
  "model_error_response",
  "model_owner",
  "permissions_types",
@@ -8328,6 +8348,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "genai_telemetry",
  "workspace-hack",
 ]
 
@@ -8610,7 +8631,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8840,6 +8861,7 @@ dependencies = [
 name = "feature_flags"
 version = "0.1.0"
 dependencies = [
+ "macro_env",
  "macro_user_id",
  "reqwest 0.13.4",
  "rootcause",
@@ -9524,6 +9546,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde_json",
+ "strum 0.27.2",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -9562,7 +9585,6 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb130435a959a8d525e6bca66ff6c40981a300ee96d70e3ef56f046556d614a3"
 dependencies = [
- "generic-array 0.14.9",
  "rustversion",
  "typenum",
 ]
@@ -10578,6 +10600,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "harnessd"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "harnessd_protocol",
+ "hex",
+ "rustix 1.1.6",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "vt100",
+ "workspace-hack",
+]
+
+[[package]]
+name = "harnessd_protocol"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "harnesses"
 version = "0.1.0"
 dependencies = [
@@ -10586,17 +10642,21 @@ dependencies = [
  "bearer_token",
  "bot_id",
  "chrono",
+ "computer_id",
  "constant_time_eq 0.3.1",
  "entity_access_db_utils",
  "harness_id",
+ "harnessd_protocol",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
  "model_error_response",
+ "pairing_id",
  "permissions_types",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
@@ -10605,6 +10665,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -10773,9 +10834,9 @@ checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
 
 [[package]]
 name = "hickory-net"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
+checksum = "c480823ed7c2c5d0f09c41020cb6b7c28029ce60ec42dc942158dcf22f8e0a4d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -10817,9 +10878,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-resolver"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
+checksum = "3f3da5255c95d5a716857d54b5b8f4e8d67c3484d3beaaaae2ce25063b3ba981"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -10884,6 +10945,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hosted_runtimes"
+version = "0.1.0"
+dependencies = [
+ "async-stripe",
+ "axum",
+ "bot_id",
+ "chrono",
+ "clap",
+ "computer_id",
+ "entity_access",
+ "feature_flags",
+ "harness_id",
+ "harnesses",
+ "incus_client",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env",
+ "macro_user_id",
+ "model_error_response",
+ "model_user",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "pairing_id",
+ "proptest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-retry",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -11507,6 +11613,7 @@ dependencies = [
  "bot_id",
  "entity_kind",
  "entity_registry",
+ "genai_telemetry",
  "image",
  "lexical_client",
  "macro_authorization",
@@ -11564,6 +11671,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -11572,6 +11680,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_tower_layers",
  "reqwest 0.13.4",
  "secretsmanager_client",
  "serde",
@@ -11688,6 +11797,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "databases_types",
  "futures",
  "http 1.4.0",
  "indexmap 2.14.0",
@@ -11701,6 +11811,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -11747,6 +11858,7 @@ name = "incus_client"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures",
  "progenitor-client",
  "reqwest 0.13.4",
  "rustls",
@@ -11755,6 +11867,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-tungstenite 0.28.0",
  "tracing",
  "uuid",
  "wiremock",
@@ -12000,7 +12113,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13529,14 +13642,20 @@ dependencies = [
  "harness_id",
  "harnesses",
  "hex",
+ "hosted_runtimes",
  "lazy-regex",
  "macro_env_var",
  "macro_event_broker",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "messages",
  "mimalloc",
  "openssl-sys",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pairing_id",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
@@ -13544,6 +13663,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "service_url",
  "sha2 0.10.9",
  "shell-words",
  "strum 0.27.2",
@@ -13557,6 +13677,7 @@ dependencies = [
  "toml 0.8.23",
  "toml_edit 0.22.27",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "trigger_context",
  "tui-input",
@@ -13564,7 +13685,9 @@ dependencies = [
  "webbrowser",
  "webhook",
  "windows-sys 0.61.2",
+ "wiremock",
  "workspace-hack",
+ "zeroize",
  "zip",
 ]
 
@@ -13757,6 +13880,7 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "macro_authorization",
+ "macro_env",
  "macro_env_var",
  "macro_user_id",
  "model_error_response",
@@ -13818,11 +13942,13 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
+ "macro_user_id",
  "regex",
  "rmcp",
  "schemars 1.2.1",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -14229,6 +14355,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "entity_kind",
+ "harnessd_protocol",
  "html-escape",
  "invite_email",
  "macro_user_id",
@@ -15264,6 +15391,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openbao_client"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "jsonwebtoken 10.3.0",
+ "macro_tower_layers",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "opensearch"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15729,6 +15876,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
+]
+
+[[package]]
+name = "passwords"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "feature_flags",
+ "jsonwebtoken 10.3.0",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_client",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model_user",
+ "openbao_client",
+ "opentelemetry",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -17073,7 +17254,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -18048,9 +18229,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.63.3"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
+checksum = "94be3d86c71b9ed220a675c405e35c7a02565a009bf8da2e9cc13a700320a5c5"
 dependencies = [
  "aes 0.9.3",
  "bitflags 2.11.1",
@@ -18214,7 +18395,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -18227,7 +18408,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -18286,7 +18467,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -20663,7 +20844,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
 dependencies = [
- "vte",
+ "vte 0.10.1",
 ]
 
 [[package]]
@@ -21105,6 +21286,7 @@ dependencies = [
  "embedding",
  "entity_kind",
  "futures",
+ "genai_telemetry",
  "lexical_client",
  "lexical_service_url",
  "macro_aws_config",
@@ -21229,7 +21411,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22733,12 +22915,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
+name = "vt100"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84cd863bf0db7e392ba3bd04994be3473491b31e66340672af5d11943c6274de"
+dependencies = [
+ "itoa",
+ "log",
+ "unicode-width 0.1.14",
+ "vte 0.11.1",
+]
+
+[[package]]
 name = "vte"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
 dependencies = [
  "arrayvec 0.5.2",
+ "utf8parse",
+ "vte_generate_state_changes",
+]
+
+[[package]]
+name = "vte"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
+dependencies = [
+ "arrayvec 0.7.6",
  "utf8parse",
  "vte_generate_state_changes",
 ]
@@ -23486,7 +23691,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -24131,6 +24336,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "arrayvec 0.7.6",
  "aws-config",
  "aws-credential-types",
  "aws-runtime",
@@ -24495,6 +24701,7 @@ name = "xtask_local_telemetry"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "libc",
  "reqwest 0.13.4",
  "serde",
  "serde_json",

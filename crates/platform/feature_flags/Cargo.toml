@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 macro_user_id = { workspace = true }
+macro_env = { workspace = true }
 rootcause = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

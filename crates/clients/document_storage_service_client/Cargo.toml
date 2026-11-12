@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+macro_tower_layers = { workspace = true }
 anyhow = { workspace = true }
 shared_types = { workspace = true }
 model_owner = { workspace = true }

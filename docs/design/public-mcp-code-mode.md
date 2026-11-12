@@ -68,7 +68,7 @@ Choose the surface per client in `initialize`, `list_tools` and `call_tool`
   request) replaces the standard tool-catalog instructions with code-mode
   instructions.
 - `call_tool` rejects `ExecuteCode` / `DescribeCodeTools` for unflagged users.
-  Hidden native tools stay callable; they are the same tools.
+  A native tool called by name in code mode is refused.
 
 The public MCP is stateless, so each request loads flags. `PostHogFeatureFlags`
 does not cache; add a short per-user TTL cache in front of it rather than a

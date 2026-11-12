@@ -35,6 +35,7 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
         provider_thread_id: Some("approved-provider-thread".into()),
         thread_db_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
         subject: "Approved subject".into(),
+        from_name: None,
         to: vec![to.clone()],
         cc: vec![],
         bcc: vec![],

@@ -29,4 +29,3 @@ macro_auth = { workspace = true, features = ["testing"] }
 macro_db_migrator = { workspace = true }
 serde_json = { workspace = true }
 tower = { workspace = true, features = ["util"] }
-

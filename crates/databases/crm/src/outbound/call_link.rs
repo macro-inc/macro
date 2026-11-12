@@ -78,8 +78,10 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             FROM outsiders o
             JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
             JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
-            LEFT JOIN crm_contacts ct
-                ON ct.company_id = co.id AND LOWER(ct.email) = o.email AND NOT ct.hidden
+            LEFT JOIN (
+                crm_contact_emails ce
+                JOIN crm_contacts ct ON ct.id = ce.contact_id AND NOT ct.hidden
+            ) ON ce.email = o.email AND ct.company_id = co.id
             "#,
             &user_ids,
             &emails,

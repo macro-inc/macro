@@ -1,0 +1,68 @@
+diff --git a/build/legacy/queryObserver.cjs b/build/legacy/queryObserver.cjs
+index a6ee014a3e38efcfab3872f9439e68c356ce2a4f..51620e39459a4e2ba54978f0f8f8118f9c9ae1ad 100644
+--- a/build/legacy/queryObserver.cjs
++++ b/build/legacy/queryObserver.cjs
+@@ -459,7 +459,11 @@ updateQuery_fn = function() {
+   }
+   const prevQuery = __privateGet(this, _currentQuery);
+   __privateSet(this, _currentQuery, query);
+-  __privateSet(this, _currentQueryInitialState, query.state);
++  // Only the update counters are read later; holding the state would pin its data.
++  __privateSet(this, _currentQueryInitialState, {
++    dataUpdateCount: query.state.dataUpdateCount,
++    errorUpdateCount: query.state.errorUpdateCount
++  });
+   if (this.hasListeners()) {
+     prevQuery == null ? void 0 : prevQuery.removeObserver(this);
+     query.addObserver(this);
+diff --git a/build/legacy/queryObserver.js b/build/legacy/queryObserver.js
+index d67d42924c9ab528a985cd0e8cc368b08f69f0c9..d4971629538fa691febcd76c445ab0508ce76311 100644
+--- a/build/legacy/queryObserver.js
++++ b/build/legacy/queryObserver.js
+@@ -443,7 +443,11 @@ updateQuery_fn = function() {
+   }
+   const prevQuery = __privateGet(this, _currentQuery);
+   __privateSet(this, _currentQuery, query);
+-  __privateSet(this, _currentQueryInitialState, query.state);
++  // Only the update counters are read later; holding the state would pin its data.
++  __privateSet(this, _currentQueryInitialState, {
++    dataUpdateCount: query.state.dataUpdateCount,
++    errorUpdateCount: query.state.errorUpdateCount
++  });
+   if (this.hasListeners()) {
+     prevQuery == null ? void 0 : prevQuery.removeObserver(this);
+     query.addObserver(this);
+diff --git a/build/modern/queryObserver.cjs b/build/modern/queryObserver.cjs
+index 7c8d4756cb2555dc36106fdaecac3d56e19b6789..196078532c2ecd8df147a168a1c65be701923a32 100644
+--- a/build/modern/queryObserver.cjs
++++ b/build/modern/queryObserver.cjs
+@@ -425,7 +425,11 @@ var QueryObserver = class extends import_subscribable.Subscribable {
+     }
+     const prevQuery = this.#currentQuery;
+     this.#currentQuery = query;
+-    this.#currentQueryInitialState = query.state;
++    // Only the update counters are read later; holding the state would pin its data.
++    this.#currentQueryInitialState = {
++      dataUpdateCount: query.state.dataUpdateCount,
++      errorUpdateCount: query.state.errorUpdateCount
++    };
+     if (this.hasListeners()) {
+       prevQuery?.removeObserver(this);
+       query.addObserver(this);
+diff --git a/build/modern/queryObserver.js b/build/modern/queryObserver.js
+index 2eceaf76a9addadca33acb82334b1378cd6f2848..86a535b1578c70827750417fe33cec221030dde6 100644
+--- a/build/modern/queryObserver.js
++++ b/build/modern/queryObserver.js
+@@ -410,7 +410,11 @@ var QueryObserver = class extends Subscribable {
+     }
+     const prevQuery = this.#currentQuery;
+     this.#currentQuery = query;
+-    this.#currentQueryInitialState = query.state;
++    // Only the update counters are read later; holding the state would pin its data.
++    this.#currentQueryInitialState = {
++      dataUpdateCount: query.state.dataUpdateCount,
++      errorUpdateCount: query.state.errorUpdateCount
++    };
+     if (this.hasListeners()) {
+       prevQuery?.removeObserver(this);
+       query.addObserver(this);

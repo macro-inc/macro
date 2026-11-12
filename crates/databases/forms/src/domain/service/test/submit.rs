@@ -124,6 +124,7 @@ async fn an_anonymous_response_to_a_public_form_is_written_as_the_owner_with_no_
                             value: CellValue::Date(start_of_tests()),
                         },
                     ]],
+                    ids: None,
                 },
             }],
         }]
@@ -526,7 +527,7 @@ async fn an_option_named_by_label_is_written_by_id_and_passes_the_gate_by_id() {
         .unwrap();
     let world = world.lock().unwrap();
     let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &world.batches[0].ops[0]
     else {

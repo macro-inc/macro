@@ -210,6 +210,7 @@ pub(super) async fn insert_guests(pool: &PgPool, wedding: &Wedding) -> (RowId, R
                             },
                         ],
                     ],
+                    ids: None,
                 },
             }]
             .into(),

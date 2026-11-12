@@ -2,7 +2,7 @@
 
 ## What it is
 
-The Macro computer guest: a NixOS configuration with macrod, Claude Code,
+The Macro computer guest: a NixOS configuration with macrod, harnessd, Claude Code,
 herdr, Chromium on Xvnc + Openbox, Docker and nix-ld. It ships as an Incus
 VM image (for the computers IncusFleet) and a Docker image with systemd as
 PID 1 (for the dev-only DockerFleet).
@@ -12,7 +12,7 @@ PID 1 (for the dev-only DockerFleet).
 - `_guest.nix` is the whole machine as one NixOS module: users, the macrod
   units, the desktop user services, `/etc/skel`, Claude Code settings,
   packages, Docker, nix-ld and envfs. Options under `macro.box` take macrod
-  (required), Claude Code, the ACP adapter, chrome-devtools-mcp and the
+  and harnessd (required), Claude Code, the ACP adapter, chrome-devtools-mcp and the
   enrollment source.
 - `_image.nix` adds nixpkgs' `virtualisation/incus-virtual-machine.nix`:
   `make-disk-image` builds an EFI qcow2 (systemd-boot, ext4 root by label,
@@ -45,6 +45,7 @@ PID 1 (for the dev-only DockerFleet).
 - `nix build .#macro-box-incus` → `result/{metadata.tar.xz,disk.qcow2}`.
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
+- `nix build .#harnessd` → the harnessd binary.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
 - `nix build .#nixosConfigurations.macro-box.config.system.build.toplevel` →
   the system closure, without packing the disk.
@@ -67,8 +68,21 @@ PID 1 (for the dev-only DockerFleet).
   permission bypass as root), workspace `/home/macro/work`, after
   `macrod-enroll.service`. It restarts after 1 s, backing off to 30 s, and
   never hits a start limit.
-- Claude signs in through Claude Code's own `/login`, in a herdr pane; its
-  credentials stay in `~macro/.claude` on the data disk.
+- `harnessd.service` runs `harnessd serve` as `macro` (socket
+  `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
+  the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
+  client, on PATH) through the fleet. Its state, the Claude credential
+  `<state>/claude/credential.json`, is `/home/.system/harnessd` with a data
+  disk, else `/var/lib/harnessd` (tmpfiles, macro, 0700). See
+  `crates/agents/harnessd/AGENTS.md`.
+- `claude` on PATH (and so macrod's `CLAUDE_CODE_EXECUTABLE`) is
+  `_claude-wrapper.nix` over `files/claude-wrapper`: when the credential file
+  has a token it unsets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_API_KEY` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
+  exports `CLAUDE_CODE_OAUTH_TOKEN` (the customer's plan); with no file it
+  changes nothing (Macro credits); an unreadable file or one without a token
+  keeps the gateway env and warns on stderr without the token. Never write
+  `~/.claude/.credentials.json`.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Both units get PATH `/run/wrappers/bin:/run/current-system/sw/bin`, so agents
   find the same tools as a login shell.
@@ -156,6 +170,9 @@ The control plane, per computer:
   and Xvnc and Chromium's CDP port come up. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
+- `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
+  `files/claude-wrapper` against a fake claude: no credential, a credential,
+  an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/agents/macrod/src/tui/agent_catalog/claude_code.rs`;

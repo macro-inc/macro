@@ -12,7 +12,7 @@ pub(super) fn primary_references(
     for op in &batch.ops {
         let cells: Vec<&CellWrite> = match op {
             DatabaseOp::Rows {
-                change: RowsChange::Insert { rows },
+                change: RowsChange::Insert { rows, .. },
                 ..
             } => rows.iter().flatten().collect(),
             DatabaseOp::Rows {

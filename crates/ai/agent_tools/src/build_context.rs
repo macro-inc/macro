@@ -179,9 +179,24 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
 /// reads as connected for a linked user; `None` where the host cannot reach
 /// the authentication service.
+///
+/// `sender_provider` lists an inbox's verified send-as aliases, so the email
+/// tools' `from` can name one; hosts without Gmail access pass
+/// [`email::domain::senders::UnavailableEmailSenderProvider`].
 #[tracing::instrument(
-    skip(pool, event_task_tracker, import_jobs, recorder, linked_github),
+    skip(
+        pool,
+        event_task_tracker,
+        import_jobs,
+        recorder,
+        linked_github,
+        sender_provider
+    ),
     err
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a host-owned dependency"
 )]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -191,6 +206,7 @@ pub async fn build_tool_service_context_from_env(
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
+    sender_provider: impl email::domain::senders::EmailSenderProvider,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -426,7 +442,7 @@ pub async fn build_tool_service_context_from_env(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match crate::canvas_artifacts_rollout_from_env()? {
+    let document_tool_context = match crate::canvas_artifacts_rollout_from_env(environment)? {
         Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
         None => document_tool_context,
     };
@@ -450,6 +466,7 @@ pub async fn build_tool_service_context_from_env(
             ),
             0,
         )
+        .with_sender_provider(sender_provider)
         .with_macro_event_broker(macro_event_broker.clone()),
     );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
@@ -599,13 +616,9 @@ pub async fn build_tool_service_context_from_env(
         },
     );
 
-    let admission = ai_billing::composition::pg_admission_service(
-        pool.clone(),
-        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
-        enforcement,
-        pricing,
-    );
-    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env()?;
+    let admission =
+        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
+    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env(environment)?;
     let native_servers = match maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
@@ -635,6 +648,9 @@ pub async fn build_tool_service_context_from_env(
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
             native_servers.clone(),
+            mcp_client::outbound::guarded_http::McpHttp::new(
+                mcp_client::outbound::guarded_http::AddressPolicy::for_environment(environment),
+            )?,
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));

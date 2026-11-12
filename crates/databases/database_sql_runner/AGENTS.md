@@ -30,7 +30,7 @@ through `databases`' typed ops.
   and the two SQL agent tools. Saving compiles the question here, so its route
   lives here rather than in `crates/databases/databases`, which keeps `GET
   /databases/queries/{id}`.
-- Not here: the SQL grammar/engine itself → `crates/databases/database_sql_engine`; table/row
+- Not here: the SQL grammar/engine itself → `crates/databases/databases/database_sql_engine`; table/row
   persistence and the ops API → `crates/databases/databases`.
 
 ## Boundaries

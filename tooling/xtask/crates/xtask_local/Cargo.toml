@@ -51,7 +51,7 @@ macro_env_var = { workspace = true }
 xtask_paths = { workspace = true }
 # Port windows, subnets and the machine-wide allocation registry.
 xtask_ports = { workspace = true }
-# Opt-in run_local telemetry (`local/telemetry.rs`); container health times.
+# Local build telemetry, on by default (`local/telemetry.rs`); container health times.
 chrono = { workspace = true }
 xtask_local_telemetry = { workspace = true }
 

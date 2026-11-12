@@ -86,7 +86,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .unwrap();
     let app = router(
         Arc::new(repo.clone()),
-        "localhost".into(),
+        vec!["localhost".into()],
         InternalTools {
             service: Arc::new(SessionPullRequestService::new(
                 repo.clone(),

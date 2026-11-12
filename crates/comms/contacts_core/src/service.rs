@@ -3,11 +3,12 @@ use crate::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
 use crate::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::models::query::ContactLookup;
 use crate::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
     ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
-    ContactsService,
+    ContactsService, PeopleSearchRepository, PeopleSearchService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -115,6 +116,56 @@ impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
         limit: ContactPageSize,
     ) -> Result<ContactIdPage, Report> {
         self.repository.contact_id_page(viewer, after, limit).await
+    }
+}
+
+impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleSearchService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(
+        name = "contacts.directory.people_search",
+        skip_all,
+        fields(
+            limit = i64::from(limit.get()),
+            query_bytes = query.byte_len() as i64,
+            result_count = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let span = tracing::Span::current();
+        let Some(needle) = query.searchable() else {
+            span.record("result_count", 0_i64);
+            span.record("outcome", "query_too_short");
+            return Ok(Vec::new());
+        };
+        let people = self
+            .repository
+            .search_people(viewer, needle, limit)
+            .await
+            .inspect_err(|_| {
+                span.record("outcome", "error");
+            })?;
+        if people.len() > usize::from(limit.get()) {
+            span.record("outcome", "error");
+            return Err(rootcause::report!("people search exceeded its limit"));
+        }
+        span.record("result_count", people.len() as i64);
+        span.record(
+            "outcome",
+            if people.is_empty() {
+                "no_match"
+            } else {
+                "match"
+            },
+        );
+        Ok(people)
     }
 }
 

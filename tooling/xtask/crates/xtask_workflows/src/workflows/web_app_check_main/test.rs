@@ -202,21 +202,19 @@ fn typecheck_compiles_no_rust() {
     );
 }
 
-/// The OpenAPI clients, specta types, SDK and docs tool pages all come from
-/// workspace binaries, so one job builds them once and checks all four.
+/// The OpenAPI clients, specta types, and SDK all come from
+/// workspace binaries, so one job builds them once and checks all three.
 #[test]
 fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let generated = job(&yaml, "generated-code", "biome-check");
     // Specta runs last: its `cargo run -p` builds resolve features per
-    // package and would otherwise make the docs build recompile.
+    // package and would otherwise make the schema build recompile.
     let order = [
         "Build schema binaries",
         "bun run gen-api -- --check",
         "bun run sync-specs",
         "git status --porcelain -- packages/sdk",
-        "bun run generate:tools",
-        "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
         "just gen-dynamic-ui-types",
@@ -869,6 +867,11 @@ fn every_former_typecheck_step_still_runs() {
             "Check Collaboration Package Types",
             "packages/collaboration",
             "bun run type-check",
+        ),
+        (
+            "Check Observability Package",
+            "packages/observability",
+            "bun run type-check && bun run test",
         ),
         (
             "Check Lexical Service Types",

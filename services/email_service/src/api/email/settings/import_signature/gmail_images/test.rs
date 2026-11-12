@@ -1,5 +1,5 @@
 use super::{GmailMessageImage, GmailSignatureImages, ImageLocation};
-use crate::util::process_pre_insert::sfs_map::ImageSource;
+use crate::util::process_pre_insert::sfs_map::{ImageSource, RefusedImageUrl};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -184,16 +184,21 @@ async fn keeps_gmail_image_copies_out_of_the_shared_mapping() {
 }
 
 #[tokio::test]
-async fn fetches_other_images_over_public_http() {
+async fn fetches_other_images_only_from_public_addresses() {
     let fake = FakeGmail::start().await;
     let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
 
-    let image = images
+    // Non-Gmail images go through the public image client, which refuses
+    // the fake's loopback address.
+    let error = images
         .fetch(&format!("{}/public/logo.png", fake.origin))
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(image.as_deref(), Some(PNG));
+    assert!(
+        error.downcast_ref::<RefusedImageUrl>().is_some(),
+        "{error:#}"
+    );
 }
 
 struct StaticToken;

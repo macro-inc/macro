@@ -8,3 +8,4 @@ publish = false
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+genai_telemetry = { workspace = true }

@@ -12,13 +12,14 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use cognition::domain::{
     Cognition, DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
+    RoutingRequest,
 };
 use jev_classifier::domain::{JevProvider as _, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use skills::domain::model::{SkillContent, SkillError, SkillMatchType, SkillSummary};
 use skills::domain::ports::SkillService;
-use skills::domain::selection::{SkillRequest, select_skills};
+use skills::domain::selection::select_skills;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -272,7 +273,7 @@ async fn route_evaluation() {
                 &skills,
                 Some(&cognition),
                 &owner,
-                SkillRequest {
+                RoutingRequest {
                     latest: prompt,
                     previous: None,
                 },

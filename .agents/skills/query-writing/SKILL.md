@@ -41,7 +41,7 @@ The plan must show all four, judged against [table sizes](../query-review/table-
 4. **A statement timeout covers it.** Any query whose cost depends on a
    tenant's data runs under `statement_timeout`: `SET LOCAL` in its
    transaction (`crates/notifications/notification_outbound/src/retention.rs`,
-   `dynamic_email_thread_cursor` in `crates/email`) or a pool created with the
+   `dynamic_email_thread_cursor` in `crates/email/email`) or a pool created with the
    option (`crates/integrations/github/src/outbound/pg_github_repo.rs`). Most pools set no
    default, so a slow query otherwise runs until it finishes, long after the
    client gave up and retried. A repository that is handed its pool does not
@@ -129,7 +129,7 @@ one entity's pending requests.
 - An expression index is used only when the query repeats its expression
   exactly: `idx_email_contacts_email_domain` is on
   `lower(split_part(email_address, '@', 2))`, and the domain filter in
-  `crates/email` writes that same expression.
+  `crates/email/email` writes that same expression.
 - A partial index is used only when the query repeats its `WHERE` predicate in
   a form the planner can prove.
 - An index without the tenant or parent key reads every tenant's matches and

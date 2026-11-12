@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{TimeZone, Utc};
 use databases::domain::models::{DatabaseError, Viewer};
+use databases::domain::ports::CreatorAccess;
 use databases_types::{CellWrite, DatabaseId, RowId, TableId};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,7 +13,7 @@ use uuid::Uuid;
 
 use crate::domain::mapping::WebhookColumn;
 use crate::domain::models::{DatabaseWebhook, NewWebhook, WebhookId};
-use crate::domain::ports::{CreatorAccess, DatabaseWebhooksRepo, WebhookTables};
+use crate::domain::ports::{DatabaseWebhooksRepo, WebhookTables};
 
 /// Webhooks kept with their token hashes.
 #[derive(Debug, Clone, Default)]

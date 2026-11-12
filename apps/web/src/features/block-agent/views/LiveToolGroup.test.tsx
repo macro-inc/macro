@@ -43,7 +43,7 @@ function mount(overrides?: { active?: boolean; defaultOpen?: boolean }) {
 describe('LiveToolGroup', () => {
   it('starts historical groups closed with just the count', () => {
     const view = mount();
-    expect(view.getByRole('button').textContent).toContain('Called 3 tools');
+    expect(view.getByRole('button').textContent).toContain('Used 3 tools');
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
       'false'
     );
@@ -61,7 +61,7 @@ describe('LiveToolGroup', () => {
 
   it('reads as in progress while a call is still running', () => {
     const view = mount({ active: true });
-    expect(view.getByRole('button').textContent).toContain('Calling 3 tools');
+    expect(view.getByRole('button').textContent).toContain('Using 3 tools');
   });
 
   it('can start open', () => {
@@ -81,7 +81,7 @@ describe('LiveToolGroup', () => {
     setActive(false);
     vi.advanceTimersByTime(1000);
     expect(view.queryByTestId('calls')).toBeNull();
-    expect(view.getByRole('button').textContent).toContain('Called 100 tools');
+    expect(view.getByRole('button').textContent).toContain('Used 100 tools');
   });
 
   it('holds an opened run, then collapses without delaying its completion status', () => {
@@ -95,7 +95,7 @@ describe('LiveToolGroup', () => {
     vi.advanceTimersByTime(150);
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true');
     setActive(false);
-    expect(view.getByRole('button').textContent).toContain('Called 3 tools');
+    expect(view.getByRole('button').textContent).toContain('Used 3 tools');
     vi.advanceTimersByTime(599);
     expect(view.getByTestId('calls')).toBeTruthy();
     vi.advanceTimersByTime(1);

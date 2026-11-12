@@ -12,7 +12,6 @@ inbound = [
   "dep:askama",
   "dep:axum",
   "dep:axum-extra",
-  "dep:bot_id",
   "dep:macro_auth",
   "dep:macro_user_id",
   "dep:tower",
@@ -37,7 +36,7 @@ ai_toolset = { workspace = true, optional = true }
 axum = { workspace = true, features = ["tower-log"], optional = true }
 axum-extra = { workspace = true, features = ["cookie"], optional = true }
 base64 = { workspace = true }
-bot_id = { workspace = true, optional = true }
+bot_id = { workspace = true }
 chrono = { workspace = true, optional = true }
 cursor_api_key = { workspace = true, optional = true }
 fusionauth = { workspace = true, optional = true }

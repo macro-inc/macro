@@ -25,57 +25,41 @@ pub(crate) async fn lock_live_database(
     Ok(live.is_some())
 }
 
-/// Append `count` empty rows to a live table, in order; `None` when the
-/// table is gone. The app wrapper holds the entity lifecycle lock.
+/// Append empty rows under `ids` to a live table, in order. The app wrapper
+/// holds the entity lifecycle lock.
 pub(crate) async fn append_rows(
     connection: &mut PgConnection,
     table_id: TableId,
     created_by: &str,
-    count: usize,
-) -> Result<Option<Vec<RowRef>>, PgDatabasesRepoError> {
+    ids: &[RowId],
+) -> Result<Placed, PgDatabasesRepoError> {
+    if !lock_table(connection, table_id).await? {
+        return Ok(Placed::TableGone);
+    }
     // Row writers and schema writers serialize on the table's version
     // row, so positions are minted under the same lock.
-    let live = sqlx::query_scalar!(
-        r#"SELECT t.id FROM database_tables t
-               WHERE t.id = $1 FOR UPDATE OF t"#,
-        table_id.into_uuid(),
-    )
-    .fetch_optional(&mut *connection)
-    .await?;
-    if live.is_none() {
-        return Ok(None);
-    }
     let max_position = sqlx::query_scalar!(
         "SELECT MAX(position) FROM database_rows WHERE table_id = $1",
         table_id.into_uuid()
     )
     .fetch_one(&mut *connection)
     .await?;
-    let positions = keys_between(last_position(max_position)?.as_ref(), None, count)?;
-    let mut rows = Vec::with_capacity(count);
-    for position in positions {
-        let id = RowId::generate();
-        sqlx::query!(
-            "INSERT INTO database_rows (id, table_id, position, created_by) VALUES ($1, $2, $3, $4)",
-            id.into_uuid(),
-            table_id.into_uuid(),
-            position.as_str(),
-            created_by,
-        )
-        .execute(&mut *connection)
-        .await?;
-        rows.push(RowRef { id, position });
-    }
-    Ok(Some(rows))
+    let positions = keys_between(last_position(max_position)?.as_ref(), None, ids.len())?;
+    let rows: Vec<RowRef> = ids
+        .iter()
+        .zip(positions)
+        .map(|(id, position)| RowRef { id: *id, position })
+        .collect();
+    place_rows(connection, table_id, created_by, rows).await
 }
 
-/// What putting removed rows back did.
-pub(crate) enum Restored {
-    /// They are back.
+/// What placing rows did.
+pub(crate) enum Placed {
+    /// They are in the table.
     Applied(Vec<RowRef>),
     /// The table is gone.
     TableGone,
-    /// A row has one of their ids again.
+    /// A row has one of their ids already.
     Taken(RowId),
 }
 
@@ -85,7 +69,22 @@ pub(crate) async fn restore_rows(
     table_id: TableId,
     created_by: &str,
     restored: &[RestoredRow],
-) -> Result<Restored, PgDatabasesRepoError> {
+) -> Result<Placed, PgDatabasesRepoError> {
+    if !lock_table(connection, table_id).await? {
+        return Ok(Placed::TableGone);
+    }
+    let rows = restored
+        .iter()
+        .map(|row| RowRef {
+            id: row.id,
+            position: row.position.clone(),
+        })
+        .collect();
+    place_rows(connection, table_id, created_by, rows).await
+}
+
+/// Lock a table's version row; `false` when the table is gone.
+async fn lock_table(connection: &mut PgConnection, table_id: TableId) -> Result<bool, sqlx::Error> {
     let live = sqlx::query_scalar!(
         r#"SELECT t.id FROM database_tables t
                WHERE t.id = $1 FOR UPDATE OF t"#,
@@ -93,11 +92,18 @@ pub(crate) async fn restore_rows(
     )
     .fetch_optional(&mut *connection)
     .await?;
-    if live.is_none() {
-        return Ok(Restored::TableGone);
-    }
-    let mut rows = Vec::with_capacity(restored.len());
-    for row in restored {
+    Ok(live.is_some())
+}
+
+/// Insert rows of a locked table under their ids and positions, stopping at
+/// the first id a row already has.
+async fn place_rows(
+    connection: &mut PgConnection,
+    table_id: TableId,
+    created_by: &str,
+    rows: Vec<RowRef>,
+) -> Result<Placed, PgDatabasesRepoError> {
+    for row in &rows {
         let inserted = sqlx::query!(
             "INSERT INTO database_rows (id, table_id, position, created_by) VALUES ($1, $2, $3, $4)
              ON CONFLICT (id) DO NOTHING",
@@ -109,14 +115,10 @@ pub(crate) async fn restore_rows(
         .execute(&mut *connection)
         .await?;
         if inserted.rows_affected() != 1 {
-            return Ok(Restored::Taken(row.id));
+            return Ok(Placed::Taken(row.id));
         }
-        rows.push(RowRef {
-            id: row.id,
-            position: row.position.clone(),
-        });
     }
-    Ok(Restored::Applied(rows))
+    Ok(Placed::Applied(rows))
 }
 
 /// Remove one row of a table; `false` if it was not there.

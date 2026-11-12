@@ -8,7 +8,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
-- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/documents/document_sync_router`
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/documents/documents/document_sync_router`
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
@@ -16,6 +16,7 @@ threads, pins, recents, notifications, folders, activity.
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `database_sql_runner` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
 - `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
@@ -126,4 +127,25 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+## Passwords vault
+
+`/passwords` hosts human-only team vault routes, with policy in `passwords`.
+Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_SIGNING_KEY`
+together. Partial configuration fails startup; absent configuration denies vault work.
+Human routes, cleanup jobs and internal team purge use `enable-passwords-v1` for
+explicit service context `passwords-v1`. Human admissions additionally evaluate the
+same key for the authenticated actor, so service authority never admits an unflagged
+account. Local explicitly enables both. Missing/error results in either fail closed.
+Postgres stores metadata; values stay in OpenBao. Admission checks current human
+account classification and membership, including session-shaped agent accounts.
+
+`src/passwords_cleanup.rs` retries explicit item deletion and TOTP generation erasure
+every minute. Jobs gate before discovery; paused/failed work retains its journal.
+The task tracker cancels and drains the worker. Membership/account deletion never
+erases vault items. Internal `/internal/passwords/teams/{team}` DELETE accepts only
+service credentials and the same global rollout/provider gate. Team cleanup skips
+RPC only on authoritative empty metadata rechecked under the existing team lease;
+the returned guard stays in the deletion proof through team-row deletion. Retained
+state requires acknowledged purge before ordinary cleanup; release the guard before RPC.
 - The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.

@@ -11,14 +11,18 @@ inbound = [
   "dep:macro_authorization",
   "macro_authorization/axum",
   "dep:model_error_response",
-  "dep:utoipa",
   "ports",
+  "schema",
 ]
-outbound = ["dep:entity_access_db_utils", "dep:permissions_types", "dep:sqlx", "ports"]
+outbound = ["dep:entity_access_db_utils", "dep:permissions_types", "dep:sqlx", "harnessd_protocol/sqlx", "ports"]
 ports = ["dep:tokio"]
+# `ToSchema` for the domain types other crates put in their API, e.g. `AgentProvider`.
+schema = ["dep:utoipa", "harnessd_protocol/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+computer_id = { workspace = true, features = ["schema", "sqlx"] }
+pairing_id = { workspace = true, features = ["schema", "sqlx"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 bot_id = { workspace = true, features = ["schema"] }
@@ -26,6 +30,7 @@ chrono = { workspace = true }
 constant_time_eq = { workspace = true }
 entity_access_db_utils = { workspace = true, optional = true }
 harness_id = { workspace = true, features = ["schema", "sqlx"] }
+harnessd_protocol = { workspace = true }
 hex = { workspace = true }
 macro_authorization = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
@@ -33,8 +38,9 @@ mockall = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
 permissions_types = { workspace = true, optional = true }
 rand = { workspace = true }
+rootcause = { workspace = true }
 serde = { workspace = true }
-sqlx = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = ["json"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
@@ -42,6 +48,7 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 bearer_token = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 harness_id = { workspace = true, features = ["test-utils"] }

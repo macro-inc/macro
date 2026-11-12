@@ -11,6 +11,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import type { QueryAccount } from '../auth/account-scope';
 import { channelActivityQueryOptions } from '../channel/activity';
 import {
@@ -21,6 +22,7 @@ import type { CachedGraphqlChannel } from '../channel/graphql';
 import { emailLinksQueryOptions } from '../email/link';
 import { queryReadyGate } from '../gate';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
 import { buildContactContextFacts } from './context-facts';
 
 // Selectors capture resolved ownership. Retained data from an old observer/key
@@ -91,7 +93,10 @@ export function createContactContextSource(options: {
         subscribeToVisibleCacheChanges(
           host,
           () => cached.refetch({ cancelRefetch: false }),
-          { searchBuckets: () => ['channel', 'dm'] }
+          {
+            searchBuckets: () => ['channel', 'dm'],
+            intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+          }
         )
       );
     })
@@ -106,7 +111,8 @@ export function createContactContextSource(options: {
       !queryReadyGate(links)
     )
       return;
-    const c = channels.data;
+    // Raw rows: walking them through the store creates a signal per field.
+    const c = unwrap(channels.data);
     const a = activity.data;
     const l = links.data;
     if (

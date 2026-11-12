@@ -7,6 +7,6 @@ service_url::service_url! {
     pub struct McpChatgptServiceUrl {
         local: "http://localhost:8103",
         dev: "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
-        prod: "https://mcp-chatgpt.macro.com",
+        prod: "https://mcp-chatgpt-worker.macroverse.workers.dev",
     }
 }

@@ -371,6 +371,7 @@ fn plan(
                     position: row.position.clone(),
                 })
                 .collect(),
+            ids: Vec::new(),
         });
     }
 

@@ -30,6 +30,9 @@ universal_input = { workspace = true }
 ai_projection_types = { workspace = true }
 activity = { workspace = true, features = ["axum", "outbound", "schema"] }
 agent_loop = { workspace = true, features = ["debug-messages"] }
+clap = { workspace = true }
+computer_id = { workspace = true }
+genai_telemetry = { workspace = true }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
 agent-client-protocol = { workspace = true }
@@ -87,7 +90,7 @@ database_sql_runner = { workspace = true, features = ["ai_tools"] }
 document_storage_service_client = { workspace = true }
 documents = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }
-email = { workspace = true, features = ["attachment", "outbound", "sqs"] }
+email = { workspace = true, features = ["attachment", "gmail_senders", "outbound", "sqs"] }
 email_service_client = { workspace = true }
 entity_access = { workspace = true, default-features = true, features = ["inbound"] }
 entity_access_outbound = { workspace = true }
@@ -103,7 +106,11 @@ github = { workspace = true, features = ["installation_claims", "outbound", "por
 github_pull_requests = { workspace = true, default-features = true, features = ["outbound", "s3", "service"] }
 granola_sync = { workspace = true }
 harness_id = { workspace = true }
-harnesses = { workspace = true, features = ["outbound", "ports"] }
+harnesses = { workspace = true, features = ["inbound", "outbound", "ports"] }
+gmail_client = { workspace = true }
+harnessd_protocol = { workspace = true }
+hosted_runtimes = { workspace = true, features = ["outbound", "ports"] }
+incus_client = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { workspace = true, features = ["axum"] }
@@ -178,6 +185,7 @@ sqs_worker = { workspace = true }
 static_file = { workspace = true, default-features = true, features = ["attachment"] }
 static_file_service_client = { workspace = true }
 stream = { workspace = true }
+sse-core = { workspace = true }
 strum = { workspace = true }
 sync_service_client = { workspace = true }
 system_properties = { workspace = true }
@@ -185,6 +193,7 @@ teams = { workspace = true, features = ["ai_billing", "outbound", "ports"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }

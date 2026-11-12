@@ -389,7 +389,7 @@ fn apply_op(
                     .collect()
             };
             let result = match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     let mut inserted = Vec::new();
                     for (row_index, cells) in rows.iter().enumerate() {
                         let values = checked(found, row_index, cells)?;

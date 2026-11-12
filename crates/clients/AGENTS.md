@@ -27,6 +27,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `macro_redis` |  |
 | [`macro_sha_count_client`](macro_sha_count_client/AGENTS.md) | Part of document/file storage. |
 | [`mcp_client`](mcp_client/AGENTS.md) | Part of agent sessions / AI tooling. |
+| [`openbao_client`](openbao_client/AGENTS.md) | Typed OpenBao client for the Passwords provider, generated with progenitor from the mounted OpenBao specification. |
 | [`opensearch_client`](opensearch_client/AGENTS.md) | Part of the Search feature. |
 | [`opensearch_query_builder`](opensearch_query_builder/AGENTS.md) | Part of the Search feature. |
 | [`search_service_client`](search_service_client/AGENTS.md) | Part of the Search feature. |

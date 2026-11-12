@@ -33,8 +33,10 @@ macro_middleware = { workspace = true, features = [
   "tracking",
 ] }
 shared_types = { workspace = true }
+macro_tower_layers = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
+lazy-regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 url = { workspace = true }
 secretsmanager_client = { workspace = true }

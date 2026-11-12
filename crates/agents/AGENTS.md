@@ -36,7 +36,10 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`cursor_api_key`](cursor_api_key/AGENTS.md) | Part of agent sessions: a user's Cursor API key — KMS encryption (`cipher`) and row storage (`store`) for the per-user secret `@cursor` sessions run on. |
 | [`cursor_cloud_agents`](cursor_cloud_agents/AGENTS.md) | Part of agent sessions: an ACP agent backed by Cursor cloud agents — one ACP session is one Cursor *agent*, one `session/prompt` is one Cursor *run*, and the run's SSE … |
 | [`dynamic_ui`](dynamic_ui/AGENTS.md) | The view an agent shows a person (`execution.views.present` in agent sessions, `DisplayResults` in chat), as the web's dynamic-UI renderer draws it. |
+| [`harnessd`](harnessd/AGENTS.md) | The agent sign-in daemon baked into the Macro computer image: owns each agent's sign-in on the computer and answers the JSONL protocol the control plane sends over `Fleet::exec`. |
+| [`harnessd_protocol`](harnessd_protocol/AGENTS.md) | The wire types of `harnessd` (the JSON lines the control plane and the daemon exchange) and the shared `AgentProvider` enum. |
 | [`harnesses`](harnesses/AGENTS.md) | Belongs to agent sessions: registration for user-run agent harnesses (macrod). |
+| [`hosted_runtimes`](hosted_runtimes/AGENTS.md) | Macro computers: hosted VMs a team buys, each running macrod; the computer lifecycle, capacity, purchase/billing orchestration and the fleet ports. |
 | [`routine_program`](routine_program/AGENTS.md) | Routines: the typed program a routine runs. |
 | [`routines`](routines/AGENTS.md) | Part of the agent sessions feature. |
 | [`scheduled_action`](scheduled_action/AGENTS.md) | Serves agent sessions' automations ("routines"): the reusable domain and adapters for scheduled and event-triggered agent automations — cron-style schedules plus … |

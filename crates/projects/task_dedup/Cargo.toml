@@ -34,6 +34,7 @@ backfill = [
 default = ["backfill"]
 
 [dependencies]
+genai_telemetry = { workspace = true }
 rootcause = { workspace = true }
 agent_loop = { workspace = true }
 ai_usage = { workspace = true }

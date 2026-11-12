@@ -94,7 +94,9 @@ without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
 `TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
-the turn's prompt in (`ControlRequest.clientId`, refused from runtimes). Every
+the turn's prompt in (`ControlRequest.clientId`, or `promptClientId` on a
+create carrying the first prompt). `ControlPrincipal::admit_client` admits it
+on both paths: refused from runtimes, dropped for programs. Every
 `set_turn_prompter` overwrites it, a system turn never stores one, and it only
 addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 
@@ -144,12 +146,28 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity summaries: `domain/activity_summary.rs` is a turn observer the
+harness binds next to the queue. For each running turn it keeps one task that
+summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
+details already shown to readers, never tool input or output) with
+`outbound/activity_summarizer.rs` (Nemotron), resting 4s for the first 10 lines
+and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines go
+to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
+(`agent_session_activity`), and a `null` line clears it when the turn ends.
+Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
+- Persist `AcpReady` through the fenced session log before opening or restoring
+  a session on an already-initialized shared runtime; MCP and model-gateway
+  credentials remain revoked while the durable status is disconnected.
 - The scheduler's routine-session operations (`domain/routines.rs`,
   `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
   a session the scheduler opened for its owner, a routine's run (source
@@ -201,3 +219,4 @@ through `set_name` clears it, so a name a person chose is never replaced.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.

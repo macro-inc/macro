@@ -2,7 +2,7 @@
 
 ## What it is
 
-Accounts and teams: team membership and seats, onboarding, user API keys and languages, invites, account managers, system status, the native app service, last-online tracking, and the Microsoft OAuth grant and mobile welcome email stores.
+Accounts and teams: team membership and seats, onboarding, user API keys and languages, invites, account managers, system status, the native app service, last-online tracking, the Microsoft OAuth grant and mobile welcome email stores, and the team password vault (`passwords`).
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
@@ -18,6 +18,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `mobile_welcome_email_db_client` |  |
 | [`native_app_service`](native_app_service/AGENTS.md) | Part of the native apps (Tauri desktop and iOS). |
 | [`onboarding`](onboarding/AGENTS.md) | Part of the onboarding feature (`/setup`). |
+| [`passwords`](passwords/AGENTS.md) | The team credential vault hosted by the document storage service: Postgres stores metadata and grants, OpenBao stores credential values and TOTP keys. |
 | [`system_status`](system_status/AGENTS.md) | Platform status banner: Macro staff set the status (operational, degraded, major outage with a message) and every user sees a banner while it is not operational. |
 | [`teams`](teams/AGENTS.md) | Part of account/workspace management — team membership, invites, roles, CRM/analytics settings, and the `macro.teams` lifecycle event producer that other features … |
 | [`user_api_key`](user_api_key/AGENTS.md) | Part of account security — creates, lists, and deletes a user's API keys. |

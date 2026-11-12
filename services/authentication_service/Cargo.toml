@@ -49,6 +49,7 @@ codex_connection = { workspace = true }
 codex_cloud_agents = { workspace = true }
 cursor_api_key = { workspace = true }
 cursor_cloud_agents = { workspace = true }
+passwords = { workspace = true }
 aes-gcm = { workspace = true }
 calendar_events = { workspace = true }
 analytics_client = { workspace = true }
@@ -108,8 +109,13 @@ github_pull_requests = { workspace = true, features = [
   "service",
 ] }
 hmac = { workspace = true }
+hosted_runtimes = { workspace = true, features = [
+  "inbound",
+  "outbound",
+] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
+lazy-regex = { workspace = true }
 loops_client = { workspace = true }
 macro_auth = { workspace = true }
 macro_authorization = { workspace = true, default-features = true, features = [

@@ -69,6 +69,10 @@ and usage metering.
 - `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
   (native Anthropic/OpenAI); call it after `with_model`. Tools and
   `complete*` still use the deployment's keys.
+- `MeteredHttpClient` logs every provider response that means Macro's
+  account is suspended or out of credit (`genai_telemetry::provider_account`),
+  which pages on-call. A client rekeyed for an agent's own key is built
+  `with_agent_api_key()` so its billing failures never do.
 
 ## Related
 

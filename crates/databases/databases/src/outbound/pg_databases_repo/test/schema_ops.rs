@@ -141,6 +141,7 @@ async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(poo
                                 value: CellValue::Options(vec![OptionRef::Id(crew)]),
                             }],
                         ],
+                        ids: None,
                     },
                 },
             ]
@@ -656,6 +657,7 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                                 value: CellValue::Text("7".into()),
                             }],
                         ],
+                        ids: None,
                     },
                 },
                 DatabaseOp::View {

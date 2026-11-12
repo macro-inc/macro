@@ -36,7 +36,9 @@ a background tab; adding Shift also switches to it. Every menu that offers
 project rows, Reviews) also offers **Open in new tab**, which opens the item in
 a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
 selected item. Tabs are not draggable.
-Tabs persist per user and restore on launch. In the browser and on other
+Tabs persist per user and restore on launch. Call pages (`/app/meet/...`) keep
+the strip although they hide the rest of the app chrome; switching tabs there
+leaves the call running in the background. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
@@ -1168,6 +1170,25 @@ entry moves to **Settings → Routines** (on phones **More views → Settings �
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
+A routine one of another routine's runs created (from a code step or the
+Ask AI step's session, while that run was in progress) is its **sub-routine**
+and is not a row of its own. On desktop the creating routine's row shows a
+caret and **N sub-routines**; the caret expands the active ones under it,
+indented, each with its own switch (a paused-with-parent one's tooltip reads
+**Paused with the routine that created it**). A search that matches only a
+sub-routine shows its parent, expanded. Touch devices list top-level routines
+only. The creating routine's page has a **Created by this routine** section
+after its settings: the active sub-routines (name, trigger, **Active** /
+**Paused** / **Running**), then **Finished: N** with **Show finished** for the
+one-time ones that have run (the newest 200), each row opening that routine,
+whose **Runs** tab has its run. A sub-routine's page reads **Created by
+<name>** under its title (a link to the creator) and its **Routine actions**
+menu has **Keep as my routine**, which moves it to the main list and stops it
+pausing or being deleted with its creator. Switching a creator off pauses its
+sub-routines and switching it on resumes only those; deleting it deletes them,
+and the delete dialog says **The N routines it created will be deleted too.**
+In a run's details, **Created** lists the sub-routines that run created.
+
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
@@ -1317,8 +1338,9 @@ The event menu groups Macro activity triggers by surface:
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
-same panel to choose any accessible item or specific channels/documents/tasks. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
+same panel to choose any accessible item or specific channels/documents/tasks.
+Specific-item pickers use Next options/PageDown to append later loaded pages.
+Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
@@ -1346,7 +1368,7 @@ on GitHub triggers, which have no Macro item.
 
 Presets and **Any GitHub event** only receive events selected on the installed
 GitHub App. Account linking alone does not enable delivery. The
-[registration guide](../../crates/github/README.md) lists the reviewed
+[registration guide](../../crates/integrations/github/README.md) lists the reviewed
 subscriptions and manual permission approval steps; changing its checked-in
 specification does not change the live app. After adding subscriptions, verify
 a controlled repository's delivery and matching routine history. Wildcard
@@ -1700,9 +1722,12 @@ Background history or channel refetches alone must not blank a settled empty
 category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
-then catch up with one coalesced refresh. Verify with cache reads slower than the
-250 ms update throttle, starting from an empty cache: entities appear without
-waiting for background updates to stop. Changing the query/category or closing
+then catch up with one coalesced refresh. A change after a quiet interval
+refreshes at once, and refreshes never start closer together than that
+interval: 2 s for the channel index and menu searches (rebuilt for the whole
+account), 250 ms for history. Verify
+with cache reads slower than that throttle, starting from an empty cache:
+entities appear without waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal
@@ -1844,8 +1869,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 
@@ -1865,6 +1894,43 @@ Partial deletes keep the dialog open, report confirmed successes, and leave only
 failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
+
+With two or more rows selected, Share in the row context menu (long-press on
+touch), `Share items` in the selection toolbar's `Actions` menu, or `Share
+items` in the command menu opens `Share N items`. Touch devices have no command
+menu, so there `Actions` does nothing; use the long-press menu. One item still
+opens the full Share dialog. `Share N items` takes the Share dialog's place,
+size, and form: an 800px card near the top of the window with the selected
+items under its title, then the To row, the optional message, and Cancel and
+Share. On phones (touch, under 640px wide) it is the Share drawer instead.
+Phone-width rows have no select control, so to see the drawer, select and open
+the share at tablet width and then narrow the window. In the drawer, the title
+row ends in Share, the selected items sit under it, and the To box wraps its
+chips, followed by `Send As Group Message`, an `Access:` row, and the message.
+Focus starts in `To: Email or group`, which lists people and channels with more
+than two members. With two or more people and no channel,
+`Send As Group Message` is on and sends one group message; turned off, each
+person gets their own message. The access selector at the end of the To row
+(the `Access:` row on phones) sets the access level for items you own. It
+starts at the lowest default among them: Edit for markdown documents, Comment
+for PDFs, and View for anything else. A selection that includes a form or an
+email thread offers no Comment level. Each recipient gets a message with the optional
+text above the item chips, and the items also appear under the channel's
+Attachments tab. Sharing sends real messages.
+
+The first Share locks the form. If a message fails, the dialog stays open and
+names what each recipient missed, such as `jacob did not get Q3 launch plan and
+Pricing notes`. `Retry` (Cmd/Ctrl+Enter) repeats only what failed and reuses
+the same message IDs, so no recipient gets a duplicate. `Close` after a partial
+share also clears the selection, because someone already has the items. A share
+to one channel ends with a `Shared with <channel>` toast and `View in channel`;
+several recipients get `Shared with N recipients`. Finishing clears the
+selection and returns focus to the row. `Cancel` keeps the selection. Before
+the first Share, Escape cancels too, but not while focus is in the To field or
+the message, as in the Share dialog; press Tab in the To field first. The phone
+drawer has no Cancel or Close: dismissing it cancels, or finishes after a
+partial share. Its title-row button reads Retry while something can be retried
+and Done once nothing can.
 
 Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows

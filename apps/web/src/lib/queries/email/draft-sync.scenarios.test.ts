@@ -272,6 +272,57 @@ describe('discarding a draft', () => {
     expectQuiet();
   });
 
+  it('stays discarded when a closed composer still had a save to flush', async () => {
+    // The first save is on the wire for two seconds and then dropped.
+    world.server.state.latencyMs = 2_000;
+    world.server.state.fault = failing('SaveEmailDraft', { kind: 'network' });
+    const first = world.page.compose();
+    first.type('Open in a thread');
+    await world.advance(600);
+    const draftId = first.draftId()!;
+    // Leaving the thread flushes the last edit behind that save.
+    first.type('Edited just before leaving');
+    await world.advance(100);
+    first.close();
+
+    const reopened = await world.settle(world.page.reopen(draftId));
+    await world.settle(reopened.discard());
+    world.server.state.latencyMs = 20;
+    await world.advance(60_000);
+
+    await expectDiscarded(draftId);
+    expect(world.server.drafts()).toHaveLength(0);
+    expectQuiet();
+  });
+
+  it('replaces a save still waiting in the queue instead of sending it first', async () => {
+    const other = world.page.compose();
+    const composer = world.page.compose();
+    composer.type('Kept for now');
+    await world.advance(2_000);
+    const draftId = composer.draftId()!;
+
+    // Another draft's slow save holds the head of the queue.
+    world.server.state.latencyMs = 6_000;
+    other.type('Slow to save');
+    await world.advance(1_000);
+    composer.type('Never worth sending');
+    await world.advance(1_000);
+    await world.settle(composer.discard());
+    expect(
+      world.queue.entries.map((entry) => entry.args.operationName)
+    ).toEqual(['SaveEmailDraft', 'DeleteEmailDraft']);
+
+    world.server.state.latencyMs = 20;
+    await world.advance(20_000);
+    expect(world.server.draft(draftId)).toBeUndefined();
+    expect(await localOf(draftId)).toBeUndefined();
+    // The first save of each draft, and nothing after the discard.
+    expect(requestsFor('SaveEmailDraft')).toHaveLength(2);
+    expect(world.server.drafts()).toHaveLength(1);
+    expectQuiet();
+  });
+
   it.each<[string, Fault, number]>([
     ['a dropped connection', { kind: 'network' }, 3],
     ['an unavailable server', { kind: 'http', status: 503 }, 2],

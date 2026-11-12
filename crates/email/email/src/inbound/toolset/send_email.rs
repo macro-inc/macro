@@ -59,13 +59,15 @@ pub struct EmailAttachment {
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The address of the inbox to send from, when the user has more than one
-    /// connected and this email belongs to a particular one. Use the exact
-    /// `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-    /// `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-    /// you know which inbox is right: a reply then goes out from the inbox
-    /// that received the message it answers, and a new email from the user's
-    /// primary inbox. The user can change it in the composer either way.
+    /// The address to send from, when the user has more than one and this
+    /// email belongs to a particular one: the exact `emailAddress` of a
+    /// connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+    /// `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+    /// which then sends from that inbox under the alias's display name. Omit
+    /// it unless you know which address is right: a reply then goes out from
+    /// the inbox that received the message it answers, and a new email from
+    /// the user's primary inbox. The user can change it in the composer
+    /// either way.
     #[serde(default)]
     pub from: Option<String>,
     /// The body of the email, written as Markdown. A host with a composer
@@ -172,7 +174,7 @@ where
         let input = CreateDraftInput {
             frozen_signature_html: None,
             draft_generation: 0,
-            sender_email: None,
+            sender_email: sender.sender_address.clone(),
             db_id: None,
             provider_id: None,
             replying_to_id: self.replying_to_id,

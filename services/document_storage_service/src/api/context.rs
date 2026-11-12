@@ -952,6 +952,7 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
@@ -974,6 +975,8 @@ pub(crate) struct ApiContext {
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
+    #[from_ref(skip)]
+    pub channel_sections_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,

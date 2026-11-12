@@ -266,6 +266,14 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
     };
     assert_eq!(span["mailbox.link_id"], link.to_string());
     assert_eq!(span["outlook.stream_kind"], "mail_folder");
+    let stream = sqlx::query_scalar!(
+        "SELECT id FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(span["outlook.stream_id"], stream.to_string());
     assert_eq!(span["outlook.outcome"], "imported");
     assert_eq!(span["outlook.page_items"], "4");
     assert_eq!(span["outlook.rows_queued"], "3");

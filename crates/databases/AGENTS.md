@@ -1,4 +1,4 @@
-# crates/databases
+# crates/databases/databases
 
 ## What it is
 
@@ -26,7 +26,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 
 ## Recipes
 
-- Add a crate here: create `crates/databases/<name>` with its own `AGENTS.md`
+- Add a crate here: create `crates/databases/databases/<name>` with its own `AGENTS.md`
   (from `.agents/templates/AGENTS.md`), add it to the root `members` and run
   `cargo x deps`, which adds its `[workspace.dependencies]` entry once
   something depends on it. Add it to the table above.

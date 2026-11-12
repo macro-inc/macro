@@ -3,7 +3,6 @@
 use databases::domain::models::{DatabaseError, Viewer};
 use databases_types::{CellWrite, DatabaseId, RowId, TableId};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 
 use crate::domain::mapping::WebhookColumn;
@@ -92,17 +91,4 @@ pub trait WebhookTables: Send + Sync + 'static {
         table_id: TableId,
         rows: Vec<Vec<CellWrite>>,
     ) -> impl Future<Output = Result<Vec<RowId>, DatabaseError>> + Send;
-}
-
-/// Whether a webhook's creator can still edit its database.
-pub trait CreatorAccess: Send + Sync + 'static {
-    /// The creator's edit receipt for the database; `None` when they can no
-    /// longer edit it.
-    fn edit_receipt(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        database_id: DatabaseId,
-    ) -> impl Future<
-        Output = Result<Option<EntityAccessReceipt<EditAccessLevel>>, rootcause::Report>,
-    > + Send;
 }

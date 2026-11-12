@@ -140,6 +140,7 @@ async fn undoing_an_insert_is_refused_once_julia_edited_the_row() {
                     column: seeded.name_column.id,
                     value: CellValue::Text("Alex".into()),
                 }]],
+                ids: None,
             },
         }],
     )
@@ -465,6 +466,7 @@ fn hosted_board(
                         value: host("macro|ana@macro.com"),
                     },
                 ]],
+                ids: None,
             },
         },
         DatabaseOp::View {

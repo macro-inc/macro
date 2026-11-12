@@ -46,3 +46,45 @@ fn names_are_trimmed_and_limited_by_characters() {
     assert!(name(&"あ".repeat(200)).is_ok());
     assert!(name(&"あ".repeat(201)).is_err());
 }
+
+#[test]
+fn an_insert_with_client_row_ids_still_names_its_primary_records() {
+    use databases_types::{
+        CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, RowId, RowsChange,
+    };
+
+    let record = Uuid::parse_str("01900000-0000-7000-8000-0000000000aa").unwrap();
+    let pipeline = Pipeline {
+        id: Uuid::nil(),
+        team_id: Uuid::nil(),
+        user_id: "macro|owner@example.com".to_owned(),
+        name: "Renewals".to_owned(),
+        record_type: Some(PipelineRecordType::Company),
+        database_id: DatabaseId::from_uuid(Uuid::nil()),
+        table_id: TableId::from_uuid(Uuid::from_u128(1)),
+        primary_column_id: ColumnId::from_uuid(Uuid::from_u128(2)),
+        sharing: PipelineSharing::Private,
+        created_at: DateTime::<Utc>::UNIX_EPOCH,
+        trashed_at: None,
+    };
+    let batch = OpBatch {
+        ops: vec![DatabaseOp::Rows {
+            table: TableId::from_uuid(Uuid::from_u128(1)),
+            change: RowsChange::Insert {
+                rows: vec![vec![CellWrite {
+                    column: ColumnId::from_uuid(Uuid::from_u128(2)),
+                    value: CellValue::Entities(vec![EntityRef {
+                        entity_type: EntityKind::Company,
+                        entity_id: record.to_string(),
+                    }]),
+                }]],
+                ids: Some(vec![RowId::from_uuid(Uuid::from_u128(3))]),
+            },
+        }],
+        base_versions: HashMap::new(),
+    };
+
+    let references = primary_references(&pipeline, PipelineRecordType::Company, &batch).unwrap();
+
+    assert_eq!(references, std::collections::BTreeSet::from([record]));
+}

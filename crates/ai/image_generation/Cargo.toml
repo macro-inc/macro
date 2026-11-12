@@ -38,6 +38,7 @@ tracing.workspace = true
 utoipa = { workspace = true, optional = true }
 uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+genai_telemetry = { workspace = true }
 
 [dev-dependencies]
 macro_user_id = { workspace = true }
