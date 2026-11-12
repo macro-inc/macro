@@ -5629,6 +5629,7 @@
       "crates/bot_token",
       "crates/cowlike",
       "crates/dictation",
+      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -7213,6 +7214,8 @@
     ],
     "embedding": [
       "crates/embedding",
+      "crates/genai_telemetry",
+      "crates/macro_env_var",
       "crates/workspace-hack"
     ],
     "ensure_exists": [
