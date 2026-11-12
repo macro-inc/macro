@@ -1,0 +1,136 @@
+.tutorial-video-embed { width: min(100% - 48px, 1000px); margin: 0 auto 72px; overflow: hidden; border: 0; border-radius: 44px; corner-shape: squircle; font-family: 'Inter Variable', Inter, sans-serif; }
+.tutorial-video-stage { position: relative; display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; margin: 0; aspect-ratio: 16 / 9; overflow: hidden; border-radius: inherit; corner-shape: inherit; background: #000; }
+.tutorial-video-stage video { display: block; width: 100%; max-height: 100%; object-fit: contain; outline: none; }
+/* Play hands focus to the video; show it for keyboards, inside the stage's rounded clip. */
+.tutorial-video-stage video:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.tutorial-video-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: transparent; }
+
+/* The app's play pill: play disc, divider, presenter, and the video's length. */
+.tutorial-video-embed .tutorial-video-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; height: 64px; padding: 8px 24px 8px 8px; border: 1px solid #ffffff1f; border-radius: 999px; background: rgb(20 20 20 / .85); color: #fff; white-space: nowrap; box-shadow: 0 25px 50px -12px #00000040; outline: none; transition: background-color 140ms ease; }
+.tutorial-video-play:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.tutorial-video-disc { flex-shrink: 0; width: 48px; height: 48px; transition: transform 140ms ease; }
+.tutorial-video-divider { flex-shrink: 0; width: 1px; height: 60%; background: #ffffff26; }
+.tutorial-video-play img { flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.tutorial-video-byline { display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.25; }
+.tutorial-video-byline > :first-child { font-size: 16px; font-weight: 500; }
+.tutorial-video-byline > :last-child { color: #fff9; font-size: 14px; font-variant-numeric: tabular-nums; }
+@media (hover: hover) and (pointer: fine) {
+  .tutorial-video-play:hover { background: rgb(38 38 38 / .9); }
+  .tutorial-video-play:hover .tutorial-video-disc { transform: scale(1.05); }
+}
+
+
+@media (max-width: 599px) {
+ .tutorial-video-embed { width: calc(100% - 32px); margin-bottom: 48px; border-radius: 28px; }
+ .tutorial-video-embed .tutorial-video-play { height: auto; min-height: 48px; width: max-content; max-width: calc(100% - 24px); gap: 8px; padding: 6px 12px 6px 6px; white-space: normal; }
+ .tutorial-video-disc { width: 40px; height: 40px; }
+ .tutorial-video-play img { width: 36px; height: 36px; }
+ .tutorial-video-byline { min-width: 0; }
+ .tutorial-video-byline > :first-child { font-size: 14px; }
+ .tutorial-video-byline > :last-child { font-size: 12px; }
+}
+
+.tutorial-video-embed-backdrop {
+  --feature-glow: var(--color-ink);
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.tutorial-video-embed-backdrop .feature-demo-backdrop {
+  --workspace-dots-opacity: .06;
+  --workspace-grain-opacity: .11;
+  inset: -100px -120px;
+}
+
+.tutorial-video-embed-backdrop .feature-demo-backdrop::before {
+  opacity: .5;
+}
+
+/* Match Email's desktop framing, independently of the video's opening shot. */
+.tutorial-video-poster {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+
+  pointer-events: none;
+}
+
+.tutorial-video-poster-window {
+  position: absolute;
+  top: 19.6%;
+  left: -13%;
+  width: 110%;
+  aspect-ratio: 1700 / 918;
+  overflow: hidden;
+  border-radius: 1.5%;
+  box-shadow: 0 8px 24px #0004;
+}
+
+/* The source frames share a 1700x918 window at (110, 132) in 1920x1080. */
+.tutorial-video-poster-window img {
+  position: absolute;
+  width: 112.9412%;
+  max-width: none;
+  height: auto;
+  left: -6.4706%;
+  top: -14.3791%;
+}
+
+.tutorial-wallpaper {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Light previews are native light UI captures; photos and accent colors stay intact. */
+.tutorial-video-poster-window img.tutorial-video-preview-light {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  object-fit: cover;
+}
+html[data-theme-light='true'] .tutorial-video-embed .tutorial-video-play {
+  color: var(--color-ink, #222);
+  background: rgb(255 255 255 / .92);
+  border-color: rgb(0 0 0 / .1);
+  box-shadow: 0 8px 32px -8px rgb(55 45 30 / .25);
+}
+html[data-theme-light='true'] .tutorial-video-byline > :last-child {
+  color: var(--color-ink-muted, #555);
+}
+html[data-theme-light='true'] .tutorial-video-divider { background: rgb(0 0 0 / .14); }
+html[data-theme-light='true'] .tutorial-video-play:focus-visible { outline-color: var(--color-ink, #222); }
+@media (hover: hover) and (pointer: fine) {
+  html[data-theme-light='true'] .tutorial-video-embed .tutorial-video-play:hover { background: #fff; }
+}
+
+@media (max-width: 399px) {
+  .tutorial-video-play img, .tutorial-video-divider { display: none; }
+}
+
+/* Benefit diagrams float over a soft glow without a colored frame. */
+.benefit-video-poster {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Keep the play control outside the focal product detail. */
+.tutorial-video-embed .tutorial-video-stage-benefit .tutorial-video-play {
+  top: 90%;
+}
+@media (max-width: 599px) {
+  .tutorial-video-stage-benefit:has(.benefit-video-poster) { aspect-ratio: auto; padding-bottom: 80px; }
+  .tutorial-video-stage-benefit:has(.benefit-video-poster) video { aspect-ratio: 16 / 9; }
+  .tutorial-video-stage-benefit .benefit-video-poster { height: calc(100% - 80px); }
+  .tutorial-video-embed .tutorial-video-stage-benefit .tutorial-video-play { top: auto; bottom: 12px; transform: translateX(-50%); }
+}
+
+.tutorial-video-embed:has(.benefit-video-poster) { border-radius: 0; }
+.tutorial-video-stage-benefit:has(.benefit-video-poster) { background: transparent; }
+.tutorial-video-stage-benefit:has(.benefit-video-poster) video { visibility: hidden; }
