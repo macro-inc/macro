@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_change_rows (change_id, row_id, kind, columns)\n                   SELECT $1, row_id, kind,\n                          COALESCE(string_to_array(NULLIF(columns, ''), ',')::uuid[], '{}')\n                   FROM UNNEST($2::uuid[], $3::text[], $4::text[]) AS data(row_id, kind, columns)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c242659f20841bbfeb25be4bd4f9f9315fe7c5279949257601cbcf4739864263"
+}

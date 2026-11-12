@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE github_app_installation\n            SET source_id = $2::text,\n                source_type = 'team'::github_app_installation_source_type\n            WHERE source_id = $1\n              AND source_type = 'user'::github_app_installation_source_type\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8677557689260c205fa17b9b36990834ea8846624132386f2fcd92d0d9b9905"
+}

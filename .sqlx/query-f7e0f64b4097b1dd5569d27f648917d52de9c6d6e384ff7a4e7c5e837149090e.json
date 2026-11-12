@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_pull_request (agent_session_id, github_key, source)\n            SELECT $1, $2, 'agent'\n            WHERE EXISTS (SELECT 1 FROM agent_session WHERE id = $1 AND owner_id = $3)\n            ON CONFLICT (agent_session_id, github_key) DO UPDATE SET source = 'agent', linked_by = NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7e0f64b4097b1dd5569d27f648917d52de9c6d6e384ff7a4e7c5e837149090e"
+}

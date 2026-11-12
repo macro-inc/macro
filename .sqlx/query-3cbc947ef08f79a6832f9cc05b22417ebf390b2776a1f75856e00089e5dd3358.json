@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_funding_prepaid_release (payer_id, sequence, through_sequence, units) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3cbc947ef08f79a6832f9cc05b22417ebf390b2776a1f75856e00089e5dd3358"
+}

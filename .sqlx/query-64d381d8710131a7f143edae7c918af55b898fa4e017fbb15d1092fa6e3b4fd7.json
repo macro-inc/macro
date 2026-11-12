@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET is_draft=true WHERE id=$1 AND NOT is_sent",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64d381d8710131a7f143edae7c918af55b898fa4e017fbb15d1092fa6e3b4fd7"
+}

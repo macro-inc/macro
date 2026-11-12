@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL hnsw.iterative_scan = relaxed_order",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "758f208ea073a48e9be9919a0dce43648c19b5a092049b7cb0a6382e931371a1"
+}

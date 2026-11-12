@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification\n        SET deleted_at = now()\n        WHERE user_id = $1 AND notification_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0173a66e06d23847e48967c6fbf38dde11698cc4164819d48cb8f99c1ec3aae3"
+}

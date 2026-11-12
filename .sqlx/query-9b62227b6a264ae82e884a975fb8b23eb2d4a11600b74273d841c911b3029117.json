@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH sources AS (\n                SELECT DISTINCT id, auth_entity\n                FROM UNNEST($1::text[], $2::text[]) AS source(id, auth_entity)\n            )\n            SELECT\n                gpr.repository_id AS \"repository_id!\",\n                (ARRAY_AGG(\n                    gpr.owner || '/' || gpr.repo\n                    ORDER BY gpr.updated_at DESC, gpr.github_key\n                ))[1] AS \"repository!\",\n                COUNT(*) AS \"count!\"\n            FROM github_pull_request gpr\n            WHERE gpr.repository_id IS NOT NULL\n              AND EXISTS (\n                SELECT 1\n                FROM foreign_entity fe\n                JOIN sources s\n                  ON s.id = fe.stored_for_id AND s.auth_entity = fe.stored_for_auth_entity\n                WHERE fe.foreign_entity_source = $3::text\n                  AND fe.foreign_entity_id = gpr.github_key\n              )\n            GROUP BY gpr.repository_id\n            ORDER BY COUNT(*) DESC, gpr.repository_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "repository_id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "repository!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "9b62227b6a264ae82e884a975fb8b23eb2d4a11600b74273d841c911b3029117"
+}

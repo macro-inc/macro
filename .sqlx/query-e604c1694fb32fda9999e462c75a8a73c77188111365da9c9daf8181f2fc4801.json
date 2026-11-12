@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, source_workspace_id, confirmed_unknown FROM slack_import_job WHERE team_id = $1 AND id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_workspace_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "confirmed_unknown",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e604c1694fb32fda9999e462c75a8a73c77188111365da9c9daf8181f2fc4801"
+}

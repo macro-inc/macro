@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE forms SET layout_draft_enabled = TRUE WHERE id = $1 AND trashed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a87ade32b3a202528077b5613fd8f1d16f33b9cbea1244ead8435c0307bb1bf8"
+}

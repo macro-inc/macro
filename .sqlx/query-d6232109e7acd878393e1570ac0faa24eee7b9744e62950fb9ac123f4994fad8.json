@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_message_map (team_id, slack_channel_id, slack_ts, message_id, channel_id)\n               SELECT $1, $2, m.ts, m.message_id, $3 FROM jsonb_to_recordset($4) AS m(ts bigint, message_id uuid)\n               ORDER BY m.ts ON CONFLICT (team_id, slack_channel_id, slack_ts) DO NOTHING RETURNING slack_ts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_ts",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d6232109e7acd878393e1570ac0faa24eee7b9744e62950fb9ac123f4994fad8"
+}

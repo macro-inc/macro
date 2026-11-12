@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_job SET registration_closed_at = coalesce(registration_closed_at, clock_timestamp()),\n                       finalized_at = coalesce(finalized_at, clock_timestamp()) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "739a6cd1ecd514293464056b25aef8c6724a1d3843aa40bc5e8bc182b9cdf34e"
+}

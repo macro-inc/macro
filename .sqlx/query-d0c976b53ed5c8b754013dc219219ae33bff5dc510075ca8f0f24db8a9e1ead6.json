@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_participants (call_id, user_id)\n            VALUES ($1, $2)\n            ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL, joined_at = now()\n            RETURNING call_id, user_id, joined_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "joined_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d0c976b53ed5c8b754013dc219219ae33bff5dc510075ca8f0f24db8a9e1ead6"
+}

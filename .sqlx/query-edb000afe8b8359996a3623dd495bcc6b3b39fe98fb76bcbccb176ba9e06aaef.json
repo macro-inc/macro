@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team\n            SET allow_non_admin_invites = NOT allow_non_admin_invites\n            WHERE id = $1\n            RETURNING allow_non_admin_invites\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allow_non_admin_invites",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "edb000afe8b8359996a3623dd495bcc6b3b39fe98fb76bcbccb176ba9e06aaef"
+}

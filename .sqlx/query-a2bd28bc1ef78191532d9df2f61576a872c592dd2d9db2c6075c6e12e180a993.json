@@ -1,0 +1,121 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE import_entity AS mine\n                SET status = 'importing', last_error = NULL, waiting_on = NULL, updated_at = NOW(),\n                    team_id = CASE\n                        WHEN $4::uuid IS NOT NULL AND mine.id = ANY($3::uuid[]) AND NOT EXISTS (\n                            SELECT 1 FROM import_entity AS other\n                            WHERE other.source = mine.source AND other.team_id = $4\n                              AND other.foreign_id = mine.foreign_id\n                              AND other.status IN ('importing', 'imported')\n                              AND other.id <> mine.id\n                        ) THEN $4\n                        ELSE NULL\n                    END\n                WHERE mine.user_id = $1 AND mine.id = ANY($2::uuid[]) AND mine.status = 'staged'\n                RETURNING mine.id, mine.user_id, mine.team_id, mine.source, mine.kind,\n                          mine.foreign_id, mine.parent_id, mine.review_id, mine.status,\n                          mine.initiator, mine.metadata, mine.entity_id, mine.entity_type,\n                          mine.last_error, mine.waiting_on, mine.created_at, mine.updated_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "foreign_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "review_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "initiator",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "waiting_on",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a2bd28bc1ef78191532d9df2f61576a872c592dd2d9db2c6075c6e12e180a993"
+}

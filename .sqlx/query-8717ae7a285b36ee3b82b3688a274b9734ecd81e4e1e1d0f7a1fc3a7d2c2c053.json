@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ru.\"roleId\" as role_id\n            FROM \"RolesOnUsers\" ru\n            WHERE ru.\"userId\" = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8717ae7a285b36ee3b82b3688a274b9734ecd81e4e1e1d0f7a1fc3a7d2c2c053"
+}

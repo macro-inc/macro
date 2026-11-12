@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO scheduling_public_budget (profile_id, kind, window_start, used)\n            VALUES ($1, $2, now(), 1)\n            ON CONFLICT (profile_id, kind) DO UPDATE SET\n                window_start = CASE WHEN scheduling_public_budget.window_start <= now() - make_interval(secs => $3) THEN now() ELSE scheduling_public_budget.window_start END,\n                used = CASE WHEN scheduling_public_budget.window_start <= now() - make_interval(secs => $3) THEN 1 ELSE scheduling_public_budget.used + 1 END\n            WHERE scheduling_public_budget.window_start <= now() - make_interval(secs => $3) OR scheduling_public_budget.used < $4\n            RETURNING used\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Float8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2c5dd040ab7cb0467b2d6a7fcd325cdb1fc2f4505df46d059ca6f53d6d137351"
+}

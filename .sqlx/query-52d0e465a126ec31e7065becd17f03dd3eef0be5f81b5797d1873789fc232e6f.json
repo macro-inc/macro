@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT g.grant_id AS \"grant_id!\",g.generation,g.email_address,\n                g.tenant_id AS \"tenant_id!\",g.mailbox_id AS \"mailbox_id!\",g.scopes,a.calendar_requested\n            FROM in_progress_user_link p\n            JOIN microsoft_link_attempts a ON a.id = p.id AND a.completed_at IS NOT NULL\n            JOIN microsoft_oauth_grant_versions g ON g.grant_id=a.grant_id AND g.fusionauth_user_id = p.macro_user_id::text\n                AND g.email_address = p.linked_email\n            WHERE p.id = $1 AND p.macro_user_id = $2 AND p.email_provider = 'OUTLOOK'\n                AND p.created_at > now() - interval '24 hours' AND g.revoked_at IS NULL\n                AND g.grant_id IS NOT NULL AND g.tenant_id IS NOT NULL AND g.mailbox_id IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grant_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "tenant_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mailbox_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 6,
+        "name": "calendar_requested",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "52d0e465a126ec31e7065becd17f03dd3eef0be5f81b5797d1873789fc232e6f"
+}

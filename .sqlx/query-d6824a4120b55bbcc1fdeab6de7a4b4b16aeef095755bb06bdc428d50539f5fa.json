@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_usage_observation (invocation_id, occurred_at, request)\n                   VALUES ($1, $2, $3) ON CONFLICT (invocation_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6824a4120b55bbcc1fdeab6de7a4b4b16aeef095755bb06bdc428d50539f5fa"
+}

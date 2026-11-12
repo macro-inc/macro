@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          rp.\"roleId\" AS role_id,\n          rp.\"permissionId\" AS permission_id\n        FROM\n          \"User\" u\n        INNER JOIN\n          \"RolesOnUsers\" ru ON u.id = ru.\"userId\"\n        INNER JOIN\n          \"RolesOnPermissions\" rp ON ru.\"roleId\" = rp.\"roleId\"\n        WHERE\n          u.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "894b2bdfc3046722023572c4b37870258288ab2b3125c4f31dec62d916f0b64a"
+}

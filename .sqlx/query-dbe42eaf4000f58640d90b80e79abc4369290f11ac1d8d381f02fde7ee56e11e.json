@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_address_book_folders WHERE link_id = $1 AND NOT(provider_id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbe42eaf4000f58640d90b80e79abc4369290f11ac1d8d381f02fde7ee56e11e"
+}

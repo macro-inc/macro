@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cm.id AS \"id!\",\n            cm.content,\n            cm.role,\n            cm.model,\n            COALESCE(\n                (\n                    SELECT json_agg(\n                        json_build_object(\n                            'entity_type', ca.\"entity_type\",\n                            'entity_id', ca.\"entity_id\"::TEXT\n                        )\n                    )\n                    FROM \"ChatAttachment\" ca\n                    WHERE ca.\"messageId\" = cm.id\n                ),\n                '[]'::json\n            ) AS attachments\n        FROM\n            \"ChatMessage\" cm\n        WHERE\n            cm.\"chatId\" = $1\n        ORDER BY\n            cm.\"createdAt\" ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "attachments",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "bbd2b467cf8f1e277d3278fafdc5792183e42f6c00ae95aa0f4fe869292408f0"
+}

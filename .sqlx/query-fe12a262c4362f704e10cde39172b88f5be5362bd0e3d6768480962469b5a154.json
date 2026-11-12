@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comms_channels\n            SET join_code = COALESCE(join_code, $2)\n            WHERE id = $1\n            RETURNING join_code AS \"join_code!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "join_code!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fe12a262c4362f704e10cde39172b88f5be5362bd0e3d6768480962469b5a154"
+}

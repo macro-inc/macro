@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"OrganizationRetentionPolicy\" \n        SET \"retention_days\" = $2\n        WHERE \"organization_id\" = $1\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48293aa40f783e58d4f49e2d0495255d70d2b790baa1bfb5397913d2a4b1dd8f"
+}

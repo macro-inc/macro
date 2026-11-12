@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            o.name as name,\n            orp.retention_days as \"retention_days?\"\n        FROM \"Organization\" o\n        LEFT JOIN \"OrganizationRetentionPolicy\" orp ON o.id = orp.organization_id\n        WHERE o.id = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "retention_days?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "8e916c1355943f5a5d48d153bdf82e453c82b6a4c279973b2f7c0c631ffeff12"
+}

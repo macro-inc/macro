@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET in_flight = $2, updated_at = now() WHERE action_id = $1 AND state IN ('succeeded', 'failed', 'stopped', 'interrupted') AND NOT reply_finalized AND in_flight = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7d9a5377b8def1cefefb93a4ae2d9096244a5c73f22e762ed9948bf85fede11"
+}

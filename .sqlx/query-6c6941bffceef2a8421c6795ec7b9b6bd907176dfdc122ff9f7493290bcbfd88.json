@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_upload u\n                   SET verified_at = clock_timestamp(), verified_version_id = $5, verified_etag = $6\n                   FROM slack_import_job j\n                   WHERE j.team_id = $1 AND j.id = $2 AND u.job_id = j.id\n                     AND u.slack_channel_id IS NOT DISTINCT FROM $3\n                     AND u.part_index IS NOT DISTINCT FROM $4 AND u.verified_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c6941bffceef2a8421c6795ec7b9b6bd907176dfdc122ff9f7493290bcbfd88"
+}

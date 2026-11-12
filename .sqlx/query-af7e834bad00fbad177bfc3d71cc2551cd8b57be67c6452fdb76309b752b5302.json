@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT changeset_id, source, repository, base_ref, base_sha, head_ref, head_sha,\n                   files, additions, deletions, patch_bytes, truncated, captured_at,\n                   attempt_started_at, attempt_finished_at, attempt_outcome, attempt_error\n            FROM agent_session_changes\n            WHERE agent_session_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changeset_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "repository",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "base_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "base_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "head_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "head_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "files",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "additions",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "deletions",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "patch_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "truncated",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "captured_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "attempt_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "attempt_finished_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "attempt_outcome",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "attempt_error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "af7e834bad00fbad177bfc3d71cc2551cd8b57be67c6452fdb76309b752b5302"
+}

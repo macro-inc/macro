@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.content\n            FROM\n                \"DocumentText\" d\n            WHERE\n                d.\"documentId\" = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5f9f23e45c696db3baa3b172efb66ba931aeb9036344782bd4a5e277df2c7ce2"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(actual_public), 0)::bigint AS \"used!\" FROM ai_funding_reservation\n               WHERE payer_id = $1 AND user_id = $2 AND period_start = $3 AND allocated",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "20f5acd27c33c121b7df74843febf9774859e94c3f1b86446b3f33cf4ec133b9"
+}

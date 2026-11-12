@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"OrganizationRetentionPolicy\"\n        WHERE \"organization_id\" = $1\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "725db444624bc6b4df387c7f45d750328437c7732e147e15818a269bb63be183"
+}

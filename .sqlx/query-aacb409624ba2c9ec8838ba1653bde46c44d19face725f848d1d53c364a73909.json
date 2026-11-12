@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id\n            FROM team_user\n            WHERE user_id = ANY($1::text[])\n            AND team_id NOT IN (\n            SELECT * FROM UNNEST($2::uuid[])\n            )\n            AND team_role NOT IN ('owner')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aacb409624ba2c9ec8838ba1653bde46c44d19face725f848d1d53c364a73909"
+}

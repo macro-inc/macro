@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            u.id as user_id,\n            u.email as user_email,\n            array_agg(DISTINCT rop.\"permissionId\") AS permissions\n        FROM \"User\" u\n        LEFT JOIN \"RolesOnUsers\" rou ON rou.\"userId\" = u.id\n        LEFT JOIN \"Role\" r ON r.id = rou.\"roleId\"\n        LEFT JOIN \"RolesOnPermissions\" rop ON rop.\"roleId\" = r.id\n        WHERE u.\"organizationId\" = $1\n        GROUP BY u.id\n        LIMIT $2\n        OFFSET $3\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "permissions",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "9cbb599d24ea1f22756926601cb3dc157a2a327ce9aea06a1a772c1741abcf9a"
+}

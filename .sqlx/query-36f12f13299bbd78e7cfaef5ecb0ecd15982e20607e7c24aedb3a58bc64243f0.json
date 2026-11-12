@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment a SET claimed_until = now() + interval '5 minutes'\n            WHERE (a.chat_id, a.person_id, a.source_id, a.ordinal) IN (\n                SELECT chat_id, person_id, source_id, ordinal FROM external_chat_attachment\n                WHERE account_id = $1 AND state = 'pending' AND retry_at <= now()\n                  AND (claimed_until IS NULL OR claimed_until < now())\n                ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)\n            RETURNING a.chat_id, a.person_id, a.source_id, a.ordinal, a.mime AS \"mime!\", a.filename AS \"filename!\",\n                a.size AS \"size!\", a.sha256, a.locator AS \"locator!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "person_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "ordinal",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "filename!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "size!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "sha256",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "locator!",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "36f12f13299bbd78e7cfaef5ecb0ecd15982e20607e7c24aedb3a58bc64243f0"
+}

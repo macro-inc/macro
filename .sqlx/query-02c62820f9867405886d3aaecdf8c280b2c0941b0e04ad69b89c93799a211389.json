@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.session_id, s.user_id, s.agent_id, s.surfaces,\n                      (SELECT count(*) FROM routine_suggestion r WHERE r.session_id = s.session_id) AS kept\n               FROM routine_suggestion_session s\n               WHERE s.session_id = $1 AND s.closed_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "surfaces",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "kept",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "02c62820f9867405886d3aaecdf8c280b2c0941b0e04ad69b89c93799a211389"
+}

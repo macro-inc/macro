@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_billing_plan_change\n                (user_id, period_start, changed_at, previous_plan, new_plan,\n                 previous_included_cost_cents, new_included_cost_cents)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ON CONFLICT (user_id, period_start, changed_at, previous_plan, new_plan) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "78beb1a2b480da66fb5a5c767ccae3a4abd54f516aad873c17ae37342cb142fa"
+}

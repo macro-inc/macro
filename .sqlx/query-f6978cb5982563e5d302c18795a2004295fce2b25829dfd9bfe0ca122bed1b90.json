@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_notification_item_unsubscribe (user_id, item_id, item_type)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f6978cb5982563e5d302c18795a2004295fce2b25829dfd9bfe0ca122bed1b90"
+}

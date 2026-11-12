@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_reservation SET allocated = TRUE, included_public = $2, extra_public = $3,\n             prepaid = $4, reclaimed_prepaid = $5, postpaid = $6, macro_absorbed = $7 WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7dbe1525e041dd133ca8e665d9ce2c580e5df3d1d4ec0e40f8dbd211a1203af2"
+}

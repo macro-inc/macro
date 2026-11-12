@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT parent_entity_type, parent_entity_id FROM comms_messages\n             WHERE id = $1 AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4a4b8aa2e73460d5d6d5b0842f5c22a351d68ed22a1f166712a9942b4b9612a3"
+}

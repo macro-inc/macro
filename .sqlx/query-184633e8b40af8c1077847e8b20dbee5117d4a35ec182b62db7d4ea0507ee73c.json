@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO \"ChatAttachment\" (\"entity_type\", \"entity_id\", \"chatId\", \"messageId\")\n                SELECT * FROM UNNEST($1::TEXT[], $2::UUID[], $3::TEXT[], $4::TEXT[])\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "184633e8b40af8c1077847e8b20dbee5117d4a35ec182b62db7d4ea0507ee73c"
+}

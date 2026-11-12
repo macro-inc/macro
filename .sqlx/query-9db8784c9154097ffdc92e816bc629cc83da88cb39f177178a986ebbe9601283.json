@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_prepaid_release SET units = units - $3 WHERE payer_id = $1 AND sequence = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9db8784c9154097ffdc92e816bc629cc83da88cb39f177178a986ebbe9601283"
+}

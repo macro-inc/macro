@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\" FROM comms_messages m\n               WHERE parent_entity_type = $1 AND parent_entity_id = $2 AND thread_id = $3\n                   AND deleted_at IS NULL ORDER BY import_order NULLS LAST, created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2f8604f7d008f535ced30d563eed07842844a1713595bc5cb8b9f464a7d0d333"
+}

@@ -1,0 +1,190 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                name, description, icon_url,\n                apollo_organization_id, website_url, linkedin_url, twitter_url,\n                facebook_url, industry, keywords, technologies,\n                estimated_num_employees, annual_revenue, annual_revenue_printed,\n                total_funding, total_funding_printed, latest_funding_stage,\n                latest_funding_round_date, founded_year, publicly_traded_symbol,\n                publicly_traded_exchange, phone, raw_address, street_address,\n                city, state, postal_code, country, raw\n            FROM crm_domain_directory\n            WHERE LOWER(domain) = $1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "icon_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "apollo_organization_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "website_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "linkedin_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "twitter_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "facebook_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "industry",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "keywords",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "technologies",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "estimated_num_employees",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "annual_revenue",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "annual_revenue_printed",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "total_funding",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "total_funding_printed",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "latest_funding_stage",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "latest_funding_round_date",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "founded_year",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 19,
+        "name": "publicly_traded_symbol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "publicly_traded_exchange",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "raw_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "street_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 26,
+        "name": "postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 28,
+        "name": "raw",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "acb38333fa7958869cc39acafee4f7d08731aa1543d9d2d6f6d105be9e7a0530"
+}

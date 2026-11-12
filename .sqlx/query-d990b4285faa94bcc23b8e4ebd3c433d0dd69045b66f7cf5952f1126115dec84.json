@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO task_duplicate_embedding (document_id, search_key, content, embedding)\n            SELECT $1, sk, ct, emb::vector\n            FROM unnest($2::text[], $3::text[], $4::text[]) AS t(sk, ct, emb)\n            ON CONFLICT (document_id, search_key) DO UPDATE\n            SET content = EXCLUDED.content,\n                embedding = EXCLUDED.embedding,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d990b4285faa94bcc23b8e4ebd3c433d0dd69045b66f7cf5952f1126115dec84"
+}

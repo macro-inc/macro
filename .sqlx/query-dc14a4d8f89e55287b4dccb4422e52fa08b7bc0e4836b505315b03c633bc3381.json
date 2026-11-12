@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM notification_user_device_registration\n            WHERE user_id = $1 AND device_token = $2 AND device_type = $3\n            RETURNING device_endpoint\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_endpoint",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "notification_device_type_option",
+            "kind": {
+              "Enum": [
+                "ios",
+                "android",
+                "iosvoip"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dc14a4d8f89e55287b4dccb4422e52fa08b7bc0e4836b505315b03c633bc3381"
+}

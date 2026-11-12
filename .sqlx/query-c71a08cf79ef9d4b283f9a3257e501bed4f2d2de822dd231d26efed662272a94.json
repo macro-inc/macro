@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.job_id, c.channel_id AS \"channel_id!\", c.search_dirty_generation, c.search_state,\n           c.search_receipt_id, c.search_updated_at FROM slack_import_conversation c\n           JOIN slack_import_outbox o ON o.job_id = c.job_id AND o.slack_channel_id = c.slack_channel_id\n             AND o.kind = 'search' AND o.generation = c.search_dirty_generation\n           WHERE c.channel_id IS NOT NULL AND c.search_state IN ('pending', 'submitted', 'failed')\n             AND o.cancelled_at IS NULL AND o.available_at <= clock_timestamp()\n             AND NOT EXISTS (SELECT 1 FROM slack_import_message_reference r\n                 WHERE r.job_id = c.job_id AND r.completed_at IS NULL)\n           ORDER BY c.search_updated_at, c.job_id, c.slack_channel_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "search_dirty_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "search_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "search_receipt_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "search_updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c71a08cf79ef9d4b283f9a3257e501bed4f2d2de822dd231d26efed662272a94"
+}

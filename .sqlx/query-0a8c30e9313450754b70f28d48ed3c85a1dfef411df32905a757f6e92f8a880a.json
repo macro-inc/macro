@@ -1,0 +1,134 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH LinkLabels AS (\n            SELECT l.id, l.provider_label_id\n            FROM email_labels l\n            WHERE l.link_id = ANY($1) AND l.provider_label_id IN ('INBOX', 'TRASH', 'IMPORTANT')\n        ),\n        QualifyingMessages AS (\n            SELECT m.thread_id,\n                   m.internal_date_ts,\n                   m.created_at AS fallback_ts,\n                   m.is_draft,\n                   m.subject,\n                   m.snippet,\n                   m.from_contact_id,\n                   m.from_name\n            FROM email_messages m\n            LEFT JOIN email_pending_mailbox_state pending_trash\n                ON pending_trash.message_id = m.id AND pending_trash.attribute = 'in_trash'\n            LEFT JOIN email_pending_mailbox_state pending_inbox\n                ON pending_inbox.message_id = m.id AND pending_inbox.attribute = 'in_inbox'\n            WHERE m.link_id = ANY($1)\n              AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)\n              AND NOT COALESCE(\n                  (pending_trash.desired #>> '{}')::boolean,\n                  (m.mailbox_state->>'in_trash')::boolean,\n                  m.id IN (\n                      SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id\n                      WHERE l.provider_label_id = 'TRASH'\n                  )\n              )\n              AND (\n                  m.is_draft\n                  OR (\n                      CASE WHEN m.mailbox_state IS NOT NULL THEN m.mailbox_state->>'attention' = 'primary'\n                      ELSE m.id IN (\n                          SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id\n                          WHERE l.provider_label_id = 'IMPORTANT'\n                      )\n                      END\n                      AND COALESCE(\n                          (pending_inbox.desired #>> '{}')::boolean,\n                          (m.mailbox_state->>'in_inbox')::boolean,\n                          m.id IN (\n                              SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id\n                              WHERE l.provider_label_id = 'INBOX'\n                          )\n                      )\n                  )\n              )\n        ),\n        AllImportantThreads AS (\n            -- From all qualifying messages, get the single most recent one per thread.\n            SELECT DISTINCT ON (thread_id)\n                   thread_id,\n                   internal_date_ts,\n                   fallback_ts,\n                   is_draft,\n                   subject,\n                   snippet,\n                   from_contact_id,\n                   from_name\n            FROM QualifyingMessages\n            ORDER BY thread_id, COALESCE(internal_date_ts, fallback_ts) DESC\n        ),\n        ImportantWithSortKey AS (\n            -- Join with user_history to calculate the final effective sort key.\n            SELECT\n                ait.thread_id,\n                ait.is_draft,\n                ait.subject,\n                ait.snippet,\n                ait.from_contact_id,\n                ait.from_name,\n                tt.provider_id,\n                tt.inbox_visible,\n                tt.is_read,\n                tt.is_signal,\n                tt.project_id,\n                tt.link_id,\n                COALESCE(ait.internal_date_ts, ait.fallback_ts) as created_at,\n                COALESCE(ait.internal_date_ts, ait.fallback_ts) as updated_at,\n                uh.updated_at as viewed_at,\n                -- This CASE statement dynamically selects the correct timestamp for sorting.\n                -- For 'updated_at' and 'created_at', we use the important message timestamp\n                -- For 'viewed_at', we use the history timestamp.\n                -- For 'viewed_updated', we use the history timestamp if it exists, otherwise the important message timestamp.\n                CASE $5 -- sort_method_str\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updated_at\", '1970-01-01 00:00:00+00')\n                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, COALESCE(ait.internal_date_ts, ait.fallback_ts))\n                    ELSE COALESCE(ait.internal_date_ts, ait.fallback_ts)\n                END AS effective_ts\n            FROM AllImportantThreads ait\n            JOIN email_threads tt ON tt.id = ait.thread_id\n            -- This has to be a left join to support all sort methods.\n            LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = tt.link_id\n        ),\n        Page AS (\n            -- Cut the page before joining senders and links, which every thread has at most one of.\n            SELECT *\n            FROM ImportantWithSortKey isk\n            WHERE ($3::timestamptz IS NULL) OR (isk.effective_ts, isk.thread_id) < ($3::timestamptz, $4::uuid)\n            ORDER BY isk.effective_ts DESC, isk.thread_id DESC\n            LIMIT $2\n        )\n        SELECT\n               isk.thread_id as \"id!\",\n               isk.provider_id,\n               isk.inbox_visible as \"inbox_visible!\",\n               isk.is_read as \"is_read!\",\n               isk.is_signal as \"is_signal!\",\n               isk.effective_ts as \"sort_ts!\",\n               isk.created_at as \"created_at!\",\n               isk.updated_at as \"updated_at!\",\n               isk.project_id,\n               isk.viewed_at as \"viewed_at?\",\n               isk.is_draft as \"is_draft!\",\n               -- It's the important view - all threads here are important\n               true as \"is_important!\",\n               isk.subject as \"name?\",\n               isk.snippet as \"snippet?\",\n               c.email_address AS \"sender_email?\",\n               COALESCE(isk.from_name, c.name) AS \"sender_name?\",\n               c.sfs_photo_url as \"sender_photo_url?\",\n               el.macro_id AS \"owner_id!\",\n            el.id AS \"link_id!\"\n        FROM Page isk\n        LEFT JOIN email_contacts c ON isk.from_contact_id = c.id\n        JOIN email_links el ON isk.link_id = el.id\n        ORDER BY isk.effective_ts DESC, isk.thread_id DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "inbox_visible!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_read!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_signal!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "sort_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_draft!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "is_important!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "snippet?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "sender_email?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "sender_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "sender_photo_url?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      true,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      null,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "0a8c30e9313450754b70f28d48ed3c85a1dfef411df32905a757f6e92f8a880a"
+}

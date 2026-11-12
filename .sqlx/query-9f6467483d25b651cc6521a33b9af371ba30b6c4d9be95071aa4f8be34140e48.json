@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM user_ai_projection u\n        USING ai_projection p\n        WHERE u.ai_projection_id = p.id\n          AND p.refresh_cadence = $1\n          AND u.last_requested_at < NOW() - (\n                CASE p.expiry\n                    WHEN 'day'   THEN INTERVAL '1 day'\n                    WHEN 'week'  THEN INTERVAL '7 days'\n                    WHEN 'month' THEN INTERVAL '30 days'\n                END)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f6467483d25b651cc6521a33b9af371ba30b6c4d9be95071aa4f8be34140e48"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET search_state = $4, search_receipt_id = $5,\n           search_submitted_generation = CASE WHEN $5::uuid IS NOT NULL THEN $3 ELSE search_submitted_generation END,\n           search_attempts = search_attempts + CASE WHEN $4 = 'submitted' THEN 1 ELSE 0 END,\n           search_updated_at = clock_timestamp(), updated_at = clock_timestamp()\n           WHERE job_id = $1 AND channel_id = ANY($2) AND search_dirty_generation = $3\n             AND search_state <> 'completed' AND search_receipt_id IS NOT DISTINCT FROM $6\n             AND search_updated_at = $7\n           RETURNING slack_channel_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_channel_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a221a12748715fda53d1ec99282d1a7a0596caf3efbee6ee84c8d749cc9cf8eb"
+}

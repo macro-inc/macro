@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, table_id, version, actor, acting_bot, at, ops, inverse, payload_version\n           FROM database_changes WHERE id = $1 AND database_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "acting_bot",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ops",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "inverse",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "payload_version",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a7dda27f9a9637a336b7030522d252f5046fe26a9bc4d544676903b6e18aa35c"
+}

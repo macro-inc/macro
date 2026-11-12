@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_reservation SET completion = $2, actual_public = $3 WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3e7916bee59f69a354f3fb4ac16217884e7368fb1825ec71d814671a675cf0a"
+}

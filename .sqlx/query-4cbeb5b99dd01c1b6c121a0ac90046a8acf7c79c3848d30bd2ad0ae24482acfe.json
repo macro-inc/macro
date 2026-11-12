@@ -1,0 +1,125 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.job_id, c.slack_channel_id, c.name, c.kind, c.archived, c.status, c.channel_id, c.part_count,\n                      c.processed, c.imported, c.duplicates, c.skipped, c.reactions,\n                      c.search_state, c.search_receipt_id, c.last_error, c.warnings,\n                      (SELECT count(*) FROM slack_import_upload u\n                       WHERE u.job_id = c.job_id AND u.slack_channel_id = c.slack_channel_id\n                         AND u.verified_at IS NOT NULL) AS \"verified_parts!\"\n               FROM slack_import_conversation c JOIN slack_import_job j ON j.id = c.job_id\n               WHERE j.team_id = $1 AND j.id = ANY($2)\n               ORDER BY c.job_id DESC, c.slack_channel_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "slack_channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "part_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "processed",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "imported",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "duplicates",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "skipped",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "reactions",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "search_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "search_receipt_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "warnings",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 17,
+        "name": "verified_parts!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "4cbeb5b99dd01c1b6c121a0ac90046a8acf7c79c3848d30bd2ad0ae24482acfe"
+}

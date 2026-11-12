@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM agent_session_pull_request\n            WHERE agent_session_id = $1 AND lower(github_key) = lower($2) AND source = 'user'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c09a8ffd057adf75fc00dd1ad3528f2eb5458a5434f2e9102283007dd642279a"
+}

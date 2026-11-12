@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH target AS (SELECT embedding FROM voice WHERE id = $1)\n            SELECT muv.macro_user_id\n            FROM voice v\n            JOIN macro_user_voice muv ON muv.voice_id = v.id\n            WHERE (v.embedding <=> (SELECT embedding FROM target)) <= $2\n            ORDER BY v.embedding <=> (SELECT embedding FROM target) ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fb28d507d6c6e160fdf0e56d5fc7a70bfbf8709ea5473b3ec59e8f547cbeaed9"
+}

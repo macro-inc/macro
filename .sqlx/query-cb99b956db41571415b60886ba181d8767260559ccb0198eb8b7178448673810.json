@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO contacts_connections(user1, user2)\n            SELECT * FROM unnest($1::text[], $2::text[])\n            ON CONFLICT(user1, user2) DO UPDATE SET updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb99b956db41571415b60886ba181d8767260559ccb0198eb8b7178448673810"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"SharePermission\" sp\n        USING \"ProjectPermission\" pp \n        WHERE pp.\"sharePermissionId\" = sp.id\n        AND pp.\"projectId\" = ANY($1)\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc0a71fe3ce6804e5f2b80e78c108aba496434dc78909951f7c1bd86f9c56ec0"
+}

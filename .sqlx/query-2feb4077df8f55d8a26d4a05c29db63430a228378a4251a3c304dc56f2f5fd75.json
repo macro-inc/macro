@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_id AS channel_id, access_level AS \"access_level: AccessLevel\"\n            FROM entity_access\n            WHERE entity_id = $1 AND entity_type = 'agent_session' AND source_type = 'channel'\n                AND granted_from_project_id IS NULL\n            ORDER BY source_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2feb4077df8f55d8a26d4a05c29db63430a228378a4251a3c304dc56f2f5fd75"
+}

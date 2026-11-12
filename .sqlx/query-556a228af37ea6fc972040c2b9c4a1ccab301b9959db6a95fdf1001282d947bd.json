@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status, registration_closed_at, include_message_history, registered_bytes,\n                  (staging_expires_at <= clock_timestamp()) AS \"expired!\"\n           FROM slack_import_job WHERE team_id = $1 AND id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "registration_closed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "include_message_history",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "registered_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "expired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "556a228af37ea6fc972040c2b9c4a1ccab301b9959db6a95fdf1001282d947bd"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT create_tasks, open_pull_requests\n            FROM user_agent_coding_preferences\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "create_tasks",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "open_pull_requests",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "54e898a564f27deb66caca710182ee38ba1033dc9a075d707fa187dde5a7477a"
+}

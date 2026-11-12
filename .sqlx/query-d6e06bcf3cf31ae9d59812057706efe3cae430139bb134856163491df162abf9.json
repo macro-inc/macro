@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_ai_projection (ai_projection_id, target_id, prompt_hash, status)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (target_id, ai_projection_id)\n            DO UPDATE SET\n                last_requested_at = NOW(),\n                updated_at = NOW(),\n                status = CASE\n                    WHEN user_ai_projection.prompt_hash IS DISTINCT FROM EXCLUDED.prompt_hash\n                    THEN 'cold'\n                    ELSE user_ai_projection.status\n                END,\n                prompt_hash = EXCLUDED.prompt_hash\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6e06bcf3cf31ae9d59812057706efe3cae430139bb134856163491df162abf9"
+}

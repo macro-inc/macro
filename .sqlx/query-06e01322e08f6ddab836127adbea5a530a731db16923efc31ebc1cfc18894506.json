@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT cs.link_id AS \"link_id!\", LOWER(ct.email) AS \"email!\"\n            FROM crm_contact_sources cs\n            JOIN crm_contacts ct ON ct.id = cs.contact_id\n            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)\n              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "06e01322e08f6ddab836127adbea5a530a731db16923efc31ebc1cfc18894506"
+}

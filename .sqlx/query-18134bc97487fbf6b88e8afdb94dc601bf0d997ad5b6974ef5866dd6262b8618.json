@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        ),\n        -- Get all entities the user has access to via entity_access, filtered to requested items\n        AllAccessGrants AS (\n            -- Documents the user has access to\n            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type\n            FROM entity_access ea\n            LEFT JOIN \"Document\" d ON ea.entity_type = 'document' AND ea.entity_id::text = d.id\n            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n              AND ea.entity_type = 'document'\n              AND ea.entity_id::text = ANY($2)\n              AND d.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Chats the user has access to\n            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type\n            FROM entity_access ea\n            LEFT JOIN \"Chat\" c ON ea.entity_type = 'chat' AND ea.entity_id::text = c.id\n            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n              AND ea.entity_type = 'chat'\n              AND ea.entity_id::text = ANY($3)\n              AND c.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Projects the user has access to\n            SELECT ea.entity_id::text as item_id, ea.entity_type as item_type\n            FROM entity_access ea\n            LEFT JOIN \"Project\" p ON ea.entity_type = 'project' AND ea.entity_id::text = p.id\n            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n              AND ea.entity_type = 'project'\n              AND ea.entity_id::text = ANY($4)\n              AND p.\"deletedAt\" IS NULL\n        ),\n        UserAccessibleItems AS (\n            SELECT\n                item_id,\n                item_type\n            FROM AllAccessGrants\n            GROUP BY item_id, item_type\n        )\n        SELECT item_id as \"item_id!\", item_type as \"item_type!\" FROM UserAccessibleItems\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "18134bc97487fbf6b88e8afdb94dc601bf0d997ad5b6974ef5866dd6262b8618"
+}

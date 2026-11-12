@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_state SET next_sequence = next_sequence + 1 WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbeb3e4d4021cdfd6f3f24d389c00f4b0b7c3c6b1c1e2c6fecabad8ac8172c37"
+}

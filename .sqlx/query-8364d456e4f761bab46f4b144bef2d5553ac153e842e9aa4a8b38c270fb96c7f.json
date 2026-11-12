@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE user_ai_projection\n            SET status = $3, updated_at = NOW()\n            WHERE ai_projection_id = $1 AND target_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8364d456e4f761bab46f4b144bef2d5553ac153e842e9aa4a8b38c270fb96c7f"
+}

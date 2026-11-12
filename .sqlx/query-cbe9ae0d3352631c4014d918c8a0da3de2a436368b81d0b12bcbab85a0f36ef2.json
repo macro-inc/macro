@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            esm.link_id AS \"link_id!\", esm.message_id AS \"message_id!\"\n        FROM email_scheduled_messages esm\n        JOIN email_messages em ON em.id = esm.message_id\n        WHERE\n            esm.send_time < now()\n            AND esm.sent = FALSE\n            AND em.is_sent = FALSE\n            AND esm.delivery_status <> 'failed'\n            AND (CASE WHEN esm.processing THEN\n                COALESCE(esm.delivery_lease_expires_at, esm.updated_at + make_interval(secs => $1)) <= NOW()\n                ELSE esm.delivery_lease_expires_at IS NULL OR esm.delivery_lease_expires_at <= NOW() END)\n            AND (em.is_draft OR esm.delivery_claim_id IS NOT NULL OR EXISTS (\n                SELECT 1 FROM email_send_attempts a\n                WHERE a.link_id = esm.link_id AND a.message_id = esm.message_id AND NOT a.cancelled\n            ))\n        UNION\n        SELECT em.link_id, em.id AS message_id\n        FROM email_deferred_message_deletions d\n        JOIN email_messages em ON em.id = d.message_id\n        WHERE em.draft_generation <> d.draft_generation\n           OR em.provider_id IS DISTINCT FROM d.provider_id\n           OR NOT EXISTS (\n               SELECT 1 FROM email_send_attempts a\n               WHERE a.message_id = em.id AND a.link_id = em.link_id\n                 AND NOT a.cancelled AND NOT a.sent\n           )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "cbe9ae0d3352631c4014d918c8a0da3de2a436368b81d0b12bcbab85a0f36ef2"
+}

@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT checkpoint_part, checkpoint_record, part_count, channel_id,\n           processed, imported, duplicates, skipped, reactions\n           FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checkpoint_part",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "checkpoint_record",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "part_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "processed",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "imported",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "duplicates",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "skipped",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "reactions",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6823d54d359b4a38b614d373d485f8e44123069eca14bd1f20153582f78b7632"
+}

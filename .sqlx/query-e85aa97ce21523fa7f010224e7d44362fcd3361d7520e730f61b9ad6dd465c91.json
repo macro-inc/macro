@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_columns SET position = $3 WHERE id = $1 AND table_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e85aa97ce21523fa7f010224e7d44362fcd3361d7520e730f61b9ad6dd465c91"
+}

@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET status = 'importing', lease_owner = $3,\n               lease_token = $4, lease_generation = lease_generation + 1, attempts = attempts + 1,\n               lease_expires_at = clock_timestamp() + make_interval(secs => $5),\n               heartbeat_at = clock_timestamp(), updated_at = clock_timestamp()\n               WHERE job_id = $1 AND slack_channel_id = $2\n               RETURNING lease_generation, attempts, lease_expires_at, heartbeat_at,\n               kind, name, folder, member_ids, creator_id, source_created_at, archived, message_count,\n               checkpoint_part, checkpoint_record",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lease_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "lease_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "heartbeat_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "folder",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "member_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "creator_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "source_created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "message_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "checkpoint_part",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "checkpoint_record",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8c867b211e545a855485b1b1e13f90d54835695ff7ba90f2400f920d50ad5caf"
+}

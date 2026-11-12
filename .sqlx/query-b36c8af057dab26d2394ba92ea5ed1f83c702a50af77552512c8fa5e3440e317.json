@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channel_participants\n                WHERE channel_id = $1\n                  AND user_id = $2\n                  AND left_at IS NULL\n            ) AS \"is_active!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b36c8af057dab26d2394ba92ea5ed1f83c702a50af77552512c8fa5e3440e317"
+}

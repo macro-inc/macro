@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE comms_channel_participants AS cp\n            SET left_at = NOW()\n            FROM comms_channels AS cc\n            WHERE cp.channel_id = cc.id\n              AND cc.team_id = $1\n              AND cp.user_id = $2\n              AND cp.left_at IS NULL\n            RETURNING cp.channel_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d132c249dc280d43197902289d97f1a87d1519b4de21096e079b36c18cf95c52"
+}

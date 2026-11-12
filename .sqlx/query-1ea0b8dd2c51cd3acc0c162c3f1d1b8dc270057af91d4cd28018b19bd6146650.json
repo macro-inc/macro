@@ -22,8 +22,7 @@
             "kind": {
               "Enum": [
                 "GMAIL",
-                "OUTLOOK",
-                "ROX"
+                "OUTLOOK"
               ]
             }
           }

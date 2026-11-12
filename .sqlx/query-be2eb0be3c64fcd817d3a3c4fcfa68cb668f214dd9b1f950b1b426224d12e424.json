@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages SET provider_id = $3,provider_thread_id = $4\n            WHERE id = $1 AND link_id = $2 AND (provider_id IS NULL OR provider_id = $3)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be2eb0be3c64fcd817d3a3c4fcfa68cb668f214dd9b1f950b1b426224d12e424"
+}

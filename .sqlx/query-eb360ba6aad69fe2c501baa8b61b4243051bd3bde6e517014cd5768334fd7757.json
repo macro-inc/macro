@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.content as \"content\",\n            c.name as \"name\",\n            m.role as \"role\",\n            c.\"deletedAt\"::timestamptz as \"deleted_at\",\n            c.\"userId\" as \"owner_user_id\",\n            m.\"createdAt\" as \"created_at\",\n            m.\"updatedAt\" as \"updated_at\"\n        FROM\n            \"ChatMessage\" m\n        JOIN\n            \"Chat\" c on c.\"id\" = m.\"chatId\"\n        WHERE\n            m.id = $1 AND m.\"chatId\" = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eb360ba6aad69fe2c501baa8b61b4243051bd3bde6e517014cd5768334fd7757"
+}

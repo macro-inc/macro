@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, segment_id, speaker_id, diarized_speaker_id, content, started_at, ended_at, sequence_num\n                FROM call_transcripts\n                WHERE call_id = $1\n                ORDER BY sequence_num ASC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "segment_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "diarized_speaker_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "sequence_num",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8a0e545eabb0a82a436eff39cf37a956514fd084748105272d9915b515d0ebd2"
+}

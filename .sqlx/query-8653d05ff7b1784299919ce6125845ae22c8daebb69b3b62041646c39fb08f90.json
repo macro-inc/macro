@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_link_google_scopes (\n                link_id, granted_scopes, grant_version, calendar_disabled_at\n            )\n            VALUES ($1, $2, 1, now())\n            ON CONFLICT (link_id) DO UPDATE\n            SET granted_scopes = EXCLUDED.granted_scopes,\n                grant_version = email_link_google_scopes.grant_version + 1,\n                calendar_disabled_at = now(),\n                updated_at = now()\n            RETURNING grant_version AS \"grant_version!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grant_version!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8653d05ff7b1784299919ce6125845ae22c8daebb69b3b62041646c39fb08f90"
+}

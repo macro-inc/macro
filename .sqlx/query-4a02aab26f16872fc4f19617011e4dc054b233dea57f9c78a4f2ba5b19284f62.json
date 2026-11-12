@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            oi.email\n        FROM \"OrganizationInvitation\" oi\n        WHERE oi.organization_id = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4a02aab26f16872fc4f19617011e4dc054b233dea57f9c78a4f2ba5b19284f62"
+}

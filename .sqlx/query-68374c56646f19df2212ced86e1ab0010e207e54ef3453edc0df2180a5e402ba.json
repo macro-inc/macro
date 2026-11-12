@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO channel_notification_email_sent (channel_id, user_id)\n        SELECT $1, u FROM UNNEST($2::text[]) AS u\n        ON CONFLICT (channel_id, user_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68374c56646f19df2212ced86e1ab0010e207e54ef3453edc0df2180a5e402ba"
+}

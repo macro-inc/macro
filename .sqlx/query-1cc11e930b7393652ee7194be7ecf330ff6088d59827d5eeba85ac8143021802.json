@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO slack_import_outbox (job_id, slack_channel_id, kind, generation)\n                   VALUES ($1, $2, 'search', $3) ON CONFLICT (job_id, slack_channel_id, kind, generation) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1cc11e930b7393652ee7194be7ecf330ff6088d59827d5eeba85ac8143021802"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, period_start, funding_invocation_id, note)\n                 VALUES ($1, $2, 'consumption', $3, $4, $5, 'Authorized public-rate AI usage') ON CONFLICT (funding_invocation_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ed3112c95f3ad29410270186f31e701f7dcb2368d1c17222a5b952039f996f4"
+}

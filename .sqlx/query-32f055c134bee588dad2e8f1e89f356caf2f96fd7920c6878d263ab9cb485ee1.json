@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session\n                SET status = $2,\n                    status_event_name = $3\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "32f055c134bee588dad2e8f1e89f356caf2f96fd7920c6878d263ab9cb485ee1"
+}

@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, foreign_entity_source AS source, foreign_entity_id AS github_key,\n                       updated_at, metadata\n                FROM foreign_entity\n                WHERE foreign_entity_source = $1::text\n                  AND left(lower(foreign_entity_id), length($2::text)) = lower($2::text)\n                  AND ($3::uuid IS NULL OR id > $3)\n                ORDER BY id ASC\n                LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "github_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c96b43f28b4c42a7805ce09dcbee2838d33e401e24c9d608cbe6489620da14dd"
+}

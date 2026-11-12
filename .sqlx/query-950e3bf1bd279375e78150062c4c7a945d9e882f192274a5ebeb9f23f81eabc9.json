@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat b SET next_sequence = next_sequence + 1\n            WHERE b.id = $1 AND b.state = 'active'\n              AND EXISTS (\n                SELECT 1 FROM whatsapp_linked_account a JOIN whatsapp_chat_membership m ON m.account_id = a.id\n                WHERE a.id = $2 AND a.user_id = $3 AND a.state = 'connected' AND a.generation = $4\n                  AND m.chat_id = b.id AND m.generation = a.generation AND m.consent_ended_at IS NULL\n                  AND m.remote_member AND m.can_post AND m.reconciled)\n              AND external_chat_can_view(b.id, $3)\n            RETURNING next_sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "950e3bf1bd279375e78150062c4c7a945d9e882f192274a5ebeb9f23f81eabc9"
+}

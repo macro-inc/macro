@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_onboarding (user_id, status, skipped, completed_at)\n            VALUES ($1, 'completed', $2, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET status = 'completed',\n                skipped = CASE\n                    WHEN user_onboarding.status = 'completed' THEN user_onboarding.skipped\n                    ELSE EXCLUDED.skipped\n                END,\n                completed_at = COALESCE(user_onboarding.completed_at, EXCLUDED.completed_at),\n                updated_at = NOW()\n            RETURNING status, skipped, started_at, completed_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "skipped",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "64ab0eddd585b96ab58d5b864525bba3b87cf7ef9971ec2da46d84c0868251f3"
+}

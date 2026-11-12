@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduling_booking SET starts_at = $2, ends_at = $3, status = 'processing', record = $4, recovery_at = $6 WHERE id = $1 AND status = $5 AND COALESCE(record->>'revision', '0') = $7",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51191335f5cbcd7a8f2b8373848812f4e9aefd75a4f71ef8bdd8ebe7adec8d88"
+}

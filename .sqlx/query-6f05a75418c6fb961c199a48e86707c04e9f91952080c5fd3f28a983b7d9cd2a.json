@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_usage_observation SET finalization = $2, finalized_at = now()\n                       WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f05a75418c6fb961c199a48e86707c04e9f91952080c5fd3f28a983b7d9cd2a"
+}

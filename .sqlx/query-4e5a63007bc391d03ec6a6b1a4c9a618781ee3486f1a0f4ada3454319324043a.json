@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_state SET watermark = watermark + 1, prepaid_remainder = $2 WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e5a63007bc391d03ec6a6b1a4c9a618781ee3486f1a0f4ada3454319324043a"
+}

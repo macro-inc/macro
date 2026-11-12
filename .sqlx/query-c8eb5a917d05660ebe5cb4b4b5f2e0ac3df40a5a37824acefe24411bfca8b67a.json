@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_message_reference SET template = NULL, completed_at = clock_timestamp()\n               WHERE job_id = $1 AND message_id = $2 AND completed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8eb5a917d05660ebe5cb4b4b5f2e0ac3df40a5a37824acefe24411bfca8b67a"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            di.id, \n            d.uploaded\n        FROM \"DocumentInstance\" di\n        JOIN \"Document\" d ON di.\"documentId\" = d.id\n        WHERE di.\"documentId\" = $1\n        ORDER BY di.\"createdAt\" DESC\n        LIMIT 1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "uploaded",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ebb5fcd2dc97d8c2f1ea17927db39e0fd0419594e068b4d43eaaddca5e46f6b0"
+}

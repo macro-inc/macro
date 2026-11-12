@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_financial_invocation SET funding_acknowledged = true\n                   WHERE invocation_id = $1 AND finalization IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f83c33d84756507f9c8710ea899f1469e13dac2072c3f48390f60139607636b4"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(\n                       SELECT 1 FROM comms_message_threads\n                       WHERE root_id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3\n                           AND deleted_at IS NULL\n                   ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "eef83aa3f4e0a7580de8385b651e3871582c513092847391cbbc423ae45e7119"
+}

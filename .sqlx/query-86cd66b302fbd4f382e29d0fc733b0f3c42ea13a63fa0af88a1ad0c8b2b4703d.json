@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"RolesOnUsers\" (\"userId\", \"roleId\") VALUES ($1, 'self_serve')\n               ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86cd66b302fbd4f382e29d0fc733b0f3c42ea13a63fa0af88a1ad0c8b2b4703d"
+}

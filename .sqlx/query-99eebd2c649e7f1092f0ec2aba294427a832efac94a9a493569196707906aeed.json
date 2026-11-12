@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status, lease_expires_at > clock_timestamp() AS active FROM slack_import_conversation\n               WHERE job_id = $1 AND slack_channel_id = $2 AND event_generation = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "99eebd2c649e7f1092f0ec2aba294427a832efac94a9a493569196707906aeed"
+}

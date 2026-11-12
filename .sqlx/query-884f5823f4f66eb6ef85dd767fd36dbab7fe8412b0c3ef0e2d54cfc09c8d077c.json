@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n          COALESCE(SUM(actual_public) FILTER (WHERE allocated AND user_id = $2), 0)::bigint AS \"used!\",\n          COALESCE(SUM(included_hold) FILTER (WHERE NOT allocated AND user_id = $2), 0)::bigint AS \"included_held!\",\n          COALESCE(SUM(postpaid) FILTER (WHERE allocated), 0)::bigint AS \"postpaid!\",\n          COALESCE(SUM(postpaid_hold) FILTER (WHERE NOT allocated), 0)::bigint AS \"postpaid_held!\"\n          FROM ai_funding_reservation WHERE payer_id = $1 AND period_start = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "included_held!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "postpaid!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "postpaid_held!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "884f5823f4f66eb6ef85dd767fd36dbab7fe8412b0c3ef0e2d54cfc09c8d077c"
+}

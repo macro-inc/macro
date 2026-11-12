@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_accounts\n            SET sync_status = $2,\n                last_sync_error = $3,\n                updated_at = now()\n            WHERE email_link_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52f1475a6789f0edeccf8775d240f75af28d42c8aa16518bbfe103feabddc788"
+}

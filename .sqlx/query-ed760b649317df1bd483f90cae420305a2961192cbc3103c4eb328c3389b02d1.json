@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.invocation_id, r.sequence, r.user_id, r.period_start, r.actual_public,\n                      r.admission AS \"admission: Json<AdmissionData>\", f.next_sequence, f.prepaid_remainder\n               FROM ai_funding_state f JOIN ai_funding_reservation r ON r.payer_id = f.user_id AND r.sequence = f.watermark\n               WHERE f.user_id = $1 AND NOT r.allocated",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "invocation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "period_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "actual_public",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "admission: Json<AdmissionData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "prepaid_remainder",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ed760b649317df1bd483f90cae420305a2961192cbc3103c4eb328c3389b02d1"
+}

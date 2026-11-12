@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT part.sha, COUNT(*) AS \"count!\"\n        FROM \"BomPart\" part\n        JOIN \"DocumentBom\" bom ON bom.id = part.\"documentBomId\"\n        WHERE bom.\"documentId\" = ANY($1)\n        GROUP BY part.sha\n        ORDER BY part.sha\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "50ac34f0a72f6b85588857a19bc9e88ee9feb8e2aed829d4d61926399e40d1a8"
+}

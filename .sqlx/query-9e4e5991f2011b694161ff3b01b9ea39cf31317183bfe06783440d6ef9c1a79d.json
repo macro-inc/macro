@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_agent_sandbox_size (user_id, sandbox_size, modified_at)\n            VALUES ($1, $2, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET sandbox_size = EXCLUDED.sandbox_size,\n                modified_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9e4e5991f2011b694161ff3b01b9ea39cf31317183bfe06783440d6ef9c1a79d"
+}

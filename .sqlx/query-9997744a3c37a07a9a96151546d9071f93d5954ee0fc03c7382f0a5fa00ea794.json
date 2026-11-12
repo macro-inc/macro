@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(j) AS \"value!\" FROM agent_conversation_turns j WHERE outcome IS NOT NULL AND NOT reply_finalized ORDER BY updated_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9997744a3c37a07a9a96151546d9071f93d5954ee0fc03c7382f0a5fa00ea794"
+}

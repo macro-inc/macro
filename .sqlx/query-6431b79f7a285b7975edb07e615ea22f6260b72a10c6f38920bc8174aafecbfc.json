@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT agent_session_id\n            FROM agent_session_pull_request\n            WHERE lower(github_key) = lower($1)\n            ORDER BY created_at, agent_session_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6431b79f7a285b7975edb07e615ea22f6260b72a10c6f38920bc8174aafecbfc"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"User\"\n        WHERE id = $1\n          AND EXISTS (SELECT 1 FROM promoted_shared_mailboxes WHERE macro_id = $1)\n        RETURNING macro_user_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c11f23488f780d7d26380775088aee0d8c1c9cf7cb28867dbdd96b7004a5d259"
+}

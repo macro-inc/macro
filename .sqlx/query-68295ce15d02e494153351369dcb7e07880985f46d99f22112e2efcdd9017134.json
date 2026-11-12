@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET deleted_at = COALESCE(deleted_at, now()), updated_at = now(), content = '' WHERE id = $1 OR thread_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68295ce15d02e494153351369dcb7e07880985f46d99f22112e2efcdd9017134"
+}

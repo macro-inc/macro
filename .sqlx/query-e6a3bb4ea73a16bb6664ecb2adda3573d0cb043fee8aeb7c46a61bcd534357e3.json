@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                d.name AS document_name,\n                d.owner AS \"owner: MacroUserIdStr\",\n                d.\"fileType\" AS file_type,\n                dst.sub_type::text AS sub_type\n            FROM \"Document\" d\n            LEFT JOIN document_sub_type dst ON dst.document_id = d.id\n            WHERE d.id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner: MacroUserIdStr",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sub_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "e6a3bb4ea73a16bb6664ecb2adda3573d0cb043fee8aeb7c46a61bcd534357e3"
+}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT included_public, extra_public, prepaid, reclaimed_prepaid, postpaid, macro_absorbed\n                 FROM ai_funding_reservation WHERE invocation_id = $1 AND allocated",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "included_public",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "extra_public",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "prepaid",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "reclaimed_prepaid",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "postpaid",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "macro_absorbed",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5c1390339a382278471343f73b60614ba9fea72013ed7f38c7d18cdea39d91fb"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.slack_channel_id FROM slack_import_conversation c\n               JOIN slack_import_job j ON j.id = c.job_id\n               WHERE j.team_id = $1 AND j.id = $2 AND c.slack_channel_id = ANY($3)\n                 AND c.status IN ('awaiting_uploads', 'queued', 'importing')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slack_channel_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58b7a93ac4ac873e446f3a61c653bf4181c5996d25809e6b34661fd9100903a4"
+}

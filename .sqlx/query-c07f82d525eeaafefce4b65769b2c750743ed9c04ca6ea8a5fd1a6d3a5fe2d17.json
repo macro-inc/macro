@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT \n      m.id \n    FROM \n      \"ChatMessage\" m\n    JOIN \n      \"Chat\" c on c.\"id\" = m.\"chatId\"\n    WHERE\n      \"userId\" = $1\n    AND\n      m.\"updatedAt\" <= $2\n    AND \n      m.\"updatedAt\" >= $3\n    AND \n      \"role\" = 'user'\n    \n    ORDER BY \n      m.\"updatedAt\" DESC\n    LIMIT \n      $4\n    OFFSET $5\n  ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamp",
+        "Timestamp",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c07f82d525eeaafefce4b65769b2c750743ed9c04ca6ea8a5fd1a6d3a5fe2d17"
+}

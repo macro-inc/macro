@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    c.name as \"name?\",\n                    c.owner_id\n                FROM\n                    \"comms_channels\" c\n                WHERE\n                    c.id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "cf1161cb3ef4f573dd8e15092ebedc6cfa7e0f8b9f8b3c3a698991d37860c76f"
+}

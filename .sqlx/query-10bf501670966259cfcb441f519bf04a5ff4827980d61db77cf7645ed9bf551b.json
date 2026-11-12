@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE edges(left_id, right_id) AS (\n                SELECT m.task_id, m.duplicate_task_id\n                FROM task_duplicate_match m\n                JOIN \"Document\" left_document ON left_document.id = m.task_id\n                JOIN \"Document\" right_document ON right_document.id = m.duplicate_task_id\n                WHERE m.status = 'active'\n                  AND left_document.\"deletedAt\" IS NULL\n                  AND right_document.\"deletedAt\" IS NULL\n            ),\n            component(document_id) AS (\n                SELECT DISTINCT unnest($1::text[])\n                UNION\n                SELECT CASE\n                    WHEN edges.left_id = component.document_id THEN edges.right_id\n                    ELSE edges.left_id\n                END\n                FROM edges\n                JOIN component\n                  ON component.document_id = edges.left_id\n                  OR component.document_id = edges.right_id\n            )\n            SELECT DISTINCT document_id AS \"document_id!\"\n            FROM component\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "10bf501670966259cfcb441f519bf04a5ff4827980d61db77cf7645ed9bf551b"
+}

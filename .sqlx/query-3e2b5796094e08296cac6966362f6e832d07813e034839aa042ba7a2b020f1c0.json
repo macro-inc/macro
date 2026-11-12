@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM reminder_occurrence\n            WHERE reminder_id = $1\n              AND scheduled_for = $2\n              AND sent_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3e2b5796094e08296cac6966362f6e832d07813e034839aa042ba7a2b020f1c0"
+}

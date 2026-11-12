@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\"\n            FROM comms_messages m WHERE id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ae47e0de1b0ff799a2af6b7b9fc6c042ca2eda0db968e73de37f3be0ee85b7dd"
+}

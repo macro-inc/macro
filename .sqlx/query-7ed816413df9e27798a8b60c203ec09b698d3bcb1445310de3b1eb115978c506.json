@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_accounts (\n            id, owner_id, email_link_id, provider, provider_account_id\n        )\n        VALUES ($1, $2, $3, 'google', $4)\n        ON CONFLICT (email_link_id) DO UPDATE SET\n            owner_id = EXCLUDED.owner_id,\n            provider_account_id = EXCLUDED.provider_account_id,\n            sync_status = CASE\n                WHEN calendar_accounts.sync_status = 'disabled' THEN 'pending'\n                ELSE calendar_accounts.sync_status\n            END,\n            last_sync_error = CASE\n                WHEN calendar_accounts.sync_status = 'disabled' THEN NULL\n                ELSE calendar_accounts.last_sync_error\n            END,\n            updated_at = now()\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7ed816413df9e27798a8b60c203ec09b698d3bcb1445310de3b1eb115978c506"
+}

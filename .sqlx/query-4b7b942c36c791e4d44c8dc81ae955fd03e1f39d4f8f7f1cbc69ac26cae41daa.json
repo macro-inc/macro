@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)\n                   VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b7b942c36c791e4d44c8dc81ae955fd03e1f39d4f8f7f1cbc69ac26cae41daa"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_team_sharing(user_id,sharing) VALUES($1,$2)\n            ON CONFLICT(user_id) DO UPDATE SET sharing=EXCLUDED.sharing, updated_at=now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5075777473ea8c0fcdcb24f0d876b841d60ca91a56fb7c0e554a307b74f01e10"
+}

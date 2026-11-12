@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.id, j.team_id FROM slack_import_job j\n           WHERE j.registration_closed_at IS NOT NULL\n             AND j.status IN ('uploading', 'processing', 'cancelling')\n             AND NOT EXISTS (SELECT 1 FROM slack_import_conversation c WHERE c.job_id = j.id\n                 AND c.status IN ('awaiting_uploads', 'queued', 'importing'))\n             AND EXISTS (SELECT 1 FROM slack_import_message_reference r\n                 WHERE r.job_id = j.id AND r.completed_at IS NULL)\n           ORDER BY j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "35e571d9c4e3bc5fd717c8866d8b27c2f4baab1338b5e206646209eb3d2f3d1c"
+}

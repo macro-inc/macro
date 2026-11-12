@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.device_endpoint\n            FROM notification_user_device_registration d\n            WHERE d.device_token = $1 AND d.device_type = $2\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_endpoint",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "notification_device_type_option",
+            "kind": {
+              "Enum": [
+                "ios",
+                "android",
+                "iosvoip"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c30215af0b9eed6ebb9aee2ab60c847dc1766df4e5280c91067a1ce92c9f40d5"
+}

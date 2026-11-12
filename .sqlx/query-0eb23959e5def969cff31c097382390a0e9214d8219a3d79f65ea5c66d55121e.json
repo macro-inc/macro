@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"DocumentText\" (\"documentId\", \"content\", \"tokenCount\")\n        VALUES ($1, $2, $3)\n        ON CONFLICT (\"documentId\")\n        DO UPDATE SET \"content\" = EXCLUDED.\"content\", \"tokenCount\" = EXCLUDED.\"tokenCount\"\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0eb23959e5def969cff31c097382390a0e9214d8219a3d79f65ea5c66d55121e"
+}

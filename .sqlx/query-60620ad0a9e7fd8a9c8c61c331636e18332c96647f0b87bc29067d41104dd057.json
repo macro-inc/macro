@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO harness_replica (id, last_heartbeat_at, address)\n            VALUES ($1, now(), $2)\n            ON CONFLICT (id) DO UPDATE\n            SET last_heartbeat_at = now(),\n                address = COALESCE(EXCLUDED.address, harness_replica.address)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "60620ad0a9e7fd8a9c8c61c331636e18332c96647f0b87bc29067d41104dd057"
+}

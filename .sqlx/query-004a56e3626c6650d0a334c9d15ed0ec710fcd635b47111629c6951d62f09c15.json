@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.object_key, u.sha256, u.byte_length, u.record_count, u.verified_version_id, u.verified_etag\n           FROM slack_import_upload u JOIN slack_import_job j ON j.id = u.job_id\n           WHERE j.team_id = $1 AND j.id = $2\n             AND u.slack_channel_id IS NOT DISTINCT FROM $3 AND u.part_index IS NOT DISTINCT FROM $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "object_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sha256",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "byte_length",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "record_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "verified_version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "verified_etag",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "004a56e3626c6650d0a334c9d15ed0ec710fcd635b47111629c6951d62f09c15"
+}

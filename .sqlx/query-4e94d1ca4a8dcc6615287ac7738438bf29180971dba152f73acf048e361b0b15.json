@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM entity_properties\n                WHERE property_definition_id = $1 AND values -> 'value' ? $2\n                  AND (entity_type != 'DATABASE_ROW' OR NOT (entity_id = ANY($3)))\n            ) AS \"used!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4e94d1ca4a8dcc6615287ac7738438bf29180971dba152f73acf048e361b0b15"
+}

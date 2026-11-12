@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"ChatMessage\"\n        SET \"content\" = $1, \"updatedAt\" = NOW()\n        WHERE \"id\" = $2 AND \"chatId\" = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2434f8a0e387b85009c8857ab719928f6e922ecf302228837e4d0686866ac515"
+}

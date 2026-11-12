@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.job_id FROM slack_import_upload u\n               JOIN slack_import_job j ON j.id = u.job_id\n               WHERE j.team_id = $1 AND j.id = ANY($2)\n                 AND u.slack_channel_id IS NULL AND u.verified_at IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2c666e5086fac5cadf9d1eb34e5d4321cafb42e6f7d4c316edf9cb1b8b0a2b35"
+}

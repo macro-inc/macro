@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COALESCE(-SUM(delta_cents), 0)::bigint AS \"consumed!\"\n        FROM ai_credit_ledger\n        WHERE user_id = $1 AND kind = 'consumption' AND period_start = $2\n          AND funding_invocation_id IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "consumed!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c51f26f7fd7b06ac8db307bb6fabc8be0aefdeb9e64d58ada66c8fc143139fbc"
+}

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id AS channel_id,\n                c.name,\n                c.channel_type::text AS \"channel_type!\",\n                cp.joined_at\n            FROM comms_channel_participants cp\n            JOIN comms_channels c ON c.id = cp.channel_id\n            WHERE cp.user_id = $1\n              AND cp.left_at IS NULL\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM comms_channel_agents ca\n                  WHERE ca.channel_id = cp.channel_id\n                    AND ca.kind = 'direct'\n              )\n            ORDER BY cp.joined_at ASC, c.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "joined_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "756d77585ebc481d41ad20bbb8f1d603e5d80c240bdd97db7edcb31e3fc2e344"
+}

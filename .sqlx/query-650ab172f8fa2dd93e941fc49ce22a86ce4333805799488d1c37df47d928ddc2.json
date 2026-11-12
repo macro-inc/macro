@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO \"DocumentBom\" (\"documentId\", \"createdAt\", \"updatedAt\")\n                    VALUES ($1, $2, $2)\n                    RETURNING id, \"createdAt\"::timestamptz as \"created_at\", \"updatedAt\"::timestamptz as \"updated_at\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "650ab172f8fa2dd93e941fc49ce22a86ce4333805799488d1c37df47d928ddc2"
+}

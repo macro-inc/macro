@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendars\n        SET is_deleted = true,\n            sync_token = NULL,\n            materialized_starts_at = NULL,\n            materialized_ends_at = NULL,\n            materialized_start_date = NULL,\n            materialized_end_date = NULL,\n            updated_at = now()\n        WHERE account_id = $1\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7f0b4a6ce456c7b58194e6a73f6badebb1e38c13bc83855ce8d8c2bbf9684976"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO harness_replica (id, draining_at)\n            VALUES ($1, now())\n            ON CONFLICT (id) DO UPDATE\n            SET draining_at = COALESCE(harness_replica.draining_at, now())\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a7c20eb5577db0bf0d2e48a979287b681a881ffc25a6151b227c6f7f0b493fd"
+}

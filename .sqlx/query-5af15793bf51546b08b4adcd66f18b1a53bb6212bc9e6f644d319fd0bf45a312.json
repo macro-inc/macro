@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT mui.profile_picture as \"profile_picture!\"\n        FROM \"User\" u\n        JOIN macro_user mu ON mu.id = u.macro_user_id\n        JOIN macro_user_info mui ON mui.macro_user_id = mu.id\n        WHERE u.id = $1 AND mui.profile_picture IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "profile_picture!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5af15793bf51546b08b4adcd66f18b1a53bb6212bc9e6f644d319fd0bf45a312"
+}

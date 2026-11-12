@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)\n            SELECT frame.id, $1, frame.user_id, frame.direction, frame.content,\n                   stamp.created_at + (frame.ordinality - 1) * interval '1 microsecond'\n            FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::jsonb[])\n                WITH ORDINALITY AS frame(id, user_id, direction, content, ordinality)\n            CROSS JOIN (\n                SELECT GREATEST(statement_timestamp(), (\n                    SELECT created_at + interval '1 microsecond'\n                    FROM agent_session_log WHERE agent_session_id = $1\n                    ORDER BY created_at DESC, id DESC LIMIT 1\n                )) AS created_at\n            ) AS stamp\n            RETURNING id, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bb979ea2a2e956068325620d27daa7d28f34613dd595c17bf9d2081087701aee"
+}

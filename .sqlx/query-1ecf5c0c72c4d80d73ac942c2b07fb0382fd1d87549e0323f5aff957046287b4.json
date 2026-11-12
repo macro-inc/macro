@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call_meetings SET title = COALESCE($3, title), scheduled_start = CASE WHEN $6 THEN NULL ELSE COALESCE($4, scheduled_start) END, scheduled_end = CASE WHEN $6 THEN NULL ELSE COALESCE($5, scheduled_end) END WHERE id = $1 AND user_id = $2 AND cancelled_at IS NULL RETURNING id, share_token, user_id, title, scheduled_start, scheduled_end, channel_id, channel_call_id, active_call_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "share_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "scheduled_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "scheduled_end",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "active_call_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1ecf5c0c72c4d80d73ac942c2b07fb0382fd1d87549e0323f5aff957046287b4"
+}

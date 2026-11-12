@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM calendar_change_counters counter\n            WHERE NOT EXISTS (\n                SELECT 1 FROM email_links link WHERE link.id = counter.link_id\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a8296d31c2ffecb9d60db37e04c062c83e529c91b5b540c4b534e38bfad4190f"
+}

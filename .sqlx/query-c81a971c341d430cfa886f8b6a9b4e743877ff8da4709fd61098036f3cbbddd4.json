@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT agent_session_id, head_ref AS \"head_ref!\", repository AS \"repository!\"\n                FROM agent_session_changes\n                WHERE agent_session_id = ANY($1) AND head_ref IS NOT NULL AND repository IS NOT NULL\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "head_ref!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "repository!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "c81a971c341d430cfa886f8b6a9b4e743877ff8da4709fd61098036f3cbbddd4"
+}

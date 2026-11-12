@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET \"deletedAt\" = $2 WHERE id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18873e86f757831adcdb60bb2c4071a06e3d06d4e2049a25f751146a5f010b13"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT status::text AS \"status!\"\n            FROM ai_overage_charge\n            WHERE user_id = $1\n            ORDER BY created_at DESC, id DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4dab09dc05e20ee33cf78fe906292dc6f2f89653afda45138f00315648a77342"
+}

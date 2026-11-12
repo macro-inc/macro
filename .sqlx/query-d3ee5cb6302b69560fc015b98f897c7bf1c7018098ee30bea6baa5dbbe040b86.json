@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing SET passkey_response = $3, updated_at = now()\n            WHERE id = $1 AND user_id = $2 AND consumed_at IS NULL AND state = 'passkey'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d3ee5cb6302b69560fc015b98f897c7bf1c7018098ee30bea6baa5dbbe040b86"
+}

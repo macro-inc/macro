@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload AS \"payload!: Json<FollowupRecord>\" FROM reminder_email_followup\n               WHERE user_id = $1 AND reminder_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload!: Json<FollowupRecord>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cb5a046733c0cfb8d7b74e560b1ba5fd89c0d9f7ab498a9fcaf782c2ee6e4871"
+}

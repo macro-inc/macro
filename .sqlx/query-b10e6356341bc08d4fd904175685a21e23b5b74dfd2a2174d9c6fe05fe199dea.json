@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\"\n            FROM comms_messages m WHERE id = ANY($1) AND thread_id IS NULL\n            ORDER BY array_position($1, id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b10e6356341bc08d4fd904175685a21e23b5b74dfd2a2174d9c6fe05fe199dea"
+}

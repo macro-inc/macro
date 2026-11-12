@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls\n               SET recording_started_at = $2\n             WHERE egress_id = $1\n               AND recording_started_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "099d5a355490ebd8fe221bc0526af0a38305c090cdb791212b5968c24ae5d5f4"
+}

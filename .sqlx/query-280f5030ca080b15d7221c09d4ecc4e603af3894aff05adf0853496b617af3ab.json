@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.request AS \"request: Json<RequestData>\",\n                          r.publication AS \"publication: Json<RateData>\",\n                          j.funding AS \"funding: Json<FundingData>\",\n                          j.finalization AS \"finalization: Json<StateData>\"\n                   FROM ai_financial_invocation j JOIN ai_financial_rate r ON r.version = j.rate_version\n                   WHERE j.funding IS NOT NULL AND (j.recovery_required OR NOT j.funding_acknowledged)\n                     AND ($1::uuid IS NULL OR j.invocation_id > $1) AND j.occurred_at < $2\n                   ORDER BY j.invocation_id LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request: Json<RequestData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "publication: Json<RateData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "funding: Json<FundingData>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "finalization: Json<StateData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "280f5030ca080b15d7221c09d4ecc4e603af3894aff05adf0853496b617af3ab"
+}

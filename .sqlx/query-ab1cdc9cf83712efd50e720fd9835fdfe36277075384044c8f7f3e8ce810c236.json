@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"macro_user_email_verification\" SET \"macro_user_id\" = $1 WHERE \"macro_user_id\" = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab1cdc9cf83712efd50e720fd9835fdfe36277075384044c8f7f3e8ce810c236"
+}

@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            p.id,\n            p.name,\n            p.\"userId\" AS \"user_id\",\n            p.\"parentId\" AS \"parent_id?\",\n            p.\"createdAt\"::timestamptz AS \"created_at\",\n            p.\"updatedAt\"::timestamptz AS \"updated_at\",\n            p.\"deletedAt\"::timestamptz AS \"deleted_at\"\n        FROM \"Project\" p\n        WHERE p.\"parentId\" = $1 AND p.\"deletedAt\" IS NULL\n        ORDER BY p.\"createdAt\" ASC, p.id ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0fbead946cc1cb045e55f15e1c41975495a19cfc847196e4835c52afa602082a"
+}

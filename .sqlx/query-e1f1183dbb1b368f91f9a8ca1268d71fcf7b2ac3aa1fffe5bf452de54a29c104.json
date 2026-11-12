@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO import_target_reservation\n                        (team_id, source, foreign_id, candidate_channel_id, channel_id, state)\n                    VALUES ($1, 'slack', $2, $3, $4, $5)\n                    ON CONFLICT (team_id, source, foreign_id) DO NOTHING\n                    RETURNING candidate_channel_id\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "candidate_channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e1f1183dbb1b368f91f9a8ca1268d71fcf7b2ac3aa1fffe5bf452de54a29c104"
+}

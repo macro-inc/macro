@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM initiative_member\n            WHERE initiative_id = $1 AND user_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "030b0d08f8d634e36e79c2fc35c4a4bb3260f6e35d01420cd2ae8546ed5d97f2"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM user_notification_item_unsubscribe\n        WHERE user_id = $1 AND item_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e239c46742a642923b5367a73cfcc0f253c96269afb634301ed6d207c206107"
+}

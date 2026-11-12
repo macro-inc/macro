@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, lower(piece) AS \"start!\", upper(piece) AS \"end!\" FROM scheduling_host_claim CROSS JOIN LATERAL unnest(occupied) AS piece WHERE user_id = ANY($1) AND piece && tstzrange($2, $3, '[)') AND ($4::uuid IS NULL OR booking_id <> $4)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "start!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "end!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f01ac4a2d86bb2ac055beca13b1b5c87a8d4e57ce7d893c5eec9493f438a861c"
+}

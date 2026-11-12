@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_columns SET display_name = $3\n         WHERE id = $1 AND table_id = $2 AND display_name IS NOT DISTINCT FROM $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "471d0d99dcd46808935fef4ef8150683ccc22a430e2f51ea70077d57767a4281"
+}

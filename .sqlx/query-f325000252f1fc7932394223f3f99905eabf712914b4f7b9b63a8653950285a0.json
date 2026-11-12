@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.id, j.status, j.revision, j.created_at, j.updated_at,\n                      j.registration_closed_at, j.source_workspace_id, j.include_message_history\n               FROM slack_import_job j\n               WHERE j.team_id = $1 AND ($2::uuid IS NULL OR j.id = $2)\n                 AND ($3::uuid IS NULL OR j.id < $3)\n               ORDER BY j.id DESC LIMIT 50 FOR SHARE OF j",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "registration_closed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_workspace_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "include_message_history",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "f325000252f1fc7932394223f3f99905eabf712914b4f7b9b63a8653950285a0"
+}

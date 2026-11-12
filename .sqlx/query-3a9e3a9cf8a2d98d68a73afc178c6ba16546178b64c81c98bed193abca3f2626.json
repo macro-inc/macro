@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH entity_access_grants AS (\n            SELECT ea.access_level\n            FROM entity_access ea\n            WHERE ea.entity_id = $1\n              AND ea.entity_type = 'initiative'\n              AND ea.source_id = ANY($2)\n        ),\n        link_share_grants AS (\n            SELECT sp.\"linkShareAccessLevel\" AS access_level\n            FROM initiative i\n            JOIN \"SharePermission\" sp ON sp.id = i.share_permission_id\n            WHERE i.id = $1\n              AND sp.\"linkShareAccessLevel\" IS NOT NULL\n              AND (\n                  sp.\"linkShare\" = 'PUBLIC'\n                  OR (\n                      sp.\"linkShare\" = 'TEAM'\n                      AND EXISTS (\n                          SELECT 1\n                          FROM team_user owner_team\n                          WHERE owner_team.user_id = i.owner_user_id\n                            AND owner_team.team_id::text = ANY($2)\n                      )\n                  )\n              )\n        )\n        SELECT access_level AS \"access_level!: AccessLevel\"\n        FROM (\n            SELECT access_level FROM entity_access_grants\n            UNION ALL\n            SELECT access_level FROM link_share_grants\n        ) AS grants\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a9e3a9cf8a2d98d68a73afc178c6ba16546178b64c81c98bed193abca3f2626"
+}

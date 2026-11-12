@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.user_id AS owner_id, d.trashed_at\n            FROM database_rows r\n            JOIN database_tables t ON t.id = r.table_id\n            JOIN database_entities d ON d.database_id = t.database_id\n            WHERE r.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "c91626de6a6510e49f42505ea3e6bb725b94b2003f1eaa23279e72f14a7a5193"
+}

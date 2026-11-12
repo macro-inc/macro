@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_meeting_preparations WHERE id = $1 AND user_id = $2 AND meeting_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5dacfa998e0a0d84c746b4a835eeeb7edb2bd0d7743098ab2e5c49edc5490fb1"
+}

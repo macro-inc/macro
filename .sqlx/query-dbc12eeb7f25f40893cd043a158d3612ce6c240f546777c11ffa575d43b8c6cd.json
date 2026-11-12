@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n            SELECT $1::uuid, 'document', u.user_id, 'user', $3::\"AccessLevel\"\n            FROM UNNEST($2::text[]) u(user_id)\n            WHERE EXISTS (SELECT 1 FROM \"DocumentPermission\" dp JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n                JOIN \"Document\" d ON d.id = dp.\"documentId\"\n                WHERE dp.\"documentId\" = $1::uuid::text AND sp.\"linkShare\" IN ('PUBLIC', 'TEAM')\n                    AND sp.\"linkShareAccessLevel\"::\"AccessLevel\" = $3 AND d.\"deletedAt\" IS NULL)\n            ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbc12eeb7f25f40893cd043a158d3612ce6c240f546777c11ffa575d43b8c6cd"
+}

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO channel_label (id, team_id, user_id, name, name_contains, sort_order)\n            VALUES ($1, $2, $3, $4, $6,\n                COALESCE((SELECT MAX(sort_order) + 1 FROM channel_label WHERE scope_key = $5), 0))\n            ON CONFLICT DO NOTHING\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "18598e232f82a5fbac9fcc2b32605e1c7dba7e3b1d4c9f4db6b9b134dd6bf819"
+}

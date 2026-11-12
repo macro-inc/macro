@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id,l.macro_id,l.provider::text AS \"provider!\",l.sync_generation,l.grant_id,l.grant_generation,l.fusionauth_user_id,\n        l.disconnect_requested_at,EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id) AS \"promoted!\"\n        FROM email_links l WHERE l.id = $1 FOR UPDATE OF l",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "disconnect_requested_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "promoted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      true,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "b87cfa479cf823ec098322532d281e02ddee1c1bc306d28e2c77c9e30a126f17"
+}

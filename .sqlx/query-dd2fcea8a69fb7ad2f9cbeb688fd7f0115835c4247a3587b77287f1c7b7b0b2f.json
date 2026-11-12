@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, sent, state AS \"state: NotificationState\",\n                    created_at::timestamptz AS \"created_at!\", seen_at::timestamptz AS viewed_at,\n                    created_at::timestamptz AS \"updated_at!\", deleted_at::timestamptz AS deleted_at\n                FROM user_notification WHERE notification_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "state: NotificationState",
+        "type_info": {
+          "Custom": {
+            "name": "notification_state",
+            "kind": {
+              "Enum": [
+                "unseen",
+                "seen",
+                "done"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dd2fcea8a69fb7ad2f9cbeb688fd7f0115835c4247a3587b77287f1c7b7b0b2f"
+}

@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT d.message_id FROM email_mailbox_drafts d JOIN email_links l ON l.id = d.link_id\n                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND l.sync_generation = d.generation\n                    AND (d.state IN ('pending','running') OR (d.state = 'synced' AND EXISTS (\n                        SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = d.message_id AND s.link_id = d.link_id\n                            AND NOT s.sent AND NOT s.processing AND s.send_time <= now())))\n                    AND ($2 OR d.checkpoint->>'stage' IN ('creating','submitting','confirming'))\n                    AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id\n                        WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now())\n                    AND d.available_at <= now() AND (d.lease_until IS NULL OR d.lease_until < now())\n                ORDER BY d.available_at,d.message_id LIMIT 1 FOR UPDATE OF d SKIP LOCKED\n            )\n            UPDATE email_mailbox_drafts d SET claimed_content = d.desired_content,state = 'running', lease_id = $1,lease_until = now() + interval '3 minutes',updated_at = now()\n            FROM candidate c,email_links l WHERE c.message_id = d.message_id AND l.id = d.link_id\n            RETURNING d.message_id,d.link_id,d.generation,l.grant_generation,d.revision,d.actor_id,d.desired_content,\n                d.provider_id,d.base_version,d.delete_requested,d.checkpoint\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "desired_content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "base_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "delete_requested",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "checkpoint",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0741fc4ea1e489a23a8d1f7445431bd356d15f6b516bf2e09ea0e0d4912626af"
+}

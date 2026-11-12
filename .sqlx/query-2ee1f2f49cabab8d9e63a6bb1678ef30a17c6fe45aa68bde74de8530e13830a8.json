@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET sandbox_size = $2,\n                modified_at = NOW()\n            WHERE id = $1\n              AND sandbox_size IS DISTINCT FROM $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ee1f2f49cabab8d9e63a6bb1678ef30a17c6fe45aa68bde74de8530e13830a8"
+}

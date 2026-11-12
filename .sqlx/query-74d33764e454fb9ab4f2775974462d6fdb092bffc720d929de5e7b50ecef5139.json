@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, apns_collapse_key as \"apns_collapse_key!: String\"\n            FROM notification\n            WHERE id = ANY($1) AND apns_collapse_key IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "apns_collapse_key!: String",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "74d33764e454fb9ab4f2775974462d6fdb092bffc720d929de5e7b50ecef5139"
+}

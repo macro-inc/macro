@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT f.in_inbox,f.in_trash,f.in_junk,f.is_present,t.inbox_visible,t.is_signal,m.provider_version\n            FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id JOIN email_threads t ON t.id = m.thread_id\n            WHERE m.id = $1 AND m.link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "in_inbox",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "in_trash",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "in_junk",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_present",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "inbox_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_signal",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider_version",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ecdedb5b5303081dca6887fd040f9fe34b713b2d99313e9623d82328f7757544"
+}

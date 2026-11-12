@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_external_replies (session_id, action_id, target) VALUES ($1, $2, $3) ON CONFLICT (session_id, action_id) DO UPDATE SET target = COALESCE(agent_external_replies.target, EXCLUDED.target), updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "33967c4adbd4740a8727a3b9e9bf9868bec30abd9d7167405ab8538a22061786"
+}

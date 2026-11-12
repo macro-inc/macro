@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Chat\" SET \"tokenCount\" = $1\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d17144ac0fad7ccde292b6da4197cee6ec3a0e3eefc8711308ef3c6b3f7f30c"
+}

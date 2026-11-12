@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"SharePermission\" SET team_share_access_level = $2,\n            team_share_team_id = $3, team_share_revision = $4, \"updatedAt\" = NOW()\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "45b2c2170f17a9efc5f4b6fe9c00d480c3dcb6d3c45c60d99b6fcec98e88a1a0"
+}

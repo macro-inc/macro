@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET updated_at = now(),\n                   edited_at = CASE WHEN content <> $2 THEN now() ELSE edited_at END,\n                   content = $2\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a2f649af45e58aa57cbff9c8d663d0f53215fabb5ed1dea5954dc0094899d64"
+}

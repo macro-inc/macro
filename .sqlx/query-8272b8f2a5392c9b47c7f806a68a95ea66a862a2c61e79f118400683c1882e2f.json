@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT d.id\n        FROM \"Document\" d\n        WHERE d.id = ANY($1)\n          AND d.owner = $2\n          AND d.\"deletedAt\" IS NULL\n          AND EXISTS (\n              SELECT 1\n              FROM document_email de\n              WHERE de.document_id = d.id\n          )\n          AND (\n              SELECT i.sha\n              FROM \"DocumentInstance\" i\n              WHERE i.\"documentId\" = d.id\n              ORDER BY i.\"createdAt\" DESC\n              LIMIT 1\n          ) = $3\n        ORDER BY d.\"createdAt\" ASC, d.id ASC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8272b8f2a5392c9b47c7f806a68a95ea66a862a2c61e79f118400683c1882e2f"
+}

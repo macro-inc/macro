@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\"\n               SET uploaded = true, \"contentState\" = 'ready', \"contentLocation\" = $2, \"updatedAt\" = NOW()\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "08bd7c6f5b9f188bb4b70a71ab2f1d5483608926bd1a95ebe15a4e8b32f96cf4"
+}

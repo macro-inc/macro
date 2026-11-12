@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id as entity_id,\n                c.name,\n                regexp_replace(\n                    c.name,\n                    $6,\n                    '<macro_em>\\1</macro_em>',\n                    'gi'\n                ) as name_highlighted,\n                c.\"updatedAt\" as updated_at\n            FROM \"Chat\" c\n            WHERE c.id = ANY($1)\n                AND c.\"deletedAt\" IS NULL\n                AND c.name ILIKE $2\n                AND (\n                    $4::timestamptz IS NULL\n                    OR (c.\"updatedAt\", c.id) < ($4, $5)\n                )\n                AND (\n                    cardinality($7::text[]) = 0\n                    OR (\n                        NOT $8::bool\n                        AND EXISTS (\n                            SELECT 1 FROM entity_properties ep\n                            WHERE ep.entity_id = c.id\n                                AND ep.entity_type = 'CHAT'\n                                AND ep.values->'value' ?| $7::text[]\n                        )\n                    )\n                    OR (\n                        $8::bool\n                        AND NOT EXISTS (\n                            SELECT 1 FROM unnest($7::text[]) AS want(opt)\n                            WHERE NOT EXISTS (\n                                SELECT 1 FROM entity_properties ep\n                                WHERE ep.entity_id = c.id\n                                    AND ep.entity_type = 'CHAT'\n                                    AND ep.values->'value' ? want.opt\n                            )\n                        )\n                    )\n                )\n            ORDER BY c.\"updatedAt\" DESC, c.id DESC\n            LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name_highlighted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "750cd6a910f8026f27c6a5124e31fd0f2440b9d943424e7fcd99b5a6dda11634"
+}

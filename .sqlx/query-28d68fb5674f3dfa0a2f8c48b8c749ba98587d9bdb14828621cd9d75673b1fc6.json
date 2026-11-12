@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_meeting_preparations WHERE meeting_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28d68fb5674f3dfa0a2f8c48b8c749ba98587d9bdb14828621cd9d75673b1fc6"
+}

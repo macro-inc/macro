@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE project_path AS (\n                SELECT\n                    p.id,\n                    p.name,\n                    p.\"userId\",\n                    p.\"parentId\",\n                    p.\"updatedAt\",\n                    ARRAY[p.name] AS path\n                FROM \"Project\" p\n                WHERE p.id = ANY($1)\n\n                UNION ALL\n\n                SELECT\n                    child.id,\n                    child.name,\n                    child.\"userId\",\n                    parent.\"parentId\",\n                    child.\"updatedAt\",\n                    ARRAY[parent.name] || child.path AS path\n                FROM project_path child\n                JOIN \"Project\" parent ON child.\"parentId\" = parent.id\n            )\n            SELECT DISTINCT ON (id)\n                id AS \"id!\",\n                name AS \"name!\",\n                \"userId\" AS \"owner!\",\n                path AS \"path!\",\n                \"updatedAt\"::timestamptz AS \"updated_at\"\n            FROM project_path\n            WHERE \"parentId\" IS NULL\n            ORDER BY id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "path!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "459f452f7069c7c587f0894fc7dca749b68d522255f51845cde57626dbaa3fa2"
+}

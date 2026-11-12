@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_billing_account (user_id, overage_suspended_at)\n            VALUES ($1, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET overage_suspended_at = COALESCE(ai_billing_account.overage_suspended_at, NOW()),\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9817d0f3c0c5addd52244e9ff830efa69845b5df2f117bb027264c72b0e1f3ea"
+}

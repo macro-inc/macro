@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_conversation SET status = $3, last_error = $4,\n           lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, heartbeat_at = NULL,\n           settled_at = clock_timestamp(), updated_at = clock_timestamp()\n           WHERE job_id = $1 AND slack_channel_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b30b8c97e900134cf9cd5cae49f29f36453665d8ed1bc029ee62ebd2814a8f4"
+}

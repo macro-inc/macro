@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                NULLIF(mui.first_name,  'N/A') AS first_name,\n                NULLIF(mui.last_name,   'N/A') AS last_name\n            FROM macro_user_info mui\n            JOIN \"User\" u ON mui.macro_user_id = u.macro_user_id\n            WHERE u.id = $1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "dedb4996ddd1f4a5a44ce96d8ab9e7ad85d35c823d233e6d9b53534c5aaf94b0"
+}

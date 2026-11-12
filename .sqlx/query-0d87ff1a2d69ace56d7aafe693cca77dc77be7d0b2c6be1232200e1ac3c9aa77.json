@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET generation = $3,lease_id = NULL,lease_until = NULL,\n        state = CASE WHEN state = 'running' THEN 'pending' ELSE state END,available_at = now(),updated_at = now() WHERE link_id = $1 AND generation = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d87ff1a2d69ace56d7aafe693cca77dc77be7d0b2c6be1232200e1ac3c9aa77"
+}

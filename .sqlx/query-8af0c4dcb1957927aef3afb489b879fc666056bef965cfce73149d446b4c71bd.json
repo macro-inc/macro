@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"ChatAttachment\" (\"entity_type\", \"entity_id\", \"chatId\")\n            VALUES ($1, $2, $3)\n            RETURNING id;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8af0c4dcb1957927aef3afb489b879fc666056bef965cfce73149d446b4c71bd"
+}

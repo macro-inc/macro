@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT l.macro_id AS \"macro_id!\"\n        FROM email_threads et\n        JOIN email_links l ON et.link_id = l.id\n        WHERE et.id = $1\n        UNION\n        SELECT mul.primary_macro_id\n        FROM email_threads et\n        JOIN email_links l ON et.link_id = l.id\n        JOIN macro_user_links mul ON mul.link_id = l.id\n        WHERE et.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f5f17b4541173ce2963dbcce46cfc30fe9a30c6301dc466f8a31b4932f6c1c5c"
+}

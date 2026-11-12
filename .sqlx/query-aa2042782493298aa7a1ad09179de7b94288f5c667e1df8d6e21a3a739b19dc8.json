@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n               sp.\"linkShare\" = 'PUBLIC' AS \"is_public!\",\n               owner_team.team_id AS \"team_id?\"\n        FROM agent_session s\n        JOIN \"SharePermission\" sp ON sp.id = s.share_permission_id\n        LEFT JOIN team_user owner_team ON owner_team.user_id = s.owner_id\n        WHERE s.id = $1\n          AND sp.\"linkShareAccessLevel\" IS NOT NULL\n          AND (\n              sp.\"linkShare\" = 'PUBLIC'\n              OR (sp.\"linkShare\" = 'TEAM' AND owner_team.team_id::text = ANY($2))\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "is_public!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "aa2042782493298aa7a1ad09179de7b94288f5c667e1df8d6e21a3a739b19dc8"
+}

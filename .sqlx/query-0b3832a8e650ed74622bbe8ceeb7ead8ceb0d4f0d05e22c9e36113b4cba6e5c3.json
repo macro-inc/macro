@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"BlockedEmail\" (email)\n            VALUES ($1)\n            ON CONFLICT (email) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0b3832a8e650ed74622bbe8ceeb7ead8ceb0d4f0d05e22c9e36113b4cba6e5c3"
+}

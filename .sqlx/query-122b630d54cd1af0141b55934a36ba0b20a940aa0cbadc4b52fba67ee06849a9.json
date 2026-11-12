@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_threads\n                SET is_signal = false\n                WHERE link_id = $1 AND is_signal\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "122b630d54cd1af0141b55934a36ba0b20a940aa0cbadc4b52fba67ee06849a9"
+}

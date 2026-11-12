@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT id AS \"id!\"\n            FROM github_app_installation\n            WHERE $1::text IS NULL OR id > $1\n            ORDER BY id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58f4809821bd958ca59df997bca0f3c4e606e7735c219c6884bb4e20a6cdd8c6"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                outbox.id,\n                outbox.backfill_job_id,\n                job.link_id AS \"email_link_id?\"\n            FROM email_backfill_completion_outbox outbox\n            JOIN email_backfill_jobs job ON job.id = outbox.backfill_job_id\n            WHERE outbox.published_at IS NULL\n              AND job.status = 'Complete'\n            ORDER BY outbox.created_at, outbox.id\n            FOR UPDATE OF outbox SKIP LOCKED\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "backfill_job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_link_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "bd39b17b754c18941a4c634bee1759203f612f75a54cb51e79714ce6e3b43616"
+}

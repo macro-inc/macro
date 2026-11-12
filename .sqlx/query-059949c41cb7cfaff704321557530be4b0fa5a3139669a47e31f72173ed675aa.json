@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_settings_work SET completed_revision=CASE WHEN $2 THEN revision ELSE completed_revision END,\n            next_run_at=now()+make_interval(secs=>$3),lease_id=NULL,lease_until=NULL,failure=$4 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "059949c41cb7cfaff704321557530be4b0fa5a3139669a47e31f72173ed675aa"
+}

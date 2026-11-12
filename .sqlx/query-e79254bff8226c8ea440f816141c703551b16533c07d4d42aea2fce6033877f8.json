@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"SharePermission\" (\n            \"linkShare\",\n            \"linkShareAccessLevel\",\n            \"createdAt\",\n            \"updatedAt\"\n        )\n        VALUES (NULL, NULL, NOW(), NOW())\n        RETURNING id as \"id!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e79254bff8226c8ea440f816141c703551b16533c07d4d42aea2fce6033877f8"
+}

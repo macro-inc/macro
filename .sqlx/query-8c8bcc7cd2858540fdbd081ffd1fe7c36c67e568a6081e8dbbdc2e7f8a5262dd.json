@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH written AS (\n            SELECT calendar_meeting_uid(ical_uid) AS meeting, lower(organizer_email) AS organizer\n            FROM calendar_events\n            WHERE id = $1 AND organizer_email IS NOT NULL\n        )\n        SELECT source.id AS source_id,\n               written.meeting AS \"meeting!\",\n               written.organizer AS \"organizer!\",\n               source.normalized_payload -> 'event' -> 'guestPolicy' AS policy\n        FROM written\n        JOIN calendar_events event\n          ON calendar_meeting_uid(event.ical_uid) = written.meeting\n         AND lower(event.organizer_email) = written.organizer\n        JOIN calendar_event_sources source\n          ON source.event_id = event.id AND source.source_kind = 'google'\n        JOIN calendars calendar\n          ON calendar.id = source.calendar_id AND calendar.account_id = source.account_id\n        WHERE event.status <> 'cancelled'\n          AND NOT event.is_snapshot\n          AND NOT calendar.is_deleted\n          AND calendar.access_role IN ('owner', 'writer')\n          AND lower(calendar.provider_calendar_id) = written.organizer\n        ORDER BY source.source_updated_at DESC NULLS LAST, source.id\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "meeting!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "organizer!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "policy",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8c8bcc7cd2858540fdbd081ffd1fe7c36c67e568a6081e8dbbdc2e7f8a5262dd"
+}

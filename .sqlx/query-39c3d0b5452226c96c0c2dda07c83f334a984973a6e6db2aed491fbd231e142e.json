@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT channel_type AS \"channel_type: ChannelType\", team_id\n           FROM comms_channels WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "private",
+                "direct_message",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "39c3d0b5452226c96c0c2dda07c83f334a984973a6e6db2aed491fbd231e142e"
+}

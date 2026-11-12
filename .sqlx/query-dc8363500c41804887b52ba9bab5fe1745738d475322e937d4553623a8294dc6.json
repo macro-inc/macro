@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ChatMessage\" (\"chatId\", \"createdAt\", \"updatedAt\", \"content\", \"role\", \"model\")\n        SELECT $1, \"createdAt\", \"updatedAt\", \"content\", \"role\", \"model\"\n        FROM \"ChatMessage\"\n        WHERE \"chatId\"=$2\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dc8363500c41804887b52ba9bab5fe1745738d475322e937d4553623a8294dc6"
+}

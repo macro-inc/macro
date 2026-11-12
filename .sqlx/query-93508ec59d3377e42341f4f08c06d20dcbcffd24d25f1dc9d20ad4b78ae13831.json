@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_pull_request_changeset (\n                id,\n                github_key,\n                repository,\n                number,\n                base_ref,\n                base_sha,\n                head_ref,\n                head_sha,\n                files,\n                additions,\n                deletions,\n                patch_blob_key,\n                patch_bytes,\n                truncated,\n                captured_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15)\n            ON CONFLICT (id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Int4",
+        "Text",
+        "Int8",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93508ec59d3377e42341f4f08c06d20dcbcffd24d25f1dc9d20ad4b78ae13831"
+}

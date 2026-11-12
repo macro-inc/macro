@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_funding_intent SET denied = TRUE WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53908392b5b0672b2fcc4cf2506e508939bd5318c6729535d80fc026d117e90c"
+}

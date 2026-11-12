@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.share_token, m.user_id, m.title, m.scheduled_start,\n                      m.scheduled_end, m.channel_id, m.channel_call_id, m.active_call_id\n               FROM call_meetings m\n               JOIN calls c ON c.id = m.active_call_id\n               WHERE m.cancelled_at IS NULL\n                 AND m.channel_id IS NULL\n                 AND m.scheduled_start IS NULL AND m.scheduled_end IS NULL\n                 AND (m.user_id = $1 OR EXISTS (\n                     SELECT 1 FROM call_participants p\n                     WHERE p.call_id = c.id AND p.user_id = $1\n                 ) OR EXISTS (\n                     SELECT 1 FROM call_invitees i\n                     WHERE i.call_id = c.id AND i.user_id = $1\n                 ))\n                 AND (EXISTS (\n                     SELECT 1 FROM call_participants p\n                     WHERE p.call_id = c.id AND p.left_at IS NULL\n                 ) OR EXISTS (\n                     SELECT 1 FROM call_guests g\n                     WHERE g.call_id = c.id AND g.left_at IS NULL\n                 ))\n               ORDER BY m.created_at DESC, m.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "share_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "scheduled_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "scheduled_end",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "active_call_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8cfc25bbd4c2fcc4ad56b38a6a63cbbfd9c0361ab7358ec6f8f6611758f6fd1c"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ai_funding_prepaid_release WHERE payer_id = $1 AND sequence = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d024840942fdd0c664ff6233fd8f42bdcddc37bd76b8e54fe0dc5b7543b5bdc5"
+}

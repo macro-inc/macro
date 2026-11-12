@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO calendar_event_override_attendees (\n                    event_id, recurrence_id, email, display_name, response_status,\n                    is_organizer, is_optional, is_self, comment\n                )\n                VALUES ($1, $2, lower($3), $4, $5, $6, $7, $8, $9)\n                ON CONFLICT (event_id, recurrence_id, email) DO UPDATE SET\n                    display_name = EXCLUDED.display_name,\n                    response_status = EXCLUDED.response_status,\n                    is_organizer = EXCLUDED.is_organizer,\n                    is_optional = EXCLUDED.is_optional,\n                    is_self = EXCLUDED.is_self,\n                    comment = EXCLUDED.comment\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2174a00b6587755c83f5f0008950918ae8b8b8d00d05857cb8a78e8bd0a71dd0"
+}

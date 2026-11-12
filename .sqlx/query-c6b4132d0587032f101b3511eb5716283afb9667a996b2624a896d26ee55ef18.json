@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\"\n            FROM \"SharePermission\" sp\n            JOIN \"ChatPermission\" cp ON cp.\"sharePermissionId\" = sp.id\n            WHERE cp.\"chatId\" = $1\n              AND sp.\"linkShare\" = 'PUBLIC'\n              AND sp.\"linkShareAccessLevel\" IS NOT NULL\n\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c6b4132d0587032f101b3511eb5716283afb9667a996b2624a896d26ee55ef18"
+}

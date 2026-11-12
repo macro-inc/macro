@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE project_hierarchy AS (\n            SELECT id\n            FROM \"Project\"\n            WHERE id = $1 AND \"deletedAt\" IS NOT NULL\n            UNION ALL\n            SELECT child.id\n            FROM \"Project\" child\n            JOIN project_hierarchy parent ON child.\"parentId\" = parent.id\n            WHERE child.\"deletedAt\" IS NOT NULL\n        )\n        SELECT id AS \"id!\" FROM project_hierarchy\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f4acb15153e914588ba0aeebcdad3d47804bda301d53441f8ccfb2ff3a271f11"
+}

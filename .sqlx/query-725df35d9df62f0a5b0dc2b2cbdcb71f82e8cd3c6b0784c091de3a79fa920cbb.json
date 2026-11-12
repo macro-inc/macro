@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment SET state = 'downloaded', claimed_until = NULL, locator = NULL, attempts = 0, retry_at = now()\n            WHERE chat_id = $1 AND person_id = $2 AND source_id = $3 AND ordinal = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "725df35d9df62f0a5b0dc2b2cbdcb71f82e8cd3c6b0784c091de3a79fa920cbb"
+}
