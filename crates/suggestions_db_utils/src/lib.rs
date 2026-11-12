@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
 //! Transactional helpers for the `suggestion` tables, for writes that must
 //! commit with another crate's: a routine suggestion and its `routine`
-//! suggestion are kept, dismissed, retired and saved together. The `ideas` crate's repository
+//! suggestion are kept, dismissed, retired and saved together. The `suggestions` crate's repository
 //! builds on the same helpers.
 
 use chrono::{DateTime, Utc};
@@ -12,20 +12,20 @@ use sqlx::PgConnection;
 #[cfg(test)]
 mod test;
 
-/// Whether one more open idea fits.
+/// Whether one more open suggestion fits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Room {
     /// It fits.
     Fits,
-    /// The person has the most open ideas they may have.
+    /// The person has the most open suggestions they may have.
     OpenFull,
     /// The generation added the most it may.
     GenerationFull,
 }
 
-/// One change a generation session made to an idea, for the change log.
+/// One change a generation session made to a suggestion, for the change log.
 #[derive(Debug, Clone, PartialEq)]
-pub struct IdeaChange<'a> {
+pub struct SuggestionChange<'a> {
     /// The generation it belongs to.
     pub generation: Uuid,
     /// The session that made it.
@@ -42,7 +42,7 @@ pub struct IdeaChange<'a> {
     pub at: DateTime<Utc>,
 }
 
-/// Serialize writes to `user`'s ideas for the rest of the transaction, so
+/// Serialize writes to `user`'s suggestions for the rest of the transaction, so
 /// limits hold under concurrent writes.
 pub async fn lock_user(conn: &mut PgConnection, user: &str) -> Result<(), sqlx::Error> {
     sqlx::query!(
@@ -54,7 +54,7 @@ pub async fn lock_user(conn: &mut PgConnection, user: &str) -> Result<(), sqlx::
     Ok(())
 }
 
-/// Whether one more open idea fits `user`'s `open` limit and
+/// Whether one more open suggestion fits `user`'s `open` limit and
 /// `generation`'s `per_generation` limit. Call under [`lock_user`].
 pub async fn room(
     conn: &mut PgConnection,
@@ -84,12 +84,12 @@ pub async fn room(
     Ok(Room::Fits)
 }
 
-/// Log `change` to idea `idea` of `user`'s.
+/// Log `change` to suggestion `suggestion` of `user`'s.
 pub async fn log_change(
     conn: &mut PgConnection,
     user: &str,
-    idea: Uuid,
-    change: &IdeaChange<'_>,
+    suggestion: Uuid,
+    change: &SuggestionChange<'_>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"INSERT INTO suggestion_change
@@ -100,7 +100,7 @@ pub async fn log_change(
         user,
         change.generation,
         change.session,
-        idea,
+        suggestion,
         change.action,
         change.old,
         change.new,
@@ -112,9 +112,9 @@ pub async fn log_change(
     Ok(())
 }
 
-/// A routine idea for a routine suggestion a session just kept.
+/// A routine suggestion for a routine suggestion a session just kept.
 #[derive(Debug, Clone, PartialEq)]
-pub struct NewRoutineIdea<'a> {
+pub struct NewRoutineSuggestionCard<'a> {
     /// Whose.
     pub user: &'a str,
     /// The suggestion it shows.
@@ -135,16 +135,16 @@ pub struct NewRoutineIdea<'a> {
     pub at: DateTime<Utc>,
 }
 
-/// Add `idea`, logged as created, within the `open` and `per_generation`
+/// Add `suggestion`, logged as created, within the `open` and `per_generation`
 /// limits; whether it fit. Takes the person's lock.
-pub async fn add_routine_idea(
+pub async fn add_routine_card(
     conn: &mut PgConnection,
-    idea: &NewRoutineIdea<'_>,
+    card: &NewRoutineSuggestionCard<'_>,
     open: u32,
     per_generation: u32,
 ) -> Result<Room, sqlx::Error> {
-    lock_user(conn, idea.user).await?;
-    let room = room(conn, idea.user, idea.generation, open, per_generation).await?;
+    lock_user(conn, card.user).await?;
+    let room = room(conn, card.user, card.generation, open, per_generation).await?;
     if room != Room::Fits {
         return Ok(room);
     }
@@ -155,50 +155,50 @@ pub async fn add_routine_idea(
               session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'routine', $3, $4, $5, $6, $7, $8, $9, $9, $9)"#,
         id,
-        idea.user,
-        format!("routine_suggestion:{}", idea.suggestion),
-        idea.title,
-        idea.summary,
-        idea.importance,
-        idea.categories,
-        idea.session,
-        idea.at,
+        card.user,
+        format!("routine_suggestion:{}", card.suggestion),
+        card.title,
+        card.summary,
+        card.importance,
+        card.categories,
+        card.session,
+        card.at,
     )
     .execute(&mut *conn)
     .await?;
     sqlx::query!(
         "INSERT INTO suggestion_routine (suggestion_id, routine_suggestion_id) VALUES ($1, $2)",
         id,
-        idea.suggestion,
+        card.suggestion,
     )
     .execute(&mut *conn)
     .await?;
     log_change(
         conn,
-        idea.user,
+        card.user,
         id,
-        &IdeaChange {
-            generation: idea.generation,
-            session: idea.session,
+        &SuggestionChange {
+            generation: card.generation,
+            session: card.session,
             action: "created",
             old: None,
-            new: Some(serde_json::json!({ "title": idea.title, "importance": idea.importance })),
-            reason: Some(idea.summary),
-            at: idea.at,
+            new: Some(serde_json::json!({ "title": card.title, "importance": card.importance })),
+            reason: Some(card.summary),
+            at: card.at,
         },
     )
     .await?;
     Ok(Room::Fits)
 }
 
-/// Move the open routine idea of suggestion `suggestion` to `state`
+/// Move the open routine suggestion of suggestion `suggestion` to `state`
 /// (`dismissed` or `retired`), logging `change` when given; whether there
 /// was one.
-pub async fn close_routine_idea(
+pub async fn close_routine_card(
     conn: &mut PgConnection,
     suggestion: Uuid,
     state: &str,
-    change: Option<&IdeaChange<'_>>,
+    change: Option<&SuggestionChange<'_>>,
     at: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
     let closed = sqlx::query!(
@@ -219,9 +219,9 @@ pub async fn close_routine_idea(
 }
 
 /// `owner` saved routine `routine` from suggestion `suggestion`: their
-/// open routine idea for it is done, and produced the routine. Someone
+/// open routine suggestion for it is done, and produced the routine. Someone
 /// else's suggestion changes nothing.
-pub async fn complete_routine_idea(
+pub async fn complete_routine_card(
     conn: &mut PgConnection,
     owner: &str,
     suggestion: Uuid,
@@ -240,7 +240,7 @@ pub async fn complete_routine_idea(
     )
     .fetch_optional(&mut *conn)
     .await?;
-    let Some(idea) = done else {
+    let Some(card) = done else {
         return Ok(false);
     };
     sqlx::query!(
@@ -248,7 +248,7 @@ pub async fn complete_routine_idea(
            VALUES ($1, 'produced',
                    (SELECT count(*) FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced')::smallint,
                    'scheduled_action', $2)"#,
-        idea,
+        card,
         routine.to_string(),
     )
     .execute(conn)

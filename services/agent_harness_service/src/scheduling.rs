@@ -178,12 +178,12 @@ impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
     }
 }
 
-/// A routine idea is dismissed by dismissing its routine suggestion, which
+/// A routine suggestion is dismissed by dismissing its routine suggestion, which
 /// dismisses both together.
 struct SuggestionDismissal<S>(Arc<S>);
 
 #[async_trait::async_trait]
-impl<S> ideas::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
+impl<S> suggestions::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
 where
     S: scheduled_action::domain::suggestions::ports::RoutineSuggestionApi,
 {

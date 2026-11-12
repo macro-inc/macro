@@ -48,8 +48,8 @@ async fn setup(pool: &PgPool) -> (Uuid, Uuid) {
     (generation, suggestion)
 }
 
-fn idea(suggestion: Uuid, generation: Uuid) -> NewRoutineIdea<'static> {
-    NewRoutineIdea {
+fn card(suggestion: Uuid, generation: Uuid) -> NewRoutineSuggestionCard<'static> {
+    NewRoutineSuggestionCard {
         user: OWNER,
         suggestion,
         title: "Plan the week",
@@ -62,30 +62,30 @@ fn idea(suggestion: Uuid, generation: Uuid) -> NewRoutineIdea<'static> {
     }
 }
 
-/// A closed routine idea stays closed: a later dismiss, retire or save
+/// A closed routine suggestion stays closed: a later dismiss, retire or save
 /// changes nothing.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_routine_idea_closes_once(pool: PgPool) {
+async fn a_routine_card_closes_once(pool: PgPool) {
     let (generation, suggestion) = setup(&pool).await;
     let mut tx = pool.begin().await.unwrap();
     assert_eq!(
-        add_routine_idea(&mut tx, &idea(suggestion, generation), 30, 10)
+        add_routine_card(&mut tx, &card(suggestion, generation), 30, 10)
             .await
             .unwrap(),
         Room::Fits
     );
     assert!(
-        close_routine_idea(&mut tx, suggestion, "dismissed", None, Utc::now())
+        close_routine_card(&mut tx, suggestion, "dismissed", None, Utc::now())
             .await
             .unwrap()
     );
     assert!(
-        !close_routine_idea(&mut tx, suggestion, "retired", None, Utc::now())
+        !close_routine_card(&mut tx, suggestion, "retired", None, Utc::now())
             .await
             .unwrap()
     );
     assert!(
-        !complete_routine_idea(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
+        !complete_routine_card(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
             .await
             .unwrap()
     );
@@ -98,33 +98,33 @@ async fn a_routine_idea_closes_once(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_routine_idea_waits_for_room(pool: PgPool) {
+async fn a_routine_card_waits_for_room(pool: PgPool) {
     let (generation, suggestion) = setup(&pool).await;
     let mut tx = pool.begin().await.unwrap();
     assert_eq!(
-        add_routine_idea(&mut tx, &idea(suggestion, generation), 0, 10)
+        add_routine_card(&mut tx, &card(suggestion, generation), 0, 10)
             .await
             .unwrap(),
         Room::OpenFull
     );
     assert_eq!(
-        add_routine_idea(&mut tx, &idea(suggestion, generation), 30, 0)
+        add_routine_card(&mut tx, &card(suggestion, generation), 30, 0)
             .await
             .unwrap(),
         Room::GenerationFull
     );
 }
 
-/// Saving a routine from someone else's suggestion leaves their idea open.
+/// Saving a routine from someone else's suggestion leaves their suggestion open.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_the_owner_saving_a_routine_finishes_its_idea(pool: PgPool) {
+async fn only_the_owner_saving_a_routine_finishes_its_suggestion(pool: PgPool) {
     let (generation, suggestion) = setup(&pool).await;
     let mut tx = pool.begin().await.unwrap();
-    add_routine_idea(&mut tx, &idea(suggestion, generation), 30, 10)
+    add_routine_card(&mut tx, &card(suggestion, generation), 30, 10)
         .await
         .unwrap();
     assert!(
-        !complete_routine_idea(
+        !complete_routine_card(
             &mut tx,
             "macro|someone-else@macro.com",
             suggestion,
@@ -135,7 +135,7 @@ async fn only_the_owner_saving_a_routine_finishes_its_idea(pool: PgPool) {
         .unwrap()
     );
     assert!(
-        complete_routine_idea(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
+        complete_routine_card(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
             .await
             .unwrap()
     );

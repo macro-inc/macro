@@ -31,19 +31,19 @@ use anyhow::{Result, bail};
 use chrono::Utc;
 use chrono_tz::Tz;
 use feature_flags::FeatureFlags;
-use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use suggestions::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::ports::GenerationSessions;
 
 use self::model::{
     GenerationStatus, RetireSuggestion, ReviewedState, ReviewedSuggestion, RoutineGenerationReport,
     RoutineSuggestion, RoutineSuggestions, StoredPick, StoredSuggestion, SuggestOutcome,
     SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
-use ideas::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
+use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
 use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
 use super::models::ActionPolicyError;
@@ -260,9 +260,9 @@ where
                 reason,
                 surfaces,
                 keep_probability,
-                idea,
+                card,
             } => {
-                if idea.is_some() {
+                if card.is_some() {
                     return Ok(rejected(vec![
                         "only a drafted routine is shown among suggestions; leave `card` out of a catalog routine"
                             .to_owned(),
@@ -295,7 +295,7 @@ where
                 reason,
                 surfaces,
                 keep_probability,
-                idea,
+                card,
             } => {
                 let check = self
                     .actions
@@ -315,7 +315,7 @@ where
                         &reason,
                         surfaces,
                         keep_probability,
-                        idea,
+                        card,
                         allowed,
                     ),
                     Some(check),
@@ -343,12 +343,12 @@ where
                             id: Some(id),
                         });
                     }
-                    Kept::IdeasFull => format!(
-                        "the user has {OPEN_LIMIT} open ideas, and a drafted routine is one; \
+                    Kept::SuggestionsFull => format!(
+                        "the user has {OPEN_LIMIT} open suggestions, and a drafted routine is one; \
                          retire a suggestion that matters less first"
                     ),
                     Kept::NightFull => format!(
-                        "this generation added {NEW_PER_GENERATION} ideas, the most for one night, \
+                        "this generation added {NEW_PER_GENERATION} suggestions, the most for one night, \
                          and a drafted routine is one; stop drafting"
                     ),
                 };

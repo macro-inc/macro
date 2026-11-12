@@ -24,8 +24,8 @@ use super::model::{
     SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 use super::ports::{
-    GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
-    RoutineSuggestionDismissal, SuggestionAudience, Written,
+    GenerationSessions, Limits, RequestSessions, RoutineSuggestionDismissal, SuggestionAccess,
+    SuggestionApi, SuggestionAudience, SuggestionRepo, Written,
 };
 use super::prompt;
 
@@ -405,29 +405,29 @@ where
         id: Uuid,
     ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
-        let idea = self
+        let suggestion = self
             .repo
-            .idea(user, id)
+            .suggestion(user, id)
             .await
-            .map_err(IdeaError::internal)?;
-        let idea = idea
-            .filter(|idea| idea.state.is_open())
-            .ok_or(IdeaError::NotFound)?;
-        // A routine idea and its suggestion are dismissed together, where
+            .map_err(SuggestionError::internal)?;
+        let suggestion = suggestion
+            .filter(|suggestion| suggestion.state.is_open())
+            .ok_or(SuggestionError::NotFound)?;
+        // A routine suggestion and its suggestion are dismissed together, where
         // the suggestion is kept.
-        if let IdeaKind::Routine {
+        if let SuggestionKind::Routine {
             routine_suggestion_id,
-        } = idea.kind
+        } = suggestion.kind
         {
             let dismissed = self
                 .routine_suggestions
                 .dismiss_suggestion(user, routine_suggestion_id)
                 .await
-                .map_err(IdeaError::Internal)?;
+                .map_err(SuggestionError::Internal)?;
             if !dismissed {
-                return Err(IdeaError::NotFound);
+                return Err(SuggestionError::NotFound);
             }
-            tracing::info!(event = "ideas.dismissed", kind = "routine");
+            tracing::info!(event = "suggestions.dismissed", kind = "routine");
             return Ok(());
         }
         let moved = self

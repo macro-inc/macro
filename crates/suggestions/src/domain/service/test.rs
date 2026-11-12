@@ -112,7 +112,7 @@ impl RoutineSuggestionDismissal for FakeDismissal {
     }
 }
 
-type Service = IdeaService<PgIdeaRepo, FakeAccess, FakeFeatureFlags>;
+type Service = SuggestionService<PgSuggestionRepo, FakeAccess, FakeFeatureFlags>;
 
 struct Harness {
     service: Service,
@@ -774,9 +774,9 @@ async fn the_person_accepts_and_dismisses_only_their_open_suggestions(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
+async fn a_routine_card_follows_its_suggestion(pool: PgPool) {
     let h = harness(pool, true).await;
-    let session = h.session(OWNER, "ideas").await;
+    let session = h.session(OWNER, "suggestions").await;
     let generation = sqlx::query_scalar!(
         "SELECT generation_id FROM suggestion_generation_session WHERE session_id = $1",
         session,
@@ -797,9 +797,9 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
     .await
     .unwrap();
     let mut tx = h.pool.begin().await.unwrap();
-    ideas_db_utils::add_routine_idea(
+    suggestions_db_utils::add_routine_card(
         &mut tx,
-        &ideas_db_utils::NewRoutineIdea {
+        &suggestions_db_utils::NewRoutineSuggestionCard {
             user: OWNER,
             suggestion,
             title: "Plan the week",
@@ -818,10 +818,10 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
     tx.commit().await.unwrap();
 
     let feed = h.service.feed(&user(OWNER), None).await.unwrap();
-    let idea = feed.ideas[0].clone();
+    let card = feed.suggestions[0].clone();
     assert_eq!(
-        idea.kind,
-        IdeaKind::Routine {
+        card.kind,
+        SuggestionKind::Routine {
             routine_suggestion_id: suggestion
         }
     );
@@ -831,11 +831,11 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
         .rewrite(
             &principal(OWNER),
             Some(session),
-            idea.id,
-            RewriteIdea {
+            card.id,
+            RewriteSuggestion {
                 importance: Some(90),
                 reason: "Matters more".to_owned(),
-                ..RewriteIdea::default()
+                ..RewriteSuggestion::default()
             },
         )
         .await
@@ -846,8 +846,8 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
         .retire(
             &principal(OWNER),
             Some(session),
-            idea.id,
-            RetireIdea {
+            card.id,
+            RetireSuggestionRequest {
                 reason: "No longer fits".to_owned(),
             },
         )
@@ -855,7 +855,7 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
         .unwrap();
     assert!(!retire.ok);
     // The person dismissing it dismisses its suggestion, which closes both.
-    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    h.service.dismiss(&user(OWNER), card.id).await.unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
 }
 

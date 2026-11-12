@@ -173,12 +173,12 @@ pub trait SuggestionAudience: Send + Sync + 'static {
     ) -> Result<(), rootcause::Report>;
 }
 
-/// Routine suggestions, which a routine idea shows. Object-safe: the
+/// Routine suggestions, which a routine suggestion shows. Object-safe: the
 /// harness hands in the routine suggestions service.
 #[async_trait::async_trait]
 pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
     /// The person isn't interested in routine suggestion `suggestion`: it
-    /// and its routine idea are dismissed together. Whether it was theirs.
+    /// and its routine suggestion are dismissed together. Whether it was theirs.
     async fn dismiss_suggestion(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -186,7 +186,7 @@ pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
     ) -> Result<bool, rootcause::Report>;
 }
 
-/// Ideas as the API serves them: the person's feed, and the tools hidden
+/// Suggestions as the API serves them: the person's feed, and the tools hidden
 /// generation sessions manage it with.
 pub trait SuggestionApi: Send + Sync + 'static {
     /// The person's open suggestions they can still open every item of, best

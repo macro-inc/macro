@@ -294,7 +294,7 @@ fn category_names(categories: &[Category]) -> Vec<String> {
         .collect()
 }
 
-/// Whether one more open idea stays within `limits`, under the person's
+/// Whether one more open suggestion stays within `limits`, under the person's
 /// lock, which this takes.
 async fn locked_room(
     conn: &mut PgConnection,
@@ -302,9 +302,9 @@ async fn locked_room(
     generation: Uuid,
     limits: Limits,
 ) -> Result<Written, sqlx::Error> {
-    ideas_db_utils::lock_user(conn, user.as_ref()).await?;
+    suggestions_db_utils::lock_user(conn, user.as_ref()).await?;
     Ok(
-        match ideas_db_utils::room(
+        match suggestions_db_utils::room(
             conn,
             user.as_ref(),
             generation,
@@ -313,9 +313,9 @@ async fn locked_room(
         )
         .await?
         {
-            ideas_db_utils::Room::Fits => Written::Applied,
-            ideas_db_utils::Room::OpenFull => Written::OverOpenLimit,
-            ideas_db_utils::Room::GenerationFull => Written::OverNewLimit,
+            suggestions_db_utils::Room::Fits => Written::Applied,
+            suggestions_db_utils::Room::OpenFull => Written::OverOpenLimit,
+            suggestions_db_utils::Room::GenerationFull => Written::OverNewLimit,
         },
     )
 }
@@ -349,11 +349,11 @@ async fn log(
     suggestion: Uuid,
     change: &Change,
 ) -> Result<(), sqlx::Error> {
-    ideas_db_utils::log_change(
+    suggestions_db_utils::log_change(
         conn,
         user.as_ref(),
-        idea,
-        &ideas_db_utils::IdeaChange {
+        suggestion,
+        &suggestions_db_utils::SuggestionChange {
             generation: change.generation,
             session: change.session,
             action: change.action.as_ref(),
@@ -521,7 +521,7 @@ impl SuggestionRepo for PgSuggestionRepo {
                 return Ok(room);
             }
         } else {
-            ideas_db_utils::lock_user(&mut tx, user.as_ref()).await?;
+            suggestions_db_utils::lock_user(&mut tx, user.as_ref()).await?;
         }
         let updated = sqlx::query!(
             r#"UPDATE suggestion
