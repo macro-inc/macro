@@ -13,6 +13,9 @@ mkdir -p apps/web/dist
 # one falls back to bundle build 0 (the native E2E build does the same).
 echo development > apps/web/tauri/src-tauri/.macro-tauri-env
 
+# Nix's cctools ld crashes (SIGTRAP) linking the app's tests; the DMG build
+# avoids it with Apple's linker, and so does this.
+export CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=/usr/bin/clang
 nix develop --command cargo test \
   --manifest-path apps/web/tauri/Cargo.toml -p app --lib --locked \
   > "$QA_OUT/cargo-test.log" 2>&1
