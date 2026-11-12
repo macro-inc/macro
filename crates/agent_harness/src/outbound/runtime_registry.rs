@@ -16,7 +16,9 @@ use agent_client_protocol::schema::v1::SessionId;
 
 use agent_runtime_protocol::domain::ports::{Transport, TransportSender};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
-use agent_session::domain::connection::{RuntimeAttachment, RuntimeConnection, SessionChannel};
+use agent_session::domain::connection::{
+    ListedSession, RuntimeAttachment, RuntimeConnection, SessionChannel,
+};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use dashmap::DashMap;
@@ -39,8 +41,8 @@ const LIVE_SESSIONS_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct LiveRuntimeSessions {
     /// The harness the runtime dialed in for.
     pub harness: HarnessId,
-    /// Its agents' live ACP sessions.
-    pub acp_sessions: Vec<SessionId>,
+    /// Its agents' live ACP sessions, with when each last saw activity.
+    pub acp_sessions: Vec<ListedSession>,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
 }
@@ -270,25 +272,25 @@ async fn report_live_sessions<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    let acp_sessions =
-        match tokio::time::timeout(LIVE_SESSIONS_TIMEOUT, connection.list_sessions()).await {
-            Ok(Ok(acp_sessions)) => acp_sessions,
-            Ok(Err(error)) => {
-                tracing::debug!(error = %error, "the runtime listed no live sessions");
-                return;
-            }
-            Err(_) => {
-                tracing::warn!("the runtime did not list its live sessions in time");
-                return;
-            }
-        };
-    tracing::Span::current().record("agent.runtime.live_sessions", acp_sessions.len());
-    if acp_sessions.is_empty() {
+    let listed = match tokio::time::timeout(LIVE_SESSIONS_TIMEOUT, connection.list_sessions()).await
+    {
+        Ok(Ok(listed)) => listed,
+        Ok(Err(error)) => {
+            tracing::debug!(error = %error, "the runtime listed no live sessions");
+            return;
+        }
+        Err(_) => {
+            tracing::warn!("the runtime did not list its live sessions in time");
+            return;
+        }
+    };
+    tracing::Span::current().record("agent.runtime.live_sessions", listed.len());
+    if listed.is_empty() {
         return;
     }
     let _ = live_sessions.send(LiveRuntimeSessions {
         harness,
-        acp_sessions,
+        acp_sessions: listed,
         span: tracing::Span::current(),
     });
 }

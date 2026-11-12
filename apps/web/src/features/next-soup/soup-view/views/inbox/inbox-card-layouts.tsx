@@ -1,5 +1,6 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
 import { formatCallDuration } from '@block-call/utils';
+import { channelListName } from '@channel/group-chat-name';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
@@ -456,7 +457,8 @@ const channelLocation = (entity: EntityData): string | undefined => {
     return undefined;
   }
   if (entity.channelType === 'direct_message') return undefined;
-  return entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  const name = entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  return channelListName({ name, channelType: entity.channelType });
 };
 
 const entityLocation = (entity: EntityData): string | undefined => {
@@ -533,6 +535,7 @@ function BaseCard(props: {
   title: JSX.Element;
   /** Adornment before the title text (e.g. draft badge, block-type icon). */
   titleLeading?: JSX.Element;
+  trailing?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
@@ -564,10 +567,19 @@ function BaseCard(props: {
           {props.children}
         </div>
       </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
+      <Show
+        when={props.trailing}
+        fallback={
+          <InboxTimestamp
+            timestamp={props.item.timestamp}
+            class="col-start-3 row-start-1 self-start justify-self-end"
+          />
+        }
+      >
+        <div class="col-start-3 row-start-1 self-center justify-self-end">
+          {props.trailing}
+        </div>
+      </Show>
     </InboxCard.Root>
   );
 }
@@ -626,7 +638,13 @@ const attachmentSummary = (count: number): string | undefined =>
     ? undefined
     : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
 
-export function ChannelCardLayout(props: InboxCardLayoutProps) {
+export function ChannelCardLayout(
+  props: InboxCardLayoutProps & {
+    icon?: JSX.Element;
+    trailing?: JSX.Element;
+    preview?: JSX.Element;
+  }
+) {
   const entity = createMemo(() => props.item.entity);
 
   const messageSenderId = createMemo(() => {
@@ -704,34 +722,43 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     <BaseCard
       {...props}
       icon={
-        <Show
-          when={!isDM()}
-          fallback={<InboxAvatar senderId={senderAvatarId()} />}
-        >
-          <EntityIcon
-            class={AVATAR_GLYPH_CLASS}
-            targetType={getEntityIconType(entity())}
-            size="fill"
-            theme="monochrome"
-          />
-        </Show>
+        props.icon ?? (
+          <Show
+            when={!isDM()}
+            fallback={<InboxAvatar senderId={senderAvatarId()} />}
+          >
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(entity())}
+              size="fill"
+              theme="monochrome"
+            />
+          </Show>
+        )
       }
       title={text().title}
     >
-      <CardClampedMarkdown
-        inert
-        text={text().content}
-        prefix={
-          <>
-            <Show when={senderLabel()}>
-              <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
-            </Show>
-            <Show when={text().contentIsAttachmentSummary}>
-              <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
-            </Show>
-          </>
+      <Show
+        when={props.preview}
+        fallback={
+          <CardClampedMarkdown
+            inert
+            text={text().content}
+            prefix={
+              <>
+                <Show when={senderLabel()}>
+                  <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
+                </Show>
+                <Show when={text().contentIsAttachmentSummary}>
+                  <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                </Show>
+              </>
+            }
+          />
         }
-      />
+      >
+        {props.preview}
+      </Show>
     </BaseCard>
   );
 }

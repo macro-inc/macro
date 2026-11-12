@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
@@ -139,6 +140,8 @@ export function RoutineEditor(props: {
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
   feedback?: JSX.Element;
+  /** The routines this routine's runs created; absent when it created none. */
+  created?: JSX.Element;
   /** Above the sections, for what the owner has to act on first. */
   notice?: JSX.Element;
 }) {
@@ -358,6 +361,16 @@ export function RoutineEditor(props: {
                 {(settings) => (
                   <RoutineSection label="Runs & notifications">
                     <RoutineSurface>{settings()}</RoutineSurface>
+                  </RoutineSection>
+                )}
+              </Show>
+              <Show when={props.created}>
+                {(created) => (
+                  <RoutineSection
+                    label={t('subRoutines.sectionTitle')}
+                    aside={t('subRoutines.sectionAside')}
+                  >
+                    {created()}
                   </RoutineSection>
                 )}
               </Show>

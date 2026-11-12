@@ -81,6 +81,8 @@ export default {
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
   showHiddenRoutineRuns: 'Show hidden routine runs',
+  nextOptions: 'Next options',
+  retryOptions: 'Retry options',
 
   // Filter menu
   filter: 'Filter',
@@ -158,4 +160,7 @@ export default {
   draft: 'Draft',
   sharedWithTeam: '{{name}}, shared with team',
   viewActions: 'Actions for {{name}}',
+  savedViewWithStatus: '{{name}}, {{status}}',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
 };

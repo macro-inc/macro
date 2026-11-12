@@ -35,7 +35,7 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { shouldShowSplitCloseButton, splitViewId } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createSplitRowRename } from '../row-rename';
 import { createSplitTitleRenames } from '../title-rename';
@@ -78,7 +78,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
-  const ownedSlots = createOwnedSlots();
+  const ownedSlots = createOwnedSlots(() => splitViewId(props.handle));
 
   const splitLayoutHelpers = useSplitLayout();
   const isNotUnifiedList = () => {

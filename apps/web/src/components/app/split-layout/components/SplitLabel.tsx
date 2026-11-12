@@ -22,6 +22,7 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -299,6 +300,7 @@ function SplitLabelContextMenu(props: ParentProps) {
   let afterClose: (() => void) | undefined;
 
   const item = (action: SplitFileMenuAction) => {
+    if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
     const children = () => action.children?.filter(Boolean) ?? [];
 
     return (

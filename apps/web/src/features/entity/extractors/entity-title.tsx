@@ -1,5 +1,6 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { t } from '@app/lib/i18n';
+import { channelListName } from '@channel/group-chat-name';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -20,8 +21,10 @@ function extractRawTitle(entity: EntityData): JSX.Element {
     )
     .with({ type: 'initiative' }, (e) => e.name || 'Untitled project')
     .with({ type: 'project' }, (e) => e.name)
-    .with({ type: 'channel' }, (e) => e.name)
-    .with({ type: 'channel_message' }, (e) => e.channelName)
+    .with({ type: 'channel' }, (e) => channelListName(e))
+    .with({ type: 'channel_message' }, (e) =>
+      channelListName({ name: e.channelName, channelType: e.channelType })
+    )
     .with({ type: 'channel_thread' }, (e) => e.name)
     .with({ type: 'email' }, (e) => displaySubject(e.name))
     .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
@@ -54,6 +57,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       { type: 'form' },
       (entity) => entity.name || blockNameToDefaultFile('form')
     )
+    .with({ type: 'harness' }, (entity) => entity.name)
     .exhaustive(() => 'Untitled');
 }
 

@@ -8,6 +8,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { children, For, type JSX, Show } from 'solid-js';
 import {
   createSoupEntityActions,
@@ -73,26 +74,36 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
               <MenuSeparator />
             </Show>
             <For each={group.items}>
-              {(action) => (
-                <MenuItem
-                  text={action.label}
-                  icon={action.icon}
-                  hotkeyToken={action.hotkeyToken}
-                  shortcut={action.shortcut}
-                  disabled={action.disabled}
-                  onClick={() => {
-                    if (action.afterMenuCloses)
-                      props.runAfterClose(() =>
-                        fireAndForget(
-                          handleAction(action.onClick),
-                          'entity-actions'
-                        )
-                      );
-                    else return handleAction(action.onClick);
-                  }}
-                  class={action.destructive ? 'text-failure-ink' : undefined}
-                />
-              )}
+              {(action) => {
+                if (action.muteMenu) {
+                  return (
+                    <NotificationMuteMenu
+                      {...action.muteMenu}
+                      onActionComplete={props.onActionComplete}
+                    />
+                  );
+                }
+                return (
+                  <MenuItem
+                    text={action.label}
+                    icon={action.icon}
+                    hotkeyToken={action.hotkeyToken}
+                    shortcut={action.shortcut}
+                    disabled={action.disabled}
+                    onClick={() => {
+                      if (action.afterMenuCloses)
+                        props.runAfterClose(() =>
+                          fireAndForget(
+                            handleAction(action.onClick),
+                            'entity-actions'
+                          )
+                        );
+                      else return handleAction(action.onClick);
+                    }}
+                    class={action.destructive ? 'text-failure-ink' : undefined}
+                  />
+                );
+              }}
             </For>
           </>
         )}

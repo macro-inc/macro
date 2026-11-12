@@ -13,6 +13,7 @@ import { useMarkdownDocumentTools } from '@block-md/component/useMarkdownDocumen
 import { useMarkdownDocument } from '@block-md/context/markdown-document-context';
 import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
 import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
+import { arrivalFocusesComposer } from '@channel/composer-arrival-focus';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
@@ -239,6 +240,14 @@ function HomeEntityDetailBody(props: {
   navigationRequest: number | string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const home = useHomeView();
+  const composerFocusRequest = () => {
+    const request = home.composerFocusRequest();
+    return props.target.type === 'channel' &&
+      request?.channelId === props.target.id
+      ? request.id
+      : 0;
+  };
   const documentShareTarget = () => {
     const blockAlias = entityDetailBlockType(props.target);
     return props.target.type === 'document' && blockAlias
@@ -272,6 +281,12 @@ function HomeEntityDetailBody(props: {
         <EntityDetail
           target={props.target}
           navigationRequest={props.navigationRequest}
+          channel={{
+            // Read as the composer connects, for the row that opened it.
+            autofocus: arrivalFocusesComposer(panel.handle),
+            composerFocusRequest: composerFocusRequest(),
+            onEscapeToList: home.focusList,
+          }}
         >
           {(context) => {
             const name = () => {

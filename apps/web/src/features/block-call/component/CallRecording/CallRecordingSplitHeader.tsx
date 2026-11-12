@@ -3,13 +3,11 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -24,7 +22,6 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { createFileDownload } from '@core/util/createFileDownload';
@@ -34,10 +31,7 @@ import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
-import { ButtonGroup } from '@ui';
-import { Show } from 'solid-js';
 import { callRecordingDownloadSource } from '../../queries/recording-download';
-import { useCallAgain } from '../use-call-again';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -69,10 +63,6 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
     userPermissions: permissions(),
     owner: blockMetadataSignal()?.owner,
   }));
-  const { canCallAgain, callAgain } = useCallAgain(
-    () => record().callId,
-    () => record().channelId
-  );
   const recordingDownload = createFileDownload(() =>
     callRecordingDownloadSource(record(), callName())
   );
@@ -176,23 +166,6 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
-        <Show when={!isMobile() && !record().isActive && canCallAgain()}>
-          <div class="order-[900] flex items-center">
-            <HeaderActionGroup label="Call actions">
-              <HeaderIsland>
-                <ButtonGroup.Button
-                  variant="secondary"
-                  size={isTouchDevice() ? 'icon-xs' : 'icon-sm'}
-                  class={isTouchDevice() ? 'bg-surface' : undefined}
-                  tooltip="Call Again"
-                  onClick={callAgain}
-                >
-                  <PhoneCallIcon class="size-4" />
-                </ButtonGroup.Button>
-              </HeaderIsland>
-            </HeaderActionGroup>
-          </div>
-        </Show>
       </SplitHeaderRight>
 
       <ResponsivePermissionsBadge />

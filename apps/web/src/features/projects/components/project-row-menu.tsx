@@ -3,6 +3,7 @@ import {
   type SoupEntityDrawerActionGroup,
 } from '@app/features/soup/SoupEntityActionDrawer';
 import { t } from '@app/lib/i18n';
+import { canOpenInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
@@ -39,6 +40,8 @@ type ProjectMenuProps = {
   priority?: Property;
   canOpenInNewSplit: boolean;
   onOpenInNewSplit(row: ProjectRow): void;
+  /** Omit where the host cannot open a project in a new desktop tab. */
+  onOpenInNewTab?(row: ProjectRow): void;
   onRename(row: ProjectRow): void;
   onSetOption(
     rows: readonly ProjectRow[],
@@ -110,6 +113,7 @@ function projectMenuEntries(
     rows.map((row) => row.project),
     {
       splits: !isMobile(),
+      tabs: Boolean(props.onOpenInNewTab) && canOpenInNewTab(),
       share: Boolean(props.onShare),
       status: Boolean(props.status),
       priority: Boolean(props.priority),
@@ -127,6 +131,13 @@ function projectMenuEntries(
               // Without room for another split the open would replace this one.
               disabled: !props.canOpenInNewSplit,
             }
+          )
+        )
+        .with('open-in-tab', (id) =>
+          action(
+            id,
+            t('entityActions.openInNewTab'),
+            single(props.onOpenInNewTab)
           )
         )
         .with('rename', (id) =>
