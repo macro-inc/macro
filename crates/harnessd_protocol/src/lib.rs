@@ -6,6 +6,8 @@
 //! [`AgentProvider`] variant and its own nested account fields without a new
 //! command.
 
+#![deny(missing_docs)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -49,8 +51,8 @@ impl AgentProvider {
     }
 }
 
-/// A command for harnessd.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A command for harnessd. Its `Debug` leaves out the pasted code.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
     /// Start a sign-in and answer with the URL the user opens. While one
@@ -83,6 +85,34 @@ pub enum Request {
         /// The agent to report on.
         agent: AgentProvider,
     },
+}
+
+impl std::fmt::Debug for Request {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SignInStart { agent } => formatter
+                .debug_struct("SignInStart")
+                .field("agent", agent)
+                .finish(),
+            Self::SignInComplete { agent, .. } => formatter
+                .debug_struct("SignInComplete")
+                .field("agent", agent)
+                .field("code", &"<redacted>")
+                .finish(),
+            Self::SignInCancel { agent } => formatter
+                .debug_struct("SignInCancel")
+                .field("agent", agent)
+                .finish(),
+            Self::SignOut { agent } => formatter
+                .debug_struct("SignOut")
+                .field("agent", agent)
+                .finish(),
+            Self::Status { agent } => formatter
+                .debug_struct("Status")
+                .field("agent", agent)
+                .finish(),
+        }
+    }
 }
 
 impl Request {

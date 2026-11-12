@@ -438,3 +438,27 @@ async fn a_completion_whose_caller_left_still_records_its_signer() {
         )]
     );
 }
+
+#[test]
+fn only_claudes_own_https_sign_in_links_are_handed_out() {
+    let real = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&scope=user%3Ainference&state=abc";
+    assert_eq!(super::trusted_sign_in_url(real).unwrap(), real);
+    assert!(super::trusted_sign_in_url("https://claude.ai/oauth/authorize?state=abc").is_ok());
+
+    for untrusted in [
+        "javascript:alert(1)",
+        "http://claude.com/cai/oauth/authorize?state=abc",
+        "https://claude.com.evil.test/cai/oauth/authorize?state=abc",
+        "https://evil.test/cai/oauth/authorize?state=abc",
+        "https://claude.com/somewhere/else",
+        "not a url",
+    ] {
+        assert!(
+            matches!(
+                super::trusted_sign_in_url(untrusted),
+                Err(super::ComputerRouteError::UntrustedSignInUrl)
+            ),
+            "{untrusted}"
+        );
+    }
+}

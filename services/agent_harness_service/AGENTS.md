@@ -98,13 +98,14 @@ Pulumi stacks; they do not host extra agent processes.
   command through the status read to the write; the cancel goes straight
   through so it can interrupt a completion holding the lock. The
   `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
-  same lock, and `sign_in_ahead.rs` refreshes on connect and then starts a
+  same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
   `computer.harnessd.command`/`.refresh`/`.refresh_all`.
-- `src/computers/claude_expiry.rs`: the ports of the operator's
-  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers'
-  active Claude logins (signer, `expires_at` and last notice from
-  `harness_account_logins`, the team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
+- `src/computers/claude_expiry.rs`: the notices of the operator's
+  `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
+  `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
+  logins with signer, `expires_at` and last notice; it also lists the awake
+  computers for the status pass); `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
@@ -227,8 +228,7 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer
-  account-lease tests require `REDIS_URI` pointing at isolated local Redis). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).

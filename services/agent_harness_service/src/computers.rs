@@ -199,13 +199,11 @@ impl Pass {
 /// The Claude sign-in watch's ports.
 pub struct ClaudeSignInWatch<Ingress> {
     /// Computers signed in to Claude through Macro.
-    pub sign_ins: claude_expiry::PgClaudeSignIns,
+    pub sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns,
     /// Their notices.
     pub notices: claude_expiry::IngressClaudeSignInNotices<Ingress>,
     /// harnessd on every computer, whose status the watch refreshes.
     pub harnessd: HostedHarnessd,
-    /// Where the awake computers are listed.
-    pub pool: PgPool,
 }
 
 /// [`harnessd::Harnessd`] over the harness table.
@@ -279,11 +277,11 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map(|_| ())
                     .map_err(anyhow::Error::from),
                 Pass::ClaudeStatus => shutdown
-                    .run_until_cancelled(
-                        claude_sign_ins
-                            .harnessd
-                            .refresh_awake(&claude_sign_ins.pool),
-                    )
+                    .run_until_cancelled(async {
+                        let computers = claude_sign_ins.sign_ins.awake_computers().await?;
+                        claude_sign_ins.harnessd.refresh_each(&computers).await;
+                        Ok::<_, hosted_runtimes::outbound::pg_sign_ins::ClaudeSignInsError>(())
+                    })
                     .await
                     .transpose()
                     .map(|_| ())
@@ -598,12 +596,8 @@ impl harnessd::HarnessdTransport for FleetTransport {
     > {
         Box::pin(async move {
             use hosted_runtimes::domain::ports::Fleet as _;
-            use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _};
 
             let deadline = harnessd::answer_timeout(&request);
-            let mut line = serde_json::to_string(&request)
-                .map_err(|error| harnessd::HarnessdError::Unreadable(error.to_string()))?;
-            line.push('\n');
             let exchange = async {
                 let process = self
                     .operator
@@ -611,29 +605,7 @@ impl harnessd::HarnessdTransport for FleetTransport {
                     .exec(computer_id, &[harnessd::HARNESSD])
                     .await
                     .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
-                let mut stdin = process.stdin;
-                stdin
-                    .write_all(line.as_bytes())
-                    .await
-                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
-                // A closed stdin tells harnessd this was the only request.
-                drop(stdin);
-                let mut answer = String::new();
-                tokio::io::BufReader::new(process.stdout)
-                    .read_line(&mut answer)
-                    .await
-                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
-                let exit = process
-                    .exit
-                    .await
-                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
-                if answer.trim().is_empty() {
-                    return Err(harnessd::HarnessdError::Unreachable(format!(
-                        "harnessd exited with {exit} without answering"
-                    )));
-                }
-                serde_json::from_str::<harnessd_protocol::Response>(answer.trim())
-                    .map_err(|error| harnessd::HarnessdError::Unreadable(error.to_string()))
+                harnessd::exchange(process, &request).await
             };
             tokio::time::timeout(deadline, exchange)
                 .await

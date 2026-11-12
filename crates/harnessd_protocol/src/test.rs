@@ -91,3 +91,19 @@ fn responses_write_their_json_lines() {
         ]
     );
 }
+
+#[test]
+fn a_requests_debug_leaves_out_the_pasted_code() {
+    let request = Request::SignInComplete {
+        agent: AgentProvider::Claude,
+        code: "secret-code#state".to_owned(),
+    };
+
+    let printed = format!("{request:?}");
+
+    assert!(!printed.contains("secret-code"), "{printed}");
+    assert_eq!(
+        printed,
+        r#"SignInComplete { agent: Claude, code: "<redacted>" }"#
+    );
+}
