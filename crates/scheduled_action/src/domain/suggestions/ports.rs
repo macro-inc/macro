@@ -10,7 +10,7 @@ use macro_uuid::Uuid;
 use routine_program::Surface;
 use serde::Serialize;
 
-use ideas::domain::model::GenerationTrigger;
+use suggestions::domain::model::GenerationTrigger;
 
 use super::model::{
     CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineGenerationReport,
@@ -27,8 +27,8 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u32>> + Send;
 
     /// Keep `suggestion`, handed back by `session` of `generation` for the
-    /// person, with its routine idea when it has one, and log both; its id,
-    /// or which ideas limit the idea would pass, keeping nothing.
+    /// person, with its routine suggestion when it has one, and log both; its id,
+    /// or which suggestions limit the suggestion would pass, keeping nothing.
     fn add(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -38,7 +38,7 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Kept>> + Send;
 
-    /// Retire the person's open suggestion `id` and its routine idea for
+    /// Retire the person's open suggestion `id` and its routine suggestion for
     /// `reason`, logged as `session` of `generation`'s; whether it was open.
     fn retire(
         &self,
@@ -63,7 +63,7 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
 
-    /// Dismiss the person's suggestion `id` and its routine idea for good;
+    /// Dismiss the person's suggestion `id` and its routine suggestion for good;
     /// whether it was theirs.
     fn dismiss(
         &self,
@@ -206,8 +206,8 @@ pub trait GenerationStatuses: Send + Sync + 'static {
 pub enum Kept {
     /// Stored, with this id.
     Stored(Uuid),
-    /// Its routine idea would pass the person's open ideas limit.
-    IdeasFull,
-    /// Its routine idea would pass the generation's new ideas limit.
+    /// Its routine suggestion would pass the person's open suggestions limit.
+    SuggestionsFull,
+    /// Its routine suggestion would pass the generation's new suggestions limit.
     NightFull,
 }

@@ -315,20 +315,25 @@ impl InboxLifecycleRepository for PgMailboxSync {
     async fn bindings_for_deleted_user(
         &self,
         owner: &str,
-    ) -> Result<Vec<(InboxActor, Uuid)>, InboxLifecycleError> {
-        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
-            UNION SELECT l.id AS link_id,l.macro_id AS actor_id FROM email_links l WHERE l.fusionauth_user_id = $1
+    ) -> Result<Vec<DeletedUserBinding>, InboxLifecycleError> {
+        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!",true AS "is_custodian!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
+            UNION SELECT l.id AS link_id,l.macro_id AS actor_id,false AS is_custodian FROM email_links l WHERE l.fusionauth_user_id = $1
                 AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)"#,owner).fetch_all(&self.db).await.map_err(failed)?;
         rows.into_iter()
             .map(|row| {
-                Ok((
-                    InboxActor {
+                Ok(DeletedUserBinding {
+                    actor: InboxActor {
                         macro_id: macro_user_id::user_id::MacroUserIdStr::try_from(row.actor_id)
                             .map_err(failed)?,
                         credential_owner: owner.into(),
                     },
-                    row.link_id,
-                ))
+                    link_id: row.link_id,
+                    kind: if row.is_custodian {
+                        DeletedUserBindingKind::Custodian
+                    } else {
+                        DeletedUserBindingKind::Owner
+                    },
+                })
             })
             .collect()
     }

@@ -302,6 +302,12 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "email.updateThreadState",
         "storage.setCrmContactEmail",
         "storage.setEmailSync",
+        // Channel sections only arrange the person's own sidebar.
+        "storage.createChannelSection",
+        "storage.deleteChannelSection",
+        "storage.previewChannelSection",
+        "storage.setChannelSection",
+        "storage.updateChannelSection",
         "scheduled-action.attachSuggestionDraft",
     ];
     let looks_like_a_send = |key: &str, path: &str| {

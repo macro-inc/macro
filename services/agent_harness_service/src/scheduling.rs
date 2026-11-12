@@ -21,13 +21,6 @@ mod routine_analytics;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
-use ideas::domain::resolution::IdeaResolution;
-use ideas::domain::service::IdeaService;
-use ideas::inbound::kafka_consumer::run_idea_resolution_consumer;
-use ideas::inbound::router::{IdeaRouterState, idea_router};
-use ideas::outbound::email_drafts::EmailIdeaDrafts;
-use ideas::outbound::idea_access::EntityIdeaAccess;
-use ideas::outbound::pg_idea_repo::PgIdeaRepo;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_runs::{
@@ -69,13 +62,20 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
-use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
 use suggestion_generation::domain::service::GenerationService;
 use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
 use suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo;
+use suggestions::domain::resolution::SuggestionResolution;
+use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::kafka_consumer::run_suggestion_resolution_consumer;
+use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::email_drafts::EmailSuggestionDrafts;
+use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -96,8 +96,8 @@ const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 /// How often generation sessions a stopped process left behind are cleaned up.
 const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often finished background runs of ideas are settled.
-const IDEA_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
+/// How often finished background runs of suggestions are settled.
+const SUGGESTION_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
 /// How often people in their night are checked for a nightly generation.
 const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -172,7 +172,7 @@ impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
 }
 
 #[async_trait::async_trait]
-impl ideas::domain::ports::RequestSessions for CorrelationSessions {
+impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
     async fn session_of(
         &self,
         correlation: uuid::Uuid,
@@ -183,10 +183,10 @@ impl ideas::domain::ports::RequestSessions for CorrelationSessions {
     }
 }
 
-/// Background runs of ideas: hidden sessions of the person's, with the full
+/// Background runs of suggestions: hidden sessions of the person's, with the full
 /// toolset, billed as their agent usage. The in-process agent takes no
 /// permission prompts; the run's prompt says what, if anything, it sends.
-struct IdeaRunSessions<Stored> {
+struct SuggestionRunSessions<Stored> {
     sessions: Arc<AgentSessionClient>,
     creations: ActivityCreations,
     /// The stored sessions, to tell a missing session from one that can't
@@ -194,9 +194,9 @@ struct IdeaRunSessions<Stored> {
     stored: Stored,
 }
 
-impl<Stored> IdeaRunSessions<Stored> {
+impl<Stored> SuggestionRunSessions<Stored> {
     fn action(
-        run: &ideas::domain::model::StoredRun,
+        run: &suggestions::domain::model::StoredRun,
     ) -> agent_session::domain::routines::RoutineSessionAction {
         agent_session::domain::routines::RoutineSessionAction {
             owner: run.user.clone(),
@@ -208,20 +208,20 @@ impl<Stored> IdeaRunSessions<Stored> {
 }
 
 #[async_trait::async_trait]
-impl<Stored> ideas::domain::ports::RunSessions for IdeaRunSessions<Stored>
+impl<Stored> suggestions::domain::ports::RunSessions for SuggestionRunSessions<Stored>
 where
     Stored: agent_session::domain::ports::AgentSessionRepo,
 {
     async fn start(
         &self,
-        run: &ideas::domain::model::StoredRun,
+        run: &suggestions::domain::model::StoredRun,
         prompt: &str,
-    ) -> Result<(), ideas::domain::model::RunStartError> {
+    ) -> Result<(), suggestions::domain::model::RunStartError> {
         use agent_session::domain::routines::{
             PrepareRoutineSession, PromptRoutineSession, RoutineSessionError, RoutineSessions as _,
             ValidateRoutineSession,
         };
-        use ideas::domain::model::RunStartError;
+        use suggestions::domain::model::RunStartError;
         let action = Self::action(run);
         self.sessions
             .prepare(PrepareRoutineSession {
@@ -232,7 +232,7 @@ where
                     mcp_servers: Vec::new(),
                 },
                 session_id: action.session_id,
-                // The person's own session, hidden: the idea's card shows it.
+                // The person's own session, hidden: the suggestion's card shows it.
                 source: agent_session::domain::model::SessionSource::User,
                 visibility: agent_session::domain::model::SessionVisibility::Hidden,
                 origin: trigger_context::TriggerOrigin::Requested {
@@ -268,12 +268,15 @@ where
 
     async fn state(
         &self,
-        run: &ideas::domain::model::StoredRun,
-    ) -> Result<ideas::domain::model::SessionState, ideas::domain::model::SessionReadError> {
+        run: &suggestions::domain::model::StoredRun,
+    ) -> Result<
+        suggestions::domain::model::SessionState,
+        suggestions::domain::model::SessionReadError,
+    > {
         use agent_session::domain::routines::{
             RoutineActionStatus, RoutinePendingReason, RoutineSessions as _,
         };
-        use ideas::domain::model::{SessionReadError, SessionState};
+        use suggestions::domain::model::{SessionReadError, SessionState};
         let status = match self.sessions.status(Self::action(run)).await {
             Ok(status) => status,
             // A failed read says nothing about whether the session exists:
@@ -310,7 +313,7 @@ where
 
     async fn discard(
         &self,
-        run: &ideas::domain::model::StoredRun,
+        run: &suggestions::domain::model::StoredRun,
     ) -> Result<(), rootcause::Report> {
         use agent_session::domain::routines::RoutineSessions as _;
         self.sessions
@@ -321,8 +324,8 @@ where
 
     async fn produced(
         &self,
-        run: &ideas::domain::model::StoredRun,
-    ) -> Result<Vec<ideas::domain::model::Target>, rootcause::Report> {
+        run: &suggestions::domain::model::StoredRun,
+    ) -> Result<Vec<suggestions::domain::model::Target>, rootcause::Report> {
         let created = self
             .creations
             .created_by(run.session)
@@ -330,7 +333,7 @@ where
             .map_err(|error| rootcause::report!("{error:?}"))?;
         Ok(created
             .into_iter()
-            .map(|item| ideas::domain::model::Target {
+            .map(|item| suggestions::domain::model::Target {
                 entity_type: item.entity_type,
                 entity_id: item.entity_id,
                 part_id: None,
@@ -339,12 +342,12 @@ where
     }
 }
 
-/// A routine idea is dismissed by dismissing its routine suggestion, which
+/// A routine suggestion is dismissed by dismissing its routine suggestion, which
 /// dismisses both together.
 struct SuggestionDismissal<S>(Arc<S>);
 
 #[async_trait::async_trait]
-impl<S> ideas::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
+impl<S> suggestions::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
 where
     S: scheduled_action::domain::suggestions::ports::RoutineSuggestionApi,
 {
@@ -557,8 +560,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
-    let ideas_brokers = brokers.clone();
-    let ideas_ready = ready.clone();
+    let suggestions_brokers = brokers.clone();
+    let suggestions_ready = ready.clone();
     let intake_shutdown = lifecycle.stop_consumers.clone();
     let mut worker_ready = ready.clone();
     let worker_shutdown = lifecycle.stop_workers.clone();
@@ -645,7 +648,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
     let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
-    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -674,6 +677,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -681,7 +685,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
-    // recorded, never billed. Ideas sessions write through `macro.suggestions.*`;
+    // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
     // mail through email_service, which reads it from the provider.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
@@ -710,18 +714,18 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
-    let idea_repo = Arc::new(PgIdeaRepo::new(db.clone()));
-    let idea_access = Arc::new(EntityIdeaAccess {
+    let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let suggestion_access = Arc::new(EntitySuggestionAccess {
         access: access.as_ref().clone(),
         pool: db.clone(),
     });
-    // Reply ideas' drafts are the person's own unsent email drafts, as the
+    // Reply suggestions' drafts are the person's own unsent email drafts, as the
     // email domain's repository keeps them.
-    let ideas = Arc::new(
-        IdeaService::new(
-            Arc::clone(&idea_repo),
-            Arc::clone(&idea_access),
-            Arc::new(EmailIdeaDrafts(email::outbound::EmailPgRepo::new(
+    let feed = Arc::new(
+        SuggestionService::new(
+            Arc::clone(&feed_repo),
+            Arc::clone(&suggestion_access),
+            Arc::new(EmailSuggestionDrafts(email::outbound::EmailPgRepo::new(
                 db.clone(),
             ))),
             correlation_sessions,
@@ -731,10 +735,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
             template_flags.clone(),
         )
-        // Accepting a background prompt idea runs it in a hidden session of the
+        // Accepting a background prompt suggestion runs it in a hidden session of the
         // in-process Macro agent, as the person, billed as their agent usage.
         .with_runs(
-            Arc::new(IdeaRunSessions {
+            Arc::new(SuggestionRunSessions {
                 sessions: Arc::clone(&sessions),
                 creations: ActivityCreations(
                     activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
@@ -747,8 +751,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             bot_id::MACRO_NEW_BOT_ID.as_uuid(),
         )
         .with_sdk_reference(agent_code_mode::domain::index_digest(
-            ideas::domain::prompt::SYMBOLS,
-            ideas::domain::prompt::FIELDS_OF,
+            suggestions::domain::prompt::SYMBOLS,
+            suggestions::domain::prompt::FIELDS_OF,
         ))
         .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
     );
@@ -757,7 +761,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             generations,
             sessions,
             Arc::clone(&suggestions),
-            Arc::clone(&ideas),
+            Arc::clone(&feed),
             template_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
@@ -773,7 +777,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // once ready, people in their night get their nightly generation.
     {
         let generation = Arc::clone(&generation);
-        let settling = Arc::clone(&ideas);
+        let settling = Arc::clone(&feed);
         let stop = lifecycle.stop_workers.clone();
         let mut ready = generation_ready;
         lifecycle.workers.spawn(async move {
@@ -786,7 +790,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
             nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let mut runs = tokio::time::interval(IDEA_RUN_SETTLE_INTERVAL);
+            let mut runs = tokio::time::interval(SUGGESTION_RUN_SETTLE_INTERVAL);
             runs.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 // Each is logged by its own span.
@@ -796,7 +800,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = sweep.tick() => { let _ = generation.sweep().await; }
                     _ = nightly.tick() => { let _ = generation.nightly().await; }
                     _ = runs.tick() => {
-                        let _ = ideas::domain::ports::IdeaApi::settle_runs(settling.as_ref()).await;
+                        let _ = suggestions::domain::ports::SuggestionApi::settle_runs(settling.as_ref()).await;
                     }
                 }
             }
@@ -806,36 +810,36 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
-    // Ideas: written and managed by generation sessions through
+    // Suggestions: written and managed by generation sessions through
     // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generations with.
-    let idea_state = IdeaRouterState {
-        service: ideas,
+    let feed_state = SuggestionRouterState {
+        service: feed,
         authorization_state: authorization_state.clone(),
     };
     let generation_state = GenerationRouterState {
         service: generation,
         authorization_state: authorization_state.clone(),
     };
-    // Between generations, ideas end by events: the person's own reply, a
+    // Between generations, suggestions end by events: the person's own reply, a
     // deleted item, lost access. Its own consumer group, started with the
     // other consumers once the listener is ready.
-    let resolution = IdeaResolution::new(idea_repo, idea_access);
-    let ideas_shutdown = lifecycle.stop_consumers.clone();
+    let resolution = SuggestionResolution::new(feed_repo, suggestion_access);
+    let suggestions_shutdown = lifecycle.stop_consumers.clone();
     lifecycle.consumers.spawn(supervise_consumer(
         move || {
-            let mut ready = ideas_ready.clone();
-            let brokers = ideas_brokers.clone();
+            let mut ready = suggestions_ready.clone();
+            let brokers = suggestions_brokers.clone();
             let resolution = resolution.clone();
-            let shutdown = ideas_shutdown.clone();
+            let shutdown = suggestions_shutdown.clone();
             async move {
                 tokio::select! {
                     biased;
                     _ = shutdown.cancelled() => return Ok(()),
                     result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
                 }
-                run_idea_resolution_consumer(&brokers, resolution, shutdown.cancelled()).await
+                run_suggestion_resolution_consumer(&brokers, resolution, shutdown.cancelled()).await
             }
         },
         lifecycle.stop_consumers.clone(),
@@ -863,7 +867,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
-        .merge(idea_router::<_, _, ()>(idea_state))
+        .merge(suggestion_router::<_, _, ()>(feed_state))
         .merge(generation_router::<_, _, ()>(generation_state));
 
     let router = mount_router(authed_routes)
@@ -882,11 +886,11 @@ fn mount_router(routes: Router) -> Router {
     )
 }
 
-/// The scheduler's OpenAPI, with the ideas routes it also serves, as
+/// The scheduler's OpenAPI, with the suggestions routes it also serves, as
 /// `scheduling_openapi` prints it.
 fn openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = ApiDoc::openapi();
-    openapi.merge(ideas::swagger::IdeasApiDoc::openapi());
+    openapi.merge(suggestions::swagger::SuggestionsApiDoc::openapi());
     openapi.merge(suggestion_generation::swagger::GenerationApiDoc::openapi());
     openapi
 }

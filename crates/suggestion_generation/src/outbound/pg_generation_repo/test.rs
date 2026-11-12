@@ -424,11 +424,11 @@ impl crate::domain::ports::Plans for Plans {
     }
 }
 
-/// Reading the ideas feed counts a person in for nightly runs only on a
+/// Reading the suggestions feed counts a person in for nightly runs only on a
 /// paid plan, due in their next night.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_feed_counts_in_only_paid_readers_due_in_their_night(pool: PgPool) {
-    use ideas::domain::ports::SuggestionAudience;
+    use suggestions::domain::ports::SuggestionAudience;
 
     use crate::domain::audience::PaidAudience;
     use crate::domain::night;

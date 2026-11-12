@@ -5,7 +5,7 @@ use chrono::{SecondsFormat, Utc};
 use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
 use serde_json::{Value, json};
 
-use ideas::domain::model::GenerationTrigger;
+use suggestions::domain::model::GenerationTrigger;
 
 use super::decode::line;
 use super::ports::InboxMessage;

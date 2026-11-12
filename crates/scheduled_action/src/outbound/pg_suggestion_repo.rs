@@ -144,34 +144,34 @@ impl SuggestionRepo for PgSuggestionRepo {
             },
         )
         .await?;
-        if let Some(idea) = &suggestion.idea {
-            let categories: Vec<String> = idea
+        if let Some(card) = &suggestion.card {
+            let categories: Vec<String> = card
                 .categories
                 .iter()
                 .map(|category| category.as_ref().to_owned())
                 .collect();
-            let room = ideas_db_utils::add_routine_idea(
+            let room = suggestions_db_utils::add_routine_card(
                 &mut tx,
-                &ideas_db_utils::NewRoutineIdea {
+                &suggestions_db_utils::NewRoutineSuggestionCard {
                     user: user.as_ref(),
                     suggestion: id,
-                    title: &idea.title,
+                    title: &card.title,
                     summary: &suggestion.reason,
-                    importance: i16::from(idea.importance),
+                    importance: i16::from(card.importance),
                     categories: &categories,
                     session,
                     generation,
                     at: now,
                 },
-                ideas::domain::service::OPEN_LIMIT,
-                ideas::domain::service::NEW_PER_GENERATION,
+                suggestions::domain::service::OPEN_LIMIT,
+                suggestions::domain::service::NEW_PER_GENERATION,
             )
             .await?;
             match room {
-                ideas_db_utils::Room::Fits => {}
+                suggestions_db_utils::Room::Fits => {}
                 // Dropping the transaction keeps nothing.
-                ideas_db_utils::Room::OpenFull => return Ok(Kept::IdeasFull),
-                ideas_db_utils::Room::GenerationFull => return Ok(Kept::NightFull),
+                suggestions_db_utils::Room::OpenFull => return Ok(Kept::SuggestionsFull),
+                suggestions_db_utils::Room::GenerationFull => return Ok(Kept::NightFull),
             }
         }
         tx.commit().await?;
@@ -214,11 +214,11 @@ impl SuggestionRepo for PgSuggestionRepo {
                 },
             )
             .await?;
-            ideas_db_utils::close_routine_idea(
+            suggestions_db_utils::close_routine_card(
                 &mut tx,
                 id,
                 "retired",
-                Some(&ideas_db_utils::IdeaChange {
+                Some(&suggestions_db_utils::SuggestionChange {
                     generation,
                     session,
                     action: "retired",
@@ -294,7 +294,8 @@ impl SuggestionRepo for PgSuggestionRepo {
         .rows_affected()
             == 1;
         if found {
-            ideas_db_utils::close_routine_idea(&mut tx, id, "dismissed", None, Utc::now()).await?;
+            suggestions_db_utils::close_routine_card(&mut tx, id, "dismissed", None, Utc::now())
+                .await?;
         }
         tx.commit().await?;
         Ok(found)

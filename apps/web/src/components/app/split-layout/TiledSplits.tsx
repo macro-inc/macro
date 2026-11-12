@@ -109,7 +109,7 @@ export function TiledSplits(props: TiledSplitsProps) {
           };
 
           return (
-            <div style={style()} data-resize-panel>
+            <div style={style()} data-resize-panel data-split-pane={pane}>
               {props.children(pane, index)}
             </div>
           );
