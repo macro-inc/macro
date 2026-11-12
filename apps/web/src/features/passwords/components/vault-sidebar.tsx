@@ -575,14 +575,6 @@ export function VaultSidebar(
           presentation="sidebar"
           destination={props.destination}
           onCreate={props.onCreate}
-          onFolder={() =>
-            props.onEditing({
-              kind: 'create',
-              parentId: props.filter.startsWith('folder:')
-                ? props.filter.slice(7)
-                : null,
-            })
-          }
         />
       </ViewSidebar.Primary>
       <ViewSidebar.Content>

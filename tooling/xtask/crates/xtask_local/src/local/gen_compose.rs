@@ -926,5 +926,8 @@ pub fn docker_compose(
     cmd.arg("--env-file").arg(generated_env);
     cmd.env("COMPOSE_PROJECT_NAME", instance.project_name());
     cmd.env("MACRO_ENV_FILE", generated_env);
+    // Compose gives the shell precedence over --env-file. This key is owned
+    // by the resolved run policy, so inherit it only from that generated file.
+    cmd.env_remove("SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT");
     cmd
 }

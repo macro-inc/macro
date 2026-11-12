@@ -19,10 +19,12 @@ subfolder, Rename (inline), Move to folder (an inline destination list), and
 Delete folder. Delete confirms in place and says how many items move to All
 items and how many subfolders go too; it never deletes items or their values.
 On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
-Folders shows the same tree, and the floating New button opens the same kinds.
+Folders shows the same tree, and the floating New button opens the item kinds.
+Create folders from the Folders section's "+" on desktop or in the phone's
+Folders tab. A failed create offers Retry with the original name and parent.
 
 New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
-API credential, Verification code, or Folder. Each kind's form and detail label
+API credential, or Verification code. Each kind's form and detail label
 the shared username, password, website and notes values for that kind (Card:
 Cardholder and Card number; API credential: Endpoint, Key and Secret; Identity
 and Card start with labeled custom fields such as Expires or Email; those

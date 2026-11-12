@@ -9,6 +9,7 @@ import type {
   DatabaseDetail,
   DatabaseOp,
   DatabaseWebhookResponse,
+  EntityAppearance,
   EntityKind,
   ImportTable,
   InferColumnTypeOutcome,
@@ -398,6 +399,27 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** The database's display name. */
   readonly name = this.mappedField('database', (record) => record.name);
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.mappedField(
+    'database',
+    (record) => record.appearance,
+  );
+
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setDatabaseAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** The user who owns the database. */
   readonly owner = this.mappedField('database', (record) =>
