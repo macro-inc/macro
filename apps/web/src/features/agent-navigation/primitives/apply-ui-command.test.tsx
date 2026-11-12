@@ -352,7 +352,7 @@ describe('applyOpen', () => {
     expect(router.panes()).toEqual(before);
   });
 
-  it('opens a view in front on the phone apps when the pane showing it is behind', async () => {
+  it('opens a view in front in a stacked layout when the pane showing it is behind', async () => {
     const { manager, router, arrivals } = layoutWithAgentPane(true);
     await router.settled();
     const deps = { router, manager, arrivals, stacked: true };
