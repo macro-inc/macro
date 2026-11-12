@@ -3,7 +3,6 @@ import {
   AccountManagerRequestNode,
   type AgentContextDecoratorProps,
   AgentContextNode,
-  type AwaitDecoratorProps,
   AwaitNode,
   type CursorSystemNotificationDecoratorProps,
   CursorSystemNotificationNode,
@@ -18,6 +17,7 @@ import type {
   JsonObject,
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
+import type { AwaitUIProps } from '../component/decorator/Await';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
   createNativeDecoratorAdapter,
@@ -125,18 +125,19 @@ export function createNativeFastStaticDecoratorViews<
         throw new Error('Invalid watermark content');
       return { content, key: String(node.key), theme: context.theme };
     }),
-    await: bind<AwaitDecoratorProps>(AwaitNode, (node, context) => {
-      const value = node.props();
+    await: bind<AwaitUIProps>(AwaitNode, (node, context) => {
+      const { awaitId, text, inline } = node.props();
+      // Source keeps a stored null text and renders its default for it.
       if (
-        typeof value.awaitId !== 'string' ||
-        (value.text !== undefined && typeof value.text !== 'string') ||
-        typeof value.inline !== 'boolean'
+        typeof awaitId !== 'string' ||
+        (text !== undefined && text !== null && typeof text !== 'string') ||
+        typeof inline !== 'boolean'
       )
         throw new Error('Invalid await payload');
       return {
-        awaitId: value.awaitId,
-        text: value.text,
-        inline: value.inline,
+        awaitId,
+        text,
+        inline,
         key: String(node.key),
         theme: context.theme,
       };
