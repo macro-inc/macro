@@ -484,7 +484,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             if self.checked_clean(action).await {
                 break Ok(Ending::Checked);
             }
-            if polls % ROW_READS_PER_TURN_READ != 0 {
+            if !polls.is_multiple_of(ROW_READS_PER_TURN_READ) {
                 continue;
             }
             // Recorded as it goes, so a draft that times out keeps it.
