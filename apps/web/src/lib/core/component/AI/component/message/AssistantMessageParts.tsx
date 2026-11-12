@@ -74,29 +74,30 @@ const LOOKUP_TOOLS: ReadonlySet<string> = new Set([
   'LoadTools',
 ]);
 
+/** A tool lookup, or its result or error. */
+function isToolLookup(part: AssistantMessagePart) {
+  return (
+    (part.type === 'toolCall' ||
+      part.type === 'toolCallResponseJson' ||
+      part.type === 'toolCallErr') &&
+    LOOKUP_TOOLS.has(part.name)
+  );
+}
+
+/**
+ * Whether every part is a tool lookup, so the message shows nothing and must
+ * not render as an empty bubble.
+ */
+export function onlyToolLookups(parts: readonly AssistantMessagePart[]) {
+  return parts.length > 0 && parts.every(isToolLookup);
+}
+
 /**
  * Tools rendered outside the standard grouped activity chrome own their full
  * presentation. The dashboard renders as a full-bleed view, not a tool row.
  * Deferred user tools suspend the chat on an interactive compose UI, so they
  * must stay visible rather than being collapsed inside a tool group.
  */
-/**
- * Whether every part is a tool lookup or its result, so the message shows
- * nothing and must not render as an empty bubble.
- */
-export function onlyToolLookups(parts: readonly AssistantMessagePart[]) {
-  return (
-    parts.length > 0 &&
-    parts.every(
-      (part) =>
-        (part.type === 'toolCall' ||
-          part.type === 'toolCallResponseJson' ||
-          part.type === 'toolCallErr') &&
-        LOOKUP_TOOLS.has(part.name)
-    )
-  );
-}
-
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'CreateCalendarEvent',
   'DispatchCodingAgent',
@@ -252,7 +253,7 @@ export function AssistantMessageParts(props: {
     keyedParts().orderedKeys.forEach((key, index) => {
       const part = keyedParts().partsByKey.get(key);
       if (!part) return;
-      if (part.type === 'toolCall' && LOOKUP_TOOLS.has(part.name)) return;
+      if (isToolLookup(part)) return;
 
       // Standalone tools (e.g. the dashboard, or SendEmail's interactive
       // compose UI) break out of the tool group and render on their own.

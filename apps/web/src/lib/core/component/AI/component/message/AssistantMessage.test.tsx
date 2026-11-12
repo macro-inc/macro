@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 
-import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -32,28 +31,30 @@ vi.mock('./AssistantMessageParts', async (importOriginal) => ({
 
 afterEach(cleanup);
 
-const message = (
-  content: ChatMessageWithAttachments['content']
-): ChatMessageWithAttachments => ({
-  id: 'message-1',
-  role: 'assistant',
-  attachments: [],
-  content,
-});
-
 it('renders nothing for a message that only looked up tools', () => {
   render(() => (
     <AssistantMessage
-      message={message([
-        { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
-        {
-          type: 'toolCallResponseJson',
-          id: 'search',
-          name: 'SearchTools',
-          json: {},
-        },
-        { type: 'toolCall', id: 'docs', name: 'ReadCodeDocs', json: {} },
-      ])}
+      message={{
+        id: 'message-1',
+        role: 'assistant',
+        attachments: [],
+        content: [
+          { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
+          {
+            type: 'toolCallResponseJson',
+            id: 'search',
+            name: 'SearchTools',
+            json: {},
+          },
+          { type: 'toolCall', id: 'docs', name: 'ReadCodeDocs', json: {} },
+          {
+            type: 'toolCallErr',
+            id: 'docs',
+            name: 'ReadCodeDocs',
+            description: 'Unknown symbol',
+          },
+        ],
+      }}
     />
   ));
   expect(screen.queryByTestId('parts')).toBeNull();
@@ -65,10 +66,15 @@ it('renders nothing for a message that only looked up tools', () => {
 it('still renders a message whose lookups came with real work', () => {
   render(() => (
     <AssistantMessage
-      message={message([
-        { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
-        { type: 'text', text: 'Here is what I found.' },
-      ])}
+      message={{
+        id: 'message-2',
+        role: 'assistant',
+        attachments: [],
+        content: [
+          { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
+          { type: 'text', text: 'Here is what I found.' },
+        ],
+      }}
     />
   ));
   expect(screen.getByTestId('parts')).toBeTruthy();
