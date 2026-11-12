@@ -333,7 +333,7 @@ onward. There is no baseline yet; the 10% threshold is a starting point.
 
 ## Agent runtime coverage
 
-`monitors/harness-runtimes.ts` adds **three monitors, one dashboard, six
+`monitors/harness-runtimes.ts` adds **four monitors, one dashboard, six
 span-based metrics and one log-based metric** for agent-harness-service
 runtimes. Its header lists every field it reads;
 [the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
@@ -341,7 +341,9 @@ alert. None of them page.
 
 Per runtime, the monitors notify when one dials more than 15 times in
 15 minutes or lists more than 500 sessions to reattach; across the service,
-when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes.
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes;
+and per task, when its resident memory passes 75% of its limit over 15
+minutes.
 Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
 dials, 263 sessions and 451 warnings. Every reattach storm crossed the
 sessions or dials threshold and the starvation one; the storm at 17:15Z on

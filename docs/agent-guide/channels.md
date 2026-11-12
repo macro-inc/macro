@@ -1065,7 +1065,7 @@ in place until the result arrives.
 
 ## Chat navigation rail
 
-With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list.
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list (except phones, which show no tutorials).
 
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
