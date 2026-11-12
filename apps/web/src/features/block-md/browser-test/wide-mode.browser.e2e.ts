@@ -48,10 +48,11 @@ const THREAD_STATE = {
 
 /**
  * Answers the document's Discussion with one unanchored thread and a reply.
- * Every other request outside the dev server gets a 404, so no hosted data is
- * read or written.
+ * Every other request outside the test's dev server gets a 404, so no hosted
+ * or local service is read or written.
  */
-async function answerDiscussion(page: Page) {
+async function answerDiscussion(page: Page, baseURL: string | undefined) {
+  const devServer = new URL(FIXTURE, baseURL).origin;
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     const messages = `/messages/document/${DOCUMENT_ID}`;
@@ -77,7 +78,7 @@ async function answerDiscussion(page: Page) {
         json: { root: ROOT, state: THREAD_STATE, replies: REPLIES },
       });
     } else if (
-      url.hostname === 'localhost' &&
+      url.origin === devServer &&
       !url.pathname.startsWith('/__macro_dev/')
     ) {
       await route.continue();
@@ -95,15 +96,16 @@ async function openDocument(page: Page, query = '') {
 
 /**
  * Where the Discussion's header, comment, reply and composer sit across the
- * pane. The composer is measured by its frame, not its placeholder.
+ * pane. The composer is measured by its frame, not its placeholder. On touch
+ * the composer floats over the page instead, so it is left out.
  */
-async function discussionColumns(page: Page) {
+async function discussionColumns(page: Page, composer = true) {
   const discussion = page.locator('[data-entity-conversation]');
   const parts = [
     discussion.getByRole('button', { name: 'Discussion' }),
     discussion.getByText(ROOT.content),
     discussion.getByText(REPLY),
-    discussion.locator('[data-input]'),
+    ...(composer ? [discussion.locator('[data-input]')] : []),
   ];
   return Promise.all(
     parts.map(async (part) => {
@@ -209,9 +211,12 @@ test.describe('desktop', () => {
 test.describe('discussion', () => {
   test.skip(({ isMobile }) => isMobile, 'Wide mode is desktop and tablet only');
 
-  test('wide mode leaves the discussion where it was', async ({ page }) => {
-    await answerDiscussion(page);
-    for (const width of [1000, 1600]) {
+  for (const width of [1000, 1600]) {
+    test(`wide mode leaves the discussion where it was at ${width}px`, async ({
+      page,
+      baseURL,
+    }) => {
+      await answerDiscussion(page, baseURL);
       await page.setViewportSize({ width, height: 1000 });
       await openDocument(page, '?discussion');
       await expect(page.getByText(REPLY)).toBeVisible();
@@ -228,7 +233,31 @@ test.describe('discussion', () => {
       await page.getByRole('button', { name: 'Turn off wide mode' }).click();
       await expect.poll(() => columnWidth(page)).toBe(768);
       expect(await discussionColumns(page)).toEqual(standard);
-    }
+    });
+  }
+
+  test.describe('tablet', () => {
+    test.use({ hasTouch: true, viewport: { width: 1194, height: 834 } });
+
+    test('wide mode leaves the discussion where it was', async ({
+      page,
+      baseURL,
+    }) => {
+      await answerDiscussion(page, baseURL);
+      await openDocument(page, '?discussion');
+      await expect(page.locator('html')).toHaveAttribute(
+        'data-touch-device',
+        'true'
+      );
+      await expect(page.getByText(REPLY)).toBeVisible();
+      const standard = await discussionColumns(page, false);
+      // The header starts the standard column, centered in the pane.
+      expect(standard[0].left).toBe((1194 - 768) / 2);
+
+      await page.getByRole('button', { name: 'Turn on wide mode' }).tap();
+      await expect.poll(() => columnWidth(page)).toBe(1194 - 2 * 64);
+      expect(await discussionColumns(page, false)).toEqual(standard);
+    });
   });
 });
 
