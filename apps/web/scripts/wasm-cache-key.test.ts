@@ -24,10 +24,22 @@ version = 4
 name = "engine"
 version = "0.1.0"
 dependencies = [
+ "patched",
  "png",
  "serde 1.0.200",
  "server",
 ]
+
+[[package]]
+name = "patched"
+version = "1.0.0"
+dependencies = ["miniz"]
+
+[[package]]
+name = "miniz"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "gggg"
 
 [[package]]
 name = "png"
@@ -58,6 +70,8 @@ version = "1.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dddd"
 `;
+
+const WORKSPACE = new Set(['engine', 'server']);
 
 const MANIFEST = `[workspace]
 resolver = "2"
@@ -118,7 +132,7 @@ function key(files: Record<string, string>, env: Record<string, string> = {}) {
 
 describe('lockSlice', () => {
   it('follows locked dependencies, choosing the named version', () => {
-    const slice = lockSlice(LOCK, ['engine']).join('\n');
+    const slice = lockSlice(LOCK, ['engine'], WORKSPACE).join('\n');
     expect(slice).toContain('name = "png"');
     expect(slice).toContain('checksum = "bbbb"');
     expect(slice).not.toContain('checksum = "cccc"');
@@ -127,11 +141,14 @@ describe('lockSlice', () => {
 
   it('stops at workspace crates the build does not compile', () => {
     // engine's lock entry lists server, a dependency it has only off wasm32.
-    const slice = lockSlice(LOCK, ['engine']).join('\n');
+    const slice = lockSlice(LOCK, ['engine'], WORKSPACE).join('\n');
     expect(slice).not.toContain('name = "server"');
     expect(slice).not.toContain('checksum = "cccc"');
+    // A path dependency outside the workspace (a `[patch]`) has no source
+    // either, and is followed.
+    expect(slice).toContain('checksum = "gggg"');
 
-    const both = lockSlice(LOCK, ['engine', 'server']).join('\n');
+    const both = lockSlice(LOCK, ['engine', 'server'], WORKSPACE).join('\n');
     expect(both).toContain('name = "server"');
     expect(both).toContain('name = "tokio"');
   });

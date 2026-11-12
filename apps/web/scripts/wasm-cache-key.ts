@@ -25,7 +25,7 @@ import { join } from 'node:path';
 type LockPackage = {
   name: string;
   version: string;
-  /** No `source`: a crate of this workspace. */
+  /** No `source`: a workspace crate or a path dependency. */
   local: boolean;
   lines: string[];
   dependencies: string[];
@@ -77,10 +77,15 @@ function parseLock(lockText: string): LockPackage[] {
 /**
  * The Cargo.lock entries reachable from `roots` (the names of the workspace
  * crates the build compiles), as text in a fixed order. The walk does not enter
- * other workspace crates: the lock lists a crate's dependencies for every
- * target, so the edges into them are ones a wasm32 build leaves off.
+ * the other crates of `workspace` (every member's name): the lock lists a
+ * crate's dependencies for every target, so the edges into them are ones a
+ * wasm32 build leaves off.
  */
-export function lockSlice(lockText: string, roots: string[]): string[] {
+export function lockSlice(
+  lockText: string,
+  roots: string[],
+  workspace: ReadonlySet<string>
+): string[] {
   const byName = new Map<string, LockPackage[]>();
   for (const lockPackage of parseLock(lockText)) {
     const sameName = byName.get(lockPackage.name) ?? [];
@@ -103,7 +108,7 @@ export function lockSlice(lockText: string, roots: string[]): string[] {
   const pending = roots.flatMap((name) => byName.get(name) ?? []);
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     if (reached.has(next)) continue;
-    if (next.local && !compiled.has(next.name)) continue;
+    if (next.local && workspace.has(next.name) && !compiled.has(next.name)) continue;
 
     reached.add(next);
     for (const dependency of next.dependencies) {
@@ -181,7 +186,7 @@ export function wasmCacheKey(
 ): string {
   const closures = JSON.parse(
     readFileSync(join(root, '.github/workspace-dep-closures.json'), 'utf8')
-  ) as { wasm_closures?: Record<string, string[]> };
+  ) as { closures?: Record<string, string[]>; wasm_closures?: Record<string, string[]> };
   const directories = closures.wasm_closures?.[closurePackage] ?? [];
   if (directories.length === 0) {
     throw new Error(
@@ -216,7 +221,8 @@ export function wasmCacheKey(
 
   const lock = lockSlice(
     readFileSync(join(root, 'Cargo.lock'), 'utf8'),
-    crateNames(root, directories)
+    crateNames(root, directories),
+    new Set(Object.keys(closures.closures ?? {}))
   );
   hash.update(`lock\0${lock.join('\0')}\0`);
 
