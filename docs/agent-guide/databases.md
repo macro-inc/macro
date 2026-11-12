@@ -71,6 +71,25 @@ chart columns, refuses columns the `SELECT` does not return. The SDK's
 `SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
 and whose `withView()` restyles the answer without saving a new question.
 
+The browser compiles table dependencies before reading. Direct `macro.people`
+SELECTs execute filtering, grouping, DISTINCT, ordering and limits in the existing
+local Turso cache, including fresh queries offline after contact synchronization.
+Results are bounded to 500 rows, 64 columns and 512 KiB of scalar text; explicit
+small SQL limits are not marked truncated. Keyed joins read only the current
+bounded identity set; an unbounded people join is an explicit capability error.
+People joins on email, name or generated row IDs are unsupported and must report
+an error rather than treating those keys as user IDs and displaying an empty answer.
+There is no `/databases/read` route and no remote SQL or full-directory fallback.
+Cold/incomplete synchronization and unsupported native binaries remain errors,
+not empty answers. Ordinary tables keep their existing GraphQL/cache row source.
+Account/session, storage generation and input transitions fence publication;
+authority changes clear old answers. One physical local read and one replaceable
+pending input prevent obsolete queries accumulating. Contact hydration/completion
+and committed changes refresh visible results without querying a server.
+Contact synchronization completes after bounded exact-membership verification,
+not merely after downloading pages. Failed/interrupted verification stays incomplete;
+verified removals disappear from local SQL, while delayed older hydration cannot
+restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
 Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
@@ -161,6 +180,8 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
+In code mode only `CreatePipeline` stays a direct tool; the rest run through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
 
@@ -302,7 +323,11 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. The
+Click a cell to edit, or focus it with the arrow keys and start typing. A link
+in a text or URL cell opens like a link in a document (hover shows its preview,
+right-click shows the browser's link menu); clicking anywhere else in the cell,
+Enter, or typing edits it. A URL value that names no domain, such as `TBD`,
+stays plain text. The
 whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty

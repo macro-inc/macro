@@ -517,11 +517,14 @@ impl ModelRouter<MeteredHttpClient> {
                 router.anthropic = Arc::new(
                     anthropic::Client::builder()
                         .api_key(api_key)
-                        .http_client(AnthropicPromptLayout::new(MeteredHttpClient::new(
-                            http,
-                            ANTHROPIC_PROVIDER,
-                            WireProtocol::Anthropic,
-                        )))
+                        .http_client(AnthropicPromptLayout::new(
+                            MeteredHttpClient::new(
+                                http,
+                                ANTHROPIC_PROVIDER,
+                                WireProtocol::Anthropic,
+                            )
+                            .with_agent_api_key(),
+                        ))
                         .build()?,
                 );
             }
@@ -529,11 +532,10 @@ impl ModelRouter<MeteredHttpClient> {
                 router.openai = Arc::new(
                     openai::Client::builder()
                         .api_key(api_key)
-                        .http_client(MeteredHttpClient::new(
-                            http,
-                            OPENAI_PROVIDER,
-                            WireProtocol::Responses,
-                        ))
+                        .http_client(
+                            MeteredHttpClient::new(http, OPENAI_PROVIDER, WireProtocol::Responses)
+                                .with_agent_api_key(),
+                        )
                         .build()?,
                 );
             }

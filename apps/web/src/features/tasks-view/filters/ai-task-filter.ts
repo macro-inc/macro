@@ -1,13 +1,21 @@
-import { type FacetSelection, TAG_FACET_ID } from '@app/features/soup';
+import {
+  type FacetSelection,
+  TAG_FACET_ID,
+} from '@app/features/soup/filters/facets';
 import type OpenAI from 'openai';
 import { z } from 'zod';
-import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from './task-facets';
+import {
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_OPTIONS,
+  TASK_VIEWER,
+} from './task-facets';
 
 type AiTaskFilterChoice = { id: string; label: string };
 
-/** Everything the model may pick from when turning a request into filters. */
+/** Scoped tag choices and the target for an explicit request for "me".
+ * Personal names are resolved after extraction, never sent as a catalog. */
 export type AiTaskFilterCatalog = {
-  people: AiTaskFilterChoice[];
+  viewer: string;
   tags: AiTaskFilterChoice[];
 };
 
@@ -21,7 +29,7 @@ export type AiTaskFilterPlan = {
 
 const AI_TASK_FILTER_MODEL = 'gpt-4o-mini';
 
-/** Keep prompts bounded for workspaces with very large address books. */
+/** Keep scoped tag prompts bounded. People never enter the prompt. */
 const MAX_CHOICES_PER_GROUP = 400;
 
 const RESPONSE_SCHEMA_NAME = 'task_filters';
@@ -48,9 +56,10 @@ export function buildAiTaskFilterSystemPrompt(
     formatOptions(TASK_STATUS_OPTIONS),
     '- priority: options selected are ORed together. Available:',
     formatOptions(TASK_PRIORITY_OPTIONS),
-    '- assignees: person ids; the task must have at least one of them assigned. Available:',
-    catalog.people.length > 0 ? formatChoices(catalog.people) : '(none)',
-    '- createdBy: person ids; the task must have been created by one of them. Uses the same people as assignees.',
+    '- assignees: person references copied from the request; the task must have at least one of them assigned.',
+    '- createdBy: person references copied from the request; the task must have been created by one of them.',
+    `- Use "${TASK_VIEWER}" for "me" or "my tasks". Keep an explicitly supplied email or user id literal, even when it belongs to the requester.`,
+    '- No people catalog is provided. Copy each full name, email or user id verbatim as one array entry; do not guess identities, correct names, or split a comma-bearing name. The app resolves these references independently.',
     '- tags: tag ids; the task must carry at least one of them. Available:',
     catalog.tags.length > 0 ? formatChoices(catalog.tags) : '(none)',
     '- search: free text matched against task titles and content. Use it only for subject matter the user wants to SEE that no filter group covers (e.g. "tasks about billing" → "billing"). Otherwise return an empty string.',
@@ -59,11 +68,10 @@ export function buildAiTaskFilterSystemPrompt(
     '- Groups are ANDed: a task must satisfy every non-empty group.',
     '- Filters can only include options, never exclude them. To express an exclusion on status or priority, select every other option in that group (e.g. "not completed" → every status except completed; "no low priority" → urgent, high, medium).',
     '- Exclusions on assignees, createdBy, or tags cannot be expressed. Leave that group empty and mention the request in "unresolved".',
-    '- Never put a negated or excluded term into "search" (e.g. "no dev tasks" must not search for "dev"); never use "search" to stand in for a person or tag that is not listed. Report those in "unresolved" instead.',
+    '- Never put a negated or excluded term into "search" (e.g. "no dev tasks" must not search for "dev"); never use "search" to stand in for a person or tag. Report unsupported requests in "unresolved" instead.',
     '- Terms like "open", "active", or "unfinished" mean not-started, in-progress, and in-review. "Done" or "finished" means completed. "Important" or "critical" means urgent and high.',
-    '- The person marked "(me)" is the user making the request; "my tasks" or "assigned to me" refers to them.',
-    '- Match people and tags by name, tolerating typos, partial names, and casing. When a name matches nobody, leave it out and mention it in "unresolved".',
-    '- Always answer with option ids exactly as listed, never with labels.',
+    '- Match tags by name, tolerating typos, partial names, and casing. When a tag matches nothing listed, leave it out and mention it in "unresolved".',
+    '- Status, priority and tags use option ids exactly as listed. People use the original references, not invented ids.',
     '- "unresolved" is one short sentence addressed to the user naming the part of the request that was skipped and why. Only describe what was actually skipped; do not mention filters that were applied. Empty string when everything was mapped.',
     '- If the request has nothing to do with filtering tasks, return empty lists, an empty search, and explain in "unresolved".',
   ].join('\n');
@@ -72,8 +80,8 @@ export function buildAiTaskFilterSystemPrompt(
 /**
  * The model's reply, shared by the strict JSON schema sent with the request
  * and the parser. Status and priority are enums, so strict mode rejects any
- * other value at decode time; people and tags stay free strings so one
- * unknown id drops alone instead of failing the whole reply.
+ * other value at decode time. People remain references for a separate complete
+ * lookup; unknown people must not silently broaden an otherwise valid plan.
  */
 const AiTaskFilterReply = z.strictObject({
   status: z.array(z.enum(optionIds(TASK_STATUS_OPTIONS))),
@@ -84,6 +92,22 @@ const AiTaskFilterReply = z.strictObject({
   search: z.string(),
   unresolved: z.string(),
 });
+export type AiTaskFilterReply = z.infer<typeof AiTaskFilterReply>;
+
+/** Decode without resolving names against a truncated prompt or suggestion page. */
+export function parseAiTaskFilterResponse(
+  content: string | null | undefined
+): AiTaskFilterReply | undefined {
+  if (!content) return;
+  let json: unknown;
+  try {
+    json = JSON.parse(content);
+  } catch {
+    return;
+  }
+  const parsed = AiTaskFilterReply.safeParse(json);
+  return parsed.success ? parsed.data : undefined;
+}
 
 export function buildAiTaskFilterResponseFormat(): OpenAI.ResponseFormatJSONSchema {
   const { $schema: _, ...schema } = z.toJSONSchema(AiTaskFilterReply, {
@@ -138,39 +162,38 @@ function resolveChoices(
 
 export type AiTaskFilterParseResult =
   | { ok: true; plan: AiTaskFilterPlan }
-  | { ok: false; error: 'INVALID_JSON' }
+  | { ok: false; error: 'UNRESOLVED_PEOPLE' }
   /** The reply was well-formed but mapped to nothing; `unresolved` says why. */
   | { ok: false; error: 'NO_FILTERS'; unresolved?: string };
 
-/**
- * Turns the model's JSON reply into a facet selection. Unknown ids are
- * dropped rather than failing the whole request so one hallucinated option
- * does not discard the rest of an otherwise good answer.
- */
-export function parseAiTaskFilterResponse(
-  content: string | null | undefined,
-  catalog: AiTaskFilterCatalog
+/** Resolve only complete, unique person evidence. Reject the whole plan when a
+ * person is unresolved, rather than broadening its OR or AND constraints. */
+export function resolveAiTaskFilterPlan(
+  data: AiTaskFilterReply,
+  catalog: AiTaskFilterCatalog,
+  person: (label: string) => string | undefined
 ): AiTaskFilterParseResult {
-  if (!content) return { ok: false, error: 'INVALID_JSON' };
-
-  let json: unknown;
-  try {
-    json = JSON.parse(content);
-  } catch {
-    return { ok: false, error: 'INVALID_JSON' };
-  }
-  const reply = AiTaskFilterReply.safeParse(json);
-  if (!reply.success) return { ok: false, error: 'INVALID_JSON' };
-  const data = reply.data;
+  let missingPerson = false;
+  const resolvePeople = (values: string[]) => [
+    ...new Set(
+      values.flatMap((value) => {
+        const label = value.trim();
+        const id = label === TASK_VIEWER ? catalog.viewer : person(label);
+        if (!id) missingPerson = true;
+        return id ? [id] : [];
+      })
+    ),
+  ];
 
   const facets: FacetSelection = {};
   const status = [...new Set(data.status)];
   if (status.length > 0) facets.status = status;
   const priority = [...new Set(data.priority)];
   if (priority.length > 0) facets.priority = priority;
-  const assignees = resolveChoices(data.assignees, catalog.people);
+  const assignees = resolvePeople(data.assignees);
   if (assignees.length > 0) facets.assignees = assignees;
-  const createdBy = resolveChoices(data.createdBy, catalog.people);
+  const createdBy = resolvePeople(data.createdBy);
+  if (missingPerson) return { ok: false, error: 'UNRESOLVED_PEOPLE' };
   if (createdBy.length > 0) facets['created-by'] = createdBy;
   const tags = resolveChoices(data.tags, catalog.tags);
   if (tags.length > 0) facets[TAG_FACET_ID] = tags;

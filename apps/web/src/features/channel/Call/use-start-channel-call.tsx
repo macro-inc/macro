@@ -112,6 +112,7 @@ export function useStartChannelCall(channelId: () => string) {
   return {
     start,
     isCallInProgress,
+    isJoining: call.isJoining,
     isInThisChannel: call.isInThisChannel,
   };
 }

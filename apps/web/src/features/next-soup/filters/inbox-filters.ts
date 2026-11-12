@@ -149,6 +149,9 @@ export function signalFilter(entity: EntityData): boolean {
     case 'form':
       // Databases and forms are not Soup entities and never reach the Inbox.
       return false;
+    case 'harness':
+      // Runtimes are listed only by the notifications inbox.
+      return true;
   }
 }
 

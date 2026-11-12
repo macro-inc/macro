@@ -19,7 +19,11 @@ export interface ReferralLink {
 export class ReferralNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** The caller's referral link, to share wherever the user wants. */
+  /**
+   * The caller's referral link, to share wherever the user wants.
+   *
+   * @readonly
+   */
   async link(): Promise<ReferralLink> {
     const code = unwrap(await this.client.auth.getReferralCode());
     const url = new URL('/app/signup', this.client.webAppUrl);
@@ -38,6 +42,9 @@ export class ReferralNamespace {
    * instead, use `Team.invite`.
    *
    * @param email - The address to invite.
+   *
+   * @destructive
+   * @openworld
    */
   async invite(email: string): Promise<void> {
     const recipient = email.trim();

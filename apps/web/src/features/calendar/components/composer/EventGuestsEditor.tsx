@@ -14,9 +14,13 @@ export function guestDisplayName(guest: SelectedEventEditorGuest) {
   return ('name' in guest.data && guest.data.name) || guest.data.email;
 }
 
+function guestKey(guest: SelectedEventEditorGuest): string {
+  return `macro|${guestEmail(guest).toLowerCase()}`;
+}
+
 function guestToUser(guest: SelectedEventEditorGuest): IUser {
   return {
-    id: guest.id,
+    id: guestKey(guest),
     email: guestEmail(guest),
     name: guestDisplayName(guest),
   };
@@ -25,12 +29,15 @@ function guestToUser(guest: SelectedEventEditorGuest): IUser {
 function guestFromId(
   id: string,
   options: EventEditorGuestOption[],
-  known: SelectedEventEditorGuest[]
+  known: SelectedEventEditorGuest[],
+  picked: SelectedEventEditorGuest | undefined
 ): SelectedEventEditorGuest {
-  const option = options.find((guest) => guest.id === id);
-  if (option) return option;
-  const prior = known.find((guest) => guest.id === id);
+  const key = id.toLowerCase();
+  const prior = known.find((guest) => guestKey(guest) === key);
   if (prior) return prior;
+  if (picked && guestKey(picked) === key) return picked;
+  const option = options.find((guest) => guestKey(guest) === key);
+  if (option) return option;
   return recipientEntityMapper('custom')({
     id,
     email: idToEmail(id),
@@ -45,7 +52,13 @@ export function EventGuestRow(props: {
 }) {
   return (
     <div class="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-ink touch:min-h-11">
-      <UserIcon id={props.guest.id} size="sm" isDeleted={false} suppressClick />
+      <UserIcon
+        id={props.guest.id}
+        name={guestDisplayName(props.guest)}
+        size="sm"
+        isDeleted={false}
+        suppressClick
+      />
       <div class="min-w-0 flex-1 truncate text-sm">
         {guestDisplayName(props.guest)}
         <Show when={guestDisplayName(props.guest) !== guestEmail(props.guest)}>
@@ -60,11 +73,12 @@ export function EventGuestRow(props: {
 }
 
 /**
- * The composer's guest picker: team and contact suggestions plus any typed
+ * The composer's guest picker: bounded personal search and scoped extras plus any typed
  * address, which joins only once its "Add" row is chosen. `excluded` guests
  * are neither offered nor toggled.
  */
 export function EventGuestPicker(props: {
+  /** Explicit event/host data, never a personal-directory catalog. */
   options: Accessor<EventEditorGuestOption[]>;
   selected: SelectedEventEditorGuest[];
   excluded?: SelectedEventEditorGuest[];
@@ -77,14 +91,14 @@ export function EventGuestPicker(props: {
   const users = createMemo((): IUser[] => {
     const byId = new Map<string, IUser>();
     for (const guest of [...props.options(), ...known()]) {
-      byId.set(guest.id, guestToUser(guest));
+      byId.set(guestKey(guest), guestToUser(guest));
     }
     return [...byId.values()];
   });
   const excludedIds = createMemo(
-    (): ReadonlySet<string> =>
-      new Set((props.excluded ?? []).map((guest) => guest.id))
+    (): ReadonlySet<string> => new Set((props.excluded ?? []).map(guestKey))
   );
+  let picked: SelectedEventEditorGuest | undefined;
 
   return (
     <PropertyEntitySelector
@@ -92,15 +106,28 @@ export function EventGuestPicker(props: {
         isMultiSelect: true,
         placeholder: 'Add guests...',
         specificEntityType: 'USER',
-        users,
+        additionalUsers: users,
         excludedIds,
         allowCustomEmail: true,
         fillHeight: props.fillHeight,
       }}
-      selectedOptions={() => new Set(props.selected.map((guest) => guest.id))}
+      selectedOptions={() => new Set(props.selected.map(guestKey))}
+      onUserSelected={(user, custom) => {
+        picked = custom
+          ? recipientEntityMapper('custom')({
+              id: user.id,
+              email: user.email,
+              invalid: false,
+            })
+          : recipientEntityMapper('user')(user);
+      }}
       setSelectedOptions={(ids) => {
+        const current = picked;
+        picked = undefined;
         props.onChange(
-          [...ids].map((id) => guestFromId(id, props.options(), known()))
+          [...ids].map((id) =>
+            guestFromId(id, props.options(), known(), current)
+          )
         );
       }}
       onClose={props.onClose}
