@@ -319,7 +319,9 @@ branch:
   fold fixture.
 
 Second pass, same branch — Macro's own user tools reviewed through
-elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)):
+elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)).
+Superseded: everything in this pass except the `agent_fold` parsing has been
+removed; agent sessions present drafts with `PresentReview` instead.
 
 - `agent`: `AgentLoop::with_user_tool_finisher`. The stream bridge's
   `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
@@ -364,6 +366,15 @@ Still to do: request scope, more than one outstanding question per session
 sandboxed harnesses.
 
 ## User tools reviewed in the turn
+
+> Superseded. Agent sessions no longer review user tools through
+> elicitation: a review held the whole turn until the user answered. They
+> now present email and calendar drafts with `PresentReview`, a saved review
+> card that never pauses the turn, and submit it with `DecideReview` when the
+> account holder says yes in chat. `AgentLoop::with_user_tool_finisher`,
+> `ai_tools::user_tool_review` and the ACP reviewer are gone. The fold still
+> reads `ElicitationRequest::UserTool` so older sessions render. The rest of
+> this section records the original design.
 
 Macro's user tools (`SendEmail`, `CreateCalendarEvent`) are registered with
 `add_user_tool`: calling one returns `"PendingUserExecution"` and does

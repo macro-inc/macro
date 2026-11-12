@@ -1,12 +1,13 @@
 //! `SendConfirmedEmail`: [`SendEmail`] without the review, for a host that
 //! has nothing to review in.
 //!
-//! `SendEmail` defers: it returns `PendingUserExecution` and a host finishes
-//! it - the chat composer after the turn, or a review-card elicitation in an
-//! agent-session turn. A prompt read out of a channel or document thread has
-//! neither surface, so the agent asks in prose there, the user answers in the
-//! thread, and this tool sends on that answer. Every host gets both tools;
-//! the prompt, not the toolset, says which to reach for.
+//! `SendEmail` defers: it returns `PendingUserExecution` and chat's composer
+//! finishes it after the turn. An agent session puts the draft on a
+//! `PresentReview` card instead. A prompt read out of a channel or document
+//! thread, or a session turn without `PresentReview`, has neither surface,
+//! so the agent asks in prose there, the user answers in the conversation,
+//! and this tool sends on that answer. The prompt,
+//! not the toolset, says which to reach for.
 //!
 //! The email is always floated first. Being told to send one is a request to
 //! draft it, not permission to send it, so the agent writes the email into
@@ -42,7 +43,7 @@ use crate::domain::ports::{EmailService, GmailTokenProvider};
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendConfirmedEmail",
-    description = "Send an email immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it in the agent session view or in chat: use SendEmail there, whose review card or composer is the confirmation. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send."
+    description = "Send an email immediately, with no review card or composer. Only where nothing can review a draft: a prompt that came from a channel or document thread (the context block says so), or an agent session without PresentReview. The email is always shown before it is sent, even when the user's request already spelled the whole thing out: in one turn write it into the thread - recipients, subject, body - ask whether to send it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific email, quoting that reply verbatim in userConfirmation. Being asked to send an email is a request to draft one, never approval to send it, so a userConfirmation quoting the request that asked you to write the email - rather than the reply approving the one you wrote - is wrong. Never call it where a card or composer is the confirmation: an agent session with PresentReview presents the draft there, and chat uses SendEmail's composer. Takes the same fields as SendEmail; write the body in Markdown, which is rendered to HTML on send."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendConfirmedEmail {

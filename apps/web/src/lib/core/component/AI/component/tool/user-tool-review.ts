@@ -4,9 +4,9 @@
  * A user tool (`SendEmail`, `CreateCalendarEvent`) is drafted by the agent
  * and finished by the user. The composer that edits the draft is the same
  * wherever it shows; what differs is who finishes the call: chat posts to the
- * cognition tool endpoints after the turn, an agent session answers the
- * agent's review elicitation mid-turn. Each surface builds one of these and
- * the composer calls it.
+ * cognition tool endpoints after the turn, an agent session submits the
+ * saved review card the agent presented. Each surface builds one of these
+ * and the composer calls it.
  */
 
 import type { Accessor } from 'solid-js';
@@ -21,8 +21,8 @@ export type UserToolReviewSink<T> = {
    */
   lockedNotice: Accessor<string | undefined>;
   /**
-   * An edit in progress. Chat and saved-review hosts persist these; the
-   * blocking elicitation host may omit this callback.
+   * An edit in progress. Chat and saved-review hosts persist these; a host
+   * with nothing to persist may omit this callback.
    */
   onEdit?: (args: T) => void;
   /**

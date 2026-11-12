@@ -483,7 +483,7 @@ Editing or rescheduling an owned event retains and updates its selected Macro ca
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
-The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review cards)
+The AI's `CreateCalendarEvent` composer (chat, and agent sessions' saved review cards)
 offers the same selector under the same quick-calls flag; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server

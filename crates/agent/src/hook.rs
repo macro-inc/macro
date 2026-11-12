@@ -34,44 +34,6 @@ pub type ToolRouter = Arc<dyn Fn(&str) -> Option<ToolInfo> + Send + Sync>;
 pub type RegisterFn =
     Arc<dyn Fn(Vec<SearchableTool>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
-/// A user tool the model called, as the host's [`UserToolFinisher`] sees it.
-///
-/// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"` and
-/// does nothing: the host is meant to finish it - let the user review the
-/// call, then execute or reject it. Chat does that after the turn, over HTTP;
-/// a host that can reach its user mid-turn does it here, before the model
-/// reads the result.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PendingUserTool {
-    /// The tool's name as the toolset knows it.
-    pub tool_name: String,
-    /// The call's id as the stream reported it ([`ToolCall::id`]): the
-    /// provider's, or rig's correlation id when the provider gave none. The
-    /// id the host's transcript shows the call under.
-    pub tool_call_id: String,
-    /// The arguments the model called the tool with.
-    pub args: serde_json::Value,
-}
-
-/// What a finished user tool comes back as, in place of the pending answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FinishedUserTool {
-    /// The tool's own result (`UserToolResponse<T>` as JSON: the user's
-    /// action, or their rejection).
-    Result(serde_json::Value),
-    /// Finishing failed; the description is what the model reads.
-    Error(String),
-}
-
-/// Finishes a user tool inside the turn. Returns `None` to leave the pending
-/// answer as it is - the host will finish the call some other way, or not at
-/// all. Context-erased for the same reason as [`RegisterFn`].
-pub type UserToolFinisher = Arc<
-    dyn Fn(PendingUserTool) -> Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
-        + Send
-        + Sync,
->;
-
 /// Which call loaded which catalog tools this session, in load order.
 ///
 /// The Anthropic request planner references a loaded tool from the result of
@@ -150,8 +112,6 @@ pub struct BridgeInputs {
     pub register_loaded: RegisterFn,
     /// Records which result loaded which tools.
     pub tool_loads: ToolLoads,
-    /// Finishes user tools mid-turn, when the host can.
-    pub user_tool_finisher: Option<UserToolFinisher>,
     /// Cuts results too long for the model to read whole, when the host
     /// offers [`crate::ReadToolResult`] to page through them.
     pub result_limit: Option<ToolResultLimit>,
@@ -178,9 +138,6 @@ struct StreamedCalls {
     /// call was reported under.
     finished: HashMap<String, String>,
 }
-
-/// The answer a user tool gives when it has not been finished.
-const PENDING_USER_EXECUTION: &str = "PendingUserExecution";
 
 static CANCELLED_REASON: &str = "user cancelled";
 
@@ -217,9 +174,6 @@ pub struct StreamBridge {
     /// Retries spent this run on names not in the catalog; capped at
     /// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`].
     unknown_tool_call_retries: Arc<AtomicUsize>,
-    /// Finishes a user tool's pending answer before the model reads it, on
-    /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
-    user_tool_finisher: Option<UserToolFinisher>,
     /// Calls announced before they finished; `None` when the loop does not
     /// stream tool calls.
     streamed: Option<Arc<Mutex<StreamedCalls>>>,
@@ -255,7 +209,6 @@ impl StreamBridge {
             loaded_buffer,
             register_loaded,
             tool_loads,
-            user_tool_finisher,
             stream_tool_calls,
             result_limit,
         } = inputs;
@@ -269,7 +222,6 @@ impl StreamBridge {
                 tool_loads,
                 searchable_catalog,
                 unknown_tool_call_retries: Arc::default(),
-                user_tool_finisher,
                 streamed: stream_tool_calls.then(Arc::default),
                 result_limit,
                 cancel,
@@ -295,11 +247,6 @@ impl StreamBridge {
 /// plain text is tried as JSON for compatibility.
 fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
     crate::tool_media::result_json(presentation)
-}
-
-/// Whether a tool's JSON result is a user tool's unfinished answer.
-fn is_pending_user_execution(json: &serde_json::Value) -> bool {
-    json.as_str() == Some(PENDING_USER_EXECUTION)
 }
 
 /// The hook bodies, as inherent methods so tests can exercise them directly:
@@ -560,40 +507,6 @@ impl StreamBridge {
         } else {
             None
         };
-
-        // A user tool's pending answer is finished here when the host can:
-        // the user reviews the call while the turn waits, and the model reads
-        // what they decided instead of a "pending" it would take for success.
-        if let Some(finisher) = &self.user_tool_finisher
-            && json.as_ref().is_some_and(is_pending_user_execution)
-        {
-            let call = PendingUserTool {
-                tool_name: tool_name.to_owned(),
-                tool_call_id: id.clone(),
-                args: serde_json::from_str(args).unwrap_or(serde_json::Value::Null),
-            };
-            match finisher(call).await {
-                Some(FinishedUserTool::Result(result)) => {
-                    let _ = self
-                        .tx
-                        .send(Ok(StreamPart::ToolResponse(ToolResponse::Json {
-                            id,
-                            json: result.clone(),
-                            name: tool_name.to_owned(),
-                        })));
-                    return ToolResultAction::Rewrite(ToolOutput::json(result));
-                }
-                Some(FinishedUserTool::Error(description)) => {
-                    let _ = self.tx.send(Ok(StreamPart::ToolResponse(ToolResponse::Err {
-                        id,
-                        name: tool_name.to_owned(),
-                        description: description.clone(),
-                    })));
-                    return ToolResultAction::rewrite(description);
-                }
-                None => {}
-            }
-        }
 
         // The stream carries the whole result; only the model's copy is cut.
         // Images reach the model as images and are never cut as text.

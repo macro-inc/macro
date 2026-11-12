@@ -802,12 +802,10 @@ later — the reply includes an `<m-document-mention>` task chip, not a URL or
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
 fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
-answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
-user tool's draft (`SendEmail`, `CreateCalendarEvent`) in the tool's own composer - the
-same email compose or calendar event form the session shows, editable in place; expand
-the area to reach its `Send`/`Create`, which answers with the edited draft. A row at the
-bottom of the area carries the other decisions, refusal first: `Dismiss · Open in session`
-for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
+answer, text and number inputs, a yes/no) or a URL request's host and address. A row at the
+bottom of the area carries the decisions, refusal first: `Decline · Submit · Open in session`
+(or `Open` for a URL). Email and calendar drafts never ask here: the session shows them on a
+saved review card (`PresentReview`) that does not block the turn.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
 A prompt the agent read out of a channel or document thread opens no review card at all:
