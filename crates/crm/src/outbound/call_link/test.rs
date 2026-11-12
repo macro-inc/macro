@@ -328,11 +328,11 @@ async fn links_a_company_contact_by_its_second_address(pool: PgPool) {
         linked_ids(&pool, call_record_id, SystemPropertyKey::Contacts).await,
         vec![ada.to_string()]
     );
-    // The address is not at the company's domain, so only the contact links.
-    assert!(
-        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies)
-            .await
-            .is_empty()
+    // The address is not at the company's domain; the contact brings its
+    // company.
+    assert_eq!(
+        linked_ids(&pool, call_record_id, SystemPropertyKey::Companies).await,
+        vec![acme.to_string()]
     );
 }
 

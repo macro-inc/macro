@@ -88,9 +88,9 @@ tools/HTTP/GraphQL surfaces over them.
   domains and addresses constrain the viewer's mailbox, not team email access.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
-  address as any of its addresses, with or without a company
-  (`src/outbound/call_link.rs`). A contact under a hidden company does not
-  link, and a team's own members never match its CRM. Calendar events and
+  address as any of its addresses, with or without a company, together with
+  that contact's company (`src/outbound/call_link.rs`). A contact under a
+  hidden company links neither, and a team's own members never match its CRM. Calendar events and
   bookings have no link by attendee address: they reach a record only through
   a Companies or Contacts property someone set, a reference, or the call held
   for them.

@@ -34,7 +34,8 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
     /// CRM companies whose domain a person's address is at, and CRM contacts
     /// holding the address as any of their addresses, with or without a
     /// company, in the CRMs of the teams of the Macro accounts on the call.
-    /// Every visible contact holding an address matches. A team's own members
+    /// Every visible contact holding an address matches, and brings its
+    /// company with it whatever domain the address is at. A team's own members
     /// never match its CRM, and hidden records are skipped, as is a contact
     /// under a hidden company. Email contribution consent is independent.
     async fn matching_records(
@@ -84,7 +85,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             JOIN crm_domains d ON d.team_id = o.team_id AND LOWER(d.domain) = o.domain
             JOIN crm_companies co ON co.id = d.company_id AND NOT co.hidden
             UNION
-            SELECT NULL, ct.id
+            SELECT company.id, ct.id
             FROM outsiders o
             CROSS JOIN LATERAL (
                 SELECT ce.contact_id FROM crm_contact_emails ce WHERE ce.email = o.email OFFSET 0
@@ -96,7 +97,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                 OFFSET 0
             ) ct
             LEFT JOIN LATERAL (
-                SELECT co.hidden FROM crm_companies co WHERE co.id = ct.company_id OFFSET 0
+                SELECT co.id, co.hidden FROM crm_companies co WHERE co.id = ct.company_id OFFSET 0
             ) company ON TRUE
             WHERE ct.team_id = o.team_id
               AND NOT ct.hidden

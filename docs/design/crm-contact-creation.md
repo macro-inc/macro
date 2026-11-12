@@ -32,10 +32,11 @@ companies remain open.
 The create API remains an insert, not an idempotent import/upsert API; callers
 must retain a successful response instead of retrying a confirmed create.
 
-The company Emails view and a call's company association remain domain-based;
+The company Emails view remains domain-based;
 use the contact's Emails view for an explicitly attached off-domain address.
-A call's contact association matches any address of any visible contact of the
-team, with or without a company, and links every contact that holds it.
+A call links the companies at a participant's domain, and every visible contact
+of the team that holds the participant's address as any of its addresses, with
+or without a company, together with that contact's company.
 Address prechecks aggregate repeated emails within the team, preserving any
 hidden or disabled association rather than letting a second company bypass it.
 The existing People listing still displays one representative per email; each
