@@ -676,6 +676,7 @@ export function useRemoveLinkPreviewsMutation() {
       });
       return {
         target,
+        removedFor: shown.content,
         previous: {
           link_previews: shown.link_previews,
           link_previews_content: shown.link_previews_content,
@@ -688,7 +689,14 @@ export function useRemoveLinkPreviewsMutation() {
     onError: (error, vars, context) => {
       console.error('failed to remove link previews', error);
       toast.failure(t('channelLinkPreviews.removeFailed'));
-      if (context) {
+      if (!context) return;
+      // Undo only our own removal: previews a newer update installed while
+      // it was pending, for an edited text, stay.
+      const current = getTargetMessage(vars.parent, context.target);
+      const stillRemoved =
+        current?.link_previews?.length === 0 &&
+        current.link_previews_content === context.removedFor;
+      if (stillRemoved) {
         patchTargetMessage(vars.parent, context.target, context.previous);
       }
     },

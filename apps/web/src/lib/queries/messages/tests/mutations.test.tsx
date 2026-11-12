@@ -1032,4 +1032,28 @@ describe('removing link previews', () => {
 
     expect(shown()).toEqual(previews);
   });
+
+  it('keeps newer previews when a refused removal is undone', async () => {
+    seed();
+    let refuse!: (error: Error) => void;
+    mocks.removeLinkPreviews.mockReturnValue(
+      new Promise<Message>((_, reject) => {
+        refuse = reject;
+      })
+    );
+
+    const removal = mount().mutateAsync({ parent, messageID: 'root' });
+    await waitFor(() => expect(shown()).toEqual([]));
+
+    // The message is edited meanwhile, and its new text gets its own card.
+    const newer = [{ url: 'https://example.com/other', title: 'Other' }];
+    applyMessage(
+      { ...sent, content: 'edited text', link_previews: newer },
+      'link_previews_updated'
+    );
+    refuse(new Error('forbidden'));
+
+    await expect(removal).rejects.toThrow('forbidden');
+    expect(shown()).toEqual(newer);
+  });
 });
