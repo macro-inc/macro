@@ -14,6 +14,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
 import { Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -139,8 +140,9 @@ export function MarkdownDetailBreadcrumbItem(props: {
               name={documentName()}
               ops={fileOperations}
               tools={[
-                actions.history,
-                actions.wideMode,
+                // Drive and CRM details also open on phones, which offer
+                // neither version history nor wide mode.
+                ...(isMobile() ? [] : [actions.history, actions.wideMode]),
                 actions.askMacro,
                 actions.codeActions,
               ]}
