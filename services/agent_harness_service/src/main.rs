@@ -712,10 +712,14 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // Chat's code mode runs as the signed-in user on chat's own executor.
-    let chat_code_mode = code_runner.as_ref().map(|(_, _, _, chat, _)| {
-        Ok::<_, anyhow::Error>(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
-            Arc::new(chat.clone()),
+    // Chat runs only in code mode, as the signed-in user on chat's own
+    // executor, so the harness needs its Deno runtime.
+    let Some((_, _, _, chat_executor, _)) = &code_runner else {
+        anyhow::bail!("the in-app chat runs in code mode: configure DENO_BINARY");
+    };
+    let chat_code_mode: Arc<dyn agent_code_mode::domain::UserCodeMode> =
+        Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(chat_executor.clone()),
             Arc::new(code_mode::UserRunCredentials {
                 correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
@@ -725,15 +729,14 @@ async fn run() -> anyhow::Result<()> {
                 ),
                 endpoints: code_mode::sdk_endpoints()?,
             }),
-        )) as Arc<dyn agent_code_mode::domain::UserCodeMode>)
-    });
+        ));
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
         mcp_http,
-        chat_code_mode.transpose()?,
+        chat_code_mode,
     )
     .await
     .context("failed to compose cognition APIs")?;

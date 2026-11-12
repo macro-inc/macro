@@ -104,7 +104,17 @@ pub fn macro_connect_rollout(
     host: Option<&str>,
     environment: Environment,
 ) -> anyhow::Result<Option<ConnectRollout>> {
-    posthog_rollout(api_key, host, environment, MACRO_CONNECT_FLAG)
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+        environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, MACRO_CONNECT_FLAG)))
 }
 
 /// The PostHog flag for Canvas artifacts. Keep in sync with the web flag of the
@@ -119,21 +129,17 @@ pub fn canvas_artifacts_rollout(
     host: Option<&str>,
     environment: Environment,
 ) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
-    posthog_rollout(api_key, host, environment, CANVAS_ARTIFACTS_FLAG)
-}
-
-/// The PostHog flag that moves the in-app chat onto code mode.
-pub const CHAT_CODE_MODE_FLAG: &str = "ai-chat-code-mode";
-
-/// The chat code-mode rollout read from PostHog, or `None` without a PostHog
-/// key (direct tools for everyone). Answers are cached like
-/// [`macro_connect_rollout`], and a failed read answers `false`.
-pub fn chat_code_mode_rollout(
-    api_key: Option<&str>,
-    host: Option<&str>,
-    environment: Environment,
-) -> anyhow::Result<Option<ConnectRollout>> {
-    posthog_rollout(api_key, host, environment, CHAT_CODE_MODE_FLAG)
+    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
+        return Ok(None);
+    };
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        host.unwrap_or("https://us.i.posthog.com"),
+        api_key.to_owned(),
+        std::time::Duration::from_secs(3),
+        environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    Ok(Some(rollout_from(flags, CANVAS_ARTIFACTS_FLAG)))
 }
 
 /// [`canvas_artifacts_rollout`] from this process's PostHog configuration.
@@ -146,26 +152,6 @@ pub fn canvas_artifacts_rollout_from_env(
         env.posthog_host.as_ref().and_then(|value| value.value()),
         environment,
     )
-}
-
-/// `flag` read from PostHog per user, or `None` without a PostHog key.
-fn posthog_rollout(
-    api_key: Option<&str>,
-    host: Option<&str>,
-    environment: Environment,
-    flag: &'static str,
-) -> anyhow::Result<Option<ConnectRollout>> {
-    let Some(api_key) = api_key.filter(|key| !key.is_empty()) else {
-        return Ok(None);
-    };
-    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-        host.unwrap_or("https://us.i.posthog.com"),
-        api_key.to_owned(),
-        std::time::Duration::from_secs(3),
-        environment,
-    )
-    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-    Ok(Some(rollout_from(flags, flag)))
 }
 
 fn rollout_from<F>(flags: F, flag: &'static str) -> ConnectRollout

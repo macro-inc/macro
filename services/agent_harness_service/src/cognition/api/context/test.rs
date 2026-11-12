@@ -599,10 +599,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let chat_tools = ai_tools::ChatToolsets::new(None, false);
-    let all_tools_toolset = chat_tools.direct().toolset.clone();
+    let all_tools = ai_tools::tools_for_chat_code_mode();
+    let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
-        Arc::new(chat_tools.direct().prompt.clone());
+        Arc::new(all_tools.prompt.to_string());
 
     let (import_service, onboarding_service, mcp_selector) = {
         let mcp_key =
@@ -680,7 +680,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            chat_tools.clone(),
+            ai_tools::tools_for_chat_code_mode(),
         );
 
     let projection_notifier =
@@ -782,7 +782,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         tool_service_context,
         all_tools: all_tools_toolset,
         all_tools_prompt,
-        chat_tools,
         entity_access_service: entity_access_service.clone(),
         message_service: Arc::new(
             chat::domain::service::MessageServiceImpl::new(

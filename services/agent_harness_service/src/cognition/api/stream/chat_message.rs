@@ -325,8 +325,7 @@ async fn send_chat_message_inner(
         .flatten();
 
     // Build the chat messages
-    let chat_tools = ctx.chat_tools.for_user(&user_id).await;
-    let tools_prompt = choose_tools_prompt(&payload.toolset, &*chat_tools.prompt);
+    let tools_prompt = choose_tools_prompt(&payload.toolset, &*ctx.all_tools_prompt);
     let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
         tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {
@@ -372,7 +371,6 @@ async fn send_chat_message_inner(
         ai_request,
         system_prompt,
         request.toolset.clone(),
-        chat_tools.toolset,
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -530,7 +528,6 @@ fn stream_and_save_message(
     request: Vec<ChatMessage>,
     system_prompt: String,
     tool_selection: ToolSet,
-    static_tools: Arc<ai_tools::AiToolSet>,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
@@ -547,6 +544,7 @@ fn stream_and_save_message(
 ) {
     tracing::trace!(request=?request, "streaming chat request");
     let tool_context = ctx.tool_service_context.clone();
+    let static_tools = ctx.all_tools.clone();
     let mcp_selector = ctx.mcp_selector.clone();
 
     let ctx_outer = ctx.clone();

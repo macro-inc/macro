@@ -130,7 +130,8 @@ pub struct Config {
     /// Customer key for Macro Connect; sandboxes reach Connect-held grants
     /// through its MCP gateway.
     pub connect_customer_key: ConnectCustomerKey,
-    /// Pinned Deno executable. Unset hosts do not advertise code execution.
+    /// Pinned Deno executable. The in-app chat runs only in code mode, so the
+    /// harness refuses to start without it.
     pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]

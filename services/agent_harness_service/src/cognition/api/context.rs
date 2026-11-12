@@ -178,9 +178,6 @@ pub struct ApiContext {
     pub tool_service_context: ToolServiceContext,
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync>,
-    /// The tools a chat turn runs: [`Self::all_tools`], or code mode for the
-    /// users its rollout is on for.
-    pub chat_tools: ai_tools::ChatToolsets,
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,

@@ -11,7 +11,6 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 mod test;
 
 mod build_context;
-mod chat_tools;
 pub mod crm_csv_files;
 mod deferred;
 mod display_results;
@@ -69,13 +68,11 @@ pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env, build_web_search_provider_from_env,
 };
-pub use chat_tools::{ChatTools, ChatToolsets};
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
 pub use mcp_app_catalog::{
-    CHAT_CODE_MODE_FLAG, PipedreamMcpAppCatalog, canvas_artifacts_rollout,
-    canvas_artifacts_rollout_from_env, chat_code_mode_rollout, connect_adapter,
-    connector_backends_from_env, macro_connect_rollout, pipedream_client_from_env,
+    PipedreamMcpAppCatalog, canvas_artifacts_rollout, canvas_artifacts_rollout_from_env,
+    connect_adapter, connector_backends_from_env, macro_connect_rollout, pipedream_client_from_env,
 };
 pub use search::search_toolset;
 pub use tool_context::{

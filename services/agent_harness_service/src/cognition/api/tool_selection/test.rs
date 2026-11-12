@@ -121,53 +121,53 @@ fn the_database_host_carries_how_databases_work_and_no_other_area() {
     assert!(!prompt.contains("MUST use the `SendEmail` tool"));
 }
 
-/// Hidden means not callable: with chat's code mode on, a native tool the
-/// code-mode toolset leaves out is refused by name, not dispatched; with it
-/// off, the same names still reach their tools.
+/// Hidden means not callable: a native tool chat's code-mode toolset leaves
+/// out is refused by name, not dispatched, while the tools it lists are found.
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn chat_code_mode_refuses_hidden_native_tools_by_name(pool: sqlx::PgPool) {
+async fn chat_refuses_hidden_native_tools_by_name(pool: sqlx::PgPool) {
     let ctx = crate::cognition::api::context::test::test_api_context(pool).await;
     let user = MacroUserIdStr::try_from_email("chat@example.com").unwrap();
-    let code_mode = ai_tools::ChatToolsets::new(Some(Arc::new(|_| Box::pin(async { true }))), true)
-        .for_user(&user)
-        .await;
-    let direct = ai_tools::ChatToolsets::new(None, true)
-        .for_user(&user)
-        .await;
-    let code_mode = service_tools(&ToolSet::All, code_mode.toolset, &ctx.mcp_selector, &user).await;
-    let direct = service_tools(&ToolSet::All, direct.toolset, &ctx.mcp_selector, &user).await;
+    let chat = service_tools(
+        &ToolSet::All,
+        ctx.all_tools.clone(),
+        &ctx.mcp_selector,
+        &user,
+    )
+    .await;
+    let call = |name: &'static str| {
+        // Empty arguments fail to deserialize, so a tool that is found never runs.
+        chat.try_tool_call(
+            ctx.tool_service_context.clone(),
+            RequestContext::new(user.clone()),
+            name,
+            &serde_json::json!({}),
+        )
+    };
 
-    // Empty arguments fail to deserialize, so a tool that is found never runs.
-    for name in [
+    for hidden in [
         "ReadContent",
+        "ListEntities",
         "WebFetch",
+        "SelfKnowledge",
         "BashCodeExecution",
         "TextEditorCodeExecution",
     ] {
-        let refused = code_mode
-            .try_tool_call(
-                ctx.tool_service_context.clone(),
-                RequestContext::new(user.clone()),
-                name,
-                &serde_json::json!({}),
-            )
-            .await;
         assert!(
-            matches!(refused, Err(ToolSetError::NotFound(_))),
-            "code mode dispatched hidden {name}"
+            ai_tools::tools_for(ai_tools::AiHost::Chat)
+                .toolset
+                .tools
+                .contains_key(hidden),
+            "{hidden} is a native chat tool"
         );
-
-        let dispatched = direct
-            .try_tool_call(
-                ctx.tool_service_context.clone(),
-                RequestContext::new(user.clone()),
-                name,
-                &serde_json::json!({}),
-            )
-            .await;
         assert!(
-            matches!(dispatched, Err(ToolSetError::Deserialization(_))),
-            "direct chat no longer finds {name}"
+            matches!(call(hidden).await, Err(ToolSetError::NotFound(_))),
+            "chat dispatched hidden {hidden}"
+        );
+    }
+    for listed in ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"] {
+        assert!(
+            !matches!(call(listed).await, Err(ToolSetError::NotFound(_))),
+            "chat does not find {listed}"
         );
     }
 }

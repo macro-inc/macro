@@ -1077,3 +1077,43 @@ fn code_mode_reads_memory_and_activity_through_the_sdk() {
         assert!(direct.toolset.tools.contains_key(name), "{name}");
     }
 }
+
+#[test]
+fn chat_runs_in_code_mode() {
+    let tools = tools_for_chat_code_mode();
+    let direct = tools_for(AiHost::Chat).toolset;
+    let advertised: Vec<&str> = tools.toolset.tools.keys().map(String::as_str).collect();
+
+    for name in CHAT_CODE_MODE_TOOLS {
+        assert!(advertised.contains(&name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name} is sent with every request"
+        );
+    }
+    for name in CHAT_CODE_MODE_DROPPED_TOOLS {
+        assert!(!advertised.contains(&name), "{name}");
+    }
+    for name in &advertised {
+        assert!(
+            !agent_code_mode::domain::covered_by_code_sdk(
+                name,
+                direct.user_tools.contains_key(*name)
+            ),
+            "{name} is covered by the SDK"
+        );
+    }
+    // The composer still confirms chat's user tools, and chat still presents views.
+    for name in ["SendEmail", "CreateCalendarEvent", "DisplayResults"] {
+        assert!(advertised.contains(&name), "{name}");
+    }
+    for covered in ["ReadContent", "ListEntities", "WebFetch"] {
+        assert!(!advertised.contains(&covered), "{covered}");
+    }
+
+    let prompt = tools.prompt.to_string();
+    assert!(prompt.contains("ExecuteCode"));
+    assert!(prompt.contains("AboutMacro"));
+    assert!(prompt.contains("present them with `DisplayResults` without being asked"));
+    assert!(!prompt.contains("SelfKnowledge"));
+}
