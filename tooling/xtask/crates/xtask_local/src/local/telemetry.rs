@@ -1,14 +1,16 @@
-//! What a run records when its user opted in to local telemetry: the run, every
-//! step, each service build and each container's health wait. Sending, the
-//! opt-in file and the buffer are `xtask_local_telemetry`'s.
+//! What a run records as local telemetry (on unless the developer opted out):
+//! the run, every step, each service build and each container's health wait.
+//! Sending, the settings file, its provisioning and the buffer are
+//! `xtask_local_telemetry`'s.
 //!
 //! Hooked in through the supervisor's [`super::supervisor::Job`], which every
-//! attached, detached and rebuild run already has, so the flows themselves only
-//! report the bring-up's shape ([`RunTelemetry::bring_up`]). Opted out, `begin`
-//! returns `None` and every hook is a no-op.
+//! attached, detached and rebuild run already has, and through the [`Stage`] of
+//! commands without a job (`stack up`, `stack update`, `build-services`), so the
+//! flows themselves only report the bring-up's shape ([`RunTelemetry::bring_up`]).
+//! Off, `begin` returns `None` and every hook is a no-op.
 //!
 //! Fields hold names of our own steps and services, opaque ids, counts and
-//! timings: never paths, env values, error text or anything from the opt-in file.
+//! timings: never paths, env values, error text or anything from the settings file.
 
 use std::collections::{BTreeMap, HashSet};
 use std::process::Command;
@@ -17,9 +19,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
-use xtask_local_telemetry::{Event, Paths, Recorder, opaque_id};
+use xtask_local_telemetry::{Event, Paths, Recorder, opaque_id, take_hint};
 
 use super::instance::{DEFAULT_NAME, Instance};
+use super::stage::Stage;
 use super::supervisor::JobKind;
 use super::{BringUp, Mode, Start, repo_root, workspace_root};
 
@@ -53,6 +56,12 @@ pub(super) enum RunKind {
     Rebuild,
     Stop,
     RestartFrontend,
+    /// `just stack up`: a headless bring-up.
+    StackUp,
+    /// `just stack update`: adopt a new build into a running stack.
+    StackUpdate,
+    /// `cargo x build-services`: only the service binaries.
+    BuildServices,
 }
 
 impl RunKind {
@@ -62,6 +71,9 @@ impl RunKind {
             RunKind::Rebuild => "rebuild",
             RunKind::Stop => "stop",
             RunKind::RestartFrontend => "restart_frontend",
+            RunKind::StackUp => "stack_up",
+            RunKind::StackUpdate => "stack_update",
+            RunKind::BuildServices => "build_services",
         }
     }
 }
@@ -75,7 +87,9 @@ impl From<JobKind> for RunKind {
     }
 }
 
-/// One run's recording, shared with its background lanes.
+/// One run's recording, shared with its background lanes. Clones share it: the
+/// first `finish` closes the run, and hooks on a closed run do nothing.
+#[derive(Clone)]
 pub(super) struct RunTelemetry {
     shared: Arc<Shared>,
 }
@@ -84,7 +98,8 @@ struct Shared {
     /// Taken by `finish`; a lane that outlives it has nowhere to record.
     recorder: Mutex<Option<Recorder>>,
     kind: RunKind,
-    project: String,
+    /// The Compose project whose containers are inspected; none for `build-services`.
+    project: Option<String>,
     started_at: SystemTime,
     state: Mutex<State>,
 }
@@ -100,24 +115,34 @@ struct State {
     build_output: Option<BuildOutput>,
     /// Services already reported, so the end-of-run inspection skips them.
     services: HashSet<String>,
+    /// The first step that failed, for runs without a job to remember it.
+    failed_step: Option<String>,
     lanes: Vec<JoinHandle<()>>,
 }
 
 impl RunTelemetry {
-    /// Start recording, or `None` when the user hasn't opted in (or the opt-in
-    /// file is unusable, which is reported once and leaves telemetry off).
+    /// Start recording, or `None` when opted out, when there is no token yet
+    /// (a one-line hint, once), or when the settings file is unusable (reported
+    /// and left off). Never waits on the network or Doppler.
     pub(super) fn begin(
-        instance: &Instance,
+        instance: Option<&Instance>,
         kind: RunKind,
         started_at: SystemTime,
         detached: bool,
     ) -> Option<Self> {
-        Self::begin_in(&Paths::for_user()?, instance, kind, started_at, detached)
+        let paths = Paths::for_user()?;
+        let telemetry = Self::begin_in(&paths, instance, kind, started_at, detached);
+        if telemetry.is_none()
+            && let Some(hint) = take_hint(&paths)
+        {
+            eprintln!("{hint}");
+        }
+        telemetry
     }
 
     fn begin_in(
         paths: &Paths,
-        instance: &Instance,
+        instance: Option<&Instance>,
         kind: RunKind,
         started_at: SystemTime,
         detached: bool,
@@ -134,7 +159,7 @@ impl RunTelemetry {
             shared: Arc::new(Shared {
                 recorder: Mutex::new(Some(recorder)),
                 kind,
-                project: instance.project_name().to_owned(),
+                project: instance.map(|instance| instance.project_name().to_owned()),
                 started_at,
                 state: Mutex::new(State::default()),
             }),
@@ -147,8 +172,33 @@ impl RunTelemetry {
         kind: RunKind,
         work: impl FnOnce() -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
-        let telemetry = Self::begin(instance, kind, SystemTime::now(), false);
+        let telemetry = Self::begin(Some(instance), kind, SystemTime::now(), false);
         Self::finish_action(telemetry, work)
+    }
+
+    /// Record a command that has no job through its stage: every step `stage`
+    /// and its children run, then one run event when [`RunTelemetry::close`] is
+    /// called. A dry run records nothing.
+    pub(super) fn attach(
+        stage: Stage,
+        instance: Option<&Instance>,
+        kind: RunKind,
+        started_at: SystemTime,
+    ) -> (Stage, Option<Self>) {
+        if stage.is_dry_run() {
+            return (stage, None);
+        }
+        let telemetry = Self::begin(instance, kind, started_at, false);
+        (stage.with_telemetry(telemetry.clone()), telemetry)
+    }
+
+    /// Close a run started with [`RunTelemetry::attach`]. The user is waiting,
+    /// so it waits for nothing: what isn't sent yet goes with the next run.
+    pub(super) fn close<T>(telemetry: Option<Self>, result: &anyhow::Result<T>) {
+        if let Some(telemetry) = telemetry {
+            let failed_step = telemetry.shared.state().failed_step.clone();
+            telemetry.finish(result.is_ok(), failed_step.as_deref(), Duration::ZERO);
+        }
     }
 
     fn finish_action<T>(
@@ -204,6 +254,9 @@ impl RunTelemetry {
         let shape = {
             let mut state = self.shared.state();
             state.steps += 1;
+            if !succeeded && state.failed_step.is_none() {
+                state.failed_step = Some(step.to_owned());
+            }
             state.shape.clone()
         };
         let mut event = Event::new("step")
@@ -356,17 +409,14 @@ pub(super) fn step_name(label: &str) -> &str {
 }
 
 /// What every event of the run carries.
-fn common_fields(instance: &Instance, kind: RunKind, detached: bool) -> BTreeMap<String, Value> {
-    let instance_kind = if instance.name() == DEFAULT_NAME {
-        "default"
-    } else {
-        "named"
-    };
+fn common_fields(
+    instance: Option<&Instance>,
+    kind: RunKind,
+    detached: bool,
+) -> BTreeMap<String, Value> {
     let mut fields = BTreeMap::from([
         ("kind".to_owned(), Value::from(kind.as_str())),
         ("detached".to_owned(), Value::from(detached)),
-        ("instance".to_owned(), Value::from(instance.name())),
-        ("instance_kind".to_owned(), Value::from(instance_kind)),
         (
             "platform".to_owned(),
             Value::from(format!(
@@ -380,6 +430,15 @@ fn common_fields(instance: &Instance, kind: RunKind, detached: bool) -> BTreeMap
             Value::from(opaque_id(&workspace_root().to_string_lossy())),
         ),
     ]);
+    if let Some(instance) = instance {
+        let instance_kind = if instance.name() == DEFAULT_NAME {
+            "default"
+        } else {
+            "named"
+        };
+        fields.insert("instance".to_owned(), Value::from(instance.name()));
+        fields.insert("instance_kind".to_owned(), Value::from(instance_kind));
+    }
     if let Ok(cpus) = std::thread::available_parallelism() {
         fields.insert("cpus".to_owned(), Value::from(cpus.get()));
     }
@@ -557,7 +616,7 @@ impl ServiceHealth {
 /// A `service` event per container not reported yet. Best effort: no Docker, no
 /// events.
 fn inspect_services(shared: &Shared, phase: &str) {
-    let Some(containers) = project_containers(&shared.project) else {
+    let Some(containers) = shared.project.as_deref().and_then(project_containers) else {
         return;
     };
     for health in containers.iter().filter_map(ServiceHealth::parse) {
