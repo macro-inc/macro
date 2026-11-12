@@ -143,23 +143,17 @@ where
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerState, TeamAgentError> {
-        let status = self
+        let (status, availability) = self
             .service
-            .maintenance()
             .status_for_roster(team_id, computer_id)
             .await
             .map_err(TeamAgentError::internal)?;
-        Ok(computer_state(status.status.status, status.availability))
+        Ok(computer_state(status.status, availability))
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
-        match self
-            .service
-            .maintenance()
-            .request_release(team_id, computer_id)
-            .await
-        {
+        match self.service.request_release(team_id, computer_id).await {
             // A purchase still confirming settles uncharged or becomes a
             // computer; nothing to release yet.
             Ok(_) | Err(ComputerError::NotFound | ComputerError::NotPurchased) => Ok(()),

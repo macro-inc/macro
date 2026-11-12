@@ -344,6 +344,10 @@ the agent: at enrollment the operator asks its `AgentEnrollmentSource`
 (`domain/agent.rs`) for `Enrollment.agent`, which team_agents issues. A failed
 issuance fails the enrollment, so an agent computer never boots without its
 agent; `NoAgentEnrollment` (the default) enrolls every computer without one.
+team_agents reads an agent computer's roster state with
+`ComputerService::status_for_roster` (answered on a detached fleet too) and
+releases it with `request_release` when the agent is removed: normal release
+effects, no fleet access or name confirmation, team ownership still checked.
 
 ## Typed boundaries
 
