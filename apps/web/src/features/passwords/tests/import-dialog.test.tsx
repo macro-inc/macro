@@ -7,11 +7,11 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
+import type { ImportBatchBody } from '../context/passwords-context';
 import {
   type PasswordSource,
   PasswordsProvider,
 } from '../context/passwords-context';
-import type { ImportBatchBody } from '../core/import';
 import type { PasswordItem } from '../core/types';
 import { ImportDialog } from '../views/import-dialog';
 import { createFakePasswordSource } from './fake-source';

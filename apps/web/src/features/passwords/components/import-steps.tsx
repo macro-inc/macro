@@ -15,17 +15,17 @@ import { Button, Checkbox, Dropdown } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
+import type {
+  ImportDestination,
+  ImportFileFailure,
+  ImportPreview,
+} from '../context/passwords-context';
 import {
   MAX_FOLDER_DEPTH,
   MAX_TEAM_FOLDERS,
   VAULT_LIST_CAP,
 } from '../core/import';
 import { folderPath, type PasswordFolder } from '../core/types';
-import type {
-  ImportDestination,
-  ImportFileFailure,
-  ImportPreview,
-} from '../primitives/import';
 import { KIND_ICONS } from './kind-icon';
 
 false && fileDrop;

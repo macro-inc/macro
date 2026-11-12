@@ -22,8 +22,8 @@ import type { PasswordUsername } from '@service-storage/generated/schemas/passwo
 import type { PasswordVersion as VersionDto } from '@service-storage/generated/schemas/passwordVersion';
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
 import { err, ok } from 'neverthrow';
-import type { ImportBatchResult } from '../core/import';
 import type {
+  ImportBatchResult,
   PasswordFailure,
   PasswordResult,
   PasswordSource,

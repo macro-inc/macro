@@ -1,6 +1,9 @@
 import { err, ok } from 'neverthrow';
-import type { PasswordSource } from '../context/passwords-context';
-import type { ImportBatchBody, ImportBatchResult } from '../core/import';
+import type {
+  ImportBatchBody,
+  ImportBatchResult,
+  PasswordSource,
+} from '../context/passwords-context';
 import {
   folderSubtree,
   type PasswordFolder,

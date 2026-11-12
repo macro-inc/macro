@@ -1,8 +1,3 @@
-import type {
-  ImportFormat,
-  ParsedImportFolder,
-  ParsedImportItem,
-} from '@core/password-import/types';
 import { match } from 'ts-pattern';
 import { folderPath, type PasswordFolder, type PasswordItem } from './types';
 
@@ -24,43 +19,30 @@ export type ImportTarget =
   | { kind: 'existing'; folderId: string }
   | { kind: 'root' };
 
-/** One request to `POST …/imports/{importId}/items`. */
-export type ImportBatchBody = {
-  format: ImportFormat;
-  target: ImportTarget;
-  private: boolean;
-  folders: { key: string; name: string; parentKey: string | null }[];
-  items: ParsedImportItem[];
+/** What duplicate matching and batching read from a parsed item. */
+export type ImportCandidate = {
+  sourceKey: string;
+  name: string;
+  kind: string;
+  url: string | null;
+  folderKey: string | null;
 };
 
-export type ImportItemOutcome = 'created' | 'already_present' | 'failed';
-export type ImportErrorCode =
-  | 'not_found'
-  | 'forbidden'
-  | 'invalid_request'
-  | 'version_conflict'
-  | 'folder_missing'
-  | 'busy'
-  | 'vault_unavailable';
-
-export type ImportBatchResult = {
-  targetFolderId: string | null;
-  folders: { key: string; folderId: string }[];
-  items: {
-    sourceKey: string;
-    outcome: ImportItemOutcome;
-    errorCode?: ImportErrorCode;
-    itemId?: string;
-  }[];
+/** A source folder: opaque key, parent key, and its path from the top level. */
+export type ImportFolderNode = {
+  key: string;
+  name: string;
+  parentKey: string | null;
+  path: readonly string[];
 };
 
 /** Item failures worth sending again: the vault was busy or briefly unavailable. */
-export function isRetryable(code: ImportErrorCode | undefined) {
+export function isRetryable(code: string | undefined) {
   return code === 'busy' || code === 'vault_unavailable';
 }
 
 /** Distinct item names, for searching the vault when its list is capped. */
-export function candidateNames(items: readonly ParsedImportItem[]) {
+export function candidateNames(items: readonly ImportCandidate[]) {
   const names = new Map<string, string>();
   for (const item of items) {
     const name = item.name.trim();
@@ -89,7 +71,7 @@ function identity(kind: string, name: string, url: string | null) {
  * vault already loaded is compared; no values are read.
  */
 export function duplicateKeys(
-  items: readonly ParsedImportItem[],
+  items: readonly ImportCandidate[],
   existing: readonly PasswordItem[]
 ): Set<string> {
   const known = new Set(
@@ -117,7 +99,7 @@ export type FolderCheck = {
  */
 export function checkFolders(
   target: ImportTarget,
-  sourceFolders: readonly ParsedImportFolder[],
+  sourceFolders: readonly ImportFolderNode[],
   vaultFolders: readonly PasswordFolder[]
 ): FolderCheck {
   const targetDepth = match(target)
@@ -151,9 +133,9 @@ function byteLength(value: unknown) {
 
 /** The folders `items` reference, with their ancestors, parents first. */
 export function foldersFor(
-  items: readonly ParsedImportItem[],
-  folders: readonly ParsedImportFolder[]
-): ImportBatchBody['folders'] {
+  items: readonly ImportCandidate[],
+  folders: readonly ImportFolderNode[]
+): { key: string; name: string; parentKey: string | null }[] {
   const byKey = new Map(folders.map((folder) => [folder.key, folder]));
   const wanted = new Set<string>();
   for (const item of items) {
@@ -174,19 +156,18 @@ export function foldersFor(
  * folders stay under `maxBytes`. An item too large on its own goes alone and
  * the server answers for it.
  */
-export function planBatches(
-  items: readonly ParsedImportItem[],
-  folders: readonly ParsedImportFolder[],
+export function planBatches<Item extends ImportCandidate>(
+  items: readonly Item[],
+  folders: readonly ImportFolderNode[],
   limits: { maxItems: number; maxBytes: number } = {
     maxItems: BATCH_ITEMS,
     maxBytes: BATCH_BYTES,
   }
-): ParsedImportItem[][] {
-  const batches: ParsedImportItem[][] = [];
-  let current: ParsedImportItem[] = [];
+): Item[][] {
+  const batches: Item[][] = [];
+  let current: Item[] = [];
   let bytes = 0;
-  const folderBytes = (batch: ParsedImportItem[]) =>
-    byteLength(foldersFor(batch, folders));
+  const folderBytes = (batch: Item[]) => byteLength(foldersFor(batch, folders));
   for (const item of items) {
     const size = byteLength(item);
     const full =

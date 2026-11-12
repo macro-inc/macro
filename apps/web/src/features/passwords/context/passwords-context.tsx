@@ -1,4 +1,10 @@
-import type { ImportFormat, ParseReply } from '@core/password-import/types';
+import type {
+  ImportFileError,
+  ImportFormat,
+  ParsedImport,
+  ParsedImportItem,
+  ParseReply,
+} from '@core/password-import/types';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -6,7 +12,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
-import type { ImportBatchBody, ImportBatchResult } from '../core/import';
+import type { ImportTarget } from '../core/import';
 import type {
   PasswordActivity,
   PasswordDraft,
@@ -70,6 +76,53 @@ export type PasswordSource = {
     importId: string,
     batch: ImportBatchBody
   ): PasswordResult<ImportBatchResult>;
+};
+/** One request to `POST …/imports/{importId}/items` (`PasswordImportBatch`). */
+export type ImportBatchBody = {
+  format: ImportFormat;
+  target: ImportTarget;
+  private: boolean;
+  folders: { key: string; name: string; parentKey: string | null }[];
+  items: ParsedImportItem[];
+};
+export type ImportItemOutcome = 'created' | 'already_present' | 'failed';
+export type ImportErrorCode =
+  | 'not_found'
+  | 'forbidden'
+  | 'invalid_request'
+  | 'version_conflict'
+  | 'folder_missing'
+  | 'busy'
+  | 'vault_unavailable';
+/** Per-item outcomes, never values (`PasswordImportBatchResult`). */
+export type ImportBatchResult = {
+  targetFolderId: string | null;
+  folders: { key: string; folderId: string }[];
+  items: {
+    sourceKey: string;
+    outcome: ImportItemOutcome;
+    errorCode?: ImportErrorCode;
+    itemId?: string;
+  }[];
+};
+/** A file that could not be read: the parser's reason, or the parser failed. */
+export type ImportFileFailure = ImportFileError | { code: 'unreadable' };
+/** Where the import goes: a new folder, an existing one, or the vault root. */
+export type ImportDestination = 'new' | 'root' | `folder:${string}`;
+/** What the import preview shows; names but no values. */
+export type ImportPreview = {
+  format: ImportFormat;
+  summary: ParsedImport['summary'];
+  itemCount: number;
+  folders: ParsedImport['folders'];
+  skipped: ParsedImport['skipped'];
+  dropped: ParsedImport['dropped'];
+  duplicates: number;
+  /** Duplicates were checked only against the first items the vault listed. */
+  duplicatesPartial: boolean;
+  /** An earlier, unfinished import of this file is being continued. */
+  resumed: boolean;
+  newFolderName: string;
 };
 /** An unfinished import, kept per file so a rerun continues it. Ids only. */
 export type ImportResume = {

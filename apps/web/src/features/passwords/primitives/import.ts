@@ -1,6 +1,5 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import type {
-  ImportFileError,
   ImportFormat,
   ParsedImport,
   ParsedImportItem,
@@ -12,6 +11,10 @@ import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
+  type ImportBatchBody,
+  type ImportDestination,
+  type ImportFileFailure,
+  type ImportPreview,
   type ImportResume,
   type PasswordSource,
   usePasswords,
@@ -20,37 +23,15 @@ import {
   candidateNames,
   checkFolders,
   duplicateKeys,
-  MAX_DUPLICATE_SEARCHES,
-  VAULT_LIST_CAP,
   foldersFor,
-  type ImportBatchBody,
   type ImportTally,
   type ImportTarget,
   isRetryable,
+  MAX_DUPLICATE_SEARCHES,
   planBatches,
+  VAULT_LIST_CAP,
 } from '../core/import';
 import type { PasswordFolder, PasswordItem } from '../core/types';
-
-/** A file that could not be read: the parser's reason, or the parser failed. */
-export type ImportFileFailure = ImportFileError | { code: 'unreadable' };
-
-/** Where the import goes: a new folder, an existing one, or the vault root. */
-export type ImportDestination = 'new' | 'root' | `folder:${string}`;
-
-export type ImportPreview = {
-  format: ImportFormat;
-  summary: ParsedImport['summary'];
-  itemCount: number;
-  folders: ParsedImport['folders'];
-  skipped: ParsedImport['skipped'];
-  dropped: ParsedImport['dropped'];
-  duplicates: number;
-  /** Duplicates were checked only against the first items the vault listed. */
-  duplicatesPartial: boolean;
-  /** An earlier, unfinished import of this file is being continued. */
-  resumed: boolean;
-  newFolderName: string;
-};
 
 export type ImportStep =
   | { step: 'choose'; failure?: ImportFileFailure }

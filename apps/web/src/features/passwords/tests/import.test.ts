@@ -4,11 +4,11 @@ import type {
 } from '@core/password-import/types';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { describe, expect, it } from 'vitest';
+import type { ImportBatchBody } from '../context/passwords-context';
 import {
   checkFolders,
   duplicateKeys,
   foldersFor,
-  type ImportBatchBody,
   planBatches,
 } from '../core/import';
 import type { PasswordItem } from '../core/types';

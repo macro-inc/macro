@@ -2,12 +2,12 @@ import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { parseExportFile } from '@core/password-import/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import { createFakePasswordSource } from '../tests/fake-source';
-import { parseExportFile } from '@core/password-import/client';
 import {
   createMemoryImportResume,
   FIXTURE_SCOPE,
