@@ -5,6 +5,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import {
   enableCalendarScheduling,
   enableCrm,
+  enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -16,6 +17,7 @@ import EmailFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import LockFillIcon from '@icon/system/fill/lock-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
@@ -26,7 +28,9 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import LockIcon from '@icon/system/regular/lock.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -93,6 +97,14 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     iconActive: FolderSimpleFillIcon,
   },
   {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    icon: LockIcon,
+    iconActive: LockFillIcon,
+  },
+  {
     id: 'tasks',
     get label() {
       return t('nav.tasks');
@@ -146,6 +158,10 @@ export function useMobileDockViews() {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const scheduling = useFeatureFlag(enableCalendarScheduling);
+  const passwords = useFeatureFlag(enablePasswords);
+  const team = useCurrentTeamQuery(() => passwords().enabled);
+  const passwordsAvailable = () =>
+    passwords().enabled && team.isSuccess && Boolean(team.data?.team);
   const external = useFeatureFlag(enableWhatsappLinked);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
@@ -154,6 +170,7 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'companies' || crm().enabled)
       .filter((view) => view.id !== 'reviews' || reviews().enabled)
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
+      .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
   );
 }
