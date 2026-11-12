@@ -985,6 +985,11 @@ async fn run() -> anyhow::Result<()> {
             ))
             .with_entity_routing(Arc::new(
                 agent_inmem::domain::entity_routing::FlaggedEntityRouting::new(flags.clone()),
+            ))
+            // `ai-session-code-mode-only` stops a user's turns falling back
+            // to the direct tools.
+            .with_code_mode_only(Arc::new(
+                agent_inmem::domain::tool_mode::FlaggedCodeModeOnly::new(flags.clone()),
             ));
     }
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);

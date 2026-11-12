@@ -2,9 +2,9 @@
 //! checked against the columns as earlier ops leave them.
 
 use models_databases::views::LaneKey;
-use models_databases::{RowChanges, RowsChange};
+use models_databases::{RowChanges, RowsChange, TakenId};
 
-use super::{MAX_WRITTEN_ROWS, Place, Planner, refuse};
+use super::{MAX_WRITTEN_ROWS, Place, Planner, refuse, refuse_taken};
 use crate::domain::catalog::StorageTable;
 use crate::domain::derivation::Derivation;
 use crate::domain::journal::cell_value;
@@ -19,7 +19,7 @@ impl Planner {
     ) -> Result<Write, DatabaseError> {
         let table = entry.table.id;
         self.written_rows += match change {
-            RowsChange::Insert { rows } => rows.len(),
+            RowsChange::Insert { rows, .. } => rows.len(),
             RowsChange::Update {
                 changes: RowChanges::Uniform { rows, .. },
             }
@@ -38,7 +38,27 @@ impl Planner {
         }
         self.written_tables.insert(table);
         match change {
-            RowsChange::Insert { rows } => {
+            RowsChange::Insert { rows, ids } => {
+                if let Some(ids) = ids
+                    && ids.len() != rows.len()
+                {
+                    return Err(refuse(
+                        index,
+                        None,
+                        None,
+                        format!(
+                            "an insert gives {} ids for {} rows; give one id per row, or none",
+                            ids.len(),
+                            rows.len()
+                        ),
+                    ));
+                }
+                let ids = ids.clone().unwrap_or_default();
+                for id in &ids {
+                    if !self.minted_rows.insert(*id) {
+                        return Err(refuse_taken(index, TakenId::Row(*id)));
+                    }
+                }
                 let rows = rows
                     .iter()
                     .enumerate()
@@ -65,6 +85,14 @@ impl Planner {
                     })
                     .collect::<Result<Vec<_>, DatabaseError>>()?;
                 let restored = self.restoration.rows.remove(&index).unwrap_or_default();
+                if !restored.is_empty() && !ids.is_empty() {
+                    return Err(refuse(
+                        index,
+                        None,
+                        None,
+                        "rows put back keep their own ids",
+                    ));
+                }
                 if !restored.is_empty() && restored.len() != rows.len() {
                     return Err(refuse(
                         index,
@@ -93,6 +121,7 @@ impl Planner {
                 Ok(Write::InsertRows {
                     table_id: table,
                     rows,
+                    ids,
                     restored,
                     derivation: Derivation::fed_by(entry, &written),
                 })
