@@ -516,15 +516,17 @@ async fn channel_counter_guard_rolls_back_the_entire_message(pool: PgPool) {
         assert_eq!(database.code().as_deref(), Some(expected_code));
         assert_eq!(database.message(), expected_message);
 
-        // Acquiring the sole connection again also waits for SQLx's rollback.
-        assert!(timed_repo.get(&parent, failed_id).await.unwrap().is_none());
+        // Closing waits for the sole connection, and with it the rollback. The
+        // checks read through the untimed pool: under a 10 ms statement
+        // timeout a loaded machine cancels the read itself.
+        timed_pool.close().await;
+        assert!(repo.get(&parent, failed_id).await.unwrap().is_none());
         assert_eq!(
-            channel_change_db_utils::current_seq(&timed_pool, channel_id)
+            channel_change_db_utils::current_seq(&pool, channel_id)
                 .await
                 .unwrap(),
             1
         );
-        timed_pool.close().await;
     }
     holder.rollback().await.unwrap();
     let mut input = command("message-doc-a", None, "after cancelled waiters");
