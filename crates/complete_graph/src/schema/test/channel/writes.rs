@@ -15,10 +15,8 @@ fn writable(harness: &TestHarness, reads: &Arc<Reads>) -> ChannelGraphqlContext 
         .lock()
         .expect("channel access lock")
         .insert(CHANNEL_ID);
-    context(harness, reads).with_commands(
-        Arc::clone(reads),
-        Arc::clone(&harness.state.entity_access),
-    )
+    context(harness, reads)
+        .with_commands(Arc::clone(reads), Arc::clone(&harness.state.entity_access))
 }
 
 async fn mutate(
@@ -66,7 +64,7 @@ async fn a_send_repeated_by_the_queue_stores_one_message_and_returns_it_again(po
     let id = Uuid::now_v7();
     let send = format!(
         "sendChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", content: \"Queued hello\", nonce: \"{id}\" }}) {{ {} }}",
-        scalar_selection()
+        message_selection()
     );
     let first = data(
         mutate(&harness, &context, Some(PERSON), &send).await,
@@ -81,6 +79,7 @@ async fn a_send_repeated_by_the_queue_stores_one_message_and_returns_it_again(po
     assert_eq!(first["channelId"], json!(CHANNEL_ID.to_string()));
     assert_eq!(first["content"], json!("Queued hello"));
     assert_eq!(first["senderId"], json!(VALID_USER_ID));
+    assert_eq!(first["thread"]["replyCount"], json!(0));
     assert_eq!(stored(&pool, id).await, 1);
 
     // The read path returns the same record the mutation did.
@@ -89,7 +88,7 @@ async fn a_send_repeated_by_the_queue_stores_one_message_and_returns_it_again(po
         &context,
         &format!(
             "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ {} }}",
-            scalar_selection()
+            message_selection()
         ),
     )
     .await;
@@ -182,10 +181,8 @@ async fn writes_need_a_personal_session_write_access_and_a_valid_change(pool: Pg
     );
 
     // A viewer without write access.
-    let read_only = context(&harness, &reads).with_commands(
-        Arc::clone(&reads),
-        Arc::clone(&harness.state.entity_access),
-    );
+    let read_only = context(&harness, &reads)
+        .with_commands(Arc::clone(&reads), Arc::clone(&harness.state.entity_access));
     assert_eq!(
         code(&mutate(&harness, &read_only, Some(PERSON), &send).await),
         "FORBIDDEN"

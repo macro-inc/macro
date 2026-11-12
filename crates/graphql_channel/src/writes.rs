@@ -9,14 +9,16 @@ use graphql_common::require_authenticated_user;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageCommands,
-    models::{NewAttachment, PostMessage, SimpleMention},
+    models::{Message, NewAttachment, PostMessage, SimpleMention},
     ports::{AttachmentChange, MessagePatch},
-    service::MessageWrite,
+    service::{MessageView, MessageWrite},
 };
 use std::{future::Future, pin::Pin};
 use uuid::Uuid;
 
-use crate::{ChannelGraphqlContext, GraphqlChannelMessage, bad_input, message_error, parse_read_id};
+use crate::{
+    ChannelGraphqlContext, GraphqlChannelMessage, bad_input, message_error, parse_read_id,
+};
 
 /// Who a GraphQL request writes channel messages as, set by the mounting
 /// adapter from the verified credential.
@@ -175,19 +177,35 @@ pub struct ReactToChannelMessageInput {
     pub nonce: Option<String>,
 }
 
-/// Channel message mutations. Each returns the message as stored; `thread`
-/// and `call` are not loaded here and stay null.
+/// Channel message mutations. Each returns the message as the reads do, a
+/// root with its thread summary.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ChannelMessageMutationRoot;
 
 /// The message service and write receipt for one authorized mutation.
 struct AuthorizedWrite<'a> {
+    /// The request's channel context, for reading the result back.
+    context: &'a ChannelGraphqlContext,
     /// The REST message service.
     commands: &'a dyn MessageCommands,
     /// Capability for the caller on the channel.
     access: EntityAccessReceipt<MessageWrite>,
+    /// The same capability, for reading a written root's thread summary.
+    view: EntityAccessReceipt<MessageView>,
     /// The channel written to.
     channel_id: Uuid,
+}
+
+impl AuthorizedWrite<'_> {
+    /// Map the committed message as the reads return it.
+    async fn written(
+        context: &ChannelGraphqlContext,
+        view: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+        message: Message,
+    ) -> async_graphql::Result<GraphqlChannelMessage> {
+        context.written(view, message, channel_id).await
+    }
 }
 
 /// Authorize the request's person to write messages in a channel.
@@ -211,7 +229,16 @@ async fn authorize<'a>(
     let (commands, access) = context
         .authorize_write(user, actor.organization_id, channel_id)
         .await?;
+    let view = access
+        .clone()
+        .try_into_requirement::<MessageView>()
+        .map_err(|_| {
+            use async_graphql::ErrorExtensions;
+            async_graphql::Error::new("forbidden").extend_with(|_, e| e.set("code", "FORBIDDEN"))
+        })?;
     Ok(AuthorizedWrite {
+        context,
+        view,
         commands,
         access,
         channel_id,
@@ -257,7 +284,7 @@ impl ChannelMessageMutationRoot {
             )
             .await
             .map_err(message_error)?;
-        Ok(GraphqlChannelMessage::from_message(message, write.channel_id))
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
     }
 
     /// Edit a message the caller wrote or may moderate.
@@ -311,7 +338,7 @@ impl ChannelMessageMutationRoot {
             )
             .await
             .map_err(message_error)?;
-        Ok(GraphqlChannelMessage::from_message(message, write.channel_id))
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
     }
 
     /// Delete a message, leaving the tombstone the timeline renders.
@@ -334,7 +361,7 @@ impl ChannelMessageMutationRoot {
             .delete_once(write.access, id, input.nonce)
             .await
             .map_err(message_error)?;
-        Ok(GraphqlChannelMessage::from_message(message, write.channel_id))
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
     }
 
     /// Set or clear the caller's reaction.
@@ -357,6 +384,6 @@ impl ChannelMessageMutationRoot {
             .react(write.access, id, input.emoji, input.add, input.nonce)
             .await
             .map_err(message_error)?;
-        Ok(GraphqlChannelMessage::from_message(message, write.channel_id))
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
     }
 }

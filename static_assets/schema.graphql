@@ -233,6 +233,28 @@ enum ChannelActivityType {
 }
 
 """
+An entity attached to a message.
+"""
+input ChannelAttachmentInput {
+	"""
+	Attached entity type.
+	"""
+	entityType: String!
+	"""
+	Attached entity identifier.
+	"""
+	entityId: String!
+	"""
+	Optional media width.
+	"""
+	width: Int
+	"""
+	Optional media height.
+	"""
+	height: Int
+}
+
+"""
 Read changes strictly after the client's last applied channel sequence.
 """
 input ChannelChangesInput {
@@ -244,6 +266,20 @@ input ChannelChangesInput {
 	Last applied nonnegative decimal sequence number.
 	"""
 	after: String!
+}
+
+"""
+An entity mentioned in a message body.
+"""
+input ChannelMentionInput {
+	"""
+	Mentioned entity type.
+	"""
+	entityType: String!
+	"""
+	Mentioned entity identifier.
+	"""
+	entityId: String!
 }
 
 """
@@ -427,6 +463,22 @@ type CompleteMutationRoot {
 	Record a view or interaction in the authenticated user's channel activity.
 	"""
 	recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!
+	"""
+	Post a message or thread reply once under the caller's channel access.
+	"""
+	sendChannelMessage(input: SendChannelMessageInput!): GraphqlChannelMessage!
+	"""
+	Edit a message the caller wrote or may moderate.
+	"""
+	editChannelMessage(input: EditChannelMessageInput!): GraphqlChannelMessage!
+	"""
+	Delete a message, leaving the tombstone the timeline renders.
+	"""
+	deleteChannelMessage(input: DeleteChannelMessageInput!): GraphqlChannelMessage!
+	"""
+	Set or clear the caller's reaction.
+	"""
+	reactToChannelMessage(input: ReactToChannelMessageInput!): GraphqlChannelMessage!
 	"""
 	Update authenticated user-owned notifications and return authoritative rows.
 	"""
@@ -1248,6 +1300,24 @@ input DeleteCalendarEventInput {
 }
 
 """
+A channel message to delete.
+"""
+input DeleteChannelMessageInput {
+	"""
+	Channel containing the message.
+	"""
+	channelId: ID!
+	"""
+	Message to delete. Deleting it again returns the tombstone.
+	"""
+	id: ID!
+	"""
+	Echoed on the realtime event.
+	"""
+	nonce: String
+}
+
+"""
 Input for deleting an email draft.
 """
 input DeleteEmailDraftInput {
@@ -1317,6 +1387,40 @@ input DuplicateEntityInput {
 	Optional display name for the new entity.
 	"""
 	displayName: String
+}
+
+"""
+A change to an existing channel message.
+"""
+input EditChannelMessageInput {
+	"""
+	Channel containing the message.
+	"""
+	channelId: ID!
+	"""
+	Message to edit.
+	"""
+	id: ID!
+	"""
+	Replacement body; absent keeps the current one.
+	"""
+	content: String
+	"""
+	Replacement mentions; absent keeps the current ones.
+	"""
+	mentions: [ChannelMentionInput!]
+	"""
+	Stored attachment ids to remove.
+	"""
+	removeAttachmentIds: [ID!]! = []
+	"""
+	Attachments to append.
+	"""
+	addAttachments: [ChannelAttachmentInput!]! = []
+	"""
+	Echoed on the realtime event.
+	"""
+	nonce: String
 }
 
 """
@@ -12120,6 +12224,32 @@ type PendingEmailSends {
 }
 
 """
+The caller's reaction to set or clear on a channel message.
+"""
+input ReactToChannelMessageInput {
+	"""
+	Channel containing the message.
+	"""
+	channelId: ID!
+	"""
+	Message to react to.
+	"""
+	id: ID!
+	"""
+	Emoji.
+	"""
+	emoji: String!
+	"""
+	Add when true, remove when false. Repeating either changes nothing.
+	"""
+	add: Boolean!
+	"""
+	Echoed on the realtime event.
+	"""
+	nonce: String
+}
+
+"""
 Input for recording authenticated channel activity.
 """
 input RecordChannelActivityInput {
@@ -12366,6 +12496,41 @@ input SavedViewSharingInput {
 	Current team to share with; null explicitly removes sharing.
 	"""
 	teamId: ID
+}
+
+"""
+A new channel message or thread reply.
+"""
+input SendChannelMessageInput {
+	"""
+	Channel to post to.
+	"""
+	channelId: ID!
+	"""
+	Client-minted UUIDv7; the message's final identity. Sending the same
+	id again returns the stored message.
+	"""
+	id: ID!
+	"""
+	Message body in Macro Markdown.
+	"""
+	content: String!
+	"""
+	Root message to reply to; absent for a root.
+	"""
+	threadId: ID
+	"""
+	Mentions tracked by the editor.
+	"""
+	mentions: [ChannelMentionInput!]! = []
+	"""
+	Initial attachments.
+	"""
+	attachments: [ChannelAttachmentInput!]! = []
+	"""
+	Echoed on the realtime event so the sender can recognize its own write.
+	"""
+	nonce: String
 }
 
 """

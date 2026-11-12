@@ -79,6 +79,36 @@ impl ChannelGraphqlContext {
         self
     }
 
+    /// A written message as the reads return it: a root carries its thread
+    /// summary and call state, so the cached record stays whole.
+    pub(crate) async fn written(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        message: messages::domain::models::Message,
+        channel_id: Uuid,
+    ) -> async_graphql::Result<crate::GraphqlChannelMessage> {
+        use messages::domain::ports::{MessageError, MessageTimelineEntry};
+        if message.thread_id.is_some() {
+            return Ok(crate::GraphqlChannelMessage::from_message(
+                message, channel_id,
+            ));
+        }
+        match self.messages.get_root(access, message.id).await {
+            Ok(MessageTimelineEntry::Message { message }) => Ok(
+                crate::GraphqlChannelMessage::from_item(*message, channel_id, None),
+            ),
+            Ok(MessageTimelineEntry::Call { message, status }) => Ok(
+                crate::GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
+            ),
+            // The write committed; a root no longer readable as a timeline
+            // entry is still answered with what was written.
+            Ok(MessageTimelineEntry::Activity { .. }) | Err(MessageError::NotFound) => Ok(
+                crate::GraphqlChannelMessage::from_message(message, channel_id),
+            ),
+            Err(error) => Err(crate::message_error(error)),
+        }
+    }
+
     /// Mint a write receipt with REST's capability and hand out the commands.
     pub(crate) async fn authorize_write(
         &self,
