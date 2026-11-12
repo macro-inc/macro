@@ -33,6 +33,9 @@ export default defineConfig({
   resolve: {
     dedupe: ['solid-js'],
     alias: {
+      '@core/component/UserIcon': fileURLToPath(
+        new URL('./user-icon.tsx', import.meta.url)
+      ),
       '@queries/properties/options': fileURLToPath(
         new URL('./property-options.ts', import.meta.url)
       ),

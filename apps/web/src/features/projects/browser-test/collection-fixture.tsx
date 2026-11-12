@@ -55,9 +55,10 @@ export function CollectionFixture() {
   const [scope, setScope] = createSignal<ProjectScope>('all');
   const [creating, setCreating] = createSignal(false);
   const [opened, setOpened] = createSignal('');
+  const [createdProjects, setCreatedProjects] = createSignal(0);
   const params = new URLSearchParams(location.search);
   const [projectRows, setProjectRows] = createSignal(
-    rows.map((row) => ({
+    (params.has('emptyProjects') ? [] : rows).map((row) => ({
       ...row,
       project: {
         ...row.project,
@@ -243,7 +244,7 @@ export function CollectionFixture() {
               <ProjectsCollection
                 collection={collection}
                 onOpen={setOpened}
-                onCreate={() => {}}
+                onCreate={() => setCreatedProjects((count) => count + 1)}
                 createAssigneeName={(id) => id}
                 scopeId={scopeId}
                 isActive={() => true}
@@ -255,6 +256,7 @@ export function CollectionFixture() {
             </ViewShell.Main>
           </ViewShell.Root>
           <output data-testid="opened">{opened()}</output>
+          <output data-testid="created-projects">{createdProjects()}</output>
           <output data-testid="settings">
             {JSON.stringify(state.settings)}
           </output>

@@ -229,6 +229,8 @@ export function SavedViewListRow(props: {
             <Dropdown placement="bottom-end">
               <Dropdown.Trigger
                 as={ViewSidebar.Control}
+                variant="ghost"
+                size="icon-xs"
                 aria-label={t('viewMenus.viewActions', {
                   name: props.view.name,
                 })}

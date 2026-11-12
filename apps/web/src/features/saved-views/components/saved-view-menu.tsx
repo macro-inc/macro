@@ -12,6 +12,8 @@ export function SavedViewMenuItems(props: {
   owned: boolean;
   disabled?: boolean;
   onEdit: () => void;
+  editLabel?: string;
+  deleteLabel?: string;
   onDuplicate: () => void;
   /** Offered only by consumers whose links can open the view for someone. */
   onCopyLink?: () => void;
@@ -26,7 +28,7 @@ export function SavedViewMenuItems(props: {
         <Show when={props.owned}>
           <Dropdown.Item disabled={props.disabled} onSelect={props.onEdit}>
             <PencilIcon class="size-4" />
-            Edit
+            {props.editLabel ?? 'Edit'}
           </Dropdown.Item>
         </Show>
         <Dropdown.Item disabled={props.disabled} onSelect={props.onDuplicate}>
@@ -70,7 +72,7 @@ export function SavedViewMenuItems(props: {
             onSelect={props.onDelete}
           >
             <TrashIcon class="size-4" />
-            Delete view
+            {props.deleteLabel ?? 'Delete view'}
           </Dropdown.Item>
         </Dropdown.Group>
       </Show>

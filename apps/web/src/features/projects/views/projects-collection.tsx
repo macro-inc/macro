@@ -57,6 +57,7 @@ import {
   ProjectRow,
 } from '../components/project-row';
 import { ProjectRowMenu } from '../components/project-row-menu';
+import { ProjectsEmptyState } from '../components/projects-empty-state';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
 import { useProjectSavedViews } from '../context/project-saved-views-context';
 import {
@@ -189,7 +190,9 @@ export function ProjectsCollection(props: {
     Number(Boolean(collection.priority())) +
     Number(collection.mine()) +
     Number(Boolean(collection.dueAfter() || collection.dueBefore()));
-  const filtered = () => Boolean(collection.search().trim() || activeCount());
+  const filtered = () =>
+    collection.scope() !== 'all' ||
+    Boolean(collection.search().trim() || activeCount());
   const list = collection.list;
   const interaction = useListInteractions({
     controller: list,
@@ -708,21 +711,18 @@ export function ProjectsCollection(props: {
                     </div>
                   </Match>
                   <Match when={collection.items().length === 0}>
-                    <div class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-                      <span>
-                        {filtered()
-                          ? 'No matching projects'
-                          : 'No projects yet'}
-                      </span>
-                      <Show when={!filtered()}>
-                        <Button
-                          variant="secondary"
-                          onClick={() => props.onCreate()}
-                        >
-                          New project
-                        </Button>
-                      </Show>
-                    </div>
+                    <ProjectsEmptyState
+                      filtered={filtered()}
+                      onCreate={() => props.onCreate()}
+                      onClearFilters={
+                        activeCount() || collection.search().trim()
+                          ? () => {
+                              clearFilters();
+                              collection.setSearch('');
+                            }
+                          : undefined
+                      }
+                    />
                   </Match>
                   <Match when={true}>
                     <ListViewport

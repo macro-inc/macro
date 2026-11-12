@@ -190,6 +190,8 @@ export function ProjectSavedViewRows(props: {
               onSelect={() => run(() => views.select(record.id))}
               menu={(defer) => (
                 <SavedViewMenuItems
+                  editLabel="Rename"
+                  deleteLabel="Delete"
                   owned={record.ownerId === views.viewerId()}
                   onEdit={() =>
                     defer(() =>

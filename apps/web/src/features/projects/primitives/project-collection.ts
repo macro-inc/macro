@@ -264,6 +264,7 @@ export function createProjectCollection(capabilities: {
     focusKey: list.focus.key(),
   }));
   return {
+    scope,
     settings,
     updateSettings,
     layout,
