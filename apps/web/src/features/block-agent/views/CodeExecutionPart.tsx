@@ -1,5 +1,4 @@
 import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-execution';
-import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
 import { createEffect, createMemo, on, Suspense } from 'solid-js';
 import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
@@ -7,7 +6,10 @@ import type {
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
-import { codeExecutionInput, isExecutionId } from '../state/code-execution';
+import {
+  codeExecutionInput,
+  codeExecutionReceipt,
+} from '../state/code-execution';
 
 /** Production wiring; the result components receive only data and context. */
 export function CodeExecutionPart(props: {
@@ -15,19 +17,7 @@ export function CodeExecutionPart(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
 }) {
-  const receipt = createMemo(() => {
-    const detail = props.part.detail;
-    const raw =
-      detail.kind === 'other'
-        ? (detail.result ?? detail.output)
-        : detail.kind === 'macro'
-          ? detail.output
-          : undefined;
-    const parsed = ExecutionReceipt.safeParse(raw);
-    return parsed.success && isExecutionId(parsed.data.executionId)
-      ? parsed.data
-      : undefined;
-  });
+  const receipt = createMemo(() => codeExecutionReceipt(props.part));
   const requestedExecutionId = () =>
     codeExecutionInput(props.part)?.executionId;
   const executionId = () => {
@@ -50,7 +40,7 @@ export function CodeExecutionPart(props: {
           () => props.part.status,
           () => props.context.sessionId,
           () => props.common.id,
-          requestedExecutionId,
+          executionId,
           source,
         ],
         ([status, sessionId, toolCallId, executionId, source]) => {
