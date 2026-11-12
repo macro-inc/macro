@@ -30,6 +30,7 @@ Switch the body read-only and try paste, cut, drop and composition input: the
 model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML
 import must cancel if the view becomes read-only before admission.
+Exercise outside text-node changes with `readonly-text.playwright.config.ts`: cover actual reader/comment-only authority, a local UI lock with edit authority, and editable mutation-only spellcheck. Check literal text/markup repair, no rejected edit or error effect, and the retained canonical text node.
 
 On desktop, selecting native body text opens the compact formatting toolbar. It renders the document body’s FormatTools controls: bold, italic, More, then the block-style menu. More contains underline, strikethrough, highlight, inline code, superscript and subscript in that order. Check bold, italic, More inline formats and block changes against the selected body text, including backward selections. Link is hidden until the native link editor is qualified; this mount does not change the header toolbar or the Lexical title. The toolbar is optional: a presentation failure retires it while the document and sibling menus remain available.
 

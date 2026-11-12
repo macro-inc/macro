@@ -240,8 +240,10 @@ export class EditorView implements ViewSink {
         if (key === null || seen.has(key)) continue;
         seen.add(key);
         const node = this.node(key);
-        if (node?.kind === 'text' && record.target.nodeValue !== node.text)
-          this.submitText(key);
+        if (node?.kind === 'text' && record.target.nodeValue !== node.text) {
+          if (this.isEditable) this.submitText(key);
+          else repair.add(key);
+        }
       }
       if (repair.size) {
         this.observer.disconnect();
@@ -251,7 +253,10 @@ export class EditorView implements ViewSink {
               dom = this.getElementByKey(key);
             if (!node || !dom) continue;
             if (node.kind === 'text') {
-              if (!textLeaf(dom)) this.replace(node, node, dom);
+              const leaf = textLeaf(dom);
+              if (!leaf) this.replace(node, node, dom);
+              else if (!this.isEditable && leaf.nodeValue !== node.text)
+                leaf.nodeValue = node.text;
             } else this.reconcileChildren(key);
           }
           const active = this.root.ownerDocument.activeElement;

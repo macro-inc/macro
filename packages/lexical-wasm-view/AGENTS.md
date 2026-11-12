@@ -13,7 +13,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Keep browser clipboard selection walking and themed export in Rust; serialize the exported tree through the owner document DOM/CSSOM, preserving template content, raw fragment context and foreign namespaces. Keep headless clipboard exports independent.
 
-- Gate native root events on current view editability except copy and click, matching Source; recheck editability after lazy clipboard preparation before admission.
+- Gate native root events on current view editability except copy and click, matching Source; recheck editability after lazy clipboard preparation before admission. Repair outside text mutations from the maintained mirror through the canonical text leaf while readonly; do not submit TextFromView.
 
 - Reuse ListItem NodeView updates for dirty ancestors after descendant-only changes; keep mutation callbacks tied to actual Diff mutations so the checkbox guard preserves Source ordering.
 
