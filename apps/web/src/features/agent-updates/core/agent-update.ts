@@ -4,6 +4,7 @@ import type {
   PendingInteraction,
 } from '@service-agent-fold/generated/types';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
+import type { AgentUpdate as ListedAgentUpdate } from '@service-cognition/generated/tools/types';
 import { match } from 'ts-pattern';
 import {
   isCoderHarness,
@@ -34,13 +35,10 @@ export type UpdateSession = Pick<
 >;
 
 /** The fields of a listed agent update that open its session's cards. */
-export type UpdateItem = {
-  sessionId: string;
-  sessionName: string;
-  harness: string;
-  kind: 'permission' | 'elicitation' | 'tool_approval' | 'stalled';
-  since: string;
-};
+export type UpdateItem = Pick<
+  ListedAgentUpdate,
+  'sessionId' | 'sessionName' | 'harness' | 'kind' | 'since'
+>;
 
 /**
  * One entry per session in a ListAgentUpdates result or an `agentUpdates`

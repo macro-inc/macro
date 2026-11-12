@@ -25,7 +25,6 @@ expression: schema
       "type": "object"
     },
     "AgentSessionRef": {
-      "description": "The session an update is from.",
       "properties": {
         "id": {
           "type": "string"
@@ -65,7 +64,6 @@ expression: schema
       "type": "object"
     },
     "AgentUpdateKind": {
-      "description": "What a coding agent's session is waiting for.",
       "enum": [
         "permission",
         "elicitation",

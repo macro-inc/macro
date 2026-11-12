@@ -1,4 +1,5 @@
 import type { PendingInteraction } from '@service-agent-fold/generated/types';
+import type { AgentUpdates } from '@service-cognition/generated/tools/types';
 import { describe, expect, it } from 'vitest';
 import {
   blockedSessions,
@@ -145,41 +146,39 @@ describe('agent updates selection', () => {
 
 describe('sessionsOf', () => {
   it('opens each waiting session once and keeps stalled sessions static', () => {
-    const sessions = sessionsOf(
-      {
-        truncated: false,
-        items: [
-          {
-            sessionId: 'a',
-            sessionName: 'Signing',
-            harness: 'opencode',
-            kind: 'permission',
-            summary: 'Signing wants to run codesign',
-            since: '2026-10-30T20:00:00Z',
-            options: ['Allow'],
-          },
-          {
-            sessionId: 'a',
-            sessionName: 'Signing',
-            harness: 'opencode',
-            kind: 'elicitation',
-            summary: 'Signing asks which certificate',
-            since: '2026-10-30T20:01:00Z',
-            options: [],
-          },
-          {
-            sessionId: 'b',
-            sessionName: 'PDF zoom',
-            harness: 'cursor',
-            kind: 'stalled',
-            summary: 'No activity for 23 minutes',
-            since: '2026-10-30T19:40:00Z',
-            options: [],
-          },
-        ],
-      },
-      'me'
-    );
+    const updates: AgentUpdates = {
+      truncated: false,
+      items: [
+        {
+          sessionId: 'a',
+          sessionName: 'Signing',
+          harness: 'opencode',
+          kind: 'permission',
+          summary: 'Signing wants to run codesign',
+          since: '2026-10-30T20:00:00Z',
+          options: ['Allow'],
+        },
+        {
+          sessionId: 'a',
+          sessionName: 'Signing',
+          harness: 'opencode',
+          kind: 'elicitation',
+          summary: 'Signing asks which certificate',
+          since: '2026-10-30T20:01:00Z',
+          options: [],
+        },
+        {
+          sessionId: 'b',
+          sessionName: 'PDF zoom',
+          harness: 'cursor',
+          kind: 'stalled',
+          summary: 'No activity for 23 minutes',
+          since: '2026-10-30T19:40:00Z',
+          options: [],
+        },
+      ],
+    };
+    const sessions = sessionsOf(updates, 'me');
     expect(sessions.map((session) => [session.id, session.turnState])).toEqual([
       ['a', 'blocked'],
       ['b', 'running'],
@@ -188,6 +187,7 @@ describe('sessionsOf', () => {
   });
 
   it('shows nothing before the user is known', () => {
-    expect(sessionsOf({ truncated: false, items: [] }, undefined)).toEqual([]);
+    const updates: AgentUpdates = { truncated: false, items: [] };
+    expect(sessionsOf(updates, undefined)).toEqual([]);
   });
 });

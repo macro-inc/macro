@@ -24,7 +24,6 @@ export type AgendaEvent_Serialize = {
   occurrenceKey?: string;
 };
 
-/**  The session an update is from. */
 export type AgentSessionRef = {
   id: string;
 };
@@ -38,7 +37,6 @@ export type AgentUpdateItem = {
   since: string;
 };
 
-/**  What a coding agent's session is waiting for. */
 export type AgentUpdateKind =
   | 'permission'
   | 'elicitation'

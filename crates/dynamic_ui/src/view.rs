@@ -169,13 +169,11 @@ pub struct AgentUpdateItem {
     pub since: String,
 }
 
-/// The session an update is from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 pub struct AgentSessionRef {
     pub id: String,
 }
 
-/// What a coding agent's session is waiting for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentUpdateKind {
