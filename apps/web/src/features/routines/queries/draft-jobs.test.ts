@@ -93,6 +93,25 @@ describe('startDraftJob', () => {
     expect(listed()?.map((each) => each.id)).toEqual(['new', 'older']);
   });
 
+  it('keeps a draft just started when a read under way missed it', async () => {
+    let answer: (jobs: unknown) => void = () => {};
+    client.listRoutineDraftJobs.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      })
+    );
+    const read = queryClient.prefetchQuery(routineDraftJobsQueryOptions());
+    client.startRoutineDraftJob.mockResolvedValue(ok(drafting('new')));
+    client.listRoutineDraftJobs.mockResolvedValue(ok([drafting('new')]));
+    await startDraftJob(REQUEST, context);
+    // The read began before the start, so its answer leaves the draft out.
+    answer(ok([]));
+    await read;
+    expect(listed()?.map((each) => each.id)).toEqual(['new']);
+    // And the list is read again, now that it has the draft.
+    expect(queryClient.getQueryState(KEY)?.isInvalidated).toBe(true);
+  });
+
   it('sends the same start again when its connection drops', async () => {
     vi.useFakeTimers();
     client.startRoutineDraftJob

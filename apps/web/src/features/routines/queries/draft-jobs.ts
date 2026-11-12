@@ -64,14 +64,19 @@ export function useDraftJobs(enabled: Accessor<boolean>) {
   };
 }
 
-function upsertDraftJob(job: DraftJob) {
-  queryClient.setQueryData(
-    scheduledActionKeys.draftJobs.queryKey,
-    (current: DraftJob[] | undefined) => [
-      job,
-      ...(current ?? []).filter((each) => each.id !== job.id),
-    ]
-  );
+/**
+ * Put a job just started at the top of the list. A read already under way
+ * may have missed it and would write over it, so that one is read again.
+ */
+async function listDraftJob(job: DraftJob) {
+  const queryKey = scheduledActionKeys.draftJobs.queryKey;
+  const reading = queryClient.isFetching({ queryKey }) > 0;
+  if (reading) await queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) => [
+    job,
+    ...(current ?? []).filter((each) => each.id !== job.id),
+  ]);
+  if (reading) queryClient.invalidateQueries({ queryKey });
 }
 
 /**
@@ -121,7 +126,7 @@ export async function startDraftJob(
     span.setAttr('routine.draft.outcome', job.state);
     // One that finished already (refused at once, or a resend of a start
     // that ran) goes to the caller only, so nothing else reports it.
-    if (job.state === 'drafting') upsertDraftJob(job);
+    if (job.state === 'drafting') await listDraftJob(job);
     return job;
   });
 }
