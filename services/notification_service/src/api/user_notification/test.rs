@@ -49,23 +49,23 @@ fn to_typed_row_channel_mention() {
 }
 
 #[test]
-fn to_typed_row_manual() {
+fn to_typed_row_ping() {
     let metadata = serde_json::json!({
         "title": "Deploy finished",
         "body": "All 3 services are live.",
         "agent": { "id": "00000000-0000-0000-0000-00000000a2a2", "name": "Macro" }
     });
-    let row = make_row("manual", metadata);
-    let typed = to_typed_row(row).expect("should deserialize manual");
+    let row = make_row("ping", metadata);
+    let typed = to_typed_row(row).expect("should deserialize ping");
     match typed.notification_metadata {
-        NotifEvent::Manual(ref meta) => {
+        NotifEvent::Ping(ref meta) => {
             assert_eq!(meta.title, "Deploy finished");
             assert_eq!(
                 meta.agent.as_ref().map(|agent| agent.name.as_str()),
                 Some("Macro")
             );
         }
-        _ => panic!("expected Manual variant"),
+        _ => panic!("expected Ping variant"),
     }
 }
 

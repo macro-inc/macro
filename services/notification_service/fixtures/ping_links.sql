@@ -1,21 +1,23 @@
--- Entities a manual notification can link to, and who can see them.
+-- Entities a ping can link to, and who can see them.
 --
 -- user-1 sends. user-2 is a teammate with access to one entity of every
 -- linkable kind. user-3 reaches one document only through its public link.
 --
---   doc       11111111-…-aaaa  user-1 owns, user-2 views
---   chat      22222222-…-aaaa  user-1 owns, user-2 views
---   channel   33333333-…-aaaa  user-1 and user-2 are members
---   project   66666666-…-aaaa  user-1 owns, user-2 views
---   mail      44444444-…-0001  user-1's own Signal inbox thread
---             44444444-…-0002  user-2's own Signal inbox thread, shared with user-1
---             44444444-…-0003  user-1's own thread, not Signal
---   sessions  77777777-…-0001  listed, user-1 owns, user-2 views
---             77777777-…-0002  unlisted, 77777777-…-0003 hidden (user-1 only)
---   refused   11111111-…-bbbb  user-1 owns; public link share only for user-3
---             11111111-…-cccc  user-1 owns, in the trash
---             11111111-…-dddd  user-1 owns, a snippet
---   late      11111111-…-eeee  user-1 owns; the test shares it with user-3
+--   doc        11111111-…-aaaa  user-1 owns, user-2 views
+--   chat       22222222-…-aaaa  user-1 owns, user-2 views
+--   channel    33333333-…-aaaa  user-1 and user-2 are members
+--   message    99999999-…-aaaa  a top-level message in that channel
+--   project    66666666-…-aaaa  user-1 owns, user-2 views (a folder)
+--   initiative 88888888-…-aaaa  user-1 owns, user-2 views (a Tasks project)
+--   mail       44444444-…-0001  user-1's own Signal inbox thread
+--              44444444-…-0002  user-2's own Signal inbox thread, shared with user-1
+--              44444444-…-0003  user-1's own thread, not Signal
+--   sessions   77777777-…-0001  listed, user-1 owns, user-2 views
+--              77777777-…-0002  unlisted, 77777777-…-0003 hidden (user-1 only)
+--   skipped    11111111-…-bbbb  user-1 owns; public link share only for user-3
+--              11111111-…-cccc  user-1 owns, in the trash
+--   snippet    11111111-…-dddd  user-1 owns, a snippet (the inbox lists it)
+--   late       11111111-…-eeee  user-1 owns; the test shares it with user-3
 
 SET session_replication_role = 'replica';
 
@@ -74,8 +76,17 @@ INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", 
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'owner', 'macro|user-1@example.com', '2024-06-01 10:00:00', NULL),
        ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-2@example.com', '2024-06-01 10:00:00', NULL);
 
+INSERT INTO public.comms_messages ("id", "parent_entity_type", "parent_entity_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-1@example.com', 'Shipping today', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
+
+INSERT INTO public.comms_message_threads ("root_id", "parent_entity_type", "parent_entity_id", "user_id", "created_at", "updated_at")
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@example.com', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
+
 INSERT INTO public."Project" ("id", "name", "userId", "parentId", "createdAt", "updatedAt")
 VALUES ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Launch', 'macro|user-1@example.com', NULL, '2024-06-01 10:00:00', '2024-06-01 10:00:00');
+
+INSERT INTO public.initiative ("id", "name", "owner_user_id", "share_permission_id")
+VALUES ('88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Q3 launch', 'macro|user-1@example.com', 'sp-initiative-1');
 
 INSERT INTO public.email_links ("id", "macro_id", "fusionauth_user_id", "email_address", "provider")
 VALUES ('55555555-0000-0000-0000-000000000001', 'macro|user-1@example.com', 'fa-user-1', 'user1@example.com', 'GMAIL'),
@@ -114,6 +125,8 @@ VALUES ('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@exampl
        ('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-2@example.com', 'user', 'view', NULL),
        ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'project', 'macro|user-1@example.com', 'user', 'owner', NULL),
        ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'project', 'macro|user-2@example.com', 'user', 'view', NULL),
+       ('88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'initiative', 'macro|user-1@example.com', 'user', 'owner', NULL),
+       ('88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'initiative', 'macro|user-2@example.com', 'user', 'view', NULL),
        ('44444444-0000-0000-0000-000000000002', 'email_thread', 'macro|user-1@example.com', 'user', 'view', NULL),
        ('77777777-0000-0000-0000-000000000001', 'agent_session', 'macro|user-1@example.com', 'user', 'owner', NULL),
        ('77777777-0000-0000-0000-000000000001', 'agent_session', 'macro|user-2@example.com', 'user', 'view', NULL),
