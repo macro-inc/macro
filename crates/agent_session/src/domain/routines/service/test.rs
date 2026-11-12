@@ -469,6 +469,7 @@ async fn every_subsequent_operation_checks_owner_and_persona_before_controls_or_
                     action,
                     prompt: "task".into(),
                     context: None,
+                    reasoning_effort: None,
                 })
                 .await
                 .unwrap_err(),
@@ -489,6 +490,7 @@ async fn prompt_and_cancel_only_emit_attributed_prompt_and_stop_controls() {
             action: action.clone(),
             prompt: "routine guidance and task".into(),
             context: None,
+            reasoning_effort: None,
         })
         .await
         .unwrap();
@@ -509,6 +511,34 @@ async fn prompt_and_cancel_only_emit_attributed_prompt_and_stop_controls() {
 }
 
 #[tokio::test]
+async fn an_effort_is_set_ahead_of_the_prompt_it_comes_with() {
+    let fx = Fixture::new(true);
+    let action = fx.action();
+    fx.service
+        .prompt(PromptRoutineSession {
+            action: action.clone(),
+            prompt: "draft".into(),
+            context: None,
+            reasoning_effort: Some("none".into()),
+        })
+        .await
+        .unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(
+        events[0].action,
+        AgentAction::SetConfigOption(AgentSetConfigOptionAction {
+            config_id: "reasoning_effort".into(),
+            value: "none".into(),
+        })
+    );
+    assert_ne!(events[0].action_id, Some(action.action_id));
+    assert_eq!(events[0].actor, Some(action.owner.clone()));
+    assert_eq!(events[1].action, AgentAction::prompt("draft"));
+    assert_eq!(events[1].action_id, Some(action.action_id));
+}
+
+#[tokio::test]
 async fn ambiguous_prompt_failure_is_not_replayed() {
     let fx = Fixture::new(true);
     *fx.controls.fail.lock().unwrap() = true;
@@ -518,6 +548,7 @@ async fn ambiguous_prompt_failure_is_not_replayed() {
                 action: fx.action(),
                 prompt: "task".into(),
                 context: None,
+                reasoning_effort: None,
             })
             .await
             .unwrap_err(),
@@ -563,6 +594,7 @@ async fn refuses_known_prompt_replays_even_after_completion() {
                 action,
                 prompt: "retry".into(),
                 context: None,
+                reasoning_effort: None,
             })
             .await
             .unwrap_err(),
@@ -587,6 +619,7 @@ async fn queued_prompt_prevents_second_submission() {
                 action,
                 prompt: "retry".into(),
                 context: None,
+                reasoning_effort: None,
             })
             .await
             .unwrap_err(),

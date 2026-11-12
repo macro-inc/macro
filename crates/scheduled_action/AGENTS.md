@@ -44,8 +44,9 @@ each run.
   (source `user`, origin `requested`) but hidden, a background session
   (`AgentSession::is_background`) that notifies nobody and only the scheduler
   may delete, never counted as a routine's run. It runs as the person, with its usual
-  tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
-  the session admits and bills its turns as agent session usage. One
+  tools, on the model their Ask AI steps use (`DraftContext::agent_model`),
+  without thinking where the model can (`reasoning_effort` `none`, set
+  ahead of the prompt); the session admits and bills its turns as agent session usage. One
   prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
   the `@agent` text on `RoutineNamespace` every code-mode session reads, so
   the rules for writing a routine live there, not here), the code-step guide,

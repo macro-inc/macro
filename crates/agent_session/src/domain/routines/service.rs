@@ -1,6 +1,8 @@
 use agent_fold::domain::lifecycle::LifecycleFold;
 use agent_fold::domain::model::Author;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{
+    AgentAction, AgentActionId, AgentSetConfigOptionAction,
+};
 use model_owner::Owner;
 
 use super::status::action_status;
@@ -13,6 +15,9 @@ use crate::domain::ports::{
     SelectedPersona, SessionOpener, persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
+
+/// The session option runtimes advertise for how much their model reasons.
+const REASONING_EFFORT_CONFIG_ID: &str = "reasoning_effort";
 
 /// Domain orchestration using the same provisioning and controls as interactive sessions.
 #[derive(Clone)]
@@ -255,6 +260,25 @@ where
                 .is_empty()
         {
             return Err(RoutineSessionError::Conflict);
+        }
+        if let Some(value) = command.reasoning_effort {
+            // Ahead of the prompt on the same queue, so its turn runs at it.
+            self.controls
+                .control_event(
+                    action.session_id,
+                    ControlEvent {
+                        action: AgentAction::SetConfigOption(AgentSetConfigOptionAction {
+                            config_id: REASONING_EFFORT_CONFIG_ID.to_owned(),
+                            value,
+                        }),
+                        action_id: Some(AgentActionId::mint()),
+                        actor: Some(action.owner.clone()),
+                        context: None,
+                        client: None,
+                    },
+                )
+                .await
+                .map_err(session_error)?;
         }
         // A history check is a guard against known replays, not an exactly-once
         // transaction. Never retry this call after a lost or failed response.

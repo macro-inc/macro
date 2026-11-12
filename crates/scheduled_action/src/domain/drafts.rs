@@ -473,6 +473,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 action: action.clone(),
                 prompt: brief,
                 context: None,
+                // No thinking, where the model can: drafts came back much
+                // sooner with the same checks passing in the drafting eval.
+                reasoning_effort: Some("none".to_owned()),
             })
             .await?;
         let span = tracing::Span::current();

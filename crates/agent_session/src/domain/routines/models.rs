@@ -88,6 +88,11 @@ pub struct PromptRoutineSession {
     /// What made the routine fire, rendered ahead of the prompt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
+    /// A value of the session's `reasoning_effort` option, set ahead of the
+    /// prompt, such as `none` for no thinking. A model that doesn't offer it
+    /// refuses it and keeps its default. Omitted keeps the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 /// Prompt admission is not completion.

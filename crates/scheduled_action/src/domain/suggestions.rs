@@ -843,6 +843,7 @@ where
                 action: action.clone(),
                 prompt: brief,
                 context: None,
+                reasoning_effort: None,
             })
             .await?;
         let span = tracing::Span::current();

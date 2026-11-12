@@ -174,7 +174,10 @@ skips the turn before any model call; unset or unreadable, summaries run.
   `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
   a session the scheduler opened for its owner, a routine's run (source
   `routine`) or a draft's background session, and refuses any other;
-  `activity` returns content-free counts (tool calls, turns).
+  `activity` returns content-free counts (tool calls, turns). A `prompt`
+  with a `reasoning_effort` sends it as a `reasoning_effort` config change
+  ahead of the prompt on the same queue; a model that doesn't offer the
+  value refuses it and the turn runs at its default.
 - A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
   is work the owner asked for that runs out of sight: source `user`, origin
   `requested` by the owner, `hidden`, opened from no message. A routine
