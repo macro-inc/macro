@@ -373,7 +373,7 @@ impl<
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        self.apply_for_team(team_id, computer_id, Event::OperatorRetry)
+        self.apply_for_team(team_id, computer_id, Event::TeamRetry)
             .await
     }
 

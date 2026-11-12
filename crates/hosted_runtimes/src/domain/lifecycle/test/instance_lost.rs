@@ -13,6 +13,7 @@ fn state(phase: Phase, power: Power, billing: Billing) -> ComputerState {
         recent_crashes: vec![],
         power_on_requested: true,
         capacity_wait: None,
+        retried_by_team: false,
     }
 }
 

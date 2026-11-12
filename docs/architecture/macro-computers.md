@@ -74,7 +74,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   attachment-source failures return `ComputerError::Internal`. `FleetAttachment`
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
-  Gate purchase, purchase_for_team (including comps), quote, offers, status, set_power, retry, cancel, undo_cancel and release_now
+  Gate purchase, purchase_for_team (including comps), quote, offers, list, set_power, retry, cancel, undo_cancel and release_now
   before reads, billing or writes; preserve existing rollout denial
   first. Missing rows on a detached fleet return 503.
   Do not gate catalog(), size_spec(), observe_subscription, confirm_reservations,
@@ -266,7 +266,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
   computers that gave up (`Crashed` with no retry) can be retried; the
   lifecycle rejects others with `Rejected::NotFailed` (409).
-  Applies `OperatorRetry` and never touches billing or purchases. A typed missing
+  Applies `TeamRetry` (like `OperatorRetry`, but it sets
+  `ComputerState::retried_by_team`, so a give-up before the computer next
+  boots logs instead of paging; a boot clears it) and never touches billing
+  or purchases. A typed missing
   fleet instance completes its effect and applies `InstanceLost`: recreate on the
   same host, computer row and harness id, starting only with power On and room.
   Reconcile also detects missing gave-up/Stopped guests; awake guests
