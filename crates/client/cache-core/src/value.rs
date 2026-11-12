@@ -153,7 +153,7 @@ impl Record {
         let mut changed = false;
         for (k, v) in other.fields {
             // Incoming snapshots must not replace the base's recency history.
-            if k == crate::page_retention::PAGE_ORDER_FIELD {
+            if crate::page_retention::is_order_field(&k) {
                 continue;
             }
             match self.fields.get(&k) {
@@ -164,7 +164,7 @@ impl Record {
                 }
             }
         }
-        crate::page_retention::retain_soup_pages(self, &recent_pages) || changed
+        crate::page_retention::retain_viewer_pages(self, &recent_pages) || changed
     }
 
     pub fn typename(&self) -> Option<&str> {
