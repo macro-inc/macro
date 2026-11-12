@@ -1884,7 +1884,12 @@ async fn run() -> anyhow::Result<()> {
                 ),
             )
         }
-        None => axum::Router::new(),
+        None => {
+            tracing::warn!(
+                "DENO_BINARY is unset: channel-mention replies cannot run programs on this host"
+            );
+            axum::Router::new()
+        }
     };
     let computer_claude = computers::claude::router(
         harnessd.clone(),

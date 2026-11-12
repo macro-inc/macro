@@ -74,9 +74,11 @@ impl From<UserExecutionFailure> for CodeModeError {
         match failure {
             UserExecutionFailure::Busy => Self::Busy,
             UserExecutionFailure::Invalid { message } => Self::Invalid(message),
-            UserExecutionFailure::Unavailable
-            | UserExecutionFailure::BadRequest
-            | UserExecutionFailure::Failed => Self::Unavailable,
+            UserExecutionFailure::Unavailable | UserExecutionFailure::BadRequest => {
+                Self::Unavailable
+            }
+            // The program may have run before the harness failed.
+            UserExecutionFailure::Failed => Self::Unconfirmed,
         }
     }
 }

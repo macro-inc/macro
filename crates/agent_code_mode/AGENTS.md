@@ -89,7 +89,8 @@ stacks. Process isolation belongs to
   through `UserCodeMode` as the body's user, always as `ToolCaller::Agent(MACRO_AI_BOT_ID)`
   with no session (the body cannot pick either). The channel-mention bot in
   document storage, which has no Deno runtime, calls it through
-  `src/outbound/harness_user_executions.rs`.
+  `src/outbound/harness_user_executions.rs`. A response lost after the program
+  may have started is `CodeModeError::Unconfirmed`, never retried.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP and the channel-mention bot. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared

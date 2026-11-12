@@ -76,9 +76,11 @@ async fn keeps_safe_failures_and_hides_the_rest() {
         (
             500,
             json!({"error": "invalid", "message": "spoofed"}),
-            "not configured",
+            "outcome was lost",
         ),
-        (502, json!({"upstream": "html"}), "not configured"),
+        (500, json!({"error": "failed"}), "outcome was lost"),
+        (502, json!({"upstream": "html"}), "outcome was lost"),
+        (404, json!({}), "not configured"),
     ] {
         let server = MockServer::start().await;
         Mock::given(method("POST"))

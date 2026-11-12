@@ -95,28 +95,35 @@ impl MentionCodeMode for HarnessUserExecutions {
         let response = tokio::select! {
             response = send => response.map_err(|error| {
                 tracing::warn!(error = ?error.without_url(), "harness user execution unreachable");
-                CodeModeError::Unavailable
+                // Only a refused connection proves the program never started.
+                if error.is_connect() {
+                    CodeModeError::Unavailable
+                } else {
+                    CodeModeError::Unconfirmed
+                }
             })?,
-            () = cancel.cancelled() => return Err(CodeModeError::Unavailable),
+            () = cancel.cancelled() => return Err(CodeModeError::Unconfirmed),
         };
         let status = response.status();
         let body = tokio::select! {
             body = bounded_body(response) => body?,
-            () = cancel.cancelled() => return Err(CodeModeError::Unavailable),
+            () = cancel.cancelled() => return Err(CodeModeError::Unconfirmed),
         };
         if status.is_success() {
             return serde_json::from_slice(&body).map_err(|error| {
                 tracing::warn!(error = ?error, "harness user execution receipt undecodable");
-                CodeModeError::Unavailable
+                CodeModeError::Unconfirmed
             });
         }
         // Only a failure envelope that agrees with its status is trusted.
         Err(
             match serde_json::from_slice::<UserExecutionFailure>(&body) {
                 Ok(failure) if failure.status().as_u16() == status.as_u16() => failure.into(),
+                // No route (the harness has no Deno runtime): nothing ran.
+                _ if status == reqwest::StatusCode::NOT_FOUND => CodeModeError::Unavailable,
                 _ => {
                     tracing::warn!(status = status.as_u16(), "harness user execution refused");
-                    CodeModeError::Unavailable
+                    CodeModeError::Unconfirmed
                 }
             },
         )
@@ -127,10 +134,10 @@ async fn bounded_body(mut response: reqwest::Response) -> Result<Vec<u8>, CodeMo
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|error| {
         tracing::warn!(error = ?error.without_url(), "harness user execution body unreadable");
-        CodeModeError::Unavailable
+        CodeModeError::Unconfirmed
     })? {
         if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-            return Err(CodeModeError::Unavailable);
+            return Err(CodeModeError::Unconfirmed);
         }
         body.extend_from_slice(&chunk);
     }
