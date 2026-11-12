@@ -91,8 +91,9 @@ pub enum FetchError {
 }
 
 impl FetchError {
-    /// Whether the fetch was refused by policy before (or instead of) talking
-    /// to the upstream. Callers usually answer these 4xx and the rest 5xx.
+    /// Whether the URL or an address it resolved to was refused by policy,
+    /// on the first hop or a redirect. Callers usually answer these 4xx and
+    /// the rest 5xx.
     #[must_use]
     pub const fn is_refused_by_policy(&self) -> bool {
         match self {
@@ -141,7 +142,11 @@ impl FetchError {
     /// Classify a reqwest error, recovering the resolver's refusal when DNS
     /// answered with a non-public address. reqwest wraps the resolver's error
     /// a few layers deep, so walk the source chain to find it.
+    ///
+    /// The URL is stripped first: reqwest's `Debug` prints it whole, path and
+    /// query included, and these errors end up in logs.
     pub(crate) fn from_reqwest(error: reqwest::Error) -> Self {
+        let error = error.without_url();
         let mut source: Option<&(dyn std::error::Error + 'static)> = Some(&error);
         while let Some(cause) = source {
             if let Some(refusal) = cause.downcast_ref::<RefusedResolution>() {

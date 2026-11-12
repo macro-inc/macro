@@ -14,8 +14,7 @@
 //! - schemes and ports are allowlisted; credentials in URLs are refused;
 //! - one total deadline covers every hop and the body, with a separate idle
 //!   limit between body chunks and a byte cap enforced while streaming;
-//! - only listed media types are accepted; SVG and HTML are never in the
-//!   image presets.
+//! - only listed media types are accepted; the image preset refuses SVG.
 //!
 //! ```
 //! use std::time::Duration;
@@ -32,14 +31,16 @@
 //!     total_timeout: Duration::from_secs(15),
 //!     body_idle_timeout: Duration::from_secs(5),
 //!     max_body_bytes: 10 * 1024 * 1024,
-//!     media_types: AcceptedMediaTypes::raster_images(),
+//!     media_types: AcceptedMediaTypes::images_except_svg(),
 //! });
 //! assert!(fetcher.is_ok());
 //! ```
 //!
-//! Callers that re-serve fetched bytes to a browser must send
-//! `X-Content-Type-Options: nosniff` and the media type the policy accepted,
-//! never one derived from the URL.
+//! Callers that re-serve fetched bytes to a browser send the media type the
+//! policy accepted (never one derived from the URL) with
+//! `X-Content-Type-Options: nosniff`. The one exception is octet-stream
+//! served for `<img>`, which browsers must sniff to render and never sniff
+//! into a document.
 #![deny(missing_docs)]
 
 mod address;

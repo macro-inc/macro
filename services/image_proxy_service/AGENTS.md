@@ -9,7 +9,7 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 ## Start here
 
 - `src/api/proxy.rs`: the `/proxy` route — its `safe_fetch::FetchPolicy`
-  (10 MB, raster images + octet-stream, no SVG, 5 redirects, timeouts) and a
+  (10 MB, any image but SVG, octet-stream, 5 redirects, timeouts) and a
   browser-like User-Agent to clear strict WAFs.
 - `src/api/context.rs`: `ApiContext` / `AuthorizationService`.
 - `src/openapi.rs`, `src/doppler_config.rs`: separate `[[bin]]` targets for

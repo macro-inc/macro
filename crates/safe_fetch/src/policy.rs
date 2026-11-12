@@ -149,58 +149,42 @@ impl std::fmt::Display for MediaType {
     }
 }
 
-/// Raster image formats every browser decodes without running script. SVG is
-/// absent on purpose: it is a document that can carry script and, opened
-/// directly from a proxy's origin, runs as that origin.
-const RASTER_IMAGES: &[&str] = &[
-    "image/apng",
-    "image/avif",
-    "image/bmp",
-    "image/gif",
-    "image/heic",
-    "image/heif",
-    "image/jpeg",
-    "image/png",
-    "image/tiff",
-    "image/vnd.microsoft.icon",
-    "image/webp",
-    "image/x-icon",
-];
-
 /// The `Content-Type`s a successful response may carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcceptedMediaTypes {
-    accepted: Vec<MediaType>,
+    any_image_except_svg: bool,
+    also: Vec<MediaType>,
 }
 
 impl AcceptedMediaTypes {
-    /// Raster images only (no SVG).
+    /// Every `image/*` type except SVG. SVG is a document that can carry
+    /// script and, opened directly from a proxy's origin, runs as that origin.
     #[must_use]
-    pub fn raster_images() -> Self {
-        Self::listed(RASTER_IMAGES)
+    pub fn images_except_svg() -> Self {
+        Self {
+            any_image_except_svg: true,
+            also: Vec::new(),
+        }
     }
 
     /// Add one more media type, e.g. `application/octet-stream` for an image
-    /// proxy whose upstreams mislabel images. A caller that re-serves a type it
-    /// added must send `X-Content-Type-Options: nosniff`.
+    /// proxy whose upstreams mislabel images (or send no `Content-Type`,
+    /// which HTTP defines as octet-stream).
     #[must_use]
     pub fn and(mut self, media_type: MediaType) -> Self {
-        self.accepted.push(media_type);
+        self.also.push(media_type);
         self
     }
 
     /// Whether a response declaring `media_type` is accepted.
     #[must_use]
     pub fn accepts(&self, media_type: &MediaType) -> bool {
-        self.accepted.contains(media_type)
-    }
-
-    fn listed(media_types: &[&str]) -> Self {
-        Self {
-            accepted: media_types
-                .iter()
-                .map(|media_type| MediaType((*media_type).to_owned()))
-                .collect(),
+        let is_image = media_type.as_str().starts_with("image/");
+        let is_svg = media_type.as_str().starts_with("image/svg");
+        if self.any_image_except_svg && is_image && !is_svg {
+            return true;
         }
+
+        self.also.contains(media_type)
     }
 }

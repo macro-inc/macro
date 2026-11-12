@@ -35,9 +35,9 @@ const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0)
 /// defences (address checks on the connected address, per-hop redirect
 /// checks, deadlines, streaming size cap); this only states the limits.
 ///
-/// Any port stays allowed, as before. `application/octet-stream` stays
-/// accepted because many image hosts send it; SVG no longer is, since an SVG
-/// opened from this origin runs its script here.
+/// Any port stays allowed, as before. `application/octet-stream` (and no
+/// Content-Type at all) stays accepted because many image hosts send it; SVG
+/// no longer is, since an SVG opened from this origin runs its script here.
 pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
     SafeFetcher::new(FetchPolicy {
         schemes: AllowedSchemes::HttpAndHttps,
@@ -48,7 +48,7 @@ pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
         total_timeout: Duration::from_secs(15),
         body_idle_timeout: Duration::from_secs(10),
         max_body_bytes: MAX_IMAGE_SIZE,
-        media_types: AcceptedMediaTypes::raster_images().and(MediaType::octet_stream()),
+        media_types: AcceptedMediaTypes::images_except_svg().and(MediaType::octet_stream()),
     })
 }
 

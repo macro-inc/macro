@@ -136,11 +136,12 @@ impl SafeFetcher {
             return Err(FetchError::Status { status });
         }
 
-        let media_type = response
-            .headers()
-            .get(CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok())
-            .and_then(MediaType::from_content_type);
+        // A response without a Content-Type is octet-stream (RFC 9110 §8.3);
+        // it is accepted only where the policy accepts octet-stream.
+        let media_type = match response.headers().get(CONTENT_TYPE) {
+            None => Some(MediaType::octet_stream()),
+            Some(value) => value.to_str().ok().and_then(MediaType::from_content_type),
+        };
         let media_type = match media_type {
             Some(media_type) if self.policy.media_types.accepts(&media_type) => media_type,
             media_type => return Err(FetchError::MediaTypeNotAllowed { media_type }),

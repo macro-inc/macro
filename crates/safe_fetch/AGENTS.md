@@ -33,8 +33,9 @@ SSRF-safe way to do that; don't hand-roll another resolver or redirect loop.
 
 - `private_networks_allowed` is for local dev and tests only; production policies
   leave it empty.
-- Callers re-serving bytes to a browser send `X-Content-Type-Options: nosniff`
-  and the accepted media type. Never add `image/svg+xml` to a re-served policy.
+- Callers re-serving bytes to a browser send the accepted media type with
+  `X-Content-Type-Options: nosniff` (octet-stream for `<img>` excepted, see
+  `lib.rs`). Never accept `image/svg+xml` in a re-served policy.
 - Never record URL paths, queries, or userinfo in spans; they carry tokens.
 
 ## Related

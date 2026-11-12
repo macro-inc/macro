@@ -120,7 +120,7 @@ fn test_policy() -> FetchPolicy {
         total_timeout: Duration::from_secs(5),
         body_idle_timeout: Duration::from_secs(1),
         max_body_bytes: 1024,
-        media_types: AcceptedMediaTypes::raster_images(),
+        media_types: AcceptedMediaTypes::images_except_svg(),
     }
 }
 
@@ -376,7 +376,7 @@ async fn credentials_in_the_url_are_refused() {
 }
 
 #[tokio::test]
-async fn svg_is_refused_by_the_raster_image_policy() {
+async fn svg_is_refused_by_the_image_policy() {
     let server = serve(|_port| vec![Reply::Complete(
         "HTTP/1.1 200 OK\r\ncontent-type: image/svg+xml\r\ncontent-length: 6\r\nconnection: close\r\n\r\n<svg/>"
             .to_owned(),
