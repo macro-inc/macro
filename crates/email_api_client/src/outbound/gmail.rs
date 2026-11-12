@@ -81,6 +81,11 @@ fn is_quota_403_body(body: &str) -> bool {
     QUOTA_403_REASONS.iter().any(|reason| body.contains(reason))
 }
 
+/// Gmail refuses a call its token's grant lacks the scope for as HTTP 403
+/// with this reason. Only a new consent grants the scope, so it is a
+/// credential failure, not a refusal of this one request.
+const INSUFFICIENT_SCOPE_403_REASON: &str = "insufficientPermissions";
+
 /// Gmail's per-second 429 shares this one's `rateLimitExceeded` reason; only
 /// the message tells the concurrency limit apart.
 const CONCURRENCY_429_MESSAGE: &str = "Too many concurrent requests for user";
@@ -97,6 +102,7 @@ pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
                 retry_after,
                 origin: RateLimitOrigin::Provider { concurrency: false },
             },
+            403 if body.contains(INSUFFICIENT_SCOPE_403_REASON) => EmailApiError::AuthRequired,
             403 => EmailApiError::Forbidden,
             404 => EmailApiError::NotFound,
             409 => EmailApiError::Conflict,

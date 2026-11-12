@@ -97,6 +97,11 @@ impl ProviderTokenSource for EmailServiceTokenSource {
             .map(AccessToken::new)
             .map_err(map_token_acquisition_error)
     }
+
+    async fn report_rejected_grant(&self, link_id: Uuid) {
+        tracing::warn!(%link_id, "Gmail rejected a freshly fetched token - marking link as needing reauth");
+        self.mark_needs_reauth(link_id).await;
+    }
 }
 
 impl EmailServiceTokenSource {
@@ -162,27 +167,31 @@ impl EmailServiceTokenSource {
                     fusionauth_user_id=%link.fusionauth_user_id,
                     "Gmail grant no longer yields a token - marking link as needing reauth"
                 );
-                match email_db_client::links::update::set_link_needs_reauth(&self.db, link.id).await
-                {
-                    // Edge-triggered: the notification fans out only on the
-                    // false→true transition, so repeat failures don't re-notify.
-                    Ok(true) => {
-                        self.sqs_client
-                            .enqueue_link_manager_notification(
-                                LinkManagerMessage::NotifyReauthRequired { link_id: link.id },
-                            )
-                            .await
-                            .inspect_err(|enqueue_error| {
-                                tracing::error!(error=?enqueue_error, link_id=%link.id, "Failed to enqueue reauth notification");
-                            })
-                            .ok();
-                    }
-                    Ok(false) => {}
-                    Err(update_error) => {
-                        tracing::error!(error=?update_error, link_id=%link.id, "Failed to mark link as needing reauth");
-                    }
-                }
+                self.mark_needs_reauth(link.id).await;
                 result
+            }
+        }
+    }
+
+    /// Marks the link as needing reauthorization. Edge-triggered: the
+    /// notification fans out only on the false→true transition, so repeat
+    /// failures don't re-notify.
+    async fn mark_needs_reauth(&self, link_id: Uuid) {
+        match email_db_client::links::update::set_link_needs_reauth(&self.db, link_id).await {
+            Ok(true) => {
+                self.sqs_client
+                    .enqueue_link_manager_notification(
+                        LinkManagerMessage::NotifyReauthRequired { link_id },
+                    )
+                    .await
+                    .inspect_err(|enqueue_error| {
+                        tracing::error!(error=?enqueue_error, %link_id, "Failed to enqueue reauth notification");
+                    })
+                    .ok();
+            }
+            Ok(false) => {}
+            Err(update_error) => {
+                tracing::error!(error=?update_error, %link_id, "Failed to mark link as needing reauth");
             }
         }
     }
@@ -275,6 +284,8 @@ impl ProviderTokenSource for StaticTokenSource {
     ) -> Result<AccessToken, TokenError> {
         Ok(self.token.clone())
     }
+
+    async fn report_rejected_grant(&self, _link_id: Uuid) {}
 }
 
 fn map_token_acquisition_error(error: anyhow::Error) -> TokenError {

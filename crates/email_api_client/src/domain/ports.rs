@@ -329,6 +329,11 @@ pub trait ProviderTokenSource: Send + Sync + 'static {
         link: &Link,
         freshness: TokenFreshness,
     ) -> impl Future<Output = Result<AccessToken, TokenError>> + Send;
+
+    /// Records that the provider rejected a token fetched fresh for this
+    /// link: the grant still yields tokens, but they no longer work (a
+    /// revoked or narrowed consent), so only the owner reconnecting fixes it.
+    fn report_rejected_grant(&self, link_id: Uuid) -> impl Future<Output = ()> + Send;
 }
 
 /// Applies provider quota policy before an outbound request.
@@ -616,6 +621,8 @@ impl ProviderTokenSource for NoOpProviderTokenSource {
             message: "email provider token source is not configured".to_string(),
         })
     }
+
+    async fn report_rejected_grant(&self, _: Uuid) {}
 }
 
 impl ProviderRateLimiter for AlwaysAllowRateLimiter {
