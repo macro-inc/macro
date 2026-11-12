@@ -1352,6 +1352,9 @@ The stream's JavaScript object, on the other hand, is collected while a `Respons
 
 **How to check:** unit tests cannot see this, because Node collects like Chromium. In the iOS Simulator's webview, register the object with a `FinalizationRegistry`, drop it, send `Heap.gc` over the Web Inspector protocol a few times, and see whether the callback ran. Check the built bundle, not only the source: a minifier that inlines the function puts the callbacks back in the caller's scope.
 
+## iOS gotcha: a detached file input loses its picker's result
+WebKit drops a file picker's result when it garbage-collects the `<input type="file">` that opened it, and nothing keeps an input created with `document.createElement` alive unless it is in the document. The iOS app's photo and file pickers stay open long enough for that, so the pick vanishes with no `change` and no error. Keep the input in the document until `change` or `cancel`, as `fileSelector` does. Check it in the iOS Simulator by sending `Heap.gc` over the Web Inspector protocol while the picker is open.
+
 ### Agent session failure indicators
 
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
