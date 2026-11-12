@@ -50,12 +50,14 @@ export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string
   const owner = tokens[OWNER];
   const macro = sdk(at, owner);
   let removed = 0;
-  for (const routine of await listRoutines(at, owner)) {
+  // The list puts sub-routines after their parents; deleting a parent
+  // deletes its sub-routines and their grants, so theirs go first.
+  for (const routine of (await listRoutines(at, owner)).reverse()) {
     try {
       await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner });
     } catch (error) {
-      // A sub-routine goes with its parent, deleted just before it.
-      if (!String(error).includes(' 404:')) throw error;
+      // Already gone with its parent: no routine (404), or no grant left (401).
+      if (!/ (401|404):/.test(String(error))) throw error;
     }
     removed++;
   }
