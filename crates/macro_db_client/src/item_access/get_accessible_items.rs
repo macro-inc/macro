@@ -54,7 +54,10 @@ pub async fn get_user_accessible_items(
         }
     };
 
-    Ok(RUNNING_LOOKUPS.run(key, lookup).await?)
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_LOOKUPS.run(key, lookup)).await?)
 }
 
 async fn query_accessible_items(

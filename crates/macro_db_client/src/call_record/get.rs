@@ -87,7 +87,10 @@ pub async fn get_accessible_call_ids(
         }
     };
 
-    Ok(RUNNING_CALL_LOOKUPS.run(key, lookup).await?)
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_CALL_LOOKUPS.run(key, lookup)).await?)
 }
 
 async fn query_accessible_call_ids(

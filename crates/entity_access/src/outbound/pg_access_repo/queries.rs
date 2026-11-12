@@ -96,7 +96,10 @@ pub async fn get_user_source_ids(
         }
     };
 
-    Ok(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup).await?)
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    Ok(Box::pin(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup)).await?)
 }
 
 async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
