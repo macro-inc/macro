@@ -13,7 +13,12 @@ fn input_over_the_size_limit_is_refused() {
     };
 
     assert_eq!(
-        parse(&fixture("bitwarden.json"), SourceFormat::BitwardenJson, &limits).err(),
+        parse(
+            &fixture("bitwarden.json"),
+            SourceFormat::BitwardenJson,
+            &limits
+        )
+        .err(),
         Some(ImportError::TooLarge)
     );
 }
@@ -28,7 +33,10 @@ fn high_ratio_entry_stops_at_the_inflate_limit() {
         ..Limits::default()
     };
 
-    assert_eq!(parse(&bomb, SourceFormat::OnePasswordPux, &limits).err(), Some(ImportError::ZipBomb));
+    assert_eq!(
+        parse(&bomb, SourceFormat::OnePasswordPux, &limits).err(),
+        Some(ImportError::ZipBomb)
+    );
 }
 
 #[test]
@@ -59,8 +67,17 @@ fn too_many_entries_are_refused() {
 
 #[test]
 fn unsafe_entry_names_fail_the_whole_file() {
-    for name in ["../escape", "files/../../escape", "/absolute", "files\\windows", ".."] {
-        let archive = zip(&[("export.data", MINIMAL_EXPORT.to_vec()), (name, b"x".to_vec())]);
+    for name in [
+        "../escape",
+        "files/../../escape",
+        "/absolute",
+        "files\\windows",
+        "..",
+    ] {
+        let archive = zip(&[
+            ("export.data", MINIMAL_EXPORT.to_vec()),
+            (name, b"x".to_vec()),
+        ]);
 
         assert_eq!(
             parse(&archive, SourceFormat::OnePasswordPux, &Limits::default()).err(),
@@ -90,7 +107,12 @@ fn archive_without_export_data_is_refused() {
 #[test]
 fn truncated_archive_is_invalid() {
     assert_eq!(
-        parse(b"PK\x03\x04truncated", SourceFormat::OnePasswordPux, &Limits::default()).err(),
+        parse(
+            b"PK\x03\x04truncated",
+            SourceFormat::OnePasswordPux,
+            &Limits::default()
+        )
+        .err(),
         Some(ImportError::InvalidZip)
     );
 }
@@ -103,19 +125,39 @@ fn too_many_items_are_refused_in_every_format() {
     };
 
     assert_eq!(
-        parse(&fixture("bitwarden.json"), SourceFormat::BitwardenJson, &limits).err(),
+        parse(
+            &fixture("bitwarden.json"),
+            SourceFormat::BitwardenJson,
+            &limits
+        )
+        .err(),
         Some(ImportError::TooManyItems)
     );
     assert_eq!(
-        parse(&fixture("bitwarden.csv"), SourceFormat::BitwardenCsv, &limits).err(),
+        parse(
+            &fixture("bitwarden.csv"),
+            SourceFormat::BitwardenCsv,
+            &limits
+        )
+        .err(),
         Some(ImportError::TooManyItems)
     );
     assert_eq!(
-        parse(&fixture("one_password.csv"), SourceFormat::OnePasswordCsv, &limits).err(),
+        parse(
+            &fixture("one_password.csv"),
+            SourceFormat::OnePasswordCsv,
+            &limits
+        )
+        .err(),
         Some(ImportError::TooManyItems)
     );
     assert_eq!(
-        parse(&super::support::one_password_pux(), SourceFormat::OnePasswordPux, &limits).err(),
+        parse(
+            &super::support::one_password_pux(),
+            SourceFormat::OnePasswordPux,
+            &limits
+        )
+        .err(),
         Some(ImportError::TooManyItems)
     );
 }
@@ -123,15 +165,34 @@ fn too_many_items_are_refused_in_every_format() {
 #[test]
 fn unknown_inputs_are_typed_errors() {
     assert_eq!(detect(b""), Err(ImportError::UnknownFormat));
-    assert_eq!(detect(b"name,value\nx,y\n"), Err(ImportError::UnknownFormat));
-    assert_eq!(detect(br#"{"accounts": []}"#), Err(ImportError::UnknownFormat));
-    assert_eq!(detect(b"{\n\"items\": [\n"), Err(ImportError::InvalidJson { line: 3 }));
     assert_eq!(
-        parse(b"title,url\n", SourceFormat::OnePasswordCsv, &Limits::default()).err(),
+        detect(b"name,value\nx,y\n"),
+        Err(ImportError::UnknownFormat)
+    );
+    assert_eq!(
+        detect(br#"{"accounts": []}"#),
+        Err(ImportError::UnknownFormat)
+    );
+    assert_eq!(
+        detect(b"{\n\"items\": [\n"),
+        Err(ImportError::InvalidJson { line: 3 })
+    );
+    assert_eq!(
+        parse(
+            b"title,url\n",
+            SourceFormat::OnePasswordCsv,
+            &Limits::default()
+        )
+        .err(),
         Some(ImportError::InvalidCsv { row: 1 })
     );
     assert_eq!(
-        parse(br#"{"folders": []}"#, SourceFormat::BitwardenJson, &Limits::default()).err(),
+        parse(
+            br#"{"folders": []}"#,
+            SourceFormat::BitwardenJson,
+            &Limits::default()
+        )
+        .err(),
         Some(ImportError::UnsupportedVersion)
     );
 }

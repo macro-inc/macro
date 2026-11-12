@@ -9,12 +9,20 @@ use crate::draft::{Draft, Parts};
 use crate::error::ImportError;
 use crate::model::{FolderPath, ItemKind, Limits, Secret, SkipReason, SourceKey};
 
-pub(crate) const REQUIRED_COLUMNS: [&str; 5] =
-    ["type", "name", "login_uri", "login_username", "login_password"];
+pub(crate) const REQUIRED_COLUMNS: [&str; 5] = [
+    "type",
+    "name",
+    "login_uri",
+    "login_username",
+    "login_password",
+];
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let table = csv_table::read(bytes, limits)?;
-    if REQUIRED_COLUMNS.iter().any(|name| table.column(name).is_none()) {
+    if REQUIRED_COLUMNS
+        .iter()
+        .any(|name| table.column(name).is_none())
+    {
         return Err(ImportError::InvalidCsv { row: 1 });
     }
 

@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use crate::model::{
-    Dropped, DroppedPart, FolderPath, SegmentTooLong, ImportedField, ImportedItem, ItemKind, ParsedExport,
-    Secret, SkipReason, Skipped, SourceFormat, SourceKey,
+    Dropped, DroppedPart, FolderPath, ImportedField, ImportedItem, ItemKind, ParsedExport, Secret,
+    SegmentTooLong, SkipReason, Skipped, SourceFormat, SourceKey,
 };
 use crate::totp;
 
@@ -369,7 +369,12 @@ impl Parts {
         }
     }
 
-    pub(crate) fn skip(&mut self, source_key: Option<SourceKey>, name: Option<&str>, reason: SkipReason) {
+    pub(crate) fn skip(
+        &mut self,
+        source_key: Option<SourceKey>,
+        name: Option<&str>,
+        reason: SkipReason,
+    ) {
         self.skipped.push(Skipped {
             source_key,
             name: valid_name(name),

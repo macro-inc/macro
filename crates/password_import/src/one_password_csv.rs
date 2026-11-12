@@ -11,7 +11,10 @@ const KNOWN_COLUMNS: [&str; 9] = [
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let table = csv_table::read(bytes, limits)?;
-    if REQUIRED_COLUMNS.iter().any(|name| table.column(name).is_none()) {
+    if REQUIRED_COLUMNS
+        .iter()
+        .any(|name| table.column(name).is_none())
+    {
         return Err(ImportError::InvalidCsv { row: 1 });
     }
 

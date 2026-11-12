@@ -183,7 +183,8 @@ fn category(uuid: Option<&str>) -> Category {
 
 pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
     let data = zip_archive::read_export_data(bytes, limits)?;
-    let export: Export<'_> = serde_json::from_slice(&data).map_err(|error| ImportError::json(&error))?;
+    let export: Export<'_> =
+        serde_json::from_slice(&data).map_err(|error| ImportError::json(&error))?;
     let accounts = export.accounts.ok_or(ImportError::UnsupportedVersion)?;
 
     let item_count: usize = accounts
@@ -253,7 +254,10 @@ fn add_item(
         .as_deref()
         .and_then(SourceKey::from_source_id)
         .unwrap_or(index_key);
-    let name = item.overview.as_ref().and_then(|overview| overview.title.as_deref());
+    let name = item
+        .overview
+        .as_ref()
+        .and_then(|overview| overview.title.as_deref());
 
     let state = item.state.as_deref();
     if item.trashed == Some(true) || matches!(state, Some("trashed" | "deleted")) {
@@ -353,13 +357,22 @@ fn add_details(draft: &mut Draft, details: Details<'_>, category: Category) {
                 format!("{section_title} · {field_title}")
             };
 
-            let Some((value_type, raw)) = field.value.as_ref().and_then(|value| value.iter().next())
+            let Some((value_type, raw)) =
+                field.value.as_ref().and_then(|value| value.iter().next())
             else {
                 continue;
             };
             let id = field.id.as_deref().unwrap_or_default();
 
-            add_section_field(draft, category, id, &label, value_type, raw, &mut name_parts);
+            add_section_field(
+                draft,
+                category,
+                id,
+                &label,
+                value_type,
+                raw,
+                &mut name_parts,
+            );
         }
     }
 
@@ -408,7 +421,10 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
             Err(_) => SectionValue::Unsupported,
         },
         "email" => match serde_json::from_str::<EmailValue>(raw.get()) {
-            Ok(EmailValue::Plain(value)) => SectionValue::Text { value, concealed: false },
+            Ok(EmailValue::Plain(value)) => SectionValue::Text {
+                value,
+                concealed: false,
+            },
             Ok(EmailValue::Structured { email_address }) => SectionValue::Text {
                 value: email_address.unwrap_or_default(),
                 concealed: false,
@@ -443,11 +459,12 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
                     &address.zip,
                     &address.country,
                 ];
-                let value = Secret::join(
-                    parts.into_iter().flatten().map(Secret::expose_secret),
-                    ", ",
-                );
-                SectionValue::Text { value, concealed: false }
+                let value =
+                    Secret::join(parts.into_iter().flatten().map(Secret::expose_secret), ", ");
+                SectionValue::Text {
+                    value,
+                    concealed: false,
+                }
             }
             Err(_) => SectionValue::Unsupported,
         },

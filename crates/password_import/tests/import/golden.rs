@@ -75,10 +75,13 @@ fn bitwarden_organization_csv_skips_every_row() {
 fn encrypted_bitwarden_json_is_refused() {
     let bytes = fixture("bitwarden_encrypted.json");
 
-    assert_eq!(detect(&bytes), Err(password_import::ImportError::EncryptedBitwarden));
     assert_eq!(
-        parse(&bytes, SourceFormat::BitwardenJson, &Limits::default()).map(|export| export.items.len()),
+        detect(&bytes),
+        Err(password_import::ImportError::EncryptedBitwarden)
+    );
+    assert_eq!(
+        parse(&bytes, SourceFormat::BitwardenJson, &Limits::default())
+            .map(|export| export.items.len()),
         Err(password_import::ImportError::EncryptedBitwarden)
     );
 }
-

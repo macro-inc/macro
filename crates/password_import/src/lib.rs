@@ -6,21 +6,21 @@
 
 mod bitwarden_csv;
 mod bitwarden_json;
+mod csv_table;
 mod detect;
 mod draft;
 mod error;
 mod model;
 mod one_password_csv;
 mod one_password_pux;
-mod csv_table;
 mod totp;
 mod zip_archive;
 
 pub use detect::detect;
 pub use error::ImportError;
 pub use model::{
-    Dropped, DroppedPart, FolderPath, ImportedField, ImportedItem, ItemKind, Limits,
-    ParsedExport, Secret, SkipReason, Skipped, SourceFormat, SourceKey, Summary, TotpSeed,
+    Dropped, DroppedPart, FolderPath, ImportedField, ImportedItem, ItemKind, Limits, ParsedExport,
+    Secret, SkipReason, Skipped, SourceFormat, SourceKey, Summary, TotpSeed,
 };
 
 /// Parse `bytes` as `format`. Items that can't be imported are reported in

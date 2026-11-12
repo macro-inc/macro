@@ -63,7 +63,11 @@ pub(crate) fn read(bytes: &[u8], limits: &Limits) -> Result<Table, ImportError> 
 
         let cells: Option<Vec<Secret>> = record
             .iter()
-            .map(|cell| std::str::from_utf8(cell).ok().map(|cell| Secret::new(cell.to_owned())))
+            .map(|cell| {
+                std::str::from_utf8(cell)
+                    .ok()
+                    .map(|cell| Secret::new(cell.to_owned()))
+            })
             .collect();
         rows.push(cells.map(Row));
     }

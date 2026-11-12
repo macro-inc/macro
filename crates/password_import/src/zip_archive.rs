@@ -53,9 +53,7 @@ pub(crate) fn read_export_data(
 
     // The header's size is a hint only; `take` enforces the real bound.
     let capacity = entry.size().min(limits.max_decompressed_bytes);
-    let mut data = Zeroizing::new(Vec::with_capacity(
-        usize::try_from(capacity).unwrap_or(0),
-    ));
+    let mut data = Zeroizing::new(Vec::with_capacity(usize::try_from(capacity).unwrap_or(0)));
     let read_limit = limits.max_decompressed_bytes.saturating_add(1);
     entry
         .take(read_limit)
@@ -86,7 +84,5 @@ fn declared_entry_count(bytes: &[u8]) -> Option<u16> {
 /// Names that could escape an extraction directory. Nothing is extracted,
 /// but such a file is not a genuine export, so the whole file is refused.
 fn is_unsafe_entry_name(name: &str) -> bool {
-    name.contains('\\')
-        || name.starts_with('/')
-        || name.split('/').any(|segment| segment == "..")
+    name.contains('\\') || name.starts_with('/') || name.split('/').any(|segment| segment == "..")
 }

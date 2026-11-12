@@ -20,7 +20,11 @@ pub fn fixture(name: &str) -> Vec<u8> {
 /// A `.1pux` archive: `export.data` plus the attachment files 1Password adds.
 pub fn one_password_pux() -> Vec<u8> {
     zip(&[
-        ("export.attributes", br#"{"version":3,"description":"1Password Unencrypted Export","createdAt":1700000000}"#.to_vec()),
+        (
+            "export.attributes",
+            br#"{"version":3,"description":"1Password Unencrypted Export","createdAt":1700000000}"#
+                .to_vec(),
+        ),
         ("export.data", fixture("one_password_export.data.json")),
         ("files/doc1__receipt.pdf", b"%PDF-synthetic".to_vec()),
     ])

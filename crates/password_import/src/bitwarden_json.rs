@@ -305,10 +305,14 @@ fn add_card(draft: &mut Draft, card: Card) {
 
 fn add_identity(draft: &mut Draft, identity: Identity) {
     let full_name = Secret::join(
-        [&identity.first_name, &identity.middle_name, &identity.last_name]
-            .into_iter()
-            .flatten()
-            .map(Secret::expose_secret),
+        [
+            &identity.first_name,
+            &identity.middle_name,
+            &identity.last_name,
+        ]
+        .into_iter()
+        .flatten()
+        .map(Secret::expose_secret),
         " ",
     );
     draft.username(full_name, "Name");
@@ -329,7 +333,10 @@ fn add_identity(draft: &mut Draft, identity: Identity) {
         &identity.postal_code,
         &identity.country,
     ];
-    let address = Secret::join(address.into_iter().flatten().map(Secret::expose_secret), ", ");
+    let address = Secret::join(
+        address.into_iter().flatten().map(Secret::expose_secret),
+        ", ",
+    );
     draft.field(draft::ADDRESS, address, false);
 
     let rest = [

@@ -66,7 +66,9 @@ fn normalize_base32(raw: &str) -> Option<TotpSeed> {
 
     let valid = !seed.is_empty()
         && seed.len() <= MAX_SEED_BYTES
-        && seed.bytes().all(|byte| matches!(byte, b'A'..=b'Z' | b'2'..=b'7'));
+        && seed
+            .bytes()
+            .all(|byte| matches!(byte, b'A'..=b'Z' | b'2'..=b'7'));
 
     valid.then(|| TotpSeed(Secret::new(std::mem::take(&mut *seed))))
 }

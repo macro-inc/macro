@@ -4,7 +4,11 @@
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(
     feature = "serde",
-    serde(tag = "code", rename_all = "snake_case", rename_all_fields = "camelCase")
+    serde(
+        tag = "code",
+        rename_all = "snake_case",
+        rename_all_fields = "camelCase"
+    )
 )]
 pub enum ImportError {
     /// Not a 1Password or Bitwarden export this crate reads.

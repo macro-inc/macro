@@ -11,17 +11,25 @@ const SENTINEL: &str = "S3NT1NEL-value";
 fn content_strings(export: &ParsedExport) -> Vec<String> {
     fn collect(value: &Value, key: &str, strings: &mut Vec<String>) {
         match value {
-            Value::String(text) if !matches!(key, "sourceKey" | "kind" | "reason" | "what" | "format") => {
+            Value::String(text)
+                if !matches!(key, "sourceKey" | "kind" | "reason" | "what" | "format") =>
+            {
                 strings.push(text.clone());
             }
             Value::Array(values) => values.iter().for_each(|value| collect(value, key, strings)),
-            Value::Object(map) => map.iter().for_each(|(key, value)| collect(value, key, strings)),
+            Value::Object(map) => map
+                .iter()
+                .for_each(|(key, value)| collect(value, key, strings)),
             _ => {}
         }
     }
 
     let mut strings = Vec::new();
-    collect(&serde_json::to_value(export).expect("serializes"), "", &mut strings);
+    collect(
+        &serde_json::to_value(export).expect("serializes"),
+        "",
+        &mut strings,
+    );
     strings
 }
 
@@ -30,7 +38,14 @@ fn debug_of_everything(export: &ParsedExport) -> String {
     for item in &export.items {
         debug.push_str(&format!(
             "{item:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:#?}\n",
-            item.source_key, item.username, item.password, item.notes, item.totp, item.folder, item.fields, item
+            item.source_key,
+            item.username,
+            item.password,
+            item.notes,
+            item.totp,
+            item.folder,
+            item.fields,
+            item
         ));
     }
     for skipped in &export.skipped {
@@ -50,7 +65,10 @@ fn assert_redacted(bytes: &[u8], format: SourceFormat) {
     let debug = debug_of_everything(&export);
 
     let strings = content_strings(&export);
-    assert!(strings.len() > 20, "the fixture should carry plenty of content");
+    assert!(
+        strings.len() > 20,
+        "the fixture should carry plenty of content"
+    );
 
     // Debug prints source keys and type names by design; content that merely
     // repeats one of those (`Field`, `true`, an id-like title) proves nothing.
@@ -58,14 +76,26 @@ fn assert_redacted(bytes: &[u8], format: SourceFormat) {
         .items
         .iter()
         .map(|item| item.source_key.as_str())
-        .chain(export.skipped.iter().filter_map(|skipped| skipped.source_key.as_ref().map(|key| key.as_str())))
+        .chain(
+            export
+                .skipped
+                .iter()
+                .filter_map(|skipped| skipped.source_key.as_ref().map(|key| key.as_str())),
+        )
         .collect();
     let printed_by_design = |text: &str| {
-        matches!(text, "Field" | "true" | "false") || source_keys.iter().any(|key| key.contains(text))
+        matches!(text, "Field" | "true" | "false")
+            || source_keys.iter().any(|key| key.contains(text))
     };
 
-    for text in strings.iter().filter(|text| text.len() >= 4 && !printed_by_design(text)) {
-        assert!(!debug.contains(text.as_str()), "Debug output shows content of {format:?}: {text}");
+    for text in strings
+        .iter()
+        .filter(|text| text.len() >= 4 && !printed_by_design(text))
+    {
+        assert!(
+            !debug.contains(text.as_str()),
+            "Debug output shows content of {format:?}: {text}"
+        );
     }
 }
 
@@ -94,15 +124,38 @@ fn errors_show_no_content() {
     let broken_json = format!(r#"{{"items": [{{"name": "{SENTINEL}" "#);
     let unsafe_zip = zip(&[(&format!("../{SENTINEL}"), b"x".to_vec())]);
     let headerless_csv = format!("{SENTINEL},{SENTINEL}\n{SENTINEL}");
-    let pux_without_accounts = zip(&[("export.data", format!(r#"{{"{SENTINEL}": 1}}"#).into_bytes())]);
+    let pux_without_accounts = zip(&[(
+        "export.data",
+        format!(r#"{{"{SENTINEL}": 1}}"#).into_bytes(),
+    )]);
 
     let errors: Vec<ImportError> = vec![
         detect(broken_json.as_bytes()).expect_err("broken JSON"),
-        parse(broken_json.as_bytes(), SourceFormat::BitwardenJson, &Limits::default()).expect_err("broken JSON"),
-        parse(&unsafe_zip, SourceFormat::OnePasswordPux, &Limits::default()).expect_err("unsafe zip"),
+        parse(
+            broken_json.as_bytes(),
+            SourceFormat::BitwardenJson,
+            &Limits::default(),
+        )
+        .expect_err("broken JSON"),
+        parse(
+            &unsafe_zip,
+            SourceFormat::OnePasswordPux,
+            &Limits::default(),
+        )
+        .expect_err("unsafe zip"),
         detect(headerless_csv.as_bytes()).expect_err("unknown CSV"),
-        parse(headerless_csv.as_bytes(), SourceFormat::BitwardenCsv, &Limits::default()).expect_err("unknown CSV"),
-        parse(&pux_without_accounts, SourceFormat::OnePasswordPux, &Limits::default()).expect_err("no accounts"),
+        parse(
+            headerless_csv.as_bytes(),
+            SourceFormat::BitwardenCsv,
+            &Limits::default(),
+        )
+        .expect_err("unknown CSV"),
+        parse(
+            &pux_without_accounts,
+            SourceFormat::OnePasswordPux,
+            &Limits::default(),
+        )
+        .expect_err("no accounts"),
     ];
 
     for error in errors {
@@ -112,7 +165,12 @@ fn errors_show_no_content() {
 
 #[test]
 fn secret_debug_is_fixed() {
-    let export = parse(&fixture("bitwarden.json"), SourceFormat::BitwardenJson, &Limits::default()).expect("parses");
+    let export = parse(
+        &fixture("bitwarden.json"),
+        SourceFormat::BitwardenJson,
+        &Limits::default(),
+    )
+    .expect("parses");
     let item = export.items.first().expect("an item");
 
     assert_eq!(format!("{:?}", item.password), "Secret(..)");
