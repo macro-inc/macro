@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture SET state = $3, picture_id = NULL, static_file_id = NULL,\n                    checked_at = now(), attempts = 0,\n                    retry_at = now() + make_interval(days => $4) + random() * interval '2 days'\n                WHERE account_id = $1 AND jid = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "adc5e0ee2c666981e717ce52f0b67bad19d1f53a634ae6e73610f83a8fdd0a28"
+}

@@ -21,6 +21,7 @@ mod groups;
 mod ingest;
 mod lookups;
 mod media;
+mod pictures;
 mod sends;
 mod session;
 #[cfg(test)]

@@ -534,6 +534,46 @@ impl SessionRepository for PgWhatsAppRepository {
         tx.commit().await.map_err(failure)
     }
 
+    async fn claim_picture_checks(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<PictureCheck>> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        // Exclusive, so concurrent claims can't both spend the same budget.
+        let account = fence_exclusive_in(&mut tx, scope).await?;
+        if account.state != AccountState::Connected {
+            return Ok(vec![]);
+        }
+        let checks = pictures::claim_picture_checks_in(&mut tx, &account, limit).await?;
+        tx.commit().await.map_err(failure)?;
+        Ok(checks)
+    }
+
+    async fn complete_picture_check(
+        &self,
+        scope: SessionScope,
+        jid: &str,
+        answer: &PictureAnswer,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        pictures::complete_picture_check_in(&mut tx, &account, jid, answer).await?;
+        tx.commit().await.map_err(failure)
+    }
+
+    async fn picture_changed(
+        &self,
+        scope: SessionScope,
+        jids: &[String],
+        picture_id: Option<&str>,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let account = fence_in(&mut tx, scope).await?;
+        pictures::picture_changed_in(&mut tx, &account, jids, picture_id).await?;
+        tx.commit().await.map_err(failure)
+    }
+
     async fn backfill_requested(&self, scope: SessionScope, group: Uuid) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
