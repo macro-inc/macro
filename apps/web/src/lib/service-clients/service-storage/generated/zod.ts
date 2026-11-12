@@ -79915,6 +79915,75 @@ export const uploadExtractFolderHandlerResponse = zod.object({
 });
 
 /**
+ * @summary Where the caller's folder upload stands, so the uploader can follow it to
+the end even when a websocket update is missed.
+ */
+export const getUploadExtractStatusHandlerParams = zod.object({
+  request_id: zod.string().describe('The upload request id'),
+});
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin = 0;
+
+export const getUploadExtractStatusHandlerResponse = zod.object({
+  data: zod
+    .object({
+      progress: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              filesFailed: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin
+                )
+                .describe('Files that could not be stored.'),
+              filesStored: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin
+                )
+                .describe('Files stored successfully.'),
+              filesTotal: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin
+                )
+                .describe('Files the folder holds.'),
+            })
+            .describe(
+              'Files of an extracted folder moved into storage so far.'
+            ),
+        ])
+        .optional(),
+      projectId: zod
+        .string()
+        .nullish()
+        .describe('The uploaded folder, once it exists.'),
+      status: zod
+        .enum([
+          'pending',
+          'uploaded',
+          'processing',
+          'partially_completed',
+          'completed',
+          'failed',
+          'unknown',
+        ])
+        .describe('The upload status of the folder'),
+    })
+    .describe(
+      'Where a folder upload stands, for the uploader to follow it to the end.'
+    )
+    .describe('Data to be returned'),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
  * @summary Get project metadata.
  */
 export const getProjectHandlerParams = zod.object({
