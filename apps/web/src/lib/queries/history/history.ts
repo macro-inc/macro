@@ -126,7 +126,14 @@ const restHistoryQueryOptions = {
   reconcile: 'id' as const,
 };
 
-export function useHistoryQuery() {
+/**
+ * The user's history. Rows update in place (`reconcile: 'id'`) so lists and
+ * pickers keep their rows through a refetch. A reader that walks the whole
+ * list passes `reconcile: false`: every change then replaces `data`, which
+ * lets it read `unwrap(query.data)` instead of subscribing to each field.
+ * That `data` is the query cache's own array: read it, never write to it.
+ */
+export function useHistoryQuery(options?: { reconcile: false }) {
   const authenticated = useIsAuthenticated();
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
@@ -164,6 +171,7 @@ export function useHistoryQuery() {
       ...(cacheHost
         ? cachedGraphqlHistoryQueryOptions(cacheHost)
         : restHistoryQueryOptions),
+      ...(options?.reconcile === false ? { reconcile: false as const } : {}),
       enabled: authenticated() === true,
     };
   });

@@ -87,7 +87,8 @@ State ownership, reactivity, and async error handling.
   `query.data` still tracks the result being replaced, which is every update
   of a query without `reconcile`. A query with `reconcile` updates rows in
   place without replacing `data`, so an unwrapped walk would miss them: keep
-  its reads tracked.
+  its reads tracked, or give the walker its own observer with
+  `reconcile: false`, as Quick Access does for history.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".

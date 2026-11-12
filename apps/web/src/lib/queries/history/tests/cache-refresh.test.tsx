@@ -5,8 +5,10 @@ import type {
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { unwrap } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHistoryQuery } from '../history';
+import { historyKeys } from '../keys';
 
 const mocks = vi.hoisted(() => ({
   readHistory: vi.fn(),
@@ -48,6 +50,45 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+describe('history readers', () => {
+  // A reader that walks the list unwrapped only sees a change that replaces
+  // the list; the default reader updates its rows in place instead.
+  it('replaces the list on every change only for a reader that asks not to reconcile', async () => {
+    mocks.subscribe.mockReturnValue(mocks.unsubscribe);
+    const row = { id: 'row', name: 'Before', type: 'document', ownerId: 'o' };
+    mocks.readHistory.mockResolvedValue([row]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let rows: ReturnType<typeof useHistoryQuery> | undefined;
+    let snapshots: ReturnType<typeof useHistoryQuery> | undefined;
+    const Probe = () => {
+      rows = useHistoryQuery();
+      snapshots = useHistoryQuery({ reconcile: false });
+      return null;
+    };
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(snapshots?.isSuccess).toBe(true));
+    await waitFor(() => expect(rows?.isSuccess).toBe(true));
+    const reconciled = unwrap(rows?.data);
+    const replaced = unwrap(snapshots?.data);
+
+    client.setQueryData(historyKeys.graphqlList.queryKey, [
+      { ...row, name: 'After' },
+    ]);
+    await waitFor(() => expect(snapshots?.data?.[0]?.name).toBe('After'));
+    await waitFor(() => expect(rows?.data?.[0]?.name).toBe('After'));
+    expect(unwrap(snapshots?.data)).not.toBe(replaced);
+    expect(unwrap(rows?.data)).toBe(reconciled);
+    view.unmount();
+    client.clear();
+  });
 });
 
 describe('cache-backed history refresh', () => {

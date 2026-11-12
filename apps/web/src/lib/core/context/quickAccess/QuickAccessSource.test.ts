@@ -44,6 +44,7 @@ import {
   BUCKET_COMBINATIONS,
   type Bucket,
   type QuickAccessContextValue,
+  type QuickAccessItem,
   type QuickAccessListOptions,
 } from './types';
 
@@ -58,6 +59,7 @@ vi.mock('@queries/email/local-draft-source', async () => ({
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
+  historyOptions: vi.fn<(options?: { reconcile: false }) => void>(),
   channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
@@ -163,13 +165,17 @@ vi.mock('@queries/channel/graphql', () => ({
     ),
 }));
 vi.mock('@queries/history/history', () => ({
-  useHistoryQuery: () =>
-    mocks.queries.history?.() ?? {
-      data: mocks.history,
-      isSuccess: true,
-      isLoading: false,
-      refetch: vi.fn(),
-    },
+  useHistoryQuery: (options?: { reconcile: false }) => {
+    mocks.historyOptions(options);
+    return (
+      mocks.queries.history?.() ?? {
+        data: mocks.history,
+        isSuccess: true,
+        isLoading: false,
+        refetch: vi.fn(),
+      }
+    );
+  },
 }));
 vi.mock('@queries/history/graphql', () => ({
   materializeCachedGraphqlHistoryItems: async (
@@ -434,7 +440,8 @@ const retainedListText = {
 
 function renderRetainedList(
   client: QueryClient,
-  options?: QuickAccessListOptions
+  options?: QuickAccessListOptions,
+  describeItem = (item: QuickAccessItem) => `${item.id}@${item.sortTimestamp}`
 ) {
   const Shell = () => {
     const quickAccess = useQuickAccess();
@@ -443,10 +450,7 @@ function renderRetainedList(
     node.dataset.testid = 'retained-shell';
     createRenderEffect(() => {
       node.dataset.loading = String(list.isLoading());
-      node.textContent = list
-        .items()
-        .map((item) => `${item.id}@${item.sortTimestamp}`)
-        .join(',');
+      node.textContent = list.items().map(describeItem).join(',');
     });
     return node;
   };
@@ -463,6 +467,147 @@ function renderRetainedList(
     })
   );
 }
+
+const taskDone = (item: QuickAccessItem) =>
+  item.kind === 'entity' &&
+  item.data.type === 'document' &&
+  item.data.subType?.type === 'task' &&
+  item.data.subType.is_completed;
+
+/** History served by a real query, as plain rows no other test shares. */
+function renderHistoryList(
+  key: string,
+  options?: QuickAccessListOptions,
+  rows: HistoryItem[] = retainedHistory
+) {
+  const queryKey = ['history-snapshots', key];
+  mocks.queries.history = () =>
+    useQuery(() => ({
+      queryKey,
+      queryFn: async () => structuredClone(rows),
+      retry: false,
+    }));
+  const client = new QueryClient();
+  const rendered = renderRetainedList(
+    client,
+    options,
+    (item) => `${item.id}@${item.sortTimestamp}${taskDone(item) ? ':done' : ''}`
+  );
+  return {
+    client,
+    queryKey,
+    shell: rendered.getByTestId('retained-shell'),
+    done: () => {
+      rendered.unmount();
+      client.clear();
+    },
+  };
+}
+
+describe('Quick Access history snapshots', () => {
+  it('asks for history it can walk unwrapped', () => {
+    setup((source) => source.useList());
+    expect(mocks.historyOptions).toHaveBeenCalledWith({ reconcile: false });
+  });
+
+  // A tracked walk gives every field of every row its own signal; over a
+  // long history that is most of the index's build time.
+  it('builds the index without reading rows through the store', async () => {
+    const { client, queryKey, shell, done } = renderHistoryList('unwrapped');
+    try {
+      await vi.waitFor(() =>
+        expect(shell.textContent).toBe(retainedListText.history)
+      );
+      const rows = client.getQueryData<HistoryItem[]>(queryKey) ?? [];
+      expect(rows).toHaveLength(2);
+      // The store marks every object it wraps with a symbol.
+      for (const row of rows)
+        expect(Object.getOwnPropertySymbols(row)).toEqual([]);
+    } finally {
+      done();
+    }
+  });
+
+  it('rebuilds the index when history is replaced', async () => {
+    const { client, queryKey, shell, done } = renderHistoryList('replaced');
+    try {
+      await vi.waitFor(() =>
+        expect(shell.textContent).toBe(retainedListText.history)
+      );
+      const updatedAt = '2026-08-05T00:00:00.000Z';
+      client.setQueryData<HistoryItem[]>(queryKey, (rows = []) =>
+        rows.map((row) =>
+          row.id === 'older-note' ? { ...row, updatedAt } : row
+        )
+      );
+      await vi.waitFor(() =>
+        expect(shell.textContent).toBe(
+          `older-note@${Date.parse(updatedAt)},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`
+        )
+      );
+    } finally {
+      done();
+    }
+  });
+
+  // An entity is a snapshot of its row, so a row must be rebuilt for any
+  // change to what the entity copies, with or without a new timestamp.
+  it.each([
+    ['file type', { fileType: 'pdf' }],
+    ['sub-type', { subType: { type: 'task', is_completed: false } }],
+  ] as const)(
+    'moves a row to its new bucket when only its %s changes',
+    async (_name, change) => {
+      const { client, queryKey, shell, done } = renderHistoryList(_name, {
+        buckets: ['note'],
+      });
+      try {
+        await vi.waitFor(() =>
+          expect(shell.textContent).toBe(retainedListText.history)
+        );
+        client.setQueryData<HistoryItem[]>(queryKey, (rows = []) =>
+          rows.map((row) =>
+            row.id === 'older-note' ? { ...row, ...change } : row
+          )
+        );
+        await vi.waitFor(() =>
+          expect(shell.textContent).toBe(
+            `newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`
+          )
+        );
+      } finally {
+        done();
+      }
+    }
+  );
+
+  it('shows a task as completed when only its completion changes', async () => {
+    const task: HistoryItem = {
+      id: 'task',
+      type: 'document',
+      fileType: 'md',
+      subType: { type: 'task', is_completed: false },
+      name: 'Task',
+      ownerId: 'owner',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    };
+    const open = `task@${Date.parse('2026-08-01T00:00:00.000Z')}`;
+    const { client, queryKey, shell, done } = renderHistoryList(
+      'completion',
+      { buckets: ['task'] },
+      [task]
+    );
+    try {
+      await vi.waitFor(() => expect(shell.textContent).toBe(open));
+      client.setQueryData<HistoryItem[]>(queryKey, [
+        { ...task, subType: { type: 'task', is_completed: true } },
+      ]);
+      await vi.waitFor(() => expect(shell.textContent).toBe(`${open}:done`));
+    } finally {
+      done();
+    }
+  });
+});
 
 describe('Quick Access source integration', () => {
   it('starts cached email search when the GraphQL flag arrives after mounting', async () => {

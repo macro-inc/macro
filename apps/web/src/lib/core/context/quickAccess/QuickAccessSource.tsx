@@ -67,6 +67,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
   filterQuickAccessItems,
@@ -282,7 +283,13 @@ function getHistoryItemVersion(
   item: HistoryItem,
   viewedAt?: DateValue | null
 ): string {
-  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}|${JSON.stringify(item.appearance)}`;
+  // An entity holds a snapshot of its row, not a live store object, so every
+  // field `historyItemToEntity` copies or the row is bucketed by belongs here.
+  const documentFields =
+    item.type === 'document'
+      ? `${item.fileType}|${JSON.stringify(item.subType)}`
+      : '';
+  return `${item.type}|${item.name}|${item.rawName}|${item.ownerId}|${item.createdAt}|${item.updatedAt}|${viewedAt}|${item.deletedAt}|${JSON.stringify(item.appearance)}|${documentFields}`;
 }
 
 function getCrmCompanySearchText(company: CrmCompanyEntity): string {
@@ -396,7 +403,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const projectsFlag = useFeatureFlag(enableProjects);
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
-  const historyQuery = useHistoryQuery();
+  // The index walks the whole history, so it reads plain snapshots: without
+  // reconciliation every change replaces `data`, and `itemCache` keeps the
+  // identity of rows that did not change.
+  const historyQuery = useHistoryQuery({ reconcile: false });
   const { channels, isLoading: channelsLoading } = useChannelsContext();
   const directoryScope = useContactDirectoryScope();
   const rawDmActivityByUserId = useDmActivityByUserId();
@@ -477,7 +487,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries: IndexEntry[] = [];
 
     // Process history items
-    const historyData = queryReadyGate(historyQuery) ? historyQuery.data : [];
+    // Reading `data` tracks its replacement; the rows themselves are read
+    // unwrapped, or each field of each row would get its own signal.
+    const historyData = queryReadyGate(historyQuery)
+      ? unwrap(historyQuery.data)
+      : [];
     for (const item of historyData) {
       if (item.deletedAt) continue;
       if (
