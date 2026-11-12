@@ -2571,7 +2571,7 @@ saved "fast mode on" becomes Ultrafast. External coding agents use their own
 speed controls.
 
 Preview the control at `/app/debug/ui?ui=speed-selector`.
-Pick Priority and verify the trigger reads *Priority* with the accent tint.
+Pick Priority and verify the trigger reads *Priority*.
 Reload, change between supported models, and confirm the preference survives.
 Select an unsupported model and verify the menu is hidden; switching back restores
 the preference. Native sessions confirm the tier before sending the prompt when

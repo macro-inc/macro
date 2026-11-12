@@ -62,7 +62,6 @@ export function SpeedSelector(props: {
       icon={<LightningIcon class="size-4" />}
       choices={choices()}
       value={props.value}
-      active={props.value !== 'standard'}
       disabled={props.disabled}
       onSelect={(choice) => {
         if (isModelSpeed(choice.value)) props.onChange(choice.value);

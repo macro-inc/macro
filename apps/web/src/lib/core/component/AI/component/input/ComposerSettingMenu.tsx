@@ -1,7 +1,7 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Check from '@icon/system/regular/check.svg';
-import { Button, cn, Dropdown, Tooltip } from '@ui';
+import { Button, Dropdown, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 export type ComposerSettingChoice = {
@@ -24,8 +24,6 @@ export function ComposerSettingMenu(props: {
   icon: JSX.Element;
   choices: readonly ComposerSettingChoice[];
   value?: string;
-  /** Highlights the trigger, e.g. for a tier that costs more than standard. */
-  active?: boolean;
   disabled?: boolean;
   onSelect: (choice: ComposerSettingChoice) => void;
   onOpenChange?: (open: boolean) => void;
@@ -57,9 +55,6 @@ export function ComposerSettingMenu(props: {
       </Show>
     </>
   );
-  const tone = () =>
-    props.active ? 'text-accent bg-accent/10' : 'text-ink-muted';
-
   return (
     <Show when={props.choices.length > 1}>
       <Show
@@ -69,11 +64,8 @@ export function ComposerSettingMenu(props: {
             <Tooltip label={props.title} disabled={open()}>
               <Dropdown.Trigger
                 variant="ghost"
-                size="sm"
-                class={cn(
-                  'h-8 shrink-0 gap-1 rounded-full px-2 text-xs',
-                  tone()
-                )}
+                size="md"
+                class="shrink-0"
                 disabled={props.disabled}
                 aria-label={props.triggerLabel}
               >
@@ -113,8 +105,8 @@ export function ComposerSettingMenu(props: {
           <MobileDrawer.Trigger
             as={Button}
             variant="ghost"
-            size="sm"
-            class={cn('size-[34px] rounded-full p-0', tone())}
+            size="icon-md"
+            class="shrink-0"
             disabled={props.disabled}
             aria-label={props.triggerLabel}
             title={props.triggerLabel}
