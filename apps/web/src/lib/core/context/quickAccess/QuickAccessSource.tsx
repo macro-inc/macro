@@ -6,6 +6,7 @@ import {
   materializeCachedGraphqlCrmContacts,
   useQuickAccessCrmContactsQuery,
 } from '@app/features/crm/record-adapter';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -59,6 +60,7 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
+import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -108,6 +110,7 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     ownerId: item.ownerId,
+    appearance: item.appearance,
   };
 
   switch (item.type) {
@@ -279,7 +282,7 @@ function getHistoryItemVersion(
   item: HistoryItem,
   viewedAt?: DateValue | null
 ): string {
-  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
+  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}|${JSON.stringify(item.appearance)}`;
 }
 
 function getCrmCompanySearchText(company: CrmCompanyEntity): string {
@@ -300,7 +303,7 @@ function getCrmContactVersion(contact: CrmContactEntity): string {
 }
 
 function getSnippetVersion(snippet: SnippetEntity, viewedAt?: string): string {
-  return `${snippet.name}|${snippet.updatedAt}|${viewedAt}`;
+  return `${snippet.name}|${snippet.updatedAt}|${viewedAt}|${JSON.stringify(snippet.appearance)}`;
 }
 
 function getSkillVersion(skill: SkillEntity, viewedAt?: string): string {
@@ -425,7 +428,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       subscribeToVisibleCacheChanges(
         host,
         () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
-        { searchBuckets: () => ['channel', 'dm'] }
+        {
+          searchBuckets: () => ['channel', 'dm'],
+          intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+        }
       )
     );
   });
@@ -841,6 +847,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'database',
         id: database.id,
         name: database.name,
+        appearance: readEntityAppearance(database.appearance),
         ownerId: database.owner_id,
         createdAt: database.created_at,
         grant,
@@ -877,6 +884,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'form',
         id: form.id,
         name: form.name,
+        appearance: readEntityAppearance(form.appearance),
         ownerId: form.ownerId,
         createdAt: form.createdAt,
         access,
@@ -1176,6 +1184,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           {
             searchBuckets: () =>
               projectedBuckets().filter((bucket) => bucket !== 'person'),
+            intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
           }
         )
       );

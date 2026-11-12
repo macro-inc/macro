@@ -75,6 +75,7 @@ impl Modify for SecurityAddon {
         agent_session::inbound::axum_router::activity::get_agent_session_activity,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::present_view,
+        agent_code_mode::inbound::axum_router::open_in_app,
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
@@ -133,6 +134,10 @@ impl Modify for SecurityAddon {
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
         app_connections::app_connected_handler,
+        crate::computers::claude::claude_sign_in_handler,
+        crate::computers::claude::claude_sign_in_complete_handler,
+        crate::computers::claude::claude_sign_out_handler,
+        crate::computers::claude::claude_mode_handler,
     ),
     components(schemas(
         CodingAgent,
@@ -211,12 +216,18 @@ impl Modify for SecurityAddon {
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
+        crate::computers::claude::ClaudeSignInStarted,
+        crate::computers::claude::ClaudeSignInComplete,
+        crate::computers::claude::ClaudeSignedIn,
+        crate::computers::claude::ClaudeModeResponse,
+        crate::computers::claude::ClaudeAccountStatus,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
         (name = "agent-models", description = "Fresh provider model discovery"),
         (name = "agent-repositories", description = "Repositories a coding session can work on"),
-        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent")
+        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent"),
+        (name = "computers", description = "Claude sign-in on Macro computers")
     )
 )]
 pub struct ApiDoc;

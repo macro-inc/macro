@@ -23,6 +23,7 @@ pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
+use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
@@ -317,10 +318,29 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     drop(execution_rx);
 
     let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
+    let routine_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Event routines follow each owner's PostHog flag; without PostHog no one has it.
+    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
         Arc::clone(&service_executor),
+        event_routines.clone(),
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
@@ -329,7 +349,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let worker_shutdown = lifecycle.stop_workers.clone();
     let executions = lifecycle.executions.clone();
     start_event_tasks(
-        config.event_routines_enabled,
+        event_routines.is_some(),
         &lifecycle,
         move || {
             let mut ready = ready.clone();
@@ -417,31 +437,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             dispatcher_tx,
             access.clone(),
         )
-        .with_event_management_enabled(config.event_routines_enabled)
+        .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
         .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_run_sessions(Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
         ))))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
-    let template_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                Duration::from_secs(3),
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Suggestions run once per person, when their inbox connects, in hidden
     // sessions of the in-process Macro agent on the free tier's model, as
     // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
@@ -463,7 +469,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         sessions,
         suggestion_code,
         request_sessions,
-        template_flags.clone(),
+        routine_flags.clone(),
         SuggestionAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
@@ -498,7 +504,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
-            template_flags,
+            routine_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),

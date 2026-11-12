@@ -86,14 +86,15 @@ works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 
-## Temporary open signup in Develop
+## Signup in Develop
 
-Once the temporary authentication-service override is deployed, Develop accepts
-new accounts with any email address regardless of signup allowlist membership or
-the configured bypass flag. Verify with an authorized test account outside
-`macro.com` that is absent from the allowlist. Email verification and provider
-sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
-for restoring allowlist enforcement.
+With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
+accounts only for `@macro.com` addresses and the addresses on the Develop signup
+allowlist; turning the bypass on admits every address. With the bypass off, a
+code request for any other new address gets a
+generic `403`, and FusionAuth aborts any other provider sign-up. Existing
+accounts still sign in. See the
+[authentication-service configuration guide](../../services/authentication_service/README.md#development-signup-allowlist).
 
 ## GraphQL cache session lifecycle
 
@@ -142,6 +143,8 @@ sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
 `is_mobile=true` to request the session-code handoff. The `original_url`
 remains the browser destination (including its query and hash). Returning
 from the provider redeems the session code to establish cookies locally.
+A code redeems once: a second redemption, or a reload of a page still
+carrying `?token=`, answers 400.
 This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.

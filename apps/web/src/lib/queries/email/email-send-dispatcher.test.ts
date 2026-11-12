@@ -191,6 +191,41 @@ describe('independent email dispatch', () => {
     });
   });
 
+  it('retries after the API returns while navigator.onLine still reads offline', async () => {
+    // Native webviews can report offline while the API is reachable, and
+    // then never fire `online`.
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const storage = await setup();
+    await storage.journal.putSend(storage.session, intent(), true);
+    let reachable = false;
+    const submit = vi.fn(async () => {
+      if (!reachable)
+        throw new CombinedError({
+          networkError: new Error('Connection refused'),
+        });
+      return accepted;
+    });
+    run({
+      ...storage,
+      submit,
+      status: vi.fn(async () => null),
+      cancel: vi.fn(),
+      report: vi.fn(),
+    });
+    await vi.waitFor(() => expect(submit).toHaveBeenCalled());
+    reachable = true;
+    // Only the dispatcher's own timers run from here: no `online` event.
+    for (let second = 0; second < 40; second++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      const [row] = await storage.journal.sends(storage.session);
+      if (row.phase === 'committed') break;
+    }
+    expect((await storage.journal.sends(storage.session))[0]).toMatchObject({
+      phase: 'committed',
+      response: { sendEmailMessage: { attempt: accepted } },
+    });
+  });
+
   it('recovers a lost acceptance response after restart without a second submission', async () => {
     const storage = await setup();
     await storage.journal.putSend(storage.session, intent(), true);
@@ -308,6 +343,88 @@ describe('independent email dispatch', () => {
     ).toBe('committed');
     slow.resolve({ ...accepted, attemptId: 'slow' });
     await runner.wake();
+  });
+
+  it('holds a reply until the message it answers is delivered', async () => {
+    const storage = await setup();
+    await storage.journal.putSend(storage.session, intent('first'), true);
+    const reply = intent('reply');
+    reply.metadata.payload.input.message.replyingToId = 'draft-first';
+    await storage.journal.putSend(storage.session, reply, true);
+    let delivered = false;
+    const submit = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+    }));
+    const status = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+      status: delivered ? ('SENT' as const) : ('ACCEPTED' as const),
+    }));
+    const runner = run({
+      ...storage,
+      submit,
+      status,
+      cancel: vi.fn(),
+      report: vi.fn(),
+    });
+    await runner.wake();
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual(['first']);
+
+    delivered = true;
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual([
+      'first',
+      'reply',
+    ]);
+  });
+
+  it('releases a held reply when the message it answers is cancelled', async () => {
+    const storage = await setup();
+    const first = await storage.journal.putSend(
+      storage.session,
+      intent('first'),
+      true
+    );
+    const reply = intent('reply');
+    reply.metadata.payload.input.message.replyingToId = 'draft-first';
+    await storage.journal.putSend(storage.session, reply, true);
+    const submit = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+    }));
+    const runner = run({
+      ...storage,
+      submit,
+      status: vi.fn(async () => null),
+      cancel: vi.fn(async (row: EmailSendIntent) => ({
+        ...accepted,
+        attemptId: row.uuid,
+        status: 'CANCELLED' as const,
+      })),
+      report: vi.fn(),
+    });
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual(['first']);
+
+    const current = (await storage.journal.sends(storage.session)).find(
+      (row) => row.uuid === first.uuid
+    )!;
+    await storage.journal.putSend(storage.session, {
+      ...current,
+      cancellationRequested: true,
+    });
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual([
+      'first',
+      'reply',
+    ]);
   });
 
   it('reconciles an uncertain provider outcome without resubmitting', async () => {

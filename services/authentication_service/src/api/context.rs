@@ -99,15 +99,19 @@ pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::StripePaymentGateway,
 >;
 
+pub(crate) type StripePlanGatewayType = crate::outbound::subscription_plan::StripePlanGateway<
+    teams::outbound::customer_repo::CustomerRepositoryImpl,
+    teams::outbound::team_repo::TeamRepositoryImpl,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+>;
+
 pub(crate) type SubscriptionStatusServiceType =
     crate::service::subscription_status::SubscriptionStatusService<
         ai_billing::outbound::RolesTeamsEntitlementSource<
             UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
-        crate::outbound::subscription_plan::StripePlanGateway<
-            teams::outbound::customer_repo::CustomerRepositoryImpl,
-        >,
+        StripePlanGatewayType,
     >;
 
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
@@ -172,6 +176,14 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Buys and manages Macro computers on team subscriptions.
+pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::ComputerService<
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
+    hosted_runtimes::domain::service::SystemClock,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+>;
+
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
     favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
 >;
@@ -213,13 +225,8 @@ pub(crate) struct ApiContext {
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub subscription_status: Arc<SubscriptionStatusServiceType>,
-    pub subscription_plan: Arc<
-        crate::service::subscription_plan::PlanService<
-            crate::outbound::subscription_plan::StripePlanGateway<
-                teams::outbound::customer_repo::CustomerRepositoryImpl,
-            >,
-        >,
-    >,
+    pub subscription_plan:
+        Arc<crate::service::subscription_plan::PlanService<StripePlanGatewayType>>,
     pub subscription_checkout: Arc<
         crate::service::subscription_checkout::CheckoutService<
             crate::outbound::subscription_checkout::StripeCheckoutGateway<GtmInviteServiceType>,
@@ -263,8 +270,17 @@ pub(crate) struct ApiContext {
     pub user_language_service: Arc<UserLanguageServiceType>,
     pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
+    /// Publishes user profile events such as `user.picture_changed`.
+    pub event_broker: AuthenticationEventBroker,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,
+    /// The Stripe prices Macro computers bill at.
+    pub computer_prices: crate::domain::computer_billing::ComputerPrices,
+    /// Buys and manages Macro computers; also runs their billing effects.
+    pub computer_service: Arc<ComputerServiceType>,
+    /// Cancels computers whose subscription items went away outside Macro.
+    pub computer_billing_observer:
+        Arc<dyn crate::domain::computer_billing::ComputerBillingObserver>,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,

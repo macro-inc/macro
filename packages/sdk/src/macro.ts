@@ -37,6 +37,7 @@ import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
@@ -47,6 +48,11 @@ import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
+export type {
+  AppearanceColor,
+  AppearanceIcon,
+  EntityAppearance,
+} from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
 export type {
   ActivityAction,
@@ -108,6 +114,13 @@ export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
 export type { CreatedEntity } from './entities/routines/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -187,6 +200,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Call the user's connected apps and MCP servers from a code execution. */
   readonly connectedApps: ConnectedAppNamespace;
+
+  /** Open items in the Macro app tab the user prompted from. */
+  readonly ui: UiNamespace;
 
   readonly favorites: FavoritesNamespace;
 
@@ -275,6 +291,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.connectedApps = new ConnectedAppNamespace(client);
+    this.ui = new UiNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
@@ -301,6 +318,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /**
    * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
    * auth, `macro|<email>` for user auth — fetched once and cached.
+   *
+   * @readonly
    */
   myPrincipalId(): Promise<string> {
     return this._client.myPrincipalId();
@@ -308,7 +327,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Clone of this SDK acting on behalf of `user` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
-   * since a user token always acts as its own user. */
+   * since a user token always acts as its own user.
+   *
+   * @readonly
+   * @mcp-exclude Returns a new SDK client, which an MCP result cannot carry.
+   */
   requestedAs(user: User): Macro<T> {
     return new Macro({ ...this.opts, requestedAs: user.id });
   }
@@ -385,6 +408,11 @@ export {
 } from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
+export type {
+  MessageContext,
+  MessageContextOptions,
+  ReplyContext,
+} from './entities/channels/message';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
@@ -548,6 +576,10 @@ export {
 } from './entities/spreadsheets/spreadsheet';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  ExternalProfilePicture,
+  type ProfilePicture,
+} from './entities/users/profile-picture';
 export type { ActivityReport } from './entities/users/user';
 export type {
   WebFetchOptions,

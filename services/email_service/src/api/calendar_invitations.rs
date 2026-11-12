@@ -27,17 +27,15 @@ pub(crate) async fn handler(
         AuthorizationService,
     >,
 ) -> Result<Json<HashMap<String, InvitationResolution>>, StatusCode> {
-    email::domain::invitation_resolution::resolve(
-        state.invitation_resolver.as_ref(),
-        &state.invitation_snapshots,
-        access.entity_access_receipt,
-    )
-    .await
-    .map(Json)
-    .map_err(|error| {
-        tracing::error!(error=?error, "invitation resolution failed");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })
+    state
+        .invitations
+        .resolve(access.entity_access_receipt)
+        .await
+        .map(Json)
+        .map_err(|error| {
+            tracing::error!(error=?error, "invitation resolution failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
 }
 
 /// Add a shared event saved from one of the thread's messages to one of the
@@ -75,14 +73,14 @@ pub(crate) async fn copy_handler(
     Path((_thread_id, message_id, invitation_id)): Path<(Uuid, Uuid, String)>,
     Json(request): Json<CopyCalendarEventRequest>,
 ) -> Result<(StatusCode, Json<CalendarEvent>), CalendarMutationApiError> {
-    let event = email::domain::invitation_import::add_to_calendar(
-        state.calendar_mutation_service.as_ref(),
-        &state.invitation_snapshots,
-        access.entity_access_receipt,
-        message_id,
-        &invitation_id,
-        request.calendar_id,
-    )
-    .await?;
+    let event = state
+        .invitations
+        .add_to_calendar(
+            access.entity_access_receipt,
+            message_id,
+            &invitation_id,
+            request.calendar_id,
+        )
+        .await?;
     Ok((StatusCode::CREATED, Json(event)))
 }

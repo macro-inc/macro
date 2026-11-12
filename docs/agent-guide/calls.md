@@ -2,7 +2,7 @@
 
 ## Calls — `/app/calls`
 
-The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits below the touch inset, outside the virtualized rows.
+The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
 On desktop a collapsible sidebar starts with the shared outlined `New` button,
 with `Search calls` immediately left of collapse. Search reveals its field above
@@ -36,20 +36,148 @@ Opening a recording uses `/app/calls/call/<callId>` inside the Calls view,
 with one breadcrumbed header (`Calls > <recording name>`). Choose `Calls` to
 return to the list with its search, filters, focus, and scroll position preserved.
 The desktop sidebar remains available; choosing a view or filter, or focusing
-search, returns to the list. Phones show the same detail and return breadcrumb
-instead of switching to Drive. Shift+Enter and Open in new split open
-the recording in a second Calls view.
-Old copied `/app/call/<callId>` links redirect to the Calls detail without losing
-the transcript target. Existing `/app/drive/call/<callId>` links still work.
-The detail shows a loading state, recording/transcript/summary, Share, and a call
-side panel below the breadcrumb header; a failed load shows Retry.
-While the call is in progress, a `Join call` button under the title joins it
-(desktop and phone); it is hidden once you are in that call.
-`call_transcript_id=<segmentId>` seeks the matching video segment after loading.
-Check a direct link, both old link formats, a Calls-list click, a second split,
-the breadcrumb return, browser Back/Forward, and clicking the same transcript
-search hit twice after playing elsewhere. On phones, recorded call headers omit
-**Call Again**.
+search, returns to the list. Shift+Enter and Open in new split open the recording
+in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Calls
+detail without losing the transcript target. Existing `/app/drive/call/<callId>`
+links still work. A failed load shows Retry.
+
+### Join and leave sounds
+
+Browser calls play a clear two-note ascending chime when you or another
+participant joins, and a descending chime when someone deliberately leaves.
+Both last under half a second. Joining an occupied call plays only your own
+join chime. Reconnects and recovery rejoins stay silent.
+
+**Settings → Notifications → Sounds → Call sounds** is on by default, independent
+of the notification-sounds switch. Join and Leave preview buttons play the fixed
+cues. The shared volume slider and quiet-hours schedule apply. Guest browser
+calls use the default settings because they have no signed-in device profile.
+
+Call cues follow the speaker selected in the call controls; notification sounds
+and settings previews still use the system-default output. Mouse, touch, Enter,
+and Space activation unlock audio, including when enabling sounds. A browser
+that cannot resume audio promptly drops the cue rather than replaying it on a
+later click.
+
+`Call/primitives/call-sounds.ts` exchanges explicit visit announcements over the
+room's reliable data channel; RTC roster changes never make sounds. Announcements
+are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
+sessions do not announce departures or joins. Native channel calls need a bridge
+extension before they can send or play these cues. Do not infer a leave from a
+missing participant, because recovery uses the same RTC removal events.
+
+To verify, join one browser call from two participants. Check each self join,
+the first participant hearing the second join, and both sides of a deliberate
+leave. Rejoin deliberately, then interrupt and restore the second connection:
+recovery must not play a leave or another join. Turn Call sounds off on one
+participant and confirm the other participant still hears announcements.
+Also select a non-default call speaker and check that both cues play there,
+while notification previews stay on the default output. After reloading, join
+with Enter or Space to check keyboard-only audio activation.
+
+### Saved call detail
+
+On desktop the header keeps the breadcrumb, the call's More menu, Call again before Ask Macro,
+combined Share/copy-link control, and the details toggle. Calls and Drive use the
+same More menu for call actions, including rename, recording download and delete.
+The channel appears above the title, with the
+participant avatars before the start/end time range. Call again keeps its existing
+availability checks in the header; active calls retain Join call below the title.
+The existing tag picker sits below the title metadata and uses the call's property tags. The recording
+precedes the stored summary and read-only Call chat. Summary headings are the
+stored Markdown, not generated client-side sections.
+
+The full-width top bar stays above the content, with the standard details toggle.
+Details opens in the existing floating popover below the header, without
+Transcript/Details tabs. On touch it uses the standard details drawer.
+At call-column widths of 1108px or more, a 480px Transcript card sits beside
+an at-most-720px player, with the existing 28px section gap. The centered group
+caps at 1308px including 80px of page insets, preserving the original 800px
+content wrapper's player width. The threshold leaves at least 520px for the
+player; split panes switch independently of the window. Identity spans the
+group, aligned to the video's left edge. The left column scrolls through
+the player, Summary and Call chat while the transcript stays in view and scrolls
+internally. The card uses the next Layer surface depth, the player's corner radius,
+a light-theme inset edge and shadow (dark stays unchanged), and an inset Sync surface in both themes. Details floats over
+the card without changing its scroll position or follow state. There is no separate
+Transcript header button. The card fades and slides into wide layouts while the player animates from its
+previous width and position over the same 240ms curve, rather than jumping to its
+narrower width first. Reduced motion disables both entry animations.
+Fullscreen opens the recording workspace with the same video and transcript.
+The player's Transcript toggle hides or shows the right panel until fullscreen
+exits; narrow HTML fullscreen uses a right overlay. Native iOS video fullscreen
+remains video-only. Playback, seeking, manual follow and Sync retain their state.
+
+Transcript rows show a flush-right recording time, with the active waveform to its left; long speaker names truncate and reveal the full name in a
+tooltip on hover or row focus. Click or press Enter on a row to seek.
+The active line reuses the live-call waveform and its bar timing on desktop,
+driven by recording playback. It stays still when paused, on phones, or when
+reduced motion is enabled. Playback follows the transcript until the user
+scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
+playback and returns to the current line. Authorized chat messages
+appear inline at their recorded moment. Details keeps owner, dates, duration,
+status, channel, team sharing, properties, activity and references on their
+existing permission-scoped readers. Only team sharing has a card, always visible below metadata with no collapsible
+Sharing section; other sections use the shared floating-detail rows and standard
+dividers, matching other entity detail popovers.
+After a call ends, only its starter can change team sharing. Other viewers see
+the current state and an explanation naming the starter, not a disabled switch.
+Until a display name is available, the explanation says only the person who
+started the call can change sharing; it never substitutes their email.
+An editable switch stays disabled while its change is pending.
+
+Below that threshold, medium-size Summary/Transcript tabs sit below the recording.
+The inline transcript list has no horizontal padding, aligning its row edges with
+the tabs and Summary. The tab selection and one mounted video/transcript survive resizing in either
+direction. Summary has an AI icon before its tab label and wide-pane heading;
+hovering or focusing either shows “Written by Macro after the call” in a tooltip, rather than
+a separate credit line. The credit remains the Summary tab's accessible description
+on touch, where tooltips stay disabled. Details starts closed and
+floats over content without moving it. Playback remains reachable in a pinned bar
+after the recording scrolls above the viewport. Its width follows the left column
+on wide panes and the centered content column on narrow panes. Show video returns
+to the recording; all controls drive one media
+element. Chat jump chips use message time relative to recording start and appear
+only within the known recording duration. Attachments retain their usual cards.
+There is no caption control without a caption track or synthetic speaker video
+layer over the recorded composite. After 2.5 seconds of idle playback, controls
+slide down by their own height and fade out over 240ms, and the cursor hides,
+including in fullscreen. Only transform and opacity animate; the page stays still.
+Movement, focus or touch brings them back; pause, control hover, control focus and
+open menus keep them visible. Reduced motion uses only the fade. Speed uses a dropdown, and volume opens a vertical slider above the mute
+button on hover or focus. Clicking the icon still toggles mute. Both sliders keep
+white thumbs across themes. Dragging the volume thumb, clicking its track, and
+arrow keys update native volume immediately without closing the popover.
+Clicking the picture toggles playback without intercepting controls or overlays.
+On touch, the first tap reveals hidden controls; a tap with controls visible toggles playback.
+
+Phones use separate Back, title-menu, and Details header islands. The player
+comes before identity, then Summary/Transcript/Chat tabs with the real chat count.
+Ask Macro floats above the dock on Summary and Chat. The avatar chevron opens the
+participant list. Details opens the same content in the standard bottom sheet. In the scrolled Transcript tab, manual downward
+scrolling replaces the navigation dock with the mini player; scrolling upward
+restores navigation below it. Search, the keyboard, and leaving the view release
+that chrome. No Call again action appears in the phone header.
+
+While a call is in progress, Join call below the title remains available on both
+desktop and phone, except when already connected. This is separate from the live
+call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
+`call_message_id=<messageId>` opens the phone Chat tab and highlights the message.
+
+Check a saved call with recording, transcript, summary, chat and attachments at
+1920x1080, 1440x900, 1280x800 and 1024x768, in splits on both sides of the 1108px
+call-column threshold, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
+Details over the Transcript card, both themes, independent scrolling, retained tab
+and playback state after resizing, pause/seek/skip/speed/fullscreen, scroll-follow
+and Sync to video, pinned playback, phone scroll direction, Details dismissal,
+and switching away while playback chrome is mounted. Also check calls without a
+recording, standalone guests, private channel access, owner/non-owner sharing,
+a direct link, both old link formats, repeated transcript targets, Calls-list
+return, a second split, and Back/Forward.
+
+Saved call route loading records `call.record` and `call.discussion` phases on the
+existing view trace. Reading-tab selections record `call.detail.tab`; attributes
+contain only the call ID and tab kind, never transcript or message contents.
 
 ### Imported Granola meetings
 
@@ -70,13 +198,60 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
-The desktop Chat sidebar lists every live channel call and quick call in a `Live`
-section above the conversations. Each row reads `Join`, or `Open` when you are
-already in that call, which returns to the channel's Call tab. A channel call that is
-still ringing for you also shows a `Dismiss` button, which declines it like the
-conversation row's Decline. To see the section
-without starting a real call, answer `/call/active` and `/call/<channelId>/active`
-with a fake call through CDP `Fetch` interception.
+The rail's live waveform opens a 300px popover without leaving the current view.
+It shows the call title and duration, current attendees and compact media controls.
+The popup and floating player reuse the full call's microphone, camera/background
+and screen-audio caret menus, without the full toolbar container.
+Open call returns to the existing meeting/channel route. More offers
+**Show floating player**, **Copy meeting link**, and **Full screen**. Copy creates the link
+only after explicit selection and reports success or failure. More stays available
+when copying is its only action. The grouped dropdown opens below More and aligns
+to its right edge. Away from the channel's Call tab, the desktop player
+starts bottom-right, follows the speaker and gives screen sharing priority.
+Speaker changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen
+shares and participant departures update immediately. Reduced motion skips both
+the hold and the fade; outgoing controls stop accepting input during a transition.
+Drag its header freely within the window. The nearest corner glows faintly within
+120px, strengthening until both edges reach the 24px snap range. This
+edge-anchored success gradient previews the snap, fading
+toward the centre with only the two outer edges marked. Release there to ease
+into that corner, or elsewhere to keep the dropped position. The indicator
+fades over 150ms; reduced motion shows/hides and snaps without animation. Collapse
+tucks it back into the rail. **More → Reset position and size** clears saved
+size preferences and restores the 336px player to the bottom-right corner.
+Resize from any edge or corner; video/screens remain 16:9 and audio retains its
+minimum height. Width is capped at 960px, or the available window width/height
+when smaller. Width and audio height persist as local preferences; the player
+reclamps to the viewport when media or window size changes. Short windows cap
+the player's outer height and allow its contents to scroll; only the pointer
+that began a drag or resize can update or finish that gesture.
+Audio-only calls keep a 144px minimum stage with a neutral 48px avatar and name,
+rather than collapsing to a thin row. Channel and standalone
+calls navigate and leave through their existing session owner; standalone calls
+do not depend on the quick-call feed loading first.
+
+The desktop Chat sidebar has no separate Live section. Live calls are marked
+on their conversation rows with a waveform and elapsed time. Your current call
+uses the waveform as its channel icon and shows live participant avatars.
+Ringing conversations keep their existing Answer and Decline actions; these
+use the real incoming-call signal rather than treating every active call as ringing.
+
+Only the current call's desktop Chat sidebar row, channel-header duration pill
+and app-rail item use live waveforms; all other call and phone surfaces use the
+original static icon. Live waveforms animate only while someone in the joined
+call is speaking, using the same speaking state as the participant tiles. Silent calls, other live calls
+without speech data, and reduced-motion preferences show a low, even five-bar
+resting mark. Speech eases into the existing waveform loop and settles back to
+that resting mark when speech stops.
+Speaking participants have the same success-colored ring in tiles and the
+filmstrip, the Participants roster, header/sidebar avatar groups, and the floating
+player. Avatar groups without a matching joined room have no speaking ring.
+Browser calls sample existing microphone tracks for quieter speech, with a
+250ms release hold between syllables; muting clears the indicator immediately.
+This visual-only detector changes no microphone gain, noise suppression or
+transmitted audio. It retries after returning to the tab or starting a microphone.
+Unavailable analysis, including temporarily unsubscribed tracks, falls back to
+LiveKit speaking state. Background noise can also activate this audio indicator.
 
 ### Calls whose discussion is a channel thread
 
@@ -84,22 +259,37 @@ With the `enable-call-channel-thread` server flag on for the caller, a new call 
 `channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
-In the channel, the call is a row at its start time: `<name> started a call`, the call time, live
-avatars and **Join** (or **Return to call**), with the thread collapsed under it, which replies like any other thread.
-When it ends the line says how long it lasted. While the live row is
-off screen, the banner above the composer shows a message count and scrolls to the row.
+While a call is active and you have not joined, a compact **Call in progress**
+card stays above the composer with a light success tint, live duration, attendee
+avatars and **Join**; both themes keep the normal readable text rather than a solid green fill.
+The channel header also shows attendees, duration and Join. The live status pill
+opens the call tab: its pre-join screen when outside the call, or the live view
+when already connected. Clicking that pill never joins automatically. On phones, Join is
+a success-colored phone icon and the compact card keeps up to three avatars. While you are in
+the call, Messages shows the live waveform/duration chip instead of a Return button. Joining uses the
+existing call action; no call is started merely by opening the channel.
 
-In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
-name. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
-and at the newest message otherwise. The composer is pinned to the call thread and returns there
-after replying elsewhere; nothing posts top-level from the panel. A popup counts top-level messages
+In the channel, the call is also a row at its start time: `<name> started a call`, the call time, live
+avatars and **Join** for viewers outside the call, with the thread collapsed under it, which replies like any other thread.
+When it ends the line says how long it lasted. The join card remains above the
+composer while the viewer is outside the call, independent of scroll position.
+
+In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
+On phones, Chat and Participants fill the shared sheet's tab row; Participants keeps the attendee count. The sheet opens at 65% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
+and at the newest message otherwise. The composer shares the messages' horizontal inset
+in both docked and overlay panels while keeping its bottom spacing. The composer opens as a plain message input bound to the call discussion. Reply
+mode appears only after choosing Reply on a message, with target navigation and
+**Stop replying** available; closing or sending that reply returns to the plain
+call composer without replacing its editor. The call root remains above the conversation;
+replies show root-style avatars, names and times without thread rails or indent.
+This is presentation only: nothing posts top-level from the panel. A popup counts top-level messages
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 
 People connected to the call get no notification from its thread, mentions included; they stay
 followers, so later replies reach them after they leave. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
-and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
+else: no edit, delete or reactions. On a call's record the chat is read-only;
+its contents require channel read access. Deleting a record leaves the thread in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
@@ -233,9 +423,12 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
-In-call participant tiles fill their grid cell but are never wider than 16:9,
-so a wide window centers them instead of cropping cameras; check a single remote
-participant in a wide window and at phone width.
+In-call grid tiles fill their cell but are never wider than 16:9. A staged camera
+or screen retains its track's aspect ratio; pinning uses the same fixed-size
+strip as Speaker or Sidebar, without remounting tracks. Short Sidebar stages
+shrink strip tiles to keep every participant accessible. Hiding the strip also
+hides non-stage screen shares without stopping their tracks. Unpin restores the
+selected layout. Check landscape and portrait cameras, shares, and 3–6 people.
 Participants with the LiveKit `macro.program` attribute show an **Agent** badge
 beside their name on video tiles, screen shares, and in the Participants list,
 including on phones.
@@ -245,37 +438,77 @@ preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
 off and back on; when no effect has been selected, it enables Strong blur.
 Backgrounds use a simple menu with None, Light blur, Strong blur, and image upload
-(JPG, PNG, or WebP, up to 10 MB). Dot icons distinguish the two blur strengths.
-Selected devices and backgrounds carry into the call; unsupported browsers use
+(JPG, PNG, or WebP, up to 10 MB). None, Light and Strong show the same room
+illustration, with only the room blurred and the person kept sharp.
+Background pickers share five device-local recent uploaded images. Selecting one
+moves it first; hover/focus Remove or press Delete/Backspace to remove an inactive
+image immediately. Removing the current image asks for confirmation, turns the
+background off, then removes it from recents. Cancelling preserves both. Uploads stay usable if optional
+IndexedDB storage fails. Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
-button. During a desktop or tablet call, `Copy Meeting Url` sits at the
-bottom-left; narrow panes show only its copy icon. Active phone calls fill the
-available viewport, retaining header islands for Back and Copy Meeting Url.
+button. In a channel's Call tab, the header shows the live waveform and duration,
+then an icon-only meeting link and Invite. Below 560px of header width, the
+duration pill hides so the channel title and tabs retain room; Call tabs, join
+cards and the app's live-call entry remain available. The link is fetched only when copied.
+Active phone calls fill the viewport and retain Back, channel title and live status.
+The speaker button sits before the live time in channel and standalone call headers.
+It opens Audio output with the available routes and a check on the active one.
+Native channel calls use their system routes; connecting or removing a headset updates
+that check and the native video speaker toggle. Browser calls show the button only
+when `setSinkId` supports output selection, using the same Speaker devices as
+call settings. Older native builds without the route commands hide the button.
 The header shows the current local time before the call name. Owners can click the name
 to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
 
-Join-preview and in-call controls use the standard Macro icon buttons. In a
-call, a fully rounded toolbar contains the controls. The microphone and camera
+Join-preview and in-call controls use the standard Macro icon buttons.
+The full and compact call bars keep split and standalone controls at the same
+outer height (40px and 32px respectively), including each split frame's border.
+Desktop popover and floating-player controls use 14px glyphs, including their
+reaction and leave actions, without shrinking buttons or carets. Main and phone
+controls retain their existing glyph sizes. In a
+call, one floating-menu surface with a hairline edge, soft shadow, 8px padding
+and 8px gaps contains mic, camera, screen sharing, Team, More and Leave. The chat toggle stays outside this panel. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
-toggles the device, with a failure-colored slashed icon when off, and the caret
+toggles the device; when muted or off, both segments use the subtle danger
+fill and failure ink. Browser-blocked devices instead stay neutral with a muted
+slashed icon and amber warning badge. Their label explains browser settings;
+pressing the badge or button retries, and device menus stay available. Retryable
+permission prompts use the browser's capture request. Denied access opens brief
+browser-specific instructions with Try again; the macOS app also offers Open System
+Settings for that device's privacy pane. A pending camera request does not block
+microphone actions, or vice versa. Failed capture recovers after permission changes
+or returning from system settings, without reloading; stale calls cannot recover.
+Help stays anchored to the selected device. Cancel or Escape returns focus to that
+media button; clicking outside preserves the newly focused control.
+Only successful capture clears a previously failed device's warning. Connecting controls remain neutral and
+dimmed. The caret
 opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),
 and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+Light blur, Strong blur, Recent images, and Upload in one even grid. In-call blur
+tiles show independent live previews of your camera with the same background
+processor while the menu is open (8fps on its canvas fallback); they never modify your published
+camera. Off, denied or unsupported cameras show a neutral effect tile. Screen share is
 also a split button: the left half starts or stops sharing (pressed while
 sharing), and **Screen share settings** holds **Share audio**, off by default,
-saved per device, and locked while sharing. With it on, the browser picker offers
+saved per device, and locked while sharing. Its disabled row stays focusable:
+hover or keyboard focus explains “Stop sharing to change this” or, while
+connecting, “Available once you've joined”; the description is also announced
+to screen readers. The compact row aligns its speaker
+icon, title and switch on one line. With it on, the browser picker offers
 tab audio (and system audio where Chromium supports it), and other participants
 hear it alongside microphones, even away from the Call tab. Leave call is a
 separate button. Live channel calls also include **Call sharing** in the toolbar:
-its menu offers **Team sharing** and **Private**, each with a short explanation
-and a checkmark on the current choice. The icon changes between team and lock.
-Audio settings, video settings, screen share settings, and call sharing use
-bottom drawers on phones, with a handle and scrollable options; desktop and
-tablet keep dropdowns.
+its **After the call ends** menu offers **Share with team** and **Channel only**
+for channel-thread discussions. Legacy call-chat and standalone calls retain
+**Private** rather than promise channel access. The control shows Team, Channel
+or Private with the corresponding icon and a caret; it locks while saving.
+Desktop and tablet keep the device settings dropdowns. The phone call's sharing
+control uses the shared bottom drawer; its media buttons are single-tap toggles
+without device carets.
 The sharing icons align with the option titles, with short descriptions below.
 Click outside or press Escape to close and return focus to the opener. The
 controls also work by keyboard and touch.
@@ -287,24 +520,66 @@ header; Invite remains available on setup screens, desktop, and tablets. Back
 returns to the app without hanging up; when a channel has no navigation history, Back opens its
 Messages tab instead. Only **Leave call** ends participation.
 
-Focus is unavailable when you are the only participant. Otherwise, click or tap
-a participant, including your own tile, to focus them. Focusing
-someone else keeps your own tile in the small picture-in-picture window;
-focusing yourself moves the remote participant grid into that window instead.
-Tap a tile in the small window to switch focus, or use the solid **Back to grid**
-button on the focused tile to restore the grid. If that participant leaves, the grid
-returns automatically. Focus changes keep the existing video tracks mounted.
-A talking participant has an accent-colored border above their video or avatar.
+On desktop, pin a participant, yourself, or a shared screen to take the stage; see [Pinning call tiles on desktop](#pinning-call-tiles-on-desktop). A phone tap does not pin; hold a tile for its Pin/Unpin menu.
+A talking participant has a success-colored border above their video or avatar.
+Camera-off tiles are flat and show a neutral initial, never a profile-color gradient.
+In desktop Auto layout the self view floats at the bottom-right beside the controls,
+or above them while chat is docked, unless pinned. Grid, Speaker and Sidebar keep
+the self view in a grid or strip tile. Alone, your tile fills the stage in every layout. Muted icons sit beside the participant name.
 
-While someone shares their screen, **Maximize screen share** at the share's
-top-right hides the participant strip so the share fills the call area, and
-**Show participants** brings it back. Video tiles stay mounted and audio keeps
-playing. The choice lasts while the call view is open, so a later share also
-opens maximized; check it on desktop and at phone width, and when the share stops.
+A shared-screen chip leads with its screen icon, then the presenter's avatar
+and name. A hidden-participant speaking chip uses the same order with a waveform; the
+presenter's tile also carries a screen icon. Local sharing shows **You're sharing
+your screen** and **Stop sharing** instead of recursively playing your own display.
+The call bar uses the vertical three-dot More icon; the live-call popover keeps
+its horizontal icon. Desktop **More → Layout** offers Auto, Grid, Speaker and Sidebar and remembers
+the choice for later calls. Auto keeps the existing behavior; Grid gives people
+equal tiles; Speaker puts the active person or share above a filmstrip; Sidebar
+puts that strip on the right. Phones always use Auto.
+**More → Hide participants** hides the strip and self view during screen sharing,
+leaving a speaking-person chip on the share. It resets when sharing stops and is
+not shown without a share. Hover or focus the shared screen to reveal the same
+visibility toggle on its bottom edge, or its right edge in Sidebar. The caret
+flips while hidden. Grid has no edge caret; its equal participant grid remains
+controlled through More. Tracks stay mounted and audio continues.
+
+Desktop **Reactions** beside Team opens a one-row picker with arrow-key navigation.
+The picker stays open for repeated reactions; in compact call panes it moves into More.
+The live-call popover and floating player offer the same compact reaction picker
+and 8px-spaced media controls; the popover header stays unchanged. The player shows incoming
+reactions at mini scale, and marks the local preview when the microphone is muted.
+Choosing an emoji sends a temporary reaction to the connected room, not
+chat history. The emoji pops in, rises gently with a slight sway and fades over 3.2 seconds;
+quick repeats start at slightly different horizontal positions. When the
+sender's tile is off screen it appears at the stage's bottom-left. Reduced motion
+fades in, holds, then fades out without movement or scale. Reactions have no sound and disappear when leaving.
+
+Desktop **More → Full screen**, including the rail popover, expands only the call area.
+The call area lays out its stage and initial panel before a single short fade;
+reduced-motion settings omit the animation.
+The call chat panel stays attached while crossing the docked/overlay width
+threshold; its draft, active thread and reading gap survive reflow.
+The call provider owns a persistent fullscreen target so a popover action enters
+fullscreen during its click before the call route loads. The same item becomes
+**Exit full screen**; browser Escape also exits. Call menus and tooltips remain
+inside the fullscreen surface. Unsupported webviews disable the action.
+
+Desktop **More → Keyboard shortcuts** opens a four-row call-only popover.
+While the call view is open, ⌘D toggles the microphone, ⇧⌘E toggles the camera,
+Space holds the microphone open only in the focused call view while muted,
+and ⌃⌘F toggles full screen. Non-Mac desktops use Ctrl for ⌘ and F11 for full screen.
+Space ignores text fields, editable content, buttons and ARIA widgets. Releasing
+Space, losing window focus or leaving the view restores mute; cancellation also
+retires permission recovery so a later grant cannot enable the microphone. A
+delayed action never mutes a replacement call. These
+bindings use the app hotkey registry without changing the global shortcut sheet.
 
 Open **Chat** and **Participants** from the button beside the media controls.
+The call discussion reuses the main channel panel and its thread/draft owner.
+Its composer says **Message this call…**, has no reply flag, and still posts into
+the call thread. Call replies render as a flat list without thread connectors.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
-**Participants** shows the live attendee count and a scrollable roster, including
+**Participants** shows the live attendee count on phones and a scrollable roster, including
 you and connected guests but excluding recording agents. Rows show names,
 avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
@@ -314,31 +589,48 @@ This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.
 
-On phones, the fully rounded control bar fits its buttons instead of filling the
-available width. Controls have 8px gaps, expanding to 12px in roomy bars and
-contracting on narrow phones so all controls fit. The sidebar button stays
-separate on the right with a 48px tap target and the row keeps its side gutters.
-On phones at most 416px wide, the sidebar button moves below the bar so the
-additional screen-share settings control fits without clipping. Controls wrap
-on smaller available widths without shrinking their split-button segments.
-On desktop, the sidebar button stays at the bottom-right and Copy Meeting Url
-stays at the bottom-left, without horizontal padding on the footer row. On
-phones, Copy Meeting Url uses the shared `CopyButton` in a standard 40px
-header island, without custom button colors or sizing. Media controls occupy a
+On phones, the full-screen call puts the self view in the participant grid.
+Away from the call, a separate live-call island sits above the phone dock with
+the speaker's neutral avatar, call name, duration, mic and Leave. It occupies its
+own float region so channel/email composers remain available. It hides with the
+keyboard and while the Call tab is open. Tap the name to open the call.
+Mobile conversation rows show live duration or inline ringing actions instead of
+the normal timestamp; the current call uses a waveform avatar.
+
+A compact bottom island holds microphone, camera, Team/Private and Leave;
+Chat is a separate island beside it. Both keep the safe-area gutters and stay
+below the tiles. The phone island has no screen-share button or device carets.
+The desktop control bar is centered beneath the tiles and the chat toggle sits
+at the stage's right edge, including when chat is docked. The toggle uses the
+same floating surface and shadow as the pill. Its desktop button matches More:
+40px normally and 32px beside compact controls, with a 20px glyph. When space is tight,
+the pill shifts left to preserve the toggle and at least an 8px gap; there is no
+invisible balance element. The self view stays above the controls row. The
+toggle uses the primary button's inverted colours while open; existing
+discussion/Work updates retain their badge at the edge.
+On desktop channel calls, the meeting-link action lives in the header, not the
+footer. Phones retain their channel header islands. Media controls occupy a
 separate row below the video, never over it. Controls remain visible while idle;
 auto-hide is disabled for now. Header islands also stay visible. Check 320px
 phones, safe-area insets, and rotation.
 
 In wide desktop panes, the sidebar fills the call content height alongside the
-video and controls, with a rounded, raised background. Drag its divider, or focus
+video and controls, with an opaque `surface-2` fill and rounded corners, without
+a border. A soft shadow separates the docked card in light mode; dark mode
+stays shadowless. The inset card in a narrow desktop pane uses the same
+fill with a drop shadow; the phone sheet keeps its own surface. Tabs, message
+hover, composer and empty-state styles remain shared. Drag its divider, or focus
 the divider and use the arrow keys, to resize it between 280px and 480px while
-leaving at least 320px for the call. It starts at 360px and retains its resized
-width when closed and reopened. Narrow desktop panes overlay the sidebar;
+leaving at least 320px for the call. It starts at the shared 380px SidePanel width and retains its resized
+width when closed and reopened. Below 640px, media controls use the compact
+button sizes and the self view joins the grid. Narrow desktop panes overlay the
+whole call, controls included, with an inset full-width chat card;
 phones use the shared bottom sheet instead of a resize handle.
 
-Both presentations have a **Close chat and participants** button beside the tabs.
-Dismiss the sheet with that button, its handle, backdrop, or Escape; desktop also
-closes with Escape. Opening and closing animate unless reduced motion is enabled.
+Desktop has a **Close chat and participants** button beside the tabs.
+Dismiss the phone sheet with its handle, backdrop, or Escape; desktop also
+closes with Escape. Explicit panel toggles animate unless reduced motion is enabled;
+returning to the call mounts the stage and default-open panel in place without animation.
 The desktop sidebar stays anchored to the right edge and closes to the right,
 without crossing the call area. Closing returns focus to the footer button.
 Switching tabs, closing, and resizing preserve the message draft and scroll
@@ -365,6 +657,27 @@ call uses `POST /call/{channel_id}`; joining an existing call uses
 `POST /call/record/{call_id}/join`, which never starts one. Meeting joins use
 `POST /call/meetings/join/{token}`. When only programs have remained in a call
 for 60 seconds, the call ends automatically.
+
+### Pinning call tiles on desktop
+
+Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else, including your own view, and active shares in the strip. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Pin actions record `call.pin` interactions. On phones, hold a tile for the anchored Pin/Unpin menu; plain taps do not pin. The selected tile lifts above a dimmed stage. A pinned person fills the top, with everyone else including you in one row below. The Unpin pill stays visible on phones. Moving the touch cancels the hold; Escape or touching outside dismisses the menu.
+
+On supported desktop browsers, hover or focus a remote person's tile for Volume,
+beside Pin. The same control is available in the call roster and floating player.
+The slider changes only that person's microphone playback for you, from 0–100%.
+Drag up to increase volume, click the track to jump, or use the wheel and arrow
+keys for one-percent steps. The narrow popover has no visible heading.
+The small avatar above the slider is the viewer; its tooltip and
+the slider label explain that only this device changes. The thumb uses the
+shared white switch appearance. It survives track resubscription and leaving the call view, but resets
+in the next call. Your own tile, agents, phones and native mobile apps do not show
+it; screen-share audio is unchanged. Only an explicit 0% choice marks a person as
+muted for you; an unset SDK gain never does. At 0%, the speaker control and that person's
+tile/avatar show a muted-speaker badge labelled **Muted for you**, distinct from
+their microphone status. Their own muted microphone keeps a crossed-out microphone
+with a **Microphone off** tooltip. When both states apply, both indicators remain
+visible on tiles, avatars and in the player and roster. Raising volume clears only
+the personal-mute badge across call views.
 
 ### Work in a call
 
@@ -428,8 +741,9 @@ as instant and scheduled calls. Clicking it creates the share link and copies it
 opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
-A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. Its side panel has a `Sharing` section with one `Share with team` checkbox.
+A channel call's **Share** dialog has a `Team access` control (None or View) for the
+same canonical team share. Saved-call Details keeps an always-visible **Share
+with team** card below metadata.
 While a call is live, the controls bar instead has a **Call sharing** dropdown with
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
@@ -440,7 +754,7 @@ participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.
 Afterwards only the call's **creator** can change it; everyone else sees the
-side-panel checkbox read-only with a note saying so.
+current sharing state and an explanation naming the starter, without a switch.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no

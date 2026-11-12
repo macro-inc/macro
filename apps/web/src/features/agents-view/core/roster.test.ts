@@ -2,6 +2,7 @@ import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { describe, expect, it } from 'vitest';
+import { agentPickerGroups } from './agent-picker-groups';
 import {
   buildAgentRoster,
   kindForBot,
@@ -104,6 +105,32 @@ describe('buildAgentRoster', () => {
     expect(saved[2]?.offline).toBe(true);
     expect(saved[1]?.offline).toBeFalsy();
     expect(saved[3]?.runtime.label).toBe('Disconnected machine');
+  });
+
+  it('marks an agent on a turned-off Macro computer powered off, never reconnectable', () => {
+    const roster = buildAgentRoster({
+      ...EMPTY,
+      runtimes: [
+        { id: 'h1', name: 'Agent Box', connected: false, computer_id: 'c1' },
+      ],
+      agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
+    });
+    const agent = roster[2];
+    expect(agent?.poweredOff).toBe(true);
+    expect(agent?.offline).toBe(false);
+    expect(agent?.connectLabel).toBeUndefined();
+    expect(agent?.unavailableReason).toBe(
+      'Turn its computer on in Settings → Machines'
+    );
+    expect(
+      agentPickerGroups(roster).map((group) => [
+        group.label,
+        group.agents.map((item) => item.id),
+      ])
+    ).toEqual([
+      ['Your agents', ['bot-macrod']],
+      ['Needs connection', [CURSOR_BOT_ID]],
+    ]);
   });
 
   it('can start a saved agent on a connected macrod runtime from here', () => {

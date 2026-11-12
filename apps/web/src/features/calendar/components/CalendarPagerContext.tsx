@@ -203,6 +203,17 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       rotatePages(destination, direction),
   });
 
+  // A page mounted after the active one starts beside the period that page
+  // shows by then, which a navigation may already have moved.
+  const initialDateFor = (id: CalendarPageId) => {
+    const order = pageOrder();
+    const offset = order.indexOf(id) - order.indexOf(activePageId());
+    const activeDate = activePage()?.api()?.getDate();
+    if (offset === 0 || !activeDate) return initialDates[id];
+
+    return shiftedDateForView(activeDate, periodView(), offset < 0 ? -1 : 1);
+  };
+
   const registerPage = (handle: CalendarPageHandle) => {
     pageHandles.set(handle.id, handle);
     notifyPageRegistryChange();
@@ -403,7 +414,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
     visibleRange: () => activeData()?.range(),
-    initialDateFor: (id: CalendarPageId) => initialDates[id],
+    initialDateFor,
     isActive: (id: CalendarPageId) => activePageId() === id,
     registerPage,
     updateSize,
