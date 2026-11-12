@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::models::MacroUserIdStr;
+use crate::outbound::guarded_http::AddressPolicy;
 use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::OAuthTokenResponse;
 
@@ -107,7 +108,7 @@ fn no_token_response_yields_nothing() {
 
 #[tokio::test]
 async fn a_server_added_without_an_account_is_anonymous() {
-    let access = server_access(&record(None), Arc::new(UntouchedStore))
+    let access = server_access(&record(None), &local_http(), Arc::new(UntouchedStore))
         .await
         .unwrap();
     assert_eq!(access, ServerAccess::Anonymous);
@@ -117,6 +118,7 @@ async fn a_server_added_without_an_account_is_anonymous() {
 async fn an_authorization_that_never_finished_requires_one() {
     let access = server_access(
         &record(Some(credentials(None, Some(1)))),
+        &local_http(),
         Arc::new(UntouchedStore),
     )
     .await
@@ -134,6 +136,7 @@ async fn a_live_token_is_returned_without_touching_the_network() {
             Some(token("live", Some(3600))),
             Some(now),
         ))),
+        &local_http(),
         Arc::new(UntouchedStore),
     )
     .await
@@ -147,4 +150,8 @@ fn debug_redacts_the_bearer() {
         format!("{:?}", ServerAccess::Bearer("secret".to_owned())),
         "Bearer([REDACTED])"
     );
+}
+
+fn local_http() -> McpHttp {
+    McpHttp::new(AddressPolicy::AnyAddress).unwrap()
 }
