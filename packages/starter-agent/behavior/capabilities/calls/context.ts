@@ -65,6 +65,7 @@ export const callsContext = (
         paths,
         join,
         relayed: base.relayed,
+        sandbox: base.sandbox,
       }),
       signal,
       post: async (to, text) => {

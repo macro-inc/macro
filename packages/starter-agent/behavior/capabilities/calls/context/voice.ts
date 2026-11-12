@@ -13,6 +13,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Telemetry } from '@macro-inc/observability/core';
 import { guards } from '../../../agent/guards/index.ts';
 import type { Base } from '../../../context/index.ts';
+import { claude } from '../../../context/children.ts';
 import type { Work } from '../../../contracts.ts';
 import { readIdentity } from '../../identity/index.ts';
 import {
@@ -120,6 +121,7 @@ export const voicePorts = (base: Base, needs: VoiceNeeds): Voice => {
     claudeBrain(
       {
         query,
+        claude,
         config,
         charter: () => disk.read(config.charter).catch(() => undefined),
         identity: () => readIdentity(base).catch(() => undefined),
