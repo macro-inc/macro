@@ -309,7 +309,8 @@ async fn main() -> anyhow::Result<()> {
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),

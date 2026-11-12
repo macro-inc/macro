@@ -84,6 +84,10 @@ the gateway `/email` prefix.
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
+- `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
+  only live message work; import rows wait and live changes keep importing.
+  `src/bin/reimport_outlook_folders` re-imports folders whose delta round
+  started at an older reader revision ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`

@@ -25,6 +25,7 @@ pub mod initialization;
 pub mod lifecycle;
 pub mod progress;
 pub mod projection;
+pub mod reimport;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]
