@@ -93,7 +93,7 @@ fn docker_computers_dial_the_stack_in_network() {
             ),
             (
                 "OVERRIDE_AGENT_GIT_SERVICE_URL".to_string(),
-                "http://agent-git-service:8080".to_string(),
+                "http://agent-harness-service:8080/agent-git".to_string(),
             ),
         ])
     );
@@ -176,7 +176,7 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
     );
     assert_eq!(
         overrides["OVERRIDE_AGENT_GIT_SERVICE_URL"],
-        devbox(Port::AgentGit)
+        format!("{}/agent-git", devbox(Port::AgentHarness))
     );
     assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
@@ -191,7 +191,6 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
             instance.port(Port::DocStorage),
             instance.port(Port::Auth),
             instance.port(Port::ConnGateway),
-            instance.port(Port::AgentGit),
         ]
     );
 }
@@ -370,7 +369,12 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
                 "/scheduled-action",
             ),
             ("OVERRIDE_MCP_SERVICE_URL", Port::AgentHarness, "http", ""),
-            ("OVERRIDE_AGENT_GIT_SERVICE_URL", Port::AgentGit, "http", ""),
+            (
+                "OVERRIDE_AGENT_GIT_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+                "/agent-git",
+            ),
             (
                 "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
                 Port::AgentHarnessEgress,

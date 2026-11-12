@@ -27,17 +27,27 @@ let
   failures = "${state}/failed-boots";
   bootHead = "${state}/boot-head";
   restartFile = "${home}/.restart";
+  # The agent's browser profile: its logins survive restarts and image
+  # updates on the data disk.
+  browserProfile = "${home}/browser";
+  # 9222 is macro's Chromium on :0.
+  cdpPort = 9223;
+  browserCdpUrl = "http://127.0.0.1:${toString cdpPort}";
+  pulseServer = "unix:${runtimeDirectory}/pulse/native";
   runtimeDirectory = "/run/user/${uid}";
   # Where harnessd keeps the Claude sign-in token `claude` reads (#10186).
   harnessdState = "/home/.system/harnessd";
-  display = ":${toString cfg.display}";
-  vncPort = 5900 + cfg.display;
+  # macro's own desktop is :0.
+  displayNumber = 1;
+  display = ":${toString displayNumber}";
+  vncPort = 5900 + displayNumber;
 
   ffmpegX11grab = pkgs.runCommand "ffmpeg-x11grab" { } ''
     mkdir -p $out/bin
     ln -s ${pkgs.ffmpeg-full}/bin/ffmpeg $out/bin/ffmpeg-x11grab
   '';
-  # What the runtime and its call-share screen run by name. `claude` comes
+  # What the runtime runs by name (calls share :1 through ffmpeg-x11grab and
+  # record the default sink with parec). `claude` comes
   # from the system profile, where the image installs the wrapper that reads
   # harnessd's sign-in.
   runtimePath = [
@@ -45,17 +55,19 @@ let
     pkgs.git
     pkgs.coreutils
     pkgs.chromium
-    pkgs.xvfb
     pkgs.pulseaudio
     pkgs.ffmpeg-headless
     ffmpegX11grab
+    # For the runtime to run capability scripts and Claude's tools with the
+    # credentials directory masked (`bwrap --tmpfs /run/credentials`).
+    pkgs.bubblewrap
   ];
   scriptVariables = ''
     workspace=${workspace}
     last_good=${lastGood}
     failures=${failures}
     boot_head=${bootHead}
-    max_failed_boots=${toString cfg.maxFailedBoots}
+    max_failed_boots=3
     runtime=${cfg.runtime}
     helper=${lib.getExe credentialHelper}
     helper_credentials=/run/credentials/macro-agent.service/agent.env
@@ -66,7 +78,7 @@ let
       pkgs.gnused
       pkgs.coreutils
     ];
-    text = builtins.readFile ./files/git-credential-agent;
+    text = builtins.readFile ./files/agent-env-setting + builtins.readFile ./files/git-credential-agent;
   };
   startAgent = pkgs.writeShellApplication {
     name = "start-agent";
@@ -74,7 +86,10 @@ let
       pkgs.gnused
       pkgs.diffutils
     ];
-    text = scriptVariables + builtins.readFile ./files/start-agent;
+    text =
+      scriptVariables
+      + builtins.readFile ./files/agent-env-setting
+      + builtins.readFile ./files/start-agent;
   };
   agentStopped = pkgs.writeShellApplication {
     name = "agent-stopped";
@@ -83,7 +98,7 @@ let
   };
 
   # Stdio MCP servers the runtime adds to its Claude Code query.
-  mcpServers = lib.optionalAttrs cfg.computerUse.enable {
+  mcpServers = {
     computer-use-linux = {
       type = "stdio";
       command = lib.getExe cfg.computerUse.package;
@@ -107,12 +122,16 @@ let
     MUPPET_LAST_GOOD_FILE = lastGood;
     MUPPET_RESTART_FILE = restartFile;
     MUPPET_MCP_SERVERS_JSON = builtins.toJSON mcpServers;
+    # The agent's Chromium on its desktop, for muppet's browser utility.
+    MUPPET_BROWSER_CDP_URL = browserCdpUrl;
+    # macro's sound server; its default sink `agent` is recorded from
+    # `agent.monitor`.
+    PULSE_SERVER = pulseServer;
     DISPLAY = display;
     XDG_RUNTIME_DIR = runtimeDirectory;
     DBUS_SESSION_BUS_ADDRESS = "unix:path=${runtimeDirectory}/bus";
     # Chromium and GTK expose AT-SPI trees for computer use.
     ACCESSIBILITY_ENABLED = "1";
-    AGENT_SCREEN_FONTS = "${pkgs.noto-fonts-cjk-sans}:${pkgs.noto-fonts-color-emoji}";
     LIVEKIT_FFMPEG_PATH = lib.getExe pkgs.ffmpeg-headless;
     # LiveKit's native modules link libstdc++.
     LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
@@ -134,13 +153,6 @@ let
       runtimeDirectory
     ];
     BindReadOnlyPaths = [ "-${harnessdState}" ];
-    # macro is in the docker group, which is root on this machine: the
-    # daemon's sockets are out of reach.
-    InaccessiblePaths = [
-      "-/run/docker.sock"
-      "-/run/docker"
-      "-/run/containerd"
-    ];
     PrivateTmp = true;
     PrivateDevices = true;
     ProtectKernelTunables = true;
@@ -162,7 +174,7 @@ let
     ];
     # Not RestrictNamespaces (Chromium's sandbox makes user namespaces) or
     # MemoryDenyWriteExecute (bun and V8 JIT).
-    MemoryMax = cfg.memoryMax;
+    MemoryMax = "75%";
     TasksMax = 4096;
     LoadCredential = "agent.env:${agentEnvironment}";
     Restart = "always";
@@ -203,37 +215,22 @@ let
     // service;
   };
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
-    until [ -S /tmp/.X11-unix/X${toString cfg.display} ]; do sleep 0.2; done
+    until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
   '';
 in
 {
   options.macro.box.agent = {
-    enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Run the agent teammate when enrollment writes ${agentEnvironment}.";
-    };
     runtime = lib.mkOption {
       type = lib.types.package;
       default = import ./_agent-runtime.nix { inherit pkgs; };
       description = "node_modules for the starter agent, with @macro-inc/muppet and @macro-inc/sdk.";
     };
     computerUse = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Give the agent computer-use-linux as a stdio MCP server on its own display.";
-      };
       package = lib.mkOption {
         type = lib.types.package;
         default = import ./_computer-use-linux.nix { inherit pkgs; };
         description = "computer-use-linux, built from source at a pinned release.";
       };
-    };
-    display = lib.mkOption {
-      type = lib.types.ints.between 1 99;
-      default = 1;
-      description = "The agent's X display (Xvnc; VNC on 127.0.0.1:5900 + display).";
     };
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf json.type;
@@ -241,22 +238,22 @@ in
       default = mcpServers;
       description = "The stdio MCP servers the runtime adds to its Claude Code query (MUPPET_MCP_SERVERS_JSON).";
     };
-    maxFailedBoots = lib.mkOption {
-      type = lib.types.ints.positive;
-      default = 3;
-      description = "Failed boots in a row before the launcher resets the workspace to last-good.";
-    };
-    memoryMax = lib.mkOption {
-      type = lib.types.str;
-      default = "75%";
-      description = "MemoryMax of the agent and its screen.";
-    };
   };
 
-  config = lib.mkIf cfg.enable {
+  # Only an agent teammate's computer runs it.
+  config = lib.mkIf config.macro.box.agentMode {
     environment.systemPackages = [ cfg.computerUse.package ];
     # The AT-SPI bus, activated on macro's session bus.
     services.gnome.at-spi2-core.enable = true;
+    # macro's sound server, started on demand in its session, with the
+    # agent's virtual sink; there is no sound card.
+    services.pulseaudio = {
+      enable = true;
+      extraConfig = ''
+        load-module module-null-sink sink_name=agent sink_properties=device.description=Agent
+        set-default-sink agent
+      '';
+    };
     fonts.packages = [
       pkgs.noto-fonts-cjk-sans
       pkgs.noto-fonts-color-emoji
@@ -264,6 +261,11 @@ in
 
     systemd.tmpfiles.settings."20-macro-agent" = {
       ${home}.d = {
+        user = "macro";
+        group = "macro";
+        mode = "0700";
+      };
+      ${browserProfile}.d = {
         user = "macro";
         group = "macro";
         mode = "0700";
@@ -297,21 +299,6 @@ in
         KillMode = "process";
         # The agent's desktop, for computer use.
         BindReadOnlyPaths = hardening.BindReadOnlyPaths ++ [ "/tmp/.X11-unix" ];
-      };
-    };
-
-    # The browser the agent shares on calls, on a private Xvfb of its own. It
-    # outlives the agent's restarts, as calls do.
-    systemd.services.macro-agent-screen = agentUnit // {
-      description = "Macro agent teammate's call-share screen";
-      wantedBy = [ "multi-user.target" ];
-      after = agentUnit.after ++ [ "macro-agent.service" ];
-      serviceConfig = hardening // {
-        WorkingDirectory = home;
-        ExecStart = "${lib.getExe startAgent} screen";
-        TimeoutStopSec = 15;
-        LogRateLimitIntervalSec = 60;
-        LogRateLimitBurst = 50;
       };
     };
 
@@ -352,6 +339,36 @@ in
         bindsTo = [ "macro-agent-display.service" ];
         after = [ "macro-agent-display.service" ];
         environment.DISPLAY = display;
+      };
+    # The agent's browser, on its desktop (so a screen share shows it), with
+    # DevTools on loopback only and AT-SPI on for computer use.
+    systemd.user.services.macro-agent-browser =
+      userService "Agent teammate's Chromium on ${display}, DevTools on ${browserCdpUrl}" {
+        ExecStartPre = waitForDisplay;
+        ExecStart = lib.concatStringsSep " " [
+          (lib.getExe pkgs.chromium)
+          "--user-data-dir=${browserProfile}"
+          "--remote-debugging-address=127.0.0.1"
+          "--remote-debugging-port=${toString cdpPort}"
+          "--force-renderer-accessibility"
+          "--no-first-run"
+          "--no-default-browser-check"
+          "--disable-dev-shm-usage"
+          "--password-store=basic"
+          "--start-maximized"
+        ];
+      }
+      // {
+        bindsTo = [ "macro-agent-display.service" ];
+        after = [
+          "macro-agent-display.service"
+          "macro-agent-openbox.service"
+        ];
+        environment = {
+          DISPLAY = display;
+          ACCESSIBILITY_ENABLED = "1";
+          PULSE_SERVER = pulseServer;
+        };
       };
   };
 }

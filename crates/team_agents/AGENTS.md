@@ -12,7 +12,7 @@ PostHog flag. Served at `/team_agents` in authentication_service.
 account rows + `team_agents` row in one transaction (`"User"."isAgent"`, a
 placeholder `@agents.macro.invalid` address, no sign-in) →
 `TeamService::add_team_agent` (included seat, no Stripe change) → workspace
-repo on agent_git_service → `ComputerService::purchase_for_agent`, the normal
+repo on agent_git (served by agent_harness_service) → `ComputerService::purchase_for_agent`, the normal
 per-computer purchase with the computer linked to the agent
 (`hosted_runtime.agent_user_id`). A failure before the purchase completes
 undoes the repo, membership and account, newest first.

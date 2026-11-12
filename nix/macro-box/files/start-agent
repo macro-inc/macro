@@ -1,31 +1,21 @@
 # `start-agent run`: clones the agent's repo into its workspace on first
 # start, configures git, links the image's packages, rolls back to the last
 # good commit after repeated failed boots, then runs the runtime.
-# `start-agent screen`: the call-share screen, once the workspace exists.
 # `_agent.nix` prepends `workspace`, `last_good`, `failures`, `boot_head`,
 # `helper`, `helper_credentials`, `runtime` and `max_failed_boots`.
 umask 077
-mode=${1:?usage: start-agent run|screen}
+mode=${1:?usage: start-agent run}
 # The unit sets MUPPET_CREDENTIALS_FILE to its agent.env credential.
 credentials=${MUPPET_CREDENTIALS_FILE:?}
-setting() { sed -n "s/^$1=//p" "$credentials" | tail -n 1; }
 
-if [[ $mode == screen ]]; then
-  if [[ ! -e $workspace/cli.ts ]]; then
-    echo "the agent's workspace is not cloned yet" >&2
-    exit 1
-  fi
-  cd "$workspace"
-  exec bun "$workspace/cli.ts" serveScreen
-fi
 [[ $mode == run ]] || { echo "unknown mode: $mode" >&2; exit 2; }
 
-repo_url=$(setting MACRO_REPO_URL)
-user_id=$(setting MACRO_AGENT_USER_ID)
-name=$(setting MACRO_AGENT_NAME)
+repo_url=$(setting "$credentials" MACRO_REPO_URL)
+user_id=$(setting "$credentials" MACRO_AGENT_USER_ID)
+name=$(setting "$credentials" MACRO_AGENT_NAME)
 # Configuration errors exit 78, as the runtime's do: retried, never rolled back.
 for key in MACRO_REPO_URL MACRO_REPO_TOKEN MACRO_AGENT_USER_ID MACRO_AGENT_NAME; do
-  if [[ -z "$(setting "$key")" ]]; then
+  if [[ -z "$(setting "$credentials" "$key")" ]]; then
     echo "agent.env is missing $key" >&2
     exit 78
   fi
@@ -76,21 +66,16 @@ if ((count >= max_failed_boots)) && [[ -n $good && $good != "$head" ]]; then
 fi
 echo "$head" > "$boot_head"
 
-# The image's packages, unless a self-edit changed the lockfile.
+# The image's packages. They are installed from the starter agent's
+# bun.lock, so a self-edit that changes it fails to boot and rolls back.
+if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
+  echo "bun.lock differs from the image's; new packages need a new image" >&2
+  exit 1
+fi
 modules=$workspace/node_modules
-if cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
-  if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
-    rm -rf "$modules"
-    ln -s "$runtime/node_modules" "$modules"
-  fi
-else
-  [[ -L $modules ]] && rm "$modules"
-  (cd "$workspace" && bun install --frozen-lockfile)
-  mkdir -p "$modules/@macro-inc"
-  for package in muppet sdk; do
-    rm -rf "${modules:?}/@macro-inc/$package"
-    ln -s "$runtime/node_modules/@macro-inc/$package" "$modules/@macro-inc/$package"
-  done
+if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
+  rm -rf "$modules"
+  ln -s "$runtime/node_modules" "$modules"
 fi
 
 cd "$workspace"

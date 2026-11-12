@@ -13,6 +13,16 @@ use crate::domain::template::{PersonaSeed, RenderedFile};
 pub trait RepoRepository: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
+    /// Holds a repo's lock until dropped.
+    type Lock: Send + 'static;
+
+    /// Wait for the repo's lock, held across every replica of the service
+    /// until the guard drops. Management and pushes take it, so a push and a
+    /// delete never interleave.
+    fn lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Self::Lock, Self::Err>> + Send;
 
     /// The agent's repo row.
     fn find_repo(
@@ -90,10 +100,16 @@ pub trait TeamAdmins: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
-/// Per-repo push budget.
+/// Per-repo push budget, shared by every replica of the service.
 pub trait PushRateLimiter: Send + Sync + 'static {
+    /// Adapter error.
+    type Err: std::error::Error + Send + Sync + 'static;
+
     /// Take one push from the repo's budget; `false` when it is spent.
-    fn try_acquire_push(&self, agent_user_id: &MacroUserIdStr<'_>) -> bool;
+    fn try_acquire_push(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Serves smart-HTTP requests against a bare repo.
