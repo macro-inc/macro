@@ -71,6 +71,14 @@ tools — hexagonal, heavily feature-gated.
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
+- A requested sender may be a verified Gmail send-as alias, not just an inbox
+  address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
+  `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
+  Both read `EmailSenderProvider`, so a host that skips `with_sender_provider`
+  refuses every alias. Outlook inboxes have no aliases here. The alias's
+  display name is stored on the draft row (`from_name`), not only on the
+  shared sender contact, which keeps an existing name and drops names for
+  role addresses such as `support@`.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
@@ -239,6 +247,11 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
+  latest catalog discovery (every 5 minutes, from the listing discovery already
+  makes), and the discover span sums it as `outlook.provider_item_count`. It
+  counts what the folder holds at the provider, imported or not, so an import
+  is checked against it.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

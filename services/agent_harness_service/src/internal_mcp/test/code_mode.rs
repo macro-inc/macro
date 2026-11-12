@@ -10,6 +10,19 @@ use code_execution::{
 };
 use serde_json::json;
 
+/// Programs here return no images.
+struct NoImages;
+
+#[async_trait]
+impl agent_code_mode::domain::ModelImages for NoImages {
+    async fn load_png(
+        &self,
+        _: &agent_code_mode::domain::StaticFileId,
+    ) -> anyhow::Result<agent_code_mode::domain::ModelImage> {
+        anyhow::bail!("no images in this test")
+    }
+}
+
 struct NoAppEgress;
 
 impl agent_egress::domain::service::EgressService for NoAppEgress {
@@ -78,6 +91,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
                 ),
             ),
         )),
+        Arc::new(NoImages),
     ));
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(
@@ -89,7 +103,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .unwrap();
     let app = router(
         Arc::new(repo.clone()),
-        "localhost".into(),
+        vec!["localhost".into()],
         InternalTools {
             service: Arc::new(SessionPullRequestService::new(
                 repo.clone(),

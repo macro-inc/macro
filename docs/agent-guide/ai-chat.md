@@ -431,7 +431,7 @@ you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
 
-Code-mode sessions do not get these two tools. They do the coding work themselves
+Code-mode sessions do not get these two tools, nor `CreateAgentSession`. They do the coding work themselves
 first and, when asked to hand a task off, run `ExecuteCode`: pick a coding
 persona from `macro.agents.coding()` (the same list `ListCodingAgents` returns,
 Cursor included once connected) or one of your agents from `macro.agents.list()`,
@@ -1453,8 +1453,9 @@ return exactly `{data}` (an empty `reviews: []` is dropped). There is no
 session, execution journal, review stack or `execution_id`; the receipt carries
 status, observed SDK activity, result and error. Runs act as the user with no
 agent attribution and no owner approval card: the MCP client asks before each
-tool call. SDK writes, including email sends, take effect immediately. Hidden
-native tools stay callable if a client already knows their names. Public runs use
+tool call. SDK writes, including email sends, take effect immediately. A native
+tool called by name is refused in code mode; ChatGPT, which gets the direct
+tools, still calls them. Public runs use
 their own Deno budget (four running, eight queued per replica) so external
 traffic cannot take agent sessions' slots. Agent-session code mode is
 unchanged: it still keeps a reduced direct toolset for search, document
@@ -2693,8 +2694,10 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
-mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
+`ContentSearch` to find sessions. `ListAgents` identifies available agents and
+`CreateAgentSession` starts a conversation with the chosen agent; code mode uses
+`macro.agents.list()` and `macro.agentSessions.createManaged` instead, which
+also prompt an agent that runs on its operator's machine. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain
