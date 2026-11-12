@@ -394,7 +394,8 @@ Writes are not retried. The test prints all cases and then fails if any measured
 or warmup request failed. Summarize the completed release log with:
 
 ```sh
-python3 crates/messages/proofs/summarize_bounded_latency.py /tmp/deadline50ms-bounded.log
+python3 crates/messages/proofs/summarize_bounded_latency.py /tmp/deadline50ms-bounded.log \
+  --source-revision '<exact tested deadline head>'
 ```
 
 The parser validates all 42 rows (seven cases, three repetitions, warmup and
@@ -445,7 +446,8 @@ percentiles and throughput against measured wall time, then writes
 `channel_deadline_write_latency_runs.csv` and
 `channel_deadline_write_latency_results.md`. These preserve the historical
 pre-timeout artifacts. The report shows old/current latency and throughput,
-individual-run p95 values, and single-writer absolute and percentage changes.
+all per-run p50/p95/p99 and throughput values, and single-writer absolute and
+percentage changes.
 The current implementation includes one deadline-configuration round trip
 before counter acquisition; this is part of the measured repository write.
 
