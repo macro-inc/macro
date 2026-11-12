@@ -6,9 +6,10 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 | File | Contents |
 | --- | --- |
-| `_nixos/incus-host.nix` | Incus (preseed: ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), control-plane cert trust, box filter/NAT nftables, `zfs_arc_max` 8 GiB. |
-| `_nixos/gcp.nix` | GCE boot modules, MTU, metadata NTP, and serial console. |
-| `_nixos/runtime-dev-1.nix` | Tailscale, control-plane address/ports, hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
+| `_nixos/incus-host.nix` | Incus (preseed: API address, ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), the control-plane WireGuard tunnel, control-plane cert trust, host/box nftables, `zfs_arc_max` 8 GiB. |
+| `_nixos/gcp.nix` | GCE boot modules, DHCP, MTU, metadata NTP, guest agent, OS Login, root sshd with `keys/admin.pub`, and serial console. |
+| `_nixos/runtime-dev-1.nix` | Incus API address, WireGuard tunnel and peer, devbox box-access address/ports, hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
+| `_nixos/keys/admin.pub` | Root's authorized SSH key (over IAP). |
 | `_nixos/certs/control-plane-dev.crt` | Public client cert the dev control plane uses for the Incus API. |
 
 ## Hosts
@@ -21,14 +22,31 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 ## Access
 
-The demo uses a personal tailnet; production must use the company tailnet.
-The control plane uses Tailscale with a pinned Incus server certificate and a
-trusted client certificate. Administration uses Tailscale SSH (`--ssh`) at
-`root@runtime-dev-1` through MagicDNS; no plain sshd or OS Login remains.
-Allow the administrator to SSH as root to `tag:runtime-host` in the tailnet SSH
-policy, and allow the control plane to reach that tag on TCP/8443. Use a
-pre-authorized auth key carrying `tag:runtime-host`. Do not advertise the box
-subnet or accept routes.
+Two paths reach the host, and nothing else:
+
+- **Control plane (Incus API).** The dev agent harness (ECS Fargate) dials
+  `https://10.200.0.2:8443`. The dev VPC routes 10.200.0.0/24 to a WireGuard
+  gateway (EC2, `wg0` 10.99.0.1, Elastic IP), which initiates the tunnel to
+  this host's UDP/51820 and masquerades, so the host only ever sees 10.99.0.1.
+  The host's `wg0` is 10.99.0.2/24 with that single peer and no endpoint.
+  Incus listens on 10.200.0.2:8443 (preseed, never a wildcard). nftables admits
+  TCP/8443 only from `lo` and from 10.99.0.1 on `wg0`; the GCE NIC and the box
+  bridge cannot reach it. The GCP firewall admits UDP/51820 only from the
+  gateway's Elastic IP.
+- **Administration.** IAP TCP forwarding to sshd: `gcloud compute ssh
+  --tunnel-through-iap` (OS Login) or root with `keys/admin.pub`. The GCP
+  firewall (`macro-computers-allow-iap-ssh`) and nftables both admit TCP/22
+  only from 35.235.240.0/20.
+
+The host runs no Tailscale. The WireGuard private key lives at
+`/var/lib/macro/wg.key` (root, 0600), outside the Nix store and the repository;
+`macro.computers.tunnel.privateKeyFile` is a string path, never key contents.
+The gateway's public key is in `runtime-dev-1.nix`.
+
+The client pins the Incus server certificate bytes (see
+`crates/incus_client/src/tls.rs`), so 10.200.0.2 need not be in the
+certificate's SANs. Changing the listen address does not regenerate
+`/var/lib/incus/server.crt`.
 
 Serial console is the break-glass path (serial-getty remains enabled; provision
 recovery credentials separately):
@@ -37,64 +55,51 @@ recovery credentials separately):
 gcloud compute connect-to-serial-port runtime-dev-1 --project macro-435922 --zone us-east4-b
 ```
 
-## Deploy: last IAP use
+## Deploy
 
-Run from the checkout on the coordinator. This switches the existing host; it
-never runs disko or wipes disks. Copy the key before switching, while the old
-IAP/root-key access is still available. The option
-`macro.runtimeHost.tailscaleAuthKeyFile` defaults to null; this host passes
-`/var/lib/macro/tskey`. It is a string path, never a Nix path or key contents.
-The key stays root-only outside the Nix store, repository, and deploy command line.
-
-Use bash for the deploy commands (the SSH option array preserves quoting):
+Run from the checkout with `gcloud` on the PATH. This switches the existing
+host; it never runs disko or wipes disks. Use bash (the SSH option array
+preserves quoting):
 
 ```bash
 iap=( -o 'ProxyCommand=gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b'
       -o HostKeyAlias=runtime-dev-1
       -o "UserKnownHostsFile=$HOME/.config/macro-computers/known_hosts" )
-ssh "${iap[@]}" root@runtime-dev-1 'install -d -m 0700 /var/lib/macro; umask 077; cat > /var/lib/macro/tskey; chmod 0600 /var/lib/macro/tskey' < ~/.config/macro/runtime-host-tskey
+# Once, before the first switch with the tunnel:
+ssh "${iap[@]}" root@runtime-dev-1 'install -d -m 0700 /var/lib/macro; umask 077; cat > /var/lib/macro/wg.key; chmod 0600 /var/lib/macro/wg.key' < <host-private-key-file>
 export NIX_SSHOPTS="-o ProxyCommand='gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b' -o HostKeyAlias=runtime-dev-1 -o UserKnownHostsFile=$HOME/.config/macro-computers/known_hosts"
 nixos-rebuild switch --flake .#runtime-dev-1 --target-host root@runtime-dev-1
 unset NIX_SSHOPTS
-ssh root@runtime-dev-1 'tailscale status; incus config get core.https_address'
+ssh "${iap[@]}" root@runtime-dev-1 'wg show; incus config get core.https_address; incus list'
 ```
 
-The switching IAP session may close when sshd stops. Verify the new generation
-via Tailscale SSH before treating the switch as complete. Activation starts
-`tailscaled-autoconnect`, reading the root-only key file at runtime; state
-persists under `/var/lib/tailscale`. Tailscale owns its packet filtering;
-`macro-boxes` still restricts forwarded box traffic independently.
+Switch-to-configuration runs in a transient unit, so it finishes if the IAP
+session drops. `incus.service` restarts leave instances running
+(`softDaemonRestart`); `incus-preseed` re-applies on change and only merges
+keys, so it never removes profile or network config. dhcpcd runs with
+`--persistent`, so its restart keeps eth0's lease.
 
 Fresh installation is destructive and needs separate approval. For
 `nixos-anywhere`, prepare a temporary extra-files tree with
-`install -Dm0600 ~/.config/macro/runtime-host-tskey "$extra/var/lib/macro/tskey"`
+`install -Dm0600 <host-private-key-file> "$extra/var/lib/macro/wg.key"`
 and `chmod 0700 "$extra/var/lib/macro"`, then pass `--extra-files "$extra"`.
 Never copy the key into the checkout or use `builtins.readFile` for it.
 
-## Subsequent deploys
+## Local devbox stacks (`--computers incus`)
 
-MagicDNS resolves `runtime-dev-1` on the tailnet; no IAP proxy is used:
+Not currently reachable: this path assumed the host was on Wolf's tailnet,
+which it no longer joins. The box rules below stay in the config but match
+nothing without a `tailscale0` interface. The rest of this section and the
+next describe that path for when a tailnet returns.
 
-```sh
-unset NIX_SSHOPTS
-nixos-rebuild switch --flake .#runtime-dev-1 --target-host root@runtime-dev-1
-```
-
-On the devbox, `tailscale ip -4 runtime-dev-1` must return exactly one IPv4
-address. xtask resolves this at stack start and emits
-`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, avoiding MagicDNS inside
-Compose. Override host-side discovery with `COMPUTERS_INCUS_ADDRESS=<IPv4>`.
+xtask resolves `tailscale ip -4 runtime-dev-1` at stack start and emits
+`COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, avoiding MagicDNS
+inside Compose. Override host-side discovery with `COMPUTERS_INCUS_ADDRESS=<IPv4>`.
 xtask resolves the devbox address once with `tailscale ip -4` and fails startup
 if it does not return one tailnet IPv4 address. Guests dial service HTTP and
 WebSocket host ports directly at that address; it must match the runtime's
 `macro.computers.controlPlaneAddress` (`100.116.73.13` in this configuration).
 `COMPUTERS_INCUS_ADDRESS` is an xtask input, not a service/Doppler secret.
-
-Incus starts on `127.0.0.1:8443`; `incus-tailnet.service` binds it exclusively
-to the enrolled tailnet IPv4 address. Local tooling uses the Unix socket.
-Nftables admits TCP/8443 only from `tailscale0` and `lo`. The client pins certificate
-bytes, so the tailnet IP/name need not be in the certificate's SANs. The
-existing SHA-256 pin is checked before caching a newly fetched certificate.
 
 ## Devbox firewall and verification
 
@@ -148,7 +153,8 @@ remain nftables text because nixpkgs has no nftables ruleset format generator.
 ## Box network policy
 
 Boxes on `boxbr0` get DHCP/DNS from the bridge and outbound IPv4 internet
-(NAT). The only forwarded tailnet access is TCP to
+(NAT); they reach the hosted dev services over the public internet. The only
+forwarded tailnet access (inert without `tailscale0`) is TCP to
 `macro.computers.controlPlaneAddress` on `macro.computers.controlPlanePorts`,
 masqueraded to the runtime's `tailscale0` address. All other traffic exiting
 `tailscale0` is dropped, as are the rest of 100.64.0.0/10, private ranges,

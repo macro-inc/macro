@@ -1,6 +1,7 @@
 # Incus host for Macro computers: ZFS-backed VMs on an isolated bridge.
 # Boxes get outbound internet only; the host and internal ranges are closed
-# to them except DNS/DHCP and the control plane.
+# to them except DNS/DHCP and the control plane. The control plane reaches the
+# Incus API over a WireGuard tunnel; nothing else may reach TCP/8443.
 {
   config,
   lib,
@@ -10,6 +11,8 @@
 let
   computers = config.macro.computers;
   tailnetEnabled = computers.controlPlaneAddress != null;
+  tunnel = computers.tunnel;
+  tunnelInterface = "wg0";
   ports = lib.concatMapStringsSep ", " toString computers.controlPlanePorts;
   bridge = "boxbr0";
   bridgeAddress = "10.210.0.1";
@@ -27,9 +30,53 @@ in
       default = [ ];
       description = "TCP host ports boxes may reach on the control-plane devbox.";
     };
+    apiAddress = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+      description = "IPv4 address the Incus API listens on (port 8443); never a wildcard.";
+    };
+    tunnel = lib.mkOption {
+      default = null;
+      description = "WireGuard tunnel the control plane uses to reach the Incus API; null keeps it local.";
+      type = lib.types.nullOr (
+        lib.types.submodule {
+          options = {
+            address = lib.mkOption {
+              type = lib.types.str;
+              description = "The host's tunnel address in CIDR form.";
+            };
+            listenPort = lib.mkOption {
+              type = lib.types.port;
+              default = 51820;
+              description = "UDP port the tunnel listens on, open on eth0.";
+            };
+            privateKeyFile = lib.mkOption {
+              type = lib.types.str;
+              description = "Absolute host-local private key path, outside the Nix store; never the key itself.";
+            };
+            peer = {
+              publicKey = lib.mkOption {
+                type = lib.types.str;
+                description = "The control-plane gateway's public key.";
+              };
+              address = lib.mkOption {
+                type = lib.types.str;
+                description = "The gateway's tunnel IPv4 address, the only source admitted to TCP/8443.";
+              };
+            };
+          };
+        }
+      );
+    };
   };
 
   config = {
+    assertions = lib.optional (tunnel != null) {
+      assertion =
+        lib.hasPrefix "/" tunnel.privateKeyFile && !(lib.hasPrefix "/nix/store/" tunnel.privateKeyFile);
+      message = "The WireGuard private key must be a host-local absolute path outside /nix/store.";
+    };
+
     boot.supportedFilesystems = [ "zfs" ];
     boot.zfs.extraPools = [ "tank" ];
     boot.zfs.forceImportRoot = false;
@@ -47,8 +94,8 @@ in
       enable = true;
       ui.enable = false;
       preseed = {
-        # Start locally; incus-tailnet binds the enrolled address, never a WAN wildcard.
-        config."core.https_address" = "127.0.0.1:8443";
+        # Never a wildcard; nftables admits 8443 only from lo and the tunnel peer.
+        config."core.https_address" = "${computers.apiAddress}:8443";
         networks = [
           {
             name = bridge;
@@ -130,41 +177,19 @@ in
       '';
     };
 
-    # The address is assigned at enrollment, so it cannot be baked into preseed.
-    systemd.services.incus-tailnet = lib.mkIf tailnetEnabled {
-      description = "Bind Incus to the runtime host's Tailscale IPv4 address";
-      after = [
-        "incus-preseed.service"
-        "tailscaled.service"
-        "tailscaled-autoconnect.service"
+    # The gateway initiates (no endpoint here) and masquerades the control
+    # plane, so the only source seen on the tunnel is the peer address.
+    networking.wireguard.interfaces.${tunnelInterface} = lib.mkIf (tunnel != null) {
+      ips = [ tunnel.address ];
+      inherit (tunnel) listenPort privateKeyFile;
+      # eth0's 1460 minus 60 bytes of IPv4 WireGuard overhead.
+      mtu = 1400;
+      peers = [
+        {
+          inherit (tunnel.peer) publicKey;
+          allowedIPs = [ "${tunnel.peer.address}/32" ];
+        }
       ];
-      requires = [
-        "incus.service"
-        "tailscaled.service"
-      ];
-      wantedBy = [ "multi-user.target" ];
-      partOf = [
-        "incus.service"
-        "incus-preseed.service"
-      ];
-      restartTriggers = [
-        ((pkgs.formats.yaml { }).generate "incus-preseed.yaml" config.virtualisation.incus.preseed)
-      ];
-      path = [
-        config.virtualisation.incus.clientPackage
-        config.services.tailscale.package
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        Restart = "on-failure";
-        RestartSec = 5;
-      };
-      script = ''
-        address=$(tailscale ip -4)
-        test -n "$address"
-        incus config set core.https_address "$address:8443"
-      '';
     };
 
     networking.nftables.tables.macro-boxes = {
@@ -184,18 +209,21 @@ in
 
         chain input {
           type filter hook input priority filter; policy accept;
-          tcp dport 8443 iifname != "lo" iifname != "tailscale0" counter drop
-          iifname "tailscale0" jump tailnet_to_host
+          iifname "lo" accept
+          ${lib.optionalString (tunnel != null) ''iifname "${tunnelInterface}" jump tunnel_to_host''}
+          tcp dport 8443 counter drop
           iifname "${bridge}" jump box_to_host
           iifname "eth0" jump wan_to_host
         }
 
-        chain tailnet_to_host {
-          ct state established,related accept
-          ip protocol icmp accept
-          tcp dport { 22, 8443 } accept
-          counter drop
-        }
+        ${lib.optionalString (tunnel != null) ''
+          chain tunnel_to_host {
+            ct state established,related accept
+            ip protocol icmp accept
+            ip saddr ${tunnel.peer.address} tcp dport 8443 accept
+            counter drop
+          }
+        ''}
 
         chain box_to_host {
           meta nfproto ipv6 counter drop
@@ -207,11 +235,14 @@ in
           counter drop
         }
 
-        # No SSH or Incus API on the GCE NIC.
+        # GCP's firewall admits only IAP on tcp/22 (and the gateway on the
+        # tunnel port); this is the second wall. No Incus API on the GCE NIC.
         chain wan_to_host {
           ct state established,related accept
           ip protocol icmp accept
-          udp dport ${toString config.services.tailscale.port} accept
+          udp dport 68 accept
+          ip saddr 35.235.240.0/20 tcp dport 22 accept
+          ${lib.optionalString (tunnel != null) "udp dport ${toString tunnel.listenPort} accept"}
           counter drop
         }
 
