@@ -77,6 +77,7 @@ import {
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
+import { HelpMenu } from './HelpMenu';
 import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -390,6 +391,9 @@ export function AppChrome(props: ParentProps) {
         </FloatRegion>
       </Show>
       <InitialInteractiveOnboardingModal />
+      <Show when={isAuthenticated() && !isTouchDevice()}>
+        <HelpMenu />
+      </Show>
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
