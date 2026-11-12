@@ -16,9 +16,25 @@ import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
 
-export function ContactMention(
-  props: ContactMentionDecoratorProps & ContactMentionHostProp
-) {
+/**
+ * Source `importJSON` and `exportComponentProps` hand stored values over
+ * unchanged, so null or omitted fields reach this component. Only a person's
+ * name is read as a string (`displayName` and Source `getTextContent` trim it).
+ */
+export type ContactMentionUIProps = Omit<
+  ContactMentionDecoratorProps,
+  'contactId' | 'name' | 'emailOrDomain' | 'isCompany'
+> & {
+  contactId?: string | null;
+  emailOrDomain?: string | null;
+  mentionUuid?: string | null;
+} & (
+    | { isCompany: true; name?: string | null }
+    | { isCompany?: false | null; name: string }
+  ) &
+  ContactMentionHostProp;
+
+export function ContactMention(props: ContactMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -37,7 +53,8 @@ export function ContactMention(
 
   const openContact = (e: MouseEvent | KeyboardEvent | null) => {
     // The contactId is the email or @domain
-    const contactId = encodeURIComponent(props.emailOrDomain);
+    // String() matches encodeURIComponent's own conversion of a stored null.
+    const contactId = encodeURIComponent(String(props.emailOrDomain));
     const inNewSplit = openInNewSplitForMention(e?.shiftKey, e != null);
     openWithSplit(
       { type: 'contact', id: contactId },
