@@ -139,9 +139,9 @@ impl SessionCreations for ActivityCreations {
     }
 }
 
-/// Whether programs whose newest records, read `DRAFT_EXECUTIONS + 1` at
-/// most, are `records` may have written: one of them may have, or there were
-/// more than a draft reads.
+/// Whether a session's programs may have written, from up to
+/// `DRAFT_EXECUTIONS + 1` of their records, in any order: one of them may
+/// have, or there were more than a draft reads.
 fn programs_may_have_written(records: &[agent_code_mode::domain::ExecutionRecord]) -> bool {
     records.len() > usize::from(DRAFT_EXECUTIONS)
         || records
