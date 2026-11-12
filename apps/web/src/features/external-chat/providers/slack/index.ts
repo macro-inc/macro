@@ -1,18 +1,23 @@
-import SlackLogo from '@phosphor/slack-logo.svg';
-import SlackLogoBold from '@phosphor-icons/core/bold/slack-logo-bold.svg';
+import { providerIdentity } from '../identity';
 import type { ChatProvider } from '../index';
 import { markdownToSlack, slackToMarkdown } from './formatting';
 
-// TODO(slack-web): spread `providerIdentity('slack')` and register in
-// `PROVIDERS` once the generated `ExternalChatProvider` has `slack`.
 export const slackProvider: ChatProvider = {
-  label: 'Slack',
-  icon: SlackLogo,
-  boldIcon: SlackLogoBold,
+  ...providerIdentity('slack'),
   badgeClass: 'bg-[#4A154B] text-[#fff]',
   formatting: {
     toMarkdown: slackToMarkdown,
     fromMarkdown: markdownToSlack,
+  },
+  // Slack ended the session (signed out, revoked) or the owner disconnected.
+  disconnected: {
+    note: 'Your Slack session ended. Sign in again to reply',
+    action: 'Sign in to Slack',
+  },
+  // Adding a chat imports its recent history; each import reaches further back.
+  historyImport: {
+    states: ['partial'],
+    prompt: 'Earlier messages are still in Slack.',
   },
   // Text, formatting, files and mentions of the conversation's members;
   // nothing Macro-only.

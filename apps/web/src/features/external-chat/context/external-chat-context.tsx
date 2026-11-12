@@ -1,3 +1,4 @@
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { Result } from 'neverthrow';
 import {
   type Accessor,
@@ -41,8 +42,8 @@ export type ExternalChatCapabilities = {
   fileUrl: (fileId: string) => string;
   markRead: (messageId: string) => Promise<unknown>;
   stopSync: () => Promise<unknown>;
-  /** Asks the owner's phone for this chat's earlier messages. */
-  importHistory: () => Promise<unknown>;
+  /** Imports this chat's earlier messages from its provider. */
+  importHistory: (provider: ExternalChatProvider) => Promise<unknown>;
 };
 const Context = createContext<ExternalChatCapabilities>();
 export function ExternalChatContextProvider(

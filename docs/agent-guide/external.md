@@ -88,7 +88,17 @@ outside the workspace.
 
 `apps/web/tests/functional/slack-linked.spec.ts` is the reference mock for
 `/slack-linked/*`. Never sign a real Slack account in from an automated run.
-The page mounts in External once External picks a page per provider.
+External shows it under its **Slack** sidebar entry; `/external?slackLogin=<attempt
+id|browser>` opens External on it and resumes that sign-in (or opens Slack's own
+in Macro desktop), then drops the param.
+
+In a Slack chat, the owner's composer says *Your Slack session ended. Sign in
+again to reply* with **Sign in to Slack** (opens the Slack page) once the
+workspace's session ended or was disconnected. Adding imports the last 90 days
+(up to 1,000 messages); while the detail's `backfill` is `partial` the owner
+sees a bar under the header ("Earlier messages are still in Slack." with
+**Import**), which posts `/slack-linked/chats/<id>/history-import` for another
+1,000. Slack has no bottom-right import prompt.
 
 ## External chat view
 

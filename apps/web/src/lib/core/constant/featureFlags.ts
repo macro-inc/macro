@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 
 /**
  * This constant reflects whether the app is running locally: under the Vite
@@ -1144,6 +1145,16 @@ export const enableSlackLinked = defineFlag({
   key: 'enable-slack-linked',
   env: 'ENABLE_SLACK_LINKED',
 });
+
+/**
+ * Each external chat provider's rollout gate: its External page, its chats
+ * and its sidebar entry. Here so core (the mentions menu) can read it;
+ * `features/external-view/provider-flags.ts` builds on it.
+ */
+export const externalChatProviderFlags = {
+  whatsapp: enableWhatsappLinked,
+  slack: enableSlackLinked,
+} as const satisfies Record<ExternalChatProvider, RemoteFlag>;
 
 /**
  * Passwords v1: the `/passwords` route and its rail and dock entries (which

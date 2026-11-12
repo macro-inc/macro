@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  enableWhatsappLinked,
+  externalChatProviderFlags,
   isFeatureEnabled,
   type RemoteFlag,
 } from '@core/constant/featureFlags';
@@ -8,9 +8,8 @@ import { ExternalChatProvider } from '@service-storage/generated/schemas/externa
 import { type Accessor, createMemo } from 'solid-js';
 
 /** Each provider's rollout gate: its page, its chats and its sidebar entry. */
-export const PROVIDER_FLAGS: Record<ExternalChatProvider, RemoteFlag> = {
-  whatsapp: enableWhatsappLinked,
-};
+export const PROVIDER_FLAGS: Record<ExternalChatProvider, RemoteFlag> =
+  externalChatProviderFlags;
 
 export type EnabledProviders = {
   /** Some provider's flag is still resolving. */

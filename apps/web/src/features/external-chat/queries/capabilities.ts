@@ -189,9 +189,9 @@ export function createExternalChatCapabilities(
       await chatOperation('stop_sync', chatId(), () => api.stopSync(chatId()));
       invalidateExternalChat(chatId());
     },
-    importHistory: async () => {
+    importHistory: async (provider) => {
       await chatOperation('import_history', chatId(), () =>
-        api.importHistory()
+        api.importHistory(chatId(), provider)
       );
       invalidateExternalChat(chatId());
     },

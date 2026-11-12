@@ -200,7 +200,54 @@ it('lets a viewer without WhatsApp read and offers to connect', () => {
   fireEvent.pointerEnter(row);
   expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Connect WhatsApp' }));
-  expect(connect).toHaveBeenCalledOnce();
+  expect(connect).toHaveBeenCalledExactlyOnceWith('whatsapp');
+});
+
+it('sends a Slack owner whose session ended to sign in again', () => {
+  const fake = createFakeChat({
+    chat: {
+      ...chat,
+      provider: 'slack',
+      phone: undefined,
+      canSend: false,
+      sendReason: 'disconnected',
+    },
+  });
+  const { connect } = mount(fake);
+  expect(
+    screen.getByText('Your Slack session ended. Sign in again to reply')
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in to Slack' }));
+  expect(connect).toHaveBeenCalledExactlyOnceWith('slack');
+});
+
+it('lets a Slack owner import further back after the first import', () => {
+  const fake = createFakeChat({
+    chat: {
+      ...chat,
+      provider: 'slack',
+      phone: undefined,
+      backfill: { state: 'partial', imported: 1000 },
+    },
+  });
+  mount(fake);
+  expect(screen.getByText('Earlier messages are still in Slack.')).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Import earlier messages' })
+  );
+  expect(fake.capabilities.importHistory).toHaveBeenCalledExactlyOnceWith(
+    'slack'
+  );
+
+  fake.setChat({
+    ...chat,
+    provider: 'slack',
+    phone: undefined,
+    backfill: { state: 'done', imported: 1400 },
+  });
+  expect(
+    screen.queryByRole('button', { name: 'Import earlier messages' })
+  ).toBeNull();
 });
 
 it('makes a task from a message for a viewer who cannot reply', () => {
@@ -278,7 +325,9 @@ it('says while history imports and shows older messages as they land', () => {
   fireEvent.click(
     screen.getByRole('button', { name: 'Import earlier messages' })
   );
-  expect(fake.capabilities.importHistory).toHaveBeenCalledOnce();
+  expect(fake.capabilities.importHistory).toHaveBeenCalledExactlyOnceWith(
+    'whatsapp'
+  );
 
   fake.setChat({ ...chat, backfill: { state: 'done', imported: 1 } });
   expect(screen.queryByText(/Importing history|Waiting for/)).toBeNull();

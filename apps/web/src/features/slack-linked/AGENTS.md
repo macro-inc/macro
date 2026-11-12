@@ -40,10 +40,9 @@ Behind the `enable-slack-linked` flag. Architecture:
 
 ## Gotchas
 
-- Wire types are hand-typed in `service-storage/slack-linked-wire.ts` until
-  `crates/slack_linked` is in DSS's OpenAPI; then use the generated schemas
-  and delete it. Adding goes through `slackLinkedClient.addChat` until the
-  generated `ExternalChatProvider` has `slack`.
+- External mounts the page through `features/external-view/provider-pages.tsx`,
+  which reads `?slackLogin=<uuid|browser>` once (the route keeps it as an
+  external search key) and opens External on the Slack page.
 - Sign-in material (emails, codes, tokens, cookies) stays in the
   `ph-no-capture` dialog and the never-persisted, `gcTime: 0` login query;
   never in a URL (handoffs carry only the attempt id), a log or a span.

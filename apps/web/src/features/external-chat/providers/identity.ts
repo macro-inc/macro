@@ -1,4 +1,6 @@
+import SlackLogo from '@phosphor/slack-logo.svg';
 import WhatsappLogo from '@phosphor/whatsapp-logo.svg';
+import SlackLogoBold from '@phosphor-icons/core/bold/slack-logo-bold.svg';
 import WhatsappLogoBold from '@phosphor-icons/core/bold/whatsapp-logo-bold.svg';
 import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { Component, JSX } from 'solid-js';
@@ -22,6 +24,11 @@ const IDENTITIES: Record<ExternalChatProvider, ProviderIdentity> = {
     label: 'WhatsApp',
     icon: WhatsappLogo,
     boldIcon: WhatsappLogoBold,
+  },
+  slack: {
+    label: 'Slack',
+    icon: SlackLogo,
+    boldIcon: SlackLogoBold,
   },
 };
 
