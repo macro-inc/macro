@@ -123,6 +123,23 @@ describe('native retained view transport', () => {
     host.dispose();
   });
 
+  it('resumes a descriptor while fewer readers than the bound register after it', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.entityFilter(args);
+    for (let id = 0; id < LIVE_QUERY_CAPACITY - 1; id++) {
+      await host.entityFilter({
+        ...args,
+        liveQuery: { ...args.liveQuery!, id: String(id) },
+      });
+    }
+    await host.entityFilter(args);
+    expect(invoke).toHaveBeenLastCalledWith(
+      'graphql_cache_entity_filter_resume',
+      { id: 'view', registrationId: 'registration-1', since: undefined }
+    );
+    host.dispose();
+  });
+
   it('bounds retained descriptors and clears them after reset', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.entityFilter(args);
