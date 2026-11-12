@@ -45,6 +45,31 @@ import { type ApplyOutcome, applyOpen } from '../primitives/apply-ui-command';
 /** Undo stays on offer a little longer than an ordinary notice. */
 const UNDO_TOAST_MS = 8_000;
 
+/**
+ * Undo, traced with its outcome. A leave guard can keep the pane (unsaved
+ * edits); Undo then stays on offer.
+ */
+async function undoOpen(
+  frame: UiCommandFrame,
+  route: string,
+  outcome: Extract<ApplyOutcome, { kind: 'opened' }>
+) {
+  const span = Telemetry.span('ui.command.undo');
+  span.setAttr('ui.command.id', frame.commandId);
+  span.setAttr('ui.route', route);
+  try {
+    const undone = await outcome.undo();
+    span.setAttr('outcome', undone ? 'undone' : 'kept');
+    analytics.track('agent_ui_command_undone', {
+      route,
+      outcome: undone ? 'undone' : 'kept',
+    });
+    if (!undone) offerUndo(frame, route, outcome);
+  } finally {
+    span.end();
+  }
+}
+
 function offerUndo(
   frame: UiCommandFrame,
   route: string,
@@ -63,8 +88,7 @@ function offerUndo(
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId !== undefined) toast.dismiss(toastId);
-            analytics.track('agent_ui_command_undone', { route });
-            fireAndForget(outcome.undo(), 'agent-navigation');
+            fireAndForget(undoOpen(frame, route, outcome), 'agent-navigation');
           },
         },
       ],
@@ -185,6 +209,9 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
+  // Take this tab's id as the app starts, so this page answers a tab
+  // duplicated from it, which starts with a copy of the id, from the start.
+  uiClientId();
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();

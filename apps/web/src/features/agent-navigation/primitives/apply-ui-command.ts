@@ -6,10 +6,12 @@
 
 import {
   claimOf,
+  type Entry,
   type LayoutSnapshot,
   type PaneId,
   type SplitLocation,
   type SplitRouter,
+  type SplitSearchState,
 } from '@app/lib/split-router';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { splitOf } from '@components/app/split-layout/layoutManager';
@@ -32,8 +34,12 @@ export type ApplyDeps = {
 };
 
 export type ApplyOutcome =
-  /** A new pane shows it; `undo` takes it away again. */
-  | { kind: 'opened'; pane: PaneId; undo: () => Promise<void> }
+  /**
+   * A new pane shows it; `undo` takes it away again and resolves whether it
+   * did. A leave guard can keep the pane (unsaved edits); `undo` can then be
+   * tried again.
+   */
+  | { kind: 'opened'; pane: PaneId; undo: () => Promise<boolean> }
   /** Already on screen; left as it is, nothing to undo. */
   | { kind: 'shown' }
   /** No room for another pane, and the agent never replaces one. */
@@ -56,11 +62,58 @@ function paneShowingSession(
     );
 }
 
-/** Already shown by a pane or a preview: an open would only bring it forward. */
-function alreadyShown(router: SplitRouter, location: SplitLocation): boolean {
-  const claim = claimOf(router.routes, location.route);
+/** Whether every search value the agent asked for is in `shown`. */
+function includesSearch(
+  shown: SplitSearchState | undefined,
+  asked: SplitSearchState
+): boolean {
+  return Object.entries(asked).every(([namespace, params]) =>
+    Object.entries(params).every(([key, value]) =>
+      deepEqual(shown?.[namespace]?.[key], value)
+    )
+  );
+}
 
-  return claim !== undefined && router.claims.holderOf(claim) !== undefined;
+/**
+ * Whether `entry` shows the view at `location`: the same route, with every
+ * search value the agent asked for (`/tasks` matches a Tasks pane on any
+ * saved view; `/tasks?s0.view=…` only a pane on that view).
+ */
+function showsView(entry: Entry | undefined, location: SplitLocation): boolean {
+  if (!entry) return false;
+  if (!deepEqual(entry.location.route, location.route)) return false;
+
+  return includesSearch(entry.location.search, location.search ?? {});
+}
+
+/** The panes on screen: stacked layouts show only the front one. */
+function panesOnScreen(
+  router: SplitRouter,
+  manager: SplitManager | undefined
+): readonly PaneId[] {
+  const panes = router.panes();
+  if (!manager) return panes;
+
+  const visible = manager.getVisibleSplits().map((split) => split.id);
+  return panes.filter((pane) => visible.includes(splitOf(pane)));
+}
+
+/**
+ * Already shown, so an open would only bring it forward: by whoever holds its
+ * claim (a pane or a preview), or, for a view no claim covers (Tasks, Home),
+ * by a pane on screen showing that view. A view in a stacked pane behind the
+ * front one opens in front.
+ */
+function alreadyShown(
+  { router, manager }: ApplyDeps,
+  location: SplitLocation
+): boolean {
+  const claim = claimOf(router.routes, location.route);
+  if (claim !== undefined) return router.claims.holderOf(claim) !== undefined;
+
+  return panesOnScreen(router, manager).some((pane) =>
+    showsView(router.entry(pane), location)
+  );
 }
 
 /**
@@ -96,26 +149,39 @@ function target(
   return { source: agentPane, split: { pane: agentPane, side: 'right' } };
 }
 
+/**
+ * Takes the agent's pane away, as Undo. The read hold stays until the pane
+ * is gone: the person hasn't touched it, and a read marker mounting during
+ * the departure would mark it read. Resolves whether the pane went; when a
+ * leave guard kept it (unsaved edits) or a newer navigation won, it comes
+ * back into view.
+ */
 async function undo(
   deps: ApplyDeps,
   pane: PaneId,
   snapshot: LayoutSnapshot,
   opened: LayoutSnapshot
-) {
-  deps.arrivals.release(pane);
-  const others = deps.router.panes().filter((open) => open !== pane);
+): Promise<boolean> {
+  const { router } = deps;
+  const others = router.panes().filter((open) => open !== pane);
   const rects = capturePaneRects(others);
-  if (!deps.stacked) await playDeparture(pane);
+  const departure = deps.stacked ? undefined : playDeparture(pane);
+  await departure?.finished;
 
   // Restore the layout as it was when nothing else changed since (panes,
   // sizes, order, where each pane is); otherwise take away only the agent's
-  // pane and keep the person's changes.
-  const untouched = deepEqual(deps.router.layoutSnapshot(), opened);
-  await (untouched
-    ? deps.router.restoreLayout(snapshot)
-    : deps.router.remove(pane));
+  // pane and keep the person's changes. Decided after the departure, so an
+  // open landing during it counts as a change.
+  const untouched = deepEqual(router.layoutSnapshot(), opened);
+  await (untouched ? router.restoreLayout(snapshot) : router.remove(pane));
+
+  if (router.panes().includes(pane)) {
+    departure?.revert();
+    return false;
+  }
 
   if (!deps.stacked) requestAnimationFrame(() => playSettle(rects));
+  return true;
 }
 
 /** Open `location` for the agent, as described in the module comment. */
@@ -125,13 +191,15 @@ export async function applyOpen(
   location: SplitLocation
 ): Promise<ApplyOutcome> {
   const { router, manager } = deps;
+  // Opening it again would bring its pane forward and take focus. Checked
+  // before room: a full layout has nothing to make room for when it's shown.
+  if (alreadyShown(deps, location)) return { kind: 'shown' };
+
   const { source, split } = target(router, frame);
   const roomy = split
     ? (manager?.canSplit(splitOf(split.pane), split.side) ?? true)
     : (manager?.canAppendSplit() ?? true);
   if (!deps.stacked && !roomy) return { kind: 'no_room' };
-  // Opening it again would bring its pane forward and take focus.
-  if (alreadyShown(router, location)) return { kind: 'shown' };
 
   const before = router.panes();
   const snapshot = router.layoutSnapshot();
