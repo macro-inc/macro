@@ -6,6 +6,7 @@ import { createExternalChatCapabilities } from '@app/features/external-chat/quer
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { ExternalChatView } from '@app/features/external-chat/views/external-chat-view';
 import { InMacroChats } from '@app/features/external-view/components/in-macro-section';
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -199,6 +200,7 @@ function Page() {
   );
 }
 
+initializeLexical();
 const root = document.getElementById('root');
 if (!root) throw new Error('missing #root');
 render(

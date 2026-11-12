@@ -10,6 +10,10 @@ the gateway `/email` prefix.
 
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
+- `src/composition/api.rs`: production API dependencies and service wiring.
+- `src/outbound/message_reads.rs`: query adapter for the email domain's synced
+  read service; handlers retain only extraction and HTTP/error rendering.
+
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
   `scheduled` (scheduled sends),
@@ -51,6 +55,7 @@ the gateway `/email` prefix.
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
 - `just check` (from this directory) runs `cargo check` with `SQLX_OFFLINE=true`.
+
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
 

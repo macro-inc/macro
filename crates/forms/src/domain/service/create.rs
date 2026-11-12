@@ -474,6 +474,7 @@ where
         let now = self.now();
         let database_id = table.table.database_id;
         let form = Form {
+            appearance: None,
             id,
             name,
             description: String::new(),
