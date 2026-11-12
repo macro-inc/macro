@@ -23,6 +23,7 @@ vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
 vi.mock('@app/lib/split-router', () => ({
+  useOptionalSplitRouter: () => undefined,
   SplitRouter: {
     Outlet: (props: { fallback: ParentProps['children'] }) => props.fallback,
   },

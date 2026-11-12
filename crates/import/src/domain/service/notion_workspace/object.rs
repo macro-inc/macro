@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use import_notion::domain::inventory::full_markdown;
+use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -227,7 +228,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         items: &[write::WriteItem],
-        people: &values::PeopleMap,
+        people: &PeopleMap,
     ) -> Result<NotionLinks> {
         let pages: Vec<&write::WriteItem> = items
             .iter()
@@ -333,7 +334,7 @@ pub(super) struct Target<'a, Api> {
     pub api: &'a Api,
     pub team_id: Option<Uuid>,
     pub place: Place<'a>,
-    pub people: &'a values::PeopleMap,
+    pub people: &'a PeopleMap,
     pub links: &'a NotionLinks,
     pub databases: &'a tokio::sync::Mutex<HashMap<NotionId, write::WrittenDatabase>>,
     pub written: &'a [WrittenObject],

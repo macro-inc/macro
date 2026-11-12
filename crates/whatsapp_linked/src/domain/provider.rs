@@ -136,9 +136,9 @@ impl ChatProvider for WhatsAppProvider {
         &self,
         chat: &ChatRef,
         ids: &[String],
-        unnamed: &[Uuid],
+        persons: &[Uuid],
     ) -> ExternalChatResult<People> {
-        self.groups.people(chat, ids, unnamed).await
+        self.groups.people(chat, ids, persons).await
     }
 
     async fn request_refresh(&self, chat: &ChatRef, viewer: &str) -> ExternalChatResult<()> {

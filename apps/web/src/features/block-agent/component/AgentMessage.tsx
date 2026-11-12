@@ -9,6 +9,8 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { AgentReplyLinks } from '@components/app/split-layout/split-router/agent-reply-links';
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
@@ -44,7 +46,7 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
-import { PromptFooter } from './PromptFooter';
+import { PromptFooter, ReplyFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -126,6 +128,11 @@ function AgentMessagePart(props: {
               partIndex: props.index,
               inFlight: props.inFlight,
               followedBy: toolUsedAfter(props.message.parts, props.index),
+              current:
+                props.inFlight &&
+                props.message.parts
+                  .slice(props.index + 1)
+                  .every((part) => part.kind === 'thought'),
             }}
           />
         )}
@@ -176,6 +183,16 @@ function ToolGroupPart(props: {
         )
       : -1;
   const active = () => activeIndex() !== -1;
+  const activity = useSessionActivity(() => props.message.agentSessionId);
+  // The session's live line names what the turn is doing now, so it belongs
+  // on the run the turn is still in: one with a call in flight, or the
+  // newest run while the agent thinks between calls.
+  const current = () =>
+    active() ||
+    (props.inFlight &&
+      props.message.parts
+        .slice(props.end)
+        .every((part) => part.kind === 'thought'));
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
@@ -197,6 +214,7 @@ function ToolGroupPart(props: {
         count={calls().length}
         active={active()}
         activeIndex={active() ? activeIndex() : undefined}
+        summary={current() ? activity() : undefined}
       >
         {renderParts()}
       </LiveToolGroup>
@@ -230,6 +248,24 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       () => false
     )
     .otherwise(() => true);
+}
+
+/**
+ * When a finished agent reply was sent, for the line under it. A turn stopped
+ * before the agent said anything leaves only an empty placeholder reply,
+ * which has nothing to put a time under unless it failed.
+ */
+function replySentAt(message: FoldedMessage): string | undefined {
+  if (message.author.kind !== 'agent' || message.postedAt === null) {
+    return undefined;
+  }
+
+  const placeholder = message.parts.every(
+    (part) => part.kind === 'text' && part.text.trim() === ''
+  );
+  if (placeholder && message.stop?.kind !== 'failed') return undefined;
+
+  return message.postedAt;
 }
 
 /**
@@ -358,69 +394,75 @@ export function Message(props: {
         !isNotificationMessage(props.message)
       }
       fallback={
-        <div class="flex flex-col gap-1 min-w-0">
-          {/* Segments are positional, and a run at the tail grows as calls
+        // An agent's links to Macro open in the app, as its mention chips do.
+        <AgentReplyLinks>
+          <div class="flex flex-col gap-1 min-w-0">
+            {/* Segments are positional, and a run at the tail grows as calls
               stream in — so rows are keyed by index, not by segment value,
               and a group keeps its open state while it fills. */}
-          <Index each={segmentParts(props.message.parts)}>
-            {(segment) => (
-              <Show
-                when={segment().kind === 'tools'}
-                fallback={
-                  <Show when={props.message.parts[segment().start]}>
-                    {(part) => (
-                      <AgentMessagePart
-                        part={part()}
-                        message={props.message}
-                        index={segment().start}
-                        inFlight={inFlight()}
-                      />
-                    )}
-                  </Show>
-                }
-              >
-                <ToolGroupPart
-                  message={props.message}
-                  start={segment().start}
-                  end={segment().end}
-                  inFlight={inFlight()}
-                />
-              </Show>
-            )}
-          </Index>
-          {/* The turn is open with nothing to read yet — a ripple and a label
+            <Index each={segmentParts(props.message.parts)}>
+              {(segment) => (
+                <Show
+                  when={segment().kind === 'tools'}
+                  fallback={
+                    <Show when={props.message.parts[segment().start]}>
+                      {(part) => (
+                        <AgentMessagePart
+                          part={part()}
+                          message={props.message}
+                          index={segment().start}
+                          inFlight={inFlight()}
+                        />
+                      )}
+                    </Show>
+                  }
+                >
+                  <ToolGroupPart
+                    message={props.message}
+                    start={segment().start}
+                    end={segment().end}
+                    inFlight={inFlight()}
+                  />
+                </Show>
+              )}
+            </Index>
+            {/* The turn is open with nothing to read yet — a ripple and a label
               naming the work, so the wait reads as work rather than a stall. */}
-          <Show when={inFlight() && showsWorkingLine(props.message)}>
-            <WorkingLine label={workingLabel(props.message)} />
-          </Show>
-          {/* A turn the runtime errored is something that happened to the
+            <Show when={inFlight() && showsWorkingLine(props.message)}>
+              <WorkingLine label={workingLabel(props.message)} />
+            </Show>
+            {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. The
               line says what to do about it; the runtime's own account of
               what happened is the detail. A failure the runtime wrote in the
               person's terms is theirs to act on, so it gets a card instead. */}
-          <Show when={failure()}>
-            {(failed) => (
-              <Show
-                when={failed().notice}
-                fallback={
-                  <ActionLine
-                    label={TURN_FAILED_LABEL}
-                    detail={failed().message}
-                    failed
-                  />
-                }
-              >
-                {(notice) => (
-                  <FailureNoticeCard
-                    notice={notice()}
-                    onOpenLink={openExternalUrl}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
-        </div>
+            <Show when={failure()}>
+              {(failed) => (
+                <Show
+                  when={failed().notice}
+                  fallback={
+                    <ActionLine
+                      label={TURN_FAILED_LABEL}
+                      detail={failed().message}
+                      failed
+                    />
+                  }
+                >
+                  {(notice) => (
+                    <FailureNoticeCard
+                      notice={notice()}
+                      onOpenLink={openExternalUrl}
+                    />
+                  )}
+                </Show>
+              )}
+            </Show>
+            <Show when={!inFlight() && replySentAt(props.message)}>
+              {(sentAt) => <ReplyFooter sentAt={sentAt()} />}
+            </Show>
+          </div>
+        </AgentReplyLinks>
       }
     >
       <UserMessage message={props.message} />

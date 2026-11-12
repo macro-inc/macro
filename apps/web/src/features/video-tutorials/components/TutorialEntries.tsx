@@ -82,11 +82,11 @@ export function TutorialRowView(props: EntryProps) {
         class="grid min-h-[inherit] w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] items-center gap-x-(--soup-row-column-gap) rounded-xl pr-2 pl-[calc(var(--soup-row-padding-l)+var(--tutorial-row-inset,0px))] text-left text-sm outline-none [--title-width:10rem] focus-visible:bg-list-hover"
       >
         <span aria-hidden="true" />
-        {/* On phones the label takes its own width, and the title truncates
-            (after the snippet has given up its space) instead of overflowing. */}
+        {/* The title truncates (after the snippet has given up its space)
+            instead of overflowing. */}
         <span class="flex min-w-0 items-center gap-2 font-medium">
           <PlayCircleIcon class="size-4 shrink-0 text-ink-muted" />
-          <span class="w-(--title-width) shrink-0 truncate text-ink mobile:w-auto">
+          <span class="w-(--title-width) shrink-0 truncate text-ink">
             {t('tutorials.watchTutorial')}
           </span>
           <span class="min-w-0 truncate text-ink">{props.title}</span>
@@ -136,9 +136,13 @@ export function TutorialPillView(props: EntryProps & { class?: string }) {
 
 /**
  * For a sidebar: a sidebar item like the block's own (Inbox, Favorites), with
- * the length in the trailing lane, swapped for the dismiss X on hover.
+ * the length in the trailing lane, swapped for the dismiss X on hover. A
+ * sidebar that lists several tutorials labels each with its block instead of
+ * "Watch tutorial".
  */
-export function TutorialSidebarItemView(props: EntryProps) {
+export function TutorialSidebarItemView(
+  props: EntryProps & { label?: string }
+) {
   return (
     <div class="group/tutorial relative">
       <ViewSidebar.Item
@@ -149,7 +153,9 @@ export function TutorialSidebarItemView(props: EntryProps) {
         <ViewSidebar.Icon>
           <PlayCircleIcon />
         </ViewSidebar.Icon>
-        <span class="truncate">{t('tutorials.watchTutorial')}</span>
+        <span class="truncate">
+          {props.label ?? t('tutorials.watchTutorial')}
+        </span>
         <span
           class={cn(
             'ml-auto shrink-0 pr-1 text-xs text-ink-extra-muted',

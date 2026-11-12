@@ -11,6 +11,7 @@ fn completion(feature: AiFeature, total: Option<f32>) -> CompletionUsage {
         user: user(),
         entity: None,
         agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1000,
@@ -234,6 +235,14 @@ fn normalize_model_id_strips_provider_prefix() {
     assert_eq!(normalize_model_id("claude-haiku-4-5"), "claude-haiku-4-5");
     // A trailing slash is not a provider prefix; leave the id alone.
     assert_eq!(normalize_model_id("weird/"), "weird/");
+}
+
+#[test]
+fn model_provider_is_the_routing_segment() {
+    assert_eq!(model_provider("fireworks/kimi-k3"), Some("fireworks"));
+    assert_eq!(model_provider("anthropic/claude-opus-5"), Some("anthropic"));
+    assert_eq!(model_provider("claude-haiku-4-5"), None);
+    assert_eq!(model_provider("weird/"), None);
 }
 
 #[derive(Clone, Default)]

@@ -1999,3 +1999,81 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
         ]),
     );
 }
+
+#[tokio::test]
+async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
+    let user = "macro|owner@example.com";
+    let event = Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id(user),
+            file_id: Some("file_1".to_string()),
+            url: Some("https://example.com/picture.png".to_string()),
+        },
+    ));
+    let expected_envelope = serde_json::to_value(&event).unwrap();
+    let access = MockAccessService::with_users(vec![user_id("macro|contact@example.com")]);
+    let repository = MockRepository::new(
+        vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_match", user)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_user_event(event.clone())
+        .await
+        .expect("user event is ingested");
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.workspace_calls, vec![vec![user_id(user)]]);
+    assert_eq!(
+        repository_state.match_calls,
+        vec![MatchCall {
+            workspace_ids: vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
+            event_name: "user.picture_changed".to_string(),
+            entity_id: user.to_string(),
+        }]
+    );
+    drop(repository_state);
+
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let message = &enqueuer_state.attempted_messages[0];
+    assert_eq!(message.webhook_id, "wh_match");
+    assert_eq!(message.event.event_id, event.event_id.to_string());
+    assert_eq!(message.event.event_name, "user.picture_changed");
+    assert_eq!(message.event.entity_type, "user");
+    assert_eq!(message.event.entity_id, user);
+    assert_eq!(message.event.ordering_key, user);
+    assert_eq!(message.event.broker_envelope, expected_envelope);
+    assert_eq!(
+        message.event.broker_envelope["event_type"],
+        "user.picture_changed"
+    );
+}
+
+#[tokio::test]
+async fn user_event_workspace_resolution_failure_is_transient() {
+    let event = Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: None,
+            url: None,
+        },
+    ));
+    let repository = MockRepository::new(Vec::new(), Vec::new());
+    lock(&repository.state).fail_workspace_resolution = true;
+    let service = service(
+        MockAccessService::with_users(Vec::new()),
+        repository,
+        MockEnqueuer::default(),
+    );
+
+    let error = service
+        .ingest_user_event(event)
+        .await
+        .expect_err("resolution failure surfaces");
+
+    assert!(error.is_transient());
+}

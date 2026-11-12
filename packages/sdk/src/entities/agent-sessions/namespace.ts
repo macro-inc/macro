@@ -7,6 +7,7 @@ import type {
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
+  type AgentSessionUpdates,
   type CreateManagedSessionOptions,
   type RegisteredWork,
   type SelectableRepository,
@@ -39,6 +40,10 @@ import {
  * ```
  *
  * The prompt must be self-contained: the task, repository, relevant findings and links, constraints, and expected outcome. The new session does not receive this conversation. When the outcome is a pull request, require it to be ready for review, not a draft, with CI passing before the agent finishes. Create once per task and do not retry automatically after an uncertain failure. Link the session in your reply with its id. To check on it later, create a routine; never wait or poll inside an execution.
+ *
+ * ## Sessions waiting for the user
+ *
+ * macro.agentSessions.updates() lists the user's sessions waiting on them (permission requests, questions, held tool approvals) or stalled. A session's held tool calls come from session.pendingApprovals(); approve or deny one only when the user said so for that call. session.linkTask(task) links a session the user owns to its Macro task, and the session's pull request with it.
  */
 export class AgentSessionNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -56,6 +61,9 @@ export class AgentSessionNamespace {
    * from an id. Unknown or inaccessible personas fail. `model` and `instructions`
    * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
    * and it starts as Cursor.
+   *
+   * @write
+   * @openworld
    */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
@@ -65,6 +73,8 @@ export class AgentSessionNamespace {
    * The sessions the caller registered as its work with
    * {@link AgentSession.registerAsWork} and can still view, newest first.
    * Ended registrations and archived sessions are left out.
+   *
+   * @readonly
    */
   registeredWork(): Promise<RegisteredWork[]> {
     return AgentSession.listRegisteredWork(this.client);
@@ -73,6 +83,8 @@ export class AgentSessionNamespace {
   /**
    * Whether `prompt` needs a chat agent (`'chat'`) or a coding agent
    * (`'code'`), as the app's Auto mode decides before starting a session.
+   *
+   * @write
    */
   chooseMode(prompt: string): Promise<AgentMode> {
     return AgentSession.chooseMode(this.client, prompt);
@@ -81,6 +93,9 @@ export class AgentSessionNamespace {
   /**
    * The GitHub repositories the caller can hand a managed session, with the
    * branch each one's sessions start on by default.
+   *
+   * @readonly
+   * @openworld
    */
   repositories(): Promise<SelectableRepository[]> {
     return AgentSession.repositories(this.client);
@@ -90,47 +105,91 @@ export class AgentSessionNamespace {
    * Branch names on one repository the caller can start a managed session
    * from. `repoUrl` is one of the URLs {@link AgentSessionNamespace.repositories}
    * lists.
+   *
+   * @readonly
+   * @openworld
    */
   repositoryBranches(repoUrl: string): Promise<string[]> {
     return AgentSession.repositoryBranches(this.client, repoUrl);
   }
 
   /**
+   * The caller's coding sessions waiting for them: permission requests,
+   * questions and held tool approvals to answer, and sessions stalled for
+   * over 20 minutes, newest activity first. Read a session's held approvals
+   * with {@link AgentSession.pendingApprovals}.
+   *
+   * @readonly
+   */
+  updates(): Promise<AgentSessionUpdates> {
+    return AgentSession.updates(this.client);
+  }
+
+  /**
    * The sessions linked to the GitHub pull request at `url` that the caller
    * can view.
+   *
+   * @readonly
    */
   forPullRequest(url: string): Promise<AgentSession[]> {
     return AgentSession.forPullRequest(this.client, url);
   }
 
-  /** The caller's default sandbox size for new `@coder` sessions. */
+  /**
+   * The caller's default sandbox size for new `@coder` sessions.
+   *
+   * @readonly
+   */
   defaultSandboxSize(): Promise<SandboxSize> {
     return AgentSession.defaultSandboxSize(this.client);
   }
 
-  /** Set the caller's default sandbox size for the next `@coder` mention. */
+  /**
+   * Set the caller's default sandbox size for the next `@coder` mention.
+   *
+   * @write
+   * @idempotent
+   */
   setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     return AgentSession.setDefaultSandboxSize(this.client, size);
   }
 
-  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  /**
+   * What the caller's new coding sessions are told to do beyond their assignment.
+   *
+   * @readonly
+   */
   codingPreferences(): Promise<CodingPreferencesBody> {
     return AgentSession.codingPreferences(this.client);
   }
 
-  /** Which triggers archive the caller's sessions by default; each is off unless chosen. */
+  /**
+   * Which triggers archive the caller's sessions by default; each is off unless chosen.
+   *
+   * @readonly
+   */
   autoArchivePreferences(): Promise<AutoArchivePreferencesBody> {
     return AgentSession.autoArchivePreferences(this.client);
   }
 
-  /** Replace which triggers archive the caller's sessions by default. */
+  /**
+   * Replace which triggers archive the caller's sessions by default.
+   *
+   * @write
+   * @idempotent
+   */
   setAutoArchivePreferences(
     preferences: AutoArchivePreferencesBody,
   ): Promise<AutoArchivePreferencesBody> {
     return AgentSession.setAutoArchivePreferences(this.client, preferences);
   }
 
-  /** Replace the caller's coding preferences. */
+  /**
+   * Replace the caller's coding preferences.
+   *
+   * @write
+   * @idempotent
+   */
   setCodingPreferences(
     preferences: CodingPreferencesBody,
   ): Promise<CodingPreferencesBody> {

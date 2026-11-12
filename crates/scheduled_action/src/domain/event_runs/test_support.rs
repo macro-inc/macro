@@ -326,7 +326,9 @@ impl EventRunRepository for Repo {
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
                 template_id: None,
+                suggestion_id: None,
                 description: String::new(),
+                sub_routine: None,
             },
         }))
     }
