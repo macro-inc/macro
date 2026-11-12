@@ -511,6 +511,8 @@ a later successful refresh releases it. A failed or incomplete refresh shows
 `Calendar unavailable` with the existing Retry action; partial cache results do
 not count as a refreshed viewport. While waiting, `Event saved. Refreshing
 calendar…` also offers Retry, which reruns calendar sync before reading the view.
+Saved previews belong to the visible range; a successful read of another range
+releases the preview rather than retaining the old range's frozen grid.
 `This event` changes only the selected occurrence and leaves the cached series
 master time untouched; Cancel, Escape, and failed saves restore the original
 position. `All events`, when available, applies
