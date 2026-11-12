@@ -191,6 +191,39 @@ document is left untouched, so a mark is never guessed into place. The
 backend `CommentOnText` tool places the mark first and then posts the
 thread anchored to it, removing the mark again if the post fails.
 
+## Lexical state and commits
+
+Programs edit a markdown document with a real Lexical editor, without a model
+(`src/lexical-commit`, design in `docs/design/sdk-content-editing.md`).
+`POST /lexical-state` (view token) joins the document and answers
+`{ state, revision }`: the Loro mirror's state normalized through
+`createDocumentEditor()` from `@macro-inc/lexical-core/sdk`, and the revision
+it is at. `POST /lexical-commit` (edit token) takes that `revision`, the
+top-level `blocks` the program changed (`{ id, after, node }` in document
+order) and the `removed` block ids.
+
+The worker rebuilds base by forking Loro at the revision (never trusting a
+client copy), builds wanted from base and the request, reads live from the
+mirror, and merges the three by node id (`merge.ts`): root, lists, tables, rows,
+cells and list items holding only lists merge child by child; every other node
+and every container's attributes are taken whole from whichever side changed
+them, and a node both sides changed differently conflicts. Moves are what lies
+outside the longest common subsequence with base. A list item's `value` is
+derived, so it is ignored and renumbered. A clean merge is applied in one
+update with no await between reading live and propagating, then acknowledged
+like `/edit`; it skips `flush`'s catch-all sync, which could revert a remote
+edit Loro holds but the session hasn't folded in yet. A retry of a landed
+commit merges to the live state and applies nothing.
+
+Answers: 200 `{ revision, state }` (merged live state); 409
+`{ error: 'conflict', conflicts: [{ id, reason }] }` with `changed`,
+`removed`, `moved`, or `revision` (id null) when the revision isn't a version
+of the document; 422 `{ error: 'invalid', message }` for unknown node types,
+duplicate ids, a node whose id differs from its entry, a misplaced `after` or
+more than 500 blocks; 502 `unacknowledged`; 499 when the request aborted
+before the apply, 504 on the worker's timeout. Nothing applies on 409, 422 or
+an abort before the apply.
+
 ## Canvas
 
 `POST /canvas` reads an initialized Canvas room or performs a natural-language
