@@ -950,7 +950,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   operation rows only; never show the program or code-mode wording. A live
   tool group's header is the shared `ActivityLine` (`block-agent/ui`), the one
   a channel reply's open run uses; never add a second working line or a
-  scrolling peek window beside it.
+  scrolling peek window beside it. `activity.browser.e2e.ts` in
+  `block-agent/browser-test` replays a long run and checks it shows one live
+  line, then one settled row.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
