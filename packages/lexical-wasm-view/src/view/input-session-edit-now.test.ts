@@ -193,16 +193,42 @@ test('entry admission false cancels before the factory', async () => {
   }
 });
 
-test('a closing session cancels before the factory', async () => {
-  const runtime = mount();
+test('a closing unbound session cancels before the factory, like the queued method', async () => {
+  const runtime = mount(false);
   let calls = 0;
+  const factory = () => {
+    calls++;
+    return missingEquation(runtime);
+  };
   try {
     const closing = runtime.close();
-    const settled = now(runtime).inputNowIfSessionEdit(() => {
-      calls++;
-      return missingEquation(runtime);
-    });
-    expect(settled).toEqual({ status: 'cancelled', reason: 'closing' });
+    const queued = await runtime.port.inputSettledIfSessionEdit(factory);
+    const settled = now(runtime).inputNowIfSessionEdit(factory);
+    expect(queued).toEqual({ status: 'cancelled', reason: 'closing' });
+    expect(settled).toEqual(queued);
+    expect(calls).toBe(0);
+    await closing;
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('a closing view with native Enter refuses admission, like the queued method', async () => {
+  const runtime = mount();
+  let calls = 0;
+  const factory = () => {
+    calls++;
+    return missingEquation(runtime);
+  };
+  try {
+    const closing = runtime.close();
+    expect(() => runtime.port.inputSettledIfSessionEdit(factory)).toThrow(
+      'Native editor view is closing'
+    );
+    expect(() => now(runtime).inputNowIfSessionEdit(factory)).toThrow(
+      'Native editor view is closing'
+    );
     expect(calls).toBe(0);
     await closing;
   } finally {
