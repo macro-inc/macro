@@ -486,10 +486,15 @@ impl SessionCodeMode for CodeModeService {
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
-        let mut receipt = tokio::spawn(
+        let session_id = session.id;
+        tokio::spawn(
             async move {
                 let _permit = permit;
-                let result = service.run(identity, execution, request, cancel).await;
+                let mut result = service.run(identity, execution, request, cancel).await;
+                // Image reads stay inside the admission budget.
+                if let Ok(receipt) = &mut result {
+                    service.attach_images(session_id, receipt).await;
+                }
                 match &result {
                     Ok(receipt) => {
                         let span = tracing::Span::current();
@@ -508,9 +513,7 @@ impl SessionCodeMode for CodeModeService {
             .instrument(span.or_current()),
         )
         .await
-        .map_err(CodeModeError::Task)??;
-        self.attach_images(session.id, &mut receipt).await;
-        Ok(receipt)
+        .map_err(CodeModeError::Task)?
     }
 
     async fn read(

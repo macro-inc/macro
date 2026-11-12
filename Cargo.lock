@@ -704,6 +704,7 @@ dependencies = [
  "onboarding",
  "opentelemetry",
  "pipedream_mcp",
+ "png",
  "prompt",
  "properties",
  "rate_limit",

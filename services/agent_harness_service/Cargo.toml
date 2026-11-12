@@ -158,6 +158,7 @@ notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 opentelemetry = { workspace = true, features = ["metrics"] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+png = { workspace = true }
 prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 rdkafka = { workspace = true }
