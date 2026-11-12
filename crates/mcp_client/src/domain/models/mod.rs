@@ -12,4 +12,6 @@ pub use macro_user_id::user_id::MacroUserIdStr;
 pub use oauth_client_metadata::OAuthClientMetadata;
 pub use result::{Error, Result};
 pub use rmcp::transport::auth::StoredCredentials;
-pub use server::{McpServer, McpServerConnectionInfo, McpServerRecord, client_info};
+pub use server::{
+    HandshakeTimedOut, McpServer, McpServerConnectionInfo, McpServerRecord, client_info,
+};
