@@ -851,8 +851,9 @@ stopping.
 The row's one action is **Finish setup** while guided setup is incomplete
 (only for the buyer and the team owner), else **Sign in with Claude** when the
 computer is on its own Claude account but signed out, else none. **⋯** holds,
-in order: **Share** and **Don't ask before acting** (the runtime's Share menu
-and permission bypass, for its owner); **Retry** on a `failed` computer
+in order: **Don't ask before acting** (the computer's permission bypass, for
+the team's owner and admins; a computer belongs to its team, so it has no Share
+menu); **Retry** on a `failed` computer
 (sets it up again, billing untouched); **Turn off** (confirm: agents on it stop
 until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 **Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
