@@ -95,7 +95,6 @@ function serializeSnapshot<T>(
   return result;
 }
 
-/** Durable scene ownership uses the same engine, WAL and transport as documents. */
 // A failed request's text names hosts and transport internals, which tell the
 // person nothing; the span keeps it. Opening calls more than one service, so
 // the message names none of them.
@@ -105,6 +104,7 @@ function openFailure(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unable to open this canvas.';
 }
 
+/** Durable scene ownership uses the same engine, WAL and transport as documents. */
 export function createCanvasSession(options: CanvasSessionOptions) {
   const owner = getOwner();
   let resetWork = Promise.resolve();
