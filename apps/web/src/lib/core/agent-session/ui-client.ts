@@ -20,10 +20,15 @@ import {
   enableAgentNavigation,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { z } from 'zod';
 
 const STORAGE_KEY = 'macro.ui-client-id';
 const CHANNEL = 'macro.ui-client';
+
+/** A phone screen's short side is narrower than this, in CSS pixels. */
+const PHONE_SHORT_SIDE_PX = 640;
 
 const storedId = z.uuid();
 
@@ -120,10 +125,7 @@ function rejoin(event: PageTransitionEvent) {
   if (event.persisted) join();
 }
 
-/**
- * This tab's id, minted on first use. The app shell calls it as it starts,
- * so this page answers a tab duplicated from it from the start.
- */
+/** This tab's id, minted on first use. */
 export function uiClientId(): string {
   if (current) return current;
 
@@ -140,11 +142,39 @@ export function uiClientId(): string {
 }
 
 /**
+ * Whether agent navigation runs in this tab. It never runs on mobile: the
+ * native iOS and Android apps (iPad included, where panes stack) and touch
+ * browsers on a phone. It asks the device, not the window, so a phone held
+ * sideways is still a phone. There the tab names itself to no one and applies
+ * no `ui_command`, so an agent's open answers `no_client` and the agent links
+ * the item in its reply instead.
+ */
+export function agentNavigationRunsHere(): boolean {
+  if (isNativeMobilePlatform()) return false;
+
+  const phoneScreen =
+    Math.min(screen.width, screen.height) < PHONE_SHORT_SIDE_PX;
+  return !(isTouchDevice() && phoneScreen);
+}
+
+/**
+ * Takes this tab's id as the app starts, so this page answers a tab
+ * duplicated from it, which starts with a copy of the id, from the start. On
+ * mobile it starts neither the id nor its channel.
+ */
+export function startUiClientId() {
+  if (!agentNavigationRunsHere()) return;
+
+  uiClientId();
+}
+
+/**
  * The id to send with a prompt typed in this tab: none while agent navigation
- * is off, so the harness records no tab for the turn.
+ * is off or on mobile, so the harness records no tab for the turn.
  */
 export function typedInClientId(): string | undefined {
   if (!isFeatureEnabled(enableAgentNavigation)) return undefined;
+  if (!agentNavigationRunsHere()) return undefined;
 
   return uiClientId();
 }

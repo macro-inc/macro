@@ -29,7 +29,10 @@ export type ApplyDeps = {
   router: SplitRouter;
   manager: SplitManager | undefined;
   arrivals: AgentArrivals;
-  /** Panes stack, as on the phone apps: a new pane goes in front. */
+  /**
+   * Panes stack, as in the native apps: a new pane goes in front. Agent
+   * navigation is off there today; this keeps the open right if it is let in.
+   */
   stacked: boolean;
 };
 

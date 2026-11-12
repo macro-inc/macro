@@ -12,7 +12,11 @@ import {
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { uiClientId } from '@core/agent-session/ui-client';
+import {
+  agentNavigationRunsHere,
+  startUiClientId,
+  uiClientId,
+} from '@core/agent-session/ui-client';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAgentNavigation } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -26,7 +30,7 @@ import {
   type FromWebsocketMessage,
   parseWebsocketPayload,
 } from '@service-connection/websocket';
-import type { ParentProps } from 'solid-js';
+import { createEffect, on, type ParentProps } from 'solid-js';
 import {
   type AgentArrivals,
   AgentArrivalsProvider,
@@ -206,9 +210,9 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
-  // Take this tab's id as the app starts, so this page answers a tab
-  // duplicated from it, which starts with a copy of the id, from the start.
-  uiClientId();
+  // Takes this tab's id as the app starts, or once the page stops reading as
+  // touch-first (device emulation turned off); never on mobile.
+  createEffect(on(agentNavigationRunsHere, startUiClientId));
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();
@@ -217,6 +221,7 @@ export function AgentNavigationProvider(props: ParentProps) {
   createConnectionWebsocketEffect((message) => {
     if (message.type !== UI_COMMAND_MESSAGE) return;
     if (!navigation().enabled) return;
+    if (!agentNavigationRunsHere()) return;
 
     const user = userId();
     if (!router || !user) return;
