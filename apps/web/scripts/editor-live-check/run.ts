@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 import { commonBlocksClipboard } from './common-blocks';
 import { assertReopened, documentFacts, installSteps } from './contract';
+import { classifySplitUndo, summarizeInputTiming } from './input-timing';
 import { committedStorage, waitForDurability } from './persistence';
 import { DocumentReceipts } from './protocol';
 import { nativeSnapshot } from './snapshot';
@@ -52,6 +53,8 @@ const assetReads: Promise<void>[] = [];
 const overlays = { glue: 0, wasm: 0 };
 const steps: { name: string; status: 'pass' | 'fail'; error?: string }[] = [];
 const modules = new WeakMap<Page, string>();
+let inputTiming: ReturnType<typeof summarizeInputTiming> | null = null;
+let splitUndoObserved = false;
 
 async function context(
   storageState?: string | Awaited<ReturnType<BrowserContext['storageState']>>
@@ -199,11 +202,35 @@ try {
   });
   let typed: Awaited<ReturnType<typeof snapshot>> | undefined;
   await step('type', async () => {
+    await page.evaluate(() => {
+      const events: unknown[] = [];
+      Reflect.set(window, '__nativeCoreInputTiming', events);
+      for (const type of ['keydown', 'beforeinput', 'input'])
+        document.addEventListener(
+          type,
+          (event) => {
+            events.push({
+              type: event.type,
+              trusted: event.isTrusted,
+              performanceMs: performance.now(),
+              wallMs: Date.now(),
+              data: event instanceof InputEvent ? event.data : null,
+              inputType: event instanceof InputEvent ? event.inputType : null,
+              key: event instanceof KeyboardEvent ? event.key : null,
+            });
+          },
+          true
+        );
+    });
     await body(page).click();
     await page.keyboard.type('```');
     await page.keyboard.press('Enter');
     await page.keyboard.type('const installCheck = "durable";');
     await expect(body(page).locator('code')).toHaveText(
+      'const installCheck = "durable";'
+    );
+    inputTiming = summarizeInputTiming(
+      await page.evaluate(() => Reflect.get(window, '__nativeCoreInputTiming')),
       'const installCheck = "durable";'
     );
     typed = await snapshot(page);
@@ -212,7 +239,21 @@ try {
     if (!typed) throw new Error('Typing prerequisite failed');
     for (const redo of ['Control+Shift+z', 'Control+y']) {
       await page.keyboard.press('Control+z');
-      await expect(body(page).locator('code')).toHaveCount(0);
+      try {
+        await expect(body(page).locator('code')).toHaveCount(0);
+      } catch (error) {
+        const remaining = await body(page)
+          .locator('code')
+          .innerText()
+          .catch(() => null);
+        const code = 'const installCheck = "durable";';
+        splitUndoObserved =
+          remaining !== null &&
+          remaining.length > 0 &&
+          remaining.length < code.length &&
+          code.startsWith(remaining);
+        throw error;
+      }
       await page.keyboard.press(redo);
       await expect(body(page).locator('code')).toHaveText(
         'const installCheck = "durable";'
@@ -367,6 +408,11 @@ try {
           ? 'candidate-browser-artifact-overlay'
           : 'installed',
         passed,
+        inputTiming,
+        splitUndoClassification: classifySplitUndo(
+          splitUndoObserved,
+          inputTiming
+        ),
         steps,
         errors,
         assets,

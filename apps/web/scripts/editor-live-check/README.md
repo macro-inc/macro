@@ -56,3 +56,13 @@ for cold loading. Sign-in waits for the authenticated Create control before leav
 the login route; an identity HTTP response alone does not finish authentication.
 The document receipt observer accepts only the socket's exact `ping`/`pong` text
 heartbeats and continues to require binary decoding for document updates and ACKs.
+
+Record trusted physical input timestamps for the typing step. Report both the
+maximum gap between code-text inputs and the full code-entry burst duration,
+from the first fence input through the last code character, including the Enter
+interval. A captured complete burst over 400 ms can share the OFF history merge
+boundary even when every individual gap stays below 400 ms. Classify a matching
+split Undo as slow-input history behavior while retaining the failed assertion,
+failed step and exit status; it is not a passing run. Incomplete or untrusted
+captures cannot establish this classification. Receipts that recorded only the
+maximum gap do not establish the total burst duration.
