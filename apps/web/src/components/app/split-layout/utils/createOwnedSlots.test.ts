@@ -47,7 +47,11 @@ describe('createOwnedSlots', () => {
   it('keeps a slot after its creator unmounts while the panel stays in that view', async () => {
     const panel = createPanel('mail');
     const disposed: string[] = [];
-    const unmountList = mountView(panel.slots, 'list:navigation-source', disposed);
+    const unmountList = mountView(
+      panel.slots,
+      'list:navigation-source',
+      disposed
+    );
     unmountList();
     await settle();
     expect(disposed).toEqual([]);
