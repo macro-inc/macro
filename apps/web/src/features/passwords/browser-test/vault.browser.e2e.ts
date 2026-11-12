@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
@@ -168,6 +168,67 @@ for (const viewport of VIEWPORTS) {
     });
   });
 }
+
+/** Moves a real pointer onto `target` in steps and waits until it is hovered. */
+async function pointTo(page: Page, target: Locator) {
+  const box = await target.boundingBox();
+  if (!box) throw new Error('Pointer target is not visible');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
+    steps: 25,
+  });
+  const handle = await target.elementHandle();
+  await page.waitForFunction((element) => element?.matches(':hover'), handle);
+}
+
+test.describe('desktop pointer', () => {
+  test('New > Card with a real pointer right after a save opens the Card draft', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    await startNew(page, viewport, 'Login');
+    await page.getByLabel('Name', { exact: true }).fill('Saved before Card');
+    await press(page, viewport, 'Save');
+    await expect(
+      page.getByRole('button', { name: 'Edit', exact: true })
+    ).toBeVisible();
+
+    const trigger = page
+      .getByRole('button', { name: /^New item or folder in/ })
+      .first();
+    // An open menu hides the rest of the page from role queries; keep the element.
+    const triggerElement = await trigger.elementHandle();
+    await pointTo(page, trigger);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForFunction(
+      (element) => element?.getAttribute('aria-expanded') === 'true',
+      triggerElement
+    );
+    const card = page.getByRole('menuitem', { name: 'Card', exact: true });
+    await expect(card).toBeVisible();
+    await pointTo(page, card);
+    await expect(card).toHaveAttribute('data-highlighted', '');
+    await page.mouse.down();
+    await page.mouse.up();
+
+    await expect(
+      page.getByRole('heading', { name: 'Untitled', exact: true })
+    ).toBeVisible();
+    await expect(page.getByLabel('Cardholder', { exact: true })).toBeVisible();
+    await press(page, viewport, /Saved before Card/);
+    await expect(
+      page.getByRole('heading', { name: 'Saved before Card' })
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+});
 
 test.describe('desktop view-only', () => {
   test('a view-only item reveals but offers no edit, share, delete or code changes', async ({

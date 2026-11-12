@@ -803,21 +803,23 @@ export function VaultView(props: {
           </ViewShell.Content>
         </ViewShell.Main>
         <ViewShell.Detail class="border-l border-edge-muted">
+          {/* Keyed: a pane gets its own value, never a getter over the Match
+              accessor, which throws a stale read once the selection moves on. */}
           <Switch>
-            <Match when={selectedDraftKey()}>
+            <Match when={selectedDraftKey()} keyed>
               {(key) => (
                 <NewDraftPane
                   vault={vault}
-                  draftKey={key()}
+                  draftKey={key}
                   onBack={() => vault.select(undefined)}
                 />
               )}
             </Match>
-            <Match when={vault.selected()}>
+            <Match when={vault.selected()} keyed>
               {(item) => (
                 <ItemPane
                   vault={vault}
-                  item={item()}
+                  item={item}
                   now={now()}
                   onBack={() => vault.select(undefined)}
                 />
