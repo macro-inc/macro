@@ -12,6 +12,11 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TabIcon from '@icon/system/regular/tabs.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useRemoveFavoriteMutation } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -54,6 +59,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
           <MenuGroup>
             <MenuItem
               text={t('entityActions.openInNewSplit')}
+              icon={SplitIcon}
               disabled={!canOpenInNewSplit()}
               onClick={() => {
                 if (canOpenInNewSplit()) openFavorite(true);
@@ -62,12 +68,14 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
             <Show when={canOpenInNewTab()}>
               <MenuItem
                 text={t('entityActions.openInNewTab')}
+                icon={TabIcon}
                 onClick={() => openInNewTab(() => openFavorite(false))}
               />
             </Show>
             <Show when={canOpenFullscreen()}>
               <MenuItem
                 text={t('entityActions.openFullscreen')}
+                icon={ArrowsOutIcon}
                 onClick={() => {
                   layout.replaceAllSplits(content(), {
                     referredFrom: 'sidebar',
@@ -78,6 +86,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
             </Show>
             <MenuItem
               text={t('entityActions.openInCurrentSplit')}
+              icon={ArrowRightIcon}
               onClick={() => openFavorite(false)}
             />
           </MenuGroup>
@@ -86,6 +95,7 @@ export function FavoriteContextMenu(props: FavoriteContextMenuProps) {
           <MenuGroup>
             <MenuItem
               text={t('entityActions.removeFromFavorites')}
+              icon={StarIcon}
               onClick={() =>
                 removeMutation.mutate({
                   entityType: props.favorite.entityType,
