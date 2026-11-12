@@ -75,10 +75,40 @@ type LinkedServer = {
   lookups: Record<string, string>;
   /** Times the owner pressed Import. */
   historyImports: number;
+  /** What the added chat is: the "Design Crit" group or a direct chat with Ana. */
+  kind: 'group' | 'direct';
+  /** The group's members, as its details report them. */
+  participants: {
+    jid: string;
+    name: string;
+    admin: boolean;
+    pictureFileId?: string;
+  }[];
+  /** Profile pictures' static file ids: the added chat's, and senders' by name. */
+  pictures: { chat?: string; senders?: Record<string, string> };
 };
 
 /** A person's phone-number JID. */
 const phoneJid = (digits: string) => `${digits}@s.whatsapp.net`;
+
+/** A message whose sender shows their profile picture, when the server has one. */
+function withPicture(state: LinkedServer, message: unknown) {
+  const shown = message as { sender: { name: string } };
+  const picture = state.pictures.senders?.[shown.sender.name];
+  return picture
+    ? { ...shown, sender: { ...shown.sender, pictureFileId: picture } }
+    : message;
+}
+
+/** A profile picture: a flat colour with a light disc, served as a static file. */
+function picture(colour: string) {
+  return {
+    contentType: 'image/svg+xml',
+    body: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${colour}"/><circle cx="32" cy="26" r="12" fill="#fff" opacity=".85"/><rect x="12" y="44" width="40" height="24" rx="12" fill="#fff" opacity=".85"/></svg>`
+    ),
+  };
+}
 
 function server(): LinkedServer {
   return {
@@ -147,6 +177,11 @@ function server(): LinkedServer {
     registered: [],
     lookups: {},
     historyImports: 0,
+    kind: 'group',
+    participants: [
+      { jid: phoneJid('14155550199'), name: 'Ana Ruiz', admin: true },
+    ],
+    pictures: {},
   };
 }
 
@@ -275,8 +310,9 @@ async function mount(page: Page, state: LinkedServer, query = '') {
             json: {
               id: CHAT_ID,
               provider: 'whatsapp',
-              kind: 'group',
-              name: 'Design Crit',
+              kind: state.kind,
+              name: state.kind === 'group' ? 'Design Crit' : 'Ana Ruiz',
+              pictureFileId: state.pictures.chat ?? null,
               userId: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
               accessLevel: state.sharedViewer ? 'view' : 'owner',
               canSend: state.canSend,
@@ -286,20 +322,22 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                 : null,
               unreadCount: 1,
               backfill: state.backfill,
-              members: {
-                name: 'Design Crit',
-                announce: false,
-                observedAt: '2026-10-21T10:00:00Z',
-                participants: [
-                  {
-                    jid: '14155550199@s.whatsapp.net',
-                    alternateJid: null,
-                    displayName: 'Ana Ruiz',
-                    name: 'Ana Ruiz',
-                    admin: true,
-                  },
-                ],
-              },
+              members:
+                state.kind === 'group'
+                  ? {
+                      name: 'Design Crit',
+                      announce: false,
+                      observedAt: '2026-10-21T10:00:00Z',
+                      participants: state.participants.map((person) => ({
+                        jid: person.jid,
+                        alternateJid: null,
+                        displayName: person.name,
+                        name: person.name,
+                        admin: person.admin,
+                        pictureFileId: person.pictureFileId ?? null,
+                      })),
+                    }
+                  : null,
               limits: {
                 textLimitBytes: 65536,
                 attachmentLimitBytes: 33554432,
@@ -326,21 +364,21 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                       attachments: [],
                     },
                   ]
-                : [
-                    ...state.imported,
-                    incomingMessage,
-                    {
-                      ...incomingMessage,
-                      id: 'message-2',
-                      body: 'Looking now. Thanks, Ana!',
-                      sender: { name: 'Me', userId: USER_ID },
-                      sentAt: new Date().toISOString(),
-                      replyTo: 'message-1',
-                      reactions: [],
-                      attachments: [],
-                      deliveryState: 'accepted',
-                    },
-                  ],
+                : [...state.imported, incomingMessage]
+                    .map((message) => withPicture(state, message))
+                    .concat([
+                      {
+                        ...incomingMessage,
+                        id: 'message-2',
+                        body: 'Looking now. Thanks, Ana!',
+                        sender: { name: 'Me', userId: USER_ID },
+                        sentAt: new Date().toISOString(),
+                        replyTo: 'message-1',
+                        reactions: [],
+                        attachments: [],
+                        deliveryState: 'accepted',
+                      },
+                    ]),
             },
           });
         if (suffix === '/sends' && method === 'POST') {
@@ -423,6 +461,10 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
               backfill: item.added?.backfill ?? null,
               community: item.community ?? null,
+              pictureFileId:
+                item.added?.id === CHAT_ID
+                  ? (state.pictures.chat ?? null)
+                  : null,
             })),
         });
       if (path === 'external-chats' && method === 'POST') {
@@ -1801,3 +1843,161 @@ test('the owner shares through direct people access without creating a channel',
   );
   expect(unexpected).toEqual([]);
 });
+
+const GROUP_PICTURE = '019a061e-0000-7000-8000-0000000000a1';
+const ANA_PICTURE = '019a061e-0000-7000-8000-0000000000a2';
+
+/** The loaded pictures, by static file id (senders' ask for a size). */
+const shownPictures = (page: Page) =>
+  page
+    .locator('img[src*="/static-file/file/"]')
+    .evaluateAll((images) =>
+      images
+        .filter((image) => (image as HTMLImageElement).complete)
+        .map((image) =>
+          new URL((image as HTMLImageElement).src).pathname.split('/').at(-1)
+        )
+    );
+
+for (const mobile of [false, true]) {
+  const device = mobile ? 'mobile' : 'desktop';
+  test.describe(`${device} profile pictures`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    const screenshot = (page: Page, name: string) =>
+      page.screenshot({
+        path: process.env.WHATSAPP_SCREENSHOT_DIR
+          ? join(process.env.WHATSAPP_SCREENSHOT_DIR, `${name}-${device}.png`)
+          : test.info().outputPath(`${name}-${device}.png`),
+        fullPage: true,
+      });
+
+    test('a group, its senders and members show pictures, and a hidden one initials', async ({
+      page,
+    }) => {
+      const state = server();
+      state.pictures = {
+        chat: GROUP_PICTURE,
+        senders: { 'Ana Ruiz': ANA_PICTURE },
+      };
+      state.files = {
+        [GROUP_PICTURE]: picture('#2f7d6d'),
+        [ANA_PICTURE]: picture('#c2643a'),
+      };
+      // Ben hides his picture from the owner's account.
+      state.participants = [
+        {
+          jid: phoneJid('14155550199'),
+          name: 'Ana Ruiz',
+          admin: true,
+          pictureFileId: ANA_PICTURE,
+        },
+        { jid: phoneJid('14155550177'), name: 'Ben Okafor', admin: false },
+      ];
+      state.imported = [
+        {
+          ...incomingMessage,
+          id: 'message-ben',
+          sender: { name: 'Ben Okafor', userId: null },
+          body: 'I can take the mobile pass.',
+          sentAt: '2026-10-21T09:30:00Z',
+          reactions: [],
+          attachments: [],
+        },
+      ];
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      await expect(
+        page.getByRole('textbox', { name: 'Message Design Crit' })
+      ).toBeVisible();
+      await expect
+        .poll(() => shownPictures(page))
+        .toEqual(expect.arrayContaining([GROUP_PICTURE, ANA_PICTURE]));
+      // Ben's hidden picture leaves his initial.
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(timeline.getByText('B', { exact: true })).toBeVisible();
+      await expect(
+        timeline.getByRole('img', { name: 'Ben Okafor' })
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-group');
+
+      await page
+        .getByRole('button', { name: 'Show details', exact: true })
+        .click();
+      const members = page.getByRole('list', { name: 'WhatsApp members' });
+      await expect(members.getByRole('listitem')).toHaveCount(2);
+      await expect(
+        members
+          .getByRole('listitem')
+          .filter({ hasText: 'Ana Ruiz' })
+          .locator(`img[src$="${ANA_PICTURE}"]`)
+      ).toBeVisible();
+      await expect(
+        members
+          .getByRole('listitem')
+          .filter({ hasText: 'Ben Okafor' })
+          .locator('img')
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-group-details');
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth
+        )
+      ).toBe(false);
+      expect(unexpected).toEqual([]);
+    });
+
+    test('a direct chat shows the person in the header, timeline and External', async ({
+      page,
+    }) => {
+      const state = server();
+      state.kind = 'direct';
+      state.chats[1].added = null;
+      state.chats[0].added = { id: CHAT_ID, name: 'Ana Ruiz' };
+      state.pictures = {
+        chat: ANA_PICTURE,
+        senders: { 'Ana Ruiz': ANA_PICTURE },
+      };
+      state.files = { [ANA_PICTURE]: picture('#c2643a') };
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      await expect(
+        page.getByRole('textbox', { name: 'Message Ana Ruiz' })
+      ).toBeVisible();
+      await expect
+        .poll(async () => (await shownPictures(page)).length)
+        .toBeGreaterThanOrEqual(2);
+      expect(new Set(await shownPictures(page))).toEqual(
+        new Set([ANA_PICTURE])
+      );
+      await screenshot(page, 'pictures-direct');
+      expect(unexpected).toEqual([]);
+    });
+
+    test('External lists added chats with their pictures, others with their icon', async ({
+      page,
+    }) => {
+      const state = server();
+      state.chats[2].added = { id: 'group-shared', name: 'Launch War Room' };
+      state.pictures = { chat: GROUP_PICTURE };
+      state.files = { [GROUP_PICTURE]: picture('#2f7d6d') };
+      const unexpected = await mount(page, state, '?view=in-macro');
+      const nav = page.getByRole('navigation', {
+        name: 'WhatsApp chats in Macro',
+      });
+      await expect(
+        nav
+          .getByRole('button', { name: /design-crit/ })
+          .locator(`img[src$="${GROUP_PICTURE}"]`)
+      ).toBeVisible();
+      await expect(
+        nav.getByRole('button', { name: /Launch War Room/ }).locator('img')
+      ).toHaveCount(0);
+      await screenshot(page, 'pictures-external');
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
