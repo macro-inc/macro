@@ -1,6 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TASK_PROJECT_PROPERTY } from './task-project';
@@ -23,10 +24,15 @@ vi.mock('@queries/properties/definitions', () => ({}));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
 }));
+vi.mock('@queries/activity/push-registry', () => ({
+  registerActivityRevalidator: vi.fn(),
+  revalidateActivityQueries: vi.fn(async () => {}),
+}));
 vi.mock('./create-project', () => ({ createProjectMutation: () => ({}) }));
 vi.mock('./project-soup', () => ({}));
 vi.mock('./project-identity', () => ({}));
 
+import { soupKeys } from '@queries/soup/keys';
 import { createProjectSources } from './project-sources';
 
 afterEach(() => vi.clearAllMocks());
@@ -140,3 +146,29 @@ it('sets and clears each task Project property, reporting failures per task', as
   });
   dispose();
 });
+
+it.each([
+  ['refreshes', undefined, true],
+  ['leaves cache-maintained', { disabled: false }, false],
+] as const)(
+  '%s shared list rows after a rename',
+  async (_, host, refetched) => {
+    const cache = new QueryClient();
+    const key = soupKeys.astItems({ body: 'home' } as never).queryKey;
+    cache.setQueryData(key, { pages: [] });
+    const { rename, dispose } = createRoot((dispose) => ({
+      rename: createProjectSources(
+        { update: async () => ok(undefined) } as never,
+        { client: () => ({}) as never, cacheHost: () => host as never },
+        cache,
+        () => 'viewer'
+      ).createCommands().rename,
+      dispose,
+    }));
+
+    await rename('launch', 'Launch v2');
+
+    expect(cache.getQueryState(key)?.isInvalidated).toBe(refetched);
+    dispose();
+  }
+);

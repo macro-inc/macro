@@ -46,7 +46,12 @@ export function createProjectSources(
   userId: Accessor<string | undefined>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
-  const refresh = () => refreshProjectQueries(soup.client());
+  const refresh = () =>
+    refreshProjectQueries(
+      soup.client(),
+      cache,
+      soup.cacheHost ?? (() => undefined)
+    );
   const context: ProjectsContext = {
     userId,
     createPropertyDefinitionsSource() {
