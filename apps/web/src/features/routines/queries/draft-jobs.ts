@@ -1,6 +1,6 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
@@ -39,7 +39,29 @@ export function routineDraftJobsQueryOptions() {
     queryFn: fetchDraftJobs,
     // Updates arrive over the connection, and it refetches after reconnecting.
     staleTime: 60_000,
+    retry: retryDraftJobsRead,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, MAX_RETRY_DELAY_MS),
   });
+}
+
+/** How many times a failed read of the list is tried again, about 35 s in all. */
+const READ_RETRIES = 6;
+const MAX_RETRY_DELAY_MS = 10_000;
+
+/**
+ * A finished draft is read again for its draft or its reason, and that read
+ * can land while the replica that drafted it shuts down (a draft it
+ * interrupts fails then). Keep trying past the restart, so its toast still
+ * comes; a refused sign-in won't change by trying.
+ */
+function retryDraftJobsRead(failureCount: number, error: Error): boolean {
+  if (
+    thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+    thrownResultErrorHasCode(error, 'FORBIDDEN')
+  ) {
+    return false;
+  }
+  return failureCount < READ_RETRIES;
 }
 
 async function fetchDraftJobs(): Promise<DraftJob[]> {

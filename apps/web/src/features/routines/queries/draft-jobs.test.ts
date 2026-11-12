@@ -1,5 +1,6 @@
 import { queryClient } from '@queries/client';
 import type { DraftJob } from '@service-scheduled-action/generated/schemas';
+import { QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -186,6 +187,34 @@ describe('background draft updates', () => {
     });
     expect(invalidate).toHaveBeenCalledTimes(2);
     invalidate.mockRestore();
+  });
+
+  it('keeps reading a finished draft while its server restarts', async () => {
+    vi.useFakeTimers();
+    queryClient.setQueryData(KEY, [drafting('a')]);
+    const observer = new QueryObserver(
+      queryClient,
+      routineDraftJobsQueryOptions()
+    );
+    const stop = observer.subscribe(() => {});
+    // The replica that failed it is shutting down; the next one isn't up yet.
+    const away = err([{ code: 'HTTP_ERROR', message: 'Bad gateway' }]);
+    client.listRoutineDraftJobs
+      .mockResolvedValueOnce(away)
+      .mockResolvedValueOnce(away)
+      .mockResolvedValueOnce(away)
+      .mockResolvedValueOnce(away)
+      .mockResolvedValueOnce(away)
+      .mockResolvedValue(ok([failed('a')]));
+    applyDraftUpdate({
+      draftId: 'a',
+      state: 'failed',
+      progress: { stage: 'writing' },
+    });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(listed()?.[0]?.state).toBe('failed');
+    expect(client.listRoutineDraftJobs).toHaveBeenCalledTimes(6);
+    stop();
   });
 
   it('drops a draft removed elsewhere, and ignores what it can’t read', () => {
