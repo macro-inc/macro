@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::{Event, Paths, Recorder};
+use super::config::Provision;
+use super::{Event, Paths, Recorder, Switch, take_hint};
 
 const TOKEN: &str = "test-token-0123456789abcdef0123456789";
 const CHILD_DIR: &str = "LOCAL_TELEMETRY_TEST_CHILD_DIR";
@@ -74,10 +75,7 @@ fn opt_in(dir: &Path, endpoint: &str) -> Paths {
     )
     .expect("write config");
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
-    Paths {
-        config,
-        buffer_dir: dir.join("buffer"),
-    }
+    Paths::at(config, dir.join("buffer"))
 }
 
 fn common() -> BTreeMap<String, Value> {
@@ -118,15 +116,12 @@ fn buffered_files(paths: &Paths) -> Vec<std::path::PathBuf> {
 }
 
 #[test]
-fn opted_out_writes_and_sends_nothing() {
+fn no_settings_and_no_provisioning_writes_and_sends_nothing() {
     let endpoint = Endpoint::start(ResponseTemplate::new(204));
     let dir = tempfile::tempdir().expect("tempdir");
-    // A fully working opt-in file, just not at the path that is read.
+    // A fully working settings file, just not at the path that is read.
     let opted_in = opt_in(dir.path(), &endpoint.server.uri());
-    let paths = Paths {
-        config: dir.path().join("absent.toml"),
-        buffer_dir: opted_in.buffer_dir.clone(),
-    };
+    let paths = Paths::at(dir.path().join("absent.toml"), opted_in.buffer_dir.clone());
 
     let built_fields = std::cell::Cell::new(false);
     let recorder = Recorder::start(&paths, SystemTime::now(), || {
@@ -152,7 +147,7 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
 
     let recorder = Recorder::start(&paths, started, common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     let run_id = recorder.run_id().to_owned();
     recorder.step_started("Running migrations");
     recorder.record(
@@ -236,13 +231,10 @@ fn killed_child() {
         return;
     };
     let config = Path::new(&dir).join("local-telemetry.toml");
-    let paths = Paths {
-        config,
-        buffer_dir: Path::new(&dir).join("buffer"),
-    };
+    let paths = Paths::at(config, Path::new(&dir).join("buffer"));
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     recorder.step_started("Starting infra (docker compose up -d --wait)");
     recorder.record(
         Event::new("step")
@@ -284,7 +276,7 @@ fn a_killed_run_is_sent_by_the_next_one() {
 
     let next = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     next.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     let records = endpoint.log_records();
@@ -322,7 +314,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let began = Instant::now();
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     for index in 0..50 {
         recorder.record(Event::new("step").with("step", format!("step {index}")));
     }
@@ -336,7 +328,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let bounded = Instant::now();
     let second = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     second.finish(
         BTreeMap::new(),
         SystemTime::now(),
@@ -359,9 +351,141 @@ fn an_unreachable_endpoint_keeps_the_events_for_later() {
 
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     recorder.record(Event::new("step").with("step", "Running migrations"));
     recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     assert_eq!(buffered_files(&paths).len(), 1);
+}
+
+/// Settings in `dir` that don't exist yet, provisioned by `script`'s stdout.
+fn unprovisioned(dir: &Path, endpoint: &str, script: &str) -> Paths {
+    let mut paths = Paths::at(dir.join("local-telemetry.toml"), dir.join("buffer"));
+    paths.provision = Some(Provision {
+        command: vec!["sh".into(), "-c".into(), script.into()],
+        endpoint: endpoint.to_owned(),
+    });
+    paths
+}
+
+#[test]
+fn opting_out_wins_over_working_settings() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut by_env = opt_in(dir.path(), &endpoint.server.uri());
+    by_env.switch = Switch::Off;
+    let recorder = Recorder::start(&by_env, SystemTime::now(), common).expect("start");
+    assert!(recorder.is_none());
+
+    let by_file = unprovisioned(dir.path(), &endpoint.server.uri(), &format!("echo {TOKEN}"));
+    std::fs::write(&by_file.config, "enabled = false\n").expect("write");
+    let recorder = Recorder::start(&by_file, SystemTime::now(), common).expect("start");
+    assert!(recorder.is_none());
+    assert!(!by_file.buffer_dir.exists());
+    assert!(endpoint.requests("/v1/logs").is_empty());
+}
+
+#[test]
+fn a_first_run_provisions_its_token_and_sends() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = unprovisioned(dir.path(), &endpoint.server.uri(), &format!("echo {TOKEN}"));
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on by default");
+    recorder.record(Event::new("step").with("step", "Running migrations"));
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    let requests = endpoint.requests("/v1/logs");
+    assert!(!requests.is_empty());
+    let authorization = requests[0]
+        .headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    assert_eq!(authorization, Some(format!("Bearer {TOKEN}")));
+    let mode = std::fs::metadata(&paths.config)
+        .expect("settings written")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+    let written = std::fs::read_to_string(&paths.config).expect("read");
+    assert!(written.contains("provisioned = true"));
+    assert!(buffered_files(&paths).is_empty());
+}
+
+#[test]
+fn without_a_token_runs_carry_on_and_back_off() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Doppler logged out, offline or without access: no token on stdout.
+    let paths = unprovisioned(dir.path(), "https://otlp.example.com", "exit 1");
+
+    let began = Instant::now();
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on by default");
+    recorder.record(Event::new("step").with("step", "Running migrations"));
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    assert!(began.elapsed() < Duration::from_secs(5));
+    assert!(!paths.config.exists());
+    // Kept, in case a later run gets a token within the week.
+    assert_eq!(buffered_files(&paths).len(), 1);
+
+    let built_fields = std::cell::Cell::new(false);
+    let next = Recorder::start(&paths, SystemTime::now(), || {
+        built_fields.set(true);
+        common()
+    })
+    .expect("start");
+    assert!(next.is_none(), "a recent failure skips recording");
+    assert!(!built_fields.get());
+
+    assert!(take_hint(&paths).is_some());
+    assert!(take_hint(&paths).is_none(), "the hint shows once");
+}
+
+#[test]
+fn a_rejected_provisioned_token_is_fetched_again() {
+    const FRESH: &str = "fresh-token-0123456789abcdef0123456789";
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let server = runtime.block_on(async {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                format!("Bearer {FRESH}").as_str(),
+            ))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        server
+    });
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = unprovisioned(dir.path(), &server.uri(), &format!("echo {FRESH}"));
+    std::fs::write(
+        &paths.config,
+        format!(
+            "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\n",
+            server.uri()
+        ),
+    )
+    .expect("write");
+    std::fs::set_permissions(&paths.config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    let written = std::fs::read_to_string(&paths.config).expect("read");
+    assert!(written.contains(FRESH));
+    assert!(
+        buffered_files(&paths).is_empty(),
+        "sent with the fresh token"
+    );
 }
