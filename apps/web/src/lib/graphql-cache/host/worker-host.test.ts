@@ -828,7 +828,7 @@ describe('createWorkerCacheHost', () => {
     adapter.options.onCacheReadAvailabilityChanged?.('blocked');
     await refused;
     await browseRefused;
-    await vi.advanceTimersByTimeAsync(60_001);
+    await vi.advanceTimersByTimeAsync(9);
 
     const queued = adapter.requests.find(
       (request) => request.kind === 'search' && request.request.query === 'todo'
@@ -837,6 +837,45 @@ describe('createWorkerCacheHost', () => {
     adapter.options.onCacheReadAvailabilityChanged?.('ready');
     adapter.respond(queued.id, page);
     await expect(search).resolves.toEqual(page);
+    host.dispose();
+  });
+
+  it('ends a kept search when the owner change never completes, and releases one its caller superseded', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const typed = (query: string, signal?: AbortSignal) =>
+      host.search(
+        { profile: 'quick-access-v1', buckets: ['document'], query, limit: 20 },
+        { signal }
+      );
+    const superseded = new AbortController();
+    const earlier = typed('to', superseded.signal);
+    const dropped = expect(earlier).rejects.toThrow('superseded');
+    const latest = typed('todo');
+    const expired = expect(latest).rejects.toThrow('owner handoff timeout');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await vi.advanceTimersByTimeAsync(9);
+    await vi.advanceTimersByTimeAsync(1);
+    await expired;
+
+    // The coordinator may still answer either copy once an engine arrives.
+    for (const request of adapter.requests) {
+      if (request.kind === 'search') {
+        adapter.respond(request.id, { documents: [], nextCursor: null });
+      }
+    }
+    await expect(typed('', AbortSignal.abort())).rejects.toThrow('superseded');
     host.dispose();
   });
 
