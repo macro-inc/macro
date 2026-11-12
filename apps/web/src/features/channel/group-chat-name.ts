@@ -3,6 +3,8 @@
  * channel; one nobody named is called after everyone else in it, which can run
  * to a dozen names, so a list of more than three keeps the first two and
  * counts the rest. Shorter names, and names people chose, stay as they are.
+ * The surfaces it feeds aren't translated yet; when they are, make this one
+ * plural `t()` message rather than concatenating.
  */
 export function groupChatName(name: string) {
   const people = name.split(', ');

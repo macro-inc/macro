@@ -6,6 +6,7 @@ import {
   describeInboxCard,
   describeInboxRow,
   describeStackItem,
+  groupChatId,
   inboxCardKind,
   isGroupChatRow,
 } from './describe-row';
@@ -400,6 +401,7 @@ describe('describeInboxCard', () => {
       what: undefined,
       body: 'Sam: Working from home',
     });
+    expect(groupChatId(row)).toBe('entity');
   });
 
   it('keeps a reaction in a group chat about the person', () => {
@@ -411,6 +413,7 @@ describe('describeInboxCard', () => {
       }),
     ]);
     expect(isGroupChatRow(row)).toBe(false);
+    expect(groupChatId(row)).toBeUndefined();
   });
 
   it('shows a direct message stack the person and the newest message', () => {

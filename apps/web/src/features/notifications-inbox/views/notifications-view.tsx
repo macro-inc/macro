@@ -92,8 +92,8 @@ import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
   describeStackItem,
+  groupChatId,
   inboxCardKind,
-  isGroupChatRow,
 } from '../primitives/describe-row';
 import {
   createInboxListItems,
@@ -118,6 +118,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { GroupChatAvatar } from './group-chat-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -724,17 +725,21 @@ export function NotificationsView(props: NotificationsViewProps) {
         <NotificationRow
           id={card.row().id}
           icon={
-            <InboxSenderAvatar
-              // A group chat shows itself, not whoever wrote in it last.
-              notification={
-                isGroupChatRow(card.row())
-                  ? undefined
-                  : card.row().content.notifications[0]
+            <Show
+              when={groupChatId(card.row())}
+              fallback={
+                <InboxSenderAvatar
+                  notification={card.row().content.notifications[0]}
+                  kind={inboxCardKind(card.row())}
+                  entity={card.row().content.entity}
+                  badged
+                />
               }
-              kind={inboxCardKind(card.row())}
-              entity={card.row().content.entity}
-              badged
-            />
+            >
+              {(channelId) => (
+                <GroupChatAvatar channelId={channelId()} row={card.row()} />
+              )}
+            </Show>
           }
           who={display().who}
           what={display().what}

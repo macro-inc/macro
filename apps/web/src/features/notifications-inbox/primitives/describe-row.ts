@@ -91,6 +91,14 @@ export function isGroupChatRow(row: NotificationInboxRow) {
   return metadata.content.channelType === 'private';
 }
 
+/** The channel a group chat row is for, which it shows instead of a sender. */
+export function groupChatId(row: NotificationInboxRow) {
+  const entity = row.content.entity;
+  return isGroupChatRow(row) && entity.type === 'channel'
+    ? entity.id
+    : undefined;
+}
+
 /**
  * The name a group chat row shows. The row's channel is named for the reader;
  * the notification's copy is named for its sender, so it lists the reader too.
