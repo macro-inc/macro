@@ -105,7 +105,14 @@ impl ChannelGraphqlContext {
             Ok(MessageTimelineEntry::Activity { .. }) | Err(MessageError::NotFound) => Ok(
                 crate::GraphqlChannelMessage::from_message(message, channel_id),
             ),
-            Err(error) => Err(crate::message_error(error)),
+            // Failing here would tell the client its write was refused, and a
+            // resend under a new id would post twice.
+            Err(error) => {
+                tracing::error!(error = ?error, "written channel root could not be read back");
+                Ok(crate::GraphqlChannelMessage::from_message(
+                    message, channel_id,
+                ))
+            }
         }
     }
 

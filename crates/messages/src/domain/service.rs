@@ -321,7 +321,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// Post a client message once, for callers that retry until they hear an
     /// answer. A repeat of an id this author already posted to the same parent
     /// and thread returns the stored message, including a tombstone, without
-    /// another write, event, or clock-skew check on the id.
+    /// another write, event, or clock-skew check on the id. A first delivery
+    /// accepts an id minted up to 30 days ago, for a write a device held
+    /// while offline.
     #[tracing::instrument(err, skip(self, access, input))]
     pub async fn post_once(
         &self,
@@ -338,7 +340,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if let Some(message) = self.repo.get(&parent, id).await? {
             return validate_event_message(message, &parent, &actor, thread_id);
         }
-        match self.post(access, input).await {
+        // A write queued on a device can first arrive long after its id was
+        // minted; a call's first message keeps `post`'s own id handling.
+        let posted = if matches!(parent, MessageParent::Call(_)) {
+            self.post(access, input).await
+        } else {
+            validate_replayed_client_id(id, chrono::Utc::now())?;
+            self.post_validated(access, input).await
+        };
+        match posted {
             Err(MessageError::Conflict) => {
                 let message = self
                     .repo
@@ -605,6 +615,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     })
                     .collect();
                 retained.extend(add);
+                Some(retained)
+            }
+            AttachmentChange::DeltaOnce { remove, add } => {
+                let mut retained: Vec<_> = current
+                    .attachments
+                    .iter()
+                    .filter(|attachment| !remove.contains(&attachment.id))
+                    .map(|attachment| NewAttachment {
+                        entity_type: attachment.entity_type.clone(),
+                        entity_id: attachment.entity_id.clone(),
+                        width: attachment.width,
+                        height: attachment.height,
+                    })
+                    .collect();
+                for attachment in add {
+                    let held = retained.iter().any(|kept| {
+                        kept.entity_type == attachment.entity_type
+                            && kept.entity_id == attachment.entity_id
+                    });
+                    if !held {
+                        retained.push(attachment);
+                    }
+                }
                 Some(retained)
             }
         };
@@ -1313,6 +1346,24 @@ const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
 fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
     let minted_at = validate_uuid_v7(id)?;
     if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
+        return Err(MessageError::Invalid(
+            "message id timestamp is too far from the server clock",
+        ));
+    }
+    Ok(())
+}
+
+/// How long a queued write may wait on a device before its first delivery.
+const REPLAYED_CLIENT_ID_MAX_AGE: chrono::TimeDelta = chrono::TimeDelta::days(30);
+
+/// A replayed write's id may be old, since the device held it while offline,
+/// but never further in the future than a wrong clock explains.
+fn validate_replayed_client_id(
+    id: Uuid,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), MessageError> {
+    let minted_at = validate_uuid_v7(id)?;
+    if minted_at - now > CLIENT_ID_MAX_SKEW || now - minted_at > REPLAYED_CLIENT_ID_MAX_AGE {
         return Err(MessageError::Invalid(
             "message id timestamp is too far from the server clock",
         ));

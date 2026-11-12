@@ -90,7 +90,7 @@ async fn a_post_without_an_id_or_with_a_forged_one_is_rejected() {
             .await,
         Err(MessageError::Invalid(_)),
     ));
-    let created = Utc::now() - chrono::TimeDelta::days(3);
+    let created = Utc::now() - chrono::TimeDelta::days(31);
     let mut input = post_input();
     input.id = Some(Uuid::new_v7(uuid::Timestamp::from_unix(
         uuid::NoContext,
@@ -162,4 +162,102 @@ async fn deleting_a_message_that_never_existed_is_still_not_found() {
             .await,
         Err(MessageError::NotFound),
     ));
+}
+
+#[tokio::test]
+async fn a_first_post_held_offline_for_days_is_still_written() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let created = Utc::now() - chrono::TimeDelta::days(3);
+    let mut input = post_input();
+    input.id = Some(Uuid::new_v7(uuid::Timestamp::from_unix(
+        uuid::NoContext,
+        created.timestamp() as u64,
+        created.timestamp_subsec_nanos(),
+    )));
+    service
+        .post_once(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            input,
+        )
+        .await
+        .unwrap();
+    assert_eq!(repo.creates.lock().unwrap().len(), 1);
+    assert_eq!(events.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_post_minted_in_the_future_is_rejected() {
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default());
+    let created = Utc::now() + chrono::TimeDelta::days(2);
+    let mut input = post_input();
+    input.id = Some(Uuid::new_v7(uuid::Timestamp::from_unix(
+        uuid::NoContext,
+        created.timestamp() as u64,
+        created.timestamp_subsec_nanos(),
+    )));
+    assert!(matches!(
+        service
+            .post_once(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input,
+            )
+            .await,
+        Err(MessageError::Invalid(_)),
+    ));
+    assert!(repo.creates.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_repeated_edit_does_not_attach_the_same_entity_twice() {
+    // The first attempt already removed 601 and attached "new"; its answer
+    // was lost and the client sends the same edit again.
+    let mut repo = fixture();
+    repo.message.attachments = [("602", 602), ("new", 603)]
+        .map(|(entity_id, id)| MessageAttachment {
+            id: Uuid::from_u128(id),
+            entity_type: "document".into(),
+            entity_id: entity_id.into(),
+            width: None,
+            height: None,
+            created_at: Utc::now(),
+        })
+        .to_vec();
+    let service =
+        MessageService::new(repo.clone(), Events::default()).with_references(ReferenceAccess {
+            allowed: true,
+            checked: Arc::default(),
+        });
+    service
+        .patch(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.message.id,
+            MessagePatch {
+                attachments: AttachmentChange::DeltaOnce {
+                    remove: vec![Uuid::from_u128(601)],
+                    add: vec![NewAttachment {
+                        entity_type: "document".into(),
+                        entity_id: "new".into(),
+                        width: None,
+                        height: None,
+                    }],
+                },
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let edits = repo.edits.lock().unwrap();
+    assert_eq!(
+        edits[0]
+            .attachments
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|a| a.entity_id.as_str())
+            .collect::<Vec<_>>(),
+        ["602", "new"]
+    );
 }

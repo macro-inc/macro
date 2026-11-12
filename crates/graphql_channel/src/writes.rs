@@ -310,7 +310,8 @@ impl ChannelMessageMutationRoot {
         let attachments = if remove.is_empty() && input.add_attachments.is_empty() {
             AttachmentChange::Preserve
         } else {
-            AttachmentChange::Delta {
+            // The client's queue replays an edit whose answer was lost.
+            AttachmentChange::DeltaOnce {
                 remove,
                 add: input.add_attachments.into_iter().map(Into::into).collect(),
             }
