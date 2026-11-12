@@ -13,7 +13,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType;
-use single_flight::SingleFlight;
+use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{Pool, Postgres};
 use std::sync::{Arc, LazyLock};
 
@@ -33,7 +33,6 @@ pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod crm_entity_users;
 pub mod database_access;
-mod database_key;
 pub mod database_row_access;
 pub mod document_access;
 pub mod foreign_entity_access;
@@ -44,8 +43,6 @@ pub mod project_access;
 pub mod scheduled_action_access;
 pub mod team_access;
 pub mod thread_access;
-
-use database_key::DatabaseKey;
 
 #[cfg(test)]
 mod test;
@@ -88,11 +85,15 @@ pub async fn get_user_source_ids(
 
     let user_id = user_id.as_ref().to_string();
     let key = (DatabaseKey::of(pool), user_id.clone());
-    let pool = pool.clone();
-    let lookup = async move {
-        query_user_source_ids(&pool, &user_id)
-            .await
-            .map_err(Arc::new)
+    let lookup = || {
+        let pool = pool.clone();
+        let user_id = user_id.clone();
+
+        async move {
+            query_user_source_ids(&pool, &user_id)
+                .await
+                .map_err(Arc::new)
+        }
     };
 
     Ok(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup).await?)

@@ -4,10 +4,8 @@ mod test;
 use std::sync::{Arc, LazyLock};
 
 use chrono::{DateTime, Utc};
-use single_flight::SingleFlight;
+use single_flight::{DatabaseKey, SingleFlight};
 use uuid::Uuid;
-
-use crate::database_key::DatabaseKey;
 
 type AccessibleCallsKey = (DatabaseKey, String, Vec<String>);
 type AccessibleCalls = Result<Vec<Uuid>, Arc<sqlx::Error>>;
@@ -66,7 +64,7 @@ pub struct CallRecordSearchPayload {
 /// Nothing is cached, but callers asking at the same time for the same
 /// database, user and status filter share one run of the query. A failure
 /// reaches all of them as an `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(db, status_filter), fields(coalesced = tracing::field::Empty))]
+#[tracing::instrument(skip(db, status_filter), err, fields(coalesced = tracing::field::Empty))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
@@ -77,13 +75,16 @@ pub async fn get_accessible_call_ids(
         user_id.to_string(),
         status_filter.to_vec(),
     );
-    let db = db.clone();
-    let user_id = user_id.to_string();
-    let status_filter = status_filter.to_vec();
-    let lookup = async move {
-        query_accessible_call_ids(&db, &user_id, &status_filter)
-            .await
-            .map_err(Arc::new)
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let status_filter = status_filter.to_vec();
+
+        async move {
+            query_accessible_call_ids(&db, &user_id, &status_filter)
+                .await
+                .map_err(Arc::new)
+        }
     };
 
     Ok(RUNNING_CALL_LOOKUPS.run(key, lookup).await?)

@@ -18972,6 +18972,7 @@ name = "single_flight"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "sqlx",
  "tokio",
  "tracing",
  "workspace-hack",

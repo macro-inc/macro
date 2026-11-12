@@ -9,7 +9,9 @@ lookups use it so overlapping searches by one user run one database query.
 ## Start here
 
 - `src/lib.rs`: `SingleFlight::run` and the crate docs, which state what
-  happens on errors and cancellation.
+  happens on errors, cancellation and panics.
+- `src/database_key.rs`: `DatabaseKey`, the part of a key that says which
+  database a lookup reads.
 
 ## Scope
 
@@ -30,10 +32,12 @@ lookups use it so overlapping searches by one user run one database query.
 
 ## Gotchas
 
-- The key must name everything the output depends on, including which
-  database it is read from: callers with equal keys receive the same output.
+- The key must name everything the output depends on: callers with equal keys
+  receive the same output. A database lookup's key starts with a `DatabaseKey`.
 - A caller that joins receives data as of when the run started. Do not put a
   read that must see the caller's own preceding write behind it.
-- The work must be `'static`: clone the pool and own the arguments.
+- `run` takes a function that makes the work, and the work must be `'static`:
+  clone the pool and own the arguments inside it.
 - `run` records `coalesced` on the caller's span when the span declares that
-  field as `tracing::field::Empty`.
+  field as `tracing::field::Empty`, and links a waiting caller's span to the
+  span that started the work (`follows_from`), where the query's time is.

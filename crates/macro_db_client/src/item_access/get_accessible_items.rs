@@ -4,10 +4,8 @@ use cached::proc_macro::cached;
 use std::sync::{Arc, LazyLock};
 
 use model::item::UserAccessibleItem;
-use single_flight::SingleFlight;
+use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{Pool, Postgres};
-
-use crate::database_key::DatabaseKey;
 
 type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
 type AccessibleItems = Result<Vec<UserAccessibleItem>, Arc<sqlx::Error>>;
@@ -22,7 +20,7 @@ static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItem
 /// Callers that miss the cache at the same time for the same database, user and
 /// filters share one run of the queries. A failure reaches all of them as an
 /// `Arc<sqlx::Error>`.
-#[tracing::instrument(skip(db), fields(coalesced = tracing::field::Empty))]
+#[tracing::instrument(skip(db), err, fields(coalesced = tracing::field::Empty))]
 #[cfg_attr(
     not(test),
     cached(
@@ -44,12 +42,16 @@ pub async fn get_user_accessible_items(
         item_type_filter.clone(),
         exclude_owned,
     );
-    let db = db.clone();
-    let user_id = user_id.to_string();
-    let lookup = async move {
-        query_accessible_items(&db, &user_id, item_type_filter.as_deref(), exclude_owned)
-            .await
-            .map_err(Arc::new)
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let item_type_filter = item_type_filter.clone();
+
+        async move {
+            query_accessible_items(&db, &user_id, item_type_filter.as_deref(), exclude_owned)
+                .await
+                .map_err(Arc::new)
+        }
     };
 
     Ok(RUNNING_LOOKUPS.run(key, lookup).await?)
