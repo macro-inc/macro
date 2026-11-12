@@ -400,6 +400,16 @@ async fn search_with_a_blank_or_short_query_returns_nobody() {
 }
 
 #[tokio::test]
+async fn search_rate_limit_is_enforced() {
+    let (api, validator) = build_test_router(true);
+
+    let response = api.oneshot(search_request("query=pe")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(validator.validation_count(), 1);
+}
+
+#[tokio::test]
 async fn search_rejects_oversized_or_missing_queries_and_anonymous_callers() {
     let (api, _) = build_test_router(false);
     let long = "a".repeat(subsequence_match::MAX_QUERY_BYTES + 1);

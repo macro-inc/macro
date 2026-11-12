@@ -1,7 +1,7 @@
 -- Ranked people search over the viewer's contact graph (both directions),
--- self, and the viewer's current team. Peers are read through the two scoped
--- expression indexes, so each candidate arrives already lowercased; nothing
--- outside the viewer's own edges and team is ever read.
+-- self, and the viewer's current team. Peers are read through
+-- contacts_connections_user1_user2_key and idx_contacts_connections_user2_user1,
+-- so nothing outside the viewer's own edges and team is ever read.
 -- $1 viewer id, $2 trimmed query (at least two characters), $3 result limit.
 WITH viewer AS MATERIALIZED (
     SELECT $1::text AS id, lower($2::text) AS needle

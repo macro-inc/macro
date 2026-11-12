@@ -101,7 +101,7 @@ pub struct SearchPeopleResponse {
 )]
 pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     Query(params): Query<SearchPeopleParams>,
 ) -> Result<Json<SearchPeopleResponse>, (StatusCode, &'static str)> {
     let query = PeopleSearchQuery::new(&params.query)
@@ -230,6 +230,48 @@ where
     }
 }
 
+/// Rate limit for people search: 600 requests per user per hour, the budget
+/// other interactive read routes use.
+pub struct PerUserPeopleSearchRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
+
+impl<S, Auth> RateLimitExtractable<S> for PerUserPeopleSearchRateLimit<Auth>
+where
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+{
+    fn config() -> RateLimitConfig {
+        RateLimitConfig {
+            max_count: 600,
+            window: Duration::from_mins(60),
+        }
+    }
+
+    fn key(&self) -> RateLimitKey {
+        RateLimitKey::builder(&"per-user-people-search")
+            .append(&self.0.authorization.user.macro_user_id.as_ref())
+            .finish()
+    }
+}
+
+impl<S, Auth> FromRequestParts<S> for PerUserPeopleSearchRateLimit<Auth>
+where
+    S: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    MacroAuthorizationState<Auth>: FromRef<S>,
+{
+    type Rejection = macro_authorization::MacroAuthorizationRejection;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>> =
+            parts.extract_with_state(state).await?;
+        Ok(Self(authorization))
+    }
+}
+
 /// State required by the contacts HTTP router.
 pub struct ContactsRouterState<S, R, Auth> {
     /// The contacts service implementation.
@@ -300,7 +342,8 @@ where
     }
 }
 
-/// Builds the contacts API router with authorization and POST rate limiting.
+/// Builds the contacts API router with authorization, and per-user rate
+/// limits on POST /contacts and GET /contacts/search.
 pub fn contacts_router<S, R, Auth, T>(state: ContactsRouterState<S, R, Auth>) -> Router<T>
 where
     S: ContactsService + PeopleSearchService,
@@ -318,18 +361,28 @@ where
             axum::routing::post(add_contact_handler::<S, Auth>),
         )
         .layer(axum::middleware::from_fn_with_state(
-            rate_limit_state,
+            rate_limit_state.clone(),
             rate_limit_middleware::<
                 AddContactRateLimitState<R, Auth>,
                 PerUserAddContactRateLimit<Auth>,
                 AddContactRateLimitState<R, Auth>,
             >,
         ));
+    let search_route = Router::new()
+        .route("/contacts/search", get(search_people_handler::<S, Auth>))
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit_state,
+            rate_limit_middleware::<
+                AddContactRateLimitState<R, Auth>,
+                PerUserPeopleSearchRateLimit<Auth>,
+                AddContactRateLimitState<R, Auth>,
+            >,
+        ));
 
     Router::new()
         .route("/contacts", get(handler::<S, Auth>))
-        .route("/contacts/search", get(search_people_handler::<S, Auth>))
         .merge(post_route)
+        .merge(search_route)
         .with_state(state)
 }
 
