@@ -1,8 +1,116 @@
+diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-23b105205f6ff236 b/.bun-tag-23b105205f6ff236
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-3a3ebcb749662a29 b/.bun-tag-3a3ebcb749662a29
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-3f0a2cd495abb925 b/.bun-tag-3f0a2cd495abb925
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-7e7ced7d20a3a0a3 b/.bun-tag-7e7ced7d20a3a0a3
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist-js/index.cjs b/dist-js/index.cjs
-index f1bba4502af349efbde8b94ac1b1773a490f4836..18b6c78e7102523d557430eaae94d839fcef0cb0 100644
+index f1bba4502af349efbde8b94ac1b1773a490f4836..910c17c7ac8f09b63a3bf81645a337dc8a09390f 100644
 --- a/dist-js/index.cjs
 +++ b/dist-js/index.cjs
-@@ -103,21 +103,24 @@ async function fetch(input, init) {
+@@ -29,6 +29,95 @@ var core = require('@tauri-apps/api/core');
+  * @module
+  */
+ const ERROR_REQUEST_CANCELLED = 'Request cancelled';
++// Releases a native response once the page can no longer read its body and
++// has neither finished nor cancelled it. Until then the response stays open
++// natively, and its unread data counts against the flow control of a
++// connection that other requests share.
++//
++// It watches the `unread` object in `createBody`, not the stream or the
++// response: WebKit collects a stream object while its response can still be
++// read. The held value is the resource id alone, so the registry cannot keep
++// what it watches.
++const unreadBodies = new FinalizationRegistry((rid) => {
++    core.invoke('plugin:http|fetch_cancel_body', { rid }).catch(() => { });
++});
++// A listener that calls the function behind `weakHandler` while it is alive.
++// Made here so that its scope holds the weak reference and nothing else.
++function weakListener(weakHandler) {
++    return () => weakHandler.deref()?.();
++}
++// Makes the body stream of a response.
++//
++// The stream's callbacks must not be able to reach the stream or its response,
++// directly or through a scope they share: WebKit never collects a stream that
++// its own callbacks can reach. So they are made here rather than in `fetch`,
++// and hold only what reading needs.
++function createBody(responseRid, signal) {
++    // Held only by the callbacks below, so it is collected once nothing can
++    // read the body any more. It also keeps the abort handler alive: the
++    // signal holds that weakly, because a signal that outlives the response
++    // must not keep its body.
++    const unread = { abort: undefined };
++    let dropped = false;
++    let stopListening = () => { };
++    const settle = () => {
++        dropped = true;
++        unreadBodies.unregister(unread);
++        stopListening();
++    };
++    const dropBody = () => {
++        if (dropped)
++            return Promise.resolve();
++        settle();
++        return core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
++    };
++    const readChunk = async (controller) => {
++        let data;
++        try {
++            data = await core.invoke('plugin:http|fetch_read_body', {
++                rid: responseRid
++            });
++        }
++        catch (e) {
++            // close the stream if an error occurs
++            // and drop the body on Rust side
++            controller.error(e);
++            void dropBody();
++            return;
++        }
++        const dataUint8 = new Uint8Array(data);
++        const lastByte = dataUint8[dataUint8.byteLength - 1];
++        const actualData = dataUint8.slice(0, dataUint8.byteLength - 1);
++        // close when the signal to close (last byte is 1) is sent from the IPC.
++        // The Rust side has released the response by then.
++        if (lastByte === 1) {
++            settle();
++            controller.close();
++            return;
++        }
++        controller.enqueue(actualData);
++    };
++    unreadBodies.register(unread, responseRid, unread);
++    return new ReadableStream({
++        start: (controller) => {
++            // listen for abort events to cancel reading
++            if (!signal)
++                return;
++            unread.abort = () => {
++                controller.error(ERROR_REQUEST_CANCELLED);
++                void dropBody();
++            };
++            const listener = weakListener(new WeakRef(unread.abort));
++            signal.addEventListener('abort', listener);
++            stopListening = () => signal.removeEventListener('abort', listener);
++        },
++        pull: (controller) => readChunk(controller),
++        cancel: () => {
++            // Ensure body resources are released on stream cancellation
++            void dropBody();
++        }
++    });
++}
+ /**
+  * Fetch a resource from the network. It returns a `Promise` that resolves to the
+  * `Response` to that `Request`, whether it is successful or not.
+@@ -103,64 +192,35 @@ async function fetch(input, init) {
              danger
          }
      });
@@ -18,25 +126,193 @@ index f1bba4502af349efbde8b94ac1b1773a490f4836..18b6c78e7102523d557430eaae94d839
 +        void abort();
          throw new Error(ERROR_REQUEST_CANCELLED);
      }
-     signal?.addEventListener('abort', () => void abort());
-     const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await core.invoke('plugin:http|fetch_send', {
-         rid
-     });
-+    let bodyDropped = false;
-     const dropBody = () => {
+-    signal?.addEventListener('abort', () => void abort());
+-    const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await core.invoke('plugin:http|fetch_send', {
+-        rid
+-    });
+-    const dropBody = () => {
 -        return core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid });
-+        if (bodyDropped)
-+            return Promise.resolve();
-+        bodyDropped = true;
-+        return core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
-     };
-     const readChunk = async (controller) => {
-         let data;
+-    };
+-    const readChunk = async (controller) => {
+-        let data;
+-        try {
+-            data = await core.invoke('plugin:http|fetch_read_body', {
+-                rid: responseRid
+-            });
+-        }
+-        catch (e) {
+-            // close the stream if an error occurs
+-            // and drop the body on Rust side
+-            controller.error(e);
+-            void dropBody();
+-            return;
+-        }
+-        const dataUint8 = new Uint8Array(data);
+-        const lastByte = dataUint8[dataUint8.byteLength - 1];
+-        const actualData = dataUint8.slice(0, dataUint8.byteLength - 1);
+-        // close when the signal to close (last byte is 1) is sent from the IPC.
+-        if (lastByte === 1) {
+-            controller.close();
+-            return;
+-        }
+-        controller.enqueue(actualData);
+-    };
++    // Only while the request is in flight: left on the signal, the listener
++    // would hold this call's scope for as long as the signal lives.
++    signal?.addEventListener('abort', abort);
++    let sent;
++    try {
++        sent = await core.invoke('plugin:http|fetch_send', {
++            rid
++        });
++    }
++    finally {
++        signal?.removeEventListener('abort', abort);
++    }
++    const { status, statusText, url, headers: responseHeaders, rid: responseRid } = sent;
+     // no body for 101, 103, 204, 205 and 304
+     // see https://fetch.spec.whatwg.org/#null-body-status
+     const body = [101, 103, 204, 205, 304].includes(status)
+         ? null
+-        : new ReadableStream({
+-            start: (controller) => {
+-                // listen for abort events to cancel reading
+-                signal?.addEventListener('abort', () => {
+-                    controller.error(ERROR_REQUEST_CANCELLED);
+-                    void dropBody();
+-                });
+-            },
+-            pull: (controller) => readChunk(controller),
+-            cancel: () => {
+-                // Ensure body resources are released on stream cancellation
+-                void dropBody();
+-            }
+-        });
++        : createBody(responseRid, signal);
++    // Nothing will read a response without a body, so release it now.
++    if (!body)
++        core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
+     const res = new Response(body, {
+         status,
+         statusText
+@@ -175,11 +235,12 @@ async function fetch(input, init) {
+         value: new Headers(responseHeaders),
+         writable: false
+     });
+-    // Patch clone() per-instance so cloning preserves the overridden properties
+-    const originalClone = res.clone.bind(res);
++    // Patch clone() per-instance so cloning preserves the overridden properties.
++    // It finds the response through `this`, not a closure: nothing made in
++    // this function may hold the response (see `createBody`).
+     Object.defineProperty(res, 'clone', {
+-        value: () => {
+-            const cloned = originalClone();
++        value: function () {
++            const cloned = Response.prototype.clone.call(this);
+             Object.defineProperty(cloned, 'url', { value: url, writable: false });
+             Object.defineProperty(cloned, 'headers', {
+                 value: new Headers(responseHeaders),
 diff --git a/dist-js/index.js b/dist-js/index.js
-index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..f38dbd4b68c3efa578cf6a8309543840a3619c77 100644
+index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..4174dfd44b9c4c4c26ee27d469bbf65a7ade4a02 100644
 --- a/dist-js/index.js
 +++ b/dist-js/index.js
-@@ -101,21 +101,24 @@ async function fetch(input, init) {
+@@ -27,6 +27,95 @@ import { invoke } from '@tauri-apps/api/core';
+  * @module
+  */
+ const ERROR_REQUEST_CANCELLED = 'Request cancelled';
++// Releases a native response once the page can no longer read its body and
++// has neither finished nor cancelled it. Until then the response stays open
++// natively, and its unread data counts against the flow control of a
++// connection that other requests share.
++//
++// It watches the `unread` object in `createBody`, not the stream or the
++// response: WebKit collects a stream object while its response can still be
++// read. The held value is the resource id alone, so the registry cannot keep
++// what it watches.
++const unreadBodies = new FinalizationRegistry((rid) => {
++    invoke('plugin:http|fetch_cancel_body', { rid }).catch(() => { });
++});
++// A listener that calls the function behind `weakHandler` while it is alive.
++// Made here so that its scope holds the weak reference and nothing else.
++function weakListener(weakHandler) {
++    return () => weakHandler.deref()?.();
++}
++// Makes the body stream of a response.
++//
++// The stream's callbacks must not be able to reach the stream or its response,
++// directly or through a scope they share: WebKit never collects a stream that
++// its own callbacks can reach. So they are made here rather than in `fetch`,
++// and hold only what reading needs.
++function createBody(responseRid, signal) {
++    // Held only by the callbacks below, so it is collected once nothing can
++    // read the body any more. It also keeps the abort handler alive: the
++    // signal holds that weakly, because a signal that outlives the response
++    // must not keep its body.
++    const unread = { abort: undefined };
++    let dropped = false;
++    let stopListening = () => { };
++    const settle = () => {
++        dropped = true;
++        unreadBodies.unregister(unread);
++        stopListening();
++    };
++    const dropBody = () => {
++        if (dropped)
++            return Promise.resolve();
++        settle();
++        return invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
++    };
++    const readChunk = async (controller) => {
++        let data;
++        try {
++            data = await invoke('plugin:http|fetch_read_body', {
++                rid: responseRid
++            });
++        }
++        catch (e) {
++            // close the stream if an error occurs
++            // and drop the body on Rust side
++            controller.error(e);
++            void dropBody();
++            return;
++        }
++        const dataUint8 = new Uint8Array(data);
++        const lastByte = dataUint8[dataUint8.byteLength - 1];
++        const actualData = dataUint8.slice(0, dataUint8.byteLength - 1);
++        // close when the signal to close (last byte is 1) is sent from the IPC.
++        // The Rust side has released the response by then.
++        if (lastByte === 1) {
++            settle();
++            controller.close();
++            return;
++        }
++        controller.enqueue(actualData);
++    };
++    unreadBodies.register(unread, responseRid, unread);
++    return new ReadableStream({
++        start: (controller) => {
++            // listen for abort events to cancel reading
++            if (!signal)
++                return;
++            unread.abort = () => {
++                controller.error(ERROR_REQUEST_CANCELLED);
++                void dropBody();
++            };
++            const listener = weakListener(new WeakRef(unread.abort));
++            signal.addEventListener('abort', listener);
++            stopListening = () => signal.removeEventListener('abort', listener);
++        },
++        pull: (controller) => readChunk(controller),
++        cancel: () => {
++            // Ensure body resources are released on stream cancellation
++            void dropBody();
++        }
++    });
++}
+ /**
+  * Fetch a resource from the network. It returns a `Promise` that resolves to the
+  * `Response` to that `Request`, whether it is successful or not.
+@@ -101,64 +190,35 @@ async function fetch(input, init) {
              danger
          }
      });
@@ -52,17 +328,89 @@ index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..f38dbd4b68c3efa578cf6a8309543840
 +        void abort();
          throw new Error(ERROR_REQUEST_CANCELLED);
      }
-     signal?.addEventListener('abort', () => void abort());
-     const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await invoke('plugin:http|fetch_send', {
-         rid
-     });
-+    let bodyDropped = false;
-     const dropBody = () => {
+-    signal?.addEventListener('abort', () => void abort());
+-    const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await invoke('plugin:http|fetch_send', {
+-        rid
+-    });
+-    const dropBody = () => {
 -        return invoke('plugin:http|fetch_cancel_body', { rid: responseRid });
-+        if (bodyDropped)
-+            return Promise.resolve();
-+        bodyDropped = true;
-+        return invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
-     };
-     const readChunk = async (controller) => {
-         let data;
+-    };
+-    const readChunk = async (controller) => {
+-        let data;
+-        try {
+-            data = await invoke('plugin:http|fetch_read_body', {
+-                rid: responseRid
+-            });
+-        }
+-        catch (e) {
+-            // close the stream if an error occurs
+-            // and drop the body on Rust side
+-            controller.error(e);
+-            void dropBody();
+-            return;
+-        }
+-        const dataUint8 = new Uint8Array(data);
+-        const lastByte = dataUint8[dataUint8.byteLength - 1];
+-        const actualData = dataUint8.slice(0, dataUint8.byteLength - 1);
+-        // close when the signal to close (last byte is 1) is sent from the IPC.
+-        if (lastByte === 1) {
+-            controller.close();
+-            return;
+-        }
+-        controller.enqueue(actualData);
+-    };
++    // Only while the request is in flight: left on the signal, the listener
++    // would hold this call's scope for as long as the signal lives.
++    signal?.addEventListener('abort', abort);
++    let sent;
++    try {
++        sent = await invoke('plugin:http|fetch_send', {
++            rid
++        });
++    }
++    finally {
++        signal?.removeEventListener('abort', abort);
++    }
++    const { status, statusText, url, headers: responseHeaders, rid: responseRid } = sent;
+     // no body for 101, 103, 204, 205 and 304
+     // see https://fetch.spec.whatwg.org/#null-body-status
+     const body = [101, 103, 204, 205, 304].includes(status)
+         ? null
+-        : new ReadableStream({
+-            start: (controller) => {
+-                // listen for abort events to cancel reading
+-                signal?.addEventListener('abort', () => {
+-                    controller.error(ERROR_REQUEST_CANCELLED);
+-                    void dropBody();
+-                });
+-            },
+-            pull: (controller) => readChunk(controller),
+-            cancel: () => {
+-                // Ensure body resources are released on stream cancellation
+-                void dropBody();
+-            }
+-        });
++        : createBody(responseRid, signal);
++    // Nothing will read a response without a body, so release it now.
++    if (!body)
++        invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
+     const res = new Response(body, {
+         status,
+         statusText
+@@ -173,11 +233,12 @@ async function fetch(input, init) {
+         value: new Headers(responseHeaders),
+         writable: false
+     });
+-    // Patch clone() per-instance so cloning preserves the overridden properties
+-    const originalClone = res.clone.bind(res);
++    // Patch clone() per-instance so cloning preserves the overridden properties.
++    // It finds the response through `this`, not a closure: nothing made in
++    // this function may hold the response (see `createBody`).
+     Object.defineProperty(res, 'clone', {
+-        value: () => {
+-            const cloned = originalClone();
++        value: function () {
++            const cloned = Response.prototype.clone.call(this);
+             Object.defineProperty(cloned, 'url', { value: url, writable: false });
+             Object.defineProperty(cloned, 'headers', {
+                 value: new Headers(responseHeaders),
