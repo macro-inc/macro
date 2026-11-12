@@ -58,8 +58,10 @@ async fn one_bounded_request_expands_only_selected_entities() {
     let service: Arc<dyn Cognition> = classifier.clone();
     let result = select_documentation(
         &user(),
-        &"x".repeat(20000),
-        None,
+        RoutingRequest {
+            latest: &"x".repeat(20000),
+            previous: None,
+        },
         Some(&service),
         Guidance::Inline,
         &CancellationToken::new(),
@@ -89,8 +91,10 @@ async fn errors_and_absent_provider_retain_catalog() {
     });
     let fallback = select_documentation(
         &user(),
-        "request",
-        None,
+        RoutingRequest {
+            latest: "request",
+            previous: None,
+        },
         None,
         Guidance::Inline,
         &CancellationToken::new(),
@@ -99,8 +103,10 @@ async fn errors_and_absent_provider_retain_catalog() {
     assert_eq!(
         select_documentation(
             &user(),
-            "request",
-            None,
+            RoutingRequest {
+                latest: "request",
+                previous: None,
+            },
             Some(&classifier),
             Guidance::Inline,
             &CancellationToken::new()
@@ -120,8 +126,10 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
     });
     let fallback = select_documentation(
         &user(),
-        "request",
-        None,
+        RoutingRequest {
+            latest: "request",
+            previous: None,
+        },
         None,
         Guidance::Inline,
         &CancellationToken::new(),
@@ -131,8 +139,10 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         Duration::from_millis(1500),
         select_documentation(
             &user(),
-            "request",
-            None,
+            RoutingRequest {
+                latest: "request",
+                previous: None,
+            },
             Some(&classifier),
             Guidance::Inline,
             &CancellationToken::new(),
@@ -147,8 +157,10 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         Duration::from_millis(50),
         select_documentation(
             &user(),
-            "request",
-            None,
+            RoutingRequest {
+                latest: "request",
+                previous: None,
+            },
             Some(&classifier),
             Guidance::Inline,
             &cancel,
@@ -290,8 +302,10 @@ async fn routed_turns_bring_each_selected_entitys_guidance_with_its_index() {
     });
     let result = select_documentation(
         &user(),
-        "how many rows in Leads have revenue over 10k?",
-        None,
+        RoutingRequest {
+            latest: "how many rows in Leads have revenue over 10k?",
+            previous: None,
+        },
         Some(&classifier),
         Guidance::Selected,
         &CancellationToken::new(),
@@ -357,8 +371,10 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
 
     let result = select_documentation(
         &user(),
-        "request",
-        None,
+        RoutingRequest {
+            latest: "request",
+            previous: None,
+        },
         Some(&service),
         Guidance::Inline,
         &CancellationToken::new(),
@@ -436,8 +452,10 @@ async fn a_follow_up_keeps_the_previous_requests_entities() {
 
     let result = select_documentation(
         &user(),
-        "now do the same for the other one",
-        Some("switch my intro call booking link from Google Meet to a Macro call"),
+        RoutingRequest {
+            latest: "now do the same for the other one",
+            previous: Some("switch my intro call booking link from Google Meet to a Macro call"),
+        },
         Some(&classifier),
         Guidance::Inline,
         &CancellationToken::new(),

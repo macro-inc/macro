@@ -1,5 +1,5 @@
 //! Bounded SDK documentation selection through the shared cognition service.
-use cognition::domain::{Answer, BatchedOutcome, Cognition, decide_in_batches};
+use cognition::domain::{Answer, BatchedOutcome, Cognition, RoutingRequest, decide_in_batches};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -179,15 +179,12 @@ impl Ranking<'_> {
     }
 }
 
-/// Ask Jev which entities help with `text`, every entity in parallel calls of
-/// 32. `previous` is the user message before it, so a follow-up such as "now
-/// do the same for the other one" keeps the entities the conversation is
-/// using. Entities whose call fails or misses the deadline are not ranked; the
+/// Ask Jev which entities help with `request`, every entity in parallel calls
+/// of 32. Entities whose call fails or misses the deadline are not ranked; the
 /// rest still are.
 async fn rank_entities<'a>(
     user: &MacroUserIdStr<'static>,
-    text: &str,
-    previous: Option<&str>,
+    request: RoutingRequest<'_>,
     docs: &'a [SdkDocumentation],
     cognition: Option<&Arc<dyn Cognition>>,
     deadline: Duration,
@@ -196,10 +193,7 @@ async fn rank_entities<'a>(
     let Some(cognition) = cognition else {
         return Ranking::nothing(SelectionStatus::Unconfigured);
     };
-    let mut input = serde_json::json!({"userRequest": text.chars().take(8000).collect::<String>()});
-    if let Some(previous) = previous {
-        input["previousRequest"] = previous.chars().take(8000).collect::<String>().into();
-    }
+    let input = request.decision_input("userRequest");
     let questions: Vec<String> = docs
         .iter()
         .map(|doc| {
@@ -250,8 +244,7 @@ async fn rank_entities<'a>(
 #[tracing::instrument(skip_all, fields(guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
     user: &MacroUserIdStr<'static>,
-    prompt: &str,
-    previous: Option<&str>,
+    request: RoutingRequest<'_>,
     cognition: Option<&Arc<dyn Cognition>>,
     guidance: Guidance,
     cancel: &CancellationToken,
@@ -266,8 +259,7 @@ pub async fn select_documentation(
     let started = tokio::time::Instant::now();
     let ranking = rank_entities(
         user,
-        prompt,
-        previous,
+        request,
         docs,
         cognition,
         Duration::from_millis(1000),
@@ -337,8 +329,10 @@ pub async fn documentation_for_task(
     // The agent is waiting on this call, unlike the per-turn prompt path.
     let ranking = rank_entities(
         user,
-        task,
-        None,
+        RoutingRequest {
+            latest: task,
+            previous: None,
+        },
         docs,
         cognition,
         Duration::from_secs(5),
