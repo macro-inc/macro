@@ -8,7 +8,7 @@ import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 import { RuntimeOptions } from './runtime-options';
 
-export const RuntimeShareDialog = lazy(async () => ({
+const RuntimeShareDialog = lazy(async () => ({
   default: (
     await import('@app/features/runtime-sharing/views/RuntimeShareDialog')
   ).RuntimeShareDialog,

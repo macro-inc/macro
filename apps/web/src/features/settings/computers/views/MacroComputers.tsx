@@ -30,12 +30,9 @@ import {
 } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import {
-  MachineRow,
-  RuntimeShareDialog,
-} from '../../components/connected-runtimes-section';
+import { MachineRow } from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -149,7 +146,6 @@ function ManagedComputerRow(props: {
   canFinishSetup: boolean;
   onFinishSetup: () => void;
   onSignIn: () => void;
-  onShare: () => void;
   onRelease: () => void;
 }) {
   const rollout = useFeatureFlag(enableMacroComputers);
@@ -396,15 +392,6 @@ function ManagedComputerRow(props: {
       computer={props.computer}
       claude={claude()}
       primary={primary()}
-      share={
-        props.harness?.access === 'owner'
-          ? {
-              label: t('runtimeSharing.share'),
-              icon: 'share',
-              onSelect: props.onShare,
-            }
-          : undefined
-      }
       menu={menu()}
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
@@ -418,9 +405,6 @@ function ManagedComputerRow(props: {
  */
 export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
-  /** The runtime whose Share menu is open, e.g. from an access request. */
-  sharing?: string;
-  onSharingChange: (harnessId: string | undefined) => void;
 }) {
   const isAdmin = useIsTeamAdmin();
   const isTeamOwner = useIsTeamOwner();
@@ -440,13 +424,9 @@ export function MacroComputers(props: {
   const harnessFor = (computer: ComputerStatus) =>
     props.harnesses.find((candidate) => candidate.id === computer.harnessId);
 
-  const canManageClaude = (computer: ComputerStatus) => {
-    const harness = harnessFor(computer);
-    const viewer = userId();
-    if (!harness || !viewer) return false;
-    if (harness.owner.type === 'user') return harness.owner.user_id === viewer;
-    return harness.created_by === viewer || isTeamOwner();
-  };
+  // The computer's team owner and admins own its harness, not its buyer.
+  const canManageClaude = (computer: ComputerStatus) =>
+    harnessFor(computer)?.access === 'owner';
 
   const fromPriceLine = () =>
     fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
@@ -508,9 +488,6 @@ export function MacroComputers(props: {
                   }
                   onFinishSetup={() => setSettingUp(computer.id)}
                   onSignIn={() => setSigningIn(computer.id)}
-                  onShare={() =>
-                    props.onSharingChange(computer.harnessId ?? undefined)
-                  }
                   onRelease={() => {
                     setReleaseError(undefined);
                     setReleasing(computer);
@@ -564,23 +541,6 @@ export function MacroComputers(props: {
             harnessId={harnessId()}
             onClose={() => setSigningIn(undefined)}
           />
-        )}
-      </Show>
-      <Show
-        when={props.harnesses.find(
-          (harness) =>
-            harness.id === props.sharing &&
-            computers().some((computer) => computer.harnessId === harness.id)
-        )}
-      >
-        {(harness) => (
-          <Suspense>
-            <RuntimeShareDialog
-              harness={harness()}
-              open
-              onOpenChange={(open) => !open && props.onSharingChange(undefined)}
-            />
-          </Suspense>
         )}
       </Show>
       <Show when={releasing()} keyed>

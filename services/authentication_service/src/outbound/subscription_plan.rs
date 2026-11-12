@@ -13,20 +13,20 @@ use teams::domain::{
 };
 /// Composed with the owning billing adapter through its domain port.
 #[derive(Clone)]
-pub struct StripePlanGateway<C, Teams, Computers> {
+pub struct StripePlanGateway<Customers, Teams, Computers> {
     db: PgPool,
     stripe: Arc<stripe::Client>,
     prices: SeatPrices,
-    customer: C,
+    customer: Customers,
     billing: super::subscription_billing::StripeBillingReader<Teams, Computers>,
 }
-impl<C, Teams, Computers> StripePlanGateway<C, Teams, Computers> {
+impl<Customers, Teams, Computers> StripePlanGateway<Customers, Teams, Computers> {
     /// Inject customer storage, provider client and billing domain capabilities.
     pub fn new(
         db: PgPool,
         stripe: Arc<stripe::Client>,
         prices: SeatPrices,
-        customer: C,
+        customer: Customers,
         billing: super::subscription_billing::StripeBillingReader<Teams, Computers>,
     ) -> Self {
         Self {
@@ -82,10 +82,10 @@ impl<C, Teams, Computers> StripePlanGateway<C, Teams, Computers> {
     }
 }
 impl<
-    C: CustomerRepository,
+    Customers: CustomerRepository,
     Teams: teams::domain::team_repo::TeamRepository,
     Computers: hosted_runtimes::domain::ports::ComputerRepo,
-> PlanGateway for StripePlanGateway<C, Teams, Computers>
+> PlanGateway for StripePlanGateway<Customers, Teams, Computers>
 {
     async fn personal_subscription(
         &self,
@@ -152,10 +152,10 @@ impl<
 }
 
 impl<
-    C: CustomerRepository,
+    Customers: CustomerRepository,
     Teams: teams::domain::team_repo::TeamRepository,
     Computers: hosted_runtimes::domain::ports::ComputerRepo,
-> SubscriptionStatusGateway for StripePlanGateway<C, Teams, Computers>
+> SubscriptionStatusGateway for StripePlanGateway<Customers, Teams, Computers>
 {
     async fn billing_access(
         &self,

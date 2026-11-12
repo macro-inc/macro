@@ -8,7 +8,6 @@ import SwitchIcon from '@icon/system/regular/arrows-left-right.svg';
 import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import PowerIcon from '@icon/system/regular/power.svg';
-import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, Dropdown, ToggleSwitch } from '@ui';
@@ -20,7 +19,6 @@ import {
 } from '../../components/runtime-options';
 
 export type ComputerMenuIcon =
-  | 'share'
   | 'power'
   | 'sign-in'
   | 'credits'
@@ -39,7 +37,6 @@ export type ComputerMenuItem = {
 
 function ItemIcon(props: { icon: ComputerMenuIcon }): JSX.Element {
   return match(props.icon)
-    .with('share', () => <ShareIcon class="size-4" />)
     .with('power', () => <PowerIcon class="size-4" />)
     .with('sign-in', () => <SignInIcon class="size-4" />)
     .with('credits', () => <SwitchIcon class="size-4" />)
@@ -52,7 +49,6 @@ function ItemIcon(props: { icon: ComputerMenuIcon }): JSX.Element {
 
 type MenuProps = {
   name: string;
-  share?: ComputerMenuItem;
   items: readonly ComputerMenuItem[];
   harness?: RegisteredHarness;
 };
@@ -87,18 +83,17 @@ function DesktopMenu(props: MenuProps) {
         <DotsThreeIcon class="size-4" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-56 max-w-80">
-        <Show when={props.share || props.harness}>
-          <Dropdown.Group>
-            <Show when={props.share}>
-              {(share) => <DesktopItem item={share()} />}
-            </Show>
-            <Show when={props.harness}>
-              {(harness) => <DesktopBypassItem harness={harness()} />}
-            </Show>
-          </Dropdown.Group>
-          <Show when={props.items.length > 0}>
-            <Dropdown.Separator class="my-1 border-t border-edge-divider" />
-          </Show>
+        <Show when={props.harness}>
+          {(harness) => (
+            <>
+              <Dropdown.Group>
+                <DesktopBypassItem harness={harness()} />
+              </Dropdown.Group>
+              <Show when={props.items.length > 0}>
+                <Dropdown.Separator class="my-1 border-t border-edge-divider" />
+              </Show>
+            </>
+          )}
         </Show>
         <Dropdown.Group>
           <For each={props.items}>{(item) => <DesktopItem item={item} />}</For>
@@ -154,9 +149,6 @@ function MobileSheet(props: MenuProps) {
           </MobileDrawer.Title>
           <MobileDrawer.ScrollBody>
             <div class="flex flex-col gap-1 px-2 pb-6">
-              <Show when={props.share}>
-                {(share) => <MobileItem item={share()} onChoose={choose} />}
-              </Show>
               <Show when={props.harness}>
                 {(harness) => (
                   <MobileBypassRow harness={harness()} owner={owner} />
@@ -218,7 +210,7 @@ function MobileBypassRow(props: {
  */
 export function ComputerActionsMenu(props: MenuProps) {
   return (
-    <Show when={props.items.length > 0 || props.share || props.harness}>
+    <Show when={props.items.length > 0 || props.harness}>
       <Show when={isTouchDevice()} fallback={<DesktopMenu {...props} />}>
         <MobileSheet {...props} />
       </Show>

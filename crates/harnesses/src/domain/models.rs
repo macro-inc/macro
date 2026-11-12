@@ -159,8 +159,8 @@ pub enum HarnessPermission {
 /// A pre-approved pairing for a Macro computer, minted by the control plane.
 #[derive(Debug, Clone)]
 pub struct CreateHostedPairing {
-    /// Team whose members may use the computer; ownership remains with the
-    /// buying administrator.
+    /// Team the computer belongs to: its owner and admins own the harness
+    /// and its members use it.
     pub team_id: Uuid,
     /// Harness display name.
     pub name: String,
