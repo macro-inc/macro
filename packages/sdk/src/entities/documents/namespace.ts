@@ -1,6 +1,7 @@
 import type { CreateDocumentRequest } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import type { EmailAttachment } from '../email/attachment';
 import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search/options';
@@ -143,6 +144,12 @@ export class DocumentNamespace {
     content: FileContent;
     project?: Project;
   }): Promise<Document> {
+    rejectUnknownOptions('documents.upload', options, {
+      name: true,
+      content: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await this.client.storage.uploadFile({
         query: { fileName: options.name, projectId: options.project?.id },
@@ -169,6 +176,18 @@ export class DocumentNamespace {
     attachment?: EmailAttachment;
     isTask?: boolean;
   }) {
+    rejectUnknownOptions('documents.createUpload', options, {
+      name: true,
+      sha: true,
+      fileType: true,
+      mimeType: true,
+      project: true,
+      team: true,
+      branchedFrom: true,
+      attachment: true,
+      isTask: true,
+    });
+
     const body: CreateDocumentRequest = {
       documentName: options.name,
       sha: options.sha,
@@ -221,6 +240,11 @@ export class DocumentNamespace {
     name: string;
     project?: Project;
   }): Promise<Document> {
+    rejectUnknownOptions('documents.createCanvas', opts, {
+      name: true,
+      project: true,
+    });
+
     const result = unwrap(
       await this.client.storage.createCanvasHandler({
         body: { documentName: opts.name, projectId: opts.project?.id },
@@ -259,6 +283,11 @@ export class DocumentNamespace {
     name: string;
     project?: Project;
   }): Promise<Spreadsheet> {
+    rejectUnknownOptions('documents.createSpreadsheet', opts, {
+      name: true,
+      project: true,
+    });
+
     const result = unwrap(
       await this.client.storage.createSpreadsheet({
         body: { documentName: opts.name, projectId: opts.project?.id },

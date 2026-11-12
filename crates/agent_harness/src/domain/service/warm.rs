@@ -52,7 +52,7 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
+    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = tracing::field::Empty, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
     pub(super) async fn open_managed_session_inner(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
@@ -204,9 +204,10 @@ where
             record_warm_claim(request.id.is_some(), eligible, claim);
             claim
         };
+        tracing::Span::current()
+            .record("agent.session.warm_hit", claim == Some(WarmClaim::Claimed));
         if claim == Some(WarmClaim::Claimed) {
             self.warm_reservations.lock().await.remove(&session_id);
-            tracing::Span::current().record("agent.session.warm_hit", true);
             let session = self.inner.sessions.get_session(session_id).await?;
             self.inner
                 .publish_opened(&session)

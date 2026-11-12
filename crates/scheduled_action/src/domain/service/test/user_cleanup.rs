@@ -1,6 +1,7 @@
 use super::super::*;
 use super::{configuration, user};
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::models::ActionExecutionRecord;
 use entity_access::domain::{models::AccessError, ports::ScheduledActionGrants};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use macro_uuid::Uuid;
@@ -21,6 +22,37 @@ impl ScheduledActionGrants for UnusedGrants {
 struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     fail_delete: Mutex<bool>,
+}
+
+impl SubRoutines for FakeRepo {
+    async fn running_run(&self, _: &Uuid) -> Result<Option<RunningRun>> {
+        unreachable!()
+    }
+    async fn running_run_of_session(&self, _: &Uuid) -> Result<Option<RunningRun>> {
+        unreachable!()
+    }
+    async fn children(&self, _: &Uuid) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+    async fn active_children(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn top_level_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn child_by_key(&self, _: &Uuid, _: &SubRoutineKey) -> Result<Option<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn detach(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
+        unreachable!()
+    }
+    async fn created_by_runs(
+        &self,
+        _: &Uuid,
+        _: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::CreatedRoutine)>> {
+        unreachable!()
+    }
 }
 
 impl ScheduledActionRepo for FakeRepo {
@@ -118,6 +150,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         template_id: None,
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 
