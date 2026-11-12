@@ -148,6 +148,7 @@ impl Conversation {
             | NotifEvent::CalendarEventJoinRequest(_)
             | NotifEvent::ChannelAccessRequested(_)
             | NotifEvent::RoutineRunFinished(_)
+            | NotifEvent::AgentSignInExpiry(_)
             | NotifEvent::RuntimeAccessRemoved(_) => return None,
         };
 
