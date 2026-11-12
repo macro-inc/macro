@@ -1,0 +1,169 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/android_apk_on_release.rs
+name: Android APK on Release
+'on':
+  release:
+    types:
+    - released
+  workflow_dispatch: {}
+jobs:
+  build:
+    name: Build signed Android APK
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+      RELEASE_TAG: ${{ github.ref_name }}
+    timeout-minutes: 90
+    steps:
+    - name: Require a published production release
+      run: |
+        set -euo pipefail
+        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "Run this from a production release tag (\"Use workflow from\": the tag), not ${GITHUB_REF_NAME}." >&2
+          exit 1
+        fi
+        gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \
+          | jq -e '.isDraft == false and .isPrerelease == false' >/dev/null || {
+            echo "${RELEASE_TAG} has no published production release." >&2
+            exit 1
+          }
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ github.ref }}
+        persist-credentials: 'false'
+    - name: Install Android SDK components
+      run: |
+        set -euo pipefail
+        export JAVA_HOME="$JAVA_HOME_21_X64"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+          'platforms;android-36' 'build-tools;36.0.0' 'ndk;30.0.16248370'
+        echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+        echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+      shell: bash
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup prerequisites
+      uses: './.github/actions/setup-reqs-web'
+    - id: metadata
+      name: Prepare version and signing
+      run: |
+        set -euo pipefail
+        filename=$(bun scripts/android-release.ts metadata "$RELEASE_TAG" "$RUNNER_TEMP/android-release.json")
+        echo "filename=${filename%.*}.apk" >> "$GITHUB_OUTPUT"
+        bun scripts/android-release.ts signing "$RUNNER_TEMP/android-signing" \
+          tauri/src-tauri/gen/android/keystore.properties
+        bun scripts/android-firebase.ts build --doppler "$RUNNER_TEMP/android-google-services.json"
+      shell: bash
+      env:
+        DOPPLER_TOKEN: ${{ secrets.ANDROID_RELEASE_DOPPLER_TOKEN }}
+      working-directory: apps/web
+    - name: Build production APK
+      run: |
+        set -euo pipefail
+        # Without the key the app silently skips PostHog, so every feature flag
+        # reads false. An unset or empty secret must fail the build instead.
+        if [[ -z "${VITE_POSTHOG_API_KEY:-}" ]]; then
+          echo "VITE_POSTHOG_API_KEY is empty: the POSTHOG_API_KEY secret is unavailable to this run." >&2
+          exit 1
+        fi
+        # The Nix environment is already loaded. Do not reload it in nested
+        # bash processes and re-enable its local-development sccache wrapper.
+        # This ephemeral runner has no compiler cache/server to reuse.
+        unset BASH_ENV
+        export RUSTC_WRAPPER=""
+        cargo tauri --version
+        # Tauri has shipped both switch-only and value-taking APK/AAB flags.
+        # Nix and local installations can differ; build only one format with either CLI.
+        android_help=$(cargo tauri android build --help)
+        artifact_args=(--apk)
+        if [[ "$android_help" == *'--apk <APK>'* ]]; then
+          artifact_args=(--apk true --aab false)
+        fi
+        just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
+          "${artifact_args[@]}" --ci --config "$RUNNER_TEMP/android-release.json" \
+          2>&1 | tee "$RUNNER_TEMP/android-build.log"
+      shell: bash
+      env:
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+        VITE_OTEL_ENV: prod
+      working-directory: apps/web
+    - name: Preserve Android build log
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-build-log
+        path: ${{ runner.temp }}/android-build.log
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: Verify and collect APK
+      run: |
+        set -euo pipefail
+        mapfile -t apks < <(find tauri/src-tauri/gen/android/app/build/outputs/apk -type f -name '*-release.apk')
+        if [ "${#apks[@]}" -ne 1 ]; then
+          echo "Expected exactly one signed ARM64 release APK, found ${#apks[@]}" >&2
+          exit 1
+        fi
+        bun scripts/android-release.ts verify "$RELEASE_TAG" "${apks[0]}" \
+          "$ANDROID_HOME/build-tools/36.0.0" "$RUNNER_TEMP/android-signing/certificate-sha256"
+        mkdir -p "$GITHUB_WORKSPACE/android-artifacts"
+        cp "${apks[0]}" "$GITHUB_WORKSPACE/android-artifacts/$APK_FILENAME"
+        \cd "$GITHUB_WORKSPACE/android-artifacts"
+        sha256sum "$APK_FILENAME" > "$APK_FILENAME.sha256"
+      shell: bash
+      env:
+        APK_FILENAME: ${{ steps.metadata.outputs.filename }}
+      working-directory: apps/web
+    - name: Upload verified APK
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-apk
+        path: android-artifacts/
+        if-no-files-found: error
+        retention-days: '7'
+    - name: Remove signing material
+      if: always()
+      run: |
+        rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/android-release.json" \
+          "$RUNNER_TEMP/android-google-services.json" || true
+        rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
+      shell: bash
+  publish:
+    needs:
+    - build
+    name: Attach the APK to the release
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    timeout-minutes: 10
+    steps:
+    - name: Download verified APK
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        name: android-apk
+        path: android-artifacts
+    - name: Attach APK and checksum to the release
+      run: |
+        set -euo pipefail
+        mapfile -t files < <(find android-artifacts -maxdepth 1 -type f -name 'macro-*-android-arm64.apk*')
+        if [ "${#files[@]}" -ne 2 ]; then
+          echo "Expected the APK and its .sha256, found ${#files[@]} files" >&2
+          exit 1
+        fi
+        (\cd android-artifacts && sha256sum --check ./*.apk.sha256)
+        gh release upload "$RELEASE_TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+concurrency:
+  group: android-apk-on-release-${{ github.ref_name }}

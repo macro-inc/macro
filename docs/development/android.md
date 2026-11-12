@@ -133,6 +133,27 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
+### APK for sideloading
+
+Each production release gets a signed ARM64 APK,
+`macro-<tag>-android-arm64.apk`, and its `.sha256` as release assets. The
+`Android APK on Release` workflow builds them on the same `released` event as
+`Deploy Production Release`. It is a separate workflow, so the deploy never
+waits on it, and a failed APK build leaves the release in place.
+
+- It runs the App Bundle build with `--apk`, with the same production `VITE_*`
+  environment, which is defined once in the generated workflow sources. Both
+  builds fail when the PostHog key is empty, because without it every feature
+  flag reads false.
+- It signs with the upload key, so an APK updates an earlier APK install in
+  place. A Play-installed app has the Play App Signing certificate: uninstall it
+  before installing an APK, and the reverse.
+- The version code is the one committed at the tag. The installed app then
+  takes web updates over the air like a Play install.
+- To rebuild a release's APK, re-run the failed job, or run the workflow with
+  "Use workflow from" set to the release tag. Assets stay with their release;
+  nothing prunes them.
+
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
