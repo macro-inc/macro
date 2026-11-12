@@ -4,7 +4,10 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
-import { isOwnerHandoffBlockedError } from '@graphql-cache/protocol';
+import {
+  isOwnerEpochLostError,
+  isOwnerHandoffBlockedError,
+} from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -50,7 +53,10 @@ type Request = {
 };
 
 function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
-  return !request.answered && isOwnerHandoffBlockedError(error);
+  // Either way the cache was changing owner and a replacement engine follows.
+  const ownerChanging =
+    isOwnerHandoffBlockedError(error) || isOwnerEpochLostError(error);
+  return !request.answered && ownerChanging;
 }
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window

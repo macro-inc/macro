@@ -120,8 +120,8 @@ function isOrderingBarrier(request: CacheRequest): boolean {
   );
 }
 
-/** A new engine or cleared storage: nothing may run ahead of these. */
-function isLifecycleBarrier(request: CacheRequest): boolean {
+/** A new engine or cleared storage: not even a typed search runs ahead. */
+function stopsTypedSearch(request: CacheRequest): boolean {
   return request.kind === 'init' || request.kind === 'clear';
 }
 
@@ -464,12 +464,13 @@ export class CacheWorkerCore {
     // A typed search registers nothing and writes nothing, so the generation
     // checks and operation teardowns that fence other reads do not order it.
     // After an engine restart those fences sit between it and the head of the
-    // replayed backlog.
-    let lifecycleEnd = this.queue.findIndex((queued) =>
-      isLifecycleBarrier(queued.request)
+    // replayed backlog. It can then run before a write queued ahead of it:
+    // its rows are only older, and that write's cache change refreshes them.
+    let searchEnd = this.queue.findIndex((queued) =>
+      stopsTypedSearch(queued.request)
     );
-    if (lifecycleEnd === -1) lifecycleEnd = this.queue.length;
-    for (let i = segmentEnd; i < lifecycleEnd; i += 1) {
+    if (searchEnd === -1) searchEnd = this.queue.length;
+    for (let i = segmentEnd; i < searchEnd; i += 1) {
       const candidate = this.queue[i];
       const selected = this.queue[index];
       if (

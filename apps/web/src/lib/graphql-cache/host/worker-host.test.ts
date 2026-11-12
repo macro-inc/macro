@@ -813,14 +813,25 @@ describe('createWorkerCacheHost', () => {
       query: 'todo',
       limit: 20,
     });
+    // A browse has callers with a network result to return instead.
+    const browse = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: '',
+      limit: 20,
+    });
+    const browseRefused = expect(browse).rejects.toThrow(
+      'owner handoff timeout'
+    );
     await vi.advanceTimersByTimeAsync(0);
 
     adapter.options.onCacheReadAvailabilityChanged?.('blocked');
     await refused;
+    await browseRefused;
     await vi.advanceTimersByTimeAsync(60_001);
 
     const queued = adapter.requests.find(
-      (request) => request.kind === 'search'
+      (request) => request.kind === 'search' && request.request.query === 'todo'
     );
     if (!queued) throw new Error('missing search');
     adapter.options.onCacheReadAvailabilityChanged?.('ready');
