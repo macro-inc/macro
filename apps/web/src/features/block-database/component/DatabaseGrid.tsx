@@ -47,6 +47,7 @@ import type { ViewChange } from '../../database/core/view-state';
 import { DatabaseRecords } from '../../database/views/database-records';
 import type { DatabaseRecordsActions } from '../../database/views/database-records-view';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
@@ -117,6 +118,7 @@ const renderTextEditor = (editor: DatabaseTextEditorProps) => (
   <DatabaseTextEditor {...editor} />
 );
 const renderTextValue = (value: string) => <DatabaseTextValue value={value} />;
+const renderLinkValue = (url: string) => <DatabaseLinkValue url={url} />;
 const renderMentionPicker = (picker: DatabaseMentionPickerProps) => (
   <DatabaseMentionPicker {...picker} />
 );
@@ -351,6 +353,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 remoteUsers={remoteUsers()}
                 renderTextEditor={renderTextEditor}
                 renderTextValue={renderTextValue}
+                renderLinkValue={renderLinkValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
                 onOpenDocumentMention={openDocumentMention}
