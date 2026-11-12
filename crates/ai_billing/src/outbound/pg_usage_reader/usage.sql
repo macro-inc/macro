@@ -14,13 +14,8 @@ WITH history AS MATERIALIZED (
     FROM boundaries
 ), usage_segments AS (
     SELECT interval.user_id, interval.start,
-           COALESCE(SUM(COALESCE(
-               usage.total::float8,
-               usage.input_tokens::float8 / 1000000.0 * $4
-                   + usage.output_tokens::float8 / 1000000.0 * $5
-                   + usage.cache_read_input_tokens::float8 / 1000000.0 * $6
-                   + usage.cache_write_input_tokens::float8 / 1000000.0 * $7
-           )), 0)::float8 AS usd,
+           -- Unknown prices remain unresolved; never substitute another model's rates.
+           COALESCE(SUM(usage.total::float8), 0)::float8 AS usd,
            EXISTS (
                SELECT 1 FROM ai_billing_usage_period AS policy
                WHERE policy.user_id = interval.user_id AND policy.period_start = $2

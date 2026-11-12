@@ -59,9 +59,10 @@ for both `record()` and `record_now()`, before the
 [repository insert](../../crates/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
 supply it. The [billing reader](../../crates/ai_billing/src/outbound/pg_usage_reader.rs)
 uses the persisted literal `count_usage = TRUE`, not a mutable feature exclusion
-list. User/team-seat scoping, `[start, end)` periods, at-cost arithmetic, and
-fallback pricing for null totals are retained. Admin analytics still includes
-uncounted rows; repricing can change totals, never eligibility.
+list. User/team-seat scoping, `[start, end)` periods, and at-cost arithmetic
+are retained. Only stored non-null totals are charged; unknown prices remain
+unresolved until verified repricing. Admin analytics still includes uncounted
+rows; repricing can change totals, never eligibility.
 
 [Counting tests](../../crates/ai_usage/src/domain/counting/test.rs),
 [recording tests](../../crates/ai_usage/src/domain/service/test.rs),

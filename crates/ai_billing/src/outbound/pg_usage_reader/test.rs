@@ -89,7 +89,7 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
         cache_read: 0,
         cache_write: 0,
     };
-    repo.insert_usage(&unpriced, true).await.unwrap(); // $5 input + $25 output
+    repo.insert_usage(&unpriced, true).await.unwrap(); // Unknown pricing stays unresolved.
     repo.insert_usage(&unpriced, false).await.unwrap();
 
     // A default-false legacy write must never acquire debt via fallback pricing.
@@ -119,7 +119,7 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
             },
             SeatUsage {
                 user: second,
-                used_cents: 3_300,
+                used_cents: 300,
                 chargeable_cost_cents: None,
             },
         ]
@@ -264,7 +264,7 @@ async fn free_features_alone_do_not_produce_billable_usage(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unpriced_free_features_are_excluded_from_fallback_billing(pool: PgPool) {
+async fn unpriced_usage_does_not_consume_allowances(pool: PgPool) {
     let user = MacroUserIdStr::try_from("macro|billing@example.com".to_string()).unwrap();
     let usage_repo = PgUsageRepo::new(pool.clone());
     for (mut usage, count_usage) in free_completions(user.clone())
@@ -284,16 +284,7 @@ async fn unpriced_free_features_are_excluded_from_fallback_billing(pool: PgPool)
         .await
         .unwrap();
 
-    // Chat and editing each fall back to $5 per million input tokens, counted
-    // at cost. Unpriced free features add nothing.
-    assert_eq!(
-        usage,
-        vec![SeatUsage {
-            user,
-            used_cents: 1_000,
-            chargeable_cost_cents: None,
-        }]
-    );
+    assert!(usage.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -350,7 +341,7 @@ async fn priced_cache_tokens_count_through_the_stored_total(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unpriced_cache_tokens_fall_back_to_the_opus_5_cache_rates(pool: PgPool) {
+async fn unpriced_cache_tokens_do_not_acquire_a_substitute_price(pool: PgPool) {
     let user = MacroUserIdStr::try_from("macro|cache-unpriced@example.com".to_string()).unwrap();
     PgUsageRepo::new(pool.clone())
         .insert_usage(
@@ -382,15 +373,7 @@ async fn unpriced_cache_tokens_fall_back_to_the_opus_5_cache_rates(pool: PgPool)
         .await
         .unwrap();
 
-    // $5 input + $0.50 cache read + $6.25 cache write at the Opus 5 rates.
-    assert_eq!(
-        usage,
-        vec![SeatUsage {
-            user,
-            used_cents: 1_175,
-            chargeable_cost_cents: None,
-        }]
-    );
+    assert!(usage.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -813,4 +796,64 @@ async fn delayed_plan_cycle_retains_max_consumption_without_creating_downgrade_d
         .unwrap();
     assert_eq!(position[0].used_cents, 10_500);
     assert_eq!(position[0].chargeable_cost_cents, Some(500));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deepseek_cache_migration_resolves_missing_cost_without_repricing_known_usage(
+    pool: PgPool,
+) {
+    let user = MacroUserIdStr::try_from("macro|cache@example.com").unwrap();
+    let repo = PgUsageRepo::new(pool.clone());
+    sqlx::query!(
+        "UPDATE ai_pricing SET price_per_million_cache_read = NULL WHERE model = 'deepseek-v4p1-flash-1017'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut missing = completion(user.clone(), AiFeature::AgentSession, 0.0);
+    missing.cost.model = "deepseek-v4p1-flash-1017".to_string();
+    missing.cost.price = None;
+    missing.cost.amount = UsageAmount::Tokens {
+        input: 1_000_000,
+        output: 0,
+        cache_read: 1_000_000,
+        cache_write: 0,
+    };
+    repo.insert_usage(&missing, true).await.unwrap();
+    repo.insert_usage(&missing, false).await.unwrap();
+    let mut known = completion(user.clone(), AiFeature::AgentSession, 1.0);
+    known.cost.model = missing.cost.model.clone();
+    repo.insert_usage(&known, true).await.unwrap();
+    let reader = PgUsageReader::new(pool.clone());
+    let before = reader
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+        .await
+        .unwrap();
+    assert_eq!(before[0].used_cents, 100);
+
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20261110150953_complete_deepseek_cache_pricing.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let after = reader
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+        .await
+        .unwrap();
+    assert_eq!(after[0].used_cents, 131);
+    // Applying the migration again neither reprices known rows nor doubles usage.
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20261110150953_complete_deepseek_cache_pricing.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        reader
+            .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+            .await
+            .unwrap(),
+        after
+    );
 }

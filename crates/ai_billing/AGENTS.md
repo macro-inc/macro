@@ -51,6 +51,7 @@ provider cost (plus markup for overage).
 
 ## Gotchas
 
+- Meter only stored, priced `ai_usage.total` values; unresolved prices never use another model’s rates and remain uncharged until verified repricing.
 - Usage is cost cents; credits/charges/caps/packs are customer cents — only
   `AiPricing`'s conversions cross that boundary; never multiply/compare the
   two directly.

@@ -37,9 +37,8 @@ flexible admin query API.
 
 ## Recipes
 
-- Price a new model: `src/domain/financial.rs` (rate entry) →
-  `src/config.rs` (if a new Doppler-sourced rate) → test in
-  `src/config/test.rs`.
+- Price aggregate usage: seed every reported token dimension (including cache) in `ai_pricing` through a migration; read `ai_effective_pricing` and verify a cached call.
+- Price financial invocations with a provider-qualified immutable `RateSnapshot` from `src/domain/financial.rs`; analytics prices are not a fallback.
 - Mark a feature non-billable: `src/domain/counting.rs`'s
   `NON_BILLABLE_AI_FEATURES`.
 
