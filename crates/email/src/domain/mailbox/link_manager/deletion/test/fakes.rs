@@ -23,7 +23,7 @@ pub(super) enum Call {
     Team(String),
     CrmDelete(Uuid, Uuid),
     Purge(Uuid, u32, u32, u32, std::time::Duration),
-    Refresh(String, serde_json::Value),
+    LinkRemoved(String, Uuid),
     Event(serde_json::Value),
     History(Uuid, String),
     Acquire,
@@ -107,10 +107,7 @@ pub(super) fn expected_calls(reason: &str, promoted: bool) -> Vec<Call> {
         Call::Team(OWNER.into()),
         Call::CrmDelete(TEAM, LINK),
         Call::Purge(LINK, 500, 2000, 5000, std::time::Duration::from_secs(2)),
-        Call::Refresh(
-            OWNER.into(),
-            serde_json::json!({"event":"link_removed", "link_id":LINK}),
-        ),
+        Call::LinkRemoved(OWNER.into(), LINK),
         Call::Event(
             serde_json::json!({"schema_version": 1, "event_type":"email.link_disconnected", "metadata": {
                 "link_id": LINK, "owner": OWNER, "email_address": "owner@example.com", "reason": reason,
@@ -262,12 +259,9 @@ impl LinkPurger for Fake {
     }
 }
 impl LinkDeletionRefresh for Fake {
-    async fn refresh_email(&self, owner: &str, event: RefreshEmailEvent) {
-        self.step(
-            "refresh",
-            Call::Refresh(owner.into(), serde_json::to_value(event).unwrap()),
-        )
-        .unwrap();
+    async fn link_removed(&self, owner: &str, link_id: Uuid) {
+        self.step("refresh", Call::LinkRemoved(owner.into(), link_id))
+            .unwrap();
     }
 }
 impl MacroEventBroker for Fake {

@@ -73,7 +73,7 @@ impl LinkDeletionAuth for DeletionAuth {
 pub(crate) struct DeletionRefresh(pub ConnectionGatewayClient);
 
 impl LinkDeletionRefresh for DeletionRefresh {
-    async fn refresh_email(&self, owner: &str, event: RefreshEmailEvent) {
-        cg_refresh_email(&self.0, owner, event).await;
+    async fn link_removed(&self, owner: &str, link_id: Uuid) {
+        cg_refresh_email(&self.0, owner, RefreshEmailEvent::LinkRemoved { link_id }).await;
     }
 }
