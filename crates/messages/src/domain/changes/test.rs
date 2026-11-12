@@ -254,3 +254,18 @@ mod sequenced_activities {
         );
     }
 }
+
+#[test]
+fn a_message_and_an_activity_with_one_id_are_both_loaded() {
+    let shared = Uuid::from_u128(4);
+    let changes = vec![
+        ChannelChange {
+            seq: 1,
+            op: ChannelChangeOp::Activity(shared),
+        },
+        message(2, 4, 4),
+    ];
+    let plan = ChannelChangePlan::new(0, &log(2, changes), MAX_CHANGE_ROWS);
+    assert_eq!(plan.roots, [shared]);
+    assert_eq!(plan.activities, [shared]);
+}

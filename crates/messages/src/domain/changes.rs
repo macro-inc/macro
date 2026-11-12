@@ -114,7 +114,10 @@ impl ChannelChangePlan {
             seq: since,
             ..Self::default()
         };
+        // Messages and activities are separate id spaces: a message may carry
+        // the id of an activity.
         let mut seen = HashSet::new();
+        let mut seen_activities = HashSet::new();
         for change in &log.changes {
             match change.op {
                 ChannelChangeOp::Message {
@@ -129,7 +132,7 @@ impl ChannelChangePlan {
                     }
                 }
                 ChannelChangeOp::Activity(id) => {
-                    if seen.insert(id) {
+                    if seen_activities.insert(id) {
                         plan.activities.push(id);
                     }
                 }

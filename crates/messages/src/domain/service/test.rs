@@ -1701,6 +1701,9 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
         >,
     > {
         Box::pin(async move {
+            assert_eq!(lookup.entity_type, activity::EntityType::Channel);
+            assert_eq!(lookup.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(lookup.selection, CHANNEL_TIMELINE);
             let mut rows: Vec<_> = self
                 .0
                 .iter()

@@ -158,9 +158,6 @@ impl From<MessageError> for MessageHttpError {
         Self(value)
     }
 }
-/// Seconds a client waits before it resends a write refused as busy.
-const BUSY_RETRY_AFTER_SECONDS: &str = "1";
-
 impl IntoResponse for MessageHttpError {
     fn into_response(self) -> Response {
         let (status, message) = match self.0 {

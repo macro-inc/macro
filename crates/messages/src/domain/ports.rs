@@ -34,6 +34,10 @@ pub enum MessageError {
     Repository(rootcause::Report),
 }
 
+/// Seconds a caller answered with [`MessageError::Busy`] waits before it
+/// sends the same request again, as the `Retry-After` header carries it.
+pub const BUSY_RETRY_AFTER_SECONDS: &str = "1";
+
 /// Cursor for a chronological parent timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

@@ -40,7 +40,7 @@ pub struct ChannelChanges {
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// The channel's latest change sequence number. A reader that takes it
     /// before reading a page can catch up from it afterwards and miss nothing.
-    #[tracing::instrument(skip(self, access), err(Debug))]
+    #[tracing::instrument(skip(self, access), fields(channel_id = %access.entity().entity_id), err(Debug))]
     pub async fn channel_seq(
         &self,
         access: &EntityAccessReceipt<MessageView>,
@@ -51,7 +51,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 
     /// Everything that changed in a channel after `since`, or a reset when
     /// the log can no longer say.
-    #[tracing::instrument(skip(self, access), err(Debug))]
+    #[tracing::instrument(skip(self, access), fields(channel_id = %access.entity().entity_id), err(Debug))]
     pub async fn channel_changes(
         &self,
         access: EntityAccessReceipt<MessageView>,
@@ -75,8 +75,17 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             if plan.reset {
                 return Ok(changes);
             }
+            changes.activities = self.changed_activities(&parent, plan.activities).await?;
+            // A call's end changes what its root shows and logs only the
+            // fact, so the fact reloads the root.
+            let mut roots = plan.roots.clone();
+            for call_root in changes.activities.iter().filter_map(ended_call) {
+                if !roots.contains(&call_root) {
+                    roots.push(call_root);
+                }
+            }
             let mut shown = HashSet::new();
-            let roots = self.repo.roots_by_ids(&parent, &plan.roots).await?;
+            let roots = self.repo.roots_by_ids(&parent, &roots).await?;
             let page = self
                 .with_call_entries(MessageTimelinePage::from(MessagePage {
                     items: roots,
@@ -95,7 +104,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .copied()
                 .filter(|id| !shown.contains(id))
                 .collect();
-            changes.activities = self.changed_activities(&parent, plan.activities).await?;
             Ok(changes)
         }
         .await
@@ -110,12 +118,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         parent: &MessageParent,
         ids: Vec<Uuid>,
     ) -> Result<Vec<TimelineActivity>, MessageError> {
-        let (Some(reader), Some(source)) = (&self.activity, timeline_activity(parent)) else {
-            return Ok(Vec::new());
-        };
         if ids.is_empty() {
             return Ok(Vec::new());
         }
+        // Returning nothing here would move the reader past facts it never
+        // received.
+        let (Some(reader), Some(source)) = (&self.activity, timeline_activity(parent)) else {
+            return Err(MessageError::Repository(rootcause::report!(
+                "no activity reader is configured to read logged channel facts"
+            )));
+        };
         reader
             .read_by_ids(ActivityTimelineLookup {
                 entity_type: source.entity_type,
@@ -130,6 +142,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 ))
             })
     }
+}
+
+/// The call root a logged fact ended, when the fact is a call's end. The
+/// root carries its call's id.
+fn ended_call(fact: &TimelineActivity) -> Option<Uuid> {
+    let ended: &'static str = activity::ActionTag::CallEnded.into();
+    if fact.action != ended {
+        return None;
+    }
+    let end: activity::domain::models::CallEnd =
+        serde_json::from_value(fact.payload.clone()?).ok()?;
+    end.call_id.parse().ok()
 }
 
 fn channel_from_receipt(access: &EntityAccessReceipt<MessageView>) -> Result<Uuid, MessageError> {

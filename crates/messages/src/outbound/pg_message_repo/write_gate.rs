@@ -8,7 +8,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, LazyLock, Mutex, PoisonError},
     time::Duration,
 };
 
@@ -26,6 +26,10 @@ const WRITES_IN_FLIGHT: usize = 4;
 /// How long a write waits for its turn before it fails as busy.
 const TURN_WAIT: Duration = Duration::from_secs(2);
 
+/// The gate every repository in this process shares, so the limit holds
+/// however many repositories a service builds.
+static PROCESS_GATE: LazyLock<ChannelWriteGate> = LazyLock::new(ChannelWriteGate::default);
+
 /// Hands out turns to write to a channel.
 #[derive(Clone, Default)]
 pub(super) struct ChannelWriteGate {
@@ -40,6 +44,11 @@ pub(super) struct ChannelWriteTurn {
 }
 
 impl ChannelWriteGate {
+    /// The gate shared by every repository in this process.
+    pub(super) fn process() -> Self {
+        PROCESS_GATE.clone()
+    }
+
     /// Wait for a turn to write to `parent`. Parents other than channels
     /// have no shared counter and need no turn.
     pub(super) async fn enter(
@@ -56,7 +65,7 @@ impl ChannelWriteGate {
     #[tracing::instrument(
         name = "messages.channel_write_turn",
         skip(self),
-        fields(waited = false),
+        fields(waited = tracing::field::Empty),
         err
     )]
     pub(super) async fn enter_channel(
@@ -77,11 +86,12 @@ impl ChannelWriteGate {
             channel_id,
             permit: None,
         };
-        if let Ok(permit) = turns.clone().try_acquire_owned() {
+        let free = turns.clone().try_acquire_owned().ok();
+        tracing::Span::current().record("waited", free.is_none());
+        if let Some(permit) = free {
             turn.permit = Some(permit);
             return Ok(turn);
         }
-        tracing::Span::current().record("waited", true);
         match tokio::time::timeout(TURN_WAIT, turns.acquire_owned()).await {
             Ok(Ok(permit)) => {
                 turn.permit = Some(permit);

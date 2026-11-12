@@ -743,3 +743,51 @@ async fn a_reader_is_caught_up_with_timeline_facts(pool: PgPool) {
     );
     assert!(changes.entries.is_empty() && changes.removed.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn logged_facts_without_a_reader_fail_instead_of_being_skipped(pool: PgPool) {
+    let channel_id = channel(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let service = MessageService::new(repo.clone(), NoMessageEventPublisher);
+    repo.record_activities(channel_id, &[Uuid::now_v7()])
+        .await
+        .unwrap();
+    assert!(matches!(
+        service.channel_changes(viewer(channel_id), 0).await,
+        Err(MessageError::Repository(_))
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_call_that_ended_reloads_its_root(pool: PgPool) {
+    let channel_id = channel(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let call_id = Uuid::now_v7();
+    let mut call = post(channel_id, None, "call");
+    call.kind = MessageKind::CallRoot;
+    call.input.id = Some(call_id);
+    repo.create(call).await.unwrap();
+    let since = repo.channel_seq(channel_id).await.unwrap();
+    let ended = activity::domain::timeline::TimelineActivity {
+        id: Uuid::now_v7(),
+        actor_id: USER.into(),
+        occurred_at: Utc::now(),
+        action: "call_ended".into(),
+        payload: Some(serde_json::json!({ "call_id": call_id, "duration_ms": 1000 })),
+    };
+    let service = MessageService::new(repo.clone(), NoMessageEventPublisher)
+        .with_activity(Facts(vec![ended.clone()]));
+    repo.record_activities(channel_id, &[ended.id])
+        .await
+        .unwrap();
+    let changes = service
+        .channel_changes(viewer(channel_id), since)
+        .await
+        .unwrap();
+    assert_eq!(changes.activities.len(), 1);
+    let [MessageTimelineEntry::Call { message, .. }] = changes.entries.as_slice() else {
+        panic!("expected the call root, got {:?}", changes.entries);
+    };
+    assert_eq!(message.message.id, call_id);
+    assert!(changes.removed.is_empty());
+}

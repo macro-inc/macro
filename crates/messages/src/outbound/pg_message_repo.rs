@@ -87,7 +87,7 @@ impl PgMessageRepository {
             pool,
             initiatives: None,
             crm: None,
-            gate: write_gate::ChannelWriteGate::default(),
+            gate: write_gate::ChannelWriteGate::process(),
         }
     }
 

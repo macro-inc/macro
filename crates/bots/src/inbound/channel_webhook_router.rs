@@ -33,7 +33,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageCommands,
     models::{MessageAttribution, PostMessage},
-    ports::MessageError,
+    ports::{BUSY_RETRY_AFTER_SECONDS, MessageError},
     service::MessageWrite,
 };
 use model_error_response::ErrorResponse;
@@ -414,13 +414,22 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             tracing::error!(error=?self, "channel bot webhook handler error");
         }
 
-        (
+        let busy = matches!(self, Self::Message(MessageError::Busy));
+        let mut response = (
             status,
             Json(ErrorResponse {
                 message: self.to_string().into(),
             }),
         )
-            .into_response()
+            .into_response();
+        if busy {
+            // Nothing was written, so the same request can be sent again.
+            response.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from_static(BUSY_RETRY_AFTER_SECONDS),
+            );
+        }
+        response
     }
 }
 

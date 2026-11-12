@@ -94,7 +94,8 @@ keep no log.
   `check_thread_references` first, because the reply's deferred foreign key
   would otherwise lock the root at commit.
 - A channel's writes commit one at a time, in two queues. In the process,
-  `write_gate` lets 4 writes per channel hold a connection and makes the rest
+  one `write_gate` shared by every repository lets 4 writes per channel hold a
+  connection and makes the rest
   wait up to 2 s before a connection is taken, so a burst into one channel
   cannot take the pool from the others. In the database, the append takes the
   channel's advisory lock under a 5 s `lock_timeout`
@@ -117,6 +118,9 @@ keep no log.
 - Timeline facts (renames, joins) are logged by `ChannelSequencedActivities`
   after the activity store commits them; a replayed batch logs a fact twice
   and readers apply it by id.
+- A call's end changes what its root shows but logs only the `call_ended`
+  fact; `channel_changes` reloads the root the fact names. A new fact that
+  changes how a message reads needs the same.
 - `ChannelChangeLogRetention` prunes hourly from `document_storage_service`.
 
 ## Gotchas
