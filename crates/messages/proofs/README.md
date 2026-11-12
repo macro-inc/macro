@@ -50,11 +50,22 @@ Run each statistics mode on its own new, migrated scratch database; the script
 rolls back its fixture and mutations:
 
 ```sh
+python3 crates/messages/proofs/sync_append_plan_sql.py --check
 psql <local-scratch-url> -v stale=false \
   -f crates/messages/proofs/channel_change_append_plans.sql
 psql <another-local-scratch-url> -v stale=true \
   -f crates/messages/proofs/channel_change_append_plans.sql
 ```
+
+The SQL check reads `crates/channel_change_db_utils/src/append.rs` and compares
+all three prepared statements byte for byte with their source literals. After an
+append change, run the same script without `--check` to refresh them; it performs
+no database work. The preflight sets a 50 ms deadline for the next append
+statement unless the inherited statement timeout is stricter. The append
+restores that setting before it returns and never changes `lock_timeout`.
+The proof measures the preflight separately, rolling its setting back after
+each sample. Before each scalar/batch sample it sets the effective deadline
+to 50 ms and passes `15s` as the prior setting to restore.
 
 The call metadata proof seeds 1.1 million `call_entities` rows (100,000 in the
 selected channel and ten times that across other channels). It covers a channel
@@ -97,6 +108,12 @@ create or reset databases. These measurements are separate from the 288-query
 main matrix and the changed-query proof.
 
 ## Repository write latency
+
+The existing `channel_write_latency_results.md` and its CSV are historical:
+`before` is pinned to `354da677b5`, and `after` is the pre-timeout implementation
+at `5743b47a10`. The recorded tables and commit diagnostics do not measure the
+later counter deadline. Keep results collected from the current source in
+separate artifacts with their source revision; do not relabel the old rows.
 
 The ignored `repository_write_latency` test compares the old and current
 repository implementations on the same dedicated local database. Set
@@ -195,7 +212,15 @@ append execution; the queue-inclusive estimate includes time before the lock
 was acquired. Keep these instrumented diagnostics separate from the
 uninstrumented repository latency comparison.
 
-## Fixed-arrival mixed writes
+## Historical fixed-arrival mixed writes
+
+The 108 existing fixed-arrival and delayed-commit rows are a pre-timeout
+snapshot: old methods at `354da677b5` versus `5743b47a10`. Reproducing those
+historical results requires a separate checkout of that original source and
+benchmark harness. The commands in this section and the next describe that
+snapshot; they do not establish behavior of the current deadline implementation.
+For current below-ceiling and saturation evidence, use the result-recording
+bounded-write and shared-pool tests documented below.
 
 The ignored `repository_open_loop_write_latency` test runs on the explicit
 sixteen-worker runtime with sixteen database connections. Run it in release
@@ -220,7 +245,14 @@ wait, to avoid coordinated omission. `service_*` starts after worker admission.
 `achieved_ops_s` includes draining all scheduled writes; it is distinct from the
 offered arrival rate. No requests or latency samples are discarded.
 
-## Synthetic pre-commit delay
+## Historical synthetic pre-commit delay
+
+The original `repository_commit_delay_write_latency` runner unwraps every
+repository result. Under a counter deadline, saturated synthetic cases can
+correctly return contention errors and stop that runner. Run this legacy
+comparison only from the pre-timeout source/harness snapshot (`5743b47a10`) in
+a separate checkout. The current result-recording runners retain failures and
+latency samples; their evidence is separate from the historical 108 rows.
 
 The ignored `repository_commit_delay_write_latency` test holds each transaction
 for a requested two or five milliseconds after its last SQL statement and
@@ -260,3 +292,181 @@ p95 and p99. Timer resolution and scheduling can make the observed hold longer
 than requested; use the reported actual interval when interpreting the result.
 Query tracing is disabled. These synthetic results remain separate from both
 the ordinary latency comparison and the traced commit-phase diagnostic.
+
+## Shared-pool channel isolation
+
+The ignored `repository_shared_pool_isolation` test measures whether one busy
+channel delays writes to another through their shared connection pool:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_POOL_LABEL=deadline50ms cargo test -p messages --all-features --release repository_shared_pool_isolation -- --ignored --nocapture'
+```
+
+It uses the same caller-provided dedicated `DATABASE_URL` and the sixteen-worker
+runtime. One shared pool has the document storage service's settings: minimum
+10 connections, maximum 50, and SQLx's default acquire timeout. The CSV records
+these actual settings and the initial pool size; all 50 connections are opened
+before measurement. Setup and cleanup are outside the measured interval.
+
+Each of three repetitions runs the pinned `before` and current `after` methods
+for 30 seconds each. One hundred closed-loop writers each edit their own root
+message in the flood channel. Independently, five scheduled writes per second
+each edit a distinct root in a second channel: 150 probe samples per case.
+Distinct rows avoid message-row contention between writers; only `after`
+contends for a shared channel counter. Both implementations use the exact
+benchmark-only methods audited above, with a requested five-millisecond timer
+between the final SQL statement and `COMMIT`.
+
+There is no shared semaphore ahead of the pool. Probe arrivals retain their
+original schedule, including when earlier writes have not finished. Probe
+latency includes scheduler lateness, pool acquisition and repository execution;
+flood latency starts immediately before each repository call. Writers stop
+starting flood operations at the measurement deadline, then all in-flight
+operations drain. Throughput uses the full wall time including that drain.
+
+Each lane reports attempts, successes, errors, attempt and successful-write
+latency p50/p95/p99, successful throughput, and actual successful pre-commit
+hold p50/p95/p99 alongside `requested_hold_ms`. Error counts distinguish pool
+acquisition timeouts, PostgreSQL `55P03`, `57014`, `40P01`, and other errors.
+Failed writes remain in attempt-latency samples and are not unwrapped or
+silently dropped. An empty successful sample set is reported as `NA`.
+
+Use `CHANNEL_SEQUENCE_POOL_SECONDS` to change the positive integer duration
+(default 30); each second adds five scheduled probes. Use an ASCII alphanumeric,
+underscore or hyphen `CHANNEL_SEQUENCE_POOL_LABEL` to distinguish runs after a
+code change. Keep all three repetitions and the default duration for reported
+comparisons. The artificial timer models extra time held before commit; it
+is not a measurement of actual database commit latency.
+
+After all three repetitions finish, validate and summarize one or more labeled
+release logs with:
+
+```sh
+python3 crates/messages/proofs/summarize_pool_isolation.py /tmp/pool-baseline.log
+```
+
+The script checks pool settings, case completeness, all error counts, and 150
+probe attempts per default case. It writes the full per-run CSV and a Markdown
+report with per-run tables and medians of the three per-run percentiles and
+rates; it does not pool percentile samples across runs. Error totals remain
+sums. Pass multiple log paths to compare distinct labels. The generated report
+records the pinned old source and the known `baseline`, `bounded5ms`,
+`bounded50ms` and `deadline50ms` source states, their measurement environment, and the repository
+error classification. Current logs append failed-attempt p50/p95/p99 as columns
+35–37; the parser also reads legacy 34-column logs and marks their unavailable
+failed latencies `NA`. Failure fractions use errors divided by all attempts,
+including for the legacy logs.
+For a diagnostic duration other than 30 seconds, pass `--expected-seconds` with
+the same value used by the benchmark.
+
+## Current writes below the synthetic ceiling
+
+The ignored `repository_bounded_write_latency` test checks current repository
+writes with the total counter-allocation statement deadline enabled:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_BOUNDED_LABEL=deadline50ms cargo test -p messages --all-features --release repository_bounded_write_latency -- --ignored --nocapture'
+```
+
+It uses sixteen workers and connections in one channel. Each of three
+repetitions measures 2,000 mixed writes per case: sixteen closed-loop writers
+without a synthetic hold; fixed arrivals at 1,000 and 3,000 writes/s without a
+hold; 20, 50 and 100 writes/s with a requested 5 ms pre-commit hold; and 200
+writes/s with a requested 2 ms hold. No-hold cases call the current repository
+methods directly. Delayed cases use the same audited current-method copies
+as the earlier synthetic proof. All cases preserve the current total statement
+deadline: one preflight round trip sets a 50 ms timeout, or a stricter inherited
+timeout, before counter allocation; the append restores the old setting in the
+same statement. This is distinct from the discarded per-lock 50 ms timeout.
+
+All sixteen pool connections are opened before timing. Each case then primes
+its four write paths with 128 sequential warmup writes, reported separately.
+Using one warmup writer avoids introducing a saturated synthetic-delay workload
+before a below-ceiling case. The measured fixed-arrival cases retain every
+original arrival and queue for the same sixteen-worker semaphore as the earlier
+open-loop proof; the semaphore never blocks the arrival scheduler. Fixtures,
+warmup and cleanup are outside the measured batch.
+
+The CSV includes every attempt, success and error; SQLSTATE and pool-acquisition
+error counts; all-attempt, successful and failed arrival latency; service time;
+observed hold duration; and successful/attempted throughput including drain.
+Writes are not retried. The test prints all cases and then fails if any measured
+or warmup request failed. Summarize the completed release log with:
+
+```sh
+python3 crates/messages/proofs/summarize_bounded_latency.py /tmp/deadline50ms-bounded.log
+```
+
+The parser validates all 42 rows (seven cases, three repetitions, warmup and
+measurement), writes raw CSV and per-run/median Markdown tables, and exits with
+failure after writing the report if any request failed.
+
+
+## Retained per-lock timeout counterexample
+
+The `bounded50ms` shared-pool experiment was stopped after three old-method
+cases and two new-method cases. Its per-lock 50 ms cap did not bound the total
+append statement: successive transaction-id lock waits could each finish below
+the cap while the whole statement kept a connection occupied. This incomplete
+experiment is [retained separately](channel_pool_isolation_bounded50ms_partial_results.md);
+it is not a completed three-run comparison.
+The `deadline50ms` phase replaces that per-lock cap with a total statement
+budget and must supply its own complete results.
+
+Extract the ten completed rows without inventing the missing third new case:
+
+```sh
+python3 crates/messages/proofs/summarize_pool_isolation.py \
+  /tmp/channel-seq-pool-50ms.log --partial-counterexample
+```
+
+This validates the exact three-old/two-new case set and writes
+`channel_pool_isolation_bounded50ms_partial_runs.csv` and its separate Markdown
+report. It deliberately emits no three-run aggregate. The normal parser mode
+continues to require all twelve rows per label.
+
+## Final deadline repository matrix
+
+Run the normal release matrix on the current deadline implementation after
+its source is fixed, compilation is complete, and other work on the dedicated
+database is idle:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_write_latency -- --ignored --nocapture' > /tmp/deadline-repository-writes.log 2>&1
+python3 crates/messages/proofs/summarize_deadline_write_latency.py \
+  /tmp/deadline-repository-writes.log --source-revision '<exact tested deadline head>'
+```
+
+Pass the exact tested source revision. If it includes uncommitted deadline
+changes, qualify the revision explicitly rather than claiming a clean commit.
+The parser requires all 96 rows: three repetitions of 2,000 writes for each
+operation, variant and writer/channel layout. It validates finite ordered
+percentiles and throughput against measured wall time, then writes
+`channel_deadline_write_latency_runs.csv` and
+`channel_deadline_write_latency_results.md`. These preserve the historical
+pre-timeout artifacts. The report shows old/current latency and throughput,
+individual-run p95 values, and single-writer absolute and percentage changes.
+The current implementation includes one deadline-configuration round trip
+before counter acquisition; this is part of the measured repository write.
+
+## Final deadline fixed-arrival comparison
+
+On the same fixed deadline source used for the final repository matrix, rerun
+the no-hold old/current fixed-arrival comparison separately:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture' > /tmp/deadline-arrival-writes.log 2>&1
+python3 crates/messages/proofs/summarize_deadline_arrival_latency.py \
+  /tmp/deadline-arrival-writes.log --source-revision '<exact tested deadline head>'
+```
+
+Keep the database free of other work and supply the exact tested revision,
+including any working-tree qualification. The parser requires all 48 rows:
+three runs, one/sixteen channels, 50/200/1,000/3,000 total arrivals per second,
+and old/current variants. Each row must contain 2,000 writes and no artificial
+hold. It validates finite ordered latency percentiles and achieved rate against
+wall time. It writes `channel_deadline_arrival_latency_runs.csv` and
+`channel_deadline_arrival_latency_results.md`, retaining every run plus medians
+of each run's p50/p95/p99 and achieved rates. Historical arrival/commit-delay
+files are unchanged. The old saturation-with-delay runner remains historical;
+use the result-recording shared-pool runner for current saturation evidence.

@@ -1,11 +1,19 @@
-# Fixed-arrival and delayed-commit write results
+# Historical fixed-arrival and delayed-commit write results
+
+Historical source snapshot: `before` is pinned to `354da677b5`; `after` is
+the pre-timeout implementation at `5743b47a10`. All numbers in this report
+predate both the discarded per-lock limits and the total statement deadline.
+They are retained as baseline evidence, not current deadline measurements.
+Reproduce them only with the original source and benchmark harness in a separate
+checkout. Current below-ceiling and shared-pool evidence uses the result-recording
+runners described in [README.md](README.md).
 
 Release build, one local PostgreSQL 18.4 database server, sixteen Tokio
 workers and sixteen connections. Database files were on local tmpfs;
 fsync and synchronous_commit were enabled. The injected delay adds
 lock occupancy but does not reproduce a particular production disk.
 Each row compares the pinned old
-repository with the current repository on the same server: three runs
+repository with the pre-timeout repository on the same server: three runs
 of 2,000 mixed writes each (500 create, edit, react and delete). Each
 case has 128 unmeasured warmup writes. The four operations use distinct
 message rows; all operations rotate through all selected channels.
@@ -92,7 +100,8 @@ of a general per-channel rate cap, and
 The [closed-loop repository results](channel_write_latency_results.md)
 retain the original per-operation saturation comparison.
 
-Reproduce the benchmark commands in [README.md](README.md), then run:
+Reproduce the historical commands from the pre-timeout source/harness checkout
+(see [README.md](README.md)), then run:
 
 ```sh
 python3 crates/messages/proofs/summarize_arrival_latency.py \
