@@ -975,7 +975,7 @@ async fn create_private_channel_does_not_resolve_a_team() {
 }
 
 #[tokio::test]
-async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
+async fn create_team_channel_needs_no_other_participants() {
     let team_id = Uuid::new_v4();
     let service = ToolTestChannelService::default();
     let created = service.created.clone();
@@ -998,9 +998,9 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect("team create injects the caller");
+    .expect("team create needs no other participants");
 
-    assert_eq!(response.participants, vec![TEST_USER_ID]);
+    assert!(response.participants.is_empty());
     let (actor, on_behalf_of, req) = created
         .lock()
         .expect("create lock")
@@ -1013,7 +1013,7 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     assert_eq!(on_behalf_of.as_ref(), Some(&user_id()));
     assert_eq!(req.channel_type, ChannelType::Team);
     assert_eq!(req.team_id, Some(team_id));
-    assert!(req.participants.contains(&user_id()));
+    assert!(req.participants.is_empty());
 }
 
 #[tokio::test]
