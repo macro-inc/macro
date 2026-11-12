@@ -10,6 +10,7 @@ import {
 import {
   agentsViewRoute,
   appRoute,
+  artifactsRoute,
   connectionsRoute,
   legacyContentRoute,
   notFoundRoute,
@@ -60,6 +61,7 @@ const definitions: SplitRoutes = {
         routinesRoute,
         agentsViewRoute,
         connectionsRoute,
+        artifactsRoute,
         routineCreateRoute,
         routineDetailRoute,
         legacyContentRoute,
@@ -240,32 +242,38 @@ describe('routine navigation', () => {
     expect(routineIdFromContent(pane.content())).toBe('routine-a');
   });
 
-  it('navigates to Connections and restores its URL on Back and Forward', () => {
-    const { manager, history } = setup('/agents');
-    const pane = manager.activeSplit()!;
-    openAgentsPage(manager, 'connections');
-    expect(manager.splits()).toHaveLength(1);
-    expect(history.read().path).toBe('/connections');
-    expect(pane.content()).toMatchObject({ id: 'connections' });
+  it.each(['connections', 'artifacts'] as const)(
+    'navigates to %s and restores its URL on Back and Forward',
+    (page) => {
+      const { manager, history } = setup('/agents');
+      const pane = manager.activeSplit()!;
+      openAgentsPage(manager, page);
+      expect(manager.splits()).toHaveLength(1);
+      expect(history.read().path).toBe(`/${page}`);
+      expect(pane.content()).toMatchObject({ id: page });
 
-    openAgentsPage(manager, 'routines');
-    expect(history.read().path).toBe('/routines');
-    history.back();
-    expect(history.read().path).toBe('/connections');
-    expect(pane.content()).toMatchObject({ id: 'connections' });
-    history.back();
-    expect(history.read().path).toBe('/agents');
-    history.forward();
-    expect(history.read().path).toBe('/connections');
-    expect(pane.content()).toMatchObject({ id: 'connections' });
-  });
+      openAgentsPage(manager, 'routines');
+      expect(history.read().path).toBe('/routines');
+      history.back();
+      expect(history.read().path).toBe(`/${page}`);
+      expect(pane.content()).toMatchObject({ id: page });
+      history.back();
+      expect(history.read().path).toBe('/agents');
+      history.forward();
+      expect(history.read().path).toBe(`/${page}`);
+      expect(pane.content()).toMatchObject({ id: page });
+    }
+  );
 
-  it('opens a copied Connections URL without an in-memory page selection', () => {
-    const { manager, history } = setup('/connections');
-    expect(history.read().path).toBe('/connections');
-    expect(manager.activeSplit()?.content()).toMatchObject({
-      type: 'component',
-      id: 'connections',
-    });
-  });
+  it.each(['connections', 'artifacts'])(
+    'opens a copied %s URL without an in-memory page selection',
+    (page) => {
+      const { manager, history } = setup(`/${page}`);
+      expect(history.read().path).toBe(`/${page}`);
+      expect(manager.activeSplit()?.content()).toMatchObject({
+        type: 'component',
+        id: page,
+      });
+    }
+  );
 });

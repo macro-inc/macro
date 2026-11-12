@@ -145,14 +145,21 @@ it('opens the requested Artifacts or Connections page on the legacy Agents layou
   expect(screen.queryByText('Artifacts page')).toBeNull();
 });
 
-it('opens a direct Connections route on the legacy Agents layout', async () => {
-  state.flag = () => ({ enabled: false, loading: false });
-  state.routeId = 'connections';
-  state.agentPage = 'new';
-  render(() => (
-    <Suspense fallback={null}>
-      <AgentsRouteView />
-    </Suspense>
-  ));
-  expect(await screen.findByText('Integrations page')).toBeTruthy();
-});
+it.each(['connections', 'artifacts'])(
+  'opens a direct %s route on the legacy Agents layout',
+  async (page) => {
+    state.flag = () => ({ enabled: false, loading: false });
+    state.routeId = page;
+    state.agentPage = 'new';
+    render(() => (
+      <Suspense fallback={null}>
+        <AgentsRouteView />
+      </Suspense>
+    ));
+    expect(
+      await screen.findByText(
+        page === 'connections' ? 'Integrations page' : 'Artifacts page'
+      )
+    ).toBeTruthy();
+  }
+);

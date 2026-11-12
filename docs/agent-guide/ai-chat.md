@@ -416,9 +416,10 @@ the shimmer.
   [Program blocks in HTML previews](documents.md#program-blocks-in-html-previews)).
   Click a row to open the document as any list row does (Shift+click for a new
   split). With none, the page shows **No artifacts yet** and explains that
-  published pages appear there. The page is `agentPage: 'artifacts'` on the
-  `agents` component (no URL route of its own, like Connections); code opens it
-  with `openAgentsPage(layout, 'artifacts')`. On touch, where the sidebar's tool
+  published pages appear there. The page has its own `/app/artifacts` URL;
+  copied links, reload, and browser Back/Forward restore it while the desktop
+  Agents sidebar stays mounted. Code opens it with
+  `openAgentsPage(layout, 'artifacts')`. On touch, where the sidebar's tool
   links are hidden, the same list is **Settings → Artifacts** (on phones **More
   views → Settings → Artifacts**), beside Routines; tapping a row closes the
   settings sheet and opens the document.

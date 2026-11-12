@@ -32,6 +32,9 @@ vi.mock('@app/features/settings/AgentSettings', () => ({
 vi.mock('@app/features/settings/IntegrationsPage', () => ({
   IntegrationsPage: () => <div data-testid="connections">Connections page</div>,
 }));
+vi.mock('../../artifacts/artifacts-page', () => ({
+  ArtifactsPage: () => <div data-testid="artifacts">Artifacts page</div>,
+}));
 vi.mock('@app/features/soup/entity-notifications', () => ({
   withEntityNotifications: (entity: unknown) => entity,
 }));
@@ -120,7 +123,7 @@ vi.mock('../components/AgentSessionPane', () => ({
 vi.mock('../components/AgentsSidebar', () => ({
   AgentsSidebar: (props: {
     activePage?: string;
-    onOpenPage: (page: 'connections') => void;
+    onOpenPage: (page: 'connections' | 'artifacts') => void;
     activeConversationId?: string;
     onOpenConversation: (conversation: {
       id: string;
@@ -128,13 +131,17 @@ vi.mock('../components/AgentsSidebar', () => ({
     }) => void;
   }) => (
     <>
-      <button
-        type="button"
-        aria-current={props.activePage === 'connections' ? 'page' : undefined}
-        onClick={() => props.onOpenPage('connections')}
-      >
-        Connections
-      </button>
+      <For each={['connections', 'artifacts'] as const}>
+        {(page) => (
+          <button
+            type="button"
+            aria-current={props.activePage === page ? 'page' : undefined}
+            onClick={() => props.onOpenPage(page)}
+          >
+            {page}
+          </button>
+        )}
+      </For>
       <For each={['a', 'b', 'c']}>
         {(id) => (
           <button
@@ -260,49 +267,51 @@ it('keeps the open conversation mounted when it is selected again', async () => 
   expect(state.mounts).toEqual(['a']);
 });
 
-it('follows the Connections destination without remounting the sidebar', () => {
-  const [contentId, setContentId] = createSignal('agents');
-  state.contentId = {
-    get current() {
-      return contentId();
-    },
-  };
-  state.navigate.current = setContentId;
-  render(() => <AgentsView />);
+it.each(['connections', 'artifacts'])(
+  'follows the %s destination without remounting the sidebar',
+  async (page) => {
+    const [contentId, setContentId] = createSignal('agents');
+    state.contentId = {
+      get current() {
+        return contentId();
+      },
+    };
+    state.navigate.current = setContentId;
+    render(() => <AgentsView />);
 
-  const link = screen.getByRole('button', { name: 'Connections' });
-  fireEvent.click(link);
-  expect(contentId()).toBe('connections');
-  expect(screen.getByTestId('connections')).toBeTruthy();
-  expect(link.getAttribute('aria-current')).toBe('page');
+    const link = screen.getByRole('button', { name: page });
+    fireEvent.click(link);
+    expect(contentId()).toBe(page);
+    expect(await screen.findByTestId(page)).toBeTruthy();
+    expect(link.getAttribute('aria-current')).toBe('page');
 
-  setContentId('agents');
-  expect(screen.queryByTestId('connections')).toBeNull();
-  setContentId('connections');
-  expect(screen.getByTestId('connections')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Connections' })).toBe(link);
-});
+    setContentId('agents');
+    expect(screen.queryByTestId(page)).toBeNull();
+    setContentId(page);
+    expect(await screen.findByTestId(page)).toBeTruthy();
+    expect(screen.getByRole('button', { name: page })).toBe(link);
+  }
+);
 
-it('shows a direct Connections destination on touch and returns to conversations', () => {
-  state.touch = true;
-  const [contentId, setContentId] = createSignal('connections');
-  state.contentId = {
-    get current() {
-      return contentId();
-    },
-  };
-  state.navigate.current = setContentId;
-  render(() => <AgentsView />);
+it.each(['connections', 'artifacts'])(
+  'shows a direct %s destination on touch and returns to conversations',
+  async (page) => {
+    state.touch = true;
+    const [contentId, setContentId] = createSignal(page);
+    state.contentId = {
+      get current() {
+        return contentId();
+      },
+    };
+    state.navigate.current = setContentId;
+    render(() => <AgentsView />);
 
-  expect(
-    screen
-      .getByTestId('connections')
-      .closest('main')
-      ?.classList.contains('hidden')
-  ).toBe(false);
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Back to conversations' })
-  );
-  expect(contentId()).toBe('agents');
-  expect(screen.getByRole('button', { name: 'Connections' })).toBeTruthy();
-});
+    const content = await screen.findByTestId(page);
+    expect(content.closest('main')?.classList.contains('hidden')).toBe(false);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to conversations' })
+    );
+    expect(contentId()).toBe('agents');
+    expect(screen.getByRole('button', { name: page })).toBeTruthy();
+  }
+);

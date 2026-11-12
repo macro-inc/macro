@@ -352,6 +352,11 @@ registerComponent(
   () => composableLayout()
 );
 registerComponent(
+  'artifacts',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'mail',
   () => <MailRouteView />,
   () => composableLayout()

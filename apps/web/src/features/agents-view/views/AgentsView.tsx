@@ -111,7 +111,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     const content = panel.handle.content();
     if (
       content.type === 'component' &&
-      (content.id === 'routines' || content.id === 'connections')
+      (content.id === 'routines' ||
+        content.id === 'connections' ||
+        content.id === 'artifacts')
     )
       return content.id;
   };
@@ -242,9 +244,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       });
       return;
     }
-    if (next === 'connections') {
+    if (next === 'connections' || next === 'artifacts') {
       layout.openWithSplit(
-        { type: 'component', id: 'connections' },
+        { type: 'component', id: next },
         { handle: panel.handle, activate: true, search: {} }
       );
       return;

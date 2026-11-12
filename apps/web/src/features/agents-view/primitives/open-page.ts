@@ -8,9 +8,9 @@ export function openAgentsPage(
   page: AgentsPage,
   params: Record<string, unknown> = {}
 ) {
-  if (page === 'connections') {
+  if (page === 'connections' || page === 'artifacts') {
     layout.openWithSplit(
-      { type: 'component', id: 'connections', params },
+      { type: 'component', id: page, params },
       { activate: true, search: {} }
     );
     return;

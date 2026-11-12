@@ -113,7 +113,8 @@ export const AgentsRouteView = withAuth(() => {
   const requestedPage = () => {
     const content = panel.handle.content();
     if (content.type !== 'component' || content.id === 'routines') return;
-    if (content.id === 'connections') return 'connections';
+    if (content.id === 'connections' || content.id === 'artifacts')
+      return content.id;
     return parseAgentsPage(content.params?.agentPage);
   };
   return (
