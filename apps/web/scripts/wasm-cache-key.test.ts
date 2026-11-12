@@ -1,7 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   lockSlice,
@@ -17,9 +24,22 @@ version = 4
 name = "engine"
 version = "0.1.0"
 dependencies = [
+ "patched",
  "png",
  "serde 1.0.200",
+ "server",
 ]
+
+[[package]]
+name = "patched"
+version = "1.0.0"
+dependencies = ["miniz"]
+
+[[package]]
+name = "miniz"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "gggg"
 
 [[package]]
 name = "png"
@@ -50,6 +70,8 @@ version = "1.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dddd"
 `;
+
+const WORKSPACE = new Set(['engine', 'server']);
 
 const MANIFEST = `[workspace]
 resolver = "2"
@@ -92,7 +114,9 @@ const BASE_FILES = {
   'rust-toolchain.toml': '[toolchain]\nchannel = "1.94.0"\n',
   'nix/tools.nix': '{ wasm-pack = "0.15.0"; }\n',
   '.github/workspace-dep-closures.json': JSON.stringify({
-    closures: { engine: ['crates/engine'], server: ['crates/server'] },
+    // The plain closure also follows a link a wasm32 build never compiles.
+    closures: { engine: ['crates/engine', 'crates/server'], server: ['crates/server'] },
+    wasm_closures: { engine: ['crates/engine'] },
   }),
   'crates/engine/Cargo.toml': '[package]\nname = "engine"\nversion = "0.1.0"\n',
   'crates/engine/src/lib.rs': 'pub fn draw() {}\n',
@@ -108,11 +132,25 @@ function key(files: Record<string, string>, env: Record<string, string> = {}) {
 
 describe('lockSlice', () => {
   it('follows locked dependencies, choosing the named version', () => {
-    const slice = lockSlice(LOCK, ['engine']).join('\n');
+    const slice = lockSlice(LOCK, ['engine'], WORKSPACE).join('\n');
     expect(slice).toContain('name = "png"');
     expect(slice).toContain('checksum = "bbbb"');
     expect(slice).not.toContain('checksum = "cccc"');
     expect(slice).not.toContain('name = "tokio"');
+  });
+
+  it('stops at workspace crates the build does not compile', () => {
+    // engine's lock entry lists server, a dependency it has only off wasm32.
+    const slice = lockSlice(LOCK, ['engine'], WORKSPACE).join('\n');
+    expect(slice).not.toContain('name = "server"');
+    expect(slice).not.toContain('checksum = "cccc"');
+    // A path dependency outside the workspace (a `[patch]`) has no source
+    // either, and is followed.
+    expect(slice).toContain('checksum = "gggg"');
+
+    const both = lockSlice(LOCK, ['engine', 'server'], WORKSPACE).join('\n');
+    expect(both).toContain('name = "server"');
+    expect(both).toContain('name = "tokio"');
   });
 });
 
@@ -175,5 +213,23 @@ describe('wasmCacheKey', () => {
     expect(wasmCacheKey(first, 'engine', build(first), {})).toBe(
       wasmCacheKey(second, 'engine', build(second), {})
     );
+  });
+});
+
+describe('the closure map', () => {
+  it('has a wasm closure for every package the justfile builds', () => {
+    const repo = resolve(import.meta.dirname, '../../..');
+    const justfile = readFileSync(join(repo, 'apps/web/justfile'), 'utf8');
+    const packages = [...justfile.matchAll(/scripts\/cached-wasm-build\.sh (\S+)/g)].map(
+      (match) => match[1]
+    );
+    const { wasm_closures } = JSON.parse(
+      readFileSync(join(repo, '.github/workspace-dep-closures.json'), 'utf8')
+    ) as { wasm_closures: Record<string, string[]> };
+
+    expect(packages.length).toBeGreaterThan(0);
+    for (const name of packages) {
+      expect(wasm_closures[name]?.length ?? 0, name).toBeGreaterThan(0);
+    }
   });
 });
