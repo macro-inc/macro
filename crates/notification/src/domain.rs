@@ -1,3 +1,4 @@
+pub mod bulk_action;
 pub mod item_preferences;
 pub mod models;
 pub mod ports;

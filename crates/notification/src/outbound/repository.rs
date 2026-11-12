@@ -403,6 +403,17 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
     > + Send;
 
+    /// Atomically reopen done notifications, those in `unseen` as unseen and the
+    /// rest as seen, preserving view times.
+    fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> impl std::future::Future<
+        Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
+    > + Send;
+
     /// Get matching user-owned IDs that need a status transition or initial viewing timestamp.
     fn get_notification_ids_for_entities(
         &self,
@@ -927,6 +938,62 @@ impl NotificationDbOps for PgPool {
             user_id.as_ref(),
             notification_ids,
             done,
+        )
+        .fetch_all(self)
+        .await?;
+
+        rows.into_iter()
+            .map(UpdatedUserNotificationRow::into_domain)
+            .collect()
+    }
+
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        let rows = sqlx::query_as!(
+            UpdatedUserNotificationRow,
+            r#"
+            WITH updated AS (
+                UPDATE user_notification
+                SET state = CASE
+                    WHEN notification_id = ANY($3) THEN 'unseen'::notification_state
+                    ELSE 'seen'::notification_state
+                END
+                WHERE user_id = $1 AND notification_id = ANY($2) AND state = 'done'
+                    AND deleted_at IS NULL
+                RETURNING
+                    user_id,
+                    notification_id,
+                    sent,
+                    state,
+                    created_at,
+                    seen_at,
+                    deleted_at
+            )
+            SELECT
+                updated.user_id as owner_id,
+                updated.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                updated.sent,
+                updated.state as "state!: NotificationState",
+                updated.created_at::timestamptz as "created_at!",
+                updated.seen_at::timestamptz as viewed_at,
+                NOW()::timestamptz as "updated_at!",
+                updated.deleted_at::timestamptz,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type,
+                n.sender_id
+            FROM updated
+            JOIN notification n ON n.id = updated.notification_id
+            ORDER BY array_position($2, updated.notification_id)
+            "#,
+            user_id.as_ref(),
+            notification_ids,
+            unseen,
         )
         .fetch_all(self)
         .await?;
@@ -1564,6 +1631,17 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         self.db
             .mark_notifications_done(user_id, notification_ids, done)
+            .await
+    }
+
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.db
+            .reopen_notifications(user_id, notification_ids, unseen)
             .await
     }
 

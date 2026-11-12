@@ -525,6 +525,11 @@ where
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
                     .await?
             }
+            NotificationStatus::Reopen { unseen } => {
+                self.repository
+                    .reopen_notifications(&req.user_id, req.notification_ids, unseen)
+                    .await?
+            }
         };
 
         if !changed.is_empty() {

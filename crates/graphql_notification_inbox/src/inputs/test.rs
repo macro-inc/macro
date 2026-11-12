@@ -54,8 +54,8 @@ fn scope_input_carries_unread_only_into_pages_and_clears() {
     .unwrap();
     assert!(query.scope.unread_only);
 
-    let clear = ClearNotificationInboxInput {
-        scope: Some(unread()),
+    let (_, clear) = ClearNotificationInboxInput {
+        scope: Some(unread_tasks()),
         ..Default::default()
     }
     .into_request()
@@ -63,13 +63,25 @@ fn scope_input_carries_unread_only_into_pages_and_clears() {
     assert!(clear.scope.unread_only);
 
     // Older clients name it beside the scope.
-    let legacy = ClearNotificationInboxInput {
+    let (_, legacy) = ClearNotificationInboxInput {
+        scope: Some(NotificationInboxScopeInput {
+            unread_only: None,
+            ..unread_tasks()
+        }),
         unread_only: Some(true),
         ..Default::default()
     }
     .into_request()
     .unwrap();
     assert!(legacy.scope.unread_only);
+}
+
+/// Unread task rows.
+fn unread_tasks() -> NotificationInboxScopeInput {
+    NotificationInboxScopeInput {
+        row_types: Some(vec![GraphqlNotificationInboxRowType::Task]),
+        unread_only: Some(true),
+    }
 }
 
 const ROW: &str = "channel:11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa#top_level";
@@ -114,4 +126,61 @@ fn seen_input_is_capped() {
         scope: None,
     };
     assert!(too_many.into_rows().is_err());
+}
+
+#[test]
+fn a_clear_names_its_row_types() {
+    // An empty list is what an inbox with every kind hidden sends, and a
+    // missing one names nothing either: neither clears every kind.
+    let named_none = ClearNotificationInboxInput {
+        scope: Some(NotificationInboxScopeInput {
+            row_types: Some(Vec::new()),
+            unread_only: None,
+        }),
+        ..Default::default()
+    };
+    assert!(named_none.into_request().is_err());
+    assert!(
+        ClearNotificationInboxInput::default()
+            .into_request()
+            .is_err()
+    );
+
+    let (_, tasks) = ClearNotificationInboxInput {
+        scope: Some(unread_tasks()),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert_eq!(tasks.scope.row_types, vec![InboxRowType::Task]);
+    assert!(tasks.since.is_none());
+}
+
+#[test]
+fn a_clear_takes_the_callers_id_or_gets_one() {
+    let id = Uuid::from_u128(0xC1EA);
+    let (named, _) = ClearNotificationInboxInput {
+        clear_id: Some(ID(id.to_string())),
+        scope: Some(unread_tasks()),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert_eq!(named, id);
+
+    let not_an_id = ClearNotificationInboxInput {
+        clear_id: Some(ID("everything".to_string())),
+        scope: Some(unread_tasks()),
+        ..Default::default()
+    };
+    assert!(not_an_id.into_request().is_err());
+
+    // A client from before clears had ids.
+    let (generated, _) = ClearNotificationInboxInput {
+        scope: Some(unread_tasks()),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert_ne!(generated, id);
 }

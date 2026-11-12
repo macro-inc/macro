@@ -9,7 +9,15 @@ use model_entity::Entity;
 use notification::domain::models::NotificationState;
 use serde_json::json;
 
+use std::sync::{Arc, Mutex};
+
+use macro_user_id::user_id::MacroUserIdStr;
+
+use self::fake_clears::FakeClears;
 use super::*;
+use crate::domain::models::ClearStatus;
+
+mod fake_clears;
 
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;
@@ -22,7 +30,21 @@ type Service = NotificationInboxServiceImpl<
     FakeNotifications,
     FakeMail,
     FakeSignals,
+    FakeClears,
+    FakeClearUpdates,
 >;
+
+/// Records every clear update sent to the viewer's sessions.
+#[derive(Clone, Default)]
+struct FakeClearUpdates {
+    sent: Arc<Mutex<Vec<ClearAction>>>,
+}
+
+impl ClearUpdates for FakeClearUpdates {
+    async fn updated(&self, _user: &MacroUserIdStr<'static>, action: &ClearAction) {
+        self.sent.lock().unwrap().push(action.clone());
+    }
+}
 
 /// The service with handles on its fakes.
 struct Harness {
@@ -31,6 +53,8 @@ struct Harness {
     notifications: FakeNotifications,
     mail: FakeMail,
     signals: FakeSignals,
+    clears: FakeClears,
+    clear_updates: FakeClearUpdates,
 }
 
 fn harness(items: Vec<Candidate<&'static str>>, notifications: Vec<FeedNotification>) -> Harness {
@@ -38,17 +62,23 @@ fn harness(items: Vec<Candidate<&'static str>>, notifications: Vec<FeedNotificat
     let notifications = FakeNotifications::with(notifications);
     let mail = FakeMail::default();
     let signals = FakeSignals::default();
+    let clears = FakeClears::over(notifications.clone());
+    let clear_updates = FakeClearUpdates::default();
     Harness {
         service: NotificationInboxServiceImpl::new(
             source.clone(),
             notifications.clone(),
             mail.clone(),
             signals.clone(),
+            clears.clone(),
+            clear_updates.clone(),
         ),
         source,
         notifications,
         mail,
         signals,
+        clears,
+        clear_updates,
     }
 }
 
@@ -488,67 +518,143 @@ async fn done_on_a_notification_the_row_no_longer_shows_acknowledges_nothing() {
     assert!(outcome.receipt.notification_ids.is_empty());
 }
 
-fn clear_request(scope: InboxScope) -> InboxClearRequest {
-    InboxClearRequest {
-        scope,
-        since: None,
-        limit: 50,
-        after: None,
+/// Every kind of row: what an inbox showing everything clears.
+fn every_kind() -> InboxScope {
+    InboxScope {
+        row_types: InboxRowType::ALL.to_vec(),
+        unread_only: false,
     }
+}
+
+fn clear_request(scope: InboxScope) -> InboxClearRequest {
+    InboxClearRequest { scope, since: None }
+}
+
+const CLEAR: u128 = 0xC1EA;
+
+fn state(harness: &Harness, id: u128) -> NotificationState {
+    harness.notifications.state_of(uuid(id))
+}
+
+/// Start clear [`CLEAR`] and run it to wherever it stops.
+async fn clear(harness: &Harness, request: InboxClearRequest) -> ClearAction {
+    let started = harness
+        .service
+        .start_clear(viewer(), request, uuid(CLEAR))
+        .await
+        .unwrap();
+    let run = started.run.expect("a new clear has work to run");
+    harness
+        .service
+        .run_clear(viewer(), run, CancellationToken::new())
+        .await
+        .unwrap()
+}
+
+/// Undo clear [`CLEAR`] and run the undo to the end.
+async fn undo_clear(harness: &Harness) -> ClearAction {
+    let started = harness
+        .service
+        .undo_clear(viewer(), uuid(CLEAR))
+        .await
+        .unwrap()
+        .expect("the clear exists");
+    match started.run {
+        Some(run) => harness
+            .service
+            .run_clear(viewer(), run, CancellationToken::new())
+            .await
+            .unwrap(),
+        None => started.action,
+    }
+}
+
+/// Take over stalled clears and run each to wherever it stops.
+async fn resume(harness: &Harness) -> Vec<ClearAction> {
+    let mut resumed = Vec::new();
+    for run in harness.service.claim_stalled_clears().await.unwrap() {
+        resumed.push(
+            harness
+                .service
+                .run_clear(viewer(), run, CancellationToken::new())
+                .await
+                .unwrap(),
+        );
+    }
+    resumed
 }
 
 #[tokio::test]
 async fn clear_marks_every_row_done_without_archiving_mail() {
     let harness = inbox();
-    let outcome = harness
-        .service
-        .clear(viewer(), clear_request(InboxScope::default()))
-        .await
-        .unwrap();
+    let cleared = clear(&harness, clear_request(every_kind())).await;
 
     // The channel's thread and top level, and the inbox email thread.
-    assert_eq!(outcome.rows, 3);
-    let mut cleared = outcome.receipt.notification_ids.clone();
-    cleared.sort();
-    assert_eq!(cleared, vec![uuid(1), uuid(2), uuid(3), uuid(4), uuid(5)]);
-    assert!(outcome.receipt.archived_threads.is_empty());
+    assert_eq!(cleared.status, ClearStatus::Done);
+    assert_eq!(cleared.rows, 3);
+    assert_eq!(cleared.notifications, 5);
+    for id in 1..=5 {
+        assert_eq!(state(&harness, id), NotificationState::Done, "{id}");
+    }
     assert!(harness.mail.calls.lock().unwrap().is_empty());
-    assert!(outcome.next.is_none());
+    let stored = harness
+        .service
+        .clear_action(viewer(), uuid(CLEAR))
+        .await
+        .unwrap();
+    assert_eq!(stored, Some(cleared));
+    assert!(
+        harness
+            .service
+            .running_clears(viewer())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_clear_that_names_no_kind_is_refused_and_clears_nothing() {
+    let harness = inbox();
+    // What an inbox with every kind hidden used to send: no kinds, which an
+    // inbox page reads as every kind.
+    let refused = harness
+        .service
+        .start_clear(viewer(), clear_request(InboxScope::default()), uuid(CLEAR))
+        .await;
+
+    assert!(matches!(refused, Err(FeedError::InvalidInput(_))));
+    for id in 1..=5 {
+        assert_eq!(state(&harness, id), NotificationState::Unseen, "{id}");
+    }
+    assert_eq!(harness.clears.chunks(), 0);
 }
 
 #[tokio::test]
 async fn clear_takes_only_the_rows_the_request_names() {
     let harness = inbox();
-    let outcome = harness
-        .service
-        .clear(
-            viewer(),
-            InboxClearRequest {
-                // Channel rows only, and only what arrived at minute 8 or later.
-                since: Some(at(8)),
-                ..clear_request(InboxScope {
-                    row_types: vec![InboxRowType::ChannelMention, InboxRowType::ChannelMessages],
-                    ..Default::default()
-                })
-            },
-        )
-        .await
-        .unwrap();
+    let cleared = clear(
+        &harness,
+        InboxClearRequest {
+            // Channel rows only, and only what arrived at minute 8 or later.
+            since: Some(at(8)),
+            ..clear_request(InboxScope {
+                row_types: vec![InboxRowType::ChannelMention, InboxRowType::ChannelMessages],
+                ..Default::default()
+            })
+        },
+    )
+    .await;
 
     // The mention thread, with the document chip it hides; not the
     // top-level message from minute 2, nor the email.
-    assert_eq!(outcome.rows, 1);
-    let mut cleared = outcome.receipt.notification_ids.clone();
-    cleared.sort();
-    assert_eq!(cleared, vec![uuid(2), uuid(3), uuid(4)]);
-    assert_eq!(
-        harness.notifications.state_of(uuid(1)),
-        NotificationState::Unseen
-    );
-    assert_eq!(
-        harness.notifications.state_of(uuid(5)),
-        NotificationState::Unseen
-    );
+    assert_eq!(cleared.rows, 1);
+    for id in [2, 3, 4] {
+        assert_eq!(state(&harness, id), NotificationState::Done);
+    }
+    for id in [1, 5] {
+        assert_eq!(state(&harness, id), NotificationState::Unseen);
+    }
 }
 
 #[tokio::test]
@@ -570,56 +676,386 @@ async fn clear_of_unread_rows_leaves_read_ones() {
             channel_send(2, CHANNEL, 0x100, 5),
         ],
     );
-    let outcome = harness
+    clear(
+        &harness,
+        clear_request(InboxScope {
+            unread_only: true,
+            ..every_kind()
+        }),
+    )
+    .await;
+
+    assert_eq!(state(&harness, 1), NotificationState::Seen);
+    assert_eq!(state(&harness, 2), NotificationState::Done);
+}
+
+#[tokio::test]
+async fn clear_since_a_time_stops_at_the_first_older_group() {
+    let harness = inbox();
+    let cleared = clear(
+        &harness,
+        InboxClearRequest {
+            since: Some(at(8)),
+            ..clear_request(every_kind())
+        },
+    )
+    .await;
+    // The channel's mention thread; the email thread is older than the cutoff.
+    assert_eq!(cleared.rows, 1);
+    assert_eq!(state(&harness, 5), NotificationState::Unseen);
+}
+
+#[tokio::test]
+async fn a_clear_leaves_what_arrived_after_it_started() {
+    let harness = inbox();
+    // The clear starts at minute 7: the thread's mention, the document chip
+    // it hides and the reply (minutes 8 and 9) had not arrived yet.
+    *harness.clears.now.lock().unwrap() = at(7);
+    let cleared = clear(&harness, clear_request(every_kind())).await;
+
+    assert_eq!(cleared.status, ClearStatus::Done);
+    for id in [1, 5] {
+        assert_eq!(state(&harness, id), NotificationState::Done, "{id}");
+    }
+    for id in [2, 3, 4] {
+        assert_eq!(state(&harness, id), NotificationState::Unseen, "{id}");
+    }
+}
+
+/// `count` documents at one time, each with one unread task notification.
+fn many_documents(count: u128) -> Harness {
+    // Newest first: at one time, the higher entity id first.
+    let candidates = (0..count)
+        .rev()
+        .map(|i| {
+            candidate(
+                "doc",
+                entity(EntityType::Document, 0x1000 + i),
+                Some(5),
+                None,
+            )
+        })
+        .collect();
+    let notifications = (0..count).map(document_task).collect();
+    harness(candidates, notifications)
+}
+
+/// Document `i`'s unread task notification.
+fn document_task(i: u128) -> FeedNotification {
+    notification(
+        0x2000 + i,
+        entity(EntityType::Document, 0x1000 + i),
+        "task_assigned",
+        json!({ "taskId": format!("task-{i}"), "assignedBy": "macro|other@example.com", "taskName": "Plan" }),
+        5,
+        NotificationState::Unseen,
+    )
+}
+
+fn all_documents_are(harness: &Harness, count: u128, expected: NotificationState) {
+    for i in 0..count {
+        assert_eq!(state(harness, 0x2000 + i), expected, "document {i}");
+    }
+}
+
+#[tokio::test]
+async fn one_clear_reads_every_chunk_until_the_inbox_ends() {
+    let harness = many_documents(250);
+    let cleared = clear(&harness, clear_request(every_kind())).await;
+
+    assert_eq!(cleared.status, ClearStatus::Done);
+    assert_eq!(cleared.rows, 250);
+    assert!(
+        harness.clears.chunks() >= 3,
+        "chunks of {CLEAR_CHUNK_GROUPS} groups"
+    );
+    all_documents_are(&harness, 250, NotificationState::Done);
+    // The viewer's sessions heard it start and finish.
+    let sent = harness.clear_updates.sent.lock().unwrap();
+    assert_eq!(sent.first().unwrap().status, ClearStatus::Applying);
+    assert_eq!(sent.last().unwrap().status, ClearStatus::Done);
+}
+
+#[tokio::test]
+async fn starting_the_same_clear_again_starts_nothing() {
+    let harness = many_documents(3);
+    let cleared = clear(&harness, clear_request(every_kind())).await;
+    let chunks = harness.clears.chunks();
+
+    // The reply was lost and the client sends the clear again.
+    let again = harness
         .service
-        .clear(
+        .start_clear(viewer(), clear_request(every_kind()), uuid(CLEAR))
+        .await
+        .unwrap();
+
+    assert!(again.run.is_none());
+    assert_eq!(again.action, cleared);
+    assert_eq!(harness.clears.chunks(), chunks);
+    // The id can't be reused for another clear.
+    let other = harness
+        .service
+        .start_clear(
             viewer(),
             clear_request(InboxScope {
-                unread_only: true,
-                ..Default::default()
+                row_types: vec![InboxRowType::Email],
+                unread_only: false,
             }),
+            uuid(CLEAR),
         )
-        .await
-        .unwrap();
-
-    assert_eq!(outcome.receipt.notification_ids, vec![uuid(2)]);
+        .await;
+    assert!(matches!(other, Err(FeedError::InvalidInput(_))));
 }
 
 #[tokio::test]
-async fn clear_since_a_time_ends_at_the_first_older_group() {
+async fn a_clear_whose_server_stops_resumes_where_it_stopped() {
+    let harness = many_documents(250);
+    // The server shuts down while the second chunk is in flight.
+    let stop = CancellationToken::new();
+    let stopping = stop.clone();
+    harness.clears.before_chunk(move |chunk, _| {
+        if chunk == 1 {
+            stopping.cancel();
+        }
+    });
+    let started = harness
+        .service
+        .start_clear(viewer(), clear_request(every_kind()), uuid(CLEAR))
+        .await
+        .unwrap();
+    let stopped = harness
+        .service
+        .run_clear(viewer(), started.run.unwrap(), stop)
+        .await
+        .unwrap();
+    assert_eq!(stopped.status, ClearStatus::Applying);
+    assert_eq!(stopped.rows, 2 * u32::from(CLEAR_CHUNK_GROUPS));
+    assert_eq!(state(&harness, 0x2000), NotificationState::Unseen);
+
+    // Another server takes it over and finishes from the cursor.
+    let resumed = resume(&harness).await;
+    assert_eq!(resumed.len(), 1);
+    assert_eq!(resumed[0].status, ClearStatus::Done);
+    assert_eq!(resumed[0].rows, 250, "no row is cleared or counted twice");
+    assert_eq!(resumed[0].notifications, 250);
+    all_documents_are(&harness, 250, NotificationState::Done);
+    assert!(resume(&harness).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_clear_whose_chunk_fails_is_claimed_again_and_finishes() {
+    let harness = many_documents(250);
+    harness.clears.failing_chunks.lock().unwrap().push(1);
+    let started = harness
+        .service
+        .start_clear(viewer(), clear_request(every_kind()), uuid(CLEAR))
+        .await
+        .unwrap();
+    let failed = harness
+        .service
+        .run_clear(viewer(), started.run.unwrap(), CancellationToken::new())
+        .await;
+    assert!(failed.is_err());
+    // Nothing claims a clear whose worker may still be alive.
+    assert!(resume(&harness).await.is_empty());
+
+    harness.clears.expire_lease(uuid(CLEAR));
+    let resumed = resume(&harness).await;
+    assert_eq!(resumed[0].status, ClearStatus::Done);
+    assert_eq!(resumed[0].rows, 250);
+    all_documents_are(&harness, 250, NotificationState::Done);
+}
+
+#[tokio::test]
+async fn an_undo_stops_a_running_clear_and_restores_what_it_cleared() {
+    let harness = many_documents(250);
+    // The undo arrives while the clear is between its first two chunks.
+    let undo_lease = Arc::new(Mutex::new(None));
+    let taken = undo_lease.clone();
+    harness.clears.before_chunk(move |chunk, clears| {
+        if chunk == 1 {
+            *taken.lock().unwrap() = clears.undo_now(uuid(CLEAR));
+        }
+    });
+    let stopped = clear(&harness, clear_request(every_kind())).await;
+    // The clear's second chunk committed nothing.
+    assert_eq!(stopped.rows, u32::from(CLEAR_CHUNK_GROUPS));
+    assert_eq!(state(&harness, 0x2000), NotificationState::Unseen);
+    assert_eq!(state(&harness, 0x2000 + 249), NotificationState::Done);
+    assert!(undo_lease.lock().unwrap().is_some());
+
+    // The undo's own worker died too; it is claimed and finished like a clear.
+    harness.clears.expire_lease(uuid(CLEAR));
+    let undone = resume(&harness).await;
+    assert_eq!(undone[0].status, ClearStatus::Undone);
+    assert_eq!(undone[0].restored, u32::from(CLEAR_CHUNK_GROUPS));
+    all_documents_are(&harness, 250, NotificationState::Unseen);
+}
+
+#[tokio::test]
+async fn a_group_that_moves_ahead_of_a_running_clear_is_still_cleared() {
+    let harness = many_documents(250);
+    *harness.clears.now.lock().unwrap() = at(30);
+    // While the clear walks, document 0 (the last it would reach) gets a
+    // new notification and moves to the top of the inbox, ahead of the walk.
+    let source = harness.source.clone();
+    let notifications = harness.notifications.clone();
+    harness.clears.before_chunk(move |chunk, _| {
+        if chunk != 1 {
+            return;
+        }
+        let document = entity(EntityType::Document, 0x1000);
+        let mut items = source.items.lock().unwrap();
+        items.retain(|item| item.key != document);
+        items.insert(0, candidate("doc", document.clone(), Some(40), None));
+        notifications
+            .by_entity
+            .lock()
+            .unwrap()
+            .get_mut(&document)
+            .unwrap()
+            .push(notification(
+                0x9000,
+                document,
+                "task_assigned",
+                json!({ "taskId": "task-new", "assignedBy": "macro|other@example.com", "taskName": "New" }),
+                40,
+                NotificationState::Unseen,
+            ));
+    });
+    let cleared = clear(&harness, clear_request(every_kind())).await;
+
+    assert_eq!(cleared.status, ClearStatus::Done);
+    // Its notification from before the clear is cleared; the new one stays.
+    assert_eq!(state(&harness, 0x2000), NotificationState::Done);
+    assert_eq!(state(&harness, 0x9000), NotificationState::Unseen);
+    assert_eq!(cleared.notifications, 250);
+}
+
+#[tokio::test]
+async fn undo_of_a_clear_restores_every_notification_as_it_was() {
     let harness = inbox();
-    let request = InboxClearRequest {
-        since: Some(at(8)),
-        limit: 1,
-        ..clear_request(InboxScope::default())
-    };
-    let first = harness
+    harness
         .service
-        .clear(viewer(), request.clone())
-        .await
-        .unwrap();
-    assert_eq!(first.rows, 1);
-    assert!(first.next.is_some());
-
-    let second = harness
-        .service
-        .clear(
+        .mark_seen(
             viewer(),
-            InboxClearRequest {
-                after: first.next,
-                ..request
-            },
+            InboxScope::default(),
+            vec![row(&channel(), &thread_slot())],
         )
         .await
         .unwrap();
-    // The email thread is older than the cutoff: nothing more to clear.
-    assert_eq!(second.rows, 0);
-    assert!(second.receipt.notification_ids.is_empty());
-    assert!(second.next.is_none());
+    clear(&harness, clear_request(every_kind())).await;
+    harness.signals.calls.lock().unwrap().clear();
+
+    let undone = undo_clear(&harness).await;
+
+    // The thread was read before the clear; the top level and the email
+    // were not.
+    assert_eq!(undone.status, ClearStatus::Undone);
+    assert_eq!(undone.restored, 5);
+    for id in [2, 3, 4] {
+        assert_eq!(state(&harness, id), NotificationState::Seen);
+    }
+    for id in [1, 5] {
+        assert_eq!(state(&harness, id), NotificationState::Unseen);
+    }
+    // The channel and the email come back in the viewer's open feeds.
+    let signalled: Vec<Entity<'static>> = harness
+        .signals
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
+    assert_eq!(signalled.len(), 2);
+    // Undone once: a second undo changes nothing.
+    let again = harness
+        .service
+        .undo_clear(viewer(), uuid(CLEAR))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(again.run.is_none());
+    assert_eq!(again.action.status, ClearStatus::Undone);
 }
 
 #[tokio::test]
-async fn undo_restores_a_done_and_recomputes_its_groups() {
+async fn undo_of_a_clear_leaves_what_the_viewer_reopened_since() {
+    let harness = inbox();
+    clear(&harness, clear_request(every_kind())).await;
+    // The viewer brings the email back themselves; it returns read.
+    harness
+        .notifications
+        .by_entity
+        .lock()
+        .unwrap()
+        .get_mut(&entity(EntityType::EmailThread, MAIL))
+        .unwrap()
+        .iter_mut()
+        .for_each(|n| *n = with_state(n, NotificationState::Seen));
+
+    let undone = undo_clear(&harness).await;
+
+    assert_eq!(undone.restored, 4);
+    assert_eq!(state(&harness, 5), NotificationState::Seen);
+}
+
+#[tokio::test]
+async fn undo_of_an_unknown_clear_finds_nothing() {
+    let harness = inbox();
+    assert!(
+        harness
+            .service
+            .undo_clear(viewer(), uuid(CLEAR))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_cleared_mail_row_stays_hidden_while_its_thread_is_unread() {
+    let harness = inbox();
+    clear(
+        &harness,
+        clear_request(InboxScope {
+            row_types: vec![InboxRowType::Email],
+            ..Default::default()
+        }),
+    )
+    .await;
+
+    // Clear doesn't archive, so the thread is still in the mail inbox with
+    // an unread message; with its notification done, the inbox has no row
+    // for it until new mail arrives.
+    assert!(harness.mail.calls.lock().unwrap().is_empty());
+    let page = harness
+        .service
+        .page(viewer(), query(Vec::new()))
+        .await
+        .unwrap();
+    assert!(page.entries.iter().all(|entry| entry.entity != "mail"));
+
+    harness
+        .notifications
+        .by_entity
+        .lock()
+        .unwrap()
+        .get_mut(&entity(EntityType::EmailThread, MAIL))
+        .unwrap()
+        .push(new_email(9, MAIL, 10, NotificationState::Unseen));
+    let page = harness
+        .service
+        .page(viewer(), query(Vec::new()))
+        .await
+        .unwrap();
+    assert!(page.entries.iter().any(|entry| entry.entity == "mail"));
+}
+
+#[tokio::test]
+async fn undo_restores_a_done_as_it_was_and_recomputes_its_groups() {
     let harness = inbox();
     let outcome = harness
         .service
@@ -643,15 +1079,17 @@ async fn undo_restores_a_done_and_recomputes_its_groups() {
         )
         .await
         .unwrap();
+    // It was unseen before the done, so it comes back unseen.
     assert_eq!(
         harness.notifications.state_of(uuid(1)),
-        NotificationState::Seen
+        NotificationState::Unseen
     );
     assert_eq!(changes.len(), 1);
     let InboxChange::Upserted(entry) = &changes[0] else {
         panic!("the channel comes back");
     };
     assert_eq!(entry.rows.len(), 2);
+    assert!(entry.rows.iter().all(|row| row.unseen));
 }
 
 #[tokio::test]

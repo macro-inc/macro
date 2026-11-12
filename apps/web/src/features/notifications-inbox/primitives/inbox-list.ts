@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { UnifiedNotification } from '@notifications/types';
 import type {
   InboxDoneResult,
@@ -36,10 +37,15 @@ export type InboxDoneNotices = {
   /** Announce a completed done with an Undo action; returns its dismissal. */
   announceDone: (count: number, undo: () => Promise<void>) => () => void;
   /**
-   * Announce a completed clear of `count` rows, with an Undo action when it
-   * took any; returns its dismissal.
+   * Announce a clear of `count` rows, with an Undo action when it took any or
+   * is still running (`complete` false: `count` is so far); returns its
+   * dismissal.
    */
-  announceCleared: (count: number, undo: () => Promise<void>) => () => void;
+  announceCleared: (
+    count: number,
+    undo: () => Promise<void>,
+    complete?: boolean
+  ) => () => void;
   announceFailure: (message: string) => void;
 };
 
@@ -147,7 +153,7 @@ export function createInboxList(
       notices.announceFailure(t('notificationsInbox.clearFailed'));
       return;
     }
-    if (result.count === 0) {
+    if (result.count === 0 && result.complete) {
       notices.announceCleared(0, result.undo);
       return;
     }
@@ -155,7 +161,21 @@ export function createInboxList(
       [],
       result.count,
       result,
-      notices.announceCleared,
+      (count, undo) => {
+        let dismiss = notices.announceCleared(count, undo, result.complete);
+        // A clear still at work on the server is announced again when it
+        // ends, with its final count.
+        const announceEnd = async (finished: Promise<number | undefined>) => {
+          const total = await finished;
+          if (total === undefined) return;
+          dismiss();
+          dismiss = notices.announceCleared(total, undo, true);
+        };
+        if (result.finished) {
+          fireAndForget(announceEnd(result.finished), 'notifications-inbox');
+        }
+        return () => dismiss();
+      },
       t('notificationsInbox.clear')
     );
   };

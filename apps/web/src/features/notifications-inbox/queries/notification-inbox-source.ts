@@ -19,11 +19,13 @@ import {
   on,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { v7 as uuid7 } from 'uuid';
 import type {
   InboxFeedSource,
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import { clearHides, isClearRunning } from '../core/inbox-clear';
 import { clearIncludes, type InboxClear } from '../core/inbox-filters';
 import {
   compareInboxRows,
@@ -35,24 +37,25 @@ import {
   withoutDoneRows,
   withSeenRows,
 } from '../core/inbox-row';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import { encodeClearScope, encodeInboxScope, toInboxGroup } from './decode';
+import { createInboxClears } from './inbox-clears';
 import {
   type NotificationInboxGroup,
   orderInboxRows,
 } from './notification-inbox-groups';
 import {
-  clearInboxBatch,
+  clearInbox,
   markInboxNotificationDone,
   markInboxRowsDone,
   markInboxRowsSeen,
+  readInboxClears,
+  undoInboxClear,
   undoInboxRowsDone,
 } from './notification-inbox-mutations';
 import { notificationInboxShape } from './notification-inbox-shape';
 
 /** Entries fetched per inbox page. */
 export const INBOX_PAGE_LIMIT = 50;
-/** Most batches one clear sends: 20,000 groups at the server's default. */
-const MAX_CLEAR_BATCHES = 200;
 
 const inboxCachedQuery = {
   query: stringifyDocument(NotificationInboxDocument),
@@ -79,6 +82,11 @@ export type NotificationInboxSourceOptions = {
   enabled: Accessor<boolean>;
   /** Subscribes to transport reconnects, after which changes may be missed. */
   onReconnected?: (listener: () => void) => () => void;
+  /**
+   * Subscribes, under the caller's owner, to the server's hints that one of
+   * the viewer's clears changed, on any device.
+   */
+  onClearUpdated?: (listener: (clearId: string) => void) => void;
   /**
    * Shows the done to other readers of these notifications at once, until
    * the server's change reaches them; returns the reversal.
@@ -212,17 +220,40 @@ export function createNotificationInboxSource(
       : [...ordered, ...extra].sort(compareInboxRows);
   };
 
-  const rows = createMemo(() =>
-    query.data === undefined
-      ? undefined
-      : withSeenRows(
-          withoutDoneNotifications(
-            withoutDoneRows(listed(), done()),
-            doneNotifications()
-          ),
-          seen()
-        )
-  );
+  const revalidate = (client: Client) =>
+    fireAndForget(
+      options.revalidateNotifications?.(client),
+      'notifications-inbox'
+    );
+
+  // Clears the server is still working through, from this device or
+  // another. Their rows are hidden at once; when one ends, or is undone,
+  // the inbox is read again.
+  const clears = createInboxClears({
+    client: options.client,
+    enabled,
+    onClearUpdated: options.onClearUpdated,
+    onReconnected: options.onReconnected,
+    onSettled: () => {
+      revalidate(options.client());
+      fireAndForget(live.refetch(), 'notifications-inbox');
+    },
+  });
+
+  const rows = createMemo(() => {
+    if (query.data === undefined) return undefined;
+    const running = clears.running();
+    const shown = withSeenRows(
+      withoutDoneNotifications(
+        withoutDoneRows(listed(), done()),
+        doneNotifications()
+      ),
+      seen()
+    );
+    return running.length === 0
+      ? shown
+      : shown.filter((row) => !running.some((clear) => clearHides(clear, row)));
+  });
 
   /** Patches for a filter that has since changed would add rows it hides. */
   const applyIfCurrent = (
@@ -231,12 +262,6 @@ export function createNotificationInboxSource(
   ) => {
     if (scopeInput() === scope) live.applyPatches(patches);
   };
-
-  const revalidate = (client: Client) =>
-    fireAndForget(
-      options.revalidateNotifications?.(client),
-      'notifications-inbox'
-    );
 
   const markDone = async (targets: readonly NotificationInboxRow[]) => {
     const client = options.client();
@@ -313,52 +338,78 @@ export function createNotificationInboxSource(
   };
 
   const clear = async (request: InboxClear) => {
+    // Nothing to take: every kind is hidden. A clear always names its kinds.
+    if (request.rowTypes.length === 0) {
+      return { count: 0, complete: true, undo: async () => {} };
+    }
     const client = options.client();
     const hidden = (rows() ?? []).filter((row) => clearIncludes(request, row));
     const hiddenIds = hidden.map((row) => row.id);
     setDone((current) => markRows(current, hidden));
-    const input = {
-      scope: encodeInboxScope({
-        rowTypes: request.rowTypes,
-        unreadOnly: request.unreadOnly,
-      }),
-      since:
-        request.since === undefined
-          ? null
-          : new Date(request.since).toISOString(),
-    };
-    const undoTokens: string[] = [];
-    let count = 0;
-    let cursor: string | null = null;
+    // The id makes the clear the server's from the first request: sent
+    // again, or read back after a lost reply, it is the same clear.
+    const clearId = uuid7();
+    let cleared: Awaited<ReturnType<typeof clearInbox>>;
     try {
-      for (let batch = 0; batch < MAX_CLEAR_BATCHES; batch++) {
-        const cleared = await clearInboxBatch(client, { ...input, cursor });
-        undoTokens.push(cleared.undoToken);
-        count += cleared.rowCount;
-        cursor = cleared.nextCursor;
-        if (!cursor) break;
-      }
+      cleared = await clearInbox(client, {
+        clearId,
+        scope: encodeClearScope({
+          rowTypes: request.rowTypes,
+          unreadOnly: request.unreadOnly,
+        }),
+        since:
+          request.since === undefined
+            ? null
+            : new Date(request.since).toISOString(),
+      });
     } catch (error) {
-      // Earlier batches stand; a fresh read shows what is left.
-      setDone((current) => unmarkRows(current, hiddenIds));
-      fireAndForget(live.refetch(), 'notifications-inbox');
-      throw error;
+      // The reply may be all that was lost; the server then has the clear.
+      const [started] = await readInboxClears(client, clearId).catch(() => []);
+      if (!started) {
+        setDone((current) => unmarkRows(current, hiddenIds));
+        fireAndForget(live.refetch(), 'notifications-inbox');
+        throw error;
+      }
+      cleared = started;
     }
+    const complete = !isClearRunning(cleared.status);
+    if (!complete) clears.observe(cleared);
     revalidate(client);
     // Pages past those loaded may hold what moves up into view.
     fireAndForget(live.refetch(), 'notifications-inbox');
     return {
-      count,
+      count: cleared.rows,
+      complete,
+      // Resolves when the server finishes: to its final count, or to
+      // undefined when the clear was undone or stopped instead.
+      finished: complete
+        ? undefined
+        : (async () => {
+            const ended = await clears.settled(clearId);
+            return ended?.status === 'done' ? ended.rows : undefined;
+          })(),
       undo: async () => {
-        // The filter may have changed since the clear; restore into this one.
-        const scope = scopeInput();
-        for (const token of undoTokens) {
-          const patches = await undoInboxRowsDone(client, token, scope);
-          applyIfCurrent(scope, patches);
-        }
+        // The rows come back at once; the server restores each to the state
+        // it had, and stops the clear first if it is still at work.
         setDone((current) => unmarkRows(current, hiddenIds));
-        revalidate(client);
-        fireAndForget(live.refetch(), 'notifications-inbox');
+        let undone: Awaited<ReturnType<typeof undoInboxClear>>;
+        try {
+          undone = await undoInboxClear(client, clearId);
+        } catch (error) {
+          setDone((current) => markRows(current, hidden));
+          throw error;
+        }
+        if (!undone) {
+          // The server no longer has the clear; show what it has now.
+          revalidate(client);
+          fireAndForget(live.refetch(), 'notifications-inbox');
+          return;
+        }
+        // Every reply replaces the copy held while the clear was at work,
+        // so its rows stop being hidden now. A finished undo reads the
+        // inbox again; one still at work does when the server ends it.
+        clears.observe(undone);
+        if (isClearRunning(undone.status)) await clears.settled(clearId);
       },
     };
   };

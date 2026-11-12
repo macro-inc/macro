@@ -122,6 +122,7 @@ struct MockRepository {
     basic_notification_calls: Mutex<Vec<Vec<Uuid>>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
+    reopen_calls: Mutex<Vec<(Vec<Uuid>, Vec<Uuid>)>>,
     deleted_device_endpoints: Mutex<Vec<String>>,
 }
 
@@ -145,6 +146,7 @@ impl MockRepository {
             basic_notification_calls: Mutex::new(Vec::new()),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
+            reopen_calls: Mutex::new(Vec::new()),
             deleted_device_endpoints: Mutex::new(Vec::new()),
         }
     }
@@ -380,6 +382,23 @@ impl NotificationRepository for MockRepository {
         Ok(notification_ids
             .iter()
             .map(|id| updated_notification(user_id.clone(), *id, done, None, now))
+            .collect())
+    }
+
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        self.reopen_calls
+            .lock()
+            .unwrap()
+            .push((notification_ids.to_vec(), unseen.to_vec()));
+        let now = Utc::now();
+        Ok(notification_ids
+            .iter()
+            .map(|id| updated_notification(user_id.clone(), *id, false, None, now))
             .collect())
     }
 
@@ -650,6 +669,17 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
         (**self)
             .mark_notifications_done(user_id, notification_ids, done)
+            .await
+    }
+
+    async fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> Result<Vec<UserNotificationRow<serde_json::Value>>, Report> {
+        (**self)
+            .reopen_notifications(user_id, notification_ids, unseen)
             .await
     }
 

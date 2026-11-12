@@ -12,6 +12,7 @@ import { setDoneOverride } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { useRespondToCalendarJoinRequestMutation } from '@queries/calendar/join-requests';
 import { revalidateNotificationReaders } from '@queries/notification/revalidation';
+import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
@@ -25,6 +26,10 @@ import {
 import { inboxSearchFor, useInboxShownRowLocation } from './inbox-location';
 import { useNotificationsCalendarPreview } from './notifications-calendar-preview';
 import { openNotificationInSplit } from './open-notification-in-split';
+import {
+  INBOX_CLEAR_UPDATED,
+  parseInboxClearUpdate,
+} from './queries/inbox-clear-update';
 import { createNotificationInboxSource } from './queries/notification-inbox-source';
 import { resolveAccessRequest } from './queries/row-actions';
 import { NotificationsView } from './views/notifications-view';
@@ -67,6 +72,12 @@ function createAppNotificationsInboxContext(
         scope,
         enabled: () => true,
         onReconnected: subscribeGraphqlSoupReconnected,
+        onClearUpdated: (listener) =>
+          createConnectionWebsocketEffect((message) => {
+            if (message.type !== INBOX_CLEAR_UPDATED) return;
+            const clearId = parseInboxClearUpdate(message.data);
+            if (clearId) listener(clearId);
+          }),
         overrideNotificationsDone: (ids) => setDoneOverride(ids, true),
         revalidateNotifications: revalidateNotificationReaders,
       }),

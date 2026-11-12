@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_bulk_action\n            SET status = 'undoing',\n                lease_token = $3,\n                lease_expires_at = now() + make_interval(secs => $4),\n                attempts = 0,\n                finished_at = NULL,\n                revision = revision + 1,\n                updated_at = now()\n            WHERE id = $1 AND user_id = $2 AND status IN ('applying', 'done', 'failed')\n            RETURNING id, user_id, scope, as_of, status, cursor, units, applied, restored,\n                revision, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "as_of",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "cursor",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "units",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "applied",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "restored",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d85c5f40e8aa55b5ea4d85ef85b3d5fedff57deb1d08c3efdfc77ceea9d0ad50"
+}

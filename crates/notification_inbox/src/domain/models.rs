@@ -6,6 +6,8 @@ use attention_feed::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::domain::bulk_action::BulkActionLease;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -13,8 +15,10 @@ mod test;
 
 /// The kinds of inbox row, which callers can narrow the inbox to. Kinds are
 /// added as the inbox learns new sources; callers present a kind they do not
-/// know as a generic row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// know as a generic row. A stored clear keeps the kinds it takes by their
+/// serialized names, so a kind's name never changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum InboxRowType {
     /// An agent session's or AI chat's latest response or question.
     Agent,
@@ -49,6 +53,27 @@ pub enum InboxRowType {
     /// The viewer's access to a runtime was removed, and agents of theirs
     /// living there stopped.
     AccessRemoved,
+}
+
+impl InboxRowType {
+    /// Every kind of row.
+    pub const ALL: [Self; 15] = [
+        Self::Agent,
+        Self::Email,
+        Self::ChannelMention,
+        Self::ChannelMessages,
+        Self::ChannelThread,
+        Self::DiscussionMention,
+        Self::DiscussionMessages,
+        Self::DiscussionThread,
+        Self::Task,
+        Self::PullRequest,
+        Self::CalendarEvent,
+        Self::CalendarJoinRequest,
+        Self::AccessRequested,
+        Self::AccessGranted,
+        Self::AccessRemoved,
+    ];
 }
 
 /// A row's identity: the group it belongs to and its slot in the group,
@@ -261,30 +286,96 @@ pub struct InboxRowTarget {
     pub revision: Option<FeedRevision>,
 }
 
-/// One batch of clearing an inbox: every matching row of the groups read is
-/// marked done.
+/// A clear of an inbox: every matching row is marked done, chunk by chunk
+/// on the server.
 #[derive(Debug, Clone)]
 pub struct InboxClearRequest {
-    /// Which rows are cleared; an unread scope clears unread rows only.
+    /// Which rows are cleared; an unread scope clears unread rows only. The
+    /// row kinds are named: a clear has no "every kind".
     pub scope: InboxScope,
     /// Clear only rows whose newest notification arrived at or after this
     /// time; older groups end the clear.
     pub since: Option<DateTime<Utc>>,
-    /// Groups read in this batch.
-    pub limit: u16,
-    /// Resume after this position; `None` for the first batch.
-    pub after: Option<FeedPosition>,
 }
 
-/// The outcome of one batch of clearing an inbox.
-#[derive(Debug)]
-pub struct InboxClearOutcome {
-    /// How many rows were cleared.
-    pub rows: usize,
-    /// What the batch changed, for undo.
-    pub receipt: DoneReceipt,
-    /// Where the next batch starts; `None` once nothing is left to clear.
-    pub next: Option<FeedPosition>,
+/// Where a clear is in its life.
+pub use notification::domain::bulk_action::BulkActionStatus as ClearStatus;
+
+/// A clear as stored: what it covers, frozen when it started, and how far
+/// it has got.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClearAction {
+    /// The clear's id, chosen by the caller.
+    pub id: Uuid,
+    /// Where it is in its life.
+    pub status: ClearStatus,
+    /// The rows it clears.
+    pub scope: InboxScope,
+    /// It clears only rows whose newest notification arrived at or after
+    /// this time.
+    pub since: Option<DateTime<Utc>>,
+    /// When it started. Notifications that arrived later are not cleared.
+    pub as_of: DateTime<Utc>,
+    /// Rows cleared so far.
+    pub rows: u32,
+    /// Notifications marked done so far.
+    pub notifications: u32,
+    /// Notifications an undo has reopened so far.
+    pub restored: u32,
+    /// Bumps on every change, so a reader can drop a stale copy.
+    pub revision: i64,
+}
+
+/// Which part of the inbox a clear's next chunk reads.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ClearPass {
+    /// The walk through the inbox, newest group first.
+    #[default]
+    Walk,
+    /// A second look at the groups new activity moved ahead of the walk
+    /// while it ran; their older notifications are still the clear's.
+    Recheck,
+}
+
+/// Where a clear's next chunk starts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ClearCursor {
+    pub(crate) pass: ClearPass,
+    /// The encoded feed position to read after; `None` at a pass's start.
+    pub(crate) after: Option<String>,
+}
+
+/// The right to run a clear's remaining chunks, forward or as an undo.
+/// Whoever holds it runs it with `run_clear`; if they stop, the clear is
+/// claimed again once its lease runs out.
+#[derive(Debug, Clone)]
+pub struct ClearRun {
+    pub(crate) lease: BulkActionLease,
+    pub(crate) action: ClearAction,
+    pub(crate) cursor: ClearCursor,
+}
+
+impl ClearRun {
+    /// Whose inbox the clear belongs to.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.lease.user_id
+    }
+
+    /// The clear.
+    pub fn action(&self) -> &ClearAction {
+        &self.action
+    }
+}
+
+/// A clear or undo that was asked for.
+#[derive(Debug, Clone)]
+pub struct StartedClear {
+    /// The clear as it stands.
+    pub action: ClearAction,
+    /// The work to run, when this request started it. `None` when the
+    /// request repeated one already made.
+    pub run: Option<ClearRun>,
 }
 
 /// The outcome of marking one notification of a row done.

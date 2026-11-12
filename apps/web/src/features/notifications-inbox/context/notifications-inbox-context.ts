@@ -30,8 +30,17 @@ export type InboxScope = {
 /** A completed done, which the caller can reverse once. */
 export type InboxDoneResult = { undo: () => Promise<void> };
 
-/** A completed clear: how many rows it took, and its reversal. */
-export type InboxClearResult = InboxDoneResult & { count: number };
+/**
+ * A clear: how many rows it took, and its reversal. The server works through
+ * a clear on its own; one that didn't finish before the reply carries on
+ * there, `count` is so far, and `finished` resolves when it ends: to the
+ * final count, or undefined when it was undone or stopped instead.
+ */
+export type InboxClearResult = InboxDoneResult & {
+  count: number;
+  complete: boolean;
+  finished?: Promise<number | undefined>;
+};
 
 /** One live inbox feed for a scope. */
 export type InboxFeedSource = {
@@ -64,7 +73,9 @@ export type InboxFeedSource = {
   ) => Promise<InboxDoneResult>;
   /**
    * Clear the whole inbox of the rows `clear` takes, loaded or not, hiding
-   * the loaded ones at once. Rejects, showing them again, when it fails.
+   * them at once. The clear is the server's: it finishes without this tab,
+   * and its undo stops it if it is still at work. Rejects, showing the rows
+   * again, when it could not be started.
    */
   clear: (clear: InboxClear) => Promise<InboxClearResult>;
   /**

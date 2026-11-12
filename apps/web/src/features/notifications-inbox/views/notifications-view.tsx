@@ -280,23 +280,28 @@ export function NotificationsView(props: NotificationsViewProps) {
         if (id !== undefined) toast.dismiss(id);
       };
     },
-    announceCleared: (count, undo) => {
+    announceCleared: (count, undo, complete = true) => {
       const id =
-        count === 0
+        count === 0 && complete
           ? toast.success(t('notificationsInbox.clearedNothing'))
-          : toast.success(t('notificationsInbox.cleared', { count }), {
-              dismissStyle: 'icon',
-              actionLayout: 'inline',
-              actions: [
-                {
-                  label: t('notificationsInbox.undo'),
-                  icon: ArrowCounterClockwise,
-                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-                },
-              ],
-              duration: 8_000,
-              stack: true,
-            });
+          : toast.success(
+              complete
+                ? t('notificationsInbox.cleared', { count })
+                : t('notificationsInbox.stillClearing', { count }),
+              {
+                dismissStyle: 'icon',
+                actionLayout: 'inline',
+                actions: [
+                  {
+                    label: t('notificationsInbox.undo'),
+                    icon: ArrowCounterClockwise,
+                    onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                  },
+                ],
+                duration: 8_000,
+                stack: true,
+              }
+            );
       return () => {
         if (id !== undefined) toast.dismiss(id);
       };
