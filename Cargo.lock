@@ -15201,6 +15201,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "password_import"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "csv",
+ "insta",
+ "nom 8.0.0",
+ "password_import",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "url",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
 name = "passwords"
 version = "0.1.0"
 dependencies = [

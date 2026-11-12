@@ -124,6 +124,9 @@ workspace-members = [
     # fig_engine, so they must stay wasm-safe as well.
     "psd_engine",
     "ai_engine",
+    # password_import: password-manager export parsing runs in the browser
+    # (a wasm32 module in the import dialog's worker), so it must stay wasm-safe.
+    "password_import",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.

@@ -1,0 +1,29 @@
+[package]
+edition = "2024"
+name = "password_import"
+publish = false
+version = "0.1.0"
+
+[features]
+# Serialize the parsed export (including revealed secret values) for the
+# browser adapter that hands it to JavaScript. Off by default so nothing else
+# can serialize a `Secret` by accident.
+serde = []
+
+[dependencies]
+chrono = { workspace = true }
+csv = { workspace = true }
+nom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
+thiserror = { workspace = true }
+url = { workspace = true }
+zeroize = { workspace = true }
+zip-inflate = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+# The golden tests snapshot the parsed export through the adapter's serializer.
+password_import = { path = ".", features = ["serde"] }
+proptest = { workspace = true }
+serde_json = { workspace = true }
