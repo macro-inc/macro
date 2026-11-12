@@ -9,6 +9,7 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
+import { reconcileFailedChannelWrite } from './graphql/channel-sync';
 import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
@@ -255,6 +256,7 @@ export function useAddReactionMutation(
           if (context) {
             rollbackAddReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
@@ -325,6 +327,7 @@ export function useRemoveReactionMutation(
           if (context) {
             rollbackRemoveReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);

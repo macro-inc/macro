@@ -51,7 +51,8 @@ live events that keep them current.
   After applying rows it restarts a page read still in flight, which would
   commit its older snapshot over them. Changed roots also replace the root
   and state of a loaded thread.
-- The page is written back about a second after a server read or a catch-up,
+- The page is written back about a second after a server read, a catch-up or
+  a pushed change,
   never as part of the read that shows it, and only when
   the first loaded page is the live edge, the cache is still the session's,
   and no message write for the channel is pending, so an optimistic row is
@@ -80,4 +81,18 @@ live events that keep them current.
   change is not sent again once a later write to the same message has
   started: it fails as refused instead of landing after the later one.
   Reads are not retried.
+- A channel read this way is tracked: `handleMessageEvent` compares a pushed
+  change's `seq` with the timeline's. The next number applies and moves it (the
+  sender's own echo too: the number must describe rows the timeline holds),
+  a lower one is dropped, and a higher one
+  starts a catch-up without applying, as does any change the loaded pages
+  cannot take exactly (a deleted reply they do not hold, a call row). Timeline
+  facts are pushed without a number, so the change after one catches up.
+- A tracked timeline is never marked stale (`softInvalidateMessageTimeline`
+  returns early) and a reopened subscription catches up instead of
+  invalidating. Don't add an invalidation for a channel change: route it to
+  `catchUpTrackedChannel` and fall back to invalidating when it returns false.
+- A failed message or reaction write on a tracked channel reads the
+  timeline again (`reconcileFailedChannelWrite`): the server may have
+  committed it and its echo may already have moved the number past it.
 - Threads, `messagesByIds` and message resolution still read REST.

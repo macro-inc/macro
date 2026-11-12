@@ -36,6 +36,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
+import { reconcileFailedChannelWrite } from './graphql/channel-sync';
 import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -543,6 +544,7 @@ export function useSendMessageMutation(
             rollbackInsertChannelMessage(vars.parent, context.insert);
           }
           context?.updatedAt?.rollback();
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
@@ -625,6 +627,7 @@ export function useDeleteMessageMutation(
           if (context) {
             rollbackDeleteMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
@@ -717,6 +720,7 @@ export function usePatchMessageMutation(
           if (context) {
             rollbackUpdateMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);

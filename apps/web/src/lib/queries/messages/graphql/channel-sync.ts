@@ -176,6 +176,76 @@ export function channelSyncSeq(channelId: string): number | undefined {
   return timelineSeq({ type: 'channel', id: channelId });
 }
 
+/**
+ * The cache host of a channel whose loaded timeline follows the change
+ * sequence: it was read with a sequence number and its latest page is loaded.
+ */
+function trackedHost(parent: MessageParent): CacheHost | undefined {
+  if (parent.type !== 'channel' || !STATES.has(parent.id)) return undefined;
+  if (timelineSeq(parent) === undefined) return undefined;
+  return channelCacheHost();
+}
+
+/**
+ * Whether the channel's loaded timeline is kept current by its change
+ * sequence. Such a timeline is never marked stale or read again to pick up a
+ * change: what it lacks is exactly the changes after its sequence number.
+ */
+export function isChannelTracked(parent: MessageParent): boolean {
+  return trackedHost(parent) !== undefined;
+}
+
+/**
+ * Bring a tracked channel current from the server's changes. Returns false
+ * for a parent that is not tracked, which the caller reads again instead.
+ */
+export function catchUpTrackedChannel(parent: MessageParent): boolean {
+  const host = trackedHost(parent);
+  if (!host) return false;
+  fireAndForget(catchUpChannel(host, parent), SURFACE);
+  return true;
+}
+
+/** Where a pushed change's sequence number falls for the loaded timeline. */
+export type ChannelEventAdmission =
+  /** The timeline does not follow the sequence; the event applies as before. */
+  | 'untracked'
+  /** The change right after the timeline's own: apply it. */
+  | 'next'
+  /** Already in the timeline, from a page or a catch-up. */
+  | 'duplicate'
+  /** Changes between are missing; only a catch-up can bring them. */
+  | 'gap';
+
+export function admitChannelEvent(
+  parent: MessageParent,
+  seq: number | null | undefined
+): ChannelEventAdmission {
+  const current = timelineSeq(parent);
+  if (typeof seq !== 'number' || current === undefined || !trackedHost(parent))
+    return 'untracked';
+  if (seq <= current) return 'duplicate';
+  return seq === current + 1 ? 'next' : 'gap';
+}
+
+/** The timeline now holds the pushed change numbered `seq`. */
+export function channelEventApplied(parent: MessageParent, seq: number) {
+  const host = trackedHost(parent);
+  if (!host || seq - 1 !== timelineSeq(parent)) return;
+  setTimelineSeq(parent, seq);
+  schedulePersist(host, parent);
+}
+
+/**
+ * A message write failed and its optimistic change was rolled back. The
+ * server may have committed it all the same, and its pushed echo may already
+ * have moved the timeline past it, so the rows are read again; asking for
+ * the changes after the timeline's number would not bring it.
+ */
+export function reconcileFailedChannelWrite(parent: MessageParent) {
+  if (trackedHost(parent)) readAgain(parent);
+}
+
 /** Forget every channel's position; the next open reads its page again. */
 export function resetChannelSync() {
   for (const state of STATES.values()) state.persist?.clear();
@@ -650,7 +720,7 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
 }
 
 /** Write the loaded latest page back to the cache once the timeline is quiet. */
-export function schedulePersist(host: CacheHost, parent: MessageParent) {
+function schedulePersist(host: CacheHost, parent: MessageParent) {
   const state = STATES.get(parent.id);
   if (!state) return;
   state.persist ??= debounce(

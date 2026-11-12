@@ -24,7 +24,10 @@ import {
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
-import { loadChannelTimelinePage } from './graphql/channel-sync';
+import {
+  isChannelTracked,
+  loadChannelTimelinePage,
+} from './graphql/channel-sync';
 import { channelCacheHost } from './graphql/source';
 import { messageKeys } from './keys';
 import {
@@ -790,6 +793,9 @@ export function findThreadPreviewReplySnapshotInMessageTimeline(
  * Marks the channel messages query as stale without triggering an immediate refetch.
  */
 export function softInvalidateMessageTimeline(parent: MessageParent) {
+  // A tracked channel has every change up to its sequence number; reading
+  // its page again would only replace it with a possibly older replica read.
+  if (isChannelTracked(parent)) return;
   queryClient.invalidateQueries({
     queryKey: getMessageTimelineQueryKeyPrefix(parent),
     refetchType: 'inactive',
