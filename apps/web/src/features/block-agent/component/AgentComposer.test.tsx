@@ -1,5 +1,5 @@
-import type { TurnState } from '@service-agent-fold/generated/types';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
+import type { TurnState } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

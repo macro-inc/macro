@@ -60,9 +60,7 @@ impl PerCallUsage {
             Some("default" | "standard") => ModelSpeed::Standard,
             Some("fast") if self.model.starts_with("anthropic/") => ModelSpeed::Fast,
             // OpenAI renamed priority processing to Fast mode and reports either name.
-            Some("priority" | "fast") if self.model.starts_with("openai/") => {
-                ModelSpeed::Priority
-            }
+            Some("priority" | "fast") if self.model.starts_with("openai/") => ModelSpeed::Priority,
             Some("ultrafast") if self.model.starts_with("openai/") => ModelSpeed::Ultrafast,
             None if self.requested == ModelSpeed::Standard => ModelSpeed::Standard,
             _ => {

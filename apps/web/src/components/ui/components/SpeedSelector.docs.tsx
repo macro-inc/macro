@@ -1,7 +1,10 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
 import { Model } from '@core/component/AI/constant/model';
-import { speedForModel, speedsForModel } from '@core/component/AI/constant/speed';
+import {
+  speedForModel,
+  speedsForModel,
+} from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
   setPreferredSpeed,

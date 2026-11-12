@@ -35,7 +35,9 @@ impl ReasoningEffort {
                 &[Default, Low, Medium, High, XHigh, Max]
             }
             // https://developers.openai.com/api/docs/models (2026-11-12).
-            "openai/gpt-6.1-sol" | "openai/gpt-6-astra" => &[Default, Low, Medium, High, XHigh, Max],
+            "openai/gpt-6.1-sol" | "openai/gpt-6-astra" => {
+                &[Default, Low, Medium, High, XHigh, Max]
+            }
             "openai/gpt-5.5" => &[Default, None, Low, Medium, High, XHigh],
             "openai/gpt-5-mini" => &[Default, Minimal, Low, Medium, High],
             "openai/gpt-5.4-mini" => &[Default, None, Low, Medium, High, XHigh],

@@ -10,10 +10,7 @@ import {
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import {
-  nativeSpeeds,
-  resolveSpeed,
-} from '@core/component/AI/constant/speed';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
   setPreferredSpeed,

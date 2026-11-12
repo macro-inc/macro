@@ -1,9 +1,6 @@
 import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import {
-  nativeSpeeds,
-  resolveSpeed,
-} from '@core/component/AI/constant/speed';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
   setPreferredSpeed,
@@ -40,8 +37,8 @@ import {
 import {
   type EffortSelection,
   effortConfigOption,
-  selectConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../state/session-config';
 import {
   AgentInput,

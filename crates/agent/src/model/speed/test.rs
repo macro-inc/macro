@@ -8,7 +8,11 @@ fn premium_speeds_are_model_specific() {
     assert!(ModelSpeed::Priority.supported("openai/gpt-6.1-sol"));
     assert_eq!(
         ModelSpeed::offered("openai/gpt-6.1-sol"),
-        [ModelSpeed::Standard, ModelSpeed::Priority, ModelSpeed::Ultrafast]
+        [
+            ModelSpeed::Standard,
+            ModelSpeed::Priority,
+            ModelSpeed::Ultrafast
+        ]
     );
     assert!(!ModelSpeed::Fast.supported("anthropic/claude-opus-5-5"));
     assert!(ModelSpeed::Fast.billable("anthropic/claude-opus-5-5"));
