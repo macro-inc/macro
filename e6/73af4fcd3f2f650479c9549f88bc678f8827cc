@@ -1,0 +1,39 @@
+agent-teammates/muppet/AGENTS.md
+  s_4486610b4f3a97::t_7ee7091f95bf88 31-32,38-39
+agent-teammates/muppet/bun.lock
+  s_4486610b4f3a97::t_db08b3ab59c5df 20-26,111-130
+agent-teammates/muppet/packages/lib/package.json
+  s_4486610b4f3a97::t_996bdbce04f50f 17-23
+agent-teammates/muppet/packages/lib/utilities/telemetry/FORMAT.md
+  s_4486610b4f3a97::t_34a8fa85815dda 1-135
+agent-teammates/muppet/packages/lib/utilities/telemetry/index.ts
+  s_4486610b4f3a97::t_673998f1c60704 1-488
+agent-teammates/muppet/packages/lib/utilities/telemetry/otlp.ts
+  s_4486610b4f3a97::t_97d1b0cd242212 1-324
+agent-teammates/muppet/packages/lib/utilities/telemetry/outcome.ts
+  s_4486610b4f3a97::t_2c7b63ee972ca0 1-139
+agent-teammates/muppet/packages/lib/utilities/telemetry/record.ts
+  s_4486610b4f3a97::t_09608b65ccdcc1 1-150
+agent-teammates/muppet/packages/lib/utilities/telemetry/test/otlp.test.ts
+  s_4486610b4f3a97::t_410397e23480b2 1-219
+agent-teammates/muppet/packages/lib/utilities/telemetry/test/outcome.test.ts
+  s_4486610b4f3a97::t_80efb4fb536f45 1-117
+agent-teammates/muppet/packages/lib/utilities/telemetry/test/telemetry.test.ts
+  s_4486610b4f3a97::t_9f0c5d7db6ad11 1-322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e673af4fcd3f2f650479c9549f88bc678f8827cc",
+  "prompts": {},
+  "sessions": {
+    "s_4486610b4f3a97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e07751b0-6706-4d89-b62e-01d8640f7d9d",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
