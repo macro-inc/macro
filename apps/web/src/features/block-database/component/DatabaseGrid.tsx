@@ -50,6 +50,7 @@ import {
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
+  DatabaseLinkValue,
   DatabaseTextValue,
 } from '../database-mentions';
 import { createDatabaseDocumentNavigation } from '../navigation-adapter';
@@ -117,6 +118,7 @@ const renderTextEditor = (editor: DatabaseTextEditorProps) => (
   <DatabaseTextEditor {...editor} />
 );
 const renderTextValue = (value: string) => <DatabaseTextValue value={value} />;
+const renderLinkValue = (url: string) => <DatabaseLinkValue url={url} />;
 const renderMentionPicker = (picker: DatabaseMentionPickerProps) => (
   <DatabaseMentionPicker {...picker} />
 );
@@ -351,6 +353,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 remoteUsers={remoteUsers()}
                 renderTextEditor={renderTextEditor}
                 renderTextValue={renderTextValue}
+                renderLinkValue={renderLinkValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
                 onOpenDocumentMention={openDocumentMention}
