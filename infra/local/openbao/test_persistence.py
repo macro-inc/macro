@@ -10,7 +10,8 @@ import tempfile
 import unittest
 from uuid import uuid4
 
-from bootstrap import LocalOpenBao, bootstrap
+from bootstrap import LocalOpenBao
+from openbao_provisioning import provision_team as bootstrap
 
 
 @unittest.skipUnless(os.environ.get("PASSWORDS_TEST_OPENBAO_PERSISTENCE"), "disposable Docker lifecycle test opt-in required")
