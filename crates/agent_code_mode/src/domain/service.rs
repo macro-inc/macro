@@ -395,8 +395,6 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteInitiative"
                 // macro.agents.list() and Agent.update(). ListAgentUpdates
                 // stays: its result renders the cards the user answers on.
-                // CreateAgentSession stays: createManaged refuses a prompt for
-                // an agent that runs on its operator's machine.
                 | "ListAgents"
                 | "ConfigureAgent"
         )
