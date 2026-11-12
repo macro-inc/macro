@@ -92,6 +92,8 @@ export type Base = {
   readonly trace: Trace;
   /** What a child is started under so it can't read the enrollment's secrets: `Startup.sandbox`. */
   readonly sandbox: readonly string[];
+  /** The DevTools endpoint of the agent's browser (`Startup.browserEndpoint`). */
+  readonly browserEndpoint: string;
 };
 
 /** A relay's address and the capability it takes. */
@@ -459,6 +461,7 @@ export const base = (
       relayed,
       trace,
       sandbox: startup.sandbox,
+      browserEndpoint: startup.browserEndpoint,
     },
     wiring: {
       addresses,

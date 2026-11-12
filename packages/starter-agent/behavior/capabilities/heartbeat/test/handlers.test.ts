@@ -90,6 +90,7 @@ const setup = () => {
     relayed: async () => ({}),
     trace: passthrough,
     sandbox: [],
+    browserEndpoint: 'http://127.0.0.1:9223',
   };
   const lock = { held: false };
   const heartbeat: HeartbeatContext['heartbeat'] = {
