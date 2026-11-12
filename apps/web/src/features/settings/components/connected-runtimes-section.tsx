@@ -2,7 +2,7 @@ import { useShareRequests } from '@app/features/access-requests/access-requests'
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { t } from '@app/lib/i18n';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { For, type JSX, lazy, Show, Suspense } from 'solid-js';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
@@ -48,6 +48,28 @@ function ShareRuntime(props: {
   );
 }
 
+/*
+ * Every card on Settings -> Machines insets its rows px-6 py-4, so rows,
+ * dividers (<SettingsCard inset="wide">) and section headings line up.
+ */
+
+/** A provider's block in a Machines card: its icon beside its details. */
+export function MachineSection(props: {
+  'aria-label'?: string;
+  children: JSX.Element;
+}) {
+  return (
+    <section class="flex gap-4 px-6 py-4" aria-label={props['aria-label']}>
+      {props.children}
+    </section>
+  );
+}
+
+/** A Machines card's could-not-load line, inset like its rows. */
+export function MachineCardError(props: { children: JSX.Element }) {
+  return <p class="px-6 py-4 text-xs text-negative">{props.children}</p>;
+}
+
 function lastConnectedText(harness: RegisteredHarness): string {
   return harness.last_connected_at
     ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
@@ -72,13 +94,15 @@ export function RuntimeName(props: { harness: RegisteredHarness }) {
   );
 }
 
-/** A machine's leading dot (or glyph) and its name, aligned for every row. */
-function MachineName(props: { dot: JSX.Element; name: string }) {
+/** A machine's leading status dot, when it has one, and its name. */
+function MachineName(props: { dot?: JSX.Element; name: string }) {
   return (
     <div class="flex min-w-0 items-start gap-2 text-sm">
-      <span class="flex h-[1lh] w-2 shrink-0 items-center justify-center">
-        {props.dot}
-      </span>
+      <Show when={props.dot}>
+        <span class="flex h-[1lh] w-2 shrink-0 items-center justify-center">
+          {props.dot}
+        </span>
+      </Show>
       <p class="min-w-0 truncate text-sm font-medium text-ink @max-[480px]:whitespace-normal @max-[480px]:break-words">
         {props.name}
       </p>
@@ -89,10 +113,10 @@ function MachineName(props: { dot: JSX.Element; name: string }) {
 /**
  * The machine row every section of Machines uses: dot and name, one muted
  * meta line, and actions top-right that drop onto their own line on narrow
- * rows.
+ * rows. A row that is not a machine (Get a Macro computer) has no dot.
  */
 export function MachineRow(props: {
-  dot: JSX.Element;
+  dot?: JSX.Element;
   name: string;
   meta: JSX.Element;
   actions?: JSX.Element;
@@ -101,13 +125,17 @@ export function MachineRow(props: {
 }) {
   return (
     <div
-      class="flex items-start justify-between gap-4 px-4 py-3 transition-colors @max-[480px]:flex-col @max-[480px]:gap-2 [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0"
+      class="flex items-start justify-between gap-4 px-6 py-4 transition-colors @max-[480px]:flex-col @max-[480px]:gap-2 [&.ring-2]:bg-accent-bg/50 [&.ring-2]:ring-inset [&.ring-offset-2]:ring-offset-0"
       data-settings-target={props.target}
       data-runtime-row={props.name}
     >
       <div class="min-w-0 flex-1">
         <MachineName dot={props.dot} name={props.name} />
-        <p class="mt-0.5 pl-4 text-xs text-ink-extra-muted">{props.meta}</p>
+        <p
+          class={cn('mt-0.5 text-xs text-ink-extra-muted', props.dot && 'pl-4')}
+        >
+          {props.meta}
+        </p>
       </div>
       <Show when={props.actions}>
         <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 @max-[480px]:justify-start @max-[480px]:pl-2">
@@ -147,7 +175,7 @@ export function ConnectedRuntimesSection(props: {
             {t('runtimeSharing.yourRuntimes')}
           </h2>
         </Show>
-        <SettingsCard>
+        <SettingsCard inset="wide">
           <For each={ordered()}>
             {(harness) => (
               <PairedRuntimeRow
@@ -162,9 +190,9 @@ export function ConnectedRuntimesSection(props: {
             )}
           </For>
           <Show when={props.error}>
-            <p class="px-4 py-3 text-xs text-negative">
+            <MachineCardError>
               Could not load your machines. Try refreshing this page.
-            </p>
+            </MachineCardError>
           </Show>
         </SettingsCard>
       </div>

@@ -14,15 +14,22 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
 pub mod settings;

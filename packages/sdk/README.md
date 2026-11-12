@@ -282,6 +282,7 @@ server refuses anything but one `SELECT` that compiles, and chart columns the
 `SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
 `<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
 views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
 
 ```ts
 const question = await database.saveQuery({

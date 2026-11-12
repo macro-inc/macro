@@ -202,6 +202,11 @@ pub fn resolve(
         pull_aws_credentials(&mut env);
     }
 
+    // Worker OTLP uses HTTP rather than the other services' gRPC endpoint.
+    // Apply the run's tracing policy after env overlays so traces-off cannot
+    // inherit an enabled worker exporter from a shared environment.
+    configure_sync_service_telemetry(&mut env, wire_otel, super::summary::port_open(4318));
+
     let generated_path = instance.ensure_artifact_dir()?.join("local.generated.env");
     write_dotenv(&generated_path, &env)
         .with_context(|| format!("writing {}", generated_path.display()))?;
@@ -212,6 +217,22 @@ pub fn resolve(
         env_file: env_file.map(Path::to_path_buf),
         generated_path,
     })
+}
+
+fn configure_sync_service_telemetry(
+    env: &mut BTreeMap<String, String>,
+    wire_otel: bool,
+    collector_ready: bool,
+) {
+    let endpoint = if wire_otel && collector_ready {
+        "http://otel-collector:4318"
+    } else {
+        ""
+    };
+    env.insert(
+        "SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT".into(),
+        endpoint.into(),
+    );
 }
 
 fn should_overlay_process_env(key: &str, value: &str) -> bool {

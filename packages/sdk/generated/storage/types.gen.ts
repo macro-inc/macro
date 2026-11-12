@@ -5542,6 +5542,30 @@ export type CreatePipeline = {
     sharing?: PipelineSharing;
 };
 
+/**
+ * A new pipeline with its stages and fields.
+ */
+export type CreatePipelineRequest = {
+    /**
+     * Fields to add after the standard ones, or after a generic pipeline's Name.
+     */
+    fields?: Array<NewFieldRequest>;
+    /**
+     * Its name.
+     */
+    name: string;
+    recordType?: null | PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
+    /**
+     * Its stages, first to last, replacing the team's default stages. A
+     * generic pipeline starts without a Stage field, so these add one.
+     */
+    stages?: Array<string>;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -27241,6 +27265,44 @@ export type CreateCrmPipelineResponses = {
 };
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
+
+export type CreateCrmPipelineWithFieldsData = {
+    body: CreatePipelineRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/create';
+};
+
+export type CreateCrmPipelineWithFieldsErrors = {
+    400: ErrorResponse;
+};
+
+export type CreateCrmPipelineWithFieldsError = CreateCrmPipelineWithFieldsErrors[keyof CreateCrmPipelineWithFieldsErrors];
+
+export type CreateCrmPipelineWithFieldsResponses = {
+    200: PipelineFields;
+};
+
+export type CreateCrmPipelineWithFieldsResponse = CreateCrmPipelineWithFieldsResponses[keyof CreateCrmPipelineWithFieldsResponses];
+
+export type ListCrmPipelineDetailsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/details';
+};
+
+export type ListCrmPipelineDetailsErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmPipelineDetailsError = ListCrmPipelineDetailsErrors[keyof ListCrmPipelineDetailsErrors];
+
+export type ListCrmPipelineDetailsResponses = {
+    200: Array<PipelineFields>;
+};
+
+export type ListCrmPipelineDetailsResponse = ListCrmPipelineDetailsResponses[keyof ListCrmPipelineDetailsResponses];
 
 export type SearchCrmPipelineEntriesData = {
     body?: never;

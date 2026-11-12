@@ -1017,7 +1017,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering. Keep every joined public/private channel in All channels regardless of custom-section assignments.
   Hide section drag-handle icons; retain whole-heading drag-to-reorder and an icon-free reorder control in an out-of-flow wrapper revealed on keyboard focus without increasing header height. Preserve normal collapse clicks and exclude action buttons from dragging. Keep personal section order and route list navigation through the sectioned renderer's scroll handle, scrolling immediately with two rows of context clamped to the viewport.
-  Default sections to their natural content height and the shared sidebar scroll area, ignoring saved heights without clearing them. Gate vertical resizing on `enable-chat-sidebar-section-resize`, off by default including development; when enabled, preserve personal heights, pane/content caps, independent scrolling, four-row Favorites/DM defaults, keyboard resize controls, edge-scroll compensation, and resize-only scroll-anchor suppression. Use TanStack Virtual for the section stack, channel rows, and search results; refresh nested row offsets from each section's measured start and size, not only total stack height, snapshot index-reconciled rows before keying by identity, and retain focused rows and drag sources.
+  Default sections to their natural content height and the shared sidebar scroll area, ignoring saved heights without clearing them. Gate vertical resizing on `enable-chat-sidebar-section-resize`, off by default including development; when enabled, preserve personal heights, pane/content caps, independent scrolling, four-row Favorites/DM defaults, keyboard resize controls, edge-scroll compensation, and resize-only scroll-anchor suppression. Use TanStack Virtual for the section stack, channel rows, and search results; refresh nested row offsets from each section's measured start and size, not only total stack height, snapshot index-reconciled rows before keying by identity, ignore a row measured at an index whose key it no longer shows (transitions update keys before the rows on screen), and retain focused rows and drag sources.
   Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
@@ -1343,6 +1343,15 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 4. **Strip the instrumentation before committing.**
 
+## iOS gotcha: WebKit never collects a stream its own callbacks can reach
+In WebKit, a `ReadableStream` or `TransformStream` whose `start`, `pull`, `cancel` or `flush` callback can reach the stream is never garbage-collected, and neither is anything else those callbacks can reach. Chromium collects it. Reaching includes the scope the callbacks were made in: every closure made in one function call shares that scope, so a callback made beside `const clone = response.clone.bind(response)` holds the response without mentioning it. The published `@tauri-apps/plugin-http` `fetch` has that shape, which kept the `Response` object of every native request alive for the life of the page on iOS, read or not.
+
+The stream's JavaScript object, on the other hand, is collected while a `Response` built from it can still be read. A `FinalizationRegistry` that watches the stream therefore fires too early; watch an object that only the stream's callbacks hold.
+
+**Rule:** make a stream's callbacks in a function of their own that receives only what they need. They never refer to the stream, to its `Response`, or to a closure that holds either. The HTTP plugin's JavaScript patch under `patches/` is written this way so that it can release a native response the page dropped unread; carry it over when the package is upgraded. Its callbacks still hold the abort signal the caller passed, so a listener a caller adds to that signal must not hold the request's response either.
+
+**How to check:** unit tests cannot see this, because Node collects like Chromium. In the iOS Simulator's webview, register the object with a `FinalizationRegistry`, drop it, send `Heap.gc` over the Web Inspector protocol a few times, and see whether the callback ran. Check the built bundle, not only the source: a minifier that inlines the function puts the callbacks back in the caller's scope.
+
 ### Agent session failure indicators
 
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
@@ -1505,7 +1514,7 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 
 ### Sidebar tag dragging
 
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
 Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
@@ -1613,6 +1622,11 @@ sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
-rather than feature-local chrome. The responsive vault fixture is exercised with
+rather than feature-local chrome. Adapt Passwords metadata to the app's existing
+item drag provider and tree drop slots; never coerce vault items into Drive entities
+or install a nested provider. Scope drag cancellation and auto-scroll to the
+current vault's own drag. Register its desktop composable split layout
+and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
+legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
 See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

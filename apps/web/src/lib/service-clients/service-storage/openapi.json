@@ -9479,6 +9479,77 @@
         }
       }
     },
+    "/crm/pipelines/create": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Create a pipeline with its stages, replacing the team's defaults, and its\nfields, in one call.",
+        "operationId": "create_crm_pipeline_with_fields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/details": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "The caller's live pipelines, each with its fields in column order (a\nselect field lists its options, so Stage lists the stages) and its table\nversion: what `ListPipelines` gives the agent, in one call.",
+        "operationId": "list_crm_pipeline_details",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineFields"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines/entry-search": {
       "get": {
         "tags": ["crm::inbound::pipeline_workflows"],
@@ -36213,6 +36284,47 @@
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
             "description": "Defaults to private."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreatePipelineRequest": {
+        "type": "object",
+        "description": "A new pipeline with its stages and fields.",
+        "required": ["name"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewFieldRequest"
+            },
+            "description": "Fields to add after the standard ones, or after a generic pipeline's Name."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "recordType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/PipelineSharing",
+            "description": "Defaults to private."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its stages, first to last, replacing the team's default stages. A\ngeneric pipeline starts without a Stage field, so these add one."
           }
         },
         "additionalProperties": false
