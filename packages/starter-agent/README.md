@@ -55,10 +55,12 @@ key and where Macro is (`MACRO_GATEWAY` and the `OVERRIDE_*` service URLs),
 its repository's, and, in Macro-credits mode, `ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, the
 only ones Claude Code is given. They are read once, only read, used by name
-and never printed: `setCredential` refuses. A self-hosted agent sets
-`MUPPET_CREDENTIALS=sops` instead, and keeps them in `secrets.enc.json`,
-encrypted with SOPS to its machine's age key, where `setCredential` adds one
-(value on stdin, never as an argument).
+and never printed; the agent can't add one (its owner adds it to the
+enrollment). A self-hosted agent sets `MUPPET_CREDENTIALS=sops` instead, and
+keeps them in `secrets.enc.json`, encrypted with SOPS to its machine's age
+key, where its owner adds one with `sops`. `setCredential` and
+`useCredential` refuse in a script's process, which is where the catalog runs
+them.
 
     bin/agent listCredentials
 

@@ -54,7 +54,7 @@ const hasGithub = ({ credentials }: Pick<Needs, 'credentials'>) =>
 /** Thrown by what can't work without GitHub, naming what to add. */
 export const needsGithub = (what: string): Error =>
   new Error(
-    `${what} needs GitHub: add the ${githubToken} credential (a token for the agent's GitHub account) with setCredential.`
+    `${what} needs GitHub: ask your owner to add the ${githubToken} credential (a token for your GitHub account) to your credentials; you can't store one yourself.`
   );
 
 export const repositoryOf = (context: Needs): Repository => {
