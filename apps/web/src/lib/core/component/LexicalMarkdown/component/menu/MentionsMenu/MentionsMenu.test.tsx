@@ -741,3 +741,45 @@ it('says it is searching only for a slow search, and never that there are no res
   expect(screen.getByText('No results')).toBeTruthy();
   expect(screen.queryByText('Searching…')).toBeNull();
 });
+
+it('picks the highlighted mention on Enter at once, even while typing continues', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ana: IUser = {
+    id: 'macro|ana@macro.com',
+    name: 'Ana Lima',
+    email: 'ana@macro.com',
+  };
+  const bo: IUser = {
+    id: 'macro|bo@macro.com',
+    name: 'Bo Chen',
+    email: 'bo@macro.com',
+  };
+  const menu = createMenuOperations();
+  menu.setSearchTerm('bo');
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ana, bo]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByTitle('Bo Chen bo@macro.com')).toBeTruthy();
+
+  // Typed past the listed term and pressed Enter within the debounce, then
+  // kept typing: the pick is for the typed text and is not lost.
+  menu.setSearchTerm('ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  menu.setSearchTerm('ana!');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(onPick).toHaveBeenCalledOnce();
+});
