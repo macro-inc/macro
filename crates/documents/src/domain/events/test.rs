@@ -49,6 +49,7 @@ fn owner_bearing_events_round_trip_all_owner_kinds_as_strings() {
                 created_at: None,
             }),
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: None,
