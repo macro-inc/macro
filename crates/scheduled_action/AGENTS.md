@@ -77,6 +77,35 @@ each run.
   times drafting on a local stack against the live model, phase by phase,
   and checks the drafts (see its README); rerun it when changing the brief
   or the wait.
+- `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
+  background drafts, the same drafter without the waiting request. `POST
+  /scheduled-actions/draft-jobs` validates the request and waits only for
+  the session's prompt to be admitted (the blocking route's 400/402/503,
+  plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
+  job; `GET` lists drafting and unopened finished ones, `GET .../{id}` reads
+  one (its `Draft` when ready), `DELETE .../{id}` cancels or discards one
+  (404 when not the caller's). The job id is its hidden session's. Its
+  state, request (kind and words), progress, result, `finished_at` and the
+  starting `traceparent` live on its `scheduled_action_draft` row
+  (`DraftJobStore`, `state` NULL for a blocking draft, which keeps its old
+  lifecycle). It runs on the receiving replica's `TaskTracker` under the
+  shutdown token: shutdown fails it as interrupted. A cancel from any
+  replica marks the row `cancelled`; the drafter sees it on its next row
+  read (`HandedBack::cancelled`) and deletes the session and the row. A
+  finished job's session is only stopped; it is deleted with its row, on
+  discard or after `FINISHED_RETENTION` (7 days). `DraftJobs::sweep` fails
+  rows still drafting past `INTERRUPTED_AFTER` (their drafter died) and
+  deletes abandoned cancels and expired rows; `RoutineDrafts::sweep` skips
+  job rows. The drafter reports milestones through `DraftProgress`
+  (`drafts/progress.rs`; blocking drafts pass `Unreported`); a `watch`
+  writer in the job's task writes each to the row and sends the owner a
+  `routine_draft_update` message (`RoutineDraftUpdates`) without blocking
+  the drafter, coalescing bursts. Progress carries counts, the trigger and
+  step titles, never code or the words. Spans: `routine.draft.start` (the
+  job's `routine.draft` span is its child), `routine.draft.cancel`,
+  `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
+  (it holds an email). Replicas still on code without job rows sweep them
+  as stale blocking drafts after `STALE_DRAFT`.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
   (onboarding calls it once the inbox connects) starts the person's one

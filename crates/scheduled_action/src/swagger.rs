@@ -19,6 +19,14 @@ use crate::inbound::draft_router::__path_draft_routine;
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
+use crate::inbound::draft_job_router::{
+    __path_discard_draft_job, __path_get_draft_job, __path_list_draft_jobs,
+    __path_start_draft_job,
+};
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
@@ -59,6 +67,10 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::axum_router::catalog,
         crate::inbound::draft_router::draft_routine,
+        crate::inbound::draft_job_router::start_draft_job,
+        crate::inbound::draft_job_router::list_draft_jobs,
+        crate::inbound::draft_job_router::get_draft_job,
+        crate::inbound::draft_job_router::discard_draft_job,
         crate::inbound::suggestion_router::list_suggestions,
         crate::inbound::suggestion_router::generate_suggestions,
         crate::inbound::suggestion_router::dismiss_suggestion,
@@ -93,6 +105,17 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::drafts::DraftedRoutine,
             crate::domain::drafts::DraftedStep,
             crate::domain::drafts::StepProblem,
+            crate::domain::drafts::DraftCreated,
+            crate::domain::drafts::jobs::DraftJob,
+            crate::domain::drafts::jobs::DraftJobState,
+            crate::domain::drafts::jobs::DraftAsked,
+            crate::domain::drafts::jobs::DraftKind,
+            crate::domain::drafts::jobs::DraftUpdate,
+            crate::domain::drafts::jobs::DraftUpdateState,
+            crate::domain::drafts::progress::DraftJobProgress,
+            crate::domain::drafts::progress::DraftStage,
+            crate::domain::drafts::progress::CheckSummary,
+            crate::domain::drafts::progress::StepTitle,
             crate::domain::code_upgrade::CodeUpgrade,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
