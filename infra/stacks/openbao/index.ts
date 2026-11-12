@@ -385,6 +385,8 @@ const loadBalancer = new aws.lb.LoadBalancer(`${BASE_NAME}-alb`, {
   subnets: vpc.privateSubnetIds,
   securityGroups: [loadBalancerSecurityGroup.id],
   dropInvalidHeaderFields: true,
+  // Longer than the server's 90 s default_max_request_duration.
+  idleTimeout: 95,
   tags,
 });
 const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
@@ -551,7 +553,8 @@ new aws.cloudwatch.MetricAlarm(`${BASE_NAME}-unhealthy-alarm`, {
     LoadBalancer: loadBalancer.arnSuffix,
     TargetGroup: targetGroup.arnSuffix,
   },
-  alarmDescription: 'OpenBao has no healthy (unsealed, active) task.',
+  alarmDescription:
+    'OpenBao has no healthy task (healthy means active, or not yet initialized).',
   alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
   okActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
   tags,

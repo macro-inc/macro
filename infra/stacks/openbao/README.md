@@ -1,8 +1,8 @@
 # Hosted OpenBao (dev)
 
 Passwords keeps its secret values in OpenBao; Postgres holds only metadata. The
-local stack runs OpenBao from `infra/local/openbao`. This stack is the hosted dev
-vault that QA uses.
+Passwords change adds a local OpenBao to the local stack; this stack is the
+hosted dev vault that QA uses.
 
 | Piece | Choice |
 | --- | --- |

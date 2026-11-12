@@ -7,8 +7,9 @@ export const API_PORT = 8200;
  * `/openbao/config/local.json`, which the HCL parser reads as HCL.
  *
  * Request duration, Raft layout and the redacted `passwords` audit device match
- * `infra/local/openbao/local.hcl`; the provisioning check refuses a vault
- * without that audit device. The seal is AWS KMS, never the local static seal.
+ * the Passwords local stack config (landing with Passwords); its hosted
+ * provisioning will refuse a vault without that audit device. The seal is AWS
+ * KMS, never the local static seal.
  */
 export function renderServerConfig(args: {
   apiAddress: string;

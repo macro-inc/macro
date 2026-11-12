@@ -9,8 +9,8 @@ guide; [the Pulumi rule](../../../.agents/rules/infra/pulumi.md) covers deploys.
 ## Start here
 
 - `index.ts`: the whole stack.
-- `server-config.ts`: the server HCL. Keep it in step with
-  `infra/local/openbao/local.hcl` (request duration, Raft layout, audit device).
+- `server-config.ts`: the server HCL. Keep its request duration, Raft layout
+  and audit device in step with the Passwords local OpenBao config.
 
 ## Checks
 
