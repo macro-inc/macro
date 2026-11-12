@@ -45,7 +45,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/connection-gateway:build.bg13f1411d9bxhvi5cmgmxjqbkna7rvd
+          image: localhost:32550/macro/connection-gateway:build.i10fkdc0fipqhdkj4l11751s1p1r8i1p
           imagePullPolicy: IfNotPresent
           name: connection-gateway
           ports:
@@ -68,11 +68,11 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-5ba3a4292b >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-5ba3a4292b --timeout=600s
+              until kubectl get job kafka-topics-59c0df1286 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-59c0df1286 --timeout=600s
 
-              until kubectl get job migrate-f96702b49a >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/migrate-f96702b49a --timeout=600s
+              until kubectl get job migrate-6dd9be5873 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-6dd9be5873 --timeout=600s
 
               until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
               kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s

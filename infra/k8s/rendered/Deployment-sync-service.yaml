@@ -38,7 +38,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/sync-service:build.bz67fim9vl3cpv6qchzwjdsmsswbz57b
+          image: localhost:32550/macro/sync-service:build.6fkkx2qpq630q4l0l714c64i8x0p2mh3
           imagePullPolicy: IfNotPresent
           name: sync-service
           ports:

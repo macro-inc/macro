@@ -2,25 +2,25 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   labels:
-    app: kafka-topics
-    app.kubernetes.io/name: kafka-topics
+    app: migrate
+    app.kubernetes.io/name: migrate
     app.kubernetes.io/part-of: macro
     macro.com/instance: reference
-    macro.com/job: kafka-topics
+    macro.com/job: migrate
     macro.com/tier: infra
     macro.local/managed: "true"
-  name: kafka-topics-5ba3a4292b
+  name: migrate-6dd9be5873
   namespace: macro-kube-reference
 spec:
   backoffLimit: 10
   template:
     metadata:
       labels:
-        app: kafka-topics
-        app.kubernetes.io/name: kafka-topics
+        app: migrate
+        app.kubernetes.io/name: migrate
         app.kubernetes.io/part-of: macro
         macro.com/instance: reference
-        macro.com/job: kafka-topics
+        macro.com/job: migrate
         macro.com/tier: infra
         macro.local/managed: "true"
     spec:
@@ -31,9 +31,9 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/kafka-topics:build.vlplla9k9vhjmw32zb4cirsb3n66fzd6
+          image: localhost:32550/macro/migrate:build.qlgs2j94y4wy9cg7654y9kgabvgkjyrm
           imagePullPolicy: IfNotPresent
-          name: kafka-topics
+          name: migrate
           ports: []
           resources: {}
           volumeMounts:
@@ -44,7 +44,7 @@ spec:
         - command:
             - /bin/sh
             - -ec
-            - until kubectl rollout status deployment/kafka --timeout=600s; do sleep 0.2; done; until nc -z -w 1 kafka 29092; do sleep 0.2; done
+            - until kubectl rollout status deployment/postgres --timeout=600s; do sleep 0.2; done; until nc -z -w 1 postgres 5432; do sleep 0.2; done
           image: localhost:32550/macro/readiness:build.smghxgld6q7kd9samdjm65jjgd5zm50c
           name: dependency
       restartPolicy: OnFailure

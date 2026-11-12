@@ -55,7 +55,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/lexical:build.n0ragprayvv742lf18v2mjbamw1pwbag
+          image: localhost:32550/macro/lexical:build.gbkxnkza17a8kp6qb3q11gqnzhcp5pdk
           imagePullPolicy: IfNotPresent
           name: lexical-service
           ports:
