@@ -468,6 +468,7 @@ fn a_held_code_run_asks_for_work_in_the_workspace() {
         &identity(),
         Uuid::from_u128(0xA99),
         Some(&user("alice@macro.com")),
+        "macro",
         "Macro",
         "ExecuteCode",
     ) else {
@@ -486,6 +487,7 @@ fn a_held_tool_call_tells_only_the_owner() {
         &identity(),
         approval,
         Some(&user("alice@macro.com")),
+        "macro",
         "Macro",
         "ListEmails",
     ) else {
@@ -509,11 +511,30 @@ fn a_held_tool_call_tells_only_the_owner() {
 }
 
 #[test]
+fn a_third_party_tool_named_execute_code_keeps_its_server() {
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        Uuid::from_u128(0xA99),
+        Some(&user("alice@macro.com")),
+        "other",
+        "Other Server",
+        "ExecuteCode",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to use Other Server ExecuteCode with your access. Approve or decline it."
+    );
+}
+
+#[test]
 fn a_held_tool_call_a_bot_asked_for_says_so() {
     let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
         &identity(),
         Uuid::from_u128(1),
         None,
+        "linear",
         "Linear",
         "create_issue",
     ) else {
