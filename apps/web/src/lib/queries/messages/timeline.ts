@@ -23,6 +23,8 @@ import {
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
+import { loadChannelTimelinePage } from './graphql/channel-sync';
+import { channelCacheHost } from './graphql/source';
 import { messageKeys } from './keys';
 import {
   normalizeChannelMessageSender,
@@ -60,7 +62,7 @@ export type ThreadPreviewReplySnapshot = {
   reply: EntityMessage;
 };
 
-type MessageTimelinePageParam = {
+export type MessageTimelinePageParam = {
   next_cursor: MessageCursor | null;
   previous_cursor: MessageCursor | null;
 };
@@ -223,6 +225,18 @@ export function messageTimelineQueryOptions(
     }) => {
       // Observe cancellation so a restarted refetch stops paging its old result.
       signal?.throwIfAborted();
+      // Channels read through the device cache where it is on; the REST
+      // reads below serve every other parent and a channel without it.
+      const host = parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return loadChannelTimelinePage(
+          host,
+          parent,
+          pageParam,
+          loadAroundMessageId,
+          signal
+        );
+      }
       if (pageParam) {
         return fetchMessageTimelinePage(parent, pageParam, null);
       }
