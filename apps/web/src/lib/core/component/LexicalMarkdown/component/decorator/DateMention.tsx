@@ -22,9 +22,21 @@ import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
 
-export function DateMention(
-  props: DateMentionDecoratorProps & DateMentionHostProp
-) {
+/**
+ * Source `importJSON` and `exportComponentProps` hand stored values over
+ * unchanged, so null or omitted fields reach this component. It reads only
+ * `date`, through `parseMentionDate`, which renders any value.
+ */
+export type DateMentionUIProps = Omit<
+  DateMentionDecoratorProps,
+  'date' | 'displayFormat'
+> & {
+  date?: string | null;
+  displayFormat?: string | null;
+  mentionUuid?: string | null;
+} & DateMentionHostProp;
+
+export function DateMention(props: DateMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
