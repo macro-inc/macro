@@ -6,11 +6,15 @@ pub mod access_token_clients;
 pub mod browser_binding;
 /// Which known product a registered client is.
 pub mod client_kind;
+/// The bounded name an MCP client registers under.
+pub mod client_name;
 /// Domain models for broker-managed OAuth state and request payloads.
 pub mod models;
 /// Domain port traits for upstream OAuth providers and broker state stores.
 pub mod ports;
 /// Policy for the redirect URIs the broker will deliver codes to.
 pub mod redirect_uri;
+/// The MCP servers the broker issues tokens for.
+pub mod resource;
 /// Domain service for the MCP OAuth broker.
 pub mod service;

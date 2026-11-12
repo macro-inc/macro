@@ -81,6 +81,11 @@ the owner).
 
 - Never let the sandbox see an upstream credential directly; every egress
   path must go through a port here, not a bypass in the harness.
+- `ReqwestForwarder` and `HttpActorMcpTransport` build their clients from
+  `mcp_client::outbound::guarded_http::client_builder` and check IP-literal
+  URLs before sending: a custom server's URL is whatever its owner typed.
+  Their `AddressPolicy` comes from the environment, so only a local stack
+  reaches private addresses.
 
 ## Related
 

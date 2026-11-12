@@ -149,6 +149,20 @@ fn to_typed_row_channel_access_requested() {
 }
 
 #[test]
+fn to_typed_row_runtime_access_removed() {
+    let metadata = serde_json::json!({
+        "runtimeName": "Studio Mac",
+        "agents": [{ "botId": "00000000-0000-0000-0000-000000000002", "name": "Scout" }]
+    });
+    let row = make_row("runtime_access_removed", metadata);
+    let typed = to_typed_row(row).expect("should deserialize runtime_access_removed");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::RuntimeAccessRemoved(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_new_email() {
     let metadata = serde_json::json!({
         "sender": "ext@example.com",

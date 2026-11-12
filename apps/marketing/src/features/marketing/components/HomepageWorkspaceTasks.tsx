@@ -1,9 +1,9 @@
-import ArrowDown from '@phosphor/arrow-down.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, For } from 'solid-js';
 import type { WorkspaceDemo } from '../primitives/createWorkspaceDemo';
 import { HomepagePersonAvatar } from './HomepageConversation';

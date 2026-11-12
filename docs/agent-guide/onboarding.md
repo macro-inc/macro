@@ -22,6 +22,18 @@ All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
 skips the rest of the flow and leaves onboarding. Accounts on other domains
 do not see it.
 
+## Team setup — `/app/onboarding`
+
+When the server suggests a team domain, the create form pre-adds up to six
+same-domain contacts, excluding the user's own email and duplicates regardless
+of case. Suggestions filter bounded local browse pages to that domain, including
+empty continuations, rather than downloading or remotely searching the address book. Without an approved domain,
+no contacts are fetched. A failed lookup opens the plain editable form.
+
+The form takes its first settled seed only. Renaming the workspace, removing a
+suggestion or changing an invite address must survive later domain/contact refreshes.
+Joining an existing team or accepting an invitation keeps its existing behavior.
+
 ## Setup plan step — `/app/onboarding`
 
 The plan step offers Pro with a 30-day trial only after the server confirms

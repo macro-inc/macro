@@ -26,6 +26,15 @@ pub struct MacroUserAuthentication {
     pub user_context: UserContext,
 }
 
+impl MacroUserAuthentication {
+    /// Whether a person is acting through their own session, rather than an API
+    /// token or an agent acting for them.
+    #[must_use]
+    pub fn is_human_session(&self) -> bool {
+        self.origin == CredentialOrigin::Session && self.agent_id.is_none()
+    }
+}
+
 /// The kind of credential that authenticated a user, set where the credential
 /// is verified. Policies that need a person's own session match on it rather
 /// than on request hints.
@@ -189,7 +198,7 @@ pub enum BotAuthorizationOwner {
 
 /// Ownership facts for a harness whose token has been validated.
 ///
-/// Unlike bots, a harness always has a user or team owner; there are no
+/// Unlike bots, a harness always has one person as its owner; there are no
 /// system harnesses.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HarnessAuthorizationOwner {
@@ -197,11 +206,6 @@ pub enum HarnessAuthorizationOwner {
     User {
         /// The owning Macro user identifier.
         user_id: String,
-    },
-    /// A harness owned by a team.
-    Team {
-        /// The owning team identifier.
-        team_id: Uuid,
     },
 }
 

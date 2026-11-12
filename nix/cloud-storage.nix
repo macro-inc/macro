@@ -1122,6 +1122,7 @@
           rustToolchain
           python3
         ]
+        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker

@@ -20,6 +20,11 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
+- `src/runtime_gauges.rs`: one task recording, every minute, what the process
+  holds per session as OTel gauges (`ahs.harness.workers`,
+  `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
+  `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
+  `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -33,6 +38,9 @@ Pulumi stacks; they do not host extra agent processes.
   `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
   (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
+  `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
+  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
@@ -66,7 +74,10 @@ Pulumi stacks; they do not host extra agent processes.
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
-  (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
+  (`src/scheduling/routine_run_notifications.rs`), which names a
+  sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
+  scheduler the code-mode invocation lookup so a routine an Ask AI step's
+  session creates becomes its run's sub-routine. AI drafts routines
   (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
   in-process Macro agent on the person's Ask AI model, admitted and billed
   as their agent session usage; `scheduling.rs` composes the drafter, its
@@ -174,9 +185,23 @@ feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
 owner unsharing and already activated routines remain available.
+`AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
+scheduling configs regardless of billing flags. It is a Secrets Manager name
+in deployed configs and a direct key locally. Resolve it for the harness, cognition, and
+scheduling configs before building authentication service clients; the task
+role must allow reading its ARN.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
+
+The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
+glibc malloc kept freed memory resident as fragmentation under this
+workload. Tests and the library keep the system allocator.
+
+`AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
+a session's command worker waits before it releases a quiet session from
+memory and exits; lower it only to exercise the release end to end. Values
+below 30 fail startup.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback
@@ -205,7 +230,10 @@ listener failure shuts down the process so ECS can replace the task.
   and verified kind (shown as the author and its mark); `ApiKey` writes as the
   Macro bot. Public `ExecuteCode` builds its context per call from the caller
   and signs the same attribution into its SDK token: the agent, or the Macro bot
-  plus the client label as `agent_via` / `agent_via_kind`. Never read a bot id or client name from the request itself.
+  plus the client label as `agent_via` / `agent_via_kind`. The OAuth broker
+  signs the Macro bot attribution into the tokens it issues for the ChatGPT MCP
+  Worker's resource (`McpChatgptServiceUrl`; `public_mcp/macro_api_tokens.rs`).
+  Never read a bot id or client name from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

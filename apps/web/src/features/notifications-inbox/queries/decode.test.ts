@@ -341,3 +341,75 @@ describe('encodeInboxScope', () => {
     ).toEqual({ rowTypes: [], unreadOnly: true });
   });
 });
+
+describe('toInboxGroup for a runtime', () => {
+  it('lists an access request filed under a runtime as a row about it', () => {
+    const group = toInboxGroup({
+      groupId: 'harness:0198a4cc-e138-7670-a308-a6b766602712',
+      sortAt: '2026-02-01T10:09:00Z',
+      entity: {
+        __typename: 'GraphqlSoupHarness',
+        id: '0198a4cc-e138-7670-a308-a6b766602712',
+        entityType: 'HARNESS',
+        harnessName: 'render-box',
+        ownerId: 'macro|viewer@example.com',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      rows: [
+        {
+          id: 'harness:0198a4cc-e138-7670-a308-a6b766602712#access_requested:r-1',
+          rowType: 'ACCESS_REQUESTED',
+          revision: 'rev',
+          latestAt: '2026-02-01T10:09:00Z',
+          unseen: true,
+          count: 1,
+          actor: null,
+          actions: [],
+          notifications: [
+            {
+              id: 'n-1',
+              eventType: 'entity_access_requested',
+              entityType: 'HARNESS',
+              targetEntityType: 'HARNESS',
+              entityId: '0198a4cc-e138-7670-a308-a6b766602712',
+              sent: false,
+              state: 'UNSEEN',
+              createdAt: '2026-02-01T10:09:00Z',
+              viewedAt: null,
+              updatedAt: '2026-02-01T10:09:00Z',
+              senderId: 'macro|colleague@example.com',
+              metadata: {
+                __typename: 'GraphqlEntityAccessRequestedMetadata',
+                entityAccessRequestedRequestId: 'r-1',
+                entityAccessRequestedRevision: 1,
+                entityAccessRequestedEntityName: 'render-box',
+                entityAccessRequestedFileType: null,
+                entityAccessRequestedAccessLevel: 'edit',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+
+    expect(group?.rows).toHaveLength(1);
+    expect(group?.rows[0]).toMatchObject({
+      type: 'access_requested',
+      content: {
+        entity: {
+          type: 'harness',
+          id: '0198a4cc-e138-7670-a308-a6b766602712',
+          name: 'render-box',
+          ownerId: 'macro|viewer@example.com',
+        },
+        notifications: [
+          {
+            entity_type: 'harness',
+            notification_metadata: { tag: 'entity_access_requested' },
+          },
+        ],
+      },
+    });
+  });
+});

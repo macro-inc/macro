@@ -4,7 +4,9 @@
 mod test;
 
 use super::events::{CallMacroEvent, CallRecordImportedMetadata};
-use super::records::{CallEntityRecord, CallParticipant, CallSource, CallTranscript};
+use super::records::{
+    CallEntityRecord, CallParticipant, CallProvider, CallSource, CallTranscript, ExternalCallId,
+};
 use super::service::publish_call_event;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -43,6 +45,29 @@ pub struct ImportedCallPreview {
     pub created_at: DateTime<Utc>,
 }
 
+/// An imported call as its provider describes it, for mirroring elsewhere.
+#[derive(Debug, Clone)]
+pub struct ImportedCallRecord {
+    /// Macro call entity ID.
+    pub id: Uuid,
+    /// Display title, including a title edited in Macro.
+    pub title: Option<String>,
+    /// Observed call start, if available.
+    pub started_at: Option<DateTime<Utc>>,
+    /// Observed call end, if available.
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Named attendees, alphabetical; providers' attendee order isn't stored.
+    pub attendees: Vec<String>,
+    /// Opaque provider identifier.
+    pub external_id: ExternalCallId,
+    /// Source permalink, if supplied.
+    pub external_url: Option<String>,
+    /// Provider-written summary, if any.
+    pub summary: Option<String>,
+    /// Provider revision time.
+    pub external_updated_at: Option<DateTime<Utc>>,
+}
+
 /// Owning persistence boundary for imported call entities and resources.
 #[async_trait]
 pub trait ImportedCallRepository: Send + Sync {
@@ -53,6 +78,12 @@ pub trait ImportedCallRepository: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<ImportedCallPreview>, rootcause::Report>;
+    /// Every call this user imported from the provider, latest start first.
+    async fn list_source_records(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        provider: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>, rootcause::Report>;
     /// Read only when the user owns the imported call.
     async fn read_owned(
         &self,
@@ -71,6 +102,12 @@ pub trait CallImportService: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<ImportedCallPreview>, rootcause::Report>;
+    /// Every call the caller imported from the provider, unbounded, latest start first.
+    async fn list_source_records(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        provider: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>, rootcause::Report>;
     /// Read the caller's imported call; other owners' records are invisible.
     async fn read(
         &self,
@@ -112,6 +149,13 @@ impl<R: ImportedCallRepository, B: MacroEventBroker> CallImportService
         user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<ImportedCallPreview>, rootcause::Report> {
         self.0.list_owned(user).await
+    }
+    async fn list_source_records(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        provider: CallProvider,
+    ) -> Result<Vec<ImportedCallRecord>, rootcause::Report> {
+        self.0.list_source_records(user, provider).await
     }
     async fn read(
         &self,

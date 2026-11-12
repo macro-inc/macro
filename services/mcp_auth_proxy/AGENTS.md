@@ -20,13 +20,17 @@ in front of FusionAuth, which doesn't support DCR itself.
 - `src/domain/client_kind.rs`: which known product (Claude, ChatGPT, ...) a
   registration is, for the mark its posts wear; README "Which product a client
   is".
+- `src/domain/resource.rs`: the RFC 8707 resources the broker signs in for (the
+  ChatGPT MCP Worker by its exact URL, the harness's public MCP for anything
+  else) and which token each gets; see README "Which MCP server a token is for".
 - `src/domain/browser_binding.rs`: the cookie secret tying a flow to the browser
   that started it, and the anti-forgery token the broker's forms carry.
 - `templates/`: the broker's pages (sign-in chooser, consent and its cancellation,
   email sign-in, manual delivery), which share `broker_page.css`.
 - `src/domain/ports.rs`: `ClientRegistrationStore`, `OAuthProvider`,
-  `EmailCodeProvider`, `RefreshTokenBindingStore` — the ports the service depends
-  on.
+  `EmailCodeProvider`, `RefreshTokenBindingStore`, `MacroApiTokenMinter` — the
+  ports the service depends on. The harness implements the minter
+  (`agent_harness_service/src/public_mcp/macro_api_tokens.rs`).
 - `src/inbound/axum_router.rs`: HTTP routes; `src/inbound/middleware.rs`: auth.
 - `src/outbound/postgres.rs`: the store of record for all broker state
   (registrations, refresh token bindings, pending authorizations, issued
@@ -47,7 +51,8 @@ in front of FusionAuth, which doesn't support DCR itself.
   form, authorization-code issuance (including manual delivery for clients on
   another machine), refresh-token rotation/binding, and RFC 7009 revocation, all
   proxied in front of FusionAuth.
-- Not here: the MCP tool surface itself → `services/agent_harness_service/src/public_mcp.rs`.
+- Not here: the MCP tool surface itself → `services/agent_harness_service/src/public_mcp.rs`;
+  the ChatGPT MCP server → `services/mcp-chatgpt-worker`.
 
 ## Recipes
 
@@ -60,6 +65,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 - Recognize a new MCP client product: a variant in `crates/mcp_client_label` →
   its name and redirect evidence in `src/domain/client_kind.rs` → its mark in
   `apps/web/src/lib/core/component/mcpClientMark.ts`.
+- Sign clients in for another MCP server: a `McpResource` variant and its URL
+  in `McpResources` (from `macro_service_urls`) → the token it gets in
+  `access_token_for` (`src/domain/service.rs`) → `public_mcp.rs` wiring → README.
 - Add a new grant type: `src/domain/models.rs` → `src/domain/service.rs` →
   `src/outbound/fusionauth.rs` → `src/inbound/axum_router.rs`.
 
@@ -76,6 +84,9 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 
 ## Gotchas
 
+- Never refuse an unrecognized `resource`: deployed clients send whatever they
+  derive from their configured URL, and refusing it breaks live grants on
+  refresh.
 - Don't add an MCP client's host to FusionAuth's authorized origins
   (`infra/stacks/fusionauth-instance/origins.ts`). `/authorize` withholds the
   client's Referer from FusionAuth, so a new client needs no origin entry.
@@ -87,7 +98,7 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
   The consent page's CSP has no `form-action`: browsers apply it to the
   form's redirect to FusionAuth.
 - The consent form re-posts the authorize request, so a new `AuthorizeRequest`
-  field needs a hidden input in `templates/consent.html`. The chooser repeats its
+  field (as `resource` has) needs a hidden input in `templates/consent.html`. The chooser repeats its
   query on its own.
 - The manual delivery page puts the callback URL in a shell command. Don't widen
   `RedirectUriPolicy::allows_manual_delivery` past characters that are inert in

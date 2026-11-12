@@ -421,6 +421,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
         .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_run_sessions(Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
         ))))
@@ -438,6 +439,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()

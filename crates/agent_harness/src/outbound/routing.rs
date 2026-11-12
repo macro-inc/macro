@@ -148,6 +148,17 @@ where
         }
     }
 
+    /// Only the in-process runtime holds memory an idle session can give
+    /// back, and it sits behind the sandbox slot; sending every session there
+    /// saves a row read per release.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        self.sandbox.release_idle(session).await
+    }
+
+    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
+        self.sandbox.idle_release_is_lossless(session).await
+    }
+
     // Sized sandboxes are a sandboxed-coder concept: the effect table is the
     // sandbox manager's, and a resize routed to a Cursor session is refused
     // rather than pretended at — its compute is Cursor's, not ours.

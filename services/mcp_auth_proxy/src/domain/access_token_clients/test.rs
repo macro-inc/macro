@@ -105,3 +105,45 @@ async fn a_client_claiming_a_product_its_redirect_uris_contradict_has_no_kind() 
         })
     );
 }
+
+#[tokio::test]
+async fn a_stored_name_registered_before_the_rules_is_held_to_them() {
+    let registry = Arc::new(FakeClientRegistry::default());
+    for (client_id, client_name) in [
+        ("reserved", "Macro Support"),
+        ("bidi", "Claude\u{202e} Code"),
+    ] {
+        registry
+            .insert_client(&RegisteredClient {
+                client_id: client_id.to_owned(),
+                client_name: client_name.to_owned(),
+                redirect_uris: vec![],
+            })
+            .await
+            .unwrap();
+    }
+    let clients = clients(&registry);
+    for client_id in ["reserved", "bidi"] {
+        clients
+            .bind(
+                &format!("{client_id}-token"),
+                &RefreshTokenBinding {
+                    client_id: client_id.to_owned(),
+                    grant_id: "grant-1".to_owned(),
+                },
+            )
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(clients.client("reserved-token").await.unwrap(), None);
+    assert_eq!(
+        clients
+            .client("bidi-token")
+            .await
+            .unwrap()
+            .map(|client| client.name)
+            .as_deref(),
+        Some("Claude Code")
+    );
+}

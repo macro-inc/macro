@@ -2,7 +2,13 @@ import { analytics } from '@app/lib/analytics';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../../routines/core/draft';
-import { type SuggestionItem, suggestionItem } from '../core/suggestions';
+import { withKnobValue } from '../../routines/core/knobs';
+import {
+  type SuggestionItem,
+  suggestionItem,
+  suggestionSentence,
+  templateItem,
+} from '../core/suggestions';
 import { context, forYou, TAGS, template } from '../tests/fixtures';
 import {
   createSuggestionActions,
@@ -19,9 +25,21 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 
 function item(suggestion = template): SuggestionItem {
-  const result = suggestionItem(suggestion, [TAGS], context(false));
+  const result = suggestionItem(suggestion, [TAGS], context(true));
   if (!result) throw new Error('expected an item');
   return result;
+}
+
+/** The card's knobs with one value changed, as its sentence would. */
+function knobsWith(
+  actions: ReturnType<typeof createSuggestionActions>,
+  card: SuggestionItem,
+  name: string,
+  value: string | number
+) {
+  const sentence = suggestionSentence(card, actions.editsFor(card));
+  if (!sentence) throw new Error('expected a sentence');
+  return withKnobValue(sentence.knobs, name, value);
 }
 
 function deps(overrides: Partial<SuggestionActionsDeps> = {}) {
@@ -53,18 +71,24 @@ function withActions(
 beforeEach(() => vi.mocked(analytics.track).mockClear());
 
 describe('suggestion actions', () => {
-  it('enable in one click, once, with the row’s edits, and keep the row in place', async () => {
+  it('turn on in one click, once, with the card’s knob values, and keep the card in place', async () => {
     const host = deps();
     await withActions(host, async (actions) => {
       const row = item();
-      actions.edit(row, { ...actions.editsFor(row), title: 'My tags' });
+      actions.editKnobs(row, knobsWith(actions, row, 'days', 30));
       await Promise.all([actions.enable(row), actions.enable(row)]);
       expect(host.create).toHaveBeenCalledOnce();
       expect(host.created[0]).toMatchObject({
-        name: 'My tags',
+        name: 'Tag new email',
+        description: 'Tag each new email Reply within 30 days.',
         enabled: true,
         suggestionId: 'template-1',
       });
+      const [step] = host.created[0]?.steps ?? [];
+      expect(step?.kind === 'code' && step.knobs).toMatchObject([
+        { name: 'replyTag', value: 'Reply' },
+        { name: 'days', value: 30 },
+      ]);
       expect(actions.statusFor(row)).toEqual({
         kind: 'enabled',
         routineId: 'routine-1',
@@ -93,7 +117,7 @@ describe('suggestion actions', () => {
     );
   });
 
-  it('show why enabling failed on the row, and let the person try again', async () => {
+  it('show why turning on failed on the card, and let the person try again', async () => {
     const host = deps({
       create: vi.fn(async () => {
         throw new Error('Scheduler unavailable');
@@ -104,28 +128,43 @@ describe('suggestion actions', () => {
       await actions.enable(row);
       expect(actions.statusFor(row)).toEqual({
         kind: 'failed',
-        message: "Couldn't enable this routine. Scheduler unavailable",
+        message: 'Couldn’t turn on this routine. Scheduler unavailable',
       });
       expect(actions.visible([])).toEqual([]);
-      actions.edit(row, actions.editsFor(row));
+      actions.editKnobs(row, knobsWith(actions, row, 'days', 10));
       expect(actions.statusFor(row).kind).toBe('idle');
     });
   });
 
-  it('open the full editor prefilled with the row’s edits, saving nothing', async () => {
+  it('open the full editor prefilled with the card’s knob values, saving nothing', async () => {
     const host = deps();
     await withActions(host, async (actions) => {
       const row = item(forYou);
-      actions.edit(row, { ...actions.editsFor(row), notify: true });
+      actions.editKnobs(row, knobsWith(actions, row, 'replyTag', 'Answer'));
       actions.customize(row);
     });
     expect(host.create).not.toHaveBeenCalled();
     expect(host.customize).toHaveBeenCalledWith(
       expect.objectContaining({
         suggestionId: 'pick-1',
-        runVisibility: 'listed',
+        description: 'Tag each new email Answer within 14 days.',
       })
     );
+  });
+
+  it('leave templates out of suggestion events and dismissals', async () => {
+    const host = deps();
+    await withActions(host, async (actions) => {
+      const card = templateItem(TAGS, context(true));
+      actions.shown(card);
+      await actions.dismiss(card);
+      actions.customize(card);
+    });
+    expect(host.dismiss).not.toHaveBeenCalled();
+    expect(host.customize).toHaveBeenCalledWith(
+      expect.not.objectContaining({ suggestionId: expect.anything() })
+    );
+    expect(analytics.track).not.toHaveBeenCalled();
   });
 
   it('dismiss through the server, and say so when it refuses', async () => {
@@ -147,7 +186,7 @@ describe('suggestion actions', () => {
     );
   });
 
-  it('count a row shown once per list, by its main surface on the Routines page', async () => {
+  it('count a card shown once per list, by its main surface on the Routines page', async () => {
     const host = deps({ placement: () => ({ kind: 'routines' }) });
     await withActions(host, async (actions) => {
       const row = item(forYou);

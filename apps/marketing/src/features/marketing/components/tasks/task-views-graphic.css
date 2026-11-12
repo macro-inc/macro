@@ -1,0 +1,94 @@
+/* The app's task collection: its toolbar, list, board, and Gantt layouts. */
+.task-views {
+  --task-views-raised: oklch(100% 0 0 / 5%);
+  margin: 20px 24px;
+  color: var(--color-ui-content-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+}
+.task-views svg { flex: none; width: 14px; height: 14px; }
+.task-views [data-tone=red] { --tone: oklch(63% 0.24 27); }
+.task-views [data-tone=blue] { --tone: oklch(62% 0.21 260); }
+.task-views [data-tone=amber] { --tone: oklch(77% 0.19 70); }
+.task-views [data-tone=violet] { --tone: oklch(55% 0.25 303); }
+
+.task-views-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; }
+.task-views-bar > strong { margin-right: auto; font-size: 14px; font-weight: 600; }
+.task-views-pill, .task-views-layouts {
+  display: flex; align-items: center; height: 30px; border-radius: 999px;
+  background: var(--color-ui-button-secondary-bg); color: var(--color-ui-content-secondary);
+}
+.task-views-pill { gap: 8px; padding: 0 10px; font-size: 13px; }
+.task-views-filter b { display: grid; place-items: center; min-width: 16px; height: 16px; border-radius: 999px; background: var(--color-ui-accent); color: #000; font-size: 10px; font-weight: 600; }
+.task-views-caret { width: 11px !important; height: 11px !important; }
+/* One pill holding three icon buttons; the pressed one fills its slot. */
+.task-views-layouts { overflow: hidden; }
+.task-views-layouts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; background: none; color: var(--color-ui-content-secondary); transition: background-color 160ms ease; }
+.task-views-layouts button[aria-pressed=true] { background: oklch(100% 0 0 / 16%); color: var(--color-ui-content-primary); }
+.task-views-layouts button:focus-visible { outline: 2px solid var(--color-ui-content-tertiary); outline-offset: -2px; }
+
+/* A fixed height, so switching layouts never moves the page. */
+.task-views-body { position: relative; height: 296px; overflow: hidden; mask-image: linear-gradient(to bottom, #000 82%, transparent); }
+
+.task-views-status[data-status=not-started] { color: var(--color-ui-content-secondary); }
+.task-views-status[data-status=in-progress] { color: oklch(79% 0.17 70); }
+.task-views-status[data-status=in-review] { color: var(--color-ui-violet-ink); }
+.task-views-status[data-status=completed] { color: var(--color-ui-accent); }
+.task-views-priority { color: var(--color-ui-content-tertiary); }
+.task-views-priority[data-priority=Urgent] { color: oklch(75% 0.2 47.6); }
+.task-views-title { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.task-views-avatar { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+.task-views-meta { display: flex; flex: none; align-items: center; gap: 5px; color: var(--color-ui-content-tertiary); font-size: 12px; white-space: nowrap; }
+.task-views-meta svg { width: 12px; height: 12px; }
+.task-views-tag { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 1px 8px 1px 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--color-ui-border-secondary); color: var(--color-ui-content-secondary); font-size: 11.5px; }
+.task-views-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--tone); }
+
+.task-views-group { display: flex; align-items: center; gap: 9px; height: 30px; margin-bottom: 2px; padding: 0 10px; border-radius: 8px; background: var(--task-views-raised); color: var(--color-ui-content-secondary); font-size: 12px; }
+.task-views-group strong { font-weight: 500; }
+.task-views-group span { padding: 0 6px; border-radius: 999px; background: oklch(100% 0 0 / 8%); font-size: 11px; }
+
+.task-views-row { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px 0 30px; }
+.task-views-row .task-views-status { width: 16px; height: 16px; }
+.task-views-due { min-width: 58px; }
+
+.task-views-body[data-view=board] { display: flex; align-items: flex-start; gap: 10px; }
+.task-views-column { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; padding: 6px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--color-ui-border-secondary); }
+.task-views-column-head { display: flex; align-items: center; gap: 8px; padding: 7px 6px 5px; }
+.task-views-column-head strong { font-weight: 600; }
+.task-views-column-head span { margin-right: auto; color: var(--color-ui-content-tertiary); font-size: 11px; }
+.task-views-column-head svg:last-child { color: var(--color-ui-content-tertiary); }
+.task-views-card { display: flex; flex-direction: column; gap: 9px; padding: 10px; border-radius: 9px; background: var(--task-views-raised); }
+.task-views-card > div:first-child { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; line-height: 18px; }
+.task-views-card > div:first-child span { flex: 1; min-width: 0; }
+.task-views-card .task-views-status { margin-top: 2px; }
+.task-views-card-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-left: 22px; }
+
+.task-views-months { display: grid; grid-template-columns: 36% 1fr 1.4fr 1fr 1fr; align-items: center; height: 26px; margin-bottom: 4px; color: var(--color-ui-content-tertiary); font-size: 11.5px; }
+.task-views-months strong { color: var(--color-ui-content-primary); font-weight: 600; }
+.task-views-lane { display: grid; grid-template-columns: 36% minmax(0, 1fr); align-items: center; height: 34px; }
+.task-views-lane-name { display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+.task-views-track { position: relative; align-self: stretch; }
+/* A scheduled task is a dark bar that warms toward its due date. */
+.task-views-span {
+  position: absolute; top: 4px; bottom: 4px; left: calc(var(--start) * 100%); width: calc(var(--length) * 100%);
+  display: flex; align-items: center; gap: 7px; padding: 0 9px; box-sizing: border-box; border-radius: 7px;
+  background: linear-gradient(90deg, oklch(100% 0 0 / 7%) 35%, oklch(55% 0.13 30 / 45%));
+  font-size: 12px;
+}
+.task-views-today { position: absolute; top: 0; bottom: 0; left: 62%; width: 1px; background: oklch(100% 0 0 / 28%); }
+
+/* Phone artboard: only the layout control stays in the toolbar. */
+.paper-feature-art[data-compact=true] .task-views { margin: 10px; }
+.paper-feature-art[data-compact=true] .task-views-extra { display: none; }
+.paper-feature-art[data-compact=true] .task-views-row { gap: 8px; padding-left: 10px; }
+.paper-feature-art[data-compact=true] .task-views-row .task-views-tag,
+.paper-feature-art[data-compact=true] .task-views-row .task-views-priority { display: none; }
+/* The board scrolls sideways in the app; here the third column runs off the edge. */
+.paper-feature-art[data-compact=true] .task-views-body[data-view=board] { mask-image: linear-gradient(to right, #000 80%, transparent); }
+.paper-feature-art[data-compact=true] .task-views-column { flex: none; width: 168px; }
+/* No room for the name column: the bars carry the titles. */
+.paper-feature-art[data-compact=true] .task-views-lane { grid-template-columns: minmax(0, 1fr); }
+.paper-feature-art[data-compact=true] .task-views-months { grid-template-columns: 1.6fr 0.6fr 1.4fr 1fr 1fr; }
+.paper-feature-art[data-compact=true] .task-views-lane-name { display: none; }
+.paper-feature-art[data-compact=true] .task-views-today { left: 48%; }

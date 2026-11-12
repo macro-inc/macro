@@ -14,8 +14,9 @@ pub enum ToolCaller {
     /// An OAuth MCP client acting for the user. `client` is the name the
     /// client registered under, self-reported, and the product its
     /// registration was verified as: a display label only, never an identity
-    /// or a permission. Absent for a token the broker issued before it
-    /// recorded which client it went to.
+    /// or a permission. The broker bounds the name's length and characters and
+    /// refuses reserved names. Absent for a token the broker issued before it
+    /// recorded which client it went to, or whose stored name is reserved.
     McpClient {
         /// The client's registered label, such as "Claude Code".
         client: Option<McpClientLabel>,

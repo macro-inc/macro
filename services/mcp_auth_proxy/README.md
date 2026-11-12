@@ -173,8 +173,16 @@ SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
 binding (`domain/access_token_clients.rs`). The bearer middleware reads the
 binding and the client's registered `client_name` and attaches the request's
 caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
-writes "via <client_name>". The name is self-reported at `/register`: a display
-label, never an identity or permission. A token issued before its binding was
+writes as "<client_name> · Agent". The name is self-reported at `/register`: a
+display label, never an identity or permission. `domain/client_name.rs` bounds
+it: only ASCII letters, digits, spaces and plain punctuation survive (no
+control, bidi, zero-width, lookalike or mention characters), at most 64 of them,
+and a name that is Macro's own ("Macro", "Macro Agent", a first-party Macro
+bot's name or handle; compared ignoring case, spaces and punctuation) is
+refused with a 400. A name that only mentions Macro ("Claude Code (macro)") is
+fine. A name with nothing left registers as "MCP
+client". Reads apply the same rules, so a name stored before they existed is
+shown normalized, or unnamed if reserved. A token issued before its binding was
 recorded carries no name; the client's next refresh records one. Reading the
 records only through the existing ports keeps them working on any store
 backend.
@@ -206,6 +214,34 @@ its own callback host keeps its name and gets a letter. Claude Code appends the
 user's own name for the server in parentheses ("Claude Code (macro)"), which is
 ignored when matching. The kind is computed when a token is resolved, so it
 needs no backfill and a change to the rules applies to every registration.
+
+## Which MCP server a token is for
+
+The broker signs clients in for two MCP servers, which a client names with the
+RFC 8707 `resource` parameter (`domain/resource.rs`):
+
+- **The harness's public MCP** (`McpPublicUrl` + `/mcp`). It gets the
+  FusionAuth access token, and labels what the client writes from that token's
+  recorded client ("Which client a grant belongs to"). Any `resource` other than the ChatGPT
+  server's, or none, is for this server: deployed clients send whatever
+  resource they derive from the URL their user configured (the gateway URL, a
+  bare origin), so the broker does not refuse one it does not recognize.
+- **The ChatGPT MCP server** (`McpChatgptServiceUrl` + `/mcp`, a Cloudflare
+  Worker). It passes its bearer unchanged to Macro's APIs, which accept a
+  FusionAuth token but cannot look up its client, so writes would show as the
+  user's own. This resource gets a Macro API token instead, minted at `/token`
+  for the same user through the `MacroApiTokenMinter` port: the Macro bot via
+  the client's registered name, the attribution public MCP's `ExecuteCode`
+  signs. It expires with the FusionAuth token it was minted from, and the
+  refresh token stays FusionAuth's, so a refresh naming this resource mints a
+  fresh one.
+
+Only the ChatGPT server's exact URL (a trailing slash aside) selects it; a
+lookalike such as its bare origin or an `http` URL gets the harness's token.
+The resource is not stored with the code: it changes only which credential for
+the same user and client is returned, so `/token` decides from its own
+`resource`, which MCP clients send on both grants. A ChatGPT refresh that omits
+it gets a FusionAuth token, which Macro's APIs accept without the client label.
 
 ## Token endpoint errors
 
@@ -252,7 +288,7 @@ binding goes last, so a client that sees a `503` can retry. A token the broker
 does not hold (never issued, expired, or already revoked) gets `200`, as RFC
 7009 section 2.2 requires.
 
-Access tokens are FusionAuth JWTs and are not revocable: presenting one gets
+Access tokens, FusionAuth JWTs or Macro API tokens, are not revocable: presenting one gets
 `400 unsupported_token_type`. Revocation does not cut them short, so an access
 token issued before the revocation stays valid until it expires. Every token
 response carries `expires_in`, which is that remaining window; FusionAuth signs

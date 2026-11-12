@@ -524,6 +524,11 @@ type CompleteMutationRoot {
 	Delete the expected owned revision; repeating a completed deletion returns the ID.
 	"""
 	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Set the authenticated viewer's personal order; definitions and their
+	revisions are unchanged. Returns the views in their new order.
+	"""
+	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
 }
 
 """
@@ -543,6 +548,11 @@ type CompleteSubscriptionRoot {
 	were missed, and the log must be refetched.
 	"""
 	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
+	Recorded activity from any invocation associated with this accessible session.
+	The stream errors when rows were missed; clients must refetch its REST page.
+	"""
+	agentSessionActivityAppended(sessionId: ID!): [GraphqlActivityEvent!]!
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
@@ -1686,6 +1696,14 @@ type GraphqlActivityEvent {
 	"""
 	subjectId: String!
 	"""
+	Originating code-mode invocation, when present.
+	"""
+	agentCorrelationId: ID
+	"""
+	Display verb supplied by a validated code-mode invocation.
+	"""
+	agentVerb: String
+	"""
 	The kind of entity acted on.
 	"""
 	entityType: GraphqlEntityType!
@@ -1697,6 +1715,10 @@ type GraphqlActivityEvent {
 	What the principal did.
 	"""
 	action: GraphqlActivityAction!
+	"""
+	The stored action tag, for clients that do not need its typed payload.
+	"""
+	actionTag: String!
 	"""
 	When it happened, in RFC 3339 format.
 	"""
@@ -2210,6 +2232,24 @@ type GraphqlAllDayEventTime {
 	Exclusive local end date (`YYYY-MM-DD`).
 	"""
 	endDate: String!
+}
+
+"""
+GraphQL input naming a kind of email attachment.
+"""
+enum GraphqlAttachmentKind {
+	"""
+	PDF files.
+	"""
+	PDF
+	"""
+	PNG, JPEG, GIF, WebP or SVG images.
+	"""
+	IMAGE
+	"""
+	Word, Excel and PowerPoint files, plain text and CSV.
+	"""
+	DOCUMENT
 }
 
 """
@@ -3847,6 +3887,61 @@ type GraphqlCommentedOnDocumentMetadata {
 }
 
 """
+One viewer's directory entry, not a globally shared user profile or CRM contact.
+"""
+type GraphqlContact {
+	"""
+	Stable identity of the viewer/person pair. Names do not affect this key.
+	"""
+	id: ID!
+	"""
+	Target user identifier, also used for people who have not joined Macro.
+	"""
+	userId: ID!
+	"""
+	Email address derived from the target user identifier.
+	"""
+	email: String!
+	"""
+	Macro profile name, then this viewer's address-book name; null means use email fallback.
+	"""
+	name: String
+}
+
+"""
+Optional exact matching stages for bounded reference-resolution fallback.
+Omission keeps ordinary subsequence search unchanged.
+"""
+enum GraphqlContactMatching {
+	"""
+	Whole name, address or user identity.
+	"""
+	EXACT
+	"""
+	First word of the resolved name (full address when no name exists).
+	"""
+	FIRST_NAME
+	"""
+	Whole and first names, addresses and identities at the same priority.
+	"""
+	ANY_NAME
+}
+
+"""
+A bounded contact-ID-ordered page; an empty page may still have a continuation.
+"""
+type GraphqlContactPage {
+	"""
+	Authorized contacts, including self in sorted position.
+	"""
+	nodes: [GraphqlContact!]!
+	"""
+	Opaque continuation, or null only when the source is exhausted.
+	"""
+	nextCursor: String
+}
+
+"""
 GraphQL input naming the CRM record an association filter restricts to.
 """
 input GraphqlCrmAssociation @oneOf {
@@ -4722,6 +4817,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	recipient: GraphqlEmailValue
 	"""
+	A message whose subject contains this text, ignoring case (1-200 characters).
+	"""
+	subject: String
+	"""
 	The thread id option.
 	"""
 	threadId: ID
@@ -4757,6 +4856,10 @@ input GraphqlEmailLiteral @oneOf {
 	The calendar only option.
 	"""
 	calendarOnly: Boolean
+	"""
+	Threads with at least one attachment of this kind.
+	"""
+	attachment: GraphqlAttachmentKind
 	"""
 	The created at option.
 	"""
@@ -5304,6 +5407,10 @@ enum GraphqlEntityType {
 	chats replaced WhatsApp groups. Never returned; rejected as input.
 	"""
 	WHATSAPP_GROUP @deprecated(reason: "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30.")
+	"""
+	A registered runtime.
+	"""
+	HARNESS
 }
 
 """
@@ -6651,7 +6758,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -7521,6 +7628,20 @@ type GraphqlRoutineRunFinishedMetadata {
 }
 
 """
+Metadata for removed runtime access that stopped the recipient's agents.
+"""
+type GraphqlRuntimeAccessRemovedMetadata {
+	"""
+	The runtime's name.
+	"""
+	runtimeName: String!
+	"""
+	The recipient's agents that stopped.
+	"""
+	agents: [GraphqlStoppedAgent!]!
+}
+
+"""
 A saved filter definition, not a snapshot of matching entities.
 """
 type GraphqlSavedView {
@@ -7559,7 +7680,8 @@ type GraphqlSavedView {
 }
 
 """
-A page ordered by creation time and ID after effective visibility checks.
+A page in the viewer's own order, then by creation time and ID, after
+effective visibility checks.
 """
 type GraphqlSavedViewPage {
 	"""
@@ -9966,6 +10088,10 @@ enum GraphqlSoupEntityType {
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
+	"""
+	A paired runtime, listed only by attention feeds.
+	"""
+	HARNESS
 }
 
 """
@@ -10012,6 +10138,75 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	Source-specific metadata.
 	"""
 	sourceMetadata: JSON!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+A paired runtime (a macrod machine). Only attention feeds list it, for
+the access notifications filed under it; it opens in Settings → Machines.
+"""
+type GraphqlSoupHarness implements GraphqlSoupEntity {
+	"""
+	The harness identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for runtimes.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The machine's name.
+	"""
+	displayName: String
+	"""
+	Common runtime metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The machine's name.
+	"""
+	name: String!
+	"""
+	The principal identifier of the owner: a user or a team.
+	"""
+	ownerId: String!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -10330,6 +10525,20 @@ type GraphqlSoupReminderReference {
 }
 
 """
+An agent that stopped with its owner's runtime access.
+"""
+type GraphqlStoppedAgent {
+	"""
+	The agent's bot id.
+	"""
+	botId: ID!
+	"""
+	The agent's display name.
+	"""
+	name: String!
+}
+
+"""
 Text stored by a string select option.
 """
 type GraphqlStringPropertyOptionValue {
@@ -10516,6 +10725,45 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	Resolve up to 500 exact target user IDs, omitting unrelated or unknown people.
+	"""
+	contactsByUserIds(
+		"""
+		Target user IDs, not GraphqlContact record IDs; empty input returns no contacts.
+		"""
+		userIds: [ID!]!
+	): [GraphqlContact!]!
+	"""
+	Resolve up to 500 exact email addresses, restricted to the viewer's contacts or self.
+	"""
+	contactsByEmails(
+		"""
+		Email addresses normalized by the user-ID parser; empty input returns no contacts.
+		"""
+		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
+	Read one page of the viewer's personal contacts with resolved names.
+	"""
+	contacts(
+		"""
+		Maximum contacts to read, from 1 to 500; defaults to 100.
+		"""
+		limit: Int,
+		"""
+		Opaque nextCursor from an earlier page in this directory.
+		"""
+		after: String,
+		"""
+		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
+		"""
+		search: String,
+		"""
+		Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply.
+		"""
+		matching: GraphqlContactMatching
+	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
@@ -11379,6 +11627,11 @@ enum NotificationInboxRowType {
 	Access the viewer requested was granted.
 	"""
 	ACCESS_GRANTED
+	"""
+	The viewer's access to a runtime was removed, and agents of theirs
+	living there stopped.
+	"""
+	ACCESS_REMOVED
 }
 
 """
@@ -11497,6 +11750,21 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Inputs for setting the viewer's own order of one kind of saved view.
+"""
+input ReorderSavedViewsInput {
+	"""
+	Consumer kind whose order is replaced, such as `email`.
+	"""
+	kind: String!
+	"""
+	Visible views of that kind in their new order, at most 200; views left
+	out follow them by creation time.
+	"""
+	ids: [ID!]!
 }
 
 """
@@ -12490,6 +12758,10 @@ enum WorkFeedItemType {
 	Agent sessions.
 	"""
 	AGENT_SESSION
+	"""
+	Paired runtimes, through their access notifications.
+	"""
+	RUNTIME
 }
 
 """
