@@ -330,11 +330,21 @@ describe('a pushed change on a channel that follows its sequence', () => {
 
   it('reads a call row from the changes, not the page', async () => {
     await openAt(7);
-    mocks.fetchChannelChanges.mockResolvedValue(noChanges(8));
+    mocks.fetchChannelChanges.mockResolvedValue({
+      ...noChanges(8),
+      entries: [
+        entryToGraphql({
+          type: 'call',
+          message: root('c1', 3),
+          status: { state: 'live' },
+        }),
+      ],
+    });
     handleMessageEvent(
       event(8, { type: 'call_root_posted', message: root('c1', 3) })
     );
     await vi.waitFor(() => expect(channelSyncSeq(CHANNEL.id)).toBe(8));
+    expect(loadedRoot('c1')?.id).toBe('c1');
     expect(mocks.fetchLatestChannelPage).toHaveBeenCalledTimes(1);
   });
 
