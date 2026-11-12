@@ -2,10 +2,12 @@
 
 `/app/external` lists outside messaging accounts a person links into Macro and
 the chats added from them (entity type `external_chat`, one provider per
-chat). WhatsApp is the only provider today. The view, its rail button, its More-views entry on
-mobile and the `g x` shortcut exist only with the `enable-whatsapp-linked`
-flag; a deep link with the flag off goes to Home once the flag resolves. Turn
-it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
+chat). WhatsApp is the only provider today. Each provider has its own flag
+(WhatsApp: `enable-whatsapp-linked`, `features/external-view/provider-flags.ts`);
+the view, its rail button, its More-views entry on mobile and the `g x`
+shortcut exist while any provider's flag is on, and only those providers show.
+A deep link with every flag off goes to Home once the flags resolve. Turn
+WhatsApp on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
 The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/video-tutorials`, shaped like the page's chat rows) once that video is in its catalog, above the chats whether or not an account is linked.
 
 ## Where it is
@@ -18,12 +20,14 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   External sidebar is hidden on touch. Like Channels, the account list omits the floating split
   header; the WhatsApp title uses the shared collection header directly below
   the safe area on phones and tablets, above the scrollable **In Macro** chats.
-  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
+  Opening a chat drills in full-screen; its **Back to <provider>** button
+  (**Back to WhatsApp**; **Back** until the chat's detail loads) returns.
 
 ## Sidebar
 
-Desktop's External sidebar has one entry per provider; **WhatsApp** (the page
-below) has every WhatsApp chat the viewer can read (their own and shared ones; a person icon for
+Desktop's External sidebar has one entry per enabled provider; clicking one
+shows that provider's page in the main pane (the first provider's until another
+is picked). **WhatsApp** (the page below) has every WhatsApp chat the viewer can read (their own and shared ones; a person icon for
 direct chats, a group icon for groups) nested under it in folding sections like
 Chat's rail: **Direct messages**, **Groups**, and **Communities** with one
 section per community (its groups by their own name, its announcement group as
@@ -129,6 +133,15 @@ bottom sheet on touch. Sections: **Members (n)** (groups only; list
 an **Admin** badge, a search box past 12), **Sharing** (**Share…** opens the
 same share dialog), **Syncing** (owner only: **Stop syncing** asks to confirm),
 and "Owned by <owner>". The layout supports phone-width panes.
+
+Where the provider has threads (`limits.threads` on the detail; WhatsApp has
+none), a message that starts a thread shows the channel thread's reply chip
+("N replies", with a dot while unread) under it, and a row's **Reply** opens
+that message's thread instead of quoting it. Either expands the thread inline
+under the message, like a channel thread: its replies, **Hide replies**, and a
+**Reply in thread** composer that sends in that thread. Opening a thread marks it read. Thread
+replies stay out of the chat timeline and its unread count unless they were
+also sent to the chat.
 
 The composer placeholder names the caller's own sending phone ("Message Test 11
 as +1…"); otherwise the reason replies are unavailable shows in its place. Sending requires view access, the caller's own connected account,

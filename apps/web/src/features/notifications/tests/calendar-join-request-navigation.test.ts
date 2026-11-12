@@ -43,6 +43,7 @@ vi.mock('@core/constant/allBlocks', () => ({
 vi.mock('@core/constant/featureFlags', () => ({
   enableCalendarUi: true,
   enableReminders: false,
+  enableWhatsappLinked: { key: 'enable-whatsapp-linked' },
   isFeatureEnabled: () => mocks.calendarEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK: true,
 }));

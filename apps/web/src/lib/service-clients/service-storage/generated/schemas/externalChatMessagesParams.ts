@@ -7,6 +7,10 @@
 
 export type ExternalChatMessagesParams = {
   /**
+   * The replies in the thread this message starts, instead of the chat.
+   */
+  thread?: string | null;
+  /**
    * Last message id in the previous page.
    */
   before?: string | null;

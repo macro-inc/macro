@@ -36810,6 +36810,11 @@ export const externalChatResponse = zod
             .number()
             .min(externalChatResponseLimitsTextLimitBytesMin)
             .describe('Maximum UTF-8 bytes per text send.'),
+          threads: zod
+            .boolean()
+            .describe(
+              'Messages can start threads, and sends can reply in one.'
+            ),
         })
         .describe(
           'Operations implemented for a chat, independent of current permission.'
@@ -37028,9 +37033,15 @@ export const externalChatDeliveryResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -37045,13 +37056,19 @@ export const externalChatDeliveryResponse = zod.array(
 );
 
 /**
- * @summary Newest-first timeline through ordinary view access.
+ * @summary Newest-first timeline, or one thread's replies, through ordinary view access.
  */
 export const externalChatMessagesParams = zod.object({
   chat_id: zod.uuid(),
 });
 
 export const externalChatMessagesQueryParams = zod.object({
+  thread: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'The replies in the thread this message starts, instead of the chat.'
+    ),
   before: zod
     .uuid()
     .nullish()
@@ -37073,6 +37090,8 @@ export const externalChatMessagesResponseMessagesItemAttachmentsItemWidthMin = 0
 export const externalChatMessagesResponseMessagesItemRichSelectableCountMin = 0;
 
 export const externalChatMessagesResponseMessagesItemRichCallDurationSecondsMin = 0;
+
+export const externalChatMessagesResponseMessagesItemThreadReplyCountMin = 0;
 
 export const externalChatMessagesResponse = zod
   .object({
@@ -37504,6 +37523,38 @@ export const externalChatMessagesResponse = zod
             sentAt: zod.iso
               .datetime({})
               .describe('Timestamp assigned by the provider.'),
+            thread: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    lastReplyAt: zod.iso
+                      .datetime({})
+                      .describe('When the newest reply was sent.'),
+                    replyCount: zod
+                      .number()
+                      .min(
+                        externalChatMessagesResponseMessagesItemThreadReplyCountMin
+                      )
+                      .describe(
+                        'Replies in the thread, deleted ones excluded.'
+                      ),
+                    unread: zod
+                      .boolean()
+                      .describe('The viewer has replies they have not read.'),
+                  })
+                  .describe(
+                    'The replies in a thread, as its root message shows them.'
+                  ),
+              ])
+              .optional(),
+            threadBroadcast: zod
+              .boolean()
+              .describe('A thread reply that was also sent to the chat.'),
+            threadRoot: zod
+              .uuid()
+              .nullish()
+              .describe('The thread this message replies in.'),
             viewOnce: zod
               .boolean()
               .describe('Sent as view-once; Macro shows it like any media.'),
@@ -37622,6 +37673,8 @@ export const externalChatMessageResponseAttachmentsItemWidthMin = 0;
 export const externalChatMessageResponseRichSelectableCountMin = 0;
 
 export const externalChatMessageResponseRichCallDurationSecondsMin = 0;
+
+export const externalChatMessageResponseThreadReplyCountMin = 0;
 
 export const externalChatMessageResponse = zod
   .object({
@@ -37994,6 +38047,32 @@ export const externalChatMessageResponse = zod
     sentAt: zod.iso
       .datetime({})
       .describe('Timestamp assigned by the provider.'),
+    thread: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            lastReplyAt: zod.iso
+              .datetime({})
+              .describe('When the newest reply was sent.'),
+            replyCount: zod
+              .number()
+              .min(externalChatMessageResponseThreadReplyCountMin)
+              .describe('Replies in the thread, deleted ones excluded.'),
+            unread: zod
+              .boolean()
+              .describe('The viewer has replies they have not read.'),
+          })
+          .describe('The replies in a thread, as its root message shows them.'),
+      ])
+      .optional(),
+    threadBroadcast: zod
+      .boolean()
+      .describe('A thread reply that was also sent to the chat.'),
+    threadRoot: zod
+      .uuid()
+      .nullish()
+      .describe('The thread this message replies in.'),
     viewOnce: zod
       .boolean()
       .describe('Sent as view-once; Macro shows it like any media.'),
@@ -38109,7 +38188,11 @@ export const externalChatReadParams = zod.object({
 
 export const externalChatReadBody = zod
   .object({
-    messageId: zod.uuid().describe('Message in the addressed group.'),
+    messageId: zod
+      .uuid()
+      .describe(
+        'Message in the addressed chat; a thread reply marks its thread read.'
+      ),
   })
   .describe('Mark messages through this message read.');
 
@@ -38192,9 +38275,15 @@ export const externalChatSendsResponseItem = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -38277,9 +38366,15 @@ export const externalChatSendBody = zod
       .uuid()
       .nullish()
       .describe('Message being quoted, within this chat.'),
+    thread: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+      ),
   })
   .describe(
-    'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+    'Explicit send action from a person. Only deliberate sends reach the provider.'
   );
 
 export const externalChatSendResponse = zod
@@ -38354,9 +38449,15 @@ export const externalChatSendResponse = zod
           .uuid()
           .nullish()
           .describe('Message being quoted, within this chat.'),
+        thread: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Reply in the thread this message starts, where the provider has\nthreads ([`Capabilities::threads`]).'
+          ),
       })
       .describe(
-        'Explicit send action from a person. Only deliberate sends reach WhatsApp.'
+        'Explicit send action from a person. Only deliberate sends reach the provider.'
       ),
     state: zod
       .enum(['pending', 'sending', 'unknown', 'accepted', 'failed'])
@@ -79321,7 +79422,7 @@ export const whatsappChatsResponse = zod
                     id: zod.uuid().describe('External chat entity id.'),
                     name: zod
                       .string()
-                      .describe('Display name, following WhatsApp.'),
+                      .describe('Display name, following the provider.'),
                   })
                   .describe('An external chat entity bound to a remote chat.'),
               ])
@@ -79333,10 +79434,12 @@ export const whatsappChatsResponse = zod
                 zod.null(),
                 zod
                   .enum([
-                    'not_in_group',
+                    'not_member',
                     'community',
                     'own_chat',
                     'not_in_chat_list',
+                    'archived',
+                    'frozen',
                   ])
                   .describe(
                     "Why a chat can't be added to Macro; the app words it from the code."
@@ -79395,7 +79498,7 @@ export const whatsappChatsResponse = zod
                     id: zod.uuid().describe('External chat entity id.'),
                     name: zod
                       .string()
-                      .describe('Display name, following WhatsApp.'),
+                      .describe('Display name, following the provider.'),
                     ownerId: zod
                       .string()
                       .describe('Macro user who added the chat and shared it.'),

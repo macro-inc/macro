@@ -647,6 +647,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
 	}
+	... on GraphqlExternalChatAccountEndedMetadata {
+		externalChatAccountProvider: provider
+		externalChatAccountId: accountId
+		externalChatAccountName: accountName
+		externalChatAccountEndedReason: reason
+	}
 	... on GraphqlRoutineRunFinishedMetadata {
 		routineRunFinishedRoutineId: routineId
 		routineRunFinishedRoutineName: routineName

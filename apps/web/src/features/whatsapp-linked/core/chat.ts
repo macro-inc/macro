@@ -149,15 +149,17 @@ export function matchesChatQuery(chat: WhatsAppChat, query: string): boolean {
 
 /** Why a chat can't be added to Macro, as DSS reports it. */
 export type CannotAdd =
-  | 'not_in_group'
+  | 'not_member'
   | 'community'
   | 'own_chat'
-  | 'not_in_chat_list';
+  | 'not_in_chat_list'
+  | 'archived'
+  | 'frozen';
 
 /** The reason a chat can't be added, in the page's words. */
 export function cannotAddMessage(reason: CannotAdd): string {
   return match(reason)
-    .with('not_in_group', () => "Your WhatsApp isn't in this group anymore")
+    .with('not_member', () => "Your WhatsApp isn't in this group anymore")
     .with(
       'community',
       () => 'A community has no messages of its own; add one of its groups'
@@ -167,6 +169,8 @@ export function cannotAddMessage(reason: CannotAdd): string {
       'not_in_chat_list',
       () => "This chat isn't in your WhatsApp chat list yet"
     )
+    .with('archived', () => 'This chat is archived')
+    .with('frozen', () => 'This chat was disconnected')
     .exhaustive();
 }
 

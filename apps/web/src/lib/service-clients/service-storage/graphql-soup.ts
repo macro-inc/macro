@@ -52,6 +52,7 @@ import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
+import type { ExternalChatAccountEndedReason } from '@service-notification/generated/schemas/externalChatAccountEndedReason';
 import type { ExternalChatProvider } from '@service-notification/generated/schemas/externalChatProvider';
 import type { GithubPrCheckRunState } from '@service-notification/generated/schemas/githubPrCheckRunState';
 import type { GithubPrCommentKind } from '@service-notification/generated/schemas/githubPrCommentKind';
@@ -1501,6 +1502,22 @@ function mapGraphqlNotificationMetadata(
             snippet: metadata.newEmailSnippet,
           },
         }) satisfies NotifEventMember<'new_email'>
+    )
+    .with(
+      { __typename: 'GraphqlExternalChatAccountEndedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'external_chat_account_ended',
+          content: {
+            // GraphQL types these as strings; the server writes known ones.
+            provider:
+              metadata.externalChatAccountProvider as ExternalChatProvider,
+            accountId: metadata.externalChatAccountId,
+            accountName: metadata.externalChatAccountName,
+            reason:
+              metadata.externalChatAccountEndedReason as ExternalChatAccountEndedReason,
+          },
+        }) satisfies NotifEventMember<'external_chat_account_ended'>
     )
     .with(
       { __typename: 'GraphqlInboxReauthRequiredMetadata' },

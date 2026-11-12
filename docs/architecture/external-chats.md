@@ -28,6 +28,12 @@ may send). `external_chat_attachment` carries the provider's download state:
 an opaque sealed `locator`, and the claim columns; `sha256` stays empty until
 a download where the provider learns it only then.
 
+The reaction key gained the emoji (migrations `20261111230606`/`07`). Between
+those migrations and the deploy of the new session service, an old binary's
+reaction upsert (`ON CONFLICT (message_id, person_id)`) fails; the queued
+inbound event is retried with backoff (up to 20 attempts, hours apart at the
+end) and lands once the new binary runs.
+
 ## Access
 
 Viewing uses ordinary entity sharing: `entity_access` grants (people, teams,

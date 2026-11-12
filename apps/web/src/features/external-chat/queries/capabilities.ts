@@ -9,6 +9,7 @@ import {
   refreshExternalChatTimeline,
   useExternalChatDeliveryQuery,
   useExternalChatQueries,
+  useExternalChatThreadQuery,
 } from '@queries/external-chats';
 import { useExternalChatSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
@@ -168,6 +169,15 @@ export function createExternalChatCapabilities(
         );
         return result;
       }),
+    thread: (root) =>
+      sourceRead(useExternalChatThreadQuery(api, userId, chatId, root)),
+    markThreadRead: async (messageId) => {
+      await chatOperation('thread_read', chatId(), () =>
+        api.markRead(chatId(), messageId)
+      );
+      // The root's unread mark lives on the timeline.
+      await invalidateExternalChatMessages(userId(), chatId());
+    },
     fileUrl: staticFileIdEndpoint,
     markRead: async (messageId) => {
       await chatOperation('read', chatId(), () =>

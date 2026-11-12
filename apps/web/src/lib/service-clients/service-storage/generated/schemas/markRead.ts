@@ -9,6 +9,6 @@
  * Mark messages through this message read.
  */
 export interface MarkRead {
-  /** Message in the addressed group. */
+  /** Message in the addressed chat; a thread reply marks its thread read. */
   messageId: string;
 }

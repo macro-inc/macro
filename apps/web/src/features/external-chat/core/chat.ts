@@ -71,6 +71,8 @@ export type ChatDetail = {
     attachmentTypes: string[];
     editSeconds: number;
     mutations: ('reaction' | 'edit' | 'delete')[];
+    /** Messages start threads and sends can reply in one. */
+    threads: boolean;
   };
 };
 export type ChatMessage = {
@@ -89,17 +91,43 @@ export type ChatMessage = {
   edited: boolean;
   deleted: boolean;
   replyTo?: string;
+  /** The thread this message replies in. */
+  threadRoot?: string;
+  /** Replies to this message, when it starts a thread. */
+  thread?: ThreadSummary;
   /** Reactors earliest first; `mine` when the viewer is one of them. */
   reactions: { emoji: string; reactors: Person[]; mine: boolean }[];
   attachments: InboundAttachment[];
   /** Sent from this page and not yet in WhatsApp; never openable. */
   pending?: boolean;
 };
+/** A thread's replies, as its root shows them. */
+export type ThreadSummary = {
+  replyCount: number;
+  lastReplyAt: string;
+  /** The viewer has replies they haven't read. */
+  unread: boolean;
+};
 export type MessagePage = { messages: ChatMessage[]; before?: string };
 export type ChatSend =
-  /** `mentions`: participant ids; the text names each as `@<digits>`. */
-  | { kind: 'text'; text: string; replyTo?: string; mentions?: string[] }
-  | { kind: 'media'; uploadId: string; caption?: string; replyTo?: string }
+  /**
+   * `mentions`: participant ids; the text names each as `@<digits>`.
+   * `thread`: the root of the thread it replies in.
+   */
+  | {
+      kind: 'text';
+      text: string;
+      replyTo?: string;
+      mentions?: string[];
+      thread?: string;
+    }
+  | {
+      kind: 'media';
+      uploadId: string;
+      caption?: string;
+      replyTo?: string;
+      thread?: string;
+    }
   | { kind: 'reaction'; messageId: string; emoji: string }
   | { kind: 'edit'; messageId: string; text: string }
   | { kind: 'delete'; messageId: string };

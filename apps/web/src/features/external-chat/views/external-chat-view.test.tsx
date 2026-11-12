@@ -810,3 +810,68 @@ it('keeps syncing controls from a shared viewer', async () => {
   expect(await screen.findByRole('button', { name: 'Share…' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Stop syncing' })).toBeNull();
 });
+
+it('opens a thread under its root, reads it and replies in it', async () => {
+  const reply = {
+    ...messages[0],
+    id: 'reply-1',
+    body: 'Answered in the thread',
+    replyTo: undefined,
+    reactions: [],
+    threadRoot: 'message-1',
+  };
+  const fake = createFakeChat({
+    chat: { ...chat, limits: { ...chat.limits, threads: true } },
+    messages: [
+      {
+        ...messages[0],
+        thread: {
+          replyCount: 1,
+          lastReplyAt: new Date().toISOString(),
+          unread: true,
+        },
+      },
+      messages[1],
+    ],
+  });
+  fake.setThreadReplies({ 'message-1': [reply] });
+  mount(fake);
+  expect(screen.queryByText('Answered in the thread')).toBeNull();
+  fireEvent.click(screen.getByTitle('Expand thread'));
+  expect(screen.getByText('Answered in the thread')).toBeTruthy();
+  await waitFor(() =>
+    expect(fake.capabilities.markThreadRead).toHaveBeenCalledWith('reply-1')
+  );
+  expect(mocks.composer?.input.id).toBe('external-chat-thread-input-message-1');
+  await mocks.composer?.onSend?.(snapshot('Me too'));
+  await waitFor(() =>
+    expect(fake.capabilities.send).toHaveBeenCalledWith(
+      { kind: 'text', text: 'Me too', mentions: [], thread: 'message-1' },
+      expect.any(String)
+    )
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Hide replies' }));
+  expect(screen.queryByText('Answered in the thread')).toBeNull();
+});
+
+it('offers no threads where the provider has none', () => {
+  mount(createFakeChat());
+  expect(screen.queryByRole('button', { name: 'Reply in thread' })).toBeNull();
+  expect(screen.queryByTitle('Expand thread')).toBeNull();
+});
+
+it('replies in a thread from the row where the provider has threads', async () => {
+  const fake = createFakeChat({
+    chat: { ...chat, limits: { ...chat.limits, threads: true } },
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+  // A thread opens under the message instead of a quote in the chat composer.
+  expect(screen.queryByText('Replying to Ana Ruiz')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Hide replies' })).toBeTruthy();
+  expect(mocks.composer?.input.id).toBe('external-chat-thread-input-message-1');
+  expect(mocks.focus).toHaveBeenCalled();
+});

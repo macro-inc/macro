@@ -172,10 +172,12 @@ function writeFailure(
       }))
       .with(
         P.union(
-          'cannot_add_not_in_group',
+          'cannot_add_not_member',
           'cannot_add_community',
           'cannot_add_own_chat',
-          'cannot_add_not_in_chat_list'
+          'cannot_add_not_in_chat_list',
+          'cannot_add_archived',
+          'cannot_add_frozen'
         ),
         () => ({
           kind: 'refused',
@@ -260,11 +262,12 @@ export const externalChatApi: ExternalChatApi = {
         attachmentTypes: view.limits.attachmentTypes,
         editSeconds: view.limits.mutationWindowSeconds,
         mutations: view.limits.mutations,
+        threads: view.limits.threads,
       },
     };
   },
-  messages: async (id, before) => {
-    const page = await throwOnErr(() => client.messages(id, before));
+  messages: async (id, before, thread) => {
+    const page = await throwOnErr(() => client.messages(id, before, thread));
     return {
       before: page.nextCursor ?? undefined,
       messages: page.messages.map((message) => ({
@@ -285,6 +288,14 @@ export const externalChatApi: ExternalChatApi = {
         edited: !!message.editedAt,
         deleted: message.deleted,
         replyTo: message.replyTo ?? undefined,
+        threadRoot: message.threadRoot ?? undefined,
+        thread: message.thread
+          ? {
+              replyCount: message.thread.replyCount,
+              lastReplyAt: message.thread.lastReplyAt,
+              unread: message.thread.unread,
+            }
+          : undefined,
         reactions: message.reactions.map((reaction) => ({
           emoji: reaction.emoji,
           reactors: reaction.reactors.map(person),
@@ -309,6 +320,7 @@ export const externalChatApi: ExternalChatApi = {
       idempotencyKey,
       message: content(request),
       replyTo: 'replyTo' in request ? (request.replyTo ?? null) : null,
+      thread: 'thread' in request ? request.thread : undefined,
     });
     return result.isOk()
       ? ok(progress(result.value))

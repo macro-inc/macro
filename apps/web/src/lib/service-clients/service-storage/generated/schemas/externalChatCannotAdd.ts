@@ -8,13 +8,15 @@
 /**
  * Why a chat can't be added to Macro; the app words it from the code.
  */
-export type WhatsAppCannotAdd =
-  (typeof WhatsAppCannotAdd)[keyof typeof WhatsAppCannotAdd];
+export type ExternalChatCannotAdd =
+  (typeof ExternalChatCannotAdd)[keyof typeof ExternalChatCannotAdd];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const WhatsAppCannotAdd = {
-  not_in_group: 'not_in_group',
+export const ExternalChatCannotAdd = {
+  not_member: 'not_member',
   community: 'community',
   own_chat: 'own_chat',
   not_in_chat_list: 'not_in_chat_list',
+  archived: 'archived',
+  frozen: 'frozen',
 } as const;

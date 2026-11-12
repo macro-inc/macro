@@ -68,6 +68,7 @@ import {
   settingsTabToSlug,
 } from '@core/constant/settingsTabsConfig';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { z } from 'zod';
 import { APP_ROUTE_ID, NOT_FOUND_ROUTE_ID } from './app-route';
 
@@ -756,6 +757,8 @@ export const externalRoute = defineRoute({
   path: 'external',
   // A WhatsApp pairing handed off to Macro desktop, by id only.
   externalSearch: ['whatsappPairing'],
+  // The provider whose page to show, e.g. from an account notification.
+  state: z.object({ provider: z.enum(ExternalChatProvider) }),
 });
 
 export const bookingLinksRoute = defineRoute({

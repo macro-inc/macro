@@ -75,6 +75,10 @@ type LinkedServer = {
   lookups: Record<string, string>;
   /** Times the owner pressed Import. */
   historyImports: number;
+  /** The provider has threads (WhatsApp has none). */
+  threads: boolean;
+  /** Stored replies by the root they reply to, oldest first. */
+  threadReplies: Record<string, unknown[]>;
 };
 
 /** A person's phone-number JID. */
@@ -147,6 +151,8 @@ function server(): LinkedServer {
     registered: [],
     lookups: {},
     historyImports: 0,
+    threads: false,
+    threadReplies: {},
   };
 }
 
@@ -307,7 +313,16 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                 maxAttachments: 1,
                 mutations: ['reaction', 'edit', 'delete'],
                 attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
+                threads: state.threads,
               },
+            },
+          });
+        const thread = url.searchParams.get('thread');
+        if (suffix === '/messages' && thread)
+          return route.fulfill({
+            json: {
+              nextCursor: null,
+              messages: [...(state.threadReplies[thread] ?? [])].reverse(),
             },
           });
         if (suffix === '/messages')
@@ -328,7 +343,16 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                   ]
                 : [
                     ...state.imported,
-                    incomingMessage,
+                    {
+                      ...incomingMessage,
+                      thread: state.threadReplies['message-1']
+                        ? {
+                            replyCount: state.threadReplies['message-1'].length,
+                            lastReplyAt: '2026-10-21T10:05:00Z',
+                            unread: true,
+                          }
+                        : null,
+                    },
                     {
                       ...incomingMessage,
                       id: 'message-2',
@@ -1131,6 +1155,61 @@ test('an independent group reads, replies, reacts and pages through channel rows
   );
   expect(unexpected).toEqual([]);
 });
+
+for (const mobile of [false, true]) {
+  test.describe(`${mobile ? 'mobile' : 'desktop'} thread`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    test('a provider with threads opens a thread inline and replies in it', async ({
+      page,
+    }) => {
+      const state = server();
+      state.threads = true;
+      state.threadReplies = {
+        'message-1': [
+          {
+            ...incomingMessage,
+            id: 'reply-1',
+            body: 'Answered in the thread',
+            sentAt: '2026-10-21T10:05:00Z',
+            reactions: [],
+            attachments: [],
+            threadRoot: 'message-1',
+          },
+        ],
+      };
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      await expect(page.getByText('Answered in the thread')).toHaveCount(0);
+      await page.getByTitle('Expand thread').click();
+      await expect(page.getByText('Answered in the thread')).toBeVisible();
+      await expect.poll(() => state.readMessages).toContain('reply-1');
+      const reply = page.getByRole('textbox', { name: 'Reply in thread' });
+      await reply.click();
+      await page.keyboard.type('Thanks, in the thread');
+      // Enter sends on desktop; touch sends with the thread composer's button
+      // (the chat's own composer follows it, empty and disabled).
+      if (mobile)
+        await page.getByRole('button', { name: 'Send message' }).last().click();
+      else await reply.press('Enter');
+      await expect.poll(() => state.outgoing.length).toBe(1);
+      expect(state.outgoing[0]).toMatchObject({
+        message: { type: 'text', text: 'Thanks, in the thread' },
+        thread: 'message-1',
+      });
+      await page.screenshot({
+        path: test
+          .info()
+          .outputPath(`external-thread-${mobile ? 'phone' : 'desktop'}.png`),
+      });
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
 
 /** One of each WhatsApp message type Macro shows, oldest first. */
 function everyMessageType() {
