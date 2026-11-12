@@ -614,6 +614,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 sender_id: actor,
                 guest_name: None,
                 imported_author: None,
+                import_order: None,
                 bot_profile: None,
                 mentions: Vec::new(),
                 triggered_via: None,
