@@ -2,6 +2,7 @@ use super::*;
 use pollster::block_on;
 
 mod calendar;
+mod channel_timeline;
 mod people;
 mod soup;
 mod watch;
