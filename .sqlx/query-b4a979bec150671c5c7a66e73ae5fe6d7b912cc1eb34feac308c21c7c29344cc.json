@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT pg_try_advisory_lock(hashtextextended('whatsapp-account:' || $1::uuid::text, 0)) AS \"locked!\"",
+  "query": "SELECT pg_try_advisory_lock(hashtextextended($2 || $1::uuid::text, 0)) AS \"locked!\"",
   "describe": {
     "columns": [
       {
@@ -11,12 +11,13 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
       null
     ]
   },
-  "hash": "08926aeffe64402c98fe63e2a117ceca96b884431998ad1b59e702c39d71cb82"
+  "hash": "b4a979bec150671c5c7a66e73ae5fe6d7b912cc1eb34feac308c21c7c29344cc"
 }

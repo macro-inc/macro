@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.account_id AS \"id!\" FROM slack_chat_membership m WHERE m.chat_id = $1 AND m.consent_ended_at IS NULL\n            UNION\n            SELECT a.id FROM slack_account a JOIN slack_conversation c ON c.account_id = a.id\n                JOIN external_chat e ON e.remote_id = c.conversation_id AND e.provider = 'slack'\n            WHERE e.id = $1 AND a.user_id = $2 AND a.state IN ('connecting', 'connected')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e087ff8eedbf536080a9d836aec62500b8eb058fe04b39676f33804bf629d29a"
+}

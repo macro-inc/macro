@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_account SET state = $2, ended_reason = $3, generation = generation + 1,\n            sign_out_requested = $4,\n            credentials = CASE WHEN $4 THEN credentials END,\n            data_key_ciphertext = CASE WHEN $4 THEN data_key_ciphertext END,\n            kms_key_id = CASE WHEN $4 THEN kms_key_id END,\n            encryption_version = CASE WHEN $4 THEN encryption_version END,\n            updated_at = now()\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bdbe0e289589d018672991dd9b96dbdb9f77d9622a50385b6d3fd4b7c1666be"
+}

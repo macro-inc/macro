@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, a.generation FROM slack_account a\n            JOIN slack_chat_membership m ON m.account_id = a.id AND m.chat_id = $1\n            JOIN external_chat e ON e.id = m.chat_id\n            JOIN slack_conversation c ON c.account_id = a.id AND c.conversation_id = e.remote_id\n            WHERE a.user_id = $2 AND a.state IN ('connecting', 'connected')\n              AND m.generation = a.generation AND m.consent_ended_at IS NULL\n              AND c.is_member AND NOT c.is_archived AND c.frozen_reason IS NULL\n            ORDER BY a.last_connected_at DESC NULLS LAST, a.id LIMIT 1\n            FOR SHARE OF a",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1932eda1d8f8d53c0f25fff2c1c07ba5d47dd85272c10bc44275bf5ae298839e"
+}

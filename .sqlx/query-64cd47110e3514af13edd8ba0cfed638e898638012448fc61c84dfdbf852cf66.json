@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.account_id FROM slack_chat_membership m JOIN slack_account a ON a.id = m.account_id\n            WHERE m.chat_id = $1 AND m.consent_ended_at IS NULL AND m.generation = a.generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "64cd47110e3514af13edd8ba0cfed638e898638012448fc61c84dfdbf852cf66"
+}

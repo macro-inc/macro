@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.blob_id, a.state, a.mime AS \"mime!\", a.filename AS \"filename!\", e.user_id\n        FROM external_chat_attachment a JOIN external_chat e ON e.id = a.chat_id\n        WHERE a.chat_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4 AND a.account_id = $5\n        FOR UPDATE OF a",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "mime!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "66ccf74f6434230705ed36d1acd2571b359bb7b69ebca7e2ed20eb0b41ba6e45"
+}

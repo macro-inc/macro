@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO external_chat_message (id, message_id, chat_id, person_id, source_id, origin, source_at,\n            body, thread_root, thread_broadcast, kind, mentions, effect_revision)\n        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $11, $9, $10, 1)\n        ON CONFLICT (chat_id, person_id, source_id) DO UPDATE SET\n            thread_root = COALESCE(external_chat_message.thread_root, excluded.thread_root),\n            thread_broadcast = external_chat_message.thread_broadcast OR excluded.thread_broadcast,\n            mentions = CASE WHEN cardinality(external_chat_message.mentions) = 0\n                THEN excluded.mentions ELSE external_chat_message.mentions END\n        RETURNING id, xmax = 0 AS \"created!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "c169a8bc994bff87528cf2631ddc55f57b6b8cdf96149a77f585f4bd250e89bb"
+}

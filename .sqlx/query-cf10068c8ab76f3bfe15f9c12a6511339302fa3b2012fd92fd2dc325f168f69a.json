@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_login_attempt SET step = 'failed', step_data = $1, input = NULL,\n            sealed_input = NULL, sealed_input_key = NULL, sealed_state = NULL, sealed_state_key = NULL,\n            claimed_until = NULL, updated_at = now()\n        WHERE expires_at < now() AND step NOT IN ('done', 'failed', 'cancelled')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf10068c8ab76f3bfe15f9c12a6511339302fa3b2012fd92fd2dc325f168f69a"
+}

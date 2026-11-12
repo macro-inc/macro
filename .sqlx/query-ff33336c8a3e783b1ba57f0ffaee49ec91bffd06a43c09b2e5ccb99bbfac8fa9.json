@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_conversation SET conversation_id = $3 WHERE account_id = $1 AND conversation_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff33336c8a3e783b1ba57f0ffaee49ec91bffd06a43c09b2e5ccb99bbfac8fa9"
+}

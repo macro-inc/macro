@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM slack_read_mark WHERE chat_id = $1 AND account_id = $2 AND thread_ts = $3 AND ts = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "21a7c3a470a522dfa4cafff59b20ac90077cd501998f11774b04381b97bb768b"
+}

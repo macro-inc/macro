@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.account_id, c.conversation_id, c.kind, c.name, c.topic, c.is_private, c.is_archived,\n                c.is_member, c.frozen_reason, c.connected_team_ids, c.direct_user_id, c.last_activity_at,\n                c.unread_count\n            FROM slack_conversation c JOIN slack_account a ON a.id = c.account_id\n            WHERE a.user_id = $1 AND a.state IN ('connecting', 'connected')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "conversation_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "topic",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_private",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_member",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "frozen_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "connected_team_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "direct_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_activity_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "unread_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "b8a6e51e28f49a3659a5552069ba816e28266f6e74f87dce9a572a360df01253"
+}

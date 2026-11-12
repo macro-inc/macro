@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat SET\n                backfill_cursor = COALESCE(to_jsonb($2::text), backfill_cursor),\n                backfill_imported = backfill_imported + $3,\n                backfill_state = CASE WHEN $4 THEN 'done'\n                    WHEN backfill_imported + $3 >= $5 THEN 'partial' ELSE 'running' END\n            WHERE id = $1 AND backfill_state = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1c836fff422beddf3f57c3ac50e8787846f1694bfd51967d9dd4d043d7af06e8"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_login_attempt SET step = $2, step_data = $3, input = NULL,\n            sealed_input = NULL, sealed_input_key = NULL,\n            sealed_state = $4, sealed_state_key = $5,\n            kms_key_id = COALESCE($6, kms_key_id), encryption_version = COALESCE($7, encryption_version),\n            claimed_until = NULL, updated_at = now()\n        WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Bytea",
+        "Bytea",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40821068b383512c5ce2a7bc53df9362df67fa33be4743b6b06ad1b15b57e693"
+}
