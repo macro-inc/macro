@@ -251,8 +251,10 @@ function HomeEntityDetailBody(props: {
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={props.target.type !== 'channel'}>
         <ViewShell.TopBar class="touch:flex">
-          <ViewBreadcrumbs.Outlet aria-label="Home location" />
-          <div class="ml-auto flex items-center gap-1">
+          <ViewShell.TopBarTitle>
+            <ViewBreadcrumbs.Outlet aria-label="Home location" />
+          </ViewShell.TopBarTitle>
+          <ViewShell.TopBarActions>
             <SidePanel.HeaderActionsOutlet />
             <Show when={documentShareTarget()}>
               {(target) => (
@@ -265,7 +267,7 @@ function HomeEntityDetailBody(props: {
               )}
             </Show>
             <SidePanel.Toggle />
-          </div>
+          </ViewShell.TopBarActions>
         </ViewShell.TopBar>
       </Show>
       <div class="relative min-h-0 min-w-0 flex-1">

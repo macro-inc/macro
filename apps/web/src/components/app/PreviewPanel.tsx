@@ -114,23 +114,28 @@ export function PreviewFrame(props: PreviewFrameProps) {
           class="relative w-full py-0 touch:flex"
         >
           <Show when={props.headerLeading}>
-            <div class="flex shrink-0 items-center">{props.headerLeading}</div>
+            <ViewShell.TopBarTitle class="shrink-0">
+              <div class="flex shrink-0 items-center">
+                {props.headerLeading}
+              </div>
+            </ViewShell.TopBarTitle>
           </Show>
+          {/* Block contributions bring their own touch islands. */}
           <PriorityCollapseOverflowSensor
             controller={headerCollapseController}
             truncateAsLastResort
-            class="relative h-full min-w-0 shrink overflow-hidden"
+            class="relative h-full min-w-0 shrink overflow-hidden touch:overflow-visible"
             contentClass={
               props.headerLeading
-                ? 'flex h-full items-center gap-1 pl-0.5'
-                : 'flex h-full items-center gap-1'
+                ? 'flex h-full items-center gap-1 pl-0.5 touch:gap-2 touch:pl-0'
+                : 'flex h-full items-center gap-1 touch:gap-2'
             }
             contentRef={(element) => {
               scopedLayoutRefs.headerLeft = element;
             }}
           />
           <div
-            class="flex h-full grow shrink items-center justify-end gap-1"
+            class="flex h-full grow shrink items-center justify-end gap-1 touch:gap-2"
             ref={(ref) => {
               scopedLayoutRefs.headerRight = ref;
             }}

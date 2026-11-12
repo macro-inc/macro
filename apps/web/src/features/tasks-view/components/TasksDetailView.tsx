@@ -24,11 +24,13 @@ function TaskDetailTopBar(props: { documentId: string }) {
 
   return (
     <ViewShell.TopBar class="touch:flex">
-      <ViewBreadcrumbs.Outlet
-        aria-label="Task location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      />
-      <div class="ml-auto flex shrink-0 items-center gap-1">
+      <ViewShell.TopBarTitle>
+        <ViewBreadcrumbs.Outlet
+          aria-label="Task location"
+          fallback={<EntityDetailBreadcrumbSkeleton />}
+        />
+      </ViewShell.TopBarTitle>
+      <ViewShell.TopBarActions>
         <SidePanel.HeaderActionsOutlet />
         <ShareTrigger
           onClick={openShare}
@@ -37,7 +39,7 @@ function TaskDetailTopBar(props: { documentId: string }) {
           hotkeyScope={panel.splitHotkeyScope}
         />
         <SidePanel.Toggle />
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }

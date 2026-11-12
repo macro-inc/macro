@@ -1,5 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitPanel } from '@components/app/split-panel';
 import { useBlockId } from '@core/block';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -33,11 +34,17 @@ export default function PrBlock() {
         />
         <div class="flex flex-col size-full min-w-0">
           <ViewShell.TopBar class="hidden touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-            <Show when={detail.data()?.pullRequest.status}>
-              {(status) => <PrStatusIcon status={status()} />}
-            </Show>
-            <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
+            <HeaderIsland class="px-1">
+              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+            </HeaderIsland>
+            <ViewShell.TopBarTitle class="gap-2">
+              <Show when={detail.data()?.pullRequest.status}>
+                {(status) => <PrStatusIcon status={status()} />}
+              </Show>
+              <span class="min-w-0 truncate text-sm font-semibold">
+                {name()}
+              </span>
+            </ViewShell.TopBarTitle>
             <PrDetailActions detail={detail.data()} actions={actions} />
           </ViewShell.TopBar>
           <Show when={detail.data()}>

@@ -1,3 +1,4 @@
+import { TopBarActions } from '@app/components/view-shell/touch-top-bar';
 import type { EmailThreadListNavigation } from '@app/features/email-thread/context/email-thread-context';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
@@ -36,7 +37,7 @@ export function EmailThreadHeaderActions(props: {
   share?: JSX.Element;
 }) {
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+    <TopBarActions class="not-touch:gap-2">
       {props.controls}
       <SidePanel.HeaderActionsOutlet />
       <Show when={props.share}>
@@ -47,6 +48,6 @@ export function EmailThreadHeaderActions(props: {
         </Show>
       </Show>
       <SidePanel.Toggle size="md" />
-    </div>
+    </TopBarActions>
   );
 }

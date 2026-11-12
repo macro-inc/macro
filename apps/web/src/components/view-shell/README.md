@@ -84,8 +84,18 @@ Sheet visibility is temporary and independent of the saved desktop sidebar
 preference. `ViewSidebar.Item` dismisses a sheet after destination activation;
 disclosure controls keep it open. Focus returns to the registered list trigger.
 The sheet occupies no resize track and does not resize or remount the list or
-preview. Each detail header owns safe-area clearance without another sidebar
-trigger; floating channel headers keep their measured local chrome.
+preview. Detail headers add no sidebar trigger; floating channel headers keep
+their measured local chrome.
+
+On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
+`CollectionPanes` detail floats over the pane as mobile chrome, like the split
+header of a standalone view. Wrap its title in `ViewShell.TopBarTitle` and its
+trailing actions in `ViewShell.TopBarActions` (or other parts in `HeaderIsland`);
+each becomes an island on touch and renders inline on desktop. The pane reserves
+the bar's measured height as `--mobile-content-inset-top` and fades content
+beneath it. A bar nested in a hosted detail stacks below the bars before it.
+Content under a bar that does not float (no enclosing pane) keeps resetting the
+inset; check with `useTouchTopBarsFloat`.
 
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow

@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitPanel } from '@components/app/split-panel';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -102,18 +103,20 @@ export function ViewSidebarToggle(props: {
 /** Takes a narrow list view from the open entity back to its list. */
 function ViewListBackButton(props: { onClick: () => void }) {
   return (
-    <Button
-      aria-label={t('common.back')}
-      tooltip={t('common.back')}
-      variant="ghost"
-      size="icon-xs"
-      class="shrink-0"
-      // The way out of an inline preview is reachable before it is used.
-      data-allow-focus-in-preview
-      onClick={() => props.onClick()}
-    >
-      <ArrowLeftIcon class="size-4 touch:size-6" />
-    </Button>
+    <HeaderIsland class="px-1">
+      <Button
+        aria-label={t('common.back')}
+        tooltip={t('common.back')}
+        variant="ghost"
+        size="icon-xs"
+        class="shrink-0"
+        // The way out of an inline preview is reachable before it is used.
+        data-allow-focus-in-preview
+        onClick={() => props.onClick()}
+      >
+        <ArrowLeftIcon class="size-4 touch:size-6" />
+      </Button>
+    </HeaderIsland>
   );
 }
 

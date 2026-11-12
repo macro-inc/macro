@@ -11,6 +11,12 @@ import {
   on,
   Show,
 } from 'solid-js';
+import {
+  createTouchTopBarInset,
+  TouchTopBarFade,
+  TouchTopBarInsetProvider,
+  touchTopBarInsetStyle,
+} from './touch-top-bar';
 import { ViewShell } from './ViewShell';
 import {
   useViewShellInternal,
@@ -55,6 +61,7 @@ export function CollectionPanes(props: {
   });
   const swiping = () =>
     stacked() && (swipe.isDragging() || swipe.isAnimatingOut());
+  const topBarInset = createTouchTopBarInset();
   createComputed(
     on(stacked, (active) => {
       if (!active) swipe.reset();
@@ -123,9 +130,12 @@ export function CollectionPanes(props: {
             <FloatRegionScope anchor={detailFrame} active={detailVisible}>
               <div
                 ref={setDetailFrame}
-                class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden touch:[--mobile-content-inset-top:0px]"
+                class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden"
                 classList={{ 'bg-panel': stacked() }}
-                style={swiping() ? swipe.styleForSlot(true) : undefined}
+                style={{
+                  ...touchTopBarInsetStyle(topBarInset.height(), '0px'),
+                  ...(swiping() ? swipe.styleForSlot(true) : undefined),
+                }}
                 data-view-shell-detail
                 on:touchstart={(event) => {
                   // A narrow detail returns within its own workspace. Do not
@@ -138,14 +148,17 @@ export function CollectionPanes(props: {
                 inert={!detailVisible()}
                 aria-hidden={!detailVisible()}
               >
-                <Show
-                  when={props.hasDetail}
-                  fallback={props.empty ?? <CollectionEmpty />}
-                >
-                  <ViewShellReturnToListContext.Provider value={returnToList}>
-                    {props.children}
-                  </ViewShellReturnToListContext.Provider>
-                </Show>
+                <TouchTopBarInsetProvider value={topBarInset.value}>
+                  <Show
+                    when={props.hasDetail}
+                    fallback={props.empty ?? <CollectionEmpty />}
+                  >
+                    <ViewShellReturnToListContext.Provider value={returnToList}>
+                      {props.children}
+                    </ViewShellReturnToListContext.Provider>
+                  </Show>
+                </TouchTopBarInsetProvider>
+                <TouchTopBarFade height={topBarInset.height()} />
               </div>
             </FloatRegionScope>
           </ViewShellPaneContext.Provider>

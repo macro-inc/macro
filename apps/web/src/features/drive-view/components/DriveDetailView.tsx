@@ -85,11 +85,13 @@ function DriveDetailTopBar() {
 
   return (
     <ViewShell.TopBar class="touch:flex">
-      <DriveBreadcrumbsOutlet
-        aria-label="File location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      />
-      <div class="ml-auto flex shrink-0 items-center gap-1">
+      <ViewShell.TopBarTitle>
+        <DriveBreadcrumbsOutlet
+          aria-label="File location"
+          fallback={<EntityDetailBreadcrumbSkeleton />}
+        />
+      </ViewShell.TopBarTitle>
+      <ViewShell.TopBarActions>
         <SidePanel.HeaderActionsOutlet />
         <Show when={activeDetail()}>
           {(detail) => (
@@ -102,7 +104,7 @@ function DriveDetailTopBar() {
           )}
         </Show>
         <SidePanel.Toggle />
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }

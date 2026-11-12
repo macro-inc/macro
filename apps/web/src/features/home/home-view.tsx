@@ -142,9 +142,11 @@ function HomeViewRoot() {
                   fallback={() => (
                     <Show when={isTouchDevice()} fallback={<HomeChatStart />}>
                       <ViewShell.TopBar class="touch:flex">
-                        <ViewSidebar.Title caret={false}>
-                          Notifications
-                        </ViewSidebar.Title>
+                        <ViewShell.TopBarTitle>
+                          <ViewSidebar.Title caret={false}>
+                            Notifications
+                          </ViewSidebar.Title>
+                        </ViewShell.TopBarTitle>
                       </ViewShell.TopBar>
                       <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-ink-muted">
                         Select a notification to open it here.

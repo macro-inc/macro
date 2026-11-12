@@ -19,17 +19,10 @@ export function HomeViewLayout(props: {
           {props.list}
         </ViewShell.Aside>
       </Show>
+      {/* Inline previews float their top bars over the detail, which
+          reserves them through the content inset. */}
       <ViewShell.Main
-        class={
-          props.inlinePreview
-            ? 'overflow-hidden touch:pt-[calc(var(--safe-top,0px)+0.5rem)]'
-            : undefined
-        }
-        style={
-          props.inlinePreview
-            ? { '--mobile-content-inset-top': '0px' }
-            : undefined
-        }
+        class={props.inlinePreview ? 'overflow-hidden' : undefined}
       >
         <Show when={props.inlinePreview} fallback={props.list}>
           {props.children}

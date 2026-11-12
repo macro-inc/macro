@@ -1,5 +1,8 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
+import {
+  useTouchTopBarsFloat,
+  ViewBreadcrumbs,
+} from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -215,6 +218,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
+  const barFloats = useTouchTopBarsFloat();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -298,7 +302,10 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           )}
         </Show>
       </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
+      <div
+        class="relative min-h-0 min-w-0 flex-1"
+        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
+      >
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

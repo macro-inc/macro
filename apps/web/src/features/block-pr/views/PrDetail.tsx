@@ -1,10 +1,11 @@
-import { ViewShell } from '@app/components/view-shell';
+import { useTouchTopBarsFloat, ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitPanel } from '@components/app/split-panel';
 import {
@@ -177,8 +178,12 @@ export function PrDetailBody(props: PrDetailBodyProps) {
 
 /** Native hosts place this content below their header inside `PrChangesProvider`. */
 export function PrDetailContent(props: PrDetailBodyProps) {
+  const barFloats = useTouchTopBarsFloat();
   return (
-    <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
+    <div
+      class="relative min-h-0 min-w-0 flex-1"
+      classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
+    >
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
@@ -218,7 +223,7 @@ export function PrDetailActions(props: {
   );
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <ViewShell.TopBarActions class="not-touch:gap-2">
       <Show when={props.detail}>
         <HeaderActionGroup label="Sharing">
           <Tooltip label="Share pull request">
@@ -247,7 +252,7 @@ export function PrDetailActions(props: {
       <ChangesToggle />
       <SidePanel.Toggle />
       <ShareModal />
-    </div>
+    </ViewShell.TopBarActions>
   );
 }
 
@@ -277,23 +282,27 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         <ChangesSplit>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
             <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              <Show when={detail.data()?.pullRequest.status}>
-                {(status) => <PrStatusIcon status={status()} />}
-              </Show>
-              <span class="min-w-0 truncate text-sm font-semibold">
-                {name()}
-              </span>
-              <div class="shrink-0">
-                <SplitFileMenu
-                  id={props.foreignEntityId}
-                  itemType="foreign"
-                  name={name()}
-                  entityKind="pr"
-                  permissions={Permissions.CAN_VIEW}
-                  ops={operations()}
-                />
-              </div>
+              <HeaderIsland class="px-1">
+                <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              </HeaderIsland>
+              <ViewShell.TopBarTitle class="gap-2">
+                <Show when={detail.data()?.pullRequest.status}>
+                  {(status) => <PrStatusIcon status={status()} />}
+                </Show>
+                <span class="min-w-0 truncate text-sm font-semibold">
+                  {name()}
+                </span>
+                <div class="shrink-0">
+                  <SplitFileMenu
+                    id={props.foreignEntityId}
+                    itemType="foreign"
+                    name={name()}
+                    entityKind="pr"
+                    permissions={Permissions.CAN_VIEW}
+                    ops={operations()}
+                  />
+                </div>
+              </ViewShell.TopBarTitle>
               <PrDetailActions detail={detail.data()} actions={actions} />
             </ViewShell.TopBar>
             <PrDetailContent

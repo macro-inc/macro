@@ -14,6 +14,7 @@ vi.mock('@ui', async () => ({
   Button: (await import('@app/components/ui/components/Button')).Button,
   ButtonGroup: (await import('@app/components/ui/components/ButtonGroup'))
     .ButtonGroup,
+  cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

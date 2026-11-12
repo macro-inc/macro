@@ -24,6 +24,7 @@ export {
 } from './ListDropdowns';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
+export { useTouchTopBarsFloat } from './touch-top-bar';
 export { VIEW_SHELL_TOUR } from './tour';
 export {
   type UseViewControlHotkeysOptions,

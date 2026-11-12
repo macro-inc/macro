@@ -36,6 +36,15 @@ import {
 import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
 import { NavigationSheet } from './NavigationSheet';
+import {
+  createTouchTopBarInset,
+  TopBarActions,
+  TopBarTitle,
+  TouchTopBarFade,
+  TouchTopBarInsetProvider,
+  touchTopBarInsetStyle,
+  useTouchTopBarInset,
+} from './touch-top-bar';
 import { ViewNavigationControls } from './ViewNavigationControls';
 import {
   useViewShellInternal,
@@ -740,10 +749,20 @@ function Main(props: ViewShellMainProps) {
     'children',
     'class',
     'ref',
+    'style',
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
   const [frame, setFrame] = createSignal<HTMLElement>();
+  const topBarInset = createTouchTopBarInset();
+  // Main keeps the panel's inset (lists reserve their own) unless a
+  // floating top bar covers it.
+  const mainStyle = () => {
+    const inset = touchTopBarInsetStyle(topBarInset.height());
+    if (!inset) return local.style;
+    if (typeof local.style === 'string') return local.style;
+    return { ...local.style, ...inset };
+  };
   const layout = ws.main.layout;
   const target = () => {
     const width = layout().width;
@@ -791,20 +810,28 @@ function Main(props: ViewShellMainProps) {
           anchor={frame}
           active={() => ws.narrowList() !== 'list'}
         >
-          <main
-            {...rest}
-            ref={mergeRefs(
-              setFrame,
-              local.ref,
-              tourTarget(VIEW_SHELL_TOUR.main)
-            )}
-            class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
-            data-view-shell-main=""
-            inert={ws.narrowList() === 'list'}
-            aria-hidden={ws.narrowList() === 'list'}
-          >
-            {local.children}
-          </main>
+          <TouchTopBarInsetProvider value={topBarInset.value}>
+            <main
+              {...rest}
+              ref={mergeRefs(
+                setFrame,
+                local.ref,
+                tourTarget(VIEW_SHELL_TOUR.main)
+              )}
+              class={cn(
+                'flex size-full min-h-0 min-w-0 flex-col',
+                topBarInset.height() > 0 && 'touch:relative',
+                local.class
+              )}
+              style={mainStyle()}
+              data-view-shell-main=""
+              inert={ws.narrowList() === 'list'}
+              aria-hidden={ws.narrowList() === 'list'}
+            >
+              {local.children}
+              <TouchTopBarFade height={topBarInset.height()} />
+            </main>
+          </TouchTopBarInsetProvider>
         </FloatRegionScope>
       </ViewShellPaneContext.Provider>
     </Resize.Panel>
@@ -820,20 +847,27 @@ function TopBar(
     'ref',
     'floating',
   ]);
-  const pane = useContext(ViewShellPaneContext);
+  const [bar, setBar] = createSignal<HTMLDivElement>();
+  // On touch the bar floats over its pane as islands, like a standalone
+  // split header; `floating` bars are positioned by their own layout.
+  const inset = useTouchTopBarInset(bar, () => !local.floating);
+  const floats = inset.floats;
   return (
     <SplitHeaderContextMenu>
       <div
         {...rest}
-        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
+        ref={mergeRefs(setBar, local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
           local.class,
-          isTouchDevice() &&
-            pane === 'detail' &&
-            !local.floating &&
-            'touch:h-auto touch:min-h-[calc(var(--safe-top,0px)+3.5rem)] touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-2'
+          floats() &&
+            'touch:pointer-events-none touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:h-auto touch:min-h-0 touch:gap-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-3'
         )}
+        style={
+          floats() && inset.offset() > 0
+            ? { top: `${inset.offset()}px`, 'padding-top': '0px' }
+            : undefined
+        }
         data-view-shell-top-bar=""
       >
         <ViewNavigationControls />
@@ -895,6 +929,7 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
       px: initialWidth ?? layout().width,
     };
   };
+  const topBarInset = createTouchTopBarInset();
 
   return (
     <ViewShellPaneContext.Provider value="detail">
@@ -902,56 +937,64 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
         anchor={frame}
         active={() => ws.detail.placement() !== 'hidden'}
       >
-        <Switch>
-          <Match when={ws.detail.placement() === 'inline'}>
-            <Resize.Panel
-              id={`${ws.id}-detail`}
-              index={2}
-              minSize={layout().min}
-              maxSize={layout().max}
-              target={target()}
-            >
+        <TouchTopBarInsetProvider value={topBarInset.value}>
+          <Switch>
+            <Match when={ws.detail.placement() === 'inline'}>
+              <Resize.Panel
+                id={`${ws.id}-detail`}
+                index={2}
+                minSize={layout().min}
+                maxSize={layout().max}
+                target={target()}
+              >
+                <div
+                  {...rest}
+                  ref={mergeRefs(setDetailFrame, local.ref)}
+                  class={cn('relative size-full min-h-0 min-w-0', local.class)}
+                  style={touchTopBarInsetStyle(topBarInset.height(), '0px')}
+                  data-view-shell-detail=""
+                  data-view-shell-detail-placement="inline"
+                >
+                  {local.children}
+                  <TouchTopBarFade height={topBarInset.height()} />
+                </div>
+              </Resize.Panel>
+            </Match>
+            <Match when={ws.detail.placement() === 'overlay'}>
               <div
                 {...rest}
                 ref={mergeRefs(setDetailFrame, local.ref)}
                 class={cn(
-                  'size-full min-h-0 min-w-0 touch:[--mobile-content-inset-top:0px]',
+                  'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
                   local.class
                 )}
+                style={{
+                  width: `${layout().width}px`,
+                  'max-width': '100%',
+                  ...touchTopBarInsetStyle(topBarInset.height()),
+                }}
                 data-view-shell-detail=""
-                data-view-shell-detail-placement="inline"
+                data-view-shell-detail-placement="overlay"
               >
                 {local.children}
+                <TouchTopBarFade height={topBarInset.height()} />
               </div>
-            </Resize.Panel>
-          </Match>
-          <Match when={ws.detail.placement() === 'overlay'}>
-            <div
-              {...rest}
-              ref={mergeRefs(setDetailFrame, local.ref)}
-              class={cn(
-                'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
-                local.class
-              )}
-              style={{ width: `${layout().width}px`, 'max-width': '100%' }}
-              data-view-shell-detail=""
-              data-view-shell-detail-placement="overlay"
-            >
-              {local.children}
-            </div>
-          </Match>
-          <Match when={ws.detail.placement() === 'replace'}>
-            <div
-              {...rest}
-              ref={mergeRefs(setDetailFrame, local.ref)}
-              class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
-              data-view-shell-detail=""
-              data-view-shell-detail-placement="replace"
-            >
-              {local.children}
-            </div>
-          </Match>
-        </Switch>
+            </Match>
+            <Match when={ws.detail.placement() === 'replace'}>
+              <div
+                {...rest}
+                ref={mergeRefs(setDetailFrame, local.ref)}
+                class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
+                style={touchTopBarInsetStyle(topBarInset.height())}
+                data-view-shell-detail=""
+                data-view-shell-detail-placement="replace"
+              >
+                {local.children}
+                <TouchTopBarFade height={topBarInset.height()} />
+              </div>
+            </Match>
+          </Switch>
+        </TouchTopBarInsetProvider>
       </FloatRegionScope>
     </ViewShellPaneContext.Provider>
   );
@@ -962,6 +1005,8 @@ export const ViewShell = Object.assign(Root, {
   Aside,
   Main,
   TopBar,
+  TopBarTitle,
+  TopBarActions,
   Header,
   Content,
   Detail,

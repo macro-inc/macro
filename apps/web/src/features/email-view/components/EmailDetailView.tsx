@@ -20,6 +20,7 @@ import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
 import { registerEmailHotkeys } from '@block-email/util/emailHotkeys';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   useCanAutofocusSplitContent,
@@ -249,17 +250,22 @@ export function EmailDetailView(props: {
           {/* The subject sits atop the thread, so the header only goes
               back; the reading pane already shows the list beside it. */}
           <Show when={!pane}>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              tooltip="Back"
-              aria-label="Back"
-              onClick={closeThread}
-            >
-              <ArrowLeftIcon class="size-4 touch:size-6" />
-            </Button>
+            <HeaderIsland class="px-1">
+              <Button
+                variant="ghost"
+                size="icon-md"
+                tooltip="Back"
+                aria-label="Back"
+                onClick={closeThread}
+              >
+                <ArrowLeftIcon class="size-4 touch:size-6" />
+              </Button>
+            </HeaderIsland>
           </Show>
-          <div ref={setHeaderMenuMount} class="flex items-center" />
+          {/* Empty while the subject in the thread holds the menu. */}
+          <ViewShell.TopBarTitle>
+            <div ref={setHeaderMenuMount} class="flex items-center" />
+          </ViewShell.TopBarTitle>
           <EmailThreadHeaderActions
             controls={<div ref={setControlsMount} class="flex items-center" />}
             share={

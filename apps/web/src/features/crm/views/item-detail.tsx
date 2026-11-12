@@ -128,11 +128,13 @@ export function CrmItemDetail(props: {
             {(current) => (
               <ViewShell.TopBar class="touch:flex">
                 {props.navigation}
-                <ViewBreadcrumbs.Outlet
-                  aria-label="CRM item location"
-                  fallback={<EntityDetailBreadcrumbSkeleton />}
-                />
-                <div class="ml-auto flex shrink-0 items-center gap-1">
+                <ViewShell.TopBarTitle>
+                  <ViewBreadcrumbs.Outlet
+                    aria-label="CRM item location"
+                    fallback={<EntityDetailBreadcrumbSkeleton />}
+                  />
+                </ViewShell.TopBarTitle>
+                <ViewShell.TopBarActions>
                   <SidePanel.HeaderActionsOutlet />
                   <ShareTrigger
                     onClick={openShare}
@@ -141,7 +143,7 @@ export function CrmItemDetail(props: {
                     hotkeyScope={panel.splitHotkeyScope}
                   />
                   <SidePanel.Toggle />
-                </div>
+                </ViewShell.TopBarActions>
               </ViewShell.TopBar>
             )}
           </Show>
