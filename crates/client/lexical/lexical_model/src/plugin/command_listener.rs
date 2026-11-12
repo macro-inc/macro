@@ -18,6 +18,10 @@ impl std::fmt::Debug for CommandListenerId {
 /// An ordinary synchronous host listener, independent of foreign node support.
 /// The caller lends the actual dispatching transaction; publication remains outer.
 pub trait CommandListener: Send + Sync + 'static {
+    /// Immutable declaration captured into the actual slot at registration.
+    fn key_down_keys(&self) -> KeyDownKeys {
+        KeyDownKeys::All
+    }
     /// Stop propagation on Yes, preserve typed errors on failure.
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error>;
 }
@@ -31,6 +35,9 @@ impl Plugin for CommandPlugin {
     }
     fn commands(&self) -> &[CommandRegistration] {
         &self.registration
+    }
+    fn key_down_keys(&self) -> KeyDownKeys {
+        self.callback.key_down_keys()
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         self.callback.handle(tx, command)
@@ -63,6 +70,11 @@ impl Editor {
             registration,
             Listener {
                 priority: registration.priority,
+                key_down_keys: if registration.command == CommandKind::KeyDown {
+                    callback.key_down_keys()
+                } else {
+                    KeyDownKeys::All
+                },
                 plugin: Arc::new(CommandPlugin {
                     registration: [registration],
                     callback: callback.clone(),
@@ -72,7 +84,7 @@ impl Editor {
                 foreign_id: None,
             },
         );
-        self.listener_table = listener_table(&self.listeners);
+        self.rebuild_listener_table();
         id
     }
     /// Whether this exact registration still belongs to the current editor.
@@ -86,6 +98,9 @@ impl Editor {
     }
     /// Remove an ordinary registration; repeated or unrelated cleanup is harmless.
     pub fn unregister_command_listener(&mut self, id: &CommandListenerId) {
+        if !self.has_command_listener(id) {
+            return;
+        }
         for list in self.listeners.values_mut() {
             list.retain(|listener| {
                 listener
@@ -95,7 +110,7 @@ impl Editor {
             });
         }
         self.listeners.retain(|_, list| !list.is_empty());
-        self.listener_table = listener_table(&self.listeners);
+        self.rebuild_listener_table();
     }
 }
 impl Transaction<'_> {

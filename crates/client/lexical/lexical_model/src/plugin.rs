@@ -7,12 +7,33 @@ pub use command_listener::*;
 /// One isolated follow-up: true publishes it; false discards all staged changes.
 /// Allocated keys remain consumed even when the transaction is discarded.
 pub type ConditionalUpdate<'a> = Box<dyn FnOnce(&mut Transaction<'_>) -> Result<bool, Error> + 'a>;
+/// Registration-time declaration, never a host predicate during dispatch.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum KeyDownKeys {
+    /// Admit every actual event key.
+    #[default]
+    All,
+    /// Admit only the declared static logical keys.
+    Only(&'static [&'static str]),
+}
+impl KeyDownKeys {
+    fn matches(self, command: &Command) -> bool {
+        match (self, command) {
+            (Self::Only(keys), Command::KeyDown(event)) => keys.contains(&event.key.as_ref()),
+            _ => true,
+        }
+    }
+}
 /// Immutable extension behavior; mutable state belongs in ExtensionState.
 pub trait Plugin: Send + Sync + 'static {
     /// Diagnostic name.
     fn name(&self) -> &'static str;
     /// Command subscriptions, read once at build.
     fn commands(&self) -> &[CommandRegistration];
+    /// Default/foreign listeners admit every actual event key.
+    fn key_down_keys(&self) -> KeyDownKeys {
+        KeyDownKeys::All
+    }
     /// Handle one subscribed command.
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error>;
     /// Prepare an isolated update after the shared hooks, borrowing committed facts.
@@ -103,21 +124,61 @@ impl PriorityLevels {
     }
 }
 /// First-registration-ordered command priorities exposed to the host.
-#[derive(Clone, Debug, Default)]
-pub struct ListenerTable(IndexMap<CommandKind, PriorityLevels>);
+#[derive(Clone, Debug)]
+pub struct ListenerTable {
+    levels: IndexMap<CommandKind, PriorityLevels>,
+    key_down_only: IndexMap<CommandPriority, Vec<&'static str>>,
+    generation: Option<std::num::NonZeroU64>,
+}
+static NEXT_LISTENER_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
+fn next_listener_generation() -> Option<std::num::NonZeroU64> {
+    allocate_listener_generation(&NEXT_LISTENER_GENERATION)
+}
+fn allocate_listener_generation(
+    counter: &std::sync::atomic::AtomicU64,
+) -> Option<std::num::NonZeroU64> {
+    use std::sync::atomic::Ordering;
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            next.checked_add(1)
+        })
+        .ok()
+        .and_then(std::num::NonZeroU64::new)
+}
+impl Default for ListenerTable {
+    fn default() -> Self {
+        Self {
+            levels: IndexMap::default(),
+            key_down_only: IndexMap::default(),
+            generation: next_listener_generation(),
+        }
+    }
+}
 impl ListenerTable {
     /// Levels for a subscribed command.
     pub fn levels(&self, kind: CommandKind) -> Option<PriorityLevels> {
-        self.0.get(&kind).copied()
+        self.levels.get(&kind).copied()
     }
     /// Commands in first-registration order.
     pub fn iter(&self) -> impl Iterator<Item = (CommandKind, PriorityLevels)> + '_ {
-        self.0.iter().map(|(kind, levels)| (*kind, *levels))
+        self.levels.iter().map(|(kind, levels)| (*kind, *levels))
+    }
+    /// Opaque metadata stamp, not document version or publication authority.
+    pub fn generation(&self) -> Option<u64> {
+        self.generation.map(std::num::NonZeroU64::get)
+    }
+    /// Fully filtered priority levels only; All dominates an entire level.
+    pub fn key_down_only(&self) -> impl Iterator<Item = (CommandPriority, &[&'static str])> {
+        self.key_down_only
+            .iter()
+            .map(|(priority, keys)| (*priority, keys.as_slice()))
     }
 }
 #[derive(Clone)]
 pub(crate) struct Listener {
     pub(crate) priority: CommandPriority,
+    pub(crate) key_down_keys: KeyDownKeys,
     pub(crate) plugin: Arc<dyn Plugin>,
     pub(crate) command_callback: Option<(CommandListenerId, Arc<dyn CommandListener>)>,
     #[cfg(feature = "foreign-nodes")]
@@ -144,10 +205,42 @@ pub(crate) fn listener_table(lists: &Listeners) -> ListenerTable {
     let mut table = ListenerTable::default();
     for (kind, list) in lists {
         for listener in list {
-            table.0.entry(*kind).or_default().0 |= 1 << listener.priority as u8;
+            table.levels.entry(*kind).or_default().0 |= 1 << listener.priority as u8;
+        }
+    }
+    if let Some(list) = lists.get(&CommandKind::KeyDown) {
+        for priority in PRIORITIES {
+            let listeners = list.iter().filter(|listener| listener.priority == priority);
+            let mut keys = vec![];
+            let mut filtered = false;
+            for listener in listeners {
+                let KeyDownKeys::Only(names) = listener.key_down_keys else {
+                    filtered = false;
+                    break;
+                };
+                filtered = true;
+                for name in names {
+                    if !keys.contains(name) {
+                        keys.push(*name);
+                    }
+                }
+            }
+            if filtered {
+                table.key_down_only.insert(priority, keys);
+            }
         }
     }
     table
+}
+impl Editor {
+    pub(crate) fn rebuild_listener_table(&mut self) {
+        let unavailable = self.listener_table.generation.is_none();
+        self.listener_table = listener_table(&self.listeners);
+        // Exhaustion is terminal even though registration remains infallible.
+        if unavailable {
+            self.listener_table.generation = None;
+        }
+    }
 }
 pub(crate) fn listeners(plugins: &[Arc<dyn Plugin>]) -> (Listeners, ListenerTable) {
     let mut lists = Listeners::default();
@@ -158,6 +251,11 @@ pub(crate) fn listeners(plugins: &[Arc<dyn Plugin>]) -> (Listeners, ListenerTabl
                 *registration,
                 Listener {
                     priority: registration.priority,
+                    key_down_keys: if registration.command == CommandKind::KeyDown {
+                        plugin.key_down_keys()
+                    } else {
+                        KeyDownKeys::All
+                    },
                     plugin: plugin.clone(),
                     command_callback: None,
                     #[cfg(feature = "foreign-nodes")]
@@ -205,30 +303,44 @@ impl Transaction<'_> {
                     .get(&command.kind())
                     .into_iter()
                     .flatten()
-                    .any(|listener| listener.priority == priority)
+                    .any(|listener| {
+                        listener.priority == priority && listener.key_down_keys.matches(command)
+                    })
             {
                 self.flush()?;
             }
+            #[cfg(feature = "foreign-nodes")]
+            let had_candidates = self
+                .editor
+                .listeners
+                .get(&command.kind())
+                .into_iter()
+                .flatten()
+                .any(|listener| listener.priority == priority);
             let list = self
                 .editor
                 .listeners
                 .get(&command.kind())
                 .into_iter()
                 .flatten()
-                .filter(|listener| listener.priority == priority)
+                .filter(|listener| {
+                    listener.priority == priority && listener.key_down_keys.matches(command)
+                })
                 .cloned()
                 .collect::<Vec<_>>();
             #[cfg(not(feature = "foreign-nodes"))]
             {
                 visited |= !list.is_empty();
             }
+            #[cfg(feature = "foreign-nodes")]
+            let excluded_level = had_candidates && list.is_empty();
             for listener in list {
                 if listener.plugin.handle(self, command)? == Handled::Yes {
                     return Ok(Handled::Yes);
                 }
             }
             #[cfg(feature = "foreign-nodes")]
-            if flush_levels && self.dirty_since_flush {
+            if flush_levels && self.dirty_since_flush && !excluded_level {
                 self.flush()?;
             }
         }
@@ -542,5 +654,7 @@ impl Editor {
 }
 #[cfg(test)]
 mod after_commit_test;
+#[cfg(test)]
+mod key_down_keys_test;
 #[cfg(test)]
 mod test;

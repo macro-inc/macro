@@ -1,5 +1,7 @@
 # Lexical model
 
+- Capture static KeyDown eligibility once in each actual listener slot; preserve default All and real priority flush semantics, rebuild full metadata only on real membership changes, and disable negative filtering on checked generation exhaustion.
+
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered

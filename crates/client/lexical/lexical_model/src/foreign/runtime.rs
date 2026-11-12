@@ -88,6 +88,7 @@ impl Editor {
             registration,
             plugin::Listener {
                 priority: registration.priority,
+                key_down_keys: plugin::KeyDownKeys::All,
                 plugin: Arc::new(CommandPlugin {
                     registration: [registration],
                     callback: listener,
@@ -96,7 +97,7 @@ impl Editor {
                 foreign_id: Some(id),
             },
         );
-        self.listener_table = plugin::listener_table(&self.listeners);
+        self.rebuild_listener_table();
         id
     }
     /// Remove a host listener; unknown ids and transform ids have no effect.
@@ -114,7 +115,7 @@ impl Editor {
                 self.listeners.shift_remove(&kind);
             }
         }
-        self.listener_table = plugin::listener_table(&self.listeners);
+        self.rebuild_listener_table();
     }
     /// Add a host transform after build-time transforms, including a direct replacement.
     pub fn register_foreign_transform(
