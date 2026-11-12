@@ -1,0 +1,27 @@
+apps/web/src/features/settings/NativeAppInfo.tsx
+  s_1a4b7035344b2c::t_b8a60d183935b3 3-7,19-23,30
+docs/agent-guide/settings.md
+  s_1a4b7035344b2c::t_b8a60d183935b3 354-356
+apps/web/tauri/src-tauri/src/lib.rs
+  s_1a4b7035344b2c::t_65ad7c14d208b9 96-104,463
+apps/web/tauri/src-tauri/build.rs
+  s_1a4b7035344b2c::t_65ad7c14d208b9 44-50
+apps/web/src/features/settings/app-build.ts
+  s_1a4b7035344b2c::t_b8a60d183935b3 19-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dc8a671695d4f4f75108400cf0ad9e9a16d4d7b1",
+  "prompts": {},
+  "sessions": {
+    "s_1a4b7035344b2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61e2b3a9-5888-47ef-b6a0-5efdb1a003a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
