@@ -54,3 +54,21 @@ export function readNativeFormattingSelection(
     elementsInRange,
   };
 }
+
+/** Current model selection text without clipboard HTML or internal serialization. */
+export function readNativeSelectionText(view: EditorView): string {
+  const generation = view.mirror.keyGeneration;
+  if (generation === null)
+    throw new Error(
+      'Native selection text requires an acknowledged generation'
+    );
+  const result = queryApplication(view, 'group-b.selection-text', {});
+  if (
+    !isRecord(result) ||
+    result.generation !== generation ||
+    view.mirror.keyGeneration !== generation ||
+    typeof result.text !== 'string'
+  )
+    throw new Error('Invalid native selection text');
+  return result.text;
+}

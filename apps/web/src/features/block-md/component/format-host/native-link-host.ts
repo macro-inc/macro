@@ -13,6 +13,7 @@ import { isTouchDevice } from '../../../../lib/core/mobile/isTouchDevice';
 import { fireAndForget } from '../../../../lib/core/util/fireAndForget';
 import { openExternalUrl } from '../../../../lib/core/util/url';
 import { createNativeFormattingActions } from './native-actions';
+import { readNativeSelectionText } from './native-selection';
 
 const enter = createViewCommand(
   'Key(Enter)',
@@ -104,7 +105,7 @@ export function createNativeDocumentLinkMenuHost(
       });
       return;
     }
-    const text = view.clipboard.formats(0).plain;
+    const text = readNativeSelectionText(view);
     const epoch = ++openingEpoch;
     opening = true;
     let prepared:

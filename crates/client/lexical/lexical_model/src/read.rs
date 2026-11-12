@@ -109,6 +109,8 @@ impl<'state> StateRef<'state> {
     }
 
     pub(crate) fn slot(self, key: NodeKey) -> Option<&'state NodeSlot> {
+        #[cfg(test)]
+        crate::test_work::record_slot_lookup();
         self.state.nodes.get(&key).map(AsRef::as_ref)
     }
     /// Root.

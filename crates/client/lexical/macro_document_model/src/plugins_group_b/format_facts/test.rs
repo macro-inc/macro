@@ -255,3 +255,124 @@ fn list_kinds_preserve_source_labels_and_javascript_string_coercion() -> Result<
     }
     Ok(())
 }
+
+#[test]
+fn selection_text_query_is_closed_current_and_does_not_change_state() -> Result<(), Error> {
+    let editor = editor();
+    for data in [Value::Null, json!([]), json!({"extra":true})] {
+        assert!(query("group-b.selection-text", &data, 0, editor.state()).is_err());
+    }
+    assert!(matches!(
+        query(
+            "group-b.selection-text",
+            &json!({}),
+            u32::MAX,
+            editor.state()
+        ),
+        Err(Error::Invariant("application query generation"))
+    ));
+    let before = editor.state().to_json()?;
+    assert_eq!(
+        query("group-b.selection-text", &json!({}), 0, editor.state())?,
+        Some(json!({"generation":0,"text":""}))
+    );
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}
+
+#[test]
+fn selection_text_query_preserves_range_list_table_node_and_null_text() -> Result<(), Error> {
+    use lexical_rich_nodes::list::{ListItemNode, ListType};
+    use lexical_rich_nodes::table::{TableCellNode, TableNode, TableRowNode};
+    let mut editor = editor();
+    let ((first, second, list, item, table, left, right), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("a😀b")?;
+        tx.append(p, &[first.key()])?;
+        let q = tx.create(Paragraph::default())?;
+        let second = tx.create_text("second")?;
+        tx.append(q, &[second.key()])?;
+        let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let li = tx.create(ListItemNode::default())?;
+        let item = tx.create_text("item")?;
+        tx.append(li, &[item.key()])?;
+        tx.append(list, &[li.key()])?;
+        let table = tx.create(TableNode::default())?;
+        let row = tx.create(TableRowNode::default())?;
+        let left = tx.create(TableCellNode::default())?;
+        let right = tx.create(TableCellNode::default())?;
+        for (cell, value) in [(left.key(), "A"), (right.key(), "B")] {
+            let p = tx.create(Paragraph::default())?;
+            let t = tx.create_text(value)?;
+            tx.append(p, &[t.key()])?;
+            tx.append(cell, &[p.key()])?;
+        }
+        tx.append(row, &[left.key(), right.key()])?;
+        tx.append(table, &[row.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key(), q.key(), list.key(), table.key()])?;
+        Ok((
+            first.key(),
+            second.key(),
+            list.key(),
+            item.key(),
+            table.key(),
+            left.key(),
+            right.key(),
+        ))
+    })?;
+    let mut node = NodeSelection::new();
+    node.add(list);
+    for (selection, expected) in [
+        (None, ""),
+        (
+            Some(Selection::Range(RangeSelection::collapsed(Point::text(
+                first,
+                Utf16Offset(1),
+            )))),
+            "",
+        ),
+        (
+            Some(Selection::Range(RangeSelection::new(
+                Point::text(first, Utf16Offset(1)),
+                Point::text(second, Utf16Offset(3)),
+            ))),
+            "😀b\nsec",
+        ),
+        (
+            Some(Selection::Range(RangeSelection::new(
+                Point::text(second, Utf16Offset(3)),
+                Point::text(first, Utf16Offset(1)),
+            ))),
+            "😀b\nsec",
+        ),
+        (
+            Some(Selection::Range(RangeSelection::new(
+                Point::text(item, Utf16Offset(0)),
+                Point::text(item, Utf16Offset(4)),
+            ))),
+            "item",
+        ),
+        (Some(Selection::Node(node)), "item"),
+        (
+            Some(Selection::Table(TableSelection::new(table, left, right))),
+            "A\tB\n",
+        ),
+    ] {
+        editor.update(|tx| tx.set_selection(selection))?;
+        let before = editor.state().to_json()?;
+        let selection_before = editor.state().selection().cloned();
+        let generation = editor.state().max_key().generation();
+        assert_eq!(
+            query(
+                "group-b.selection-text",
+                &json!({}),
+                generation,
+                editor.state()
+            )?,
+            Some(json!({"generation":generation,"text":expected}))
+        );
+        assert_eq!(editor.state().to_json()?, before);
+        assert_eq!(editor.state().selection(), selection_before.as_ref());
+    }
+    Ok(())
+}

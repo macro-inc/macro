@@ -30,6 +30,7 @@ struct Counts {
     generation: u64,
     phase: Option<Phase>,
     text_visits: usize,
+    slot_lookups: usize,
     diff: ChildWork,
     splice: ChildWork,
     /// Child work outside the diff and splice phases.
@@ -61,6 +62,10 @@ impl Measurement {
             }));
         });
         Self(PhantomData)
+    }
+
+    pub(crate) fn slot_lookups(&self) -> usize {
+        COUNTS.with(|counts| counts.get().expect("active measurement").slot_lookups)
     }
 
     pub(crate) fn text_visits(&self) -> usize {
@@ -203,6 +208,39 @@ pub(crate) fn general_splice_forced() -> bool {
 impl Drop for GeneralSplice {
     fn drop(&mut self) {
         FORCE_GENERAL_SPLICE.with(|force| force.set(self.previous));
+    }
+}
+
+// Count every graph lookup for the entire measurement, not only a chosen phase.
+pub(crate) fn record_slot_lookup() {
+    COUNTS.with(|counts| {
+        if let Some(mut value) = counts.get() {
+            value.slot_lookups = value
+                .slot_lookups
+                .checked_add(1)
+                .expect("work count overflow");
+            counts.set(Some(value));
+        }
+    });
+}
+
+thread_local! {
+    static LEGACY_SELECTION_ORDER: Cell<bool> = const { Cell::new(false) };
+}
+
+pub(crate) fn legacy_selection_order() -> bool {
+    LEGACY_SELECTION_ORDER.with(Cell::get)
+}
+
+pub(crate) struct LegacySelectionOrder(bool);
+
+pub(crate) fn force_legacy_selection_order() -> LegacySelectionOrder {
+    LegacySelectionOrder(LEGACY_SELECTION_ORDER.with(|value| value.replace(true)))
+}
+
+impl Drop for LegacySelectionOrder {
+    fn drop(&mut self) {
+        LEGACY_SELECTION_ORDER.with(|value| value.set(self.0));
     }
 }
 

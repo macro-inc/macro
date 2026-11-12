@@ -63,7 +63,38 @@ impl<'state> StateRef<'state> {
         if self.has_ancestor(a.key(), b.key()) {
             return Ok(!matches!(b, Boundary::Child(_)));
         }
-        self.is_before(a.key(), b.key())
+        #[cfg(test)]
+        if crate::test_work::legacy_selection_order() {
+            return self.is_before(a.key(), b.key());
+        }
+        // Preserve the old comparator's missing-node preflight, including when
+        // a foreign inherited projection supplied the boundary's framework data.
+        self.node_or_err(a.key())?;
+        self.node_or_err(b.key())?;
+        // Compare sibling branches from the endpoints, not from the common
+        // parent's first child. Short selections must not scan an unrelated
+        // document prefix to determine their direction.
+        let Some(CommonAncestor::Branch { ancestor, a, b }) =
+            self.common_ancestor(a.key(), b.key())
+        else {
+            return Ok(false);
+        };
+        let mut next = self.next_sibling(a);
+        let mut previous = self.prev_sibling(a);
+        for _ in 0..self.children_size(ancestor) {
+            if next == Some(b) {
+                return Ok(true);
+            }
+            if previous == Some(b) {
+                return Ok(false);
+            }
+            if next.is_none() && previous.is_none() {
+                break;
+            }
+            next = next.and_then(|key| self.next_sibling(key));
+            previous = previous.and_then(|key| self.prev_sibling(key));
+        }
+        Err(Error::Invariant("common ancestor branch is not a child"))
     }
     pub(crate) fn point_is_before(self, a: Point, b: Point) -> Result<bool, Error> {
         self.boundary_before(self.boundary(a)?, self.boundary(b)?)
@@ -336,3 +367,6 @@ impl<'state> StateRef<'state> {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

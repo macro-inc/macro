@@ -17,7 +17,10 @@ import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createNativeFormattingActions } from './native-actions';
 import type { NativeDocumentLinkMenuHost } from './native-link-host';
-import { readNativeFormattingSelection } from './native-selection';
+import {
+  readNativeFormattingSelection,
+  readNativeSelectionText,
+} from './native-selection';
 import {
   type NativeFormattingTableFacts,
   readNativeFormattingTableFacts,
@@ -221,7 +224,7 @@ export function createNativeDocumentFormattingHost(
           (textSelection.anchor.key !== textSelection.focus.key ||
             textSelection.anchor.offset !== textSelection.focus.offset ||
             textSelection.anchor.type !== textSelection.focus.type)
-            ? view.clipboard.formats(0).plain
+            ? readNativeSelectionText(view)
             : '';
         setSelection(selected);
         setTables(table);

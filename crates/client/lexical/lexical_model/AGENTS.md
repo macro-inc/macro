@@ -320,3 +320,5 @@ Apply configured nested-state export order only after all known serializers, fre
 Observe reported follow-up errors through EditorCore's optional metadata hook at actual effect emission; preserve the original Arc and exact effect index without extending Output, effects, or wire records.
 
 Observe MainCommitOutcome only at the designated successful transaction commit before post-commit hooks; early noop output carriers are NotPublished, while actual empty or unhandled commits are Published. Keep correlation and host callbacks outside the model. Output.commits may be empty for either an early carrier or an actual empty transaction; never infer publication from its emptiness.
+
+Measure read work with the shared cfg(test) test_work RAII helper; count raw slot lookups across the complete measured call, and extend that helper rather than creating parallel counters. Compare selection-read sibling branches from their endpoint links without changing global is_before, preserving legacy selected-node/text/error behavior.

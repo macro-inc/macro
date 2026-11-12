@@ -32,4 +32,4 @@ Use the actual document-body call chain MarkdownPopup → FormatTools withinPopu
 
 Render Comment inside NativeBodyFormatPopup, never a second toolbar: show it for commenters while the live root exists and the session draft capability is mounted, after one divider only when formatting controls are present; keep formatting gated on the host interaction accessor. Keep the popup open with the Source toast on failed insertion and close it on success.
 
-Skip clipboard export when the published selection is nonrange or its range endpoints have the same key, offset and type; preserve the expanded selection export until a real native plain-text reader is available, and keep the table popup driven by its own facts.
+Read expanded selection text through the generation-checked group-b.selection-text query inside latestPublished and before link preparation; never request clipboard formats on publication, keep full formats demand-driven by copy/cut/dragstart, and keep the table popup driven by its own facts.

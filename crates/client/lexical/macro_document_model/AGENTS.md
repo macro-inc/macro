@@ -14,7 +14,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 - Prepare vertical block stops with block_navigation from the pending tree and selection; select only actual noninline keyboard-selectable image, video, horizontalrule, database-query and document-card nodes, using fresh host edge rectangles only when the caret is inside a block.
 
-- Read toolbar range format, link presence and ordered top-level kinds through group-b.format-facts; preserve Source endpoint, shadow-root and raw list-kind rules, and leave table facts with group-b.table-facts.
+- Read toolbar range format, link presence and ordered top-level kinds through group-b.format-facts, and plain selection text through the closed generation-checked group-b.selection-text query without clipboard export; preserve Source endpoint, shadow-root and raw list-kind rules, and leave table facts with group-b.table-facts.
 
 - Prepare expanded link editing with the existing empty-URL toggle policy and preserve the range; match Source cancel retaining the empty link until a paired product fix changes both engines.
 - Reject non-object payloads before derived struct decoding in object-only commands and queries, because Serde also accepts positional sequences.

@@ -77,7 +77,7 @@ pub(super) fn query(
     generation: u32,
     state: &EditorState,
 ) -> Result<Option<Value>, Error> {
-    if name != "group-b.format-facts" {
+    if name != "group-b.format-facts" && name != "group-b.selection-text" {
         return Ok(None);
     }
     if generation != state.max_key().generation() {
@@ -87,6 +87,12 @@ pub(super) fn query(
         return Err(Error::Invariant("format facts request must be an object"));
     }
     let _: Request = serde_json::from_value(data.clone())?;
+    if name == "group-b.selection-text" {
+        return Ok(Some(json!({
+            "generation": generation,
+            "text": state.view().selection_text_content()?,
+        })));
+    }
     let range = state
         .selection()
         .and_then(Selection::as_range)
