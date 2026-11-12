@@ -837,6 +837,9 @@ mod identity_test;
 #[cfg(test)]
 mod id_state_test;
 
+#[cfg(all(test, feature = "application"))]
+mod code_gate_test;
+
 #[cfg(test)]
 mod namespace_test;
 

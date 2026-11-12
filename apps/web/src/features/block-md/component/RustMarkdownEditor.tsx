@@ -521,7 +521,9 @@ export default function RustMarkdownEditor(props: {
               accessories.dispose();
             });
             setCodeAccessories(accessories);
-            overlayLifecycle.add(installNativeCodeHighlightDOM(mounted.view));
+            // Gutters and highlight languages stay dormant until code highlighting activates.
+            if (mounted.codeHighlighting)
+              overlayLifecycle.add(installNativeCodeHighlightDOM(mounted.view));
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()

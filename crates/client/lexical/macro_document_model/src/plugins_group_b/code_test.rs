@@ -377,6 +377,84 @@ fn code_transform_keeps_the_original_element_after_linebreak_and_valid_negative_
 // Source: @lexical/code-prism $codeNodeTransform sets tokenizer.defaultLanguage on a
 // code node whose language is undefined; Macro sets PrismTokenizer.defaultLanguage to
 // 'plaintext'. Only editors that register code highlighting run it.
+/// The code-highlighting activation: a session tokenizer reporting every grammar as not loaded.
+struct NoGrammars;
+impl CodeTokenProvider for NoGrammars {
+    fn is_loaded(&self, _: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        Ok(false)
+    }
+    fn tokenize(&self, _: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        Err(CodeTokenError::Host)
+    }
+}
+
+fn highlighting_surface() -> EditorBuilder {
+    surface::preset_builder_with_mode_and_tokens(
+        EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+        CodeTokens::new(std::sync::Arc::new(NoGrammars), "no-grammars"),
+    )
+}
+
+// Dormant until activation: without a session tokenizer a view-attached surface installs no code
+// highlighting, so it writes no default language (local or remote), reports nothing and keeps an
+// orphaned code-highlight as it is.
+#[test]
+fn a_view_attached_surface_without_a_tokenizer_installs_no_code_highlighting() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (code, commit) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    assert_eq!(code_language(&editor, code), None);
+    assert_eq!(commit.events_of(&code::CODE_HIGHLIGHT).count(), 0);
+    let (paragraph, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let highlight = tx.create(lexical_rich_nodes::code::CodeHighlightNode {
+            highlight_type: Some("keyword".into()),
+        })?;
+        tx.text(highlight)?.set_text_content("let")?;
+        tx.append(paragraph, &[highlight.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(paragraph.key())
+    })?;
+    let child = editor.state().view().children_keys(paragraph)?[0];
+    assert!(
+        editor
+            .state()
+            .view()
+            .is::<lexical_rich_nodes::code::CodeHighlightNode>(child)
+    );
+    Ok(())
+}
+
+// The activation gate adds to Source's view-only installation: a headless surface with a session
+// tokenizer still installs no code highlighting.
+#[test]
+fn a_headless_surface_with_a_tokenizer_installs_no_code_highlighting() -> Result<(), Error> {
+    let mut editor = surface::preset_builder_with_mode_and_tokens(
+        EditorType::MarkdownSync,
+        EditorMode::Headless,
+        CodeTokens::new(std::sync::Arc::new(NoGrammars), "no-grammars"),
+    )
+    .build()
+    .expect("surface");
+    let (code, commit) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    assert_eq!(code_language(&editor, code), None);
+    assert_eq!(commit.events_of(&code::CODE_HIGHLIGHT).count(), 0);
+    Ok(())
+}
+
 fn code_language(editor: &Editor, key: NodeKey) -> Option<String> {
     editor
         .state()
@@ -388,7 +466,7 @@ fn code_language(editor: &Editor, key: NodeKey) -> Option<String> {
 #[test]
 fn view_attached_body_defaults_an_unset_code_language_to_plaintext() -> Result<(), Error> {
     let mut editor =
-        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+        highlighting_surface()
             .build()
             .expect("surface");
     let (unset, _) = editor.update(|tx| {
@@ -451,7 +529,7 @@ fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Resu
         }]
     }}))?;
     let mut editor =
-        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+        highlighting_surface()
             .initial_state(state)
             .build()
             .expect("surface");
@@ -471,7 +549,7 @@ fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Resu
 #[test]
 fn every_code_transform_run_reports_its_language_to_the_host() -> Result<(), Error> {
     let mut editor =
-        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+        highlighting_surface()
             .build()
             .expect("surface");
     let (code, commit) = editor.update(|tx| {

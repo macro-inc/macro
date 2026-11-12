@@ -87,9 +87,8 @@ test('creates the Source code element attributes in Source order', () => {
   }
 });
 
-// An unset language exists natively only between open and the first local update (any update runs
-// the view-attached plaintext default, and the test fixture's setState is an update), so check the
-// view directly.
+// The native plaintext default only runs once code highlighting activates (a session tokenizer),
+// and the test fixture's setState is an update, so check the view directly.
 test('omits data-language for an unset language', () => {
   const view = registerMacroElementViews(createBuiltinRegistry()).get(
     'custom-code'

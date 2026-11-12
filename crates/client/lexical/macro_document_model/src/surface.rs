@@ -13,12 +13,15 @@ pub fn preset_builder_with_mode_and_tokens(
     mode: EditorMode,
     tokens: crate::plugins_group_b::CodeTokens,
 ) -> EditorBuilder {
+    let highlighting = mode == EditorMode::ViewAttached && tokens.is_active();
     let builder = crate::preset_builder_with_mode(ty, mode).extension_state(tokens);
 
     // WP-58 Group B: structure, lists, tables, media, paste and links.
     let builder = crate::plugins_group_b::register(builder, ty);
-    // Source installs code highlighting only with a view (codePlugin).
-    let builder = if mode == EditorMode::ViewAttached {
+    // Source installs code highlighting only with a view (codePlugin). Natively it stays dormant
+    // until the code-highlighting activation installs a session tokenizer; until then a view-attached
+    // surface writes no default language, reports nothing and leaves code-highlight leaves alone.
+    let builder = if highlighting {
         crate::plugins_group_b::register_code_highlighting(builder, ty)
     } else {
         builder

@@ -301,7 +301,8 @@ fn highlight_leaf(tx: &mut Transaction<'_>, leaf: Id<CodeHighlightNode>) -> Resu
 
 /// Install the Source code-highlighting model effects (`registerCodeHighlighting`: CodeNode,
 /// TextNode and CodeHighlightNode transforms). Source registers them only where an editor
-/// installs code highlighting, so headless editors leave this out.
+/// installs code highlighting, so headless editors leave this out; natively the surface also
+/// requires a session code tokenizer (the dormant code-highlighting activation).
 ///
 /// Like Source, each code node is tokenized at most once per pending update
 /// (`nodesCurrentlyHighlighting`), so text changed after that pass keeps stale stored tokens until

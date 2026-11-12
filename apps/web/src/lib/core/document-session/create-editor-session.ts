@@ -242,6 +242,8 @@ export function createRustEditorSession(
       ...runtime,
       editing,
       overlays,
+      /** Code-highlighting activation (C): the session carries a host code tokenizer. */
+      codeHighlighting: codeTokens !== undefined,
       close() {
         closing ??= (async () => {
           // Publish the in-flight close before disposal can synchronously reenter.

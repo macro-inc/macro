@@ -86,6 +86,10 @@ impl CodeTokens {
             profile: Arc::from(profile),
         }
     }
+    /// Whether a host tokenizer is installed: the code-highlighting activation (C) gate.
+    pub fn is_active(&self) -> bool {
+        self.provider.is_some()
+    }
 }
 impl Default for CodeTokens {
     fn default() -> Self {

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { NativeMarkdownOverlayInstallation } from '@core/component/LexicalMarkdown/editing/nativeOverlayPorts';
 import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import { createBuiltinRegistry } from '@macro-inc/lexical-wasm-view';
@@ -134,3 +135,22 @@ test.each([null, undefined, { phase: 'editing-install' }])(
     });
   }
 );
+
+test('code highlighting activates only for a session constructed with a code tokenizer', async () => {
+  const plain = createRustEditorSession(options());
+  expect(plain.codeHighlighting).toBe(false);
+  await plain.close();
+  // Fencing the tokenizer installs the module's Enter dispatcher, which needs the initialized module.
+  module.initSync({
+    module: readFileSync(
+      `${process.cwd()}/src/lib/core/document-session/wasm/document_session_wasm_bg.wasm`
+    ),
+  });
+  const provider = vi.fn(() => '{"kind":"loaded","loaded":false}');
+  const tokenized = createRustEditorSession({
+    ...options(),
+    codeTokens: { provider, profile: 'code-gate' },
+  });
+  expect(tokenized.codeHighlighting).toBe(true);
+  await tokenized.close();
+});
