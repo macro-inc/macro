@@ -28,7 +28,8 @@ function readShortSha(): string {
 const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
 /** Orders builds: a newer build takes the local cache over from older tabs. */
-const appBuildTime = Date.now();
+// Bench only: both arms embed the same build time.
+const appBuildTime = 1_700_000_000_000;
 
 function readGitBranch(): string {
   try {

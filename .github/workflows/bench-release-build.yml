@@ -1,0 +1,122 @@
+# Bench only, never merged: the production release's old inline web build
+# against build_web_app.yml for prod, on the same commit, then a byte compare.
+name: Bench Release Build
+on:
+  pull_request:
+
+env:
+  MODE: "production"
+
+jobs:
+  # Verbatim from main's release-production.yml build job, except the job id,
+  # dummy key values and the artifact name.
+  old:
+    name: Old release build
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    env:
+      CI: "true"
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+      - name: Mount Namespace cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: nix
+          path: /home/runner/.bun/install/cache
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Build for Production
+        working-directory: apps/web
+        run: just build-prod
+        env:
+          VITE_SEGMENT_WRITE_KEY: bench-segment-key
+          VITE_POSTHOG_API_KEY: bench-posthog-key
+          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+          VITE_OTEL_ENV: prod
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: old-release-dist
+          path: apps/web/dist
+          retention-days: 1
+          overwrite: true
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
+
+  # The new release build job, as release-production.yml now calls it.
+  new:
+    name: New release build
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: prod
+    secrets:
+      SEGMENT_WRITE_KEY: bench-segment-key
+      POSTHOG_API_KEY: bench-posthog-key
+
+  # Dev deploy builds, before this change (web-ci sccache and the volume's
+  # cargo and wasm-pack directories) and after.
+  dev-before:
+    name: Dev build before
+    uses: ./.github/workflows/bench_build_web_app_before.yml
+    with:
+      environment: dev
+    secrets:
+      SEGMENT_WRITE_KEY: bench-segment-key
+      POSTHOG_API_KEY: bench-posthog-key
+
+  dev-after:
+    name: Dev build after
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: dev
+    secrets:
+      SEGMENT_WRITE_KEY: bench-segment-key
+      POSTHOG_API_KEY: bench-posthog-key
+
+  compare:
+    name: Compare bundles
+    needs: [old, new]
+    runs-on: namespace-profile-linux-tiny-no-cache
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: old-release-dist
+          path: old
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: web-app-dist-prod
+          path: new
+      - name: Compare
+        run: |
+          set -euo pipefail
+          # Every build stamps its own wall-clock time into these two fields.
+          normalize() {
+            sed -E 's/"bundleBuild": *[0-9]+/"bundleBuild": 0/; s/(name="macro-bundle-build" content=")[0-9]+/\10/' "$1"
+          }
+          for d in old new; do
+            (cd "$d" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$d.sha"
+            echo "$d: $(wc -l < "$d.sha") files, $(du -sb "$d" | cut -f1) bytes, manifest $(sha256sum < "$d.sha" | cut -c1-16), wasm $(grep -c '\.wasm$' "$d.sha"), maps $(grep -c '\.map$' "$d.sha"), posthog key in $(grep -rl bench-posthog-key "$d" | wc -l) files"
+          done
+          diff old.sha new.sha | grep '^[<>]' | awk '{print $3}' | sort -u > differing.txt || true
+          echo "Files that differ byte for byte: $(wc -l < differing.txt)"
+          cat differing.txt
+          status=0
+          while read -r f; do
+            if [ ! -f "old/$f" ] || [ ! -f "new/$f" ]; then echo "only in one bundle: $f"; status=1; continue; fi
+            case "$f" in
+              ./index.html|./bundle-manifest.json)
+                if cmp -s <(normalize "old/$f") <(normalize "new/$f"); then
+                  echo "$f: differs only in its build time:"
+                  diff "old/$f" "new/$f" | grep '^[<>]' | cut -c1-200 || true
+                else
+                  echo "$f differs beyond its build time:"; diff <(normalize "old/$f") <(normalize "new/$f") | head -40 || true; status=1
+                fi ;;
+              *) echo "$f differs"; status=1 ;;
+            esac
+          done < differing.txt
+          if [ "$status" = 0 ]; then echo "Bundles are identical apart from the build time."; fi
+          exit "$status"
