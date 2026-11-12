@@ -1,7 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TASK_PROJECT_PROPERTY } from './task-project';
@@ -28,6 +28,8 @@ vi.mock('@queries/activity/push-registry', () => ({
   registerActivityRevalidator: vi.fn(),
   revalidateActivityQueries: vi.fn(async () => {}),
 }));
+const removeSearchEntities = vi.hoisted(() => vi.fn());
+vi.mock('@queries/soup/cache', () => ({ removeSearchEntities }));
 vi.mock('./create-project', () => ({ createProjectMutation: () => ({}) }));
 vi.mock('./project-soup', () => ({}));
 vi.mock('./project-identity', () => ({}));
@@ -175,3 +177,28 @@ it.each([
     dispose();
   }
 );
+
+it('drops deleted projects from cached Search pages after the refetch', async () => {
+  const cache = new QueryClient();
+  const { deleteMany, dispose } = createRoot((dispose) => ({
+    deleteMany: createProjectSources(
+      {
+        delete: async (id: string) =>
+          id === 'b' ? err([{ code: 'denied' }]) : ok(undefined),
+      } as never,
+      { client: () => ({}) as never, cacheHost: () => undefined },
+      cache,
+      () => 'viewer'
+    ).createCommands().deleteMany,
+    dispose,
+  }));
+
+  expect(await deleteMany(['a', 'b'])).toEqual(['b']);
+
+  expect(removeSearchEntities).toHaveBeenCalledOnce();
+  const [ids, matches] = removeSearchEntities.mock.calls[0] ?? [];
+  expect(ids).toEqual(new Set(['a']));
+  expect(matches({ type: 'project' })).toBe(true);
+  expect(matches({ type: 'document' })).toBe(false);
+  dispose();
+});

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { DeleteDialog } from '@ui';
 import { Show } from 'solid-js';
 
@@ -10,19 +11,14 @@ export function DeleteProjectsDialog(props: {
   onDelete(): void;
   onCloseAutoFocus?(event: Event): void;
 }) {
-  const many = () => props.count > 1;
   return (
     <DeleteDialog
       open
       onOpenChange={props.onOpenChange}
-      title={many() ? `Delete ${props.count} projects?` : 'Delete project?'}
+      title={t('entityActions.deleteProjectsTitle', { count: props.count })}
       body={
         <>
-          <p>
-            {many()
-              ? 'These projects and their activity will be deleted. Their tasks will remain in your workspace.'
-              : 'The project and its activity will be deleted. Its tasks will remain in your workspace.'}
-          </p>
+          <p>{t('entityActions.deleteProjectsBody', { count: props.count })}</p>
           <Show when={props.error}>
             {(message) => (
               <p role="alert" class="mt-2 text-failure">
@@ -32,7 +28,9 @@ export function DeleteProjectsDialog(props: {
           </Show>
         </>
       }
-      deleteLabel={many() ? `Delete ${props.count} projects` : 'Delete project'}
+      deleteLabel={t('entityActions.deleteProjectsLabel', {
+        count: props.count,
+      })}
       pending={props.pending}
       onDelete={props.onDelete}
       onCloseAutoFocus={props.onCloseAutoFocus}

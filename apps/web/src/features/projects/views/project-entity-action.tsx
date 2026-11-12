@@ -126,8 +126,11 @@ function DeleteProjects(props: {
     setRemaining(failed);
     setError(
       failed.length === ids.length
-        ? 'Could not delete. Please try again.'
-        : `Deleted ${ids.length - failed.length} of ${ids.length}. The rest could not be deleted.`
+        ? t('entityActions.deleteProjectsFailed')
+        : t('entityActions.deleteProjectsPartlyFailed', {
+            count: ids.length,
+            deleted: deleted.length,
+          })
     );
   };
   return (

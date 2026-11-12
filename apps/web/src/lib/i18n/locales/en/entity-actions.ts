@@ -313,6 +313,26 @@ export default {
     other: 'Deleted {{count}} projects',
   },
 
+  // Confirming a project delete.
+  deleteProjectsTitle: {
+    one: 'Delete project?',
+    other: 'Delete {{count}} projects?',
+  },
+  deleteProjectsBody: {
+    one: 'The project and its activity will be deleted. Its tasks will remain in your workspace.',
+    other:
+      'These projects and their activity will be deleted. Their tasks will remain in your workspace.',
+  },
+  deleteProjectsLabel: {
+    one: 'Delete project',
+    other: 'Delete {{count}} projects',
+  },
+  deleteProjectsFailed: 'Could not delete. Please try again.',
+  deleteProjectsPartlyFailed: {
+    one: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+    other: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+  },
+
   // Markdown document layout.
   turnOnWideMode: 'Turn on wide mode',
   turnOffWideMode: 'Turn off wide mode',
