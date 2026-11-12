@@ -5,7 +5,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
 use futures::{
-    StreamExt, TryFutureExt, TryStreamExt,
+    StreamExt, TryStreamExt,
     stream::{self},
 };
 use lambda_runtime::{
@@ -101,34 +101,33 @@ async fn handler(
         {
             Ok((upload_status, root_project_id)) => {
                 let pid = root_project_id.as_str();
-                let update_dynamodb_fut = dynamodb_client
-                    .bulk_upload
-                    .update_bulk_upload_request_status(
-                        request_id,
-                        upload_status.clone(),
-                        None,
-                        Some(pid),
-                    );
 
                 // A partial upload still has a usable tree; leaving it pending would hide
-                // every folder because of one bad file.
-                let (update_dynamodb_res, update_dss_res) = match &upload_status {
+                // every folder because of one bad file. The tree is marked uploaded before
+                // the outcome is recorded, because the uploader polls that record and must
+                // not hear of success while the folder is still hidden.
+                let marked = match &upload_status {
                     UploadFolderStatus::Completed | UploadFolderStatus::PartiallyCompleted => {
-                        tokio::join!(
-                            update_dynamodb_fut,
-                            dss_client
-                                .mark_projects_uploaded(user_id, pid)
-                                .map_ok(|_| ())
-                        )
+                        dss_client
+                            .mark_projects_uploaded(user_id, pid)
+                            .await
+                            .map(|_| ())
                     }
-                    _ => tokio::join!(update_dynamodb_fut, futures::future::ok(())),
+                    _ => Ok(()),
                 };
 
-                update_dynamodb_res
+                let recorded_status = match &marked {
+                    Ok(_) => upload_status.clone(),
+                    Err(_) => UploadFolderStatus::Unknown,
+                };
+                dynamodb_client
+                    .bulk_upload
+                    .update_bulk_upload_request_status(request_id, recorded_status, None, Some(pid))
+                    .await
                     .inspect_err(|e| tracing::error!("Failed to update dynamo status: {:?}", e))
                     .ok();
 
-                match (update_dss_res, &upload_status) {
+                match (marked, &upload_status) {
                     (Ok(_), UploadFolderStatus::Completed) => UploadFolderStatusUpdate::Completed {
                         request_id: request_id.clone(),
                         project_id: root_project_id.clone(),
