@@ -27,6 +27,9 @@ they need.
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
   adapters (feature `outbound`).
+- `src/domain/changes.rs` + `src/domain/service/changes.rs` +
+  `src/outbound/pg_message_repo/change_log.rs`: a channel's change sequence
+  (see **Channel change sequence**).
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
   realtime/notification delivery adapters (features `outbound`/`broker`).
 
@@ -73,6 +76,41 @@ a code-mode token, never from the request body.
 New posts use the message sender receipt to retain signed code-mode agent
 attribution. All other operations use the caller receipt so attribution cannot
 grant users another agent invocation's edit, deletion, or reaction authority.
+
+## Channel change sequence
+
+Every committed change to a channel's messages takes the channel's next
+sequence number in the same transaction (`comms_channel_change_counters`) and
+leaves a row in `comms_channel_change_log`. `message_update` events carry the
+number as `seq`; `MessageService::channel_changes(since)` returns the current
+state of everything that changed after a number, or a reset. Other parents
+keep no log.
+
+- A new repository write to channel messages calls
+  `change_log::append_message` as its last statement before the commit. The
+  counter row must be the last lock the transaction takes: a write that takes
+  a message lock after it deadlocks with a writer holding that message and
+  waiting for the counter. A transaction that inserted a reply calls
+  `check_thread_references` first, because the reply's deferred foreign key
+  would otherwise lock the root at commit.
+- A writer waits at most 5 s for another writer to the same channel
+  (`COUNTER_LOCK_TIMEOUT`, set for the rest of its transaction); past that the
+  write fails and takes no number. Keep work after the append to the commit:
+  the Slack import still updates the channel and its checkpoint after it, and
+  every live writer to that channel waits for those statements.
+- Sequence numbers follow commit order, so a reader never sees `n` before
+  `n - 1`. `concurrent_writers_never_expose_a_gap_to_a_reader` holds this.
+- Historical import logs one `HistoryImported` row per batch; readers behind
+  it reset. A reader also resets when retention (30 days) removed the change
+  after its number, above the counter, or more than `CHANGE_RESET_BACKLOG`
+  behind.
+- Reads by logged id (`roots_by_ids`, `live_replies`, the activity
+  `read_by_ids`) probe the primary key per id behind `OFFSET 0`; a plain join
+  or `= ANY` lets a generic plan walk the whole channel.
+- Timeline facts (renames, joins) are logged by `ChannelSequencedActivities`
+  after the activity store commits them; a replayed batch logs a fact twice
+  and readers apply it by id.
+- `ChannelChangeLogRetention` prunes hourly from `document_storage_service`.
 
 ## Gotchas
 

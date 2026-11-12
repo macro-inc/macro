@@ -1,4 +1,6 @@
-use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
+use crate::domain::{
+    changes::ChannelChangeLog, mentions::MessageReferenceKind, models::*, ports::*,
+};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -6,6 +8,7 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod change_log;
 mod historical;
 mod timeline;
 
@@ -731,7 +734,16 @@ impl MessageRepository for PgMessageRepository {
         self.read_timeline(parent, query).await
     }
 
-    async fn create(&self, mut command: CreateMessage) -> Result<Message, MessageError> {
+    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        self.create_sequenced(command)
+            .await
+            .map(|written| written.value)
+    }
+
+    async fn create_sequenced(
+        &self,
+        mut command: CreateMessage,
+    ) -> Result<Sequenced<Message>, MessageError> {
         let mut id = command
             .input
             .id
@@ -831,8 +843,16 @@ impl MessageRepository for PgMessageRepository {
         )
         .await?;
         let message = Self::require_message_in(&mut tx, &command.parent, id).await?;
+        if message.thread_id.is_some() && matches!(command.parent, MessageParent::Channel(_)) {
+            change_log::check_thread_references(&mut tx).await?;
+        }
+        let seq =
+            change_log::append_message(&mut tx, &command.parent, id, message.root_id()).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(Sequenced {
+            value: message,
+            seq,
+        })
     }
 
     async fn edit(
@@ -841,6 +861,17 @@ impl MessageRepository for PgMessageRepository {
         id: Uuid,
         command: EditMessage,
     ) -> Result<Message, MessageError> {
+        self.edit_sequenced(parent, id, command)
+            .await
+            .map(|written| written.value)
+    }
+
+    async fn edit_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        command: EditMessage,
+    ) -> Result<Sequenced<Message>, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let actor = Self::lock_message(&mut tx, parent, id).await?;
         // Attachment-only patches keep the message unedited, as the channel writer did.
@@ -864,18 +895,36 @@ impl MessageRepository for PgMessageRepository {
         )
         .await?;
         let message = Self::require_message_in(&mut tx, parent, id).await?;
+        let seq = change_log::append_message(&mut tx, parent, id, message.root_id()).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(Sequenced {
+            value: message,
+            seq,
+        })
     }
 
     async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+        self.delete_sequenced(parent, id)
+            .await
+            .map(|written| written.value)
+    }
+
+    async fn delete_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<Sequenced<Message>, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         sqlx::query!("UPDATE comms_messages SET content = '', deleted_at = now(), updated_at = now() WHERE id = $1", id)
             .execute(&mut *tx).await.map_err(database_error)?;
         let message = Self::require_message_in(&mut tx, parent, id).await?;
+        let seq = change_log::append_message(&mut tx, parent, id, message.root_id()).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(Sequenced {
+            value: message,
+            seq,
+        })
     }
 
     async fn react(
@@ -903,11 +952,69 @@ impl MessageRepository for PgMessageRepository {
             .map_err(database_error)?
         };
         let message = Self::require_message_in(&mut tx, parent, id).await?;
+        let changed = result.rows_affected() > 0;
+        let seq = if changed {
+            change_log::append_message(&mut tx, parent, id, message.root_id()).await?
+        } else {
+            None
+        };
         tx.commit().await.map_err(database_error)?;
         Ok(ReactionResult {
             message,
-            changed: result.rows_affected() > 0,
+            changed,
+            seq,
         })
+    }
+
+    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError> {
+        self.read_channel_seq(channel_id).await
+    }
+
+    async fn channel_change_log(
+        &self,
+        channel_id: Uuid,
+        since: i64,
+        limit: usize,
+    ) -> Result<ChannelChangeLog, MessageError> {
+        self.read_channel_change_log(channel_id, since, limit).await
+    }
+
+    async fn roots_by_ids(
+        &self,
+        parent: &MessageParent,
+        ids: &[Uuid],
+    ) -> Result<Vec<MessageListItem>, MessageError> {
+        self.read_roots_by_ids(parent, ids).await
+    }
+
+    async fn live_replies(
+        &self,
+        parent: &MessageParent,
+        ids: &[Uuid],
+    ) -> Result<Vec<Message>, MessageError> {
+        let rows = sqlx::query_scalar!(
+            // Each id is one primary-key probe. The `OFFSET 0` keeps the
+            // parent out of the probe, so no plan can walk the parent's
+            // index instead.
+            r#"SELECT reply.message AS "message!: Json<StoredMessage>"
+               FROM unnest($3::uuid[]) changed(id)
+               CROSS JOIN LATERAL (
+                   SELECT to_jsonb(m) AS message, m.parent_entity_type, m.parent_entity_id,
+                       m.thread_id, m.deleted_at
+                   FROM comms_messages m
+                   WHERE m.id = changed.id
+                   OFFSET 0
+               ) reply
+               WHERE reply.parent_entity_type = $1 AND reply.parent_entity_id = $2
+                   AND reply.thread_id IS NOT NULL AND reply.deleted_at IS NULL"#,
+            parent.entity_type(),
+            parent.entity_id(),
+            ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        self.hydrate(rows).await
     }
 
     async fn patch_thread(

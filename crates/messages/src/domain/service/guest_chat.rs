@@ -195,6 +195,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,
+                seq: None,
                 change: MessageChange::Posted {
                     notification_policy: PostMessageNotificationPolicy::default(),
                     message: message.clone(),
