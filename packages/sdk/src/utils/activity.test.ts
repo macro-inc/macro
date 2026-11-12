@@ -37,6 +37,24 @@ describe('SDK activity', () => {
       setDefaultRequestVerbHeader(false);
     }
   });
+  test('attaches the verb to a call made without options', async () => {
+    let seen = '';
+    setDefaultRequestVerbHeader(true);
+    const sdk = observeSdk(
+      {
+        async listCrmPipelines(options?: { headers?: Record<string, string> }) {
+          seen = options?.headers?.['x-macro-sdk-verb'] ?? '';
+        },
+      },
+      'storage',
+    );
+    try {
+      await sdk.listCrmPipelines();
+      expect(seen).toBe('listed');
+    } finally {
+      setDefaultRequestVerbHeader(false);
+    }
+  });
   test('correlates concurrent requests and preserves results and errors', async () => {
     const events: RequestActivity[] = [];
     let release!: () => void;

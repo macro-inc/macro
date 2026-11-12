@@ -5,12 +5,49 @@ use crate::outbound::guarded_http::McpHttp;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientConfig, Implementation};
-use rmcp::service::{RunningService, ServiceExt};
+use rmcp::service::{ClientInitializeError, RunningService, ServiceExt};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::{AuthClient, StoredCredentials};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
+
+#[cfg(test)]
+mod test;
+
+/// How long a server gets to answer the MCP initialize handshake.
+///
+/// A turn connects all of a user's servers concurrently and waits for every
+/// one, so a server that accepts the request and never answers would hold up
+/// tool loading for the whole turn. Initialize is a single small request that
+/// a healthy server answers in well under a second. OAuth requests made before
+/// it are bounded separately by the OAuth client's own timeouts.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The server accepted the connection but did not finish the initialize
+/// handshake within [`HANDSHAKE_TIMEOUT`].
+#[derive(Debug, thiserror::Error)]
+#[error("MCP server did not complete the initialize handshake within {0:?}")]
+pub struct HandshakeTimedOut(pub Duration);
+
+/// Run the initialize handshake under [`HANDSHAKE_TIMEOUT`], recording its
+/// outcome on the current span. Only the handshake is bounded; the session it
+/// returns stays open for as long as the caller keeps it.
+async fn handshake(
+    initialize: impl Future<Output = Result<McpServer, ClientInitializeError>>,
+) -> anyhow::Result<McpServer> {
+    let (outcome, result) = match tokio::time::timeout(HANDSHAKE_TIMEOUT, initialize).await {
+        Ok(Ok(server)) => ("completed", Ok(server)),
+        Ok(Err(error)) => ("failed", Err(error.into())),
+        Err(_) => (
+            "timed_out",
+            Err(HandshakeTimedOut(HANDSHAKE_TIMEOUT).into()),
+        ),
+    };
+    tracing::Span::current().record("handshake", outcome);
+    result
+}
 
 /// A connected MCP server session.
 pub type McpServer = RunningService<RoleClient, ClientConfig>;
@@ -51,7 +88,7 @@ pub struct McpServerRecord {
 }
 
 impl McpConnector for McpServerRecord {
-    #[tracing::instrument(skip_all, err)]
+    #[tracing::instrument(skip_all, err, fields(handshake = tracing::field::Empty))]
     async fn connect<S: McpServerStore>(
         &self,
         http: &McpHttp,
@@ -70,12 +107,12 @@ impl McpConnector for McpServerRecord {
                 let auth_client = AuthClient::new(http.transport(), auth_manager);
                 let transport = StreamableHttpClientTransport::with_client(auth_client, config);
 
-                Ok(client_info().serve(transport).await?)
+                handshake(client_info().serve(transport)).await
             }
             None => {
                 let transport =
                     StreamableHttpClientTransport::with_client(http.transport(), config);
-                Ok(client_info().serve(transport).await?)
+                handshake(client_info().serve(transport)).await
             }
         }
     }
