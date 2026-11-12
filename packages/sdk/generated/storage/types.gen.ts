@@ -4150,6 +4150,12 @@ export type ClaimedPairing = {
     token: string;
 };
 
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
 /**
@@ -4666,6 +4672,8 @@ export type CompleteUploads = {
      */
     uploads: Array<UploadId>;
 };
+
+export type ComputerId = string;
 
 /**
  * The conferencing system backing an event's join URL.
@@ -5884,7 +5892,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -12399,6 +12407,12 @@ export type Harness = {
      */
     allow_permission_bypass?: boolean;
     /**
+     * How Claude Code on this machine is paid for, derived from whether
+     * it has an active Claude login. Only meaningful for Macro computers.
+     */
+    claude_mode?: ClaudeMode;
+    computer_id?: null | ComputerId;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -15068,6 +15082,8 @@ export type PairingDetails = {
      */
     requested_name: string;
 };
+
+export type PairingId = string;
 
 /**
  * Paragraph formatting changes.
@@ -31918,7 +31934,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';
