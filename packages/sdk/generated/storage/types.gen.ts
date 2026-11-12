@@ -10176,7 +10176,7 @@ export type ExternalChatPollOption = {
 /**
  * The messaging service an external chat lives in.
  */
-export type ExternalChatProvider = 'whatsapp';
+export type ExternalChatProvider = 'whatsapp' | 'slack';
 
 /**
  * Grouped reactions.
@@ -18083,9 +18083,164 @@ export type SkippedImportRecord = {
 };
 
 /**
+ * A person's Slack session in one workspace.
+ */
+export type SlackAccount = {
+    /**
+     * Consent generation; reconnecting the websocket never changes it.
+     */
+    authorizationGeneration: number;
+    /**
+     * The person's Slack display name, once the first boot ran.
+     */
+    displayName?: string | null;
+    endedReason?: null | SlackEndedReason;
+    /**
+     * Enterprise Grid org, whose admins can see the session.
+     */
+    enterpriseId?: string | null;
+    /**
+     * Stable account id.
+     */
+    id: string;
+    /**
+     * When the websocket last connected.
+     */
+    lastConnectedAt?: string | null;
+    /**
+     * The person's Slack user id, once the first boot ran.
+     */
+    slackUserId?: string | null;
+    /**
+     * Lifecycle.
+     */
+    state: SlackAccountState;
+    /**
+     * Workspace subdomain (`acme` of `acme.slack.com`).
+     */
+    teamDomain: string;
+    /**
+     * Workspace icon.
+     */
+    teamIconUrl?: string | null;
+    /**
+     * The workspace.
+     */
+    teamId: string;
+    /**
+     * Workspace name.
+     */
+    teamName: string;
+};
+
+/**
+ * Account lifecycle. Websocket outages are not stored: a connected account
+ * stays connected while its session service reconnects.
+ */
+export type SlackAccountState = 'connecting' | 'connected' | 'logged_out' | 'disconnected';
+
+/**
+ * The caller's Slack accounts, in any state.
+ */
+export type SlackAccounts = {
+    /**
+     * Oldest first.
+     */
+    accounts: Array<SlackAccount>;
+};
+
+/**
+ * Why a catalogue conversation can't be added.
+ */
+export type SlackCannotAdd = 'archived' | 'frozen' | 'not_member';
+
+/**
+ * The captcha's solution.
+ */
+export type SlackCaptchaSolution = {
+    /**
+     * What the captcha widget returned.
+     */
+    solution: string;
+};
+
+/**
  * At most fifty registered identities to verify and an optional immutable conversation seal.
  */
 export type SlackCompleteRequest = CompleteUploads;
+
+/**
+ * One Slack Connect conversation of the caller's accounts.
+ */
+export type SlackConversation = {
+    /**
+     * The caller's account ids that see it.
+     */
+    accounts: Array<string>;
+    added?: null | ExternalChatReference;
+    /**
+     * "Add to Macro" works now.
+     */
+    canAdd: boolean;
+    cannotAddReason?: null | SlackCannotAdd;
+    /**
+     * The other organizations.
+     */
+    connectedTeams: Array<SlackTeam>;
+    directPerson?: null | SlackPerson;
+    /**
+     * Disconnected from the other organization: read-only.
+     */
+    frozen: boolean;
+    /**
+     * Archived in Slack.
+     */
+    isArchived: boolean;
+    /**
+     * A private channel.
+     */
+    isPrivate: boolean;
+    /**
+     * Channel or group DM (`group`), or a one-to-one DM (`direct`).
+     */
+    kind: ExternalChatKind;
+    /**
+     * Newest activity.
+     */
+    lastActivityAt?: string | null;
+    /**
+     * `#name` for a channel; the other person's name for a DM.
+     */
+    name: string;
+    /**
+     * Slack's conversation id; `POST /external-chats {provider: "slack",
+     * remoteId, kind}` adds it.
+     */
+    remoteId: string;
+    shared?: null | SharedExternalChatReference;
+    /**
+     * The channel topic.
+     */
+    topic?: string | null;
+    /**
+     * Unread messages in Slack.
+     */
+    unreadCount: number;
+};
+
+/**
+ * The caller's Slack Connect catalogue.
+ */
+export type SlackConversationList = {
+    /**
+     * Newest activity first.
+     */
+    conversations: Array<SlackConversation>;
+    /**
+     * A refresh was requested; refetch on `external_chat_changed`.
+     */
+    refreshing: boolean;
+};
 
 /**
  * Bounded full-metadata create payload. Domain validation applies effective limits again.
@@ -18093,9 +18248,282 @@ export type SlackCompleteRequest = CompleteUploads;
 export type SlackCreateRequest = CreateImport;
 
 /**
+ * Result of disconnecting.
+ */
+export type SlackDisconnect = {
+    /**
+     * The account was connected at that generation and now isn't.
+     */
+    disconnected: boolean;
+};
+
+/**
+ * The consent generation the owner deliberately ends.
+ */
+export type SlackDisconnectRequest = {
+    /**
+     * Fences retries against a later sign-in.
+     */
+    authorizationGeneration: number;
+    /**
+     * Also sign the session out at Slack.
+     */
+    signOut?: boolean;
+};
+
+/**
+ * Start an email sign-in.
+ */
+export type SlackEmailLogin = {
+    /**
+     * The Slack account's email address.
+     */
+    email: string;
+};
+
+/**
+ * Why Slack ended a session.
+ */
+export type SlackEndedReason = 'revoked' | 'expired' | 'account_inactive' | 'team_disabled' | 'removed_from_team' | 'enterprise_restricted' | 'unreadable';
+
+/**
+ * Where a chat's history import is.
+ */
+export type SlackHistoryImport = {
+    /**
+     * Started importing another page of earlier messages.
+     */
+    started: boolean;
+};
+
+/**
+ * A sign-in attempt, as `GET /slack/login/{id}` returns it.
+ */
+export type SlackLogin = {
+    /**
+     * When it stops taking input.
+     */
+    expiresAt: string;
+    /**
+     * Poll `GET /slack/login/{id}` with it.
+     */
+    id: string;
+    /**
+     * Where it is.
+     */
+    step: SlackLoginStep;
+};
+
+/**
+ * A code Slack sent (email confirmation or two-factor).
+ */
+export type SlackLoginCode = {
+    /**
+     * The code.
+     */
+    code: string;
+};
+
+/**
+ * Why a sign-in attempt failed.
+ */
+export type SlackLoginFailure = 'invalid_email' | 'no_workspaces' | 'code_expired' | 'rate_limited' | 'two_factor_expired' | 'invalid_session' | 'expired' | 'slack_unavailable';
+
+/**
+ * Where a sign-in attempt is, and what the web shows for it.
+ */
+export type SlackLoginStep = {
+    kind: 'working';
+} | {
+    kind: 'captcha';
+    /**
+     * The page the captcha belongs to.
+     */
+    pageUrl: string;
+    /**
+     * The previous solution was rejected.
+     */
+    retry: boolean;
+    /**
+     * The captcha's site key, for a client that can render it.
+     */
+    siteKey: string;
+} | {
+    /**
+     * Where it went.
+     */
+    email: string;
+    kind: 'email_code';
+    /**
+     * The previous code was wrong.
+     */
+    retry: boolean;
+} | {
+    kind: 'pick_workspaces';
+    /**
+     * Every workspace the email signs in to.
+     */
+    workspaces: Array<SlackLoginWorkspace>;
+} | {
+    kind: 'two_factor';
+    /**
+     * The previous code was wrong.
+     */
+    retry: boolean;
+    /**
+     * Which workspace.
+     */
+    team: SlackLoginWorkspace;
+} | {
+    kind: 'finish_on_desktop';
+    /**
+     * Slack's sign-in page for it.
+     */
+    signInUrl: string;
+    /**
+     * Which workspace.
+     */
+    team: SlackLoginWorkspace;
+} | {
+    /**
+     * Accounts created or reconnected.
+     */
+    accounts: Array<SlackAccount>;
+    kind: 'done';
+    /**
+     * Chosen workspaces that need SSO and were not signed in.
+     */
+    skipped: Array<SlackLoginWorkspace>;
+} | {
+    kind: 'failed';
+    /**
+     * Why.
+     */
+    reason: SlackLoginFailure;
+} | {
+    kind: 'cancelled';
+};
+
+/**
+ * A workspace the email signs in to.
+ */
+export type SlackLoginWorkspace = {
+    /**
+     * The caller already has a connected account for it.
+     */
+    alreadyConnected: boolean;
+    /**
+     * Its subdomain.
+     */
+    domain: string;
+    /**
+     * Its Enterprise Grid org's name: the org's admins see the session.
+     */
+    enterpriseName?: string | null;
+    /**
+     * Its icon.
+     */
+    iconUrl?: string | null;
+    /**
+     * Its name.
+     */
+    name: string;
+    /**
+     * How it signs in.
+     */
+    signIn: SlackWorkspaceSignIn;
+    /**
+     * The workspace.
+     */
+    teamId: string;
+};
+
+/**
+ * A Slack user as the catalogue names them.
+ */
+export type SlackPerson = {
+    /**
+     * Their avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Display name, else real name, else the id.
+     */
+    name: string;
+    /**
+     * Their id.
+     */
+    slackUserId: string;
+    team?: null | SlackTeam;
+};
+
+/**
  * At most fifty immutable upload descriptors, without client-supplied storage keys.
  */
 export type SlackRegisterRequest = RegisterUploads;
+
+/**
+ * How a sign-in attempt started.
+ */
+export type SlackSessionSource = 'manual' | 'desktop';
+
+/**
+ * A pasted or captured session, as DSS receives it and seals it at once.
+ */
+export type SlackSessionSubmission = {
+    /**
+     * The `d` cookie.
+     */
+    cookie: string;
+    /**
+     * The `d-s` cookie, when the client has it.
+     */
+    cookieDs?: string | null;
+    /**
+     * Pasted or captured by the desktop app.
+     */
+    source: SlackSessionSource;
+    /**
+     * One token per workspace.
+     */
+    tokens: Array<SlackSessionToken>;
+};
+
+/**
+ * One workspace token of a pasted or captured session.
+ */
+export type SlackSessionToken = {
+    /**
+     * The workspace it belongs to, when the client knows it.
+     */
+    teamId?: string | null;
+    /**
+     * The `xoxc-` token.
+     */
+    token: string;
+};
+
+/**
+ * A Slack team as the catalogue names it.
+ */
+export type SlackTeam = {
+    /**
+     * Its subdomain.
+     */
+    domain?: string | null;
+    /**
+     * Its icon.
+     */
+    iconUrl?: string | null;
+    /**
+     * Its name; the id when Slack never told us.
+     */
+    name: string;
+    /**
+     * Its id.
+     */
+    teamId: string;
+};
 
 /**
  * Slack time represented exactly as nonnegative Unix microseconds.
@@ -18107,6 +18535,21 @@ export type SlackTimestamp = string;
  * Slack member identity (U or W prefix), including USLACKBOT.
  */
 export type SlackUserId = string;
+
+/**
+ * The workspaces to sign in to.
+ */
+export type SlackWorkspaceChoice = {
+    /**
+     * Their team ids.
+     */
+    teamIds: Array<string>;
+};
+
+/**
+ * Whether a workspace can be signed in to from Macro's servers.
+ */
+export type SlackWorkspaceSignIn = 'ready' | 'two_factor' | 'sso';
 
 /**
  * How slide content follows a new slide size
@@ -34462,6 +34905,178 @@ export type PatchViewHandlerError = PatchViewHandlerErrors[keyof PatchViewHandle
 export type PatchViewHandlerResponses = {
     200: unknown;
 };
+
+export type SlackLinkedAccountsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/slack-linked/accounts';
+};
+
+export type SlackLinkedAccountsResponses = {
+    200: SlackAccounts;
+};
+
+export type SlackLinkedAccountsResponse = SlackLinkedAccountsResponses[keyof SlackLinkedAccountsResponses];
+
+export type SlackLinkedDisconnectData = {
+    body: SlackDisconnectRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/accounts/{id}/disconnect';
+};
+
+export type SlackLinkedDisconnectResponses = {
+    200: SlackDisconnect;
+};
+
+export type SlackLinkedDisconnectResponse = SlackLinkedDisconnectResponses[keyof SlackLinkedDisconnectResponses];
+
+export type SlackLinkedImportHistoryData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/chats/{id}/history-import';
+};
+
+export type SlackLinkedImportHistoryResponses = {
+    200: SlackHistoryImport;
+};
+
+export type SlackLinkedImportHistoryResponse = SlackLinkedImportHistoryResponses[keyof SlackLinkedImportHistoryResponses];
+
+export type SlackLinkedConversationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/slack-linked/conversations';
+};
+
+export type SlackLinkedConversationsResponses = {
+    200: SlackConversationList;
+};
+
+export type SlackLinkedConversationsResponse = SlackLinkedConversationsResponses[keyof SlackLinkedConversationsResponses];
+
+export type SlackLinkedStartLoginData = {
+    body: SlackEmailLogin;
+    path?: never;
+    query?: never;
+    url: '/slack-linked/login';
+};
+
+export type SlackLinkedStartLoginResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedStartLoginResponse = SlackLinkedStartLoginResponses[keyof SlackLinkedStartLoginResponses];
+
+export type SlackLinkedSubmitSessionData = {
+    body: SlackSessionSubmission;
+    path?: never;
+    query?: never;
+    url: '/slack-linked/login/session';
+};
+
+export type SlackLinkedSubmitSessionResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedSubmitSessionResponse = SlackLinkedSubmitSessionResponses[keyof SlackLinkedSubmitSessionResponses];
+
+export type SlackLinkedCancelLoginData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}';
+};
+
+export type SlackLinkedCancelLoginResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedCancelLoginResponse = SlackLinkedCancelLoginResponses[keyof SlackLinkedCancelLoginResponses];
+
+export type SlackLinkedLoginData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}';
+};
+
+export type SlackLinkedLoginResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedLoginResponse = SlackLinkedLoginResponses[keyof SlackLinkedLoginResponses];
+
+export type SlackLinkedLoginCaptchaData = {
+    body: SlackCaptchaSolution;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}/captcha';
+};
+
+export type SlackLinkedLoginCaptchaResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedLoginCaptchaResponse = SlackLinkedLoginCaptchaResponses[keyof SlackLinkedLoginCaptchaResponses];
+
+export type SlackLinkedLoginCodeData = {
+    body: SlackLoginCode;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}/code';
+};
+
+export type SlackLinkedLoginCodeResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedLoginCodeResponse = SlackLinkedLoginCodeResponses[keyof SlackLinkedLoginCodeResponses];
+
+export type SlackLinkedLoginTwoFactorData = {
+    body: SlackLoginCode;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}/two-factor';
+};
+
+export type SlackLinkedLoginTwoFactorResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedLoginTwoFactorResponse = SlackLinkedLoginTwoFactorResponses[keyof SlackLinkedLoginTwoFactorResponses];
+
+export type SlackLinkedLoginWorkspacesData = {
+    body: SlackWorkspaceChoice;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/slack-linked/login/{id}/workspaces';
+};
+
+export type SlackLinkedLoginWorkspacesResponses = {
+    200: SlackLogin;
+};
+
+export type SlackLinkedLoginWorkspacesResponse = SlackLinkedLoginWorkspacesResponses[keyof SlackLinkedLoginWorkspacesResponses];
 
 export type ListSlackImportsData = {
     body?: never;
