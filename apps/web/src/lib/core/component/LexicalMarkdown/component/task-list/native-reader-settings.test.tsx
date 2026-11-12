@@ -50,7 +50,7 @@ afterAll(() => {
 });
 
 for (const canComment of [false, true]) {
-  test(`reader filter cancellation preserves the bar and allows a later real grant (${canComment})`, async () => {
+  test(`reader filter changes presentation only and access upgrade restores stored settings (${canComment})`, async () => {
     const source = createEditor({
       namespace: 'reader-settings-source',
       nodes: [TaskListNode, ListNode, ListItemNode, DocumentMentionNode],
@@ -153,6 +153,8 @@ for (const canComment of [false, true]) {
         canComment ? Access.CommentOnly : Access.Read
       );
       const before = owned.runtime.executor.session.serializedState();
+      const observedSequence = owned.host.observedSequence();
+      expect(observedSequence).toBeDefined();
       const input = vi.spyOn(owned.runtime.executor.session, 'input');
       const settled = vi.spyOn(owned.runtime.executor, 'runSettled');
       fireEvent.pointerEnter(root.querySelector('ul') ?? root);
@@ -168,10 +170,20 @@ for (const canComment of [false, true]) {
         const message = SessionInputMsg.decode(bytes).editor;
         return (
           message.isEditorApplication() &&
-          message.value.name === 'group-b.checklist'
+          message.value.name === 'group-b.checklist-settings-intent'
         );
       });
-      expect(settingsCalls).toHaveLength(0);
+      expect(settingsCalls).toHaveLength(1);
+      const admitted = SessionInputMsg.decode(settingsCalls[0][0]).editor;
+      if (!admitted.isEditorApplication())
+        throw new Error('Missing actual settings intent');
+      expect(JSON.parse(admitted.value.json).observedSequence).toBe(
+        observedSequence
+      );
+      expect([...owned.host.plans().values()][0]?.result).toMatchObject({
+        kind: 'planned',
+        settings: { filters: { status: ['not-started'] } },
+      });
       expect(owned.runtime.executor.session.serializedState()).toBe(before);
       expect(errors).toEqual([]);
       owned.runtime.executor.run(() =>
@@ -184,6 +196,11 @@ for (const canComment of [false, true]) {
         )
       );
       owned.runtime.view.setEditable(true);
+      expect([...owned.host.plans().values()][0]?.result).toMatchObject({
+        kind: 'planned',
+        settings: { filters: { status: [] } },
+      });
+      expect(owned.runtime.executor.session.serializedState()).toBe(before);
       await user.click(await screen.findByText('Not started', { exact: true }));
       await waitFor(() =>
         expect(owned.runtime.executor.session.serializedState()).toContain(

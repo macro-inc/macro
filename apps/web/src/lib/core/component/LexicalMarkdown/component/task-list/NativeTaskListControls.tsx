@@ -12,9 +12,9 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { NormalizedSettings } from '../../plugins/checklist-controls/model';
+import { dispatchNativeChecklistSettings } from '../../plugins/checklist-controls/native-checklist-intent';
 import type { NativeChecklistPlanHost } from '../../plugins/checklist-controls/native-plan-host';
 import type { NativeChecklistBar } from '../../plugins/checklist-controls/native-plan-schema';
-import { dispatchApplicationCommandSettledIfSessionEdit } from '../../plugins/group-b/command';
 import { TaskListBar } from './TaskListBar';
 import { createTaskListNames, createTaskListTaskInfo } from './task-list-facts';
 
@@ -153,6 +153,7 @@ export function NativeTaskListControls(props: {
               ? actual.result
               : entry.result;
           }}
+          observedSequence={props.host.observedSequence}
           report={props.report}
         />
       )}
@@ -165,6 +166,7 @@ function NativeTaskListEntry(props: {
   key: number;
   bar: HTMLElement;
   result: Accessor<NativeChecklistBar>;
+  observedSequence: () => string | undefined;
   report: (error: unknown) => void;
 }) {
   const [hovered, setHovered] = createSignal(false);
@@ -193,9 +195,23 @@ function NativeTaskListEntry(props: {
     const view = props.view;
     const key = props.key;
     try {
-      const result = await dispatchApplicationCommandSettledIfSessionEdit(
+      const observedSequence = props.observedSequence();
+      if (observedSequence === undefined)
+        throw new Error('Checklist presentation sequence is unavailable');
+      const filters = patch.filters ?? props.result().settings.filters;
+      const settings = {
+        filters: {
+          status: [...filters.status],
+          priority: [...filters.priority],
+          assignees: [...filters.assignees],
+          due: [...filters.due],
+        },
+      };
+      const result = await dispatchNativeChecklistSettings(
         view,
-        'group-b.checklist',
+        key,
+        observedSequence,
+        settings,
         () => {
           if (
             !active ||
@@ -204,15 +220,8 @@ function NativeTaskListEntry(props: {
             view.getElementByKey(key) !== list
           )
             throw new Error('Checklist settings target is unavailable');
-          return {
-            action: 'settings',
-            key,
-            settings: { ...props.result().settings, ...patch },
-          };
         }
       );
-      if (result.status === 'cancelled' && result.reason === 'session-access')
-        return;
       if (result.status === 'error') throw result.error;
       if (result.status === 'cancelled')
         throw new Error('Checklist settings admission cancelled');

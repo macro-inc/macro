@@ -282,6 +282,12 @@ export function createNativeChecklistPlanHost(
     plans,
     taskIds,
     presentation,
+    observedSequence() {
+      if (retired || !enabled || !view || !view.isMounted) return undefined;
+      const current = view.mirror.keyGeneration;
+      if (current === null || current !== generation) return undefined;
+      return state.observedSequence(current);
+    },
     /** This is called by the real Initialize-gated public runtime, never inferred. */
     ready(current: EditorView) {
       if (retired) return;

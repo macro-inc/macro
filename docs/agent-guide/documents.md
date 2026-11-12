@@ -44,11 +44,15 @@ accepted. Preview layout notifications require a real native layout owner; row
 registration alone does not supply that capability.
 
 For a checklist containing a task reference, hover its bar and open **Filter
-tasks**. With Read or Comment access, choosing or clearing a filter must leave
-the bar and editor usable without writing settings. Grant Edit access on that
-same session and verify a subsequent choice updates settings. Native reader
-filtering currently cancels quietly; Off's reader-local filter changes remain
-a parity gap.
+tasks**. With a matching frontend and reader-settings producer, Read and Comment
+choices change local row filtering while leaving the bar and editor usable,
+with no document or WAL write. Clear filters locally, then verify that reopening
+shows stored settings. Any actual access change drops local choices; after an
+Edit grant, only a new choice may update stored settings. Equal-value access
+refreshes preserve the choice. Native canonical serializedState stays stored,
+unlike Off's reader-local NodeState; that model-observation gap remains explicit.
+Remote error paths retain surviving local choices until a later accepted reset,
+replacement or disposal; Source error-path parity is unqualified.
 
 The native body installs its checkbox pointer bridge through `installOverlays`.
 Click or tap a checklist marker, switch the view read-only, then unlock it and

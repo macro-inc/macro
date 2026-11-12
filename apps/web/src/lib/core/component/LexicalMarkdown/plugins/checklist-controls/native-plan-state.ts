@@ -142,6 +142,7 @@ function patchBar(
 export class NativeChecklistPlanState {
   private retired = false;
   private sequence: bigint | undefined;
+  private sequenceGeneration: number | undefined;
   private previousReceipt: string | undefined;
   private generation: number | undefined;
   private resetSeen = false;
@@ -149,6 +150,17 @@ export class NativeChecklistPlanState {
 
   current(): ReadonlyMap<number, NativeChecklistList> {
     return this.lists;
+  }
+
+  observedSequence(currentGeneration: number): string | undefined {
+    if (
+      this.retired ||
+      !this.resetSeen ||
+      this.generation !== currentGeneration ||
+      this.sequenceGeneration !== currentGeneration
+    )
+      return undefined;
+    return this.sequence?.toString();
   }
 
   /** Terminal UI cleanup; the native producer retains its own delivery authority. */
@@ -182,6 +194,7 @@ export class NativeChecklistPlanState {
     // They advance only the receipt cursor, never the current view's DOM baseline.
     if (delivery.generation !== currentGeneration) {
       this.sequence = sequence;
+      this.sequenceGeneration = delivery.generation;
       this.previousReceipt = receipt;
       return 'different-generation';
     }
@@ -223,6 +236,7 @@ export class NativeChecklistPlanState {
     this.lists = next;
     this.resetSeen = delivery.kind === 'delta';
     this.sequence = sequence;
+    this.sequenceGeneration = delivery.generation;
     this.previousReceipt = receipt;
     return 'updated';
   }

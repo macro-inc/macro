@@ -262,3 +262,27 @@ describe('native checklist delivery metadata', () => {
     expect(() => state.receive(initial, 1)).toThrow('presentation is retired');
   });
 });
+
+it('exposes only an actual decoded current-generation reset sequence for settings intents', () => {
+  const state = new NativeChecklistPlanState();
+  expect(state.observedSequence(1)).toBeUndefined();
+  state.receive(initial, 2);
+  expect(state.observedSequence(2)).toBeUndefined();
+  state.receive({ kind: 'cleared', generation: 2, sequence: '2' }, 2);
+  expect(state.observedSequence(2)).toBeUndefined();
+  state.receive(
+    {
+      kind: 'delta',
+      generation: 2,
+      factsVersion: '1',
+      sequence: '3',
+      reset: true,
+      lists: [],
+    },
+    2
+  );
+  expect(state.observedSequence(2)).toBe('3');
+  expect(state.observedSequence(3)).toBeUndefined();
+  state.retire();
+  expect(state.observedSequence(2)).toBeUndefined();
+});

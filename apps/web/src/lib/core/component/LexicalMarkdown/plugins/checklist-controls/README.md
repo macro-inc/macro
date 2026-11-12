@@ -38,8 +38,26 @@ receipt/transfer proof. Ordinary-session lifetime tests exercise ownership and
 cleanup; refresh controls require the matching producer and compare its real
 receipts against the Source collector and planner.
 
-Native filter settings use current session Edit access at queued admission. Read
-and Comment access cancel quietly before payload evaluation, preserving the bar
-and editor. This is a no-op: Source reader-local filter changes remain a parity
-gap. Queued writes retain their intended generation and require the same live
-list target before evaluating current settings.
+Filter changes use the closed `group-b.checklist-settings-intent` input. The
+queued native session chooses the existing document writer for Edit access or a
+session-owned Rust-planned presentation override for Read and Comment access.
+The latter changes no canonical model, selection, history, CRDT version or WAL.
+Source also changes its local NodeState, so the native canonical serializedState
+still differs from Source's reader-local state; there is no query mask.
+
+Capture settings and the last actually decoded current-generation plan sequence
+in the same UI turn. The sequence is a stale-view comparison, not access or
+transfer authority. Admission keeps the intended generation and actual list/bar
+identity, checks retirement around serialization and at the queued turn, and
+uses KeepModel without a selection query. Stale inputs return before Core
+dispatch; only native deliveries change visible filters.
+
+Any actual access-value change clears overrides and shows stored settings,
+including an upgrade to Edit; an equal-value refresh preserves them. Nothing
+local is promoted into a later document write. Successful remote application,
+actual Core replacement and binding clear drop local choices; control-only
+remounts reuse the same session host. Remote application errors alone retain choices for surviving
+lists until a later accepted reset, replacement or disposal. That error-path
+behavior is an explicitly unqualified Source difference. Source piggyback on
+upgrade is not proven; the observed binding change did not distinguish editor
+replacement from root rebinding. Replaced-editor-version coverage remains open.
