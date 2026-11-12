@@ -61,7 +61,11 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
             open({ type: 'agent', id: props.sessionId }, event.shiftKey)
           }
         >
-          <AgentSessionMentionLabel label={label()} />
+          <AgentSessionMentionLabel
+            label={label()}
+            harness={session()?.harness}
+            botId={session()?.botId}
+          />
         </button>
       </Tooltip>
       <Show when={linkedByPerson()}>

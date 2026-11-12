@@ -18,6 +18,7 @@ service.
 - `src/wiring.rs`: the one Postgres assembly every host builds from.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP router and AI
   authoring tools.
+- `set_appearance` replaces entity-owned icon/color metadata under Edit access, preserves content dates, and commits history-only activity in the same transaction.
 
 ## Scope
 

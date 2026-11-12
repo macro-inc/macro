@@ -34,6 +34,7 @@ mod tests;
 
 #[cfg(feature = "ai_tools")]
 pub mod ai_edit;
+pub mod appearance;
 #[cfg(feature = "ai_tools")]
 pub mod canvas;
 #[cfg(feature = "ai_tools")]
@@ -379,6 +380,10 @@ where
 {
     // Routes that need ensure_document_exists middleware
     let document_id_routes = Router::new()
+        .route(
+            "/{document_id}/appearance",
+            axum::routing::put(appearance::set_appearance::<T, Svc, Auth>),
+        )
         .route(
             "/{document_id}",
             axum::routing::get(get_document_handler::<T, Svc, Auth>)

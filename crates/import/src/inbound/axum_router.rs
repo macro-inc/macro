@@ -3,14 +3,15 @@
 use crate::domain::models::{ImportSource, ImportState, NotionImportReport};
 use crate::domain::ports::ImportError;
 use crate::domain::service::{
-    ImportService, NotionWorkspaceImporter, RunImportOutcome, WorkspaceImporter,
+    ImportService, ImportStager, NotionPageImporter, NotionWorkspaceImporter, RunImportOutcome,
+    WorkspaceImporter,
 };
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
@@ -21,6 +22,7 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+pub mod ledger;
 #[cfg(test)]
 mod test;
 
@@ -70,12 +72,25 @@ impl<T, Auth> FromRef<ImportRouterState<T, Auth>> for MacroAuthorizationState<Au
 /// Build the import router.
 pub fn import_router<T, Auth, S>(state: ImportRouterState<T, Auth>) -> Router<S>
 where
-    T: ImportService + WorkspaceImporter,
+    T: ImportService + WorkspaceImporter + ImportStager + NotionPageImporter,
     Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
         .route("/import/state", get(get_state_handler::<T, Auth>))
+        .route(
+            "/import/entities",
+            get(ledger::list_entities_handler::<T, Auth>)
+                .post(ledger::track_entity_handler::<T, Auth>),
+        )
+        .route(
+            "/import/entities/{id}",
+            delete(ledger::decline_entity_handler::<T, Auth>),
+        )
+        .route(
+            "/import/notion/pages",
+            post(ledger::import_notion_page_handler::<T, Auth>),
+        )
         .route("/import/run", post(run_import_handler::<T, Auth>))
         .route(
             "/import/runs/{source}/discover",

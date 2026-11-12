@@ -500,6 +500,7 @@ where
         }
 
         // Build parsed addresses
+        let from_name = sender.name.clone();
         let addresses = ParsedAddresses {
             from_email: sender.email,
             from_name: sender.name,
@@ -537,6 +538,7 @@ where
             provider_thread_id: input.provider_thread_id,
             thread_db_id,
             subject: input.subject,
+            from_name,
             to: input.to,
             cc: input.cc,
             bcc: input.bcc,
