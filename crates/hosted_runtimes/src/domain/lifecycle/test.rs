@@ -1084,3 +1084,16 @@ fn a_state_row_written_before_team_retries_still_decodes() {
 
     assert!(!state.retried_by_team);
 }
+
+#[test]
+fn a_team_retry_of_a_powered_off_computer_leaves_nothing_to_unpage() {
+    let mut off = gave_up();
+    off.power = Power::Off;
+
+    let (stopped, _) = transition(&off, &Event::TeamRetry, context(true)).unwrap();
+
+    // It does not boot, so nothing would clear the mark before a later
+    // give-up, which must page.
+    assert_eq!(stopped.phase, Phase::Stopped);
+    assert!(!stopped.retried_by_team);
+}
