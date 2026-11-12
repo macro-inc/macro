@@ -15,6 +15,8 @@ live events that keep them current.
   - `source.ts`: the GraphQL reads and the cached latest page.
   - `channel-sync.ts`: opening from the cache, catch-up, writing the page back.
   - `apply.ts`: changes applied to loaded pages; `convert.ts`: GraphQL ↔ timeline shapes.
+  - `prewarm.ts`: warming the pages of channels not open yet, and evicting
+    the pages of channels not opened for 30 days.
 
 ## Scope
 
@@ -106,4 +108,23 @@ live events that keep them current.
   the response may predate rows the timeline holds, and an older row under
   a newer number is never corrected; the write's own change comes by its
   number instead.
+- Writing a page deletes the rows the stored page held and the new one drops
+  (`writeCachedLatestPage`), so a channel keeps at most one page of rows. A
+  tab runs a channel's writes one at a time. The rows are found through the
+  page record (`ChannelCachedPageRows`), not the viewer; a page missing a row
+  (left by writers in two windows racing) reads as a miss, so its rows can't
+  be found and stay until written over.
+- While the tab is visible and idle, the unread channels and the 20 most
+  recently opened are warmed three at a time (`useChannelCachePrewarm`,
+  mounted with the navigation unread state): no page reads the latest; a
+  cached page catches up from its number like an open and is written back.
+  A channel whose timeline is in TanStack Query is never touched, and a
+  timeline read in flight goes first. A channel is warmed once per session,
+  again when it turns unread again.
+- "Last opened" is the later `viewed_at` of the channel list and the activity
+  list (which opening a channel moves). In each page load, once both lists
+  have been read from the server (lists restored from the device can be a
+  week old), and then at most once a day, the pages of channels in those
+  lists not opened for 30 days and not about to be warmed are deleted with
+  their rows. Without both lists every page would look stale.
 - Threads, `messagesByIds` and message resolution still read REST.

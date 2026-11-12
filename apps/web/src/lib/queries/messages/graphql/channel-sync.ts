@@ -63,10 +63,10 @@ import {
  */
 const ANSWERED_CACHE_HEAD_START_MS = 2_000;
 /** The page size the REST timeline reads behind a cursor, and the cached page's bound. */
-const CURSOR_PAGE_LIMIT = 100;
+export const CURSOR_PAGE_LIMIT = 100;
 const FIRST_PAGE_LIMIT = 50;
 /** Change pages one catch-up reads before it gives up and reads the page again. */
-const MAX_CATCH_UP_PAGES = 20;
+export const MAX_CATCH_UP_PAGES = 20;
 const PERSIST_DELAY_MS = 1_000;
 /** A changes read that has not answered by now is treated as failed. */
 const CHANGES_TIMEOUT_MS = 15_000;
@@ -302,7 +302,7 @@ async function readCache(
   channelId: string
 ): Promise<CachedLatestPage | undefined> {
   try {
-    const page = await readCachedLatestPage(host, channelId);
+    const page = await readCachedLatestPage(host, channelId, 'user-visible');
     const held = page && page.page.entries.length > 0 ? page : undefined;
     noteCachedPage(host, channelId, held !== undefined);
     return held;

@@ -163,16 +163,23 @@ export async function fetchChannelChanges(
   return data.user.channelMessages.changes;
 }
 
+/**
+ * How urgently the engine answers a cached page read: an open is
+ * `user-visible`; prewarming reads in the `background`, behind it.
+ */
+export type CachedPageReadPriority = 'user-visible' | 'background';
+
 /** The latest page the cache holds for the channel, if any. */
 export async function readCachedLatestPage(
   host: Pick<CacheHost, 'readQuery'>,
-  channelId: string
+  channelId: string,
+  priority: CachedPageReadPriority
 ): Promise<LatestChannelPage | undefined> {
   const read = await host.readQuery({
     query: TIMELINE_QUERY,
     operationName: TIMELINE_OPERATION,
     variables: latestPageVariables(channelId),
-    priority: 'user-visible',
+    ...(priority === 'user-visible' ? { priority } : {}),
   });
   if (read.kind !== 'hit') return undefined;
   // The generated document defines the normalized cache result's shape.

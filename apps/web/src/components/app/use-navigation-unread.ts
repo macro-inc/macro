@@ -15,6 +15,7 @@ import { notificationStateFromGraphql } from '@notifications/notification-state'
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { queryReadyGate } from '@queries/gate';
+import { useChannelCachePrewarm } from '@queries/messages/graphql/prewarm';
 import { useNotificationTypePreferencesQuery } from '@queries/notification/type-preferences';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import {
@@ -74,10 +75,11 @@ export function useNavigationUnread() {
       (entity) => entity.type === 'email' && !entity.isRead && !entity.done
     );
   });
-  const channelsUnread = createMemo(() => {
-    if (graphqlFlag().enabled) {
-      if (!channels.isEnabled || !queryReadyGate(channels)) return false;
-      return channels.data.some((notification) => {
+  const unreadChannelIds = createMemo((): string[] => {
+    if (!graphqlFlag().enabled) return [];
+    if (!channels.isEnabled || !queryReadyGate(channels)) return [];
+    return channels.data
+      .filter((notification) => {
         const state = notificationStateFromGraphql(notification.state);
         return (
           (notificationSource.withLocalState?.({
@@ -85,8 +87,13 @@ export function useNavigationUnread() {
             state,
           }) ?? state) === 'unseen'
         );
-      });
-    }
+      })
+      .map((notification) => notification.channelId);
+  });
+  // The channels with unread messages are the likeliest to be opened next.
+  useChannelCachePrewarm(unreadChannelIds);
+  const channelsUnread = createMemo(() => {
+    if (graphqlFlag().enabled) return unreadChannelIds().length > 0;
     return notificationSource
       .notifications()
       .some(
