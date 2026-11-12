@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO team_runtime_preset_allowlist (team_id, preset_ids)\n                    VALUES ($1, $2)\n                    ON CONFLICT (team_id) DO UPDATE SET preset_ids = EXCLUDED.preset_ids\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c2bf6ae46d4503cea01284fa4deba304df0bfe6ea3961ab1cab35ccd16a683a9"
+}

@@ -1,3 +1,6 @@
+-- Keep foreign-key lock waits bounded on the existing User and team tables.
+SET LOCAL lock_timeout = '5s';
+
 -- Axiom: new identity is separate from stored macro| user ids and carries no credentials.
 CREATE TABLE rox_identity_binding (
     macro_user_id TEXT PRIMARY KEY REFERENCES "User"(id) ON DELETE CASCADE,

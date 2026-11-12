@@ -8,7 +8,7 @@ use tower_cookies::Cookies;
 
 use crate::api::{
     context::ApiContext,
-    utils::{create_access_token_cookie, create_refresh_token_cookie, record_login_audit},
+    utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 
 use model::{
@@ -65,8 +65,6 @@ pub async fn handler(
             )
                 .into_response()
         })?;
-
-    record_login_audit(&ctx, &access_token).await?;
 
     cookies.add(create_access_token_cookie(&access_token));
     cookies.add(create_refresh_token_cookie(&refresh_token));

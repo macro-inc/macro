@@ -10,8 +10,7 @@ use tower_cookies::Cookies;
 use crate::api::{
     context::ApiContext,
     utils::{
-        append_signed_up_param_if_new_user, create_access_token_cookie,
-        create_refresh_token_cookie, record_login_audit,
+        append_signed_up_param_if_new_user, create_access_token_cookie, create_refresh_token_cookie,
     },
 };
 use fusionauth::error::FusionAuthClientError;
@@ -110,8 +109,6 @@ pub async fn handler(
             return Err((StatusCode::UNAUTHORIZED, "invalid code").into_response());
         }
     }
-
-    record_login_audit(&ctx, &passwordless_response.token).await?;
 
     cookies.add(create_access_token_cookie(&passwordless_response.token));
     cookies.add(create_refresh_token_cookie(

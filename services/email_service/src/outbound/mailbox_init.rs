@@ -1,5 +1,6 @@
 //! Storage and authentication adapters for the email domain's setup policy.
 
+use anyhow::Context as _;
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use email::domain::mailbox::initialization::*;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -51,6 +52,7 @@ pub async fn ensure_rox_mailbox(
     db: &PgPool,
     fusionauth_user_id: &str,
     macro_id: MacroUserIdStr<'static>,
+    writers_enabled: bool,
 ) -> anyhow::Result<Option<models_email::email::service::link::Link>> {
     use models_email::email::service::link::{Link, UserProvider};
 
@@ -69,7 +71,10 @@ pub async fn ensure_rox_mailbox(
         }
         return Ok(Some(link));
     }
-    let email_address = macro_user_id::email::EmailStr::try_from(address)?;
+    if !writers_enabled {
+        return Ok(None);
+    }
+    let email_address = macro_user_id::email::EmailStr::try_from(address.clone())?;
     let link = Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id: macro_id.clone(),
@@ -86,12 +91,49 @@ pub async fn ensure_rox_mailbox(
 
     let mut tx = db.begin().await?;
     sqlx::query!(
+        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1, 0))",
+        format!("rox-mailbox:{address}")
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    let raced_existing = sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+            SELECT 1 FROM email_links WHERE lower(email_address) = lower($1) AND provider = 'ROX'
+        ) AS "exists!""#,
+        address
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    if raced_existing {
+        tx.rollback().await?;
+        let link =
+            email_db_client::links::get::fetch_link_by_email(db, &address, UserProvider::Rox)
+                .await?
+                .context("ROX link disappeared during initialization")?;
+        if link.macro_id.as_ref() != macro_id.as_ref()
+            || link.fusionauth_user_id != fusionauth_user_id
+        {
+            anyhow::bail!("Rox mailbox link belongs to a different account");
+        }
+        return Ok(Some(link));
+    }
+
+    sqlx::query!(
         "UPDATE email_links SET is_primary = false WHERE macro_id = $1 AND provider <> 'ROX'",
         macro_id.as_ref(),
     )
     .execute(&mut *tx)
     .await?;
     let link = email_db_client::links::insert::upsert_link(&mut *tx, link).await?;
+    sqlx::query!(
+        "INSERT INTO enterprise_audit (id, actor_id, action, resource_id, result) VALUES ($1, $2, $3, $4, 'local_link_created')",
+        macro_uuid::generate_uuid_v7(),
+        macro_id.as_ref(),
+        enterprise::audit::AuditAction::MailboxProvision.as_ref(),
+        link.id.to_string()
+    )
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(Some(link))
 }

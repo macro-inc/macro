@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_runtime_preset_allowlist WHERE team_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bde79d74e51634d39efb92c01b8caedf924206bbaae0aac5aed70f2839877c0"
+}

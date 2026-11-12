@@ -75,7 +75,7 @@ impl FusionAuthClient {
     /// Performs a password-based login with the given email and password.
     #[tracing::instrument(skip(self, password), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn password_login(&self, email: &str, password: &str) -> Result<(String, String)> {
-        login(
+        let tokens = login(
             &self.auth_client,
             &self.fusion_auth_base_url,
             PasswordLoginRequest {
@@ -84,6 +84,8 @@ impl FusionAuthClient {
                 password: Cow::Borrowed(password),
             },
         )
-        .await
+        .await?;
+        self.audit_completed_login(&tokens.0).await?;
+        Ok(tokens)
     }
 }
