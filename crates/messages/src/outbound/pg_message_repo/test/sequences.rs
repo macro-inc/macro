@@ -467,20 +467,8 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
             .unwrap(),
         Some(2)
     );
-    for (lock_timeout, statement_timeout, expected_code, expected_message) in [
-        (
-            "75ms",
-            "0",
-            "55P03",
-            "canceling statement due to lock timeout",
-        ),
-        (
-            "0",
-            "75ms",
-            "57014",
-            "canceling statement due to statement timeout",
-        ),
-    ] {
+    for lock_timeout in ["75ms", "1ms"] {
+        let statement_timeout = "0";
         let options = pool.connect_options().as_ref().clone().options([
             ("lock_timeout", lock_timeout),
             ("statement_timeout", statement_timeout),
@@ -500,13 +488,16 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
                 .await
                 .expect("configured PostgreSQL timeout must stop the counter waiter")
                 .unwrap_err();
-        let MessageError::Repository(report) = failure else {
-            panic!("counter timeout must propagate as a repository failure");
+        let MessageError::Contended(report) = failure else {
+            panic!("counter timeout must propagate as retryable contention");
         };
         let error = report.downcast_current_context::<sqlx::Error>().unwrap();
         let database = error.as_database_error().unwrap();
-        assert_eq!(database.code().as_deref(), Some(expected_code));
-        assert_eq!(database.message(), expected_message);
+        assert_eq!(database.code().as_deref(), Some("55P03"));
+        assert_eq!(
+            database.message(),
+            "canceling statement due to lock timeout"
+        );
 
         // Acquiring the sole connection again also waits for SQLx's rollback.
         assert!(timed_repo.get(&parent, failed_id).await.unwrap().is_none());
@@ -525,7 +516,7 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_counter_wait_without_timeouts_resumes_after_holder_rolls_back(pool: PgPool) {
+async fn channel_counter_wait_is_bounded_with_database_timeouts_disabled(pool: PgPool) {
     setup(&pool).await;
     let channel_id = channel_fixture(&pool).await;
     let parent = MessageParent::Channel(channel_id);
@@ -551,22 +542,24 @@ async fn channel_counter_wait_without_timeouts_resumes_after_holder_rolls_back(p
     let waiting_repo = PgMessageRepository::new(waiting_pool.clone());
     let mut input = command("message-doc-a", None, "waiting for counter");
     input.parent = parent;
-    let waiter = waiting_repo.create(input);
-    tokio::pin!(waiter);
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_millis(150), &mut waiter)
+    let failure = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        waiting_repo.create(input.clone()),
+    )
+    .await
+    .expect("the counter statement bounds its wait even when pool timeouts are disabled")
+    .unwrap_err();
+    assert!(matches!(failure, MessageError::Contended(_)));
+    // Reusing the single pooled connection waits for rollback and verifies the
+    // SET LOCAL value did not leak from the failed transaction.
+    assert_eq!(
+        sqlx::query_scalar!("SELECT current_setting('lock_timeout') AS \"timeout!\"")
+            .fetch_one(&waiting_pool)
             .await
-            .is_err(),
-        "with no timeout the waiter stays pending while the holder is open"
+            .unwrap(),
+        "0"
     );
     holder.rollback().await.unwrap();
-    assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
-            .await
-            .expect("waiter resumes when holder releases the counter")
-            .unwrap()
-            .1,
-        Some(2)
-    );
+    assert_eq!(waiting_repo.create(input).await.unwrap().1, Some(2));
     waiting_pool.close().await;
 }

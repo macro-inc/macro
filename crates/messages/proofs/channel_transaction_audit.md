@@ -1,18 +1,27 @@
 # Channel sequence transaction and timeout audit
 
 Static audit of the implementation against base `354da677b5`. Source locations
-below identify the production transaction boundaries; benchmark changes do not
-change those boundaries. No database configuration was changed for this audit.
+below identify the production transaction boundaries. The append statements
+temporarily change their transaction-local lock timeout; no server or pool
+configuration is changed.
 
 ## Counter lock and commit boundaries
 
 `channel_change_db_utils::append_in` increments the counter and inserts the log
-row in one statement (`crates/channel_change_db_utils/src/append.rs:20`). Its
+row in one statement (`crates/channel_change_db_utils/src/append.rs:25`). Its
 row lock remains held until the caller's transaction ends. The batch equivalent
 locks counters in channel-id order and allocates each channel's sequences in
-input order (`crates/channel_change_db_utils/src/append.rs:57`). The new tables
+input order (`crates/channel_change_db_utils/src/append.rs:81`). The new tables
 have no foreign keys or triggers that acquire another domain's row lock
 (`crates/macro_db_client/migrations/20261110150956_channel_change_log.sql:3`).
+
+Each append remains one SQL statement. Its materialized dependency chain saves
+the inherited `lock_timeout`, sets the smaller nonzero value of that timeout
+and 50 ms before feeding rows to the counter INSERT, then consumes all inserted
+log rows before restoring the saved value. Restoration executes inside the
+same statement, without another round trip under the counter lock. For the
+scalar append, configuration is at `crates/channel_change_db_utils/src/append.rs:29`
+and the restoration barrier is at `:44`; for a batch these are at `:86` and `:113`.
 
 | Channel write | Work completed before counter acquisition | Append and commit | Work while holding the counter |
 | --- | --- | --- | --- |
@@ -80,7 +89,8 @@ remote call occurs under the counter on the live paths above.
 | Calendar/prune pool | `services/calendar_service/src/main.rs:60` | No startup statement/lock timeout override; SQLx acquisition defaults to 30 seconds. |
 | Channel changes log read and message hydration | `crates/messages/src/outbound/pg_message_repo/changes.rs:26`, `:78` | `SET LOCAL statement_timeout = '15s'`, per statement for that transaction. This is not a 15-second aggregate request deadline. |
 | Channel prune batch | `crates/messages/src/outbound/pg_message_repo/changes.rs:148` | `SET LOCAL statement_timeout = '15s'`, including a blocked delete statement. |
-| Channel counter reads/writes, activity append, calls and history: database statements | Write sites above; `crates/messages/src/outbound/pg_message_repo/changes.rs:13` | No new database timeout. Inherit database/role/connection settings. With PostgreSQL's disabled statement/lock timeout values, the repository does not impose a deadline on an active counter statement. Outer caller deadlines are separate, below. |
+| Counter/log allocation for messages, activities, calls and history | `crates/channel_change_db_utils/src/append.rs:25`, `:81` | Transaction-local 50 ms counter row-wait cap, retaining any stricter nonzero inherited timeout. Save/configure/allocation/restore stay inside one statement. Errors abort the transaction and rollback restores its settings. |
+| Other statements and COMMIT | Write sites above; counter read `crates/messages/src/outbound/pg_message_repo/changes.rs:13` | No new timeout. Inherit database/role/connection settings. The append restores the saved value before subsequent work, including the historical completion exceptions and COMMIT. |
 | Reference-repair maintenance: outer future | `crates/slack_integration/src/inbound/worker.rs:45`, `:234`, `:245` | The whole reconciliation pass has a 30-second Tokio timeout. Expiry drops the pass, returns `ImportError::Retryable`, and the maintenance loop waits ten seconds before its next pass (`:238`). This is not a PostgreSQL statement timeout. |
 | Main historical import: outer future | `crates/slack_integration/src/inbound/worker.rs:182`, `:194`, `:202`, `:207` | `work.import` has no fixed total-duration timeout. Independent lease and queue heartbeats run every 60 seconds; each heartbeat attempt is bounded by 30 seconds. Heartbeat failure drops the import future. On shutdown, the worker grants a 110-second drain window before dropping remaining work (`:48`, `:88`). |
 | Message/call HTTP routes in DSS: outer future | `services/document_storage_service/src/api.rs:58`; `crates/messages/src/inbound/axum_router.rs:48` | No request timeout layer found in the checked-in route composition or message service. The 200 ms tracing-layer argument is a warning threshold, not a deadline (`crates/macro_tower_layers/src/lib.rs:269`). External caller/proxy timeouts were not inspected. |
@@ -93,11 +103,35 @@ connection continues waiting for a counter. Actual deployed database/role
 settings and connection-URL options were not inspected; the table describes
 checked-in configuration, not a live production `SHOW` result.
 
+The 50 ms value is a **per-lock-wait** bound, not a transaction or statement
+wall-time limit. A multi-channel activity batch may wait separately for several
+counters, and execution/commit time is not bounded by this setting. PostgreSQL
+also acquires initial relation locks before executing the CTE that configures
+the timeout. Those pre-execution relation locks retain the inherited setting;
+the scoped cap does not claim protection from schema-lock waits. The counter
+row waits that serialize channel writers occur after the configured CTE feeds
+the INSERT. The cap does not change earlier message/thread locks, other SQL,
+or deferred checks at COMMIT, and does not promise latency isolation for those
+other waits.
+
+The production DSS primary pool keeps at least 10 and permits at most 50
+connections (`services/document_storage_service/src/server.rs:247`). As a rough
+steady-arrival estimate,
+200–400 contending writes per second multiplied by a 50 ms wait accounts for
+10–20 parked connections, plus the current holder. At 400 writes per second,
+100 ms would account for 40 parked connections, exceeding half of this pool.
+This estimate motivates 50 ms; it is not a connection-occupancy guarantee.
+It excludes time in other statements, bursts, retries, and multiple waits in
+one append. This estimate uses the service pool cap, not a deployed database
+connection limit.
+
 ## Caller-visible failures and rollback
 
 | Caller | Failure propagation |
 | --- | --- |
-| Message write/read | SQLSTATE `55P03` (lock timeout), `57014` (statement cancellation), `40P01` (deadlock) and pool errors are not special-cased by `database_error` (`crates/messages/src/outbound/pg_message_repo.rs:46`); they remain `MessageError::Repository`. The message HTTP adapter returns status 500 with `message operation failed` (`crates/messages/src/inbound/axum_router.rs:168`). No sequence or success push is returned before repository COMMIT succeeds. |
+| Message allocation | SQLSTATE `55P03` from the append is classified as `MessageError::Contended` in `crates/messages/src/outbound/pg_message_repo/change_log.rs:8`. The message HTTP adapter returns status 503 with a safe retry message and `Retry-After: 1` (`crates/messages/src/inbound/axum_router.rs:172`). No sequence or success push is returned before repository COMMIT succeeds. |
+| Bot webhook message allocation | The same domain failure produces status 503 and `Retry-After: 1` (`crates/bots/src/inbound/channel_webhook_router.rs:401`, `:430`). `Contended` has a stable message that omits the underlying database details. |
+| Other message failures | SQLSTATE `57014` (statement cancellation), `40P01` (deadlock), pool errors, and `55P03` outside the append retain `MessageError::Repository` through `crates/messages/src/outbound/pg_message_repo.rs:46`. The HTTP adapter returns status 500 (`crates/messages/src/inbound/axum_router.rs:179`). |
 | Call write | Plain repository operations propagate `sqlx::Error`; call service mapping and `From<sqlx::Error>` produce `CallError::Internal` (`crates/call/src/outbound/pg_call_repo/team_share.rs:30`, `crates/call/src/domain/service.rs:2038`). The HTTP adapter returns status 500 with `internal server error` (`crates/call/src/inbound/axum_router.rs:1231`). |
 | Activity ingestion | Repository error propagates before realtime publication. The consumer exits without committing that source offset (`crates/activity/src/inbound/kafka_consumer.rs:140`); DSS restarts it after five seconds (`services/document_storage_service/src/server.rs:1131`). Replayed deterministic activity ids can receive another log sequence, preserving the at-least-once log guarantee. |
 | Historical import/reconciliation | Repository errors are wrapped as `ImportError::Retryable` (`services/slack_import_worker/src/composition.rs:31`, `channel_sink.rs:194`, `reference_reconciliation.rs:62`); neither checkpoint nor successful body completion commits. |
@@ -120,6 +154,42 @@ maintenance limit and import cancellation paths therefore bound caller work,
 not the lifetime of an active database lock wait. They must not be treated as
 substitutes for `lock_timeout` or `statement_timeout`.
 
+## Observed cancellation edge in the earlier 5 ms experiment
+
+The three 5 ms pool-isolation runs produced 22 SQLSTATE `57014` errors
+(2, 8 and 12 by run), alongside 620,970 `55P03` errors. Every one of the 22
+server log entries reported `canceling statement due to user request` on the
+counter append beginning `WITH saved AS MATERIALIZED`; none named ROLLBACK
+or reported a statement timeout. Twenty entries included counter tuple/index
+context; two had no context. The relevant log window was 2026-11-12
+06:42–06:45 UTC. The extracted entries are retained locally in
+`/tmp/channel-seq-cancellation-excerpts.log` from `/tmp/channel-seq-pg.log`.
+A separate connection afterward reported `statement_timeout=0`,
+`lock_timeout=0` and `idle_in_transaction_session_timeout=0`. This checks the
+local default connection, not the precise settings of each benchmark connection.
+
+PostgreSQL 18.4's interrupt handler distinguishes a lock-timeout indicator
+(`55P03`), a statement-timeout indicator (`57014`), and a pending query cancel
+with neither indicator (`57014`, user-request text).
+[PostgreSQL interrupt classification](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/tcop/postgres.c#L3196-L3248)
+The lock-wait code preserves the lock-timeout indicator when leaving a wait,
+but enabling a subsequent timeout clears that timeout's indicator.
+[Lock-wait cleanup](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/storage/lmgr/proc.c#L1548-L1563),
+[timeout initialization](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/utils/misc/timeout.c#L143-L183)
+A plausible interleaving is a timeout arriving as a counter lock is granted,
+followed by another lock wait resetting the indicator before the pending
+interrupt is processed. This is a source-backed inference, **not a proven
+interleaving** in these runs. Restoring `lock_timeout` has no assignment hook
+that clears the indicator, so the setting restoration itself has not been
+shown to cause the error.
+[PostgreSQL lock-timeout setting](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/utils/misc/guc_tables.c#L2624-L2633)
+
+These observations do not establish that every `57014` means contention.
+That SQLSTATE remains a repository error: HTTP 500 with no `Retry-After`.
+Only `55P03` from the append receives the contention/503 mapping. The current
+50 ms cap may change how often this edge is encountered, but does not prove
+it absent; the 5 ms counts remain historical measurements.
+
 ## Regression evidence and remaining scope
 
 Existing committed tests cover concurrent commit-prefix visibility, uniqueness
@@ -128,22 +198,104 @@ and rollback, plus the deferred-root lock cycle:
 `concurrent_channel_replies_and_root_writers_finish_without_deadlocks` in
 `crates/messages/src/outbound/pg_message_repo/test/sequences.rs`.
 
-The following additional regression tests passed in release mode against the
-dedicated local PostgreSQL 18.4 database (two passed, zero failed):
+The scoped-timeout cases below passed against the current 50 ms append SQL:
+all six utility tests passed, and the full messages suite passed 198 tests with
+eight benchmark tests ignored by default. The updated cases replace the
+earlier unbounded-wait expectation. Logs are `/tmp/channel-seq-utils-50ms.log`
+and `/tmp/channel-seq-messages-50ms.log`.
 
 - `channel_counter_wait_timeout_rolls_back_the_entire_message`
   (`crates/messages/src/outbound/pg_message_repo/test/sequences.rs:451`): holds
   the counter on one connection, makes another create a message then time out
-  at the final append with both `lock_timeout = 75ms` and
-  `statement_timeout = 75ms`, verifies the preserved SQLSTATE, absent message,
-  unchanged visible counter and gap-free next successful sequence.
-- `channel_counter_wait_without_timeouts_resumes_after_holder_rolls_back`
-  (`crates/messages/src/outbound/pg_message_repo/test/sequences.rs:528`): with
-  both timeout settings disabled, the writer remains pending for 150ms and
-  resumes with the expected sequence once the holder rolls back.
+  at the final append with inherited `lock_timeout = 75ms` and `1ms`; checks
+  `Contended`, preserved SQLSTATE, absent message, unchanged visible counter
+  and gap-free next successful sequence.
+- `channel_counter_wait_is_bounded_with_database_timeouts_disabled`
+  (`crates/messages/src/outbound/pg_message_repo/test/sequences.rs:519`): with
+  both database lock and statement timeouts disabled, the append still times out,
+  leaves the pooled setting at zero, and succeeds after the holder rolls back.
+- `append_restores_stricter_disabled_and_longer_timeouts`,
+  `counter_timeout_rolls_back_prior_and_partial_batch_changes`, and
+  `a_later_statement_keeps_the_callers_longer_lock_timeout` in
+  `crates/channel_change_db_utils/src/test/timeout.rs` cover both scalar and
+  batch statements, setting restoration, atomic rollback and later SQL.
 
 The user-deletion `cleanup_user_call_entities` cascade is deliberately outside
 this PR's sequence coverage. A retained channel call root can keep its prior
 call status in an already-populated device cache until that row is next fetched
 or the channel is reset. This path remains excluded to avoid holding channel counter locks through
 the remainder of user deletion.
+
+## Sender response and retry behavior
+
+The message API and channel bot webhook return the same public response for a
+counter append that fails with SQLSTATE `55P03`: HTTP **503**, header
+**`Retry-After: 1`**, and JSON
+`{"message":"channel is busy; retry the request"}`. The adapter classifies only
+`55P03` from the append as `MessageError::Contended`, retaining the database
+report internally
+([change_log.rs:8](../src/outbound/pg_message_repo/change_log.rs#L8),
+[ports.rs:27](../src/domain/ports.rs#L27)). Both HTTP adapters set the header
+and keep the underlying cause out of that body
+([message HTTP:166](../src/inbound/axum_router.rs#L166),
+[webhook HTTP:397](../../bots/src/inbound/channel_webhook_router.rs#L397)).
+
+SQLSTATE `57014` remains `MessageError::Repository`
+([database_error:46](../src/outbound/pg_message_repo.rs#L46)). The message API
+and channel bot webhook both answer **500**, with **no `Retry-After` header**,
+and JSON `{"message":"message operation failed"}`. They log the underlying
+report for diagnosis without returning it
+([message HTTP:179](../src/inbound/axum_router.rs#L179),
+[webhook logging/body:413](../../bots/src/inbound/channel_webhook_router.rs#L413)).
+The webhook regression test asserts both this safe body and the absent header
+([tests.rs:59](../../bots/src/inbound/channel_webhook_router/tests.rs#L59)).
+
+Neither request path retries either failure on the server. Repository creation
+uses `?` on the append immediately before commit
+([pg_message_repo.rs:753](../src/outbound/pg_message_repo.rs#L753)); the service
+propagates failure before success publication
+([service.rs:433](../src/domain/service.rs#L433)). The HTTP and webhook handlers
+each await one service post
+([message handler:269](../src/inbound/axum_router.rs#L269),
+[webhook handler:287](../../bots/src/inbound/channel_webhook_router.rs#L287)).
+This statement concerns these synchronous message requests; activity ingestion
+and import workers have the separate retry behavior described above.
+
+The current **web sender does not retry 503 or 500** and does not consume the
+header or server JSON explanation. Its message client passes no retry setting
+([messages.ts:90](../../../apps/web/src/lib/service-clients/service-storage/messages.ts#L90));
+`safeFetch` defaults to one attempt, maps 503 to `HTTP_ERROR`, and returns it
+immediately
+([safeFetch.ts:116](../../../apps/web/src/lib/core/util/safeFetch.ts#L116),
+[safeFetch.ts:290](../../../apps/web/src/lib/core/util/safeFetch.ts#L290),
+[safeFetch.ts:318](../../../apps/web/src/lib/core/util/safeFetch.ts#L318)). The
+send mutation only handles a 409 by reading its already-stored id
+([mutations.ts:434](../../../apps/web/src/lib/queries/messages/mutations.ts#L434));
+the application configures retries for queries, not mutations
+([client.ts:15](../../../apps/web/src/lib/queries/client.ts#L15)), and the
+installed TanStack Query mutation default is zero retries
+(`node_modules/@tanstack/query-core/src/mutation.ts:199`). Authentication
+refresh retries concern 401, not these failures
+([fetchWithToken.ts:123](../../../apps/web/src/lib/core/util/fetchWithToken.ts#L123)).
+On failure the web shows `Failed to send message`, removes the optimistic row,
+and restores the sent draft if it has not been replaced by newer input
+([mutations.ts:539](../../../apps/web/src/lib/queries/messages/mutations.ts#L539),
+[Channel.tsx:824](../../../apps/web/src/features/channel/Channel/Channel.tsx#L824),
+[thread composer:155](../../../apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx#L155)).
+
+The **SDK also does not automatically retry**. Its channel send chooses one
+message-API or webhook call
+([post.ts:42](../../../packages/sdk/src/entities/channels/post.ts#L42),
+[post.ts:84](../../../packages/sdk/src/entities/channels/post.ts#L84)); the
+generated client executes one fetch
+([client.gen.ts:101](../../../packages/sdk/generated/storage/client/client.gen.ts#L101)),
+and its configured interceptor adds authorization only
+([client.ts:287](../../../packages/sdk/src/utils/client.ts#L287)). `unwrap`
+throws `MacroApiError(status, data)`; that high-level error does not retain
+response headers
+([unwrap.ts:32](../../../packages/sdk/src/utils/unwrap.ts#L32),
+[unwrap.ts:91](../../../packages/sdk/src/utils/unwrap.ts#L91)). A 503 therefore
+throws `Macro API error 503: channel is busy; retry the request`. A sender must
+implement its own delayed retry policy or retry manually; the header advertises
+the delay, but does not cause existing clients to wait and resend. Behavior of
+external webhook programs outside this repository is not established here.

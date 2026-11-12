@@ -74,7 +74,7 @@ fn read_refused(error: MessageError) -> HarnessError {
         MessageError::NotFound | MessageError::Forbidden | MessageError::Invalid(_) => {
             HarnessError::InvalidOrigin(rootcause::report!(error).into())
         }
-        MessageError::Conflict | MessageError::Repository(_) => {
+        MessageError::Conflict | MessageError::Contended(_) | MessageError::Repository(_) => {
             HarnessError::PromptContext(rootcause::report!(error).into())
         }
     }

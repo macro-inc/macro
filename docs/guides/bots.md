@@ -77,6 +77,20 @@ const [webhook] = await bot.webhooks();
 `secret` is shown only once. POST `{ "content": "..." }` to `webhook.url` with
 the token in `x-macro-bot-token` and `x-macro-bot-scope: user`.
 
+When concurrent channel writes briefly contend, the webhook and channel message
+API return HTTP `503`, header `Retry-After: 1`, and this JSON body:
+
+```json
+{ "message": "channel is busy; retry the request" }
+```
+
+That attempt did not commit a message change. The server, web sender, and SDK do
+not automatically retry this response or act on `Retry-After`. The web sender
+shows a failure and restores the draft; the SDK throws `MacroApiError` with
+status `503` and the response body, without preserving the header on that error.
+Retry manually, or implement a retry policy in the calling program that waits
+at least one second for this response.
+
 ## What a bot can do
 
 - **Personal bot** (the default): owned by you. It acts only as you, through

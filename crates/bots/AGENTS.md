@@ -44,6 +44,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Gotchas
 
+- Channel webhook message contention returns 503 with `Retry-After: 1` and a
+  safe retry message; other message repository errors return a safe 500.
+  Retain the underlying causes only in server diagnostics.
 - Agent create/update/patch must persist `has_agent = true` atomically with
   configuration writes; mention dispatch gates on this flag for every harness.
 - Soft-deleting a harness unbinds its agents (a trigger nulls

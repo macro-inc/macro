@@ -46,16 +46,31 @@ WHERE channel_id BETWEEN '019ba000-0000-7000-8000-000000000001' AND '019ba000-00
 GROUP BY channel_id ORDER BY channel_id;
 SET LOCAL statement_timeout = '15s';
 
-PREPARE append_scalar (uuid, smallint, uuid, uuid) AS WITH next AS (
+PREPARE append_scalar (uuid, smallint, uuid, uuid) AS WITH saved AS MATERIALIZED (
+                SELECT current_setting('lock_timeout') AS value
+            ), configured AS MATERIALIZED (
+                SELECT set_config('lock_timeout', CASE
+                    WHEN value::interval > interval '0'
+                        AND value::interval < interval '50 milliseconds' THEN value
+                    ELSE '50ms' END, true) AS value
+                FROM saved
+            ), next AS (
                 INSERT INTO channel_change_counters (channel_id, seq)
-                VALUES ($1, 1)
+                SELECT $1, 1 FROM configured WHERE configured.value IS NOT NULL
                 ON CONFLICT (channel_id) DO UPDATE
                 SET seq = channel_change_counters.seq + 1, updated_at = now()
                 RETURNING seq
+            ), logged AS (
+                INSERT INTO channel_change_log (channel_id, seq, kind, message_id, activity_id)
+                SELECT $1, next.seq, $2, $3, $4 FROM next
+                RETURNING seq
+            ), restored AS MATERIALIZED (
+                SELECT set_config('lock_timeout', saved.value, true) AS value
+                FROM saved CROSS JOIN (SELECT count(*) AS completed FROM logged) done
+                WHERE done.completed > 0
             )
-            INSERT INTO channel_change_log (channel_id, seq, kind, message_id, activity_id)
-            SELECT $1, next.seq, $2, $3, $4 FROM next
-            RETURNING seq AS "seq!";
+            SELECT logged.seq AS "seq!" FROM logged CROSS JOIN restored
+            WHERE restored.value IS NOT NULL;
 
 \echo append_scalar force_custom_plan first
 SET LOCAL plan_cache_mode = 'force_custom_plan';
@@ -87,7 +102,15 @@ RELEASE measured_write;
 DEALLOCATE append_scalar;
 
 PREPARE append_activity (uuid[], uuid[]) AS
-            WITH pending AS MATERIALIZED (
+            WITH saved AS MATERIALIZED (
+                SELECT current_setting('lock_timeout') AS value
+            ), configured AS MATERIALIZED (
+                SELECT set_config('lock_timeout', CASE
+                    WHEN value::interval > interval '0'
+                        AND value::interval < interval '50 milliseconds' THEN value
+                    ELSE '50ms' END, true) AS value
+                FROM saved
+            ), pending AS MATERIALIZED (
                 SELECT channel_id, activity_id,
                        row_number() OVER (PARTITION BY channel_id ORDER BY ordinal) AS position,
                        count(*) OVER (PARTITION BY channel_id) AS total
@@ -95,18 +118,27 @@ PREPARE append_activity (uuid[], uuid[]) AS
                     AS input(channel_id, activity_id, ordinal)
             ), advanced AS (
                 INSERT INTO channel_change_counters (channel_id, seq)
-                SELECT channel_id, total FROM pending GROUP BY channel_id, total ORDER BY channel_id
+                SELECT channel_id, total FROM pending CROSS JOIN configured
+                WHERE configured.value IS NOT NULL
+                GROUP BY channel_id, total ORDER BY channel_id
                 ON CONFLICT (channel_id) DO UPDATE
                 SET seq = channel_change_counters.seq + EXCLUDED.seq,
                     updated_at = clock_timestamp()
                 RETURNING channel_id, seq
+            ), logged AS (
+                INSERT INTO channel_change_log (channel_id, seq, kind, activity_id)
+                SELECT pending.channel_id, advanced.seq - pending.total + pending.position,
+                       2, pending.activity_id
+                FROM pending JOIN advanced USING (channel_id)
+                ORDER BY pending.channel_id, pending.position
+                RETURNING activity_id, seq
+            ), restored AS MATERIALIZED (
+                SELECT set_config('lock_timeout', saved.value, true) AS value
+                FROM saved CROSS JOIN (SELECT count(*) AS completed FROM logged) done
+                WHERE done.completed > 0
             )
-            INSERT INTO channel_change_log (channel_id, seq, kind, activity_id)
-            SELECT pending.channel_id, advanced.seq - pending.total + pending.position,
-                   2, pending.activity_id
-            FROM pending JOIN advanced USING (channel_id)
-            ORDER BY pending.channel_id, pending.position
-            RETURNING activity_id AS "activity_id!", seq
+            SELECT logged.activity_id AS "activity_id!", logged.seq AS "seq!"
+            FROM logged CROSS JOIN restored WHERE restored.value IS NOT NULL
             ;
 
 \echo append_activity force_custom_plan first

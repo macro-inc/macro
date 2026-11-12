@@ -14,7 +14,11 @@ use axum::{
     Json, Router,
     body::Bytes,
     extract::{FromRef, FromRequestParts, Path, State},
-    http::{HeaderMap, StatusCode, header::CONTENT_TYPE, request::Parts},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{CONTENT_TYPE, RETRY_AFTER},
+        request::Parts,
+    },
     response::IntoResponse,
     routing::post,
 };
@@ -242,6 +246,7 @@ where
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 503, description = "Channel is busy; retry after Retry-After seconds", body = ErrorResponse),
     )
 )]
 #[tracing::instrument(
@@ -394,6 +399,7 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             | Self::Bot(BotError::BadRequest(_))
             | Self::Message(MessageError::Invalid(_)) => StatusCode::BAD_REQUEST,
             Self::Message(MessageError::Conflict) => StatusCode::CONFLICT,
+            Self::Message(MessageError::Contended(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
             Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
@@ -405,20 +411,33 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             }
         };
 
-        if matches!(
+        let contended = matches!(&self, Self::Message(MessageError::Contended(_)));
+        if contended {
+            tracing::warn!(error=?self, "channel sequence is contended");
+        } else if matches!(
             status,
             StatusCode::INTERNAL_SERVER_ERROR | StatusCode::SERVICE_UNAVAILABLE
         ) {
             tracing::error!(error=?self, "channel bot webhook handler error");
         }
 
-        (
+        let message = match &self {
+            Self::Message(MessageError::Repository(_)) => "message operation failed".to_owned(),
+            _ => self.to_string(),
+        };
+        let mut response = (
             status,
             Json(ErrorResponse {
-                message: self.to_string().into(),
+                message: message.into(),
             }),
         )
-            .into_response()
+            .into_response();
+        if contended {
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from_static("1"));
+        }
+        response
     }
 }
 

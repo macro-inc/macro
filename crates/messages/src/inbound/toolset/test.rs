@@ -41,6 +41,20 @@ const REPLY: Uuid = Uuid::from_u128(8);
 const CHANNEL: Uuid = Uuid::from_u128(9);
 const POSTED: Uuid = Uuid::from_u128(99);
 
+#[test]
+fn contended_comment_has_retry_guidance_and_retains_the_internal_cause() {
+    let error = super::comment_error("unable to post comment")(MessageError::Contended(
+        rootcause::report!("private database detail"),
+    ));
+
+    assert_eq!(error.description, "channel is busy; retry the request");
+    let Some(MessageError::Contended(cause)) = error.internal_error.downcast_ref::<MessageError>()
+    else {
+        panic!("expected the typed contention cause");
+    };
+    assert!(cause.to_string().contains("private database detail"));
+}
+
 fn at() -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap()
 }

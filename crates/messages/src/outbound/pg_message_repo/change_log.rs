@@ -5,6 +5,17 @@ use crate::domain::{changes::ChannelChangeKind, models::MessageParent, ports::Me
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+fn append_error(error: sqlx::Error) -> MessageError {
+    if matches!(
+        &error,
+        sqlx::Error::Database(database) if database.code().as_deref() == Some("55P03")
+    ) {
+        MessageError::Contended(rootcause::Report::new(error).into())
+    } else {
+        database_error(error)
+    }
+}
+
 impl PgMessageRepository {
     /// Append one committed change to its channel's sequence. The caller must
     /// run this after all other database work, immediately before committing.
@@ -21,7 +32,7 @@ impl PgMessageRepository {
         };
         channel_change_db_utils::append_in(tx, channel_id, change)
             .await
-            .map_err(database_error)
+            .map_err(append_error)
     }
 
     pub(super) async fn append_message_change_in(
