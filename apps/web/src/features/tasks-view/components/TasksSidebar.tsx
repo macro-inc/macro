@@ -22,10 +22,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CheckSquareIcon from '@icon/system/regular/check-square.svg';
-import ProjectIcon from '@icon/system/regular/cube.svg';
-import ListChecksIcon from '@icon/system/regular/list-checks.svg';
-import NoteIcon from '@icon/system/regular/note-pencil.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -40,17 +36,8 @@ import {
 import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
-import type { TasksTab } from '../types';
 import { TaskSavedViewsList } from '../views/task-saved-views';
-
-const TAB_ICONS: Record<TasksTab, typeof NoteIcon> = {
-  'my-tasks': CheckSquareIcon,
-  'team-tasks': ListChecksIcon,
-  'created-by-me': NoteIcon,
-  'my-projects': ProjectIcon,
-  projects: ProjectIcon,
-  'created-projects': NoteIcon,
-};
+import { TAB_ICONS } from './task-view-icons';
 
 function TasksNavigation(props: {
   items: readonly TaskTabItem[];

@@ -1,13 +1,24 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import { For, getOwner, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
+import { TAB_ICONS } from '../../tasks-view/components/task-view-icons';
 import { useProjectSavedViews } from '../context/project-saved-views-context';
 import { ProjectSavedViewRows } from './project-saved-views';
 
 const SCOPES = [
-  { id: 'assigned-to-me', label: 'Assigned to me' },
-  { id: 'all', label: 'All projects' },
-  { id: 'created-by-me', label: 'Created by me' },
+  {
+    id: 'assigned-to-me',
+    label: 'My projects',
+    icon: TAB_ICONS['my-projects'],
+  },
+  { id: 'all', label: 'All projects', icon: TAB_ICONS.projects },
+  {
+    id: 'created-by-me',
+    label: 'Created by me',
+    icon: TAB_ICONS['created-projects'],
+  },
 ] as const;
 
 /** The Projects phone view keeps its own filters and saved-view navigation. */
@@ -24,12 +35,25 @@ export function ProjectsMobileTabs(props: { filters: JSX.Element }) {
     );
   };
   return (
-    <div class="flex h-10 min-w-0 items-center gap-2">
-      {props.filters}
+    <div class="flex h-10 min-w-0 items-center justify-between gap-2">
       <SavedViewPicker
         title="Projects"
         label={label()}
-        active={Boolean(views.selectedId())}
+        icon={
+          views.draft.view().kind === 'saved' ||
+          views.draft.view().kind === 'new' ? (
+            <BookmarkIcon class="size-4 shrink-0" />
+          ) : (
+            <Dynamic
+              component={
+                SCOPES.find((scope) => scope.id === views.scope())?.icon ??
+                TAB_ICONS['my-projects']
+              }
+              class="size-4 shrink-0"
+            />
+          )
+        }
+        active={false}
         scopeKey={views.viewerId()}
       >
         {(onAction) => (
@@ -58,6 +82,7 @@ export function ProjectsMobileTabs(props: { filters: JSX.Element }) {
           </>
         )}
       </SavedViewPicker>
+      {props.filters}
     </div>
   );
 }
