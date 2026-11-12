@@ -100,9 +100,10 @@ export async function setup(at: Stack, timezone: string, force = false): Promise
   const databases: Record<string, string> = {};
   const existing = await macro.databases.list();
   for (const name of DATABASES) {
-    let found: string | undefined;
+    // The one made before wins: a draft may have made another of the same name.
+    let found = existing.find((database) => database.id === saved?.databases[name])?.id;
     for (const database of existing) {
-      if ((await database.name()) === name) found = database.id;
+      if (!found && (await database.name()) === name) found = database.id;
     }
     databases[name] = found ?? (await macro.databases.create({ name })).id;
   }

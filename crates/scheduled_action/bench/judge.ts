@@ -5,6 +5,7 @@
 
 import type { Case, DraftResult } from './cases';
 import { type Stack, call } from './stack';
+import { lookalikes } from './workspace';
 
 export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
 
@@ -50,18 +51,44 @@ function glossary(draft: DraftResult, names: Map<string, string>): string[] {
   return [...found].map((id) => `${id}: ${names.get(id) ?? 'not one of the person’s items'}`);
 }
 
-/** What the judge reads: the request and the routine, with nothing that says which arm or build made it. */
-export function judgePrompt(item: Case, draft: DraftResult, reply: string | undefined, names: Map<string, string>) {
+/** The routine a step case starts from. */
+export type BaseShape = { name: string; trigger: unknown; steps: unknown[] };
+
+/**
+ * What the judge reads: the request, the person's items with names like the
+ * ones in it, the routine (and for a step case the routine it changes), with
+ * nothing that says which arm or build made it.
+ */
+export function judgePrompt(
+  item: Case,
+  draft: DraftResult,
+  reply: string | undefined,
+  names: Map<string, string>,
+  base?: BaseShape,
+) {
   const lines = [`The person typed: "${item.text}"`];
-  if (item.kind !== 'routine') lines.push(`It was a request to ${item.kind === 'add_step' ? 'add a step to' : 'change a step of'} this existing routine.`);
+  // Complete lists: every person, channel, project, document and database
+  // whose name shares a word with the request (tasks aren't listed).
+  const { people, items } = lookalikes(item.text);
+  lines.push('', `People in the person's workspace with a name in the request: ${people.join('; ') || 'none'}.`);
+  lines.push(
+    `Channels, projects, documents and databases with a word of the request in their name: ${items.join('; ') || 'none'}.`,
+  );
+  if (base) {
+    const verb = item.kind === 'add_step' ? 'add a step to' : `change step ${(item.index ?? 0) + 1} of`;
+    lines.push('', `It was a request to ${verb} this existing routine:`, JSON.stringify(base, null, 1));
+  }
   if (draft.outcome === 'failed') {
     lines.push('', 'No routine was made. The agent answered:', reply || draft.message || '(nothing)');
+  } else if (draft.outcome === 'step') {
+    const what = item.kind === 'add_step' ? 'The steps added after the existing ones' : 'The changed step';
+    lines.push('', `${what}:`, JSON.stringify(draft.step, null, 1));
   } else {
-    const shown = { name: draft.name, trigger: draft.trigger, steps: draft.steps, step: draft.step, task: draft.task };
+    const shown = { name: draft.name, trigger: draft.trigger, steps: draft.steps, task: draft.task };
     lines.push('', 'The routine:', JSON.stringify(shown, null, 1));
-    const ids = glossary(draft, names);
-    if (ids.length) lines.push('', 'Glossary of ids in it:', ...ids);
   }
+  const ids = draft.outcome === 'failed' ? [] : glossary(draft, names);
+  if (ids.length) lines.push('', 'Glossary of ids in it:', ...ids);
   return lines.join('\n');
 }
 
@@ -72,6 +99,7 @@ export async function judge(
   draft: DraftResult,
   reply: string | undefined,
   names: Map<string, string>,
+  base?: BaseShape,
 ): Promise<Grade | { error: string }> {
   try {
     const response = await call<{ outcome: { status: string; result?: Grade; reason?: string } }>(
@@ -80,7 +108,7 @@ export async function judge(
         method: 'POST',
         token,
         body: JSON.stringify({
-          prompt: judgePrompt(item, draft, reply, names),
+          prompt: judgePrompt(item, draft, reply, names, base),
           model: JUDGE_MODEL,
           output_schema: SCHEMA,
           additional_instructions: RUBRIC,

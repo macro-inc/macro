@@ -34,6 +34,8 @@ export type Attempt = {
   load: Load;
   /** The harness build that answered, when this eval set it (`drafts.ts harness`). */
   harness?: string;
+  /** Bare arm: the agent session, for reading its spans again. */
+  sessionId?: string;
 };
 
 export type Results = {

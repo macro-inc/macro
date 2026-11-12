@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 
 import { SQL } from 'bun';
 
-import { type ArmResult, bareArm, catalog, deleteSession, draftArm, preflight } from './arms';
+import { type ArmResult, bareArm, baseRoutine, catalog, deleteSession, draftArm, preflight } from './arms';
 import { type Arm, CASES, type Case, type Context, type DraftResult } from './cases';
 import { judge, passes } from './judge';
 import {
@@ -102,6 +102,9 @@ async function open(instance: string, tempo: string): Promise<Session> {
   };
 }
 
+/** The routine a step case changes, for the judge. */
+const baseOf = (session: Session, item: Case) => (item.kind === 'routine' ? undefined : baseRoutine(item, session.entries));
+
 /** Saved as the person would save it: event routines on, the rest off and run by hand. */
 async function routineToRun(session: Session, result: ArmResult): Promise<SavedRoutine | undefined> {
   const { at, tokens } = session;
@@ -170,7 +173,7 @@ async function attempt(
       : { spans: await sessionSpans(at, result.traceId, result.sessionId ?? '', window), checks: [] };
   const grade =
     options.judge && result.draft
-      ? await judge(at, session.judgeToken, item, result.draft, result.reply, session.names)
+      ? await judge(at, session.judgeToken, item, result.draft, result.reply, session.names, baseOf(session, item))
       : undefined;
   return {
     case: item.id,
@@ -192,6 +195,7 @@ async function attempt(
     breakdown: breakdown(spans, arm === 'bare' ? window : undefined),
     load,
     harness: build,
+    sessionId: result.sessionId,
   };
 }
 
@@ -450,11 +454,19 @@ async function reread(args: string[]) {
         const spans =
           item.arm === 'draft'
             ? await draftSpans(session.at, item.traceId)
-            : { spans: await sessionSpans(session.at, item.traceId, '', window), checks: [] };
+            : { spans: await sessionSpans(session.at, item.traceId, item.sessionId ?? '', window), checks: [] };
         item.breakdown = breakdown(spans, item.arm === 'bare' ? window : undefined) ?? item.breakdown;
       }
       if (session && values.judge && item.draft) {
-        item.grade = await judge(session.at, session.judgeToken, found, item.draft, item.reply, session.names);
+        item.grade = await judge(
+          session.at,
+          session.judgeToken,
+          found,
+          item.draft,
+          item.reply,
+          session.names,
+          baseOf(session, found),
+        );
       }
     }
     writeFileSync(path, `${JSON.stringify(results, null, 1)}\n`);

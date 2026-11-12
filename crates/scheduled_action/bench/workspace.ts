@@ -439,6 +439,31 @@ export const FIXTURE: Record<string, { kind: string; key: string }> = {
 };
 
 /** What a seeded item is, in words: the judge's glossary. */
+/** Words too common in requests to say which item is meant. */
+const COMMON = new Set(
+  'the and for with every each any all when from that this into them their about after before task tasks message messages channel project document database routine step new open'.split(
+    ' ',
+  ),
+);
+
+/**
+ * The people and items whose names share a word with `text`: what a careful
+ * reader of the request would look through, look-alikes included, so a
+ * judge can tell a right guess from a lucky one and asking from friction.
+ */
+export function lookalikes(text: string): { people: string[]; items: string[] } {
+  const words = new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((word) => !COMMON.has(word)));
+  const named = (name: string) => name.toLowerCase().split(/[^a-z0-9]+/).some((word) => words.has(word));
+  const people = Object.values(PEOPLE)
+    .filter(([first, last]) => named(`${first} ${last}`))
+    .map(([first, last]) => `the person ${first} ${last}`);
+  const items = Object.keys(FIXTURE)
+    .filter((name) => !name.startsWith('dm-') && !name.startsWith('task:') && named(name))
+    .map(describe);
+  const databases = DATABASES.filter(named).map((name) => `the database "${name}"`);
+  return { people, items: [...items, ...databases] };
+}
+
 export function describe(name: string): string {
   const { kind, key } = FIXTURE[name];
   if (kind === 'channel') {
