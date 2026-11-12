@@ -989,9 +989,10 @@ export const storageServiceClient = {
     ).map((result) => result.grants);
   },
 
-  async getAccountManagerGrant(args: { id: string }) {
+  async getAccountManagerGrant(args: { id: string | null | undefined }) {
+    // String() is the conversion encodeURIComponent applies to a stored null id.
     return await dssFetch<AccountManagerGrant>(
-      `/account-managers/${encodeURIComponent(args.id)}`,
+      `/account-managers/${encodeURIComponent(String(args.id))}`,
       { method: 'GET' }
     );
   },

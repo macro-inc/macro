@@ -1,3 +1,4 @@
+import { accountManagerKeys } from '@queries/account-managers/keys';
 import { queryClient } from '@queries/client';
 import {
   cleanup,
@@ -148,4 +149,66 @@ describe('AccountManagerCard', () => {
 
     await screen.findByText('This request isn’t available');
   });
+
+  // Source requests a stored card's null or omitted grant id as it is; the
+  // server refuses it and the card reads as unavailable once that settles.
+  it.each([null, undefined])(
+    'requests a stored %s grant id and reads as unavailable after the refusal',
+    async (grantId) => {
+      mocks.viewer = MANAGER;
+      let refuse = () => {};
+      mocks.getGrant.mockReturnValue(
+        new Promise((resolve) => {
+          refuse = () => resolve(err([{ code: 'BAD_REQUEST' }]));
+        })
+      );
+      render(() => (
+        <QueryClientProvider client={queryClient}>
+          <AccountManagerCard grantId={grantId} />
+        </QueryClientProvider>
+      ));
+
+      await waitFor(() =>
+        expect(mocks.getGrant).toHaveBeenCalledWith({ id: grantId })
+      );
+      expect(screen.queryByText('This request isn’t available')).toBeNull();
+
+      refuse();
+      await screen.findByText('This request isn’t available');
+      expect(mocks.getGrant).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('keys a stored grant id under the same prefix as the grant key', () => {
+    expect([...accountManagerKeys.grant._def, GRANT_ID]).toEqual(
+      accountManagerKeys.grant(GRANT_ID).queryKey
+    );
+  });
+
+  it.each([
+    [null, 'null'],
+    [undefined, 'undefined'],
+  ])(
+    'keeps a stored %s grant id apart from the text %s',
+    async (stored, text) => {
+      mocks.viewer = MANAGER;
+      mocks.getGrant.mockResolvedValue(err([{ code: 'BAD_REQUEST' }]));
+      render(() => (
+        <QueryClientProvider client={queryClient}>
+          <AccountManagerCard grantId={stored} />
+          <AccountManagerCard grantId={text} />
+        </QueryClientProvider>
+      ));
+
+      await waitFor(() => expect(mocks.getGrant).toHaveBeenCalledTimes(2));
+      expect(mocks.getGrant).toHaveBeenCalledWith({ id: stored });
+      expect(mocks.getGrant).toHaveBeenCalledWith({ id: text });
+      expect(
+        queryClient
+          .getQueryCache()
+          .findAll({ queryKey: accountManagerKeys.grant._def })
+          .map((query) => query.queryKey.at(-1))
+      ).toEqual([stored, text]);
+    }
+  );
 });

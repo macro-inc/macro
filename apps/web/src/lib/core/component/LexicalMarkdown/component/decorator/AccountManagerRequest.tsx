@@ -8,9 +8,13 @@ const AccountManagerCard = lazyNamed(
   'AccountManagerCard'
 );
 
-export function AccountManagerRequest(
-  props: AccountManagerRequestDecoratorProps
-) {
+/** Source `importJSON` keeps a stored null or omitted grant id; the card shows it as unavailable. */
+export type AccountManagerRequestUIProps = Omit<
+  AccountManagerRequestDecoratorProps,
+  'grantId'
+> & { grantId?: string | null };
+
+export function AccountManagerRequest(props: AccountManagerRequestUIProps) {
   return (
     <Suspense fallback={<AccountManagerCardFrame />}>
       <AccountManagerCard grantId={props.grantId} />

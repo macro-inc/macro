@@ -1,5 +1,4 @@
 import {
-  type AccountManagerRequestDecoratorProps,
   AccountManagerRequestNode,
   type AgentContextDecoratorProps,
   AgentContextNode,
@@ -17,6 +16,7 @@ import type {
   JsonObject,
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
+import type { AccountManagerRequestUIProps } from '../component/decorator/AccountManagerRequest';
 import type { AwaitUIProps } from '../component/decorator/Await';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
@@ -85,11 +85,16 @@ export function createNativeFastStaticDecoratorViews<
         };
       }
     ),
-    'account-manager-request': bind<AccountManagerRequestDecoratorProps>(
+    'account-manager-request': bind<AccountManagerRequestUIProps>(
       AccountManagerRequestNode,
       (node, context) => {
         const grantId = node.props().grantId;
-        if (typeof grantId !== 'string')
+        // Source keeps a stored null or omitted id; the card shows it as unavailable.
+        if (
+          grantId !== undefined &&
+          grantId !== null &&
+          typeof grantId !== 'string'
+        )
           throw new Error('Invalid account manager request payload');
         return { grantId, key: String(node.key), theme: context.theme };
       }

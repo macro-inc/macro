@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-// KNOWN GAPS: Source opens every stored node below and passes the null or
-// omitted value on to a feature query or helper. Native still refuses the
-// projection and the whole document fails. Each test pins the current
-// refusal; flip it to admission when that feature accepts null.
+// Source opens every stored node below and passes the null or omitted value
+// on to a feature query or helper. Tests marked "known gap" pin the current
+// native refusal, which fails the whole document; each is flipped to an
+// admission test once that feature accepts null.
 
 import {
   AccountManagerRequestNode,
@@ -101,9 +101,22 @@ const PULL_REQUEST: Family = {
   },
 };
 
-/** Opens one stored node beside a sibling paragraph; components are inert. */
-function open(family: Family, node: object, inline: boolean) {
+/**
+ * Opens one stored node beside a sibling paragraph. Components are inert;
+ * the optional recorder replaces one row to capture its projected props.
+ */
+function open(
+  family: Family,
+  node: object,
+  inline: boolean,
+  recorder?: { row: Klass<LexicalNode>; received: unknown[] }
+) {
   for (const row of family.rows) setDecorator(row, () => null);
+  if (recorder)
+    setDecorator<{}>(recorder.row, (props) => {
+      recorder.received.push(props);
+      return null;
+    });
   const fixture = nativeSurface();
   const { views, dispose } = family.create();
   registerMacroDecoratorViews(fixture.view.registry, views);
@@ -188,11 +201,23 @@ test('controls: the valid stored nodes open', () => {
   open(PULL_REQUEST, PR, true);
 });
 
-test('known gap: a stored null or missing account manager grant id is refused', () => {
-  for (const node of [{ ...GRANT, grantId: null }, without(GRANT, 'grantId')])
-    expect(() => open(STATIC, node, true)).toThrow(
-      'Invalid account manager request payload'
-    );
+test('account manager: projector hands a stored null or missing grant id to the registered component unchanged', () => {
+  const received: unknown[] = [];
+  for (const node of [
+    GRANT,
+    { ...GRANT, grantId: null },
+    without(GRANT, 'grantId'),
+  ])
+    open(STATIC, node, true, { row: AccountManagerRequestNode, received });
+  expect(
+    received.map((props) => Reflect.get(Object(props), 'grantId'))
+  ).toEqual(['probe-grant', null, undefined]);
+});
+
+test('account manager: stored model refuses a wrong grant id type', () => {
+  expect(() => open(STATIC, { ...GRANT, grantId: 5 }, true)).toThrow(
+    'JSON error: invalid type'
+  );
 });
 
 test('known gap: stored null or missing agent activity session and position fields are refused', () => {
