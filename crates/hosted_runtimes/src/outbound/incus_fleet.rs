@@ -1,5 +1,6 @@
 //! [`Fleet`] on one Incus host: each computer is a VM from a versioned
-//! `macro-box/<version>` image, carrying its [`Enrollment`] in the
+//! `macro-box/<version>` image (`macro-box-agent/<version>` for an agent
+//! teammate's computer), carrying its [`Enrollment`] in the
 //! [`INCUS_ENROLLMENT_KEY`] config key that macrod reads through `/dev/incus`.
 //!
 //! Each VM has a root disk of [`ROOT_DISK_GIB`] from the image, and a custom
@@ -24,7 +25,7 @@ use incus_client::{
 
 use crate::domain::enrollment::{EnrollmentGeneration, EnrollmentIssueError, INCUS_ENROLLMENT_KEY};
 use crate::domain::ids::{ComputerId, PairingId};
-use crate::domain::image::{GuestImage, ROOT_DISK_GIB, data_disk_gib};
+use crate::domain::image::{GuestImage, GuestImages, ROOT_DISK_GIB, data_disk_gib};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{
     Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
@@ -57,9 +58,9 @@ pub struct IncusFleetConfig {
     pub control_plane_id: ControlPlaneId,
     /// Incus endpoint and request limits.
     pub endpoint: IncusEndpoint,
-    /// Image new computers are created from: a versioned local alias such
-    /// as `macro-box/2026-11-10`.
-    pub image: ImageSource,
+    /// Images new computers are created from: versioned local aliases such
+    /// as `macro-box/2026-11-10` and `macro-box-agent/2026-11-10`.
+    pub images: GuestImages<ImageSource>,
     /// Profile carrying the NIC and `security.guestapi`.
     pub profile: ProfileName,
     /// Storage pool of the root disk override and the data volumes.
@@ -136,7 +137,24 @@ pub enum IncusFleetError {
 pub struct IncusFleet {
     client: IncusClient,
     config: Box<IncusFleetConfig>,
-    image: GuestImage,
+    images: GuestImages<IncusImage>,
+}
+
+/// An image to create instances from, and the name recorded for it.
+#[derive(Debug, Clone)]
+struct IncusImage {
+    source: ImageSource,
+    name: GuestImage,
+}
+
+impl IncusImage {
+    fn new(source: ImageSource) -> Result<Self, IncusFleetError> {
+        let name = GuestImage::try_new(match &source.reference {
+            ImageReference::Alias(alias) => alias.as_str(),
+            ImageReference::Fingerprint(fingerprint) => fingerprint,
+        })?;
+        Ok(Self { source, name })
+    }
 }
 
 impl IncusFleet {
@@ -149,14 +167,11 @@ impl IncusFleet {
             .into());
         }
         let client = IncusClient::new(config.endpoint.clone())?;
-        let image = GuestImage::try_new(match &config.image.reference {
-            ImageReference::Alias(alias) => alias.as_str(),
-            ImageReference::Fingerprint(fingerprint) => fingerprint,
-        })?;
+        let images = config.images.clone().try_map(IncusImage::new)?;
         Ok(Self {
             client,
             config: Box::new(config),
-            image,
+            images,
         })
     }
 
@@ -299,13 +314,9 @@ impl Fleet for IncusFleet {
                 }
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
-                let mut body = instance_body(
-                    &self.config,
-                    &self.image,
-                    computer,
-                    &enrollment_json,
-                    Utc::now(),
-                )?;
+                let image = self.images.for_enrollment(&enrollment);
+                let mut body =
+                    instance_body(&self.config, image, computer, &enrollment_json, Utc::now())?;
                 {
                     let config = body
                         .config
@@ -328,7 +339,7 @@ impl Fleet for IncusFleet {
                 if start {
                     self.start(computer.id).await?;
                 }
-                Ok(self.image.clone())
+                Ok(image.name.clone())
             }
         }
     }
@@ -595,18 +606,18 @@ fn data_device(pool: &str, volume: &StorageVolumeName) -> BTreeMap<String, Strin
 /// enrollment generation and pairing before posting.
 fn instance_body(
     config: &IncusFleetConfig,
-    image: &GuestImage,
+    image: &IncusImage,
     computer: &Computer,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
 ) -> Result<types::InstancesPost, InvalidName> {
     let computer_id = computer.id;
     let resources = computer.resources;
-    let (alias, fingerprint) = match &config.image.reference {
+    let (alias, fingerprint) = match &image.source.reference {
         ImageReference::Alias(alias) => (Some(alias.as_str().to_owned()), None),
         ImageReference::Fingerprint(fingerprint) => (None, Some(fingerprint.clone())),
     };
-    let (server, protocol) = match &config.image.remote {
+    let (server, protocol) = match &image.source.remote {
         Some(remote) => (
             Some(remote.server.clone()),
             Some(remote.protocol.as_ref().to_owned()),
@@ -625,7 +636,7 @@ fn instance_body(
             &config.control_plane_id,
             created_at,
             computer_id,
-            image,
+            &image.name,
             resources,
             enrollment_json,
         ))),

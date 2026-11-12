@@ -259,6 +259,7 @@ fn computer_fleet_settings_require_the_selected_groups() {
         "COMPUTERS_CONTROL_PLANE_ID": "local-test",
         "COMPUTERS_HOST_NAME": "local-docker",
         "COMPUTERS_IMAGE": "macro-box:latest",
+        "COMPUTERS_AGENT_IMAGE": "macro-box-agent:latest",
         "COMPUTERS_HOST_RESERVE_GB": 7,
         "COMPUTERS_OVERSELL_FACTOR": 3,
         "COMPUTERS_DOCKER_NETWORK": "test-services",
@@ -276,6 +277,26 @@ fn computer_fleet_settings_require_the_selected_groups() {
         .err()
         .unwrap();
     assert!(error.to_string().contains("COMPUTERS_DOCKER_MEMORY_GB"));
+    // No agent image is a startup failure, never the regular image.
+    let mut no_agent_image = settings.clone();
+    no_agent_image
+        .as_object_mut()
+        .unwrap()
+        .remove("COMPUTERS_AGENT_IMAGE");
+    let error = serde_json::from_value::<DockerFleetSettings>(no_agent_image)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("COMPUTERS_AGENT_IMAGE"));
+    let mut blank_agent_image = settings.clone();
+    blank_agent_image["COMPUTERS_AGENT_IMAGE"] = serde_json::json!(" ");
+    assert!(
+        serde_json::from_value::<DockerFleetSettings>(blank_agent_image)
+            .unwrap()
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("COMPUTERS_AGENT_IMAGE")
+    );
     let mut blank = settings;
     blank["COMPUTERS_IMAGE"] = serde_json::json!("");
     assert!(
