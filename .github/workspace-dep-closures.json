@@ -15421,6 +15421,7 @@
       "crates/google_token",
       "crates/harness_id",
       "crates/harness_token",
+      "crates/harnessd_protocol",
       "crates/initiative",
       "crates/invite_email",
       "crates/ip_extractor",
