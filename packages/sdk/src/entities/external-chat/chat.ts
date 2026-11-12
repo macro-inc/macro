@@ -96,6 +96,7 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     if (!community) return undefined;
     return match(provider)
       .with('whatsapp', () => communityOf(this.client, community))
+      .with('slack', () => undefined)
       .exhaustive();
   }
 
