@@ -249,6 +249,10 @@ restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
 
+Links in database text and URL cells open without editing the cell, on desktop
+and touch, while the rest of the cell still edits:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
+
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
 It uses the real records view with a local source and picker to exercise opening,
