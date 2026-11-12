@@ -242,19 +242,26 @@ impl Rows {
     }
 }
 
-/// What reached the owners' open apps.
+/// What reached the owners' open apps, in the order it arrived. Progress
+/// waits at `progress` while it is held, as a slow publish would.
 #[derive(Default)]
-struct Published(Mutex<Vec<(MacroUserIdStr<'static>, DraftUpdate)>>);
+struct Published {
+    updates: Mutex<Vec<(MacroUserIdStr<'static>, DraftUpdate)>>,
+    progress: Gate,
+}
 
 impl RoutineDraftUpdates for Published {
     async fn publish_draft(&self, owner: &MacroUserIdStr<'static>, update: DraftUpdate) {
-        self.0.lock().unwrap().push((owner.clone(), update));
+        if update.state == DraftUpdateState::Drafting {
+            self.progress.pass().await;
+        }
+        self.updates.lock().unwrap().push((owner.clone(), update));
     }
 }
 
 impl Published {
     fn of(&self, id: Uuid) -> Vec<DraftUpdate> {
-        self.0
+        self.updates
             .lock()
             .unwrap()
             .iter()
@@ -274,17 +281,21 @@ struct Replica {
 
 impl Replica {
     fn new(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> Self {
-        let published = Arc::new(Published::default());
+        Self::publishing(rows, sessions, &Arc::new(Published::default()))
+    }
+
+    /// A replica whose updates reach `published`.
+    fn publishing(rows: &Arc<Rows>, sessions: &Arc<Sessions>, published: &Arc<Published>) -> Self {
         let (tasks, shutdown) = (TaskTracker::new(), CancellationToken::new());
         Self {
             jobs: DraftJobs::new(
                 Arc::new(drafts(rows, sessions)),
                 Arc::clone(rows) as Arc<dyn DraftJobStore>,
-                Arc::clone(&published),
+                Arc::clone(published),
                 tasks.clone(),
                 shutdown.clone(),
             ),
-            published,
+            published: Arc::clone(published),
             tasks,
             shutdown,
         }
@@ -608,14 +619,103 @@ async fn a_cancel_from_another_replica_stops_the_drafter() {
     drafting.settled().await;
     assert!(rows.drafts.lock().unwrap().is_empty());
     assert!(rows.jobs.lock().unwrap().is_empty());
-    // It never publishes a result nobody wants.
+    // It never publishes a result nobody wants, and its last word is that
+    // the job is gone.
+    let said = drafting.published.of(job.id);
+    let (last, before) = said.split_last().unwrap();
+    assert_eq!(last.state, DraftUpdateState::Removed);
     assert!(
-        drafting
-            .published
+        before
+            .iter()
+            .all(|update| update.state == DraftUpdateState::Drafting),
+        "{said:?}"
+    );
+}
+
+/// Progress the drafter sent before a cancel can arrive after the cancel's
+/// `removed`; the drafter, finding the job cancelled, says `removed` last,
+/// so the owner's apps don't bring it back.
+#[tokio::test(start_paused = true)]
+async fn a_cancelled_drafter_says_removed_last() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let published = Arc::new(Published {
+        progress: Gate::held(),
+        ..Published::default()
+    });
+    let drafting = Replica::publishing(&rows, &sessions, &published);
+    let other = Replica::publishing(&rows, &sessions, &published);
+
+    let job = drafting.start(routine(BUG_REPORTS)).await.unwrap();
+    // Its first progress is written, and on its way.
+    published.progress.reached.notified().await;
+    other.jobs.discard(owner(), job.id).await.unwrap();
+    published.progress.open();
+    drafting.settled().await;
+
+    assert_eq!(
+        published
             .of(job.id)
             .iter()
-            .all(|update| update.state == DraftUpdateState::Drafting)
+            .map(|update| update.state)
+            .collect::<Vec<_>>(),
+        [
+            DraftUpdateState::Removed,
+            DraftUpdateState::Drafting,
+            DraftUpdateState::Removed,
+        ]
     );
+}
+
+/// Cancelled after its last read of the row, while it stops its session,
+/// a draft finds it cancelled only as it writes its result. Its progress can
+/// still arrive after the cancel's `removed`; the drafter deletes it and
+/// says `removed` last.
+#[tokio::test(start_paused = true)]
+async fn a_draft_cancelled_as_it_finishes_says_removed_last() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            ))]
+        }),
+    );
+    sessions.hangs = true;
+    sessions.stopping = Gate::held();
+    let sessions = Arc::new(sessions);
+    let published = Arc::new(Published {
+        progress: Gate::held(),
+        ..Published::default()
+    });
+    let replica = Replica::publishing(&rows, &sessions, &published);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    // It saw its check pass and stops its session.
+    sessions.stopping.reached.notified().await;
+    replica.jobs.discard(owner(), job.id).await.unwrap();
+    sessions.stopping.open();
+    published.progress.open();
+    replica.settled().await;
+
+    assert_eq!(
+        published
+            .of(job.id)
+            .iter()
+            .map(|update| update.state)
+            .collect::<Vec<_>>(),
+        [
+            DraftUpdateState::Removed,
+            DraftUpdateState::Drafting,
+            DraftUpdateState::Removed,
+        ]
+    );
+    assert!(rows.jobs.lock().unwrap().is_empty());
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
 }
 
 /// A host that stops ends its drafts within the shutdown's time, failed as

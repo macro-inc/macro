@@ -457,6 +457,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                             true,
                         )
                         .await;
+                        // Its last word: progress it sent can land after the
+                        // cancel's.
+                        updates.publish_draft(&owner, removed(id, progress)).await;
                     }
                     Ok(Finished::Gone) => {}
                     // Still drafting on its row: the sweep fails it.
@@ -465,8 +468,11 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                     }
                 }
             }
-            // Cancelled: the drafter deleted its session and row.
-            Ok(None) => {}
+            // Cancelled: the drafter deleted its session and row. Its last
+            // word, as progress it sent can land after the cancel's.
+            Ok(None) => {
+                updates.publish_draft(&owner, removed(id, progress)).await;
+            }
             // Its usage was refused: it never was.
             Err(error) => {
                 clean_up(

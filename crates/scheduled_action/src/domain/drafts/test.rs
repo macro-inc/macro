@@ -180,6 +180,8 @@ pub(super) struct Sessions {
     pub(super) refuses: Option<RoutineSessionError>,
     /// Where preparing waits for its admission.
     pub(super) admitting: Gate,
+    /// Where stopping a session waits.
+    pub(super) stopping: Gate,
     pub(super) prepared: Mutex<Vec<PrepareRoutineSession>>,
     pub(super) prompts: Mutex<Vec<String>>,
     pub(super) cancelled: Mutex<Vec<AgentSessionId>>,
@@ -198,6 +200,7 @@ impl Sessions {
             unreadable: false,
             refuses: None,
             admitting: Gate::default(),
+            stopping: Gate::default(),
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
@@ -266,6 +269,7 @@ impl RoutineSessions for Sessions {
     }
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.stopping.pass().await;
         self.cancelled.lock().unwrap().push(command.session_id);
         Ok(())
     }
