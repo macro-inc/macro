@@ -12,7 +12,7 @@ import type { PostMeta } from '../../registry';
 
 const SUPERHUMAN_VIDEO_ID = 'tnsxkywzTvY';
 const ARTICLE_LEDE =
-  'Macro is heavily inspired by Superhuman. While building Macro we had the privilege of speaking with the co-founders of Superhuman. They invented CMD+K, popularized dark mode (especially in email), and the suggestion of luxury, highly polished software. They laid the foundations for high-taste companies that came after them like Linear.';
+  'Macro is heavily inspired by Superhuman. While building Macro we had the privilege of speaking with the co-founders of Superhuman. They invented CMD+K, popularized dark mode (especially in email), and the idea of luxury, highly polished software. They laid the foundations for high-taste companies that came after them like Linear.';
 const ARTICLE_SECOND_PARAGRAPH = {
   after:
     '. Superhuman is a really fast email client, but only for one inbox at a time. Macro is that plus your team chat, your docs, and your GitHub PRs, all triaged from one list with the same keyboard shortcuts. On top of that we made a handful of specific improvements to the email experience itself.',
