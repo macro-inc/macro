@@ -207,7 +207,7 @@ export function createCallLifecycle(options: {
   shouldRequestToken: (channelId: string) => boolean;
   prepareToken?: (channelId: string) => Promise<() => Promise<void>>;
   requestToken: (channelId: string) => Promise<CallTokenResponse>;
-  connect: (token: CallTokenResponse) => Promise<void>;
+  connect: (token: CallTokenResponse, source: JoinSource) => Promise<void>;
   disconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
   leave: (channelId: string) => Promise<LeaveResult>;
   lookup: (channelId: string) => Promise<ActiveCallLookup>;
@@ -368,7 +368,7 @@ export function createCallLifecycle(options: {
                 await releaseStaleNativeSession(call);
                 return;
               }
-              if (needsConnection) await options.connect(token);
+              if (needsConnection) await options.connect(token, request.source);
               call = { channelId: token.channelId, callId: token.callId };
             } else {
               // Let the joining scope finish mounting before dispatching its
@@ -541,7 +541,7 @@ export function createCallLifecycle(options: {
             !request.skipServerLeave && request.options?.endNativeCall !== false
               ? leaveServerOnce()
               : undefined;
-          let result: LeaveResult = undefined;
+          let result: LeaveResult;
           try {
             try {
               await options.disconnect(request.options);
@@ -551,6 +551,7 @@ export function createCallLifecycle(options: {
               if (releasing) result = await releasing;
               else if (active && !request.skipServerLeave)
                 result = await leaveServerOnce();
+              else result = undefined;
             }
             finish(undefined, result);
           } catch (error) {
