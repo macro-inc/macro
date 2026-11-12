@@ -1,7 +1,7 @@
+import { deepEqual } from '@core/util/compareUtils';
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
-import deepEqual from 'fast-deep-equal';
 import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
 
