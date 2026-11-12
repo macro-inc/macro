@@ -394,6 +394,7 @@ it('arms one idle expiry timer for many reads and still expires each name on tim
   const expiryTimers = timers.mock.calls.filter(
     ([, delay]) => delay === LIMITS.idleMs
   );
+  timers.mockRestore();
   expect(expiryTimers).toHaveLength(1);
   expect(cache.inspect().idle).toBe(50);
 

@@ -195,11 +195,13 @@ export function createUserNameCache(options: {
       ? oldest.touched + USER_NAME_CACHE_LIMITS.idleMs
       : undefined;
 
-    // Reads call this constantly. A pending timer that fires no later than the
-    // oldest name is due stays: when it fires it trims and arms the next one.
+    // Reads call this constantly. A pending timer that is not overdue and fires
+    // no later than the oldest name is due stays: when it fires it trims and
+    // arms the next one.
     if (
       expiryTimer !== undefined &&
       dueAt !== undefined &&
+      expiryDueAt > now &&
       expiryDueAt <= dueAt
     )
       return;
