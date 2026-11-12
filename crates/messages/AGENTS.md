@@ -23,6 +23,9 @@ they need.
   address it.
 - `src/domain/discussions.rs`: a parent's live threads with all replies, the
   read both `ReadDiscussion` and the document comment reader share.
+- `src/domain/service/thread_replies.rs` +
+  `src/outbound/pg_message_repo/thread_replies.rs`: one page of a thread's
+  replies (see **Thread reply pages**).
 - `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
@@ -122,6 +125,18 @@ keep no log.
   fact; `channel_changes` reloads the root the fact names. A new fact that
   changes how a message reads needs the same.
 - `ChannelChangeLogRetention` prunes hourly from `document_storage_service`.
+
+## Thread reply pages
+
+`MessageService::thread_replies` returns one window of a thread's replies in
+`get_thread` order, `import_order NULLS LAST, created_at, id`, keyed by a
+`ReplyCursor` holding all three, never by offset. A row comparison cannot step
+across the NULLs, so every walk reads the imported and the posted part as two
+ranges of `idx_comms_messages_thread_order`. A page has a cursor on a side only
+when replies exist past it. The walks run with `enable_sort` off, because with
+stale statistics the planner sorts the whole thread through another index;
+hydration turns it back on. Deleted replies are read and skipped: a walk costs
+a buffer per deleted reply it passes.
 
 ## Gotchas
 
