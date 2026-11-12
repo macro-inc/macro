@@ -24,7 +24,7 @@ let
   claude = import ./_claude-wrapper.nix {
     inherit pkgs;
     inherit (cfg) claudeCode;
-    credential = "${harnessdState}/claude/credential.json";
+    credential = "${cfg.harnessd.stateDirectory}/claude/credential.json";
   };
   herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
@@ -97,9 +97,19 @@ in
       type = lib.types.package;
       description = "The macrod package.";
     };
-    harnessd = lib.mkOption {
+    harnessd.package = lib.mkOption {
       type = lib.types.package;
       description = "The harnessd package: agent sign-ins.";
+    };
+    harnessd.stateDirectory = lib.mkOption {
+      type = lib.types.path;
+      readOnly = true;
+      default = harnessdState;
+      description = ''
+        Where harnessd keeps the agents' credentials (`claude/credential.json`
+        for Claude): `/home/.system/harnessd` on the data disk, else
+        `/var/lib/harnessd`.
+      '';
     };
     claudeCode = lib.mkOption {
       type = lib.types.package;
@@ -214,7 +224,7 @@ in
 
     systemd.tmpfiles.settings."10-macro-box" = {
       ${persistentMacrodState}.d.mode = "0755";
-      ${harnessdState}.d = macroOwner // {
+      ${cfg.harnessd.stateDirectory}.d = macroOwner // {
         mode = "0700";
       };
       ${workspace}.d = macroDirectory;
@@ -239,7 +249,7 @@ in
 
     environment.systemPackages = [
       cfg.macrod
-      cfg.harnessd
+      cfg.harnessd.package
       # The pinned Claude Code behind the credential wrapper; harnessd runs
       # the unwrapped one.
       claude
@@ -429,7 +439,7 @@ in
         Group = "macro";
         RuntimeDirectory = "harnessd";
         RuntimeDirectoryMode = "0700";
-        ExecStart = "${lib.getExe' cfg.harnessd "harnessd"} serve --socket ${harnessdSocket} --state-dir ${harnessdState} --claude ${lib.getExe' cfg.claudeCode "claude"}";
+        ExecStart = "${lib.getExe' cfg.harnessd.package "harnessd"} serve --socket ${harnessdSocket} --state-dir ${cfg.harnessd.stateDirectory} --claude ${lib.getExe' cfg.claudeCode "claude"}";
         Restart = "always";
         RestartSec = 1;
       };

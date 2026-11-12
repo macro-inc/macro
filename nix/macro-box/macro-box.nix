@@ -29,7 +29,7 @@ let
           herdr
           {
             macro.box.macrod = self'.packages.macrod;
-            macro.box.harnessd = self'.packages.harnessd;
+            macro.box.harnessd.package = self'.packages.harnessd;
           }
         ];
       }
