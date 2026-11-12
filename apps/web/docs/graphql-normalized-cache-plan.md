@@ -271,11 +271,17 @@ records how many hints each coalesced broadcast replaced, without payloads.
 
 While parked or transitioning, `waiting` pauses read/init deadlines without
 creating a second page-side request queue. Reads, writes, and teardown retain
-coordinator admission order. A visible consumer starts a one-second read budget
+coordinator admission order, except that a typed search (a `search` with a
+query) reaches a new engine first and, inside the engine worker, runs ahead of
+list rereads and past generation checks and operation teardowns. It registers
+nothing and writes nothing, so those fences do not order it; it never passes
+`init` or `clear`, and queued writes in its segment still run first. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
-Only read callers are canceled, not admitted engine work or writes. Readiness
+Only read callers are canceled, not admitted engine work or writes. A `search`
+caller is the exception: it has no network fallback, so it stays queued and the
+replacement engine answers it. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
 

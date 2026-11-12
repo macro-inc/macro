@@ -67,18 +67,17 @@ describe('CoordinatorCore', () => {
   it('hands a new engine the held typed search before the reads replayed around a restart, never past a clear', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
-    const search = (id: number, query: string) =>
-      ({
-        id,
-        kind: 'search',
-        request: {
-          profile: 'quick-access-v1',
-          buckets: ['document'],
-          query,
-          limit: 20,
-          nowMs: 1,
-        },
-      }) as const;
+    const search = (id: number, query: string): CacheRequest => ({
+      id,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query,
+        limit: 20,
+        nowMs: 1,
+      },
+    });
     const held: CacheRequest[] = [
       {
         id: 1,
