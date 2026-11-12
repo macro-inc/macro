@@ -81,14 +81,15 @@ fn publish_job() -> Job {
 }
 
 /// A dispatch can run from any ref; only a published, non-prerelease
-/// `vYYYY.M.D[.N]` release gets an APK. `android-release.ts metadata` checks
-/// the tag's shape again before the build.
+/// `vYYYY.M.D[.N]` release gets an APK. `android-release.ts metadata` also
+/// accepts the `vc<versionCode>` names of pull-request Play builds, so the tag
+/// shape is checked here.
 fn require_release() -> Step<Run> {
     Step::new("Require a published production release")
         .run(indoc::indoc! {r#"
             set -euo pipefail
-            if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-              echo "Run this from a production release tag (\"Use workflow from\": the tag), not ${GITHUB_REF_NAME}." >&2
+            if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$RELEASE_TAG" =~ ^v20[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]{1,2})?$ ]]; then
+              echo "Run this from a production release tag vYYYY.M.D[.N] (\"Use workflow from\": the tag), not ${GITHUB_REF_NAME}." >&2
               exit 1
             fi
             gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \

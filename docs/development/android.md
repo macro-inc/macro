@@ -150,9 +150,10 @@ waits on it, and a failed APK build leaves the release in place.
   before installing an APK, and the reverse.
 - The version code is the one committed at the tag. The installed app then
   takes web updates over the air like a Play install.
-- To rebuild a release's APK, re-run the failed job, or run the workflow with
-  "Use workflow from" set to the release tag. Assets stay with their release;
-  nothing prunes them.
+- To rebuild a release's APK, re-run its build job, or run the workflow with
+  "Use workflow from" set to the release tag. Only tags that contain the
+  workflow can be picked, so releases cut before it have no APK build. Assets
+  stay with their release; nothing prunes them.
 
 ### Releasing to Google Play from a pull request
 
