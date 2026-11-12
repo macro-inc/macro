@@ -1,8 +1,9 @@
 //! `Build Web App` — builds apps/web for one environment and uploads `dist` as
 //! the [`ARTIFACT`] run artifact. Call-only: [`crate::workflows::deploy_web_app`]
-//! uses it for standalone deploys, and [`crate::workflows::deploy_on_push`]
-//! calls it directly so the build overlaps the backend deploy and only the
-//! upload waits for it. Generated into `build_web_app.yml`.
+//! uses it for standalone deploys, and [`crate::workflows::deploy_on_push`] and
+//! the hand-written `release-production.yml` call it directly so the build
+//! overlaps the backend deploy and only the upload waits for it. Generated into
+//! `build_web_app.yml`.
 
 use anyhow::Result;
 use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
@@ -46,13 +47,17 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     Ok(())
 }
 
-/// The build uses the shared Namespace `web-ci` sccache cache, so no sccache
-/// backend secret is needed here.
-///
 /// Wasm packages whose inputs did not change come from a GitHub Actions cache
 /// instead of being rebuilt with LTO. A run on a branch only reads its own
 /// scope and the default branch's, so a pull request cannot write what a deploy
 /// reads; the Namespace HTTP cache PR jobs share stays off here.
+///
+/// What dev deploys on main save there, production releases restore. So no
+/// deploy build reads the shared Namespace `web-ci` sccache or the cargo and
+/// wasm-pack directories on the `web-ci` cache volume, which pull request jobs
+/// write: from the volume it mounts only the Nix store and Bun's package cache,
+/// as the production release's own build job did, and it compiles Rust with a
+/// local sccache.
 fn build_job() -> Job {
     Job::default()
         .name("Build")
@@ -60,11 +65,9 @@ fn build_job() -> Job {
         .add_env(("CI", "true"))
         .add_env(("WASM_PKG_CACHE_DIR", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_step(checkout())
-        .add_step(steps::mount_web_build_cache_volume())
+        .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
-        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
-        .add_step(steps::start_sccache_server())
         .add_step(restore_wasm_packages())
         .add_step(build_wasm_packages())
         .add_step(save_wasm_packages())
@@ -90,7 +93,10 @@ pub fn checkout() -> Step<Use> {
 /// that saved them (`scripts/deploy_build_wasm.sh`), and the newest one in
 /// scope is restored. A run name keeps a set that comes back, say after a
 /// revert, saveable again: Actions cache entries cannot be overwritten.
-const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v1-";
+///
+/// `v1` sets were built with the `web-ci` sccache and the volume's cargo and
+/// wasm-pack directories, which pull requests write.
+const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v2-";
 
 /// actions/cache v5.0.5.
 const ACTIONS_CACHE_SHA: &str = "27d5ce7f107fe9357f9df03efb73ab90386fccae";
@@ -166,7 +172,12 @@ fn upload_dist() -> Step<Use> {
         .add_with(("name", ARTIFACT))
         .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
         .add_with(("if-no-files-found", "error"))
-        .add_with(("retention-days", 1))
+        // The production release kept its build a week, so a failed release
+        // job can still be re-run days later.
+        .add_with((
+            "retention-days",
+            "${{ inputs.environment == 'prod' && 7 || 1 }}",
+        ))
         // A full re-run of the same run uploads again under the same name.
         .add_with(("overwrite", true))
 }
