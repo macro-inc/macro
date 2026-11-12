@@ -18,6 +18,7 @@ import {
   useComputerOffersQuery,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
+  useRetryComputerMutation,
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
@@ -82,10 +83,25 @@ export function offersBlockedByTrial(offers: {
   );
 }
 
-/** The cheapest size on sale, for "From $20/month". */
-export function cheapestOffer(
-  offers: readonly SizeOffer[]
-): SizeOffer | undefined {
+/**
+ * "From $20/month" (or "from $20/month" mid-line) for the cheapest size on
+ * sale; "Included" when the team's computers are comped.
+ */
+export function fromPriceText(
+  offers: readonly SizeOffer[] | undefined,
+  placement: 'leading' | 'inline'
+): string | undefined {
+  const offer = offers ? cheapestOffer(offers) : undefined;
+  if (!offer) return undefined;
+  if (offer.quote.amount === 0) return t('computers.included');
+  const price = formatQuote(offer.quote);
+  return placement === 'leading'
+    ? t('computers.fromPrice', { price })
+    : t('computers.fromPriceLower', { price });
+}
+
+/** The cheapest size on sale. */
+function cheapestOffer(offers: readonly SizeOffer[]): SizeOffer | undefined {
   return offers
     .filter((offer) => !offer.soldOut)
     .reduce<SizeOffer | undefined>(
@@ -149,6 +165,7 @@ function ManagedComputerRow(props: {
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
   const restore = useRestoreComputerMutation();
+  const retry = useRetryComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
   // Claude's long-lived credential names no account; it only expires.
@@ -270,6 +287,14 @@ function ManagedComputerRow(props: {
     }
   };
 
+  const retrySetup = async () => {
+    try {
+      await retry.mutateAsync(props.computer.id);
+    } catch (error) {
+      toast.failure(failureMessage(error, t('computers.retryFailed')));
+    }
+  };
+
   const run = (work: Promise<void>) => fireAndForget(work, 'macro-computers');
   const billingPending = () =>
     cancel.isPending || undoCancel.isPending || restore.isPending;
@@ -314,6 +339,14 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
+    if (props.canManage && computer.status === 'failed') {
+      items.push({
+        label: t('computers.retry'),
+        icon: 'retry',
+        disabled: retry.isPending,
+        onSelect: () => run(retrySetup()),
+      });
+    }
     if (props.canManage && canPower) {
       items.push(
         computer.poweredOn
@@ -416,19 +449,15 @@ export function MacroComputers(props: {
     return harness.created_by === viewer || isTeamOwner();
   };
 
-  const fromPriceLine = () => {
-    const offer = offers.isSuccess ? cheapestOffer(offers.data) : undefined;
-    if (!offer) return undefined;
-    if (offer.quote.amount === 0) return t('computers.included');
-    return t('computers.fromPriceLower', { price: formatQuote(offer.quote) });
-  };
+  const fromPriceLine = () =>
+    fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
 
-  const releaseNow = async (computer: ComputerStatus) => {
+  const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);
     try {
       await release.mutateAsync({
         computerId: computer.id,
-        confirmName: computer.name,
+        confirmName: typedName,
       });
       setReleasing(undefined);
       toast.success(t('computers.released', { name: computer.name }));
@@ -562,8 +591,8 @@ export function MacroComputers(props: {
             pending={release.isPending}
             error={releaseError()}
             onClose={closeRelease}
-            onRelease={() =>
-              fireAndForget(releaseNow(computer), 'macro-computers')
+            onRelease={(typedName) =>
+              fireAndForget(releaseNow(computer, typedName), 'macro-computers')
             }
           />
         )}

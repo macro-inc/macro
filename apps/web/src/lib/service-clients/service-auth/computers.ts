@@ -6,6 +6,7 @@ import { match } from 'ts-pattern';
 import {
   getCompleteTeamComputerSetupUrl,
   getRestoreTeamComputerUrl,
+  getRetryTeamComputerUrl,
 } from './generated/client';
 
 import type {
@@ -177,6 +178,12 @@ export const computersClient = {
     fetchWithToken<ComputerStatus, RestoreComputerErrorCode>(
       `${SERVER_HOSTS['auth-service']}${getRestoreTeamComputerUrl(encodeURIComponent(id))}`,
       { method: 'POST', errorResponseHandler: restoreError }
+    ),
+  /** Sets a failed computer up again; billing is untouched. */
+  retry: (id: string) =>
+    fetchWithToken<ComputerStatus>(
+      `${SERVER_HOSTS['auth-service']}${getRetryTeamComputerUrl(encodeURIComponent(id))}`,
+      { method: 'POST' }
     ),
   completeSetup: (id: string) =>
     fetchWithToken<ComputerStatus>(

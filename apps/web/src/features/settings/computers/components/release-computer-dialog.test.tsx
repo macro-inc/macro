@@ -36,4 +36,6 @@ it('releases only once the exact computer name is typed', () => {
   expect(release).toHaveProperty('disabled', false);
   fireEvent.click(release);
   expect(onRelease).toHaveBeenCalledTimes(1);
+  // The typed name goes to the server, which checks it again.
+  expect(onRelease).toHaveBeenCalledWith('Build machine');
 });

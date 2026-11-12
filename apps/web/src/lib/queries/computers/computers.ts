@@ -6,6 +6,7 @@ import {
   invalidateHarnesses,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
+import { harnessKeys } from '@queries/harnesses/keys';
 import {
   type ComputerStatus,
   type ComputerStatusKind,
@@ -69,33 +70,70 @@ export function computerPresenceKey(
     .join(',');
 }
 
+/**
+ * Each computer's lifecycle status, as one comparable string. A change is the
+ * cue to refresh the runtime directory, which shows computers' power state
+ * elsewhere and does not poll on its own.
+ */
+export function computerStatusKey(
+  computers: readonly ComputerStatus[] | undefined
+): string {
+  return (computers ?? [])
+    .map((computer) => `${computer.id}:${computer.status}`)
+    .join(',');
+}
+
+/**
+ * The last presence and status keys acted on, shared by every
+ * `useComputersQuery` caller, so one change refreshes once however many
+ * callers are mounted.
+ */
+const handledKeys = { presence: '', status: '' };
+
+/** Runs `refresh` when `key` changes, once across every caller. */
+function refreshOnChange(
+  kind: keyof typeof handledKeys,
+  key: () => string,
+  refresh: () => void
+) {
+  createEffect(
+    on(
+      key,
+      (next) => {
+        if (next === handledKeys[kind]) return;
+        handledKeys[kind] = next;
+        refresh();
+      },
+      { defer: true }
+    )
+  );
+}
+
 /** The current team's Macro computers; any team member can read them. */
 export function useComputersQuery(enabled: () => boolean) {
   const computers = useQuery(() => computersQueryOptions(enabled()));
   const harnesses = useHarnessesQuery();
-  createEffect(
-    on(
-      () =>
-        computerPresenceKey(
-          computers.data,
-          new Set(
-            (harnesses.data ?? [])
-              .filter((harness) => harness.connected)
-              .map((harness) => harness.id)
-          )
-        ),
-      () => {
-        if (enabled()) {
-          fireAndForget(
-            queryClient.invalidateQueries({
-              queryKey: computerKeys.list.queryKey,
-            }),
-            'computers-presence'
-          );
-        }
-      },
-      { defer: true }
-    )
+  const invalidate = (queryKey: readonly unknown[], name: string) => {
+    if (!enabled()) return;
+    fireAndForget(queryClient.invalidateQueries({ queryKey }), name);
+  };
+  refreshOnChange(
+    'presence',
+    () =>
+      computerPresenceKey(
+        computers.data,
+        new Set(
+          (harnesses.data ?? [])
+            .filter((harness) => harness.connected)
+            .map((harness) => harness.id)
+        )
+      ),
+    () => invalidate(computerKeys.list.queryKey, 'computers-presence')
+  );
+  refreshOnChange(
+    'status',
+    () => computerStatusKey(computers.data),
+    () => invalidate(harnessKeys.directory.queryKey, 'computers-directory')
   );
   return computers;
 }
@@ -186,6 +224,15 @@ export function useUndoCancelComputerMutation() {
 }
 
 /** Bills a released computer again while its disk is still retained. */
+export function useRetryComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.retry(computerId)),
+    onSuccess: storeComputer,
+  }));
+}
+
 export function useRestoreComputerMutation() {
   return useMutation(() => ({
     gcTime: 0,

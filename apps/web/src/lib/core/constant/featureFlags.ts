@@ -197,9 +197,9 @@ export const enableSlackArchiveImport = defineFlag({
 });
 
 /**
- * Macro computers: purchases in Settings → Runtimes and Claude access.
- * Existing computers remain visible on team Billing.
- * Fail closed in dev too so the local kill switch agrees with the backend.
+ * Macro computers: the whole computer UI (Settings → Machines, Billing,
+ * Agents). Off hides it; existing computers keep running and billing.
+ * No dev default: dev follows PostHog like the backend, which fails closed.
  */
 export const enableMacroComputers = defineFlag({
   key: 'enable-macro-computers',

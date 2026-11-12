@@ -12,7 +12,8 @@ export function ReleaseComputerDialog(props: {
   pending: boolean;
   error?: string;
   onClose: () => void;
-  onRelease: () => void;
+  /** Receives the name as typed; the server checks it again. */
+  onRelease: (typedName: string) => void;
 }) {
   return (
     <DeleteDialog

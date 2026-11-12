@@ -822,8 +822,10 @@ team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
 need a team: without one the page shows nothing about them. The flag follows
 PostHog in every environment unless explicitly overridden locally. With the
-flag off, existing computers stay listed and manageable in Machines and team
-Billing. Team purchase, quote and offers return 403 when the rollout is off,
+flag off, the computer UI is hidden (Machines, Billing, Agents and settings
+search show nothing about computers), while existing computers keep running and
+billing. Turning the flag off is a sales kill switch, not a way to manage
+computers. Team purchase, quote and offers return 403 when the rollout is off,
 missing or unavailable. If the environment has no computer prices configured,
 offers, quotes, and purchases answer 503 with `computers are not available in
 this environment`; partial price configuration prevents the authentication
@@ -836,7 +838,7 @@ on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
-Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
+Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
 computer (1 of 3)`. Then the billing state: `Payment past due` while the team
@@ -850,7 +852,8 @@ The row's one action is **Finish setup** while guided setup is incomplete
 (only for the buyer and the team owner), else **Sign in with Claude** when the
 computer is on its own Claude account but signed out, else none. **⋯** holds,
 in order: **Share** and **Don't ask before acting** (the runtime's Share menu
-and permission bypass, for its owner); **Turn off** (confirm: agents on it stop
+and permission bypass, for its owner); **Retry** on a `failed` computer
+(sets it up again, billing untouched); **Turn off** (confirm: agents on it stop
 until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 **Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
 period end**, **Undo cancel** while the cancellation is pending, or **Restore**
