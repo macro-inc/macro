@@ -1,0 +1,1127 @@
+{
+  "components": {
+    "schemas": {
+      "CasOptions": {
+        "properties": {
+          "cas": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cas"
+        ],
+        "type": "object"
+      },
+      "DestroyRequest": {
+        "properties": {
+          "versions": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "errors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SecretString"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "KvMetadata": {
+        "properties": {
+          "current_version": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "versions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/KvVersion"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "current_version",
+          "versions"
+        ],
+        "type": "object"
+      },
+      "KvMetadataResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/KvMetadata"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "KvReadData": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SecretData"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/KvVersion"
+          }
+        },
+        "required": [
+          "data",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "KvReadResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/KvReadData"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "KvVersion": {
+        "properties": {
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deletion_time": {
+            "type": "string"
+          },
+          "destroyed": {
+            "type": "boolean"
+          },
+          "version": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created_time",
+          "deletion_time",
+          "destroyed"
+        ],
+        "type": "object"
+      },
+      "KvWriteData": {
+        "properties": {
+          "created_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "created_time"
+        ],
+        "type": "object"
+      },
+      "KvWriteResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/KvWriteData"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "LoginAuth": {
+        "properties": {
+          "client_token": {
+            "$ref": "#/components/schemas/SecretString"
+          }
+        },
+        "required": [
+          "client_token"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "jwt": {
+            "$ref": "#/components/schemas/SecretString"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "jwt",
+          "role"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "properties": {
+          "auth": {
+            "$ref": "#/components/schemas/LoginAuth"
+          }
+        },
+        "required": [
+          "auth"
+        ],
+        "type": "object"
+      },
+      "NamespaceInfo": {
+        "properties": {
+          "id": {
+            "description": "Accessor ID of the namespace.",
+            "type": "string"
+          },
+          "locked": {
+            "description": "Flag representing the lock status of the namespace.",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "Path of the namespace.",
+            "type": "string"
+          },
+          "tainted": {
+            "description": "Flag representing the taint status of the namespace.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "tainted"
+        ],
+        "type": "object"
+      },
+      "NamespaceResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NamespaceInfo"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "SecretData": {
+        "additionalProperties": {},
+        "type": "object"
+      },
+      "SecretString": {
+        "type": "string"
+      },
+      "TotpCode": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/SecretString"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "TotpResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TotpCode"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "TotpWriteRequest": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "digits": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "key": {
+            "$ref": "#/components/schemas/SecretString"
+          },
+          "period": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "period",
+          "digits",
+          "algorithm"
+        ],
+        "type": "object"
+      },
+      "WriteSecretRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SecretData"
+          },
+          "options": {
+            "$ref": "#/components/schemas/CasOptions"
+          }
+        },
+        "required": [
+          "data",
+          "options"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Mounted OpenBao API",
+    "version": "2.7.2"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/v1/auth/macro-lifecycle/login": {
+      "post": {
+        "operationId": "login_lifecycle",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "summary": "Authenticates to OpenBao using a JWT (or OIDC) token.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/macro/login": {
+      "post": {
+        "operationId": "login_team",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "summary": "Authenticates to OpenBao using a JWT (or OIDC) token.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/passwords/data/{path}": {
+      "get": {
+        "operationId": "read_secret",
+        "parameters": [
+          {
+            "description": "Location of the secret.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KvReadResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      },
+      "post": {
+        "operationId": "write_secret",
+        "parameters": [
+          {
+            "description": "Location of the secret.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KvWriteResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/v1/passwords/destroy/{path}": {
+      "post": {
+        "operationId": "destroy_versions",
+        "parameters": [
+          {
+            "description": "Location of the secret.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DestroyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Operation accepted"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/v1/passwords/metadata/{path}": {
+      "get": {
+        "operationId": "read_metadata",
+        "parameters": [
+          {
+            "description": "Location of the secret.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KvMetadataResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/v1/sys/namespaces/{path}": {
+      "delete": {
+        "operationId": "delete_namespace",
+        "parameters": [
+          {
+            "description": "Path of the namespace.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asynchronous deletion accepted"
+          },
+          "204": {
+            "description": "Operation accepted"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "summary": "Delete a namespace.",
+        "tags": [
+          "system"
+        ]
+      },
+      "get": {
+        "operationId": "read_namespace",
+        "parameters": [
+          {
+            "description": "Path of the namespace.",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "summary": "Retrieve a namespace.",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/v1/totp/code/{name}": {
+      "get": {
+        "operationId": "read_totp",
+        "parameters": [
+          {
+            "description": "Name of the key.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/v1/totp/keys/{name}": {
+      "delete": {
+        "operationId": "delete_totp",
+        "parameters": [
+          {
+            "description": "Name of the key.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation accepted"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      },
+      "post": {
+        "operationId": "write_totp",
+        "parameters": [
+          {
+            "description": "Name of the key.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-macro-audit-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Vault-Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Operation accepted"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "OpenBao response"
+          }
+        },
+        "tags": [
+          "secrets"
+        ]
+      }
+    }
+  }
+}

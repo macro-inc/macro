@@ -79,6 +79,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    claude_access: Router,
     capabilities: Router,
     mode_choice: Router,
     conversations: Router,
@@ -134,6 +135,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            claude_access: Router::new(),
             capabilities: Router::new(),
             mode_choice: Router::new(),
             conversations: Router::new(),
@@ -235,6 +237,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach Macro computer Claude sign-in routes.
+    pub fn with_claude_access(mut self, router: Router) -> Self {
+        self.claude_access = router;
+        self
+    }
+
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
@@ -284,23 +292,30 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 }
 
-/// Serve session egress and Macro Internal MCP on the existing egress listener.
+/// Serve session egress, Macro Internal MCP, and the Anthropic gateway on the
+/// existing egress listener.
 ///
-/// Both authenticate session credentials; internal tools also serve external
-/// runtimes. No browser-facing CORS layer or Swagger is needed.
+/// All authenticate session credentials and also serve external runtimes. No
+/// browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
     internal_mcp: Router,
+    anthropic_gateway: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
-        internal_mcp,
-        EGRESS_GATEWAY_PATH_PREFIX,
-    ));
+    let app = egress_app(EgressRouterState::new(service))
+        .merge(mount_at_root_and_prefix(
+            internal_mcp,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ))
+        .merge(mount_at_root_and_prefix(
+            anthropic_gateway,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -427,6 +442,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.claude_access)
         .merge(states.capabilities)
         .merge(states.mode_choice)
         .merge(states.conversations)

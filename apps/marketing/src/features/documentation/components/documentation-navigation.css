@@ -2,10 +2,13 @@
 .site-header.site-documentation-header { left: 20px; }
 html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f5f1e8; }
 .macro-homepage .site-documentation-header { --doc-nav-background: light-dark(#fff, #000); }
-.site-header.site-documentation-header .site-menu-toggle { display: grid; position: relative; z-index: 2; width: 68px; height: 68px; margin-inline: -16px; border-radius: 50%; color: var(--nav-ink); cursor: default; }
+.site-header.site-documentation-header .site-menu-toggle { display: grid; position: relative; z-index: 2; width: 68px; height: 68px; margin-inline: -16px; border-radius: 50%; background: transparent; color: var(--nav-ink); cursor: default; }
 .site-header.site-documentation-header .site-menu-mark { width: 36px; height: 36px; }
-.site-header.site-documentation-header .site-menu-toggle:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
-.site-documentation-header .site-menu-toggle[aria-expanded=true] { background: transparent; }
+.site-header.site-documentation-header .site-menu-toggle:focus-visible { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
+/* A touch browser keeps :hover after a tap, which would leave the highlight on the toggle. */
+@media (hover: hover) {
+  .site-header.site-documentation-header .site-menu-toggle:hover { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
+}
 .site-documentation-header .site-menu::after { display: none; }
 .documentation-navigation {
   --nav-muted: color-mix(in srgb, var(--nav-ink) 60%, var(--doc-nav-background));
@@ -34,11 +37,12 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
   .site-header.site-documentation-header .site-menu-toggle { width: 54px; height: 54px; margin-inline: -11px; }
   .site-header.site-documentation-header .site-menu-mark { width: 32px; height: 32px; }
   .documentation-navigation { inset: 0; width: 100%; padding: 0; border: 0; }
-  .doc-nav-scroll { padding-top: 80px; }
-  .documentation-navigation::before { height: 64px; }
+  /* The 68px bar holds the 54px toggle; the search field starts 8px below it. */
+  .doc-nav-scroll { padding-top: 84px; }
+  .documentation-navigation::before { height: 68px; }
   .documentation-navigation a { min-height: 44px; padding-block: 12px; }
   .doc-nav-search input { height: 48px; font-size: 16px; }
-  .site-header.site-documentation-header[data-menu-open=true]::before { background: var(--doc-nav-background); height: 64px; }
+  .site-header.site-documentation-header[data-menu-open=true]::before { background: var(--doc-nav-background); height: 68px; }
 }
 @media (min-width:768px) {
   .doc-nav-top { padding-top: 0; padding-bottom: 24px; }
