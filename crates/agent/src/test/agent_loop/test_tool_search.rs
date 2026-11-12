@@ -26,8 +26,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 /// Stand-in for `ai_tools::SearchTools`: returns all tools and stages them so
-/// they are callable on the next model turn. (The real tool auto-loads only
-/// the top-ranked matches; with this test catalog everything fits the cap.)
+/// they are callable on the next model turn, and names every advertised tool
+/// as `name: description`, so tests can see the description it was handed.
+/// (The real tool ranks both against the query; with this test catalog
+/// everything fits the cap.)
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
@@ -57,6 +59,11 @@ impl AsyncTool<()> for SearchToolsTest {
         Ok(SearchToolsResponse {
             results,
             additional_matches: Vec::new(),
+            already_available: request_context
+                .advertised_tools
+                .iter()
+                .map(|tool| format!("{}: {}", tool.name, tool.description))
+                .collect(),
         })
     }
 }
@@ -243,8 +250,106 @@ async fn search_stages_tools_from_multiple_providers_for_the_next_turn() {
         "stream ended with error: {:?}",
         result.error
     );
+    // The loop hands SearchTools the tools it advertises.
+    let search = result
+        .tool_responses()
+        .into_iter()
+        .find(|r| matches!(r, ToolResponse::Json { name, .. } if name == SEARCH_TOOLS));
+    match search {
+        Some(ToolResponse::Json { json, .. }) => {
+            let mut names: Vec<String> =
+                serde_json::from_value(json["already_available"].clone()).unwrap();
+            names.sort();
+            assert_eq!(
+                names,
+                vec![
+                    "LoadTools: Load searchable tools by name.",
+                    "SearchTools: Find and stage searchable tools.",
+                ]
+            );
+        }
+        other => panic!("expected a SearchTools response, got {other:?}"),
+    }
     expect_json_ok(&result, "mcp__a__t1");
     expect_json_ok(&result, "mcp__b__t2");
+}
+
+/// `FakeCombined` whose request schemas carry blank descriptions, leaving the
+/// text only in each schema's root, where the provider definition reads it.
+struct BlankDescriptions(FakeCombined);
+
+impl AiToolSet<()> for BlankDescriptions {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: (),
+        request_context: RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
+    > {
+        self.0
+            .dispatch_tool_call(context, request_context, tool_name, json)
+    }
+
+    fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
+        let mut schemas = self.0.request_schemas()?;
+        for schema in &mut schemas {
+            schema.description = String::new();
+        }
+        Some(schemas)
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.0.searchable_catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.0.searchable_toolset_names()
+    }
+}
+
+/// SearchTools matches advertised tools against the description the provider
+/// shows, which falls back to the schema root when the explicit one is blank.
+#[tokio::test]
+async fn search_sees_the_provider_description_of_advertised_tools() {
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-search", SEARCH_TOOLS, serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![MockStreamEvent::final_response_with_default_usage()],
+    ]);
+
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> =
+        Arc::new(BlankDescriptions(FakeCombined::new()));
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+    let result = util::drive(&mut session, "search").await;
+
+    assert!(
+        result.error.is_none(),
+        "stream ended with error: {:?}",
+        result.error
+    );
+    let search = result
+        .tool_responses()
+        .into_iter()
+        .find(|r| matches!(r, ToolResponse::Json { name, .. } if name == SEARCH_TOOLS));
+    match search {
+        Some(ToolResponse::Json { json, .. }) => {
+            let mut names: Vec<String> =
+                serde_json::from_value(json["already_available"].clone()).unwrap();
+            names.sort();
+            assert_eq!(
+                names,
+                vec![
+                    "LoadTools: Load searchable tools by name.",
+                    "SearchTools: Find and stage searchable tools.",
+                ]
+            );
+        }
+        other => panic!("expected a SearchTools response, got {other:?}"),
+    }
 }
 
 /// Repro for the reported "silent empty-turn stall": the model calls an

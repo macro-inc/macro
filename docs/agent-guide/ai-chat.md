@@ -1285,7 +1285,8 @@ server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-pro
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
 code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning). Code mode has a smaller direct toolset:
+to the direct tools and logs a warning; for owners with the
+`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1302,7 +1303,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps, subagents,
+tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
@@ -1417,7 +1418,8 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools. Supported
+one, turns fall back to the direct tools, or fail for owners with the
+`ai-session-code-mode-only` flag. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1894,6 +1896,22 @@ and confirm unknown tools have no individual disclosure or JSON payload. Repeat
 at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
 in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
+
+While a turn runs tool calls, the server words them as one live status line
+("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+pushes it to every viewer (`agent_session_activity`). It replaces the
+**Calling N tools** label of the run the turn is in: one with a call in flight,
+or the newest run while the agent thinks between calls. The count stays beside it,
+and the caret still opens the raw calls. An `ExecuteCode` program the turn is
+in takes it the same way: on its SDK-operation peek, or in place of **Working
+in your workspace…** before any operation is observed. It also replaces the
+open activity line of an agent reply in a channel, and shows under a working
+session's row in the Agents list. It is
+throttled per turn (every 4s for the first 10 lines, then every 15s, at most
+120), never stored, and cleared when the turn ends; a surface opened mid-turn
+shows its usual label until the next line arrives. Sessions owned by no person
+get no line, and the PostHog flag `disable-agent-activity-summary` turns lines
+off for an owner.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**

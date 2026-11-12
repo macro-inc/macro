@@ -1168,6 +1168,25 @@ entry moves to **Settings → Routines** (on phones **More views → Settings �
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
+A routine one of another routine's runs created (from a code step or the
+Ask AI step's session, while that run was in progress) is its **sub-routine**
+and is not a row of its own. On desktop the creating routine's row shows a
+caret and **N sub-routines**; the caret expands the active ones under it,
+indented, each with its own switch (a paused-with-parent one's tooltip reads
+**Paused with the routine that created it**). A search that matches only a
+sub-routine shows its parent, expanded. Touch devices list top-level routines
+only. The creating routine's page has a **Created by this routine** section
+after its settings: the active sub-routines (name, trigger, **Active** /
+**Paused** / **Running**), then **Finished: N** with **Show finished** for the
+one-time ones that have run (the newest 200), each row opening that routine,
+whose **Runs** tab has its run. A sub-routine's page reads **Created by
+<name>** under its title (a link to the creator) and its **Routine actions**
+menu has **Keep as my routine**, which moves it to the main list and stops it
+pausing or being deleted with its creator. Switching a creator off pauses its
+sub-routines and switching it on resumes only those; deleting it deletes them,
+and the delete dialog says **The N routines it created will be deleted too.**
+In a run's details, **Created** lists the sub-routines that run created.
+
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
@@ -1317,8 +1336,9 @@ The event menu groups Macro activity triggers by surface:
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
-same panel to choose any accessible item or specific channels/documents/tasks. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
+same panel to choose any accessible item or specific channels/documents/tasks.
+Specific-item pickers use Next options/PageDown to append later loaded pages.
+Creation triggers cover newly created accessible items; email covers the owner's inbox;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
@@ -1700,9 +1720,12 @@ Background history or channel refetches alone must not blank a settled empty
 category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
-then catch up with one coalesced refresh. Verify with cache reads slower than the
-250 ms update throttle, starting from an empty cache: entities appear without
-waiting for background updates to stop. Changing the query/category or closing
+then catch up with one coalesced refresh. A change after a quiet interval
+refreshes at once, and refreshes never start closer together than that
+interval: 2 s for the channel index and menu searches (rebuilt for the whole
+account), 250 ms for history. Verify
+with cache reads slower than that throttle, starting from an empty cache:
+entities appear without waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal
