@@ -85,7 +85,14 @@ where
             paused_by_parent,
         };
         let created = self
-            .create(principal, input.clone(), None, None, Some(link))
+            .create(
+                principal,
+                input.clone(),
+                None,
+                EntityAppearance::default(),
+                None,
+                Some(link),
+            )
             .await;
 
         match (created, &key) {

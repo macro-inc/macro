@@ -21,8 +21,11 @@ to the browser via `inbound/wasm`.
 - `src/domain/fold/convert.rs` + `turn.rs`: map image blocks into attachments,
   using source URLs or inline data; attach live image chunks to the user prompt
   and deduplicate attachments by URI during replay.
-- `src/domain/model/segment/code_execution.rs`: expands internal code receipts
-  into SDK activity rows for conversation snapshots, independent of harness.
+- `src/domain/model/segment/code_execution.rs`: how code-mode calls read in
+  conversations, independent of harness: internal code receipts expand into
+  SDK activity rows, a run without them reads as work in the workspace, and the
+  agent's tool lookups (`DescribeCodeTools`, `ReadCodeDocs`, `SearchTools`,
+  `LoadTools`) belong to no segment. People never see code wording.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
 - `src/domain/model/segment.rs`: activity rows for conversations. A row's

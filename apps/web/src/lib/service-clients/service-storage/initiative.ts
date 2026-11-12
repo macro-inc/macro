@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { catchToResult, ThrownResultError } from '@core/util/result';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type {
@@ -66,6 +67,7 @@ export function mapInitiativeIdentity(
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
+    appearance: readEntityAppearance(project.appearance),
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
