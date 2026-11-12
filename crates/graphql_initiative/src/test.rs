@@ -191,6 +191,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn detail() -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
         owner_id: user(),
@@ -207,6 +208,7 @@ fn row() -> InitiativePageRow {
     let detail = detail();
     InitiativePageRow {
         initiative: InitiativeSummary {
+            appearance: None,
             id: detail.id,
             name: detail.name,
             updated_at: detail.updated_at,

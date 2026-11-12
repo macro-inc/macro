@@ -11,6 +11,7 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
+import { isCodeModeSupportCall } from '../../state/code-mode-support';
 import {
   isCodeExecution,
   presentedReviewId,
@@ -64,6 +65,7 @@ export function ToolCallPart(props: {
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
+      <Match when={isCodeModeSupportCall(props.part)}>{null}</Match>
       <Match when={presentedReviewId(props.part)}>
         {(id) => (
           <PresentedReviewPart
@@ -121,10 +123,7 @@ export function ToolCallPart(props: {
           <Show
             when={
               props.part.name.kind === 'mcp' &&
-              (props.part.name.server === 'macro' ||
-                (props.part.name.server === 'macro_internal' &&
-                  (props.part.name.tool === 'DescribeCodeTools' ||
-                    props.part.name.tool === 'ReadCodeDocs'))) &&
+              props.part.name.server === 'macro' &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}
