@@ -268,6 +268,74 @@ test.describe('desktop view-only', () => {
   });
 });
 
+test.describe('desktop keyboard', () => {
+  test('typing key by key keeps focus in template and custom fields', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    const typeInto = async (field: Locator, text: string) => {
+      await field.click();
+      await field.pressSequentially(text);
+      await expect(field).toHaveValue(text);
+      await expect(field).toBeFocused();
+    };
+    const byLabel = (label: string) =>
+      page.locator(`input[aria-label="${label}"]`);
+
+    await startNew(page, viewport, 'Login');
+    await typeInto(page.getByLabel('Name', { exact: true }), 'Deploy login');
+    await typeInto(page.getByLabel('Username', { exact: true }), 'deploy-bot');
+    await typeInto(
+      page.getByLabel('Password', { exact: true }),
+      'not-a-real-secret'
+    );
+    await press(page, viewport, 'Discard');
+
+    await startNew(page, viewport, 'Card');
+    await typeInto(page.getByLabel('Name', { exact: true }), 'Team card');
+    await typeInto(byLabel('Expires'), '12/2028');
+    await typeInto(byLabel('Security code'), '4321');
+    await expect(page.getByText('Unsaved items')).toHaveCount(0);
+
+    await press(page, viewport, 'Add field');
+    await typeInto(page.getByLabel('Field label').last(), 'Recovery email');
+    await typeInto(byLabel('Recovery email'), 'backup@example.test');
+
+    const expiresLabel = page.getByLabel('Field label').first();
+    await expiresLabel.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expiresLabel.pressSequentially('Valid thru');
+    await expect(expiresLabel).toHaveValue('Valid thru');
+    await expect(expiresLabel).toBeFocused();
+    await expect(byLabel('Valid thru')).toHaveValue('12/2028');
+    await expect(byLabel('Valid thru')).toHaveAttribute('type', 'password');
+
+    await page.getByRole('button', { name: 'Remove field' }).first().click();
+    await expect(page.getByLabel('Field label')).toHaveCount(2);
+    await expect(page.getByLabel('Field label').first()).toHaveValue(
+      'Security code'
+    );
+    await expect(byLabel('Security code')).toHaveValue('4321');
+    await expect(byLabel('Recovery email')).toHaveValue('backup@example.test');
+    await expect(byLabel('Valid thru')).toHaveCount(0);
+    await press(page, viewport, 'Discard');
+
+    await startNew(page, viewport, 'Identity');
+    await typeInto(byLabel('Email'), 'ops@example.test');
+    await typeInto(byLabel('Phone'), '+1 555 0100');
+    await typeInto(byLabel('Address'), 'Example location');
+    await press(page, viewport, 'Discard');
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('desktop folders', () => {
   test('creates, nests, renames and deletes folders; items move to All items', async ({
     page,
