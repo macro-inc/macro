@@ -1,0 +1,62 @@
+# Two Macro users' Gmail mailboxes, and one outside correspondent's.
+mailboxes:
+  - email: ada@example.com
+    name: Ada Example
+    labels:
+      - name: Receipts
+    contacts:
+      - { email: grace@example.com, name: Grace Hopper }
+    other_contacts:
+      - { email: alan@example.com, name: Alan Turing }
+    messages:
+      - from: Grace Hopper <grace@example.com>
+        subject: Quarterly numbers
+        text: The Q3 numbers are ready for review.
+        message_id: q3-1@example.com
+        labels: [INBOX, CATEGORY_PERSONAL]
+        date: "2026-11-03T09:00:00Z"
+      - from: Ada Example <ada@example.com>
+        to: Grace Hopper <grace@example.com>
+        subject: "Re: Quarterly numbers"
+        text: Thanks, reading them now.
+        message_id: q3-2@example.com
+        in_reply_to: q3-1@example.com
+        labels: [SENT]
+        date: "2026-11-03T09:30:00Z"
+      - from: Grace Hopper <grace@example.com>
+        subject: "Re: Quarterly numbers"
+        html: "<p>One correction on <b>page 4</b>.</p>"
+        text: One correction on page 4.
+        in_reply_to: q3-2@example.com
+        labels: [INBOX, UNREAD, CATEGORY_PERSONAL, STARRED]
+        date: "2026-11-03T10:00:00Z"
+      - from: Billing <billing@example.com>
+        subject: Receipt 1042
+        text: Your receipt is attached to your account.
+        labels: [INBOX, UNREAD, Label_1, CATEGORY_UPDATES]
+        date: "2026-11-05T12:00:00Z"
+      - from: Alan Turing <alan@example.com>
+        subject: Lunch on Friday?
+        text: Are you free at noon on Friday?
+        labels: [INBOX, UNREAD, CATEGORY_PERSONAL]
+        date: "2026-11-08T08:15:00Z"
+      - from: Newsletter <news@example.com>
+        subject: This week in computing
+        html: "<h1>Weekly</h1><p>Five stories you missed.</p>"
+        labels: [INBOX, CATEGORY_PROMOTIONS]
+        date: "2026-11-09T07:00:00Z"
+  - email: bob@example.com
+    name: Bob Example
+    messages:
+      - from: Carol <carol@example.com>
+        subject: Welcome aboard
+        text: Glad to have you on the team.
+        labels: [INBOX, UNREAD, CATEGORY_PERSONAL]
+        date: "2026-11-02T15:00:00Z"
+      - from: Carol <carol@example.com>
+        subject: Your laptop
+        text: It ships on Monday.
+        labels: [INBOX, CATEGORY_PERSONAL]
+        date: "2026-11-04T11:00:00Z"
+  - email: carol@example.com
+    name: Carol Example

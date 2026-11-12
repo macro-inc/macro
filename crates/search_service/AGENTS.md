@@ -53,6 +53,11 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Gotchas
 
+- Search spans and logs never carry what the user typed: not the query, its
+  terms, or the name term. Skip those arguments and record sizes and enums
+  (`term_len`, `search.terms`, `search.search_on`). The unified
+  search span is built by `simple_unified::unified_search_span`, which a test
+  reads back; add a field there, not by instrumenting the request.
 - Every whitespace-split term is ANDed, so a term the standard tokenizer
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial
