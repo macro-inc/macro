@@ -2,6 +2,8 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; phones have no Calendar sidebar, so no entry.
+
 Microsoft calendars use the same editor and calendar views after calendar consent.
 Conference choices follow the selected calendar's capabilities: Microsoft Teams
 where supported and Google Meet for Google calendars. Selecting a calendar that
@@ -322,7 +324,8 @@ only teammate overlay. Replacing a login session clears team data and open
 teammate details before the new identity loads. Legacy out-of-office rows are
 read-only status displays and do not claim that every absence blocks availability.
 
-The `GetTeamAvailability` AI tool checks the requester together with the selected
+The `GetTeamAvailability` AI tool (and, in code mode, `macro.calendar.teamAvailability`
+over `POST /calendar-events/team/availability`) checks the requester together with the selected
 teammates. It reports confirmed free windows only when every participant has
 complete availability coverage. Hidden, disconnected, stale, or incomplete
 calendars are reported as unknown, never free. Busy blocks contain no event
@@ -349,9 +352,17 @@ Search button. The expanded field exposes Filters and, after typing, the
 icon-only Exact-match toggle. The filter button stays before Close. The filter
 menu opens below the button, aligned to its right edge: Search in is
 single-select, while Status, Organizer, and Attendee allow multiple values.
-Organizer and Attendee virtualize their contact lists; selected contacts stay
-in place, while custom email addresses appear first. Adding a valid email clears
-the contact search. Filter selections apply immediately, and only these filters
+Organizer and Attendee virtualize a bounded contact window, using shared
+name/email matching. Matching selected values stay pinned independently of the
+page; their labels resolve through explicit email lookup, including cached
+point reads offline. Unknown or external selections keep their email labels.
+Next contacts replaces the suggestion page without clearing selections. Empty
+server pages may still have a continuation; partial/offline caches are labeled
+rather than claiming no contacts exist. Adding a valid email clears the contact
+search. Typing keeps focus in the input as async rows arrive, and ArrowDown moves
+into the checkbox rows. Desktop/phone coverage uses the production filters and
+query/lookup state over stand-in services in
+`src/lib/core/internal/browser-test/playwright.config.ts`. Filter selections apply immediately, and only these filters
 mark the filter button, not Exact mode. Search opens a calendar-search hint
 until at least three characters are entered; searches show skeleton rows while
 loading. Empty results show an illustrated empty state. Result titles show a calendar-color
@@ -577,6 +588,16 @@ title as its subject (as `Forward by email` fills it in) — in a split
 beside the calendar on desktop, as the full-screen composer on touch devices, in its own
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
+Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
+paged personal suggestions. Type to find contacts outside the first window; Next
+options or PageDown replaces the page. Selected guests, their supplied/chosen
+names and custom addresses survive searches and paging. Known event guests are
+scoped extras, not personal-directory membership. Add-only editors exclude current
+and newly added guests case-insensitively without changing their stored address
+representation. Typing a complete custom address and pressing Enter selects its
+Add row, never a stale result or another person's display-name alias. Existing read-only, hidden
+list, optional-attendee and recurring-event permissions are unchanged.
+
 With the `enable-calendar-guest-invites` flag on, a third icon button, `Add guests`, shows
 whenever the event's `viewerCan.inviteGuests` allows it, including for a guest whose
 organizer lets guests invite. It opens an editor anchored to the button (on phones, a bottom
@@ -879,6 +900,7 @@ description, then larger task-style URL-path, duration, and scheduling-type pill
 with matching surfaces. Scheduling type reflects the saved link mode: Individual,
 Collective, or Round robin, with a corresponding icon. Pills wrap on narrow panes
 and align with the title on touch devices. Row content has no hover tooltips.
+The Booking links list, empty or not, starts with the Scheduling `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 Paused links appear dimmed but remain editable. The URL pill offers Copy link and
 Open in new tab. Desktop More and right-click menus share Copy link, Preview,
 Edit, Duplicate, and Delete. Touch rows hide More; hold a row to open the shared
@@ -1395,7 +1417,10 @@ been checked. A series invitation shows its current or next live occurrence.
 Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
-description links use the host's normal link-opening behavior.
+description links use the host's normal link-opening behavior. Long unbroken text
+(Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared

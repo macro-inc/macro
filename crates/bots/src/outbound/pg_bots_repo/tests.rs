@@ -1,9 +1,10 @@
 use super::*;
 use crate::domain::{
     models::{
-        AgentChannelScope, AgentMcpServer, AgentMcpServers, BotChannelListCaller, BotChannelType,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        AgentChannelScope, AgentHarnessSelection, AgentMcpServer, AgentMcpServers,
+        BotChannelListCaller, BotChannelType, CreateAgentRequest, CreateBotRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchAgentRequest, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotService, McpAppCatalog},
     service::BotServiceImpl,
@@ -19,6 +20,7 @@ use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 
 mod agent_dm;
+mod agent_enabled;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
@@ -2099,6 +2101,22 @@ async fn insert_harness(
     Ok(HarnessId::new_from_uuid(harness_id))
 }
 
+/// A runtime owned by the team's owner and opened to the whole team.
+async fn insert_team_harness(pool: &PgPool, team_id: Uuid) -> anyhow::Result<HarnessId> {
+    let harness = insert_harness(pool, Some(TEAM_OWNER), None).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'edit')
+        "#,
+        harness.as_uuid(),
+        team_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(harness)
+}
+
 fn macrod_agent_req(handle: &str, harness_id: Option<HarnessId>) -> CreateAgentRequest {
     CreateAgentRequest {
         harness: "macrod".to_string(),
@@ -2159,6 +2177,134 @@ async fn macrod_agents_require_a_registered_usable_harness(pool: PgPool) -> anyh
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patching_settings_keeps_every_runtime(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    insert_user(&pool, USER_OWNER).await?;
+    let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let in_memory = CreateAgentRequest {
+        harness: "in-memory".to_string(),
+        ..create_agent_req("in-memory-agent", AgentChannelScope::All)
+    };
+    let cursor = create_agent_req("cursor-agent", AgentChannelScope::All);
+    let macrod = macrod_agent_req("macrod-agent", Some(harness));
+
+    for create in [in_memory, cursor, macrod] {
+        let (runtime, host) = (create.harness.clone(), create.harness_id);
+        let created = service.create_agent(user_id(USER_OWNER), create).await?;
+
+        let patched = service
+            .patch_agent(
+                user_id(USER_OWNER),
+                created.bot.id,
+                PatchAgentRequest {
+                    instructions: Some("Answer in one line.".to_string()),
+                    ..PatchAgentRequest::default()
+                },
+            )
+            .await?;
+
+        assert_eq!(patched.instructions, "Answer in one line.");
+        assert_eq!(patched.harness, runtime);
+        assert_eq!(patched.harness_id, host);
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let team_harness = insert_team_harness(&pool, team_id).await?;
+    let agent = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("opencode", Some(team_harness)),
+        )
+        .await?;
+
+    // The harnesses service deletes a harness by stamping `deleted_at`.
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        team_harness.as_uuid(),
+    )
+    .execute(&pool)
+    .await?;
+
+    let unbound = PgBotsRepo::new(pool.clone())
+        .get_agent(agent.bot.id)
+        .await?
+        .expect("agent outlives its harness");
+    assert_eq!(unbound.harness, "macrod");
+    assert_eq!(unbound.harness_id, None);
+
+    // Settings other than the runtime stay editable while it is unbound.
+    let patched = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                instructions: Some("Answer in one line.".to_string()),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(patched.instructions, "Answer in one line.");
+    assert_eq!(patched.harness_id, None);
+
+    // Choosing the runtime still requires a live harness.
+    let unbound_choice = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: None,
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(unbound_choice, Err(BotError::BadRequest(_))));
+
+    let deleted_choice = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: Some(team_harness),
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(deleted_choice, Err(BotError::BadRequest(_))));
+
+    let rebound_harness = insert_team_harness(&pool, team_id).await?;
+    let rebound = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: Some(rebound_harness),
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(rebound.harness_id, Some(rebound_harness));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnesses(
     pool: PgPool,
 ) -> anyhow::Result<()> {
@@ -2167,7 +2313,17 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
     let team_id = Uuid::new_v4();
     insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
     insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
-    let team_harness = insert_harness(&pool, None, Some(team_id)).await?;
+    let team_harness = insert_harness(&pool, Some(TEAM_OWNER), None).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'edit')
+        "#,
+        team_harness.as_uuid(),
+        team_id.to_string(),
+    )
+    .execute(&pool)
+    .await?;
 
     // A member's private agent may run on the team harness.
     let member_agent = service
@@ -2204,6 +2360,40 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
         .create_agent(user_id(TEAM_MEMBER), team_on_private)
         .await;
     assert!(matches!(team_on_private, Err(BotError::Unauthorized)));
+
+    // A teammate's agent runs on someone's private harness once they are given
+    // access to it, and a team agent still does not: not everyone on the team was.
+    let shared_harness = insert_harness(&pool, Some(TEAM_OWNER), None).await?;
+    let refused = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("member-on-shared-harness", Some(shared_harness)),
+        )
+        .await;
+    assert!(matches!(refused, Err(BotError::Unauthorized)));
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'edit')
+        "#,
+        shared_harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let on_shared = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("member-on-shared-harness", Some(shared_harness)),
+        )
+        .await?;
+    assert_eq!(on_shared.harness_id, Some(shared_harness));
+    let mut team_on_shared = macrod_agent_req("team-on-shared-harness", Some(shared_harness));
+    team_on_shared.team_id = Some(team_id);
+    let team_on_shared = service
+        .create_agent(user_id(TEAM_MEMBER), team_on_shared)
+        .await;
+    assert!(matches!(team_on_shared, Err(BotError::Unauthorized)));
 
     // Updates re-check the binding: moving the member's agent onto their own
     // private harness works, and clearing the slug clears the binding.
@@ -2259,6 +2449,78 @@ async fn persona_create_and_update_cannot_bypass_a_prompt_only_harness(
             .unwrap()
             .auto_accept_permissions,
         Some(false)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_resident_reads_stopped_once_its_owner_loses_access_to_its_runtime(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let harness = insert_harness(&pool, Some(TEAM_OWNER), None).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'edit')
+        "#,
+        harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let resident = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            CreateAgentRequest {
+                is_coding: false,
+                ..macrod_agent_req("resident-agent", Some(harness))
+            },
+        )
+        .await?;
+    let coder = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("coding-agent", Some(harness)),
+        )
+        .await?;
+    let stopped = |agents: &[Agent], id: BotId| {
+        agents
+            .iter()
+            .find(|agent| agent.bot.id == id)
+            .expect("listed")
+            .stopped_reason
+    };
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(stopped(&listed, resident.bot.id), None);
+
+    // Lowered to Read: the resident stops. A coding agent is checked against
+    // whoever prompts it, so it does not.
+    sqlx::query!(
+        r#"
+        UPDATE entity_access SET access_level = 'view'
+        WHERE entity_id = $1 AND source_id = $2
+        "#,
+        harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(
+        stopped(&listed, resident.bot.id),
+        Some(AgentStoppedReason::NoRuntimeAccess)
+    );
+    assert_eq!(stopped(&listed, coder.bot.id), None);
+    assert_eq!(
+        PgBotsRepo::new(pool.clone())
+            .get_agent(resident.bot.id)
+            .await?
+            .and_then(|agent| agent.stopped_reason),
+        Some(AgentStoppedReason::NoRuntimeAccess)
     );
     Ok(())
 }

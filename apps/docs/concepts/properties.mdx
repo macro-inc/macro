@@ -4,40 +4,32 @@ icon: "tags"
 description: "Attach structured fields to documents, tasks, emails, and CRM records with one shared system."
 ---
 
-Macro uses properties to attach structured data to any *entity* (email, task, doc, CRM record, etc.). The properties system is unified across blocks, so you can organize different content types using the same fields, or create different fields for different content types. Tasks and CRM obviously have very different sensible properties, but the concepts are the same and the UI is shared, so teams can work together effectively.
+Macro uses properties to attach structured data to any *entity* (email, task, doc, CRM record, etc.). The properties system is unified across Blocks, so you can organize different content types using the same fields, or create different fields for different content types.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.24.24-PM.png"
-    alt="The properties card on a task showing Status, Priority, and Assignees"
-    title="Task properties"
-    className="mx-auto"
-    style={{ width:"71%" }}
-  />
-</Frame>
+<GuideGraphic kind="tasks" label="A task keeps status, assignee, and its source conversation together." />
 
 On tasks, the default properties of Status, Priority, and Assignees are visible in this card to the right of the task. To add additional properties click `Add property`.
 
-<Frame>
-  ![The Add property menu listing available property types](/images/Screenshot-2026-06-09-at-4.25.31-PM.png)
-</Frame>
-
 ## Supported types
 
-Every entity that supports properties supports the same data types:
+**Add property** offers:
 
-- **STRING** (text): phone, job title, department, notes.
-- **NUMBER**: revenue, employee count, ARR.
-- **BOOLEAN**: toggles.
-- **DATE**: last contacted, contract/renewal date.
-- **SELECT\_STRING**: single/multi-select with string options (custom option colors/icons).
-- **SELECT\_NUMBER**: single/multi-select with numeric options.
-- **ENTITY**: a reference to another entity (User, Company, Contact, Document, Project, Channel, Chat, Task, Thread).
-- **LINK**: URLs (website, LinkedIn, etc.).
+- **Input**
+- **Input (Number)**
+- **Checkbox**
+- **Date**
+- **Time range**
+- **Link**
+- **Option**
+- **Option (Number)**
+- **User**, **Document**, **Channel**, **Project**, **Chat**, **Task**, or **Email**
+- **Any Entity**
+
+**Link**, **Option**, **Option (Number)**, and those entity types can be **Single** or **Multi**.
 
 ## System vs. custom
 
-A property is either **system** (built in and non-removable, like a task's Status) or **custom** (something you add). Properties can also be flagged as **metadata**, which keeps them out of the main views. There are three editors: inline (click-to-edit in a list or pill), popover (a focused dialog), and modal (batch editing across several fields).
+A property is either **system** (built in and non-removable, like a task's Status) or **custom** (something you add).
 
 ## Pinned properties
 
@@ -54,4 +46,4 @@ Some blocks ship with their own system properties:
 
 ## Agent access
 
-Agents read and write properties through the MCP entity tools: `GetEntityProperties` to read, `SetEntityProperty` to update (status, assignee, dates, custom fields), and `ListEntities` to browse. See the [tool reference](/AI/mcp/tools/index).
+Agents read and write properties through the MCP entity tools: `GetEntityProperties` to read, `SetEntityProperty` to update (status, assignee, dates, custom fields), and `ListEntities` to browse. See [MCP setup](/AI/mcp/overview) to connect your agent.

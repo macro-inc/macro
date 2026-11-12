@@ -46,6 +46,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
+- Limit new Assignee choices to team members and available agents without contact discovery; reuse existing selected-first ordering at opening and keep rows stable while selecting; preserve selected outsiders, the semantic Me token, Unassigned, and broad Created by options.
 - Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
 - Do not persist temporary saved-view filters, including due-date predicates, in entry snapshots; detail navigation discards those edits but retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
@@ -71,6 +72,10 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
 
 - Mark task row notifications through `notifications/mark-row-seen.ts` when opening inline details or a split, including board and Gantt rows; keep the mounted Markdown marker for direct routes.
+- Keep Assignee menus team/agent-scoped with selected outsiders; build Created by menus with lazy contact sources on desktop and mobile. Resolve saved-summary labels from that summary's explicit IDs, not active filters or a directory map.
+- Keep semantic `@viewer` outside contact lookup and distinct from fixed self; preserve unknown selected IDs and group-local Only behavior.
+- Extract AI person references without a prompt catalog, then resolve complete per-label evidence; reject the entire plan for unknown, ambiguous or incomplete people rather than dropping constraints. Preserve model array boundaries, literal addresses and viewer-token semantics.
+- Fence planner completions by account/session, navigation and filter edits; returning to an earlier state does not revive an old request.
 
 ## Checks
 
@@ -78,6 +83,7 @@ Run from `apps/web`:
 
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
+- Bounded filters/planner browser regression: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts task-filters.browser.e2e.ts` (synthetic transport, real controls and reference reader).
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 ## Related

@@ -19,13 +19,18 @@ import './synthetics';
 // Declared here first.
 import './goalert';
 import './monitors/ai-editing';
+import './monitors/ai-providers';
 import './monitors/calls';
 import './monitors/graphql-soup';
+import './monitors/harness-presence';
+import './monitors/harness-runtimes';
 import './monitors/macrodb';
+import './monitors/oauth';
 import './monitors/outlook-sync';
 import './monitors/queues';
 import './monitors/redis';
 import './monitors/regressions';
+import './monitors/routine-suggestions';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';
 import { webPerformanceDashboard } from './dashboards/web-performance';

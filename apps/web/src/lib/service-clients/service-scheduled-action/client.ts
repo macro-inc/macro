@@ -10,11 +10,35 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
+
+/** Draft failures the dialog words on its own, beside usage limits. */
+export type DraftErrorCode =
+  | typeof AI_USAGE_LIMIT_ERROR
+  | 'PAYLOAD_TOO_LARGE'
+  | 'TIMEOUT';
+
+async function draftErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 413) {
+    return { code: 'PAYLOAD_TOO_LARGE', message: 'Request too large' };
+  }
+  if (response.status === 408 || response.status === 504) {
+    return { code: 'TIMEOUT', message: 'Request timed out' };
+  }
+  return aiUsageErrorResponseHandler(response);
+}
+
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
+  CatalogEntry,
+  CodeUpgrade,
+  Draft,
+  DraftRoutineRequest,
+  ExecutionRecordResponse,
   InProgressExecution,
+  RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
@@ -55,11 +79,52 @@ export const scheduledActionClient = {
       }
     ),
 
-  createSchedule: async (body: ActionConfiguration) =>
-    scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  /** `suggestionId` records the routine suggestion it is saved from. */
+  /**
+   * The caller's active sub-routines: the routines other routines' runs
+   * created, which `listSchedules` leaves out, without one-time ones that
+   * have run.
+   */
+  listSubRoutines: async () => {
+    const all = await scheduledActionFetch<ScheduledActionResponse[]>(
+      '/scheduled-actions?include_events=true&include_children=true',
+      { method: 'GET' }
+    );
+    return all.map((routines) =>
+      routines.filter((routine) => routine.sub_routine)
+    );
+  },
+
+  /**
+   * One routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   */
+  listChildren: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledActionResponse[]>(
+      `/scheduled-actions?${new URLSearchParams({ include_events: 'true', parent: args.scheduleId })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Keep a sub-routine as the owner's own routine: it moves to the main
+   * list and stops following the routine whose run created it.
+   */
+  detach: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/detach`,
+      { method: 'POST' }
+    ),
+
+  createSchedule: async (
+    body: ActionConfiguration,
+    options: { suggestionId?: string } = {}
+  ) =>
+    scheduledActionFetch<ScheduledAction>(
+      options.suggestionId
+        ? `/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
+        : '/scheduled-actions',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
 
   updateSchedule: async (args: {
     scheduleId: string;
@@ -99,8 +164,61 @@ export const scheduledActionClient = {
     ),
 
   listHistory: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<ActionExecutionRecord[]>(
+    scheduledActionFetch<ExecutionRecordResponse[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Macro's catalog routines, with schedules in `timezone`; code steps only
+   * where code can be saved.
+   */
+  catalog: async (args: { timezone: string }) =>
+    scheduledActionFetch<CatalogEntry[]>(
+      `/scheduled-actions/catalog?${new URLSearchParams({ timezone: args.timezone })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * The caller's routine suggestions on every surface: AI's first, then
+   * Macro's templates. 404 while suggestions are off for them.
+   */
+  routineSuggestions: async () =>
+    scheduledActionFetch<RoutineSuggestions>('/scheduled-actions/suggestions', {
+      method: 'GET',
+    }),
+
+  /**
+   * Start the caller's one generation of suggestions, from their inbox and
+   * apps, with schedules in `timezone`. Later calls change nothing.
+   */
+  generateRoutineSuggestions: async (args: { timezone: string }) =>
+    scheduledActionFetch<RoutineSuggestions>(
+      `/scheduled-actions/suggestions/generate?${new URLSearchParams({ timezone: args.timezone })}`,
+      { method: 'POST' }
+    ),
+
+  /** The caller isn't interested in a suggestion; it isn't suggested again. */
+  dismissRoutineSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(
+      `/scheduled-actions/suggestions/${args.suggestionId}/dismiss`,
+      { method: 'POST' }
+    ),
+
+  /** Have AI draft a routine or one of its steps, its code checked as saving would. */
+  draftRoutine: async (body: DraftRoutineRequest) =>
+    fetchWithToken<Draft, DraftErrorCode>(
+      `${scheduledActionHost}/scheduled-actions/drafts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: draftErrorResponseHandler,
+      }
+    ),
+
+  listCodeUpgrades: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<CodeUpgrade[]>(
+      `/scheduled-actions/${args.scheduleId}/code-upgrades`,
       { method: 'GET' }
     ),
 

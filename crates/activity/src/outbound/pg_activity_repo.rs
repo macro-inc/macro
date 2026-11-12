@@ -5,6 +5,7 @@ mod team_feed;
 mod test;
 mod timeline;
 
+mod agent_activity;
 mod entity_history;
 
 use std::collections::HashMap;
@@ -44,6 +45,8 @@ impl ActivityRepo for PgActivityRepo {
         }
 
         let mut ids = Vec::with_capacity(activities.len());
+        let mut correlations = Vec::with_capacity(activities.len());
+        let mut verbs = Vec::with_capacity(activities.len());
         let mut actor_ids = Vec::with_capacity(activities.len());
         let mut subject_ids = Vec::with_capacity(activities.len());
         let mut actions = Vec::with_capacity(activities.len());
@@ -54,6 +57,8 @@ impl ActivityRepo for PgActivityRepo {
         for activity in activities {
             let (action, payload) = activity.action.to_columns();
             ids.push(activity.id);
+            correlations.push(activity.agent_correlation_id);
+            verbs.push(activity.agent_verb.map(|verb| verb.to_string()));
             actor_ids.push(activity.actor.as_ref().to_owned());
             subject_ids.push(activity.subject_id.clone());
             actions.push(action.to_owned());
@@ -67,10 +72,10 @@ impl ActivityRepo for PgActivityRepo {
             r#"
             INSERT INTO activity_events
                 (id, actor_id, subject_id, action, action_payload,
-                 entity_type, entity_id, occurred_at)
+                 entity_type, entity_id, occurred_at, agent_correlation_id, agent_verb)
             SELECT * FROM UNNEST(
                 $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],
-                $6::text[], $7::text[], $8::timestamptz[])
+                $6::text[], $7::text[], $8::timestamptz[], $9::uuid[], $10::text[])
             ON CONFLICT (id) DO NOTHING
             "#,
             &ids,
@@ -81,6 +86,8 @@ impl ActivityRepo for PgActivityRepo {
             &entity_types,
             &entity_ids,
             &occurred_ats,
+            correlations.as_slice() as &[Option<Uuid>],
+            verbs.as_slice() as &[Option<String>],
         )
         .execute(&self.pool)
         .await?;
@@ -115,6 +122,8 @@ impl ActivityRepo for PgActivityRepo {
 
 /// One `activity_events` row as fetched, before decoding.
 struct StoredRow {
+    agent_correlation_id: Option<Uuid>,
+    agent_verb: Option<String>,
     id: Uuid,
     actor_id: String,
     action: String,
@@ -163,6 +172,11 @@ impl StoredRow {
         }
         Some(ActivityRecord {
             id: self.id,
+            agent_correlation_id: self.agent_correlation_id,
+            agent_verb: self
+                .agent_verb
+                .as_deref()
+                .and_then(|verb| verb.parse().ok()),
             actor,
             subject_id: self.subject_id,
             entity_type,
@@ -194,7 +208,7 @@ impl ActivityReads for PgActivityRepo {
                 sqlx::query_as!(
                     StoredRow,
                     r#"
-                    SELECT id, actor_id, action, action_payload,
+                    SELECT id, agent_correlation_id, agent_verb, actor_id, action, action_payload,
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1
@@ -211,7 +225,7 @@ impl ActivityReads for PgActivityRepo {
                 sqlx::query_as!(
                     StoredRow,
                     r#"
-                    SELECT id, actor_id, action, action_payload,
+                    SELECT id, agent_correlation_id, agent_verb, actor_id, action, action_payload,
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1 AND (occurred_at, id) < ($2, $3)
@@ -273,7 +287,7 @@ impl ActivityReads for PgActivityRepo {
         let rows = sqlx::query_as!(
             StoredRow,
             r#"
-            SELECT a.id AS "id!", a.actor_id AS "actor_id!",
+            SELECT a.id AS "id!", a.agent_correlation_id, a.agent_verb, a.actor_id AS "actor_id!",
                    a.action AS "action!", a.action_payload,
                    a.subject_id AS "subject_id!",
                    a.entity_type AS "entity_type!", a.entity_id AS "entity_id!",
@@ -410,7 +424,7 @@ impl ActivityReads for PgActivityRepo {
         let mut rows = sqlx::query_as!(
             StoredRow,
             r#"
-            SELECT id, actor_id, action, action_payload,
+            SELECT id, agent_correlation_id, agent_verb, actor_id, action, action_payload,
                    subject_id, entity_type, entity_id, occurred_at
             FROM activity_events
             WHERE subject_id = $1
@@ -464,7 +478,8 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::CrmPipeline
         | EntityType::DatabaseRow
         | EntityType::Form
-        | EntityType::ExternalChat => {}
+        | EntityType::ExternalChat
+        | EntityType::Harness => {}
     }
 }
 

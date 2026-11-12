@@ -20,13 +20,41 @@ fn test_client(storage_url: &str) -> EventStreamClient {
 const TEAM_HARNESS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
      {\"allow_permission_bypass\":false,\"id\":\"00000000-0000-0000-0000-00000000000a\",\
       \"kind\":\"macrod\",\"name\":\"desk\",\
-      \"owner\":{\"type\":\"team\",\"team_id\":\"00000000-0000-0000-0000-000000000007\"},\
+      \"owner\":{\"type\":\"user\",\"user_id\":\"macro|owner@example.com\"},\
+      \"shared_team_ids\":[\"00000000-0000-0000-0000-000000000007\"],\
       \"created_by\":\"macro|owner@example.com\",\"created_at\":\"2026-11-01T00:00:00Z\",\
       \"updated_at\":\"2026-11-01T00:00:00Z\",\"connected\":true,\"last_connected_at\":null}";
 
 #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
 struct Envelope {
     n: u8,
+}
+
+#[tokio::test]
+async fn presence_check_tells_the_service_a_connection_is_held() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let url = format!(
+        "http://{}",
+        listener.local_addr().expect("listener address")
+    );
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.expect("accept");
+        let mut buf = vec![0u8; 4096];
+        let read = socket.read(&mut buf).await.unwrap_or(0);
+        let _ = socket.write_all(TEAM_HARNESS.as_bytes()).await;
+        let _ = socket.shutdown().await;
+        String::from_utf8_lossy(&buf[..read]).to_lowercase()
+    });
+
+    assert!(test_client(&url).service_reports_connected().await.unwrap());
+
+    let request = server.await.unwrap();
+    assert!(request.starts_with("get /harnesses/me "));
+    assert!(request.contains("x-macro-harness-runtime-connected: true"));
 }
 
 #[tokio::test]

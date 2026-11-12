@@ -33,7 +33,9 @@ service with Axum, agent-tool and Postgres adapters.
   `connection_gateway_client` (liveness), `entity_mutation`
   (rename/move/duplicate/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
-  `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
+  `DatabaseStorage`, no `database_entities` row), `database_webhooks` (writes
+  as its creator, re-checked through the `CreatorAccess` port and its
+  `outbound::entity_access_creators` adapter), `ai_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
 
 ## Recipes
@@ -70,9 +72,10 @@ service with Axum, agent-tool and Postgres adapters.
   never silently drop data outside an explicit delete.
 - Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
   only; the repository swaps the folder-inherited `entity_access` rows in the
-  same transaction (`entity_access_db_utils::project_grants`). Purging the
-  folder returns the database to the root; trashing it does not trash the
-  database, as with email threads.
+  same transaction (`entity_access_db_utils::project_grants`). Trashing or
+  purging the folder returns the database to the root without the folder's
+  grants; trashing goes through `PgDatabaseFolders`, which the projects
+  domain reaches through its `FiledItemsUnfiler` port.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
   link. The team share's state lives in a `SharePermission` row that
   `database_entities.share_permission_id` points at, made the first time the

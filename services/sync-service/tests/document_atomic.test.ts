@@ -101,21 +101,34 @@ describe("atomic document API", () => {
 		const initial = await snapshot(id);
 		expect((await post(id, edit(initial, "A1", "Current"))).status).toBe(200);
 		const full = await snapshot(id);
-		const response = await mf.dispatchFetch(`${url(id, "snapshot")}?shallow=true`, {
-			headers: auth(id, "view"),
-		});
+		const response = await mf.dispatchFetch(
+			`${url(id, "snapshot")}?shallow=true`,
+			{
+				headers: auth(id, "view"),
+			},
+		);
 		expect(response.status).toBe(200);
-		const body = (await response.json()) as { snapshot: string; revision: string };
+		const body = (await response.json()) as {
+			snapshot: string;
+			revision: string;
+		};
 		const compact = new LoroDoc();
 		compact.import(Buffer.from(body.snapshot, "base64"));
 		expect(compact.isShallow()).toBe(true);
 		expect(compact.toJSON()).toEqual(full.doc.toJSON());
 		expect(body.revision).toBe(full.revision);
-		const change = edit({ ...body, doc: compact }, "B1", "Edited from compact state");
+		const change = edit(
+			{ ...body, doc: compact },
+			"B1",
+			"Edited from compact state",
+		);
 		expect((await post(id, change)).status).toBe(200);
 		const saved = await snapshot(id);
-		expect(saved.doc.getMap("properties").get("B1")).toBe("Edited from compact state");
-		for (const document of [initial.doc, full.doc, compact, saved.doc]) document.free();
+		expect(saved.doc.getMap("properties").get("B1")).toBe(
+			"Edited from compact state",
+		);
+		for (const document of [initial.doc, full.doc, compact, saved.doc])
+			document.free();
 	});
 	it("returns a coherent authorized snapshot and rejects viewers, wrong-document grants, missing and invalid tokens", async () => {
 		const id = await seed();
@@ -274,35 +287,42 @@ describe("atomic document API", () => {
 		expect((await snapshot(id)).doc.toJSON()).toEqual(source.doc.toJSON());
 	});
 
-	it("stores signed actor metadata with the oplog and ignores body attribution", async () => {
-		const id = await seed();
-		const request = edit(await snapshot(id));
-		expect((await post(id, { ...request, actor: "forged" })).status).toBe(400);
-		const token = jwt.sign(
-			{
-				document_id: id,
-				user_id: "macro|real-user",
-				access_level: "edit",
+	it.each([undefined, "00000000-0000-0000-0000-000000000001"])(
+		"stores signed actor metadata and correlation %s with the oplog and ignores body attribution",
+		async (correlation) => {
+			const id = await seed();
+			const request = edit(await snapshot(id));
+			expect((await post(id, { ...request, actor: "forged" })).status).toBe(
+				400,
+			);
+			const token = jwt.sign(
+				{
+					document_id: id,
+					user_id: "macro|real-user",
+					access_level: "edit",
+					actor: "bot|document-agent",
+					agent_correlation_id: correlation,
+					exp: Math.floor(Date.now() / 1000) + 60,
+				},
+				"local",
+			);
+			expect(
+				(await post(id, request, { Authorization: `Bearer ${token}` })).status,
+			).toBe(200);
+			const response = await mf.dispatchFetch(
+				`http://localhost/document/${id}/debug_do_kv_list/actor`,
+				{ headers: { "x-internal-auth-key": "local" } },
+			);
+			expect(response.status).toBe(200);
+			const records = (await response.json()) as [string, number[]][];
+			expect(records).toHaveLength(1);
+			expect(JSON.parse(Buffer.from(records[0][1]).toString())).toEqual({
 				actor: "bot|document-agent",
-				exp: Math.floor(Date.now() / 1000) + 60,
-			},
-			"local",
-		);
-		expect(
-			(await post(id, request, { Authorization: `Bearer ${token}` })).status,
-		).toBe(200);
-		const response = await mf.dispatchFetch(
-			`http://localhost/document/${id}/debug_do_kv_list/actor`,
-			{ headers: { "x-internal-auth-key": "local" } },
-		);
-		expect(response.status).toBe(200);
-		const records = (await response.json()) as [string, number[]][];
-		expect(records).toHaveLength(1);
-		expect(JSON.parse(Buffer.from(records[0][1]).toString())).toEqual({
-			actor: "bot|document-agent",
-			on_behalf_of: "macro|real-user",
-		});
-	});
+				on_behalf_of: "macro|real-user",
+				...(correlation ? { agent_correlation_id: correlation } : {}),
+			});
+		},
+	);
 
 	it("persists a bounded delta larger than a single small KV value", async () => {
 		const id = await seed();

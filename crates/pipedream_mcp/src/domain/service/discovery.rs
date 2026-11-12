@@ -17,7 +17,7 @@ mod test;
 const MAX_TOOLS: usize = 100;
 
 /// Search by app name, then inspect a returned slug before recommending auth.
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum DiscoveryRequest {
     /// Find connectable apps by name.
@@ -33,7 +33,7 @@ pub enum DiscoveryRequest {
 }
 
 /// An advertised action, not a tool loaded into the current turn.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct ConnectorTool {
     /// Upstream tool name.
     pub name: String,
@@ -42,7 +42,7 @@ pub struct ConnectorTool {
 }
 
 /// A verified app identity from the directory.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct DiscoveredApp {
     /// Exact identity to inspect or connect.
     pub app_slug: String,
@@ -53,7 +53,7 @@ pub struct DiscoveredApp {
 }
 
 /// Discovery results never execute tools or change connections.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub enum DiscoveryResult {
     /// Candidate apps; none has had its capabilities verified yet.

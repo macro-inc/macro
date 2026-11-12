@@ -10,10 +10,11 @@
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::time::Duration;
 
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
-use harnesses::domain::models::{Harness, HarnessAgent, HarnessOwner};
+use harnesses::domain::models::{Harness, HarnessAgent, RUNTIME_CONNECTED_HEADER};
 use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
@@ -25,11 +26,16 @@ mod test;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 
-/// Map the harness's ownership onto the stream query's workspace scope.
-pub fn stream_scope(owner: &HarnessOwner) -> WebhookScope {
-    match owner {
-        HarnessOwner::User { .. } => WebhookScope::User,
-        HarnessOwner::Team { .. } => WebhookScope::Team,
+/// Set on the presence request alone: a timeout on the client would also end the
+/// long-lived event stream.
+const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Map the harness's current team grants onto its webhook workspace scope.
+pub fn stream_scope(harness: &Harness) -> WebhookScope {
+    if harness.shared_team_ids.is_empty() {
+        WebhookScope::User
+    } else {
+        WebhookScope::Team
     }
 }
 
@@ -81,8 +87,8 @@ impl EventStreamClient {
             .context(format!("could not read the service's answer to {what}"))?)
     }
 
-    /// The workspace scope of this harness's owner, read from the server on
-    /// every connect so an ownership change on the web applies without
+    /// The workspace scope of this harness's current team grants, read from the server on
+    /// every connect so sharing changes on the web apply without
     /// re-pairing.
     async fn scope(&self) -> rootcause::Result<WebhookScope> {
         let harness: Harness = self
@@ -91,7 +97,22 @@ impl EventStreamClient {
                 self.http.get(format!("{}/harnesses/me", self.base)),
             )
             .await?;
-        Ok(stream_scope(&harness.owner))
+        Ok(stream_scope(&harness))
+    }
+
+    /// Whether the service reports this harness connected, telling it that this
+    /// daemon holds a runtime connection so it can log any disagreement.
+    pub async fn service_reports_connected(&self) -> rootcause::Result<bool> {
+        let harness: Harness = self
+            .read(
+                "check this harness's presence",
+                self.http
+                    .get(format!("{}/harnesses/me", self.base))
+                    .header(RUNTIME_CONNECTED_HEADER, "true")
+                    .timeout(PRESENCE_CHECK_TIMEOUT),
+            )
+            .await?;
+        Ok(harness.connected)
     }
 
     /// The agents currently bound to this harness, as sorted bot-id strings —

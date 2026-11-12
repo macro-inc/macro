@@ -1,8 +1,10 @@
 use async_graphql::{Enum, ID, InputObject};
 use attention_feed::domain::models::{FeedPosition, FeedRevision};
+use chrono::{DateTime, Utc};
 use notification_inbox::domain::models::{
-    InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
+    InboxClearRequest, InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -48,6 +50,9 @@ pub enum GraphqlNotificationInboxRowType {
     AccessRequested,
     /// Access the viewer requested was granted.
     AccessGranted,
+    /// The viewer's access to a runtime was removed, and agents of theirs
+    /// living there stopped.
+    AccessRemoved,
 }
 
 impl From<GraphqlNotificationInboxRowType> for InboxRowType {
@@ -68,6 +73,7 @@ impl From<GraphqlNotificationInboxRowType> for InboxRowType {
             G::CalendarJoinRequest => Self::CalendarJoinRequest,
             G::AccessRequested => Self::AccessRequested,
             G::AccessGranted => Self::AccessGranted,
+            G::AccessRemoved => Self::AccessRemoved,
         }
     }
 }
@@ -90,6 +96,7 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
             D::CalendarJoinRequest => Self::CalendarJoinRequest,
             D::AccessRequested => Self::AccessRequested,
             D::AccessGranted => Self::AccessGranted,
+            D::AccessRemoved => Self::AccessRemoved,
         }
     }
 }
@@ -100,6 +107,9 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
 pub struct NotificationInboxScopeInput {
     /// Row kinds to include; omitted or empty means every kind.
     pub row_types: Option<Vec<GraphqlNotificationInboxRowType>>,
+    /// Only unread rows; pages, cursors and updates then cover unread rows
+    /// alone. Defaults to false.
+    pub unread_only: Option<bool>,
 }
 
 impl NotificationInboxScopeInput {
@@ -112,6 +122,7 @@ impl NotificationInboxScopeInput {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            unread_only: self.unread_only.unwrap_or(false),
         }
     }
 }
@@ -139,6 +150,55 @@ impl NotificationInboxInput {
             .map_err(|_| async_graphql::Error::new("invalid notification inbox cursor"))?;
         Ok(InboxQuery {
             scope: self.scope.unwrap_or_default().into_scope(),
+            limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
+            after,
+        })
+    }
+}
+
+/// Groups one clear batch reads when no limit is given.
+pub const DEFAULT_CLEAR_LIMIT: i32 = 100;
+/// Most groups one clear batch may read.
+pub const MAX_CLEAR_LIMIT: i32 = 200;
+
+/// One batch of clearing the viewer's notification inbox.
+#[derive(InputObject, Default)]
+pub struct ClearNotificationInboxInput {
+    /// Which rows are cleared; the inbox the caller shows.
+    pub scope: Option<NotificationInboxScopeInput>,
+    /// Clear only unread rows.
+    #[graphql(deprecation = "Set scope.unreadOnly. Remove after 2026-12-06.")]
+    pub unread_only: Option<bool>,
+    /// RFC 3339 time; clear only rows whose newest notification arrived at or
+    /// after it.
+    pub since: Option<String>,
+    /// Groups read in this batch; defaults to 100, capped at 200.
+    pub limit: Option<i32>,
+    /// Opaque cursor from the previous batch's `nextCursor`; absent for the
+    /// first. Send it with the same scope, filters and `since`.
+    pub cursor: Option<String>,
+}
+
+impl ClearNotificationInboxInput {
+    /// Validate and convert into the domain request.
+    pub(crate) fn into_request(self) -> async_graphql::Result<InboxClearRequest> {
+        let limit = graphql_common::parse_limit(self.limit, DEFAULT_CLEAR_LIMIT, MAX_CLEAR_LIMIT)?;
+        let after = self
+            .cursor
+            .map(|cursor| FeedPosition::decode(&cursor))
+            .transpose()
+            .map_err(|_| async_graphql::Error::new("invalid notification inbox cursor"))?;
+        let since = self
+            .since
+            .map(|since| DateTime::parse_from_rfc3339(&since))
+            .transpose()
+            .map_err(|_| async_graphql::Error::new("invalid notification inbox clear time"))?
+            .map(|since| since.with_timezone(&Utc));
+        let mut scope = self.scope.unwrap_or_default().into_scope();
+        scope.unread_only |= self.unread_only.unwrap_or(false);
+        Ok(InboxClearRequest {
+            scope,
+            since,
             limit: u16::try_from(limit).expect("limit is capped below u16::MAX"),
             after,
         })
@@ -198,6 +258,26 @@ impl MarkNotificationInboxRowsDoneInput {
                 })
             })
             .collect()
+    }
+}
+
+/// Input for marking one notification of a row done.
+#[derive(InputObject)]
+pub struct MarkNotificationInboxNotificationDoneInput {
+    /// The row showing the notification.
+    pub row_id: ID,
+    /// The notification, as the row lists it.
+    pub notification_id: ID,
+    /// The inbox the row's group is placed in.
+    pub scope: Option<NotificationInboxScopeInput>,
+}
+
+impl MarkNotificationInboxNotificationDoneInput {
+    /// Validate and convert into a domain row id and notification id.
+    pub(crate) fn into_target(self) -> async_graphql::Result<(InboxRowId, Uuid)> {
+        let notification = Uuid::parse_str(&self.notification_id)
+            .map_err(|_| async_graphql::Error::new("invalid notification id"))?;
+        Ok((parse_row_id(&self.row_id)?, notification))
     }
 }
 

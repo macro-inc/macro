@@ -1,10 +1,13 @@
 import '../../../../index.css';
 import { SidePanel } from '@components/app/side-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { RecordOverview } from '../../components/record-overview';
 import { RecordTabs } from '../../components/record-tabs';
 import {
@@ -20,11 +23,25 @@ import { CompanySharingSection } from '../../views/company-sharing-section';
 import { ContactHeader } from '../../views/contact-header';
 import { RecordDetailsSection } from '../../views/record-details-section';
 import { RecordHeaderActions } from '../../views/record-header-actions';
-import { client, message, storageServiceClient } from './preview-adapters';
+import {
+  client,
+  message,
+  selectedContact,
+  storageServiceClient,
+} from './preview-adapters';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const params = new URLSearchParams(location.search);
 const kind = params.get('kind') === 'company' ? 'company' : 'contact';
+const selectorType: EntityType | EntityType[] | null | undefined = match(
+  params.get('selector')
+)
+  .with('TASK', () => 'TASK' as const)
+  .with('CONTACT', () => 'CONTACT' as const)
+  .with('MIXED', () => ['TASK' as const, 'CONTACT' as const])
+  .with('THREAD', () => 'THREAD' as const)
+  .with('GENERIC', () => null)
+  .otherwise(() => undefined);
 const record = { type: kind, id: `${kind}-1`, name: '' } as const;
 function Fixture() {
   const [section, setSection] = createSignal<CrmRecordSection>(
@@ -35,7 +52,23 @@ function Fixture() {
     storage: storageServiceClient as unknown as typeof Storage,
   };
   const source = useCompanyQuery(deps, () => 'company-1');
-  const contact = useContactQuery(deps, () => 'contact-1');
+  const contact = useContactQuery(deps, selectedContact);
+  if (selectorType !== undefined) {
+    return (
+      <main class="flex h-dvh min-w-0 flex-col bg-panel text-ink">
+        <PropertyEntitySelector
+          config={{
+            specificEntityType: selectorType,
+            isMultiSelect: true,
+            placeholder: 'Search options',
+            fillHeight: isTouchDevice(),
+          }}
+          selectedOptions={() => new Set<string>()}
+          setSelectedOptions={() => {}}
+        />
+      </main>
+    );
+  }
   return (
     <main class="flex h-dvh min-w-0 flex-col bg-panel text-ink">
       <SidePanel.Root floating defaultOpen={false}>

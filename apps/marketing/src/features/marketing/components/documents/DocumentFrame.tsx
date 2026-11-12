@@ -1,6 +1,6 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import FileText from '@phosphor/file-text.svg';
-import Share from '@phosphor/share.svg';
+import Share from '@icon/share.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import FileText from '@icon/system/regular/file-text.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { ViewShell } from '../DemoWorkspaceChrome';

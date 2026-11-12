@@ -26,6 +26,9 @@ pub enum Runner {
     /// cache volume, isolated from the deploy profiles so deploy's churn can't
     /// evict the CI Cargo/Nix caches.
     RustCi,
+    /// 32 vCPU, 64 GiB profile for the Rust `test` and `check` jobs, which are
+    /// held back by compile parallelism and memory on smaller runners.
+    Large,
     /// Apple Silicon, for jobs that need a real Apple SDK. A machine label
     /// rather than a dashboard profile, so it needs no setup outside this file.
     MacOsArm,
@@ -43,6 +46,7 @@ impl fmt::Display for Runner {
             Runner::Small => "namespace-profile-linux-small",
             Runner::Mid => "namespace-profile-linux-mid",
             Runner::RustCi => "namespace-profile-linux-rust-ci",
+            Runner::Large => "namespace-profile-linux-large-build",
             Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
             Runner::MacOsArmLarge => "nscloud-macos-sequoia-arm64-12x28",
             Runner::Windows => "nscloud-windows-2022-amd64-8x16",
@@ -51,15 +55,15 @@ impl fmt::Display for Runner {
 }
 
 impl Runner {
-    /// Render the `runs-on` label with an explicit, branch-independent cache
-    /// *tag* (`<profile>;overrides.cache-tag=<tag>`).
+    /// Render the `runs-on` label with an explicit cache *tag*
+    /// (`<profile>;overrides.cache-tag=<tag>`), for a volume apart from the
+    /// profile's default one.
     ///
-    /// By default Namespace scopes a profile's cache volume per branch: a fresh
-    /// branch can only inherit the *default* branch's cache, so any branch whose
-    /// workflow never runs on `main` starts cold every time. Pinning a fixed tag
-    /// makes every branch read/write the *same* volume — one global cache, like
-    /// the old globally shared cache behavior. Cache-volume writes are managed
-    /// by Namespace; compiled objects use the separately named remote sccache.
+    /// Every job on a tag forks the newest generation its node holds, and the
+    /// last job to finish cleanly on that node replaces it, with no merge. Keep
+    /// jobs that read back what they wrote apart from jobs that would overwrite
+    /// it. A new tag starts empty, so its first jobs fetch the whole Nix store.
+    /// Compiled objects use the separately named remote sccache.
     pub fn with_cache_tag(self, tag: &str) -> String {
         format!("{self};overrides.cache-tag={tag}")
     }

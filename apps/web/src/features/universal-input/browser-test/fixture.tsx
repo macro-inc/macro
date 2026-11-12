@@ -12,6 +12,7 @@ import type {
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $createUserMentionNode } from '@macro-inc/lexical-core';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { propertiesKeys } from '@queries/properties/keys';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { ComposerSurface } from '@ui';
@@ -33,9 +34,14 @@ import { SearchbarInput } from '../../next-soup/soup-view/filters-bar/soup-view-
 import { parsePropertyDraft } from '../../property/utils/parse-property-draft';
 import type { InputLayoutParts } from '../context/capabilities';
 import { resolveSearchFilters } from '../core/search';
-import { composerRecipientOptions } from '../queries/composer-recipients';
 import { SearchDraft } from '../views/search-draft';
 import { globalSearchRequests } from './global-search-service-fixture';
+import {
+  type InputPeople,
+  InputReferenceFixture,
+  referenceSearchFields,
+  seedInputReferences,
+} from './input-reference-fixture';
 import {
   openedSearchResult,
   setOpenedSearchResult,
@@ -47,6 +53,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
+import { createPersonList } from '@core/context/quickAccess/person-list';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -60,9 +67,18 @@ import {
   intents,
   type Submission,
 } from '../core/input';
-import { resolveRecipients } from '../core/recipients';
+import { type Recipient, resolveRecipients } from '../core/recipients';
 import { createUniversalInput } from '../primitives/universal-input';
 import { UniversalComposer } from '../views/universal-composer';
+import {
+  getGraphqlSoupCacheHost,
+  registerContactFixture,
+} from './contact-directory-fixture';
+import {
+  seedTaskReferences,
+  TaskReferenceFixture,
+  type TaskValues,
+} from './task-reference-fixture';
 
 const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
@@ -286,6 +302,9 @@ export function UniversalInputFixture(
       sortTimestamp: 0,
       timestamps: {},
     });
+  registerContactFixture(
+    records.flatMap((item) => (item.kind === 'user' ? [item.data] : []))
+  );
   records.push({
     id: 'sales-channel',
     kind: 'entity',
@@ -340,20 +359,38 @@ export function UniversalInputFixture(
           previous.at(-1) === query ? previous : [...previous, query]
         );
     });
+    const people = createPersonList({
+      scope: () => ({
+        userId: 'macro|viewer@example.com',
+        host: getGraphqlSoupCacheHost(),
+      }),
+      search: () => options?.searchTerm?.() ?? '',
+      enabled: () =>
+        enabled() && (!buckets.length || buckets.includes('person')),
+      policy: () => ({ mode: options?.peopleMode ?? 'command', excluded: [] }),
+      activity: () => new Map(),
+      conversation: () => undefined,
+      excluded: () => false,
+    });
     const items = () =>
       enabled()
-        ? records.filter(
-            (record) => !buckets.length || buckets.includes(record.bucket)
-          )
+        ? [
+            ...records.filter(
+              (record) =>
+                record.kind !== 'user' &&
+                (!buckets.length || buckets.includes(record.bucket))
+            ),
+            ...people.items(),
+          ]
         : [];
     return {
       items,
       totalCount: () => items().length,
-      hasMore: () => false,
-      isLoading: () => false,
-      isLoadingMore: () => false,
-      error: () => undefined,
-      loadMore: async () => {},
+      hasMore: people.hasMore,
+      isLoading: people.isLoading,
+      isLoadingMore: people.isLoadingMore,
+      error: people.error,
+      loadMore: people.loadMore,
     };
   }
   const quickAccess: QuickAccessContextValue = {
@@ -363,6 +400,7 @@ export function UniversalInputFixture(
     isLoading: () => false,
     refresh: () => {},
     getById: () => undefined,
+    interactionForUser: () => undefined,
   };
   const queryClient = new QueryClient({
     defaultOptions: { queries: { enabled: false, retry: false } },
@@ -391,6 +429,10 @@ export function UniversalInputFixture(
     },
   ]);
   const params = new URLSearchParams(window.location.search);
+  if (params.has('task-references')) seedTaskReferences(queryClient);
+  if (params.has('person-references')) seedInputReferences(queryClient);
+  const [inputPeople, setInputPeople] = createSignal<InputPeople>();
+  const [taskValues, setTaskValues] = createSignal<TaskValues>();
   if (!props.embedded) {
     useHotKeyRoot();
     attachGlobalDOMScope(document.body);
@@ -401,6 +443,7 @@ export function UniversalInputFixture(
   const [extractions, setExtractions] = createSignal(0);
   let focus: (() => void) | undefined;
   const [sent, setSent] = createSignal<Submission[]>([]);
+  const [personTargets, setPersonTargets] = createSignal<Recipient[]>([]);
   const [savedEmailDrafts, setSavedEmailDrafts] = createSignal<Submission[]>(
     []
   );
@@ -424,21 +467,26 @@ export function UniversalInputFixture(
     },
   ];
   const actions: InputDisplay = {
-    people: () => people,
+    person: (term) =>
+      params.has('person-references') ? inputPeople()?.lookup(term) : people,
+    createRecipientSource: useContactRecipientSource,
+    createMessageSource: useContactRecipientSource,
+    messageChannels: () => [],
     searchChannels: () => [
       { id: 'sales-channel', kind: 'channel', label: 'sales' },
       { id: 'julia-dm', kind: 'channel', label: 'Julia direct message' },
     ],
-    destinations: () => [
-      ...people,
-      { id: 'sales-channel', kind: 'channel', label: 'sales' },
-    ],
-    messageRecipients: () =>
-      composerRecipientOptions(people).filter(
-        (option) => option.kind === 'user'
-      ),
     recipients: (fields, message = false) =>
-      resolveRecipients(fields.recipients, people, !message),
+      resolveRecipients(
+        fields.recipients,
+        params.has('person-references')
+          ? (term) =>
+              message
+                ? inputPeople()?.destinations(term)
+                : inputPeople()?.lookup(term)
+          : people,
+        !message
+      ),
     calendars: () =>
       googleConnected()
         ? [
@@ -471,12 +519,6 @@ export function UniversalInputFixture(
     rosterLoading: () => false,
     connectAgent: (agent) => setAgentAction(`connect:${agent.id}`),
     createAgent: () => setAgentAction('create'),
-    agentsEnabled: () => !params.has('legacy'),
-    models: () => [
-      { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
-      { id: 'gpt-5', label: 'GPT-5' },
-    ],
-    model: () => '',
     attachmentCount: () => 0,
     clearAttachments: () => {},
   };
@@ -536,19 +578,53 @@ export function UniversalInputFixture(
               }
             : null,
           recipients:
-            intent === 'email' || intent === 'message' ? ['John'] : [],
+            intent === 'email' || intent === 'message'
+              ? params.has('person-references')
+                ? [text.replace(/^(email|dm)\s+/i, '')]
+                : ['John']
+              : [],
           start_assumption: text.includes('at 7') ? 'at 7' : null,
           start: text.includes('at 7')
             ? '2026-10-10T19:00'
             : '2026-10-10T15:00',
           end: text.includes('at 7') ? '2026-10-10T20:00' : '2026-10-10T16:00',
           query: text,
-          guests: [],
-          ...(intent === 'search' ? fixtureSearchFields(text) : {}),
+          guests:
+            intent === 'calendar' && params.has('person-references')
+              ? [text.replace(/^invite\s+/i, '')]
+              : [],
+          ...(intent === 'task' && params.has('task-references')
+            ? {
+                properties: [
+                  {
+                    name: 'Assignees',
+                    values: [text.replace(/^assign task to /i, '')],
+                  },
+                ],
+              }
+            : {}),
+          ...(intent === 'search'
+            ? params.has('person-references')
+              ? referenceSearchFields(text)
+              : fixtureSearchFields(text)
+            : {}),
         },
       };
     },
     async submit(input) {
+      if (params.has('person-references')) {
+        const f = input.fields;
+        const targets =
+          input.intent === 'email'
+            ? [f.recipients, f.cc, f.bcc].flatMap(
+                (text) =>
+                  resolveRecipients(text, actions.person, true).recipients
+              )
+            : input.intent === 'calendar'
+              ? resolveRecipients(f.guests, actions.person, true).recipients
+              : actions.recipients(f, true).recipients;
+        setPersonTargets(targets);
+      }
       setSent((s) => [...s, input]);
       if (props.command) setCommandSubmissions((s) => [...s, input]);
       return { message: `${input.intent} completed` };
@@ -557,13 +633,27 @@ export function UniversalInputFixture(
       setSavedEmailDrafts((drafts) => [...drafts, input]);
       return { message: 'Email draft saved' };
     },
-    validateEmailDraft: () =>
-      !googleConnected() ? 'Connect Google to continue' : undefined,
+    validateEmailDraft: (input) => {
+      if (!googleConnected()) return 'Connect Google to continue';
+      if (
+        params.has('person-references') &&
+        [input.fields.recipients, input.fields.cc, input.fields.bcc].some(
+          (text) =>
+            resolveRecipients(text, actions.person, true).unresolved.length
+        )
+      )
+        return 'Choose an unambiguous person';
+    },
     validate: (input) => {
+      if (input.intent === 'task' && params.has('task-references')) {
+        const result = taskValues()?.(input.fields);
+        if (!result || result.unresolved.length)
+          return 'Choose an unambiguous assignee';
+      }
       if (input.intent === 'search') {
         const filters = resolveSearchFilters(
           input.fields.searchFilters,
-          actions.people(),
+          actions.person,
           actions.searchChannels(),
           actions.inboxes()
         );
@@ -571,6 +661,22 @@ export function UniversalInputFixture(
           return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
         if (searchNeedsKeywords(filters.state, input.fields.query))
           return 'Add at least 3 search characters to search by sender or speaker.';
+      }
+      if (params.has('person-references')) {
+        const fields = input.fields;
+        const unresolved =
+          input.intent === 'email'
+            ? [fields.recipients, fields.cc, fields.bcc].flatMap(
+                (text) =>
+                  resolveRecipients(text, actions.person, true).unresolved
+              )
+            : input.intent === 'message'
+              ? actions.recipients(fields, true).unresolved
+              : input.intent === 'calendar'
+                ? resolveRecipients(fields.guests, actions.person, true)
+                    .unresolved
+                : [];
+        if (unresolved.length) return 'Choose an unambiguous person';
       }
       return !googleConnected() &&
         (input.intent === 'email' || input.intent === 'calendar')
@@ -610,6 +716,15 @@ export function UniversalInputFixture(
                         : 'min-h-screen bg-page p-12 text-ink'
                 }
               >
+                <Show when={params.has('person-references')}>
+                  <InputReferenceFixture
+                    state={state}
+                    onSource={setInputPeople}
+                  />
+                  <output hidden data-testid="person-targets">
+                    {JSON.stringify(personTargets())}
+                  </output>
+                </Show>
                 <Show when={!props.embedded && params.has('mobile-search')}>
                   <button
                     onClick={() => {
@@ -697,7 +812,16 @@ export function UniversalInputFixture(
                           />
                         )
                       }
-                      taskFields={<span>Task properties</span>}
+                      taskFields={
+                        params.has('task-references') ? (
+                          <TaskReferenceFixture
+                            state={state}
+                            onValues={(values) => setTaskValues(() => values)}
+                          />
+                        ) : (
+                          <span>Task properties</span>
+                        )
+                      }
                     />
                     <Show when={!props.embedded}>
                       <output data-testid="global-search-requests">

@@ -68,7 +68,7 @@ and cells. The core storage adapter purges its journal in the same transaction.
    | --- | --- | --- |
    | `table` | `table` | `create`, `rename`, `delete`, `reorder_columns`, `reorder_views` |
    | `column` | `table`, `column` | `create`, `rename`, `change_type`, `delete`, `add_options`, `update_option`, `delete_option` |
-   | `rows` | `table` | `insert`, `update`, `delete` |
+   | `rows` | `table` | `insert` (optionally with the rows' `ids`), `update`, `delete` |
    | `view` | `table`, `view` | `create`, `update`, `delete`, `move_card` |
    | `reorder_tables` | (every table, as `order`) | none |
 
@@ -98,11 +98,13 @@ and cells. The core storage adapter purges its journal in the same transaction.
 4. Later ops of a batch see what earlier ops did. New tables, columns, options
    and views carry ids the client mints (UUIDv7), so a later op can name a
    table, column, option or view the same batch created: create a table, give
-   it columns, then insert rows into them, in one request. An id that already
-   names something, or is minted twice in one batch, refuses the batch with a
-   400 whose `taken` is `{kind: "table" | "column" | "option" | "view", id}`; a
-   retry of a committed batch lands there instead of writing twice. Rows keep
-   server-minted ids, answered in the `inserted` result.
+   it columns, then insert rows into them, in one request. A rows `insert` may
+   carry `ids`, one client-minted id per row in order (a different count is
+   refused); left out, the server mints them. Either way the `inserted` result
+   answers them. An id that already names something (a row id: in any table),
+   or is minted twice in one batch, refuses the batch with a 400 whose `taken`
+   is `{kind: "table" | "column" | "option" | "view" | "row", id}`; a retry of
+   a committed batch lands there instead of writing twice.
 5. The optional request-level `baseVersions` names tables and the version the
    caller read; a table at another version answers 409 and writes nothing. A
    column type change follows one cast rule for the type menu, the agent tool

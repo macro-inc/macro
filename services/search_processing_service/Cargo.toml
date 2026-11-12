@@ -31,6 +31,10 @@ service = [
   "dep:properties",
 ]
 pdf = ["dep:pdfium-render"]
+# Local stacks skip pdfium: its bundled library is amd64-only and isn't in their
+# runtime image. Additive, unlike dropping the default `pdf` feature, so this
+# service builds in the same cargo invocation as every other local service.
+no_pdf = []
 
 [[bin]]
 name = "search_processing_service"
@@ -60,6 +64,7 @@ chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email = { path = "../../crates/email", default-features = false, optional = true }
 email_db_client = { path = "../../crates/email_db_client" }
+encoding_rs = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
@@ -96,7 +101,6 @@ model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 models_email = { path = "../../crates/models_email" }
 model_file_type = { path = "../../crates/model_file_type" }
-models_opensearch = { path = "../../crates/models_opensearch" }
 models_properties = { path = "../../crates/models_properties", optional = true }
 models_search = { path = "../../crates/models_search" }
 nom = { workspace = true }
@@ -118,7 +122,6 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }
-strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal", "sync", "time"] }
 tokio-retry = { workspace = true, optional = true }

@@ -7,6 +7,9 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
+Access requests, grants and removals on a paired machine appear as rows about
+that machine; opening one goes to Settings → Machines with the machine pointed out.
+Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail, a `TutorialRow` on touch tablets; phones show none. It sits outside the virtualized rows, so list keyboard focus skips it.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -61,8 +64,8 @@ The menu shares the legacy compact submenus: **Status** offers **Unread**, **Rea
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkboxes toggle without closing, rows add and close, and Shift/Only selects just
-one type without closing. Press **f** to open the menu.
+clicking a row or its checkbox toggles it without closing, Enter adds and closes,
+and Shift/Only selects just one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
@@ -98,6 +101,8 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+A click or Enter gives the conversation's composer focus, and Esc returns to the
+row; see [composer focus and Esc](channels.md#composer-focus-and-esc).
 If the channel is already open in another split or preview, clicking a message
 or reply notification focuses that view and jumps to the specific message,
 without a **Content already open** warning. Verify with two splits and a reply

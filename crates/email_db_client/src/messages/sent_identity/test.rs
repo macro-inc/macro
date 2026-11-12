@@ -86,7 +86,7 @@ async fn complete(pool: &PgPool, claim: &delivery::DeliveryClaim) -> anyhow::Res
     )
     .await?;
     crate::threads::update::update_thread_metadata(&mut tx, thread, LINK).await?;
-    crate::threads::update::sync_thread_calendar_flag(&mut tx, thread).await?;
+    crate::threads::update::sync_thread_attachment_flags(&mut tx, thread).await?;
     tx.commit().await?;
     Ok(true)
 }

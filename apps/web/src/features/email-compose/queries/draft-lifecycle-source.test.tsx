@@ -13,6 +13,9 @@ const fetchThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
   fetchFreshEmailThread: fetchThread,
 }));
+const readSentWorkingCopy = vi.hoisted(() => vi.fn());
+vi.mock('@queries/email/send-queue', () => ({ readSentWorkingCopy }));
+vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@core/cross-tab/cross-tab-bus', () => ({
   createCrossTabBus: () => ({ publish() {}, subscribe: () => () => {} }),
 }));
@@ -86,11 +89,42 @@ function observe(client = createClient()) {
   return { lifecycle, client, setCurrent, unmount };
 }
 
-beforeEach(() => fetchThread.mockReset());
+beforeEach(() => {
+  fetchThread.mockReset();
+  readSentWorkingCopy.mockReset();
+  readSentWorkingCopy.mockResolvedValue(undefined);
+});
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
+});
+
+it('reports the working copy a send from this browser carried', async () => {
+  const sent = thread(false);
+  sent.messages[0] = { ...sent.messages[0], is_draft: false, is_sent: true };
+  fetchThread.mockResolvedValue(sent);
+  readSentWorkingCopy.mockResolvedValue({ generation: 'copy', revision: 3 });
+  const { lifecycle } = observe();
+
+  await waitFor(() =>
+    expect(lifecycle.state()).toMatchObject({
+      type: 'sent',
+      sentCopy: { generation: 'copy', revision: 3 },
+    })
+  );
+  expect(readSentWorkingCopy).toHaveBeenCalledWith('draft');
+});
+
+it('still reports a sent draft when the send journal cannot be read', async () => {
+  const sent = thread(false);
+  sent.messages[0] = { ...sent.messages[0], is_draft: false, is_sent: true };
+  fetchThread.mockResolvedValue(sent);
+  readSentWorkingCopy.mockRejectedValue(new Error('Storage unavailable'));
+  const { lifecycle } = observe();
+
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('sent'));
+  expect(lifecycle.state()).not.toHaveProperty('sentCopy');
 });
 
 it('does not republish cached state when a strict refresh rejects', async () => {
