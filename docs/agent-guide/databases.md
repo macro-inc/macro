@@ -322,8 +322,10 @@ An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
 Click a cell to edit, or focus it with the arrow keys and start typing. A link
-in a text or URL cell opens like a link in a document (hover shows its preview);
-clicking anywhere else in the cell, Enter, or typing edits it. The
+in a text or URL cell opens like a link in a document (hover shows its preview,
+right-click shows the browser's link menu); clicking anywhere else in the cell,
+Enter, or typing edits it. A URL value that names no domain, such as `TBD`,
+stays plain text. The
 whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
