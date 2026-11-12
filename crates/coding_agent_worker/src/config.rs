@@ -1,11 +1,11 @@
 //! The daemon's one input: `macrod.toml`, this machine's local config - the
 //! harness it runs, its workspace, native Herdr defaults, and the pairing
-//! credential. The TUI and `macrod service` share one file,
-//! `~/.macrod/macrod.toml` ([`default_config_path`]). See
-//! `config.example.toml` at the crate root.
+//! credential. The TUI and `macrod service` share one file per runtime:
+//! `~/.macrod/macrod.toml`, or a named profile beside it (see
+//! [`crate::profiles`]). See `config.example.toml` at the crate root.
 //!
 //! Runtime settings - the name, ownership, and permission bypass - live on the
-//! web at Settings → Agents → Runtimes, not here. Pairing (press `p` in the
+//! web at Settings → Runtimes, not here. Pairing (press `p` in the
 //! control panel) adds the harness credential to this file. Treat it as
 //! sensitive because that credential is a bearer token.
 
@@ -155,7 +155,7 @@ impl MacroApi {
     /// permission bypass.
     pub fn settings_url(&self) -> String {
         let base = self.web_url.trim_end_matches('/');
-        format!("{base}/settings/harness")
+        format!("{base}/settings/runtimes")
     }
 }
 
@@ -265,25 +265,24 @@ fn web_setting_in(table: &toml::Table) -> Option<&'static str> {
         .then_some("`scope` in [credentials]")
 }
 
-/// The one config location shared by the TUI and `macrod service`:
-/// `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows),
-/// next to adapter installs and Herdr storage.
-pub fn default_config_path() -> Option<PathBuf> {
+/// macrod's directory, `~/.macrod` (`%USERPROFILE%\.macrod` on Windows):
+/// the default config, named profiles, adapter installs, and Herdr storage.
+pub fn macrod_directory() -> Option<PathBuf> {
     let home = environment::Home::new();
     let user_profile = environment::Userprofile::new();
-    config_path_in_home(
+    macrod_directory_in_home(
         home.as_ref().and_then(|home| home.value()),
         user_profile.as_ref().and_then(|profile| profile.value()),
     )
 }
 
 /// `HOME` wins; `USERPROFILE` is the fallback Windows needs.
-fn config_path_in_home(home: Option<&str>, user_profile: Option<&str>) -> Option<PathBuf> {
+fn macrod_directory_in_home(home: Option<&str>, user_profile: Option<&str>) -> Option<PathBuf> {
     [home, user_profile]
         .into_iter()
         .flatten()
         .find(|directory| !directory.is_empty())
-        .map(|home| PathBuf::from(home).join(".macrod").join("macrod.toml"))
+        .map(|home| PathBuf::from(home).join(".macrod"))
 }
 
 /// An exclusive hold on one config: one macrod serves one harness.
@@ -313,12 +312,17 @@ pub enum LockError {
     },
 }
 
+/// `<config>.lock`, the advisory lock file beside `config`.
+fn lock_path(config: &Path) -> PathBuf {
+    let mut name = config.as_os_str().to_owned();
+    name.push(".lock");
+    PathBuf::from(name)
+}
+
 /// Take the advisory lock `<config>.lock` beside `config`, failing fast when
 /// another macrod already holds it.
 pub fn lock(config: &Path) -> Result<ConfigLock, LockError> {
-    let mut name = config.as_os_str().to_owned();
-    name.push(".lock");
-    let lock_path = PathBuf::from(name);
+    let lock_path = lock_path(config);
     let io_error = |source| LockError::Io {
         path: lock_path.clone(),
         source,
@@ -341,5 +345,31 @@ pub fn lock(config: &Path) -> Result<ConfigLock, LockError> {
             path: config.to_owned(),
         }),
         Err(std::fs::TryLockError::Error(source)) => Err(io_error(source)),
+    }
+}
+
+/// Whether a macrod is serving `config` right now. Probes the lock and lets
+/// go at once; never creates the lock file.
+pub fn is_served(config: &Path) -> std::io::Result<bool> {
+    let file = match std::fs::OpenOptions::new()
+        .write(true)
+        .open(lock_path(config))
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    match file.try_lock() {
+        Ok(()) => Ok(false),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(true),
+        Err(std::fs::TryLockError::Error(source)) => Err(source),
+    }
+}
+
+/// Remove the lock file beside `config`, once its config has moved away.
+pub fn remove_lock_file(config: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(lock_path(config)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result,
     }
 }
