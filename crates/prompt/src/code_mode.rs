@@ -28,6 +28,7 @@ static INSTRUCTIONS: &str = concat!(
 static CHAT_INSTRUCTIONS: &str = concat!(
     shared!(),
     r##"- When a turn made, changed or sent something the user will want to open, or the answer is a set of workspace items, return their ids from the program and present them with `DisplayResults` without being asked, and keep your reply to a one-line lead-in.
+- This chat is neither an agent session nor a channel or document thread, whatever the SDK's email and calendar guidance says for those. To send an email or create a calendar event, call the `SendEmail` or `CreateCalendarEvent` tool: its composer card is the user's confirmation. Programs here have no `execution.reviews`, and never send or create through `sendConfirmed`, `forwardConfirmed`, `createConfirmed` or a draft's `send`.
 "##
 );
 
@@ -45,6 +46,7 @@ pub static CHAT_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
     CHAT_INSTRUCTIONS,
     "The model does Macro work in as few ExecuteCode programs as possible after reading the SDK \
 symbols it uses, keeps direct tools for what the SDK does not cover, returns ids and URLs, \
-schedules a routine instead of waiting, and presents what matters with DisplayResults without \
-being asked.",
+schedules a routine instead of waiting, presents what matters with DisplayResults without \
+being asked, and sends email or creates events only through the composer-confirmed SendEmail and \
+CreateCalendarEvent tools.",
 );

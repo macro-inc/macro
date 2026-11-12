@@ -1116,6 +1116,9 @@ fn chat_runs_in_code_mode() {
     assert!(prompt.contains("AboutMacro"));
     assert!(prompt.contains("present them with `DisplayResults` without being asked"));
     assert!(!prompt.contains("SelfKnowledge"));
+    // The SDK guides describe agent sessions and threads; chat sends through
+    // its composer tools.
+    assert!(prompt.contains("call the `SendEmail` or `CreateCalendarEvent` tool"));
 }
 
 /// Chat's user-scoped `ExecuteCode` takes different arguments and returns a
