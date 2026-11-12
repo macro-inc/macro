@@ -1801,6 +1801,11 @@ export type trackImportEntityResponse400 = {
   status: 400;
 };
 
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
 export type trackImportEntityResponse500 = {
   data: void;
   status: 500;
@@ -1811,6 +1816,7 @@ export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
 };
 export type trackImportEntityResponseError = (
   | trackImportEntityResponse400
+  | trackImportEntityResponse422
   | trackImportEntityResponse500
 ) & {
   headers: Headers;
@@ -2026,9 +2032,9 @@ export type importNotionPageResponse400 = {
   status: 400;
 };
 
-export type importNotionPageResponse409 = {
+export type importNotionPageResponse422 = {
   data: void;
-  status: 409;
+  status: 422;
 };
 
 export type importNotionPageResponse500 = {
@@ -2041,7 +2047,7 @@ export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
 };
 export type importNotionPageResponseError = (
   | importNotionPageResponse400
-  | importNotionPageResponse409
+  | importNotionPageResponse422
   | importNotionPageResponse500
 ) & {
   headers: Headers;

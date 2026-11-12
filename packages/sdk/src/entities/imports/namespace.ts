@@ -1,11 +1,14 @@
+import { match } from 'ts-pattern';
 import type {
   ImportNotionPageResult,
   ImportSource,
   ImportStatus,
   TrackImportOutcome,
 } from '../../../generated/cognition/types.gen';
-import { unwrap } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Channel } from '../channels/channel';
+import { Task } from '../tasks/task';
 import { ImportEntry, type ImportedItem } from './entry';
 
 /** An external item to track in the import ledger. */
@@ -101,7 +104,10 @@ export class ImportNamespace {
 
   /**
    * Record that `item` was created in Macro from the external item, so it is
-   * not imported again.
+   * not imported again. The ledger stores each source's kind of item: a task
+   * for Linear and Jira, a document for Notion and a channel for Slack, and
+   * any other handle is refused. An earlier mapping wins: the outcome is then
+   * `already_imported` and `entry.item()` is the item recorded first.
    *
    * @write
    * @idempotent
@@ -110,6 +116,24 @@ export class ImportNamespace {
     candidate: ImportCandidate,
     item: ImportedItem,
   ): Promise<TrackedImport> {
+    const expected = match(candidate.source)
+      .with('linear', 'jira', () => ({
+        kind: 'task',
+        fits: item instanceof Task,
+      }))
+      .with('notion', () => ({
+        kind: 'document',
+        fits: item.entityType === 'document' && !(item instanceof Task),
+      }))
+      .with('slack', () => ({
+        kind: 'channel',
+        fits: item instanceof Channel,
+      }))
+      .exhaustive();
+    if (!expected.fits)
+      throw new MacroError(
+        `A ${candidate.source} import is recorded as a ${expected.kind}`,
+      );
     return this.trackAs(candidate, 'imported', item);
   }
 

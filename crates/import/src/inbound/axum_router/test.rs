@@ -451,7 +451,12 @@ impl ImportStager for FakeImportService {
     ) -> Result<ImportEntity> {
         self.calls.lock().unwrap().push((user.clone(), source));
         let mut row = ledger_row(source, foreign_id, ImportStatus::Imported);
-        row.entity_id = Some(entity_id.to_string());
+        // "document-2" stands for an item an earlier request already mapped to "document-1".
+        row.entity_id = Some(if entity_id == "document-2" {
+            "document-1".to_string()
+        } else {
+            entity_id.to_string()
+        });
         Ok(row)
     }
 
@@ -633,4 +638,24 @@ async fn ledger_imports_a_notion_page_and_keeps_the_refusal_message() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, "not a Notion page URL or id");
+}
+
+#[tokio::test]
+async fn ledger_recording_reports_an_earlier_mapping() {
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/entities",
+        Some(serde_json::json!({
+            "source": "notion",
+            "foreignId": "page",
+            "status": "imported",
+            "metadata": { "title": "Roadmap" },
+            "entityId": "document-2",
+        })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["outcome"], "already_imported");
+    assert_eq!(body["entity"]["entity_id"], "document-1");
 }

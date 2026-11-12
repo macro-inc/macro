@@ -169,6 +169,7 @@ pub async fn list_entities_handler<T: ImportStager, Auth: MacroAuthorizationServ
     responses(
         (status = 200, body = TrackImportEntityResponse),
         (status = 400, description = "Invalid item or metadata"),
+        (status = 422, description = "The import service refused the item"),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"
@@ -238,10 +239,15 @@ pub async fn track_entity_handler<T: ImportStager, Auth: MacroAuthorizationServi
                     entity_id,
                 )
                 .await?;
-            TrackImportEntityResponse {
-                outcome: TrackImportOutcome::RecordedImported,
-                entity,
-            }
+            // An earlier mapping wins; say so rather than claiming this entity was recorded.
+            let outcome = if entity.entity_id.as_deref() == Some(entity_id) {
+                TrackImportOutcome::RecordedImported
+            } else if entity.user_id != user.as_ref() {
+                TrackImportOutcome::AlreadyImportedByTeammate
+            } else {
+                TrackImportOutcome::AlreadyImported
+            };
+            TrackImportEntityResponse { outcome, entity }
         }
     };
     Ok(Json(response))
@@ -288,8 +294,8 @@ pub async fn decline_entity_handler<T: ImportStager, Auth: MacroAuthorizationSer
     request_body = ImportNotionPageRequest,
     responses(
         (status = 200, body = ImportNotionPageResponse),
-        (status = 400, description = "Not a page that can be imported"),
-        (status = 409, description = "Notion is not connected"),
+        (status = 400, description = "No page given"),
+        (status = 422, description = "Not a page that can be imported, or Notion is not connected"),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"

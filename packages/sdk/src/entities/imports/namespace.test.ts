@@ -142,4 +142,16 @@ describe('ImportNamespace', () => {
       ['decline', { path: { id: 'row-1' } }],
     ]);
   });
+
+  test('recordImported refuses an item of the wrong kind for its source', async () => {
+    const { client, requests } = importsClient();
+
+    await expect(
+      new ImportNamespace(client).recordImported(
+        { source: 'notion', foreignId: 'page', metadata: { title: 'Roadmap' } },
+        Task.byId(client, 'task-1'),
+      ),
+    ).rejects.toThrow('A notion import is recorded as a document');
+    expect(requests).toEqual([]);
+  });
 });

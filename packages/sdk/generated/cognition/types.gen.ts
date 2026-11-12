@@ -3660,6 +3660,10 @@ export type TrackImportEntityErrors = {
      */
     400: unknown;
     /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
      * Internal server error
      */
     500: unknown;
@@ -3759,13 +3763,13 @@ export type ImportNotionPageData = {
 
 export type ImportNotionPageErrors = {
     /**
-     * Not a page that can be imported
+     * No page given
      */
     400: unknown;
     /**
-     * Notion is not connected
+     * Not a page that can be imported, or Notion is not connected
      */
-    409: unknown;
+    422: unknown;
     /**
      * Internal server error
      */

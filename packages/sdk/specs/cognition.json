@@ -1579,6 +1579,9 @@
           "400": {
             "description": "Invalid item or metadata"
           },
+          "422": {
+            "description": "The import service refused the item"
+          },
           "500": {
             "description": "Internal server error"
           }
@@ -1689,10 +1692,10 @@
             }
           },
           "400": {
-            "description": "Not a page that can be imported"
+            "description": "No page given"
           },
-          "409": {
-            "description": "Notion is not connected"
+          "422": {
+            "description": "Not a page that can be imported, or Notion is not connected"
           },
           "500": {
             "description": "Internal server error"
