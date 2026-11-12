@@ -72,8 +72,10 @@ enforced by the ordinary backend APIs.
   out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
-- `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
-  links or switches a known personal-provider contact. Neither accepts clearing.
+- `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
+  contact's addresses; `setCompany(company)` links or switches a contact with a
+  personal-provider primary and `unlinkCompany()` removes the link. The server
+  refuses to unlink or move a company-domain contact (`companyDomain`).
 - `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
   (or `databases.saveQuery()` for a question that spans databases, sent with no
   `databaseId`) save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the

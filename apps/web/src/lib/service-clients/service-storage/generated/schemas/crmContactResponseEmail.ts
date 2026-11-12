@@ -6,7 +6,7 @@
  */
 
 /**
- * The contact's email address; absent for contacts added by name
-alone.
+ * The contact's primary email address; absent for contacts added by
+name alone.
  */
 export type CrmContactResponseEmail = string | null;
