@@ -10,6 +10,10 @@ import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  calendarUpdateReadRevision,
+  reconcileCalendarUpdateRead,
+} from '../event-updates';
+import {
   type CalendarSyncController,
   setActiveCalendarSyncController,
 } from '../graphql/sync-controller';
@@ -23,6 +27,10 @@ import {
   useUpdateCalendarEventMutation,
 } from '../mutations';
 import type { CalendarOccurrencesData } from '../occurrences';
+import {
+  projectCalendarOccurrenceTime,
+  shiftCalendarEventTime,
+} from '../optimistic-time';
 
 const rsvpCalendarEventMock = vi.hoisted(() => vi.fn());
 const deleteCalendarEventMock = vi.hoisted(() => vi.fn());
@@ -752,7 +760,7 @@ describe('useUpdateCalendarEventMutation', () => {
       unsubscribe();
     }
   });
-  it('patches fields and only rewrites standalone occurrence times', async () => {
+  it('patches fields and shifts recurring occurrences relative to their master', async () => {
     updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-1' }));
     const update = renderHook(() => useUpdateCalendarEventMutation());
     const time = {
@@ -779,7 +787,7 @@ describe('useUpdateCalendarEventMutation', () => {
     expect(recurring?.event.time).toEqual(time);
     expect(recurring?.occurrence.time.kind === 'timed').toBe(true);
     expect(recurring?.occurrence.time).toMatchObject({
-      startsAt: '2026-08-05T09:00:00Z',
+      startsAt: '2026-08-07T16:00:00.000Z',
     });
   });
 
@@ -859,6 +867,221 @@ describe('useUpdateCalendarEventMutation', () => {
     await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
     expect(titleOfEvent1()).toBe('Second');
     unsubscribe();
+  });
+
+  it('projects queued series edits immediately and keeps newer edits after both writes fail', async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    updateCalendarEventMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const onOptimistic = vi.fn();
+    const firstSave = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T10:00:00Z',
+          endsAt: '2026-08-04T10:30:00Z',
+        },
+      },
+    });
+    const firstResult = Promise.allSettled([firstSave]);
+    await vi.waitFor(() => expect(onOptimistic).toHaveBeenCalledTimes(1));
+    const secondSave = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T11:00:00Z',
+          endsAt: '2026-08-04T12:00:00Z',
+        },
+      },
+    });
+    const secondResult = Promise.allSettled([secondSave]);
+    await vi.waitFor(() => expect(onOptimistic).toHaveBeenCalledTimes(2));
+    expect(updateCalendarEventMock).toHaveBeenCalledTimes(1);
+    expect(viewportData(viewportA)?.items[1].occurrence.time).toMatchObject({
+      startsAt: '2026-08-05T11:00:00.000Z',
+      endsAt: '2026-08-05T12:00:00.000Z',
+    });
+    first.resolve(failure());
+    expect((await firstResult)[0].status).toBe('rejected');
+    await vi.waitFor(() =>
+      expect(updateCalendarEventMock).toHaveBeenCalledTimes(2)
+    );
+    expect(viewportData(viewportA)?.items[1].occurrence.time).toMatchObject({
+      startsAt: '2026-08-05T11:00:00.000Z',
+    });
+    second.resolve(failure());
+    expect((await secondResult)[0].status).toBe('rejected');
+    expect(viewportData(viewportA)?.items[1]).toEqual(recurringItem());
+  });
+
+  it.each([true, false])(
+    'rebases a queued occurrence address when the series save succeeds: %s',
+    async (succeeded) => {
+      const first = deferredResult();
+      updateCalendarEventMock
+        .mockReturnValueOnce(first.promise)
+        .mockResolvedValueOnce(ok({ id: 'event-2' }));
+      const update = renderHook(() => useUpdateCalendarEventMutation());
+      const ready = vi.fn();
+      const firstSave = update.mutateAsync({
+        eventId: 'event-2',
+        onOptimistic: ready,
+        patch: {
+          time: {
+            kind: 'timed',
+            startsAt: '2026-08-04T10:00:00Z',
+            endsAt: '2026-08-04T10:30:00Z',
+          },
+        },
+      });
+      await vi.waitFor(() => expect(ready).toHaveBeenCalledTimes(1));
+      const secondSave = update.mutateAsync({
+        eventId: 'event-2',
+        scope: 'this_event',
+        occurrenceKey: '2026-08-05T09:00:00Z',
+        recurrenceId: '2026-08-05T10:00:00.000Z',
+        onOptimistic: ready,
+        patch: { title: 'Edited while saving' },
+      });
+      await vi.waitFor(() => expect(ready).toHaveBeenCalledTimes(2));
+      const settled = Promise.allSettled([firstSave, secondSave]);
+      first.resolve(succeeded ? ok({ id: 'event-2' }) : failure());
+      await settled;
+      expect(updateCalendarEventMock.mock.calls[1][1]).toMatchObject({
+        recurrenceId: succeeded
+          ? '2026-08-05T10:00:00+00:00'
+          : '2026-08-05T09:00:00Z',
+        title: 'Edited while saving',
+      });
+    }
+  );
+
+  it('retains projections through stale reads and reconciles a complete post-write read', async () => {
+    const pending = deferredResult();
+    updateCalendarEventMock.mockReturnValueOnce(pending.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const ready = vi.fn();
+    const saved = update.mutateAsync({
+      eventId: 'event-2',
+      onOptimistic: ready,
+      patch: {
+        time: {
+          kind: 'timed',
+          startsAt: '2026-08-04T10:00:00Z',
+          endsAt: '2026-08-04T10:30:00Z',
+        },
+      },
+    });
+    await vi.waitFor(() => expect(ready).toHaveBeenCalled());
+    const oldRead = calendarUpdateReadRevision(testQueryClient);
+    const key = calendarKeys.occurrences('user', viewportA).queryKey;
+    const stale = {
+      items: [standaloneItem(), recurringItem()],
+      syncStatus: 'ready' as const,
+    };
+    pending.resolve(ok({ id: 'event-2' }));
+    await saved;
+    expect(
+      reconcileCalendarUpdateRead(testQueryClient, key, stale, oldRead).items[1]
+        .occurrence.time
+    ).toMatchObject({
+      startsAt: '2026-08-05T10:00:00.000Z',
+    });
+    const freshRead = calendarUpdateReadRevision(testQueryClient);
+    expect(
+      reconcileCalendarUpdateRead(
+        testQueryClient,
+        key,
+        { ...stale, partial: true },
+        freshRead
+      ).items[1].occurrence.time
+    ).toMatchObject({
+      startsAt: '2026-08-05T10:00:00.000Z',
+    });
+    expect(
+      reconcileCalendarUpdateRead(testQueryClient, key, stale, freshRead)
+        .items[1].occurrence.time
+    ).toMatchObject({ startsAt: '2026-08-05T10:00:00.000Z' });
+    const confirmed = recurringItem();
+    confirmed.event.time = {
+      kind: 'timed',
+      startsAt: '2026-08-04T10:00:00Z',
+      endsAt: '2026-08-04T10:30:00Z',
+    };
+    confirmed.occurrence.recurrenceId = '2026-08-05T10:00:00Z';
+    confirmed.occurrence.time = {
+      kind: 'timed',
+      startsAt: '2026-08-05T10:00:00Z',
+      endsAt: '2026-08-05T10:30:00Z',
+    };
+    const refreshed = { ...stale, items: [standaloneItem(), confirmed] };
+    expect(
+      reconcileCalendarUpdateRead(testQueryClient, key, refreshed, freshRead)
+    ).toEqual(refreshed);
+  });
+
+  it('retains a saved title through a stale post-write read', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    await update.mutateAsync({
+      eventId: 'event-2',
+      patch: { title: 'Latest title' },
+    });
+    const key = calendarKeys.occurrences('user', viewportA).queryKey;
+    const revision = calendarUpdateReadRevision(testQueryClient);
+    const stale = { items: [recurringItem()], syncStatus: 'ready' as const };
+    expect(
+      reconcileCalendarUpdateRead(testQueryClient, key, stale, revision)
+        .items[0].event.title
+    ).toBe('Latest title');
+    const confirmed = recurringItem();
+    confirmed.event.title = 'Latest title';
+    const fresh = { ...stale, items: [confirmed] };
+    expect(
+      reconcileCalendarUpdateRead(testQueryClient, key, fresh, revision)
+    ).toEqual(fresh);
+  });
+
+  it('does not mistake a different occurrence at the same time for the saved occurrence', async () => {
+    const original = recurringItem();
+    const other = recurringItem();
+    other.occurrence = {
+      ...other.occurrence,
+      occurrenceKey: '2026-08-06T09:00:00Z',
+      recurrenceId: '2026-08-06T09:00:00Z',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-06T09:00:00Z',
+        endsAt: '2026-08-06T09:30:00Z',
+      },
+    };
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [original, other], syncStatus: 'ready' }
+    );
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    await update.mutateAsync({
+      eventId: 'event-2',
+      scope: 'this_event',
+      occurrenceKey: original.occurrence.occurrenceKey,
+      recurrenceId: original.occurrence.recurrenceId ?? undefined,
+      patch: { time: other.occurrence.time },
+    });
+    const data = reconcileCalendarUpdateRead(
+      testQueryClient,
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [original, other], syncStatus: 'ready' },
+      calendarUpdateReadRevision(testQueryClient)
+    );
+    expect(data.items[0].occurrence.time).toEqual(other.occurrence.time);
   });
 
   it('scopes an optimistic edit to the targeted occurrence, or widens to the series', async () => {
@@ -1205,4 +1428,72 @@ it('leaves unrelated invitation lookups, including failed ones, untouched by a r
   const rsvp = renderHook(() => useRsvpCalendarEventMutation());
   await rsvp.mutateAsync({ eventId: 'event-1', response: 'accepted' });
   expect(testQueryClient.getQueryState(failed)?.status).toBe('error');
+});
+
+describe('optimistic recurring times', () => {
+  it('uses the series wall clock across daylight-saving changes', () => {
+    expect(
+      shiftCalendarEventTime(
+        {
+          kind: 'timed',
+          startsAt: '2026-11-02T15:00:00Z',
+          endsAt: '2026-11-02T15:30:00Z',
+        },
+        {
+          kind: 'timed',
+          startsAt: '2026-10-26T14:00:00Z',
+          endsAt: '2026-10-26T14:30:00Z',
+          timeZone: 'America/New_York',
+        },
+        {
+          kind: 'timed',
+          startsAt: '2026-10-26T15:00:00Z',
+          endsAt: '2026-10-26T16:00:00Z',
+          timeZone: 'America/New_York',
+        }
+      )
+    ).toMatchObject({
+      startsAt: '2026-11-02T16:00:00.000Z',
+      endsAt: '2026-11-02T17:00:00.000Z',
+    });
+  });
+
+  it('shifts all-day dates and duration independently', () => {
+    expect(
+      shiftCalendarEventTime(
+        { kind: 'allDay', startDate: '2026-11-08', endDate: '2026-11-09' },
+        { kind: 'allDay', startDate: '2026-11-01', endDate: '2026-11-02' },
+        { kind: 'allDay', startDate: '2026-11-02', endDate: '2026-11-04' }
+      )
+    ).toEqual({
+      kind: 'allDay',
+      startDate: '2026-11-09',
+      endDate: '2026-11-11',
+    });
+  });
+
+  it('keeps moved and resized exceptions while updating their series master', () => {
+    const time = {
+      kind: 'timed' as const,
+      startsAt: '2026-08-04T10:00:00Z',
+      endsAt: '2026-08-04T10:30:00Z',
+    };
+    const moved = recurringItem();
+    moved.occurrence.time = {
+      kind: 'timed',
+      startsAt: '2026-08-05T12:00:00Z',
+      endsAt: '2026-08-05T12:30:00Z',
+    };
+    const resized = recurringItem();
+    resized.occurrence.time = {
+      kind: 'timed',
+      startsAt: '2026-08-05T09:00:00Z',
+      endsAt: '2026-08-05T10:00:00Z',
+    };
+    for (const item of [moved, resized]) {
+      const projected = projectCalendarOccurrenceTime(item, time);
+      expect(projected.event.time).toEqual(time);
+      expect(projected.occurrence).toEqual(item.occurrence);
+    }
+  });
 });

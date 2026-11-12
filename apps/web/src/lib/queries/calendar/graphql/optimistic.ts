@@ -134,6 +134,7 @@ export interface EventFieldPatch {
   location?: string | null;
   reminders?: EventReminders | null;
   time?: EventTime | null;
+  recurrenceLines?: string[] | null;
   guestPolicy?: GuestPolicy | null;
 }
 
@@ -175,6 +176,7 @@ export function patchedEvent(
     copy.calendarId === target ? patchCopy(copy, patch) : copy
   );
   if (patch.time) next.time = graphqlTimeRecord(patch.time);
+  if (patch.recurrenceLines) next.recurrenceLines = patch.recurrenceLines;
   if (patch.guestPolicy && patchesCanonical) {
     next.guestPolicy = { ...next.guestPolicy, ...patch.guestPolicy };
   }

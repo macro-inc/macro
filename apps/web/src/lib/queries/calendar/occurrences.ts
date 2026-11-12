@@ -15,6 +15,10 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
+  calendarUpdateReadRevision,
+  reconcileCalendarUpdateRead,
+} from './event-updates';
+import {
   answeringGraphqlCalendarHost,
   markCalendarCacheUnsupported,
   useGraphqlCalendarHost,
@@ -148,13 +152,23 @@ function calendarOccurrencesQueryOptions(
     >({
       queryKey: keys._ctx.graphql.queryKey,
       queryFn: async ({ signal }: { signal: AbortSignal }) => {
+        const revision = calendarUpdateReadRevision(queryClient);
         if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
         }
         const read = await readCalendarRange(host, range, { signal });
-        if (read.kind === 'range') return read.data;
         if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
-        return fetchCalendarOccurrences(range, signal);
+        const data =
+          read.kind === 'range'
+            ? read.data
+            : await fetchCalendarOccurrences(range, signal);
+        return reconcileCalendarUpdateRead(
+          queryClient,
+          keys._ctx.graphql.queryKey,
+          data,
+          revision,
+          range
+        );
       },
       enabled,
       staleTime,
@@ -181,12 +195,20 @@ function calendarOccurrencesQueryOptions(
     CalendarOccurrencesQueryKey
   >({
     queryKey: keys.queryKey,
-    queryFn: ({ signal }) => {
+    queryFn: async ({ signal }) => {
+      const revision = calendarUpdateReadRevision(queryClient);
       if (!range) {
         throw new Error('Calendar occurrence range is unavailable');
       }
 
-      return fetchCalendarOccurrences(range, signal);
+      const data = await fetchCalendarOccurrences(range, signal);
+      return reconcileCalendarUpdateRead(
+        queryClient,
+        keys.queryKey,
+        data,
+        revision,
+        range
+      );
     },
     enabled,
     staleTime,
