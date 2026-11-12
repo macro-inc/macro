@@ -122,7 +122,10 @@ specifically:
 
 Deployment builds use the filtered source in `nix/cloud-storage.nix`, rather than
 an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
-its source filter. Assets generated from JavaScript are built in their own
+its source filter. Desktop release builds compile the Tauri crates and the
+`crates/` they depend on, such as `cache-core` and `cache-turso`, from crane's
+Rust-only fileset in `nix/tauri-desktop.nix`; add such assets in those crates
+to `desktopCargoCompileInputs` there too. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
 `node_modules`, and every crane build of `crates/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
