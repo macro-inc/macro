@@ -254,3 +254,63 @@ fn sync_service_inputs_cover_its_closure_only() {
             .any(|path| path.starts_with("docs") || path.starts_with("apps"))
     );
 }
+
+#[test]
+fn compose_worker_telemetry_uses_generated_policy_over_inherited_shell() {
+    const KEY: &str = "SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT";
+    const CASE: &str = "XTASK_TEST_SYNC_OTEL_COMPOSE_CASE";
+    let Some(case) = std::env::var_os(CASE) else {
+        // Set the ambient environment on a child process, never the test runner.
+        for case in ["off", "on"] {
+            let status = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "local::gen_compose::test::compose_worker_telemetry_uses_generated_policy_over_inherited_shell",
+                ])
+                .env(KEY, "http://inherited.invalid:4318")
+                .env(CASE, case)
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        return;
+    };
+    assert_eq!(
+        std::env::var_os(KEY).as_deref(),
+        Some(std::ffi::OsStr::new("http://inherited.invalid:4318"))
+    );
+    let expected = match case.to_str().unwrap() {
+        "off" => "",
+        "on" => "http://otel-collector:4318",
+        _ => panic!("unknown isolated Compose control"),
+    };
+    let dir = std::env::temp_dir().join(format!("xtask-sync-otel-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    let env_file = dir.join("generated.env");
+    std::fs::write(&env_file, format!("{KEY}={expected}\n")).unwrap();
+    let fixture = dir.join("compose.yml");
+    // Config-only interpolation control: no service is started, pulled or built.
+    std::fs::write(
+        &fixture,
+        "services:\n  probe:\n    image: busybox\n    environment:\n      OTEL_EXPORTER_OTLP_ENDPOINT: '${SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT:-}'\n",
+    )
+    .unwrap();
+    let instance = Instance::derive(Some("sync-otel-config-test"), None).unwrap();
+    let mut cmd = docker_compose(&instance, &[fixture], &env_file);
+    assert!(
+        cmd.get_envs()
+            .any(|(key, value)| key == KEY && value.is_none())
+    );
+    let output = cmd.args(["config", "--format", "json"]).output().unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let config: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        config["services"]["probe"]["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"],
+        expected
+    );
+}
