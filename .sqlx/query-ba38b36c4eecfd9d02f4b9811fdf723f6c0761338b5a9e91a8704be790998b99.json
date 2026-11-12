@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM password_item_entities item WHERE item.team_id=$1 AND item.id=$2 AND NOT item.deleting AND item.deleted_at IS NULL AND item.grants @> $3\n                    AND (item.user_id=$4 OR EXISTS(SELECT 1 FROM password_agent_access access WHERE access.team_id=item.team_id AND access.item_id=item.id AND access.agent_user_id=$4 AND access.approved_by IS NOT NULL))\n                    FOR KEY SHARE OF item)\n                    AND NOT EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$5) AS \"authorized!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ba38b36c4eecfd9d02f4b9811fdf723f6c0761338b5a9e91a8704be790998b99"
+}

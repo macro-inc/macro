@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after,agent_user_id,wake_id) VALUES($1,$2,$3,'pending',now()+interval '180 seconds',$4,$5) ON CONFLICT(team_id,key_id) DO UPDATE SET key_id=password_totp_enrollments.key_id WHERE password_totp_enrollments.item_id=excluded.item_id AND password_totp_enrollments.state='pending' AND password_totp_enrollments.agent_user_id=excluded.agent_user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2db9f82f04c2fbfcf34d737dd7a645aca270821409a3033f8b3ee265a72d5f74"
+}
