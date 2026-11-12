@@ -23,6 +23,7 @@ import './monitors/ai-editing';
 import './monitors/ai-providers';
 import './monitors/calls';
 import './monitors/graphql-soup';
+import './monitors/computers';
 import './monitors/harness-presence';
 import './monitors/harness-runtimes';
 import './monitors/macrodb';
