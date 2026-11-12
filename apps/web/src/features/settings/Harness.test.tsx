@@ -39,6 +39,9 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('./components/pending-requests-section', () => ({
+  PendingRequestsSection: () => null,
+}));
 vi.mock('./components/teammate-runtimes-section', () => ({
   TeammateRuntimesSection: () => null,
 }));
@@ -406,8 +409,8 @@ describe('Harness', () => {
   it('hides the empty paired runtimes section', () => {
     render(() => <Harness />);
 
-    expect(screen.queryByText('No paired runtimes yet')).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Your runtimes' })).toBeNull();
+    expect(screen.queryByText('No paired machines yet')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Your machines' })).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Enter pairing code' })
     ).toBeNull();
@@ -416,11 +419,11 @@ describe('Harness', () => {
   it('opens pairing from New runtime and returns to the runtimes list', () => {
     render(() => <Harness />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'New runtime' }));
-    expect(screen.getByRole('region', { name: 'New runtime' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'New machine' }));
+    expect(screen.getByRole('region', { name: 'New machine' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByRole('heading', { name: 'Runtimes' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Machines' })).toBeTruthy();
   });
 
   it('goes back to Agents from the runtimes page', () => {
@@ -436,7 +439,7 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByRole('heading', { name: 'Your runtimes' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your machines' })).toBeTruthy();
     expect(screen.getByText('Dev box')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     const row = screen.getByText('Dev box').closest('[data-runtime-row]');
@@ -470,19 +473,22 @@ describe('Harness', () => {
     expect(names).toEqual(['Dev box', 'Old laptop']);
   });
 
-  it('hides the section when every runtime is offline', () => {
+  it('lists a machine that is offline, so its owner can still manage it', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
         connected: false,
-        last_connected_at: null,
+        last_connected_at: '2026-10-24T00:47:21Z',
       },
     ];
 
     render(() => <Harness />);
 
-    expect(screen.queryByRole('heading', { name: 'Your runtimes' })).toBeNull();
-    expect(screen.queryByText('Dev box')).toBeNull();
+    const row = document.querySelector('[data-runtime-row="Dev box"]');
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLElement).getByRole('button', { name: 'Remove' })
+    ).toBeTruthy();
   });
 
   it("leaves teammates' runtimes out of Your runtimes", () => {
@@ -555,19 +561,19 @@ describe('Harness', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Remove Dev box?')).toBeTruthy();
     expect(
-      within(dialog).getByText(/Agents using this runtime will stop running/)
+      within(dialog).getByText(/Agents using this machine will stop running/)
     ).toBeTruthy();
     expect(harnessMocks.deleteHarness).not.toHaveBeenCalled();
 
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove runtime' })
+      within(dialog).getByRole('button', { name: 'Remove machine' })
     );
 
     await waitFor(() => {
       expect(harnessMocks.deleteHarness).toHaveBeenCalledWith({
         harnessId: REGISTERED_HARNESS.id,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Machine removed');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
@@ -596,7 +602,7 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();

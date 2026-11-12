@@ -108,7 +108,7 @@ export function runtimeLabel(
     case 'macrod':
       return (
         runtimes.find((runtime) => runtime.id === harnessId)?.name ??
-        'Disconnected runtime'
+        'Disconnected machine'
       );
     default:
       return harness;
@@ -180,12 +180,12 @@ function persistedAgent(
         : needsRuntimeAccess
           ? 'Request access'
           : agent.harness === 'macrod' && !connected
-            ? 'Reconnect runtime'
+            ? 'Reconnect machine'
             : undefined,
     unavailableReason: needsRuntimeAccess
-      ? 'You need access to its runtime'
+      ? 'You need access to its machine'
       : agent.harness === 'macrod' && !connected
-        ? 'Its runtime is disconnected'
+        ? 'Its machine is disconnected'
         : agent.harness === 'cursor' && !connected
           ? 'Connect Cursor to start it'
           : undefined,

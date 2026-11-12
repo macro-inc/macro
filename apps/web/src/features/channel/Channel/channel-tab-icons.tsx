@@ -1,10 +1,10 @@
 import ChatTextIcon from '@icon/system/regular/chat-text.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import type { TabOption } from '@ui';
 import type { Component, JSX } from 'solid-js';
+import { CallWaveform } from '../Call/components/CallWaveform';
 import type { ChannelTabId } from './channel-tabs';
 
 export const CHANNEL_TAB_ICONS: Record<
@@ -15,7 +15,7 @@ export const CHANNEL_TAB_ICONS: Record<
   attachments: PaperclipIcon,
   calls: PhoneIcon,
   participants: UsersIcon,
-  call: PhoneCallIcon,
+  call: CallWaveform,
 };
 
 /** The same tabs with icons, for a header that renders them `iconOnly`. */
@@ -24,6 +24,9 @@ export function withChannelTabIcons(
 ): TabOption<ChannelTabId>[] {
   return options.map((option) => ({
     ...option,
-    icon: CHANNEL_TAB_ICONS[option.value],
+    icon:
+      option.value === 'call' && option.icon
+        ? option.icon
+        : CHANNEL_TAB_ICONS[option.value],
   }));
 }

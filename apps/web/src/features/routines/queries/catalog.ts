@@ -29,13 +29,21 @@ export function routineCatalogQueryOptions(timezone: string) {
 }
 
 /**
- * Macro's catalog routines, with schedules in this browser's zone; empty
- * until they first load, so the routines list never waits on them, and kept
- * through a failed refetch (FE-48).
+ * Macro's catalog routines, with schedules in this browser's zone, or
+ * undefined until they first load; kept through a failed refetch (FE-48).
  */
-export function useRoutineCatalog(): () => RoutineTemplate[] {
+export function useLoadedRoutineCatalog(): () => RoutineTemplate[] | undefined {
   const query = useQuery(() =>
     routineCatalogQueryOptions(getDefaultTimezone())
   );
-  return () => (query.isPending ? [] : (query.data ?? []));
+  return () => (query.isPending ? undefined : (query.data ?? []));
+}
+
+/**
+ * Macro's catalog routines; empty until they first load, so the routines
+ * list never waits on them.
+ */
+export function useRoutineCatalog(): () => RoutineTemplate[] {
+  const catalog = useLoadedRoutineCatalog();
+  return () => catalog() ?? [];
 }

@@ -26,6 +26,7 @@ import { CodexHarness } from './codex/views/CodexHarness';
 import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
+import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
 import {
@@ -103,9 +104,9 @@ export function Harness(
     try {
       await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
       setRemovingHarness(undefined);
-      toast.success('Runtime removed');
+      toast.success('Machine removed');
     } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to remove runtime'));
+      toast.failure(failureMessage(error, 'Failed to remove machine'));
     }
   };
 
@@ -150,7 +151,7 @@ export function Harness(
       <Show when={!pairingDialog()}>
         <SettingsSearchTarget result={highlight()}>
           <SettingsPage
-            title="Runtimes"
+            title="Machines"
             description="Providers and machines your agents can run on."
             signpost={
               <TutorialPill tutorial="macrod" class="mt-1 self-start" />
@@ -164,10 +165,11 @@ export function Harness(
                 onClick={() => setPairingDialog({})}
               >
                 <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-                New runtime
+                New machine
               </Button>
             }
           >
+            <PendingRequestsSection />
             <ConnectedRuntimesSection
               harnesses={
                 harnessesQuery.isSuccess
@@ -189,7 +191,7 @@ export function Harness(
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-                Built-in runtimes
+                Built-in machines
               </h2>
               <SettingsCard>
                 <section class="flex gap-4 px-6 py-5">
@@ -384,7 +386,7 @@ function HarnessRenameDialog(props: {
       });
       props.onClose();
     } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to rename runtime'));
+      toast.failure(failureMessage(error, 'Failed to rename machine'));
     }
   };
 
@@ -401,7 +403,7 @@ function HarnessRenameDialog(props: {
       <Panel depth={2} class="rounded-xl text-ink">
         <Panel.Header class="px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
-            Rename runtime
+            Rename machine
           </Dialog.Title>
         </Panel.Header>
         <form
@@ -470,8 +472,8 @@ function HarnessRemoveDialog(props: {
         </Panel.Header>
         <Panel.Body class="p-5">
           <Dialog.Description class="text-sm leading-5 text-ink-muted">
-            Agents using this runtime will stop running until it's reconnected.
-            macrod on that machine will need to pair again.
+            Agents using this machine will stop running until it's reconnected.
+            macrod on it will need to pair again.
           </Dialog.Description>
         </Panel.Body>
         <Panel.Footer class="justify-end gap-2 px-5 py-3">
@@ -491,7 +493,7 @@ function HarnessRemoveDialog(props: {
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            {props.pending ? 'Removing…' : 'Remove runtime'}
+            {props.pending ? 'Removing…' : 'Remove machine'}
           </Button>
         </Panel.Footer>
       </Panel>

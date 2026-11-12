@@ -21,9 +21,9 @@ const entity = (type: EntityData['type']) =>
 const { canExecute } = makeCopyAction();
 
 describe('makeCopyAction.canExecute', () => {
-  it('offers duplicating documents and chats', () => {
+  it('offers duplicating documents but not legacy chats', () => {
     expect(canExecute(entity('document'))).toBe(true);
-    expect(canExecute(entity('chat'))).toBe(true);
+    expect(canExecute(entity('chat'))).toBe(false);
   });
 
   it('duplicates folders only through the GraphQL entity mutation', () => {

@@ -171,31 +171,6 @@ async fn request_span_records_the_matched_route() {
     );
 }
 
-#[tokio::test]
-async fn request_span_keeps_a_path_token_out_of_the_url_path() {
-    let (subscriber, captured) = TracingCapture::new();
-    let _guard = set_default(subscriber);
-    let app = Router::new()
-        .route("/webhooks/{token}", get(|| async {}))
-        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
-
-    app.oneshot(
-        Request::builder()
-            .uri("/webhooks/mrw_secret")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await
-    .unwrap();
-
-    let fields = captured.initial_span_fields.lock().unwrap();
-    assert_eq!(fields.get("url.path").unwrap(), "\"/webhooks/{token}\"");
-    assert!(fields.values().all(|value| !value.contains("mrw_secret")));
-    drop(fields);
-    let recorded = captured.recorded_span_fields.lock().unwrap();
-    assert!(recorded.values().all(|value| !value.contains("mrw_secret")));
-}
-
 #[test]
 fn successful_response_records_telemetry_without_completion_event() {
     let (subscriber, captured) = TracingCapture::new();
@@ -429,4 +404,64 @@ async fn starvation_detector_does_not_warn_within_grace_period() {
     tokio::task::yield_now().await;
 
     assert_eq!(captured.event_count(Level::WARN), 0);
+}
+
+#[tokio::test]
+async fn request_span_keeps_credential_path_params_out_of_url_path() {
+    for (route, uri, expected) in [
+        (
+            "/session/login/{session_code}",
+            "/session/login/fake-session-code",
+            "/session/login/{session_code}",
+        ),
+        (
+            "/oauth/passwordless/{code}",
+            "/oauth/passwordless/fake-login-code?email=a",
+            "/oauth/passwordless/{code}",
+        ),
+        (
+            "/meetings/join/{token}/participants",
+            "/meetings/join/fake-join-token/participants",
+            "/meetings/join/{token}/participants",
+        ),
+        // Other path params stay searchable.
+        (
+            "/documents/{id}/session/{session_code}",
+            "/documents/doc-1/session/fake-session-code",
+            "/documents/doc-1/session/{session_code}",
+        ),
+    ] {
+        let (subscriber, captured) = TracingCapture::new();
+        let _guard = set_default(subscriber);
+        tracing::callsite::rebuild_interest_cache();
+        let inner = Router::new()
+            .route(route, get(|| async {}))
+            .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+        // The gateway mounts every service under a prefix as well as at root.
+        let app = Router::new().merge(inner.clone()).nest("/auth", inner);
+
+        for prefix in ["", "/auth"] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("{prefix}{uri}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            // A nested router sees the path without its prefix.
+            let fields = captured.initial_span_fields.lock().unwrap().clone();
+            assert_eq!(
+                fields.get("url.path").unwrap(),
+                &format!("\"{expected}\""),
+                "{prefix}{uri}"
+            );
+            assert!(
+                fields.values().all(|value| !value.contains("fake-")),
+                "{fields:?}"
+            );
+        }
+    }
 }

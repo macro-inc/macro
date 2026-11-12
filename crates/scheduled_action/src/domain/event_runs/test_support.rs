@@ -334,6 +334,7 @@ impl EventRunRepository for Repo {
                 template_id: None,
                 suggestion_id: None,
                 description: String::new(),
+                sub_routine: None,
             },
         }))
     }

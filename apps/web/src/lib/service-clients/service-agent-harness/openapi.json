@@ -132,7 +132,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -481,7 +481,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -3517,6 +3517,52 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/ui-commands": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Open an item in a new pane of the app tab the person who prompted the\nrunning turn typed in. Only a running execution of the session's current\nturn may send, as the account it acts as.",
+        "operationId": "open_in_app",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenInApp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UiCommandOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/views": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3859,6 +3905,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Originating code-mode invocation, absent on older events."
+          },
+          "agent_verb": {
+            "type": ["string", "null"],
+            "description": "SDK display verb, absent on older events."
           },
           "entity_id": {
             "type": "string",
@@ -5684,6 +5734,11 @@
                   }
                 ]
               },
+              "clientId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The app tab the person typed this in (a UUID the tab keeps for its\nlifetime), so what the turn opens in the app reaches that tab only.\nOnly a person's own request may send it; a runtime's is refused."
+              },
               "context": {
                 "type": ["object", "null"],
                 "description": "Why the agent is being asked. Only a runtime forwarding a triggered\nprompt may send it; a user's request carrying it is refused."
@@ -5772,6 +5827,11 @@
               "$ref": "#/components/schemas/PromptAttachment"
             },
             "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
+          },
+          "promptClientId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The app tab the person typed `prompt` in, as `clientId` on a control\nrequest, so what the first turn opens in the app reaches that tab\nonly. Requires `prompt`. Only a person's own request may send it; a\nruntime's is refused, and a program using a person's credential has\nit dropped."
           },
           "repoBranch": {
             "type": ["string", "null"],
@@ -6905,6 +6965,26 @@
           "title": {
             "type": ["string", "null"],
             "description": "Suggested note, task, or event title."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenInApp": {
+        "type": "object",
+        "description": "Open an item in the prompting person's app tab.",
+        "required": ["executionId", "path"],
+        "properties": {
+          "executionId": {
+            "$ref": "#/components/schemas/ExecutionId",
+            "description": "The running execution asking; it must belong to the session's\ncurrent turn."
+          },
+          "path": {
+            "type": "string",
+            "description": "An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:\nwhat follows `/app` in a Macro link. Never an origin."
+          },
+          "placement": {
+            "$ref": "#/components/schemas/UiPlacement",
+            "description": "Where to put it; beside the agent by default."
           }
         },
         "additionalProperties": false
@@ -8234,6 +8314,63 @@
           }
         ],
         "description": "What opened a session."
+      },
+      "UiCommandOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A connection of the prompting person took it. Their tab opens it\nunless it refuses the route or the person is somewhere else.",
+            "required": ["commandId", "status"],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The command's id, as the tab sees it."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["sent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Nobody to show it to: a turn nobody typed in a tab, or the tab is\nnot connected. Link the item in the reply instead.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_client"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not sent, for the given reason.",
+            "required": ["reason", "status"],
+            "properties": {
+              "reason": {
+                "$ref": "#/components/schemas/UiDeclineReason",
+                "description": "Why."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["declined"]
+              }
+            }
+          }
+        ],
+        "description": "What happened to a command."
+      },
+      "UiDeclineReason": {
+        "type": "string",
+        "description": "Why a command was not sent.",
+        "enum": ["turned_off", "not_allowed_route", "rate_limited"]
+      },
+      "UiPlacement": {
+        "type": "string",
+        "description": "Where the opened item goes. Neither replaces what the person is reading.",
+        "enum": ["beside-agent", "new"]
       },
       "UpdateChannelSharePermission": {
         "type": "object",

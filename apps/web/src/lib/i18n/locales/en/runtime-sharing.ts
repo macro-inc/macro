@@ -1,5 +1,5 @@
 export default {
-  sharing: 'Runtime sharing',
+  sharing: 'Machine sharing',
   share: 'Share',
   shareTitle: 'Share {{name}}',
   shareRequests: {
@@ -10,8 +10,8 @@ export default {
     one: '{{count}} request',
     other: '{{count}} requests',
   },
-  yourRuntimes: 'Your runtimes',
-  teammatesRuntimes: "Teammates' runtimes",
+  yourRuntimes: 'Your machines',
+  teammatesRuntimes: "Teammates' machines",
   teammatesRuntimesHint:
     'Machines your teammates own. Ask an owner for access to run agents on one.',
   yourAccess: 'Your access: {{access}}',
@@ -25,7 +25,7 @@ export default {
   dontAskBeforeActingOwnerOnly: 'Only the owner can change this.',
   dontAskConfirmTitle: "Don't ask before acting?",
   dontAskConfirmBody:
-    'Agents set to bypass can run commands and edit files on this machine without approval. Only turn this on if you trust everyone who can create agents on this runtime.',
+    'Agents set to bypass can run commands and edit files on this machine without approval. Only turn this on if you trust everyone who can create agents on this machine.',
   dontAskConfirm: 'Turn on',
   dontAskFailed: 'Could not change this setting. Try again.',
   explain:
@@ -68,6 +68,8 @@ export default {
   livesOn: 'Lives on {{name}}',
   requestAccess: 'Request access',
   requestedToUse: 'Requested to use {{name}}',
+  requestedToUseInline: 'requested to use {{name}}',
+  pendingRequestsTitle: 'Pending requests',
   requestSent: 'Access requested. The owner will be notified.',
   alreadyRequested:
     'You already asked for access. The owner has been notified.',
