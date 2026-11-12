@@ -1,0 +1,22 @@
+apps/web/src/features/command/Launcher.tsx
+  s_98506d03828861::t_013f8ba527124e 976-980
+apps/web/src/features/command/Launcher.chord.test.tsx
+  s_98506d03828861::t_5f8d9d6e88791e 9,55,120-126
+  s_98506d03828861::t_050a15a34533a0 1-8,10-54,56-119,127-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "45e26cd3fce0935a45aef219e97f09c4509a51b8",
+  "prompts": {},
+  "sessions": {
+    "s_98506d03828861": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "025c1caf-7fa3-4d8e-8731-a28c018efab2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
