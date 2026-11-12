@@ -13,6 +13,7 @@ import { inSubprocess } from '@macro-inc/muppet/core/code';
 import type { Scripts } from '@macro-inc/muppet/runtimes/pieces';
 import { checker, loader } from '@macro-inc/muppet/utilities/scripts';
 import typescript from 'typescript';
+import { authorized } from './behavior/agent/authority.ts';
 import {
   budgeted,
   capped,
@@ -211,13 +212,17 @@ const claudeAgent = agentClaude({
   },
 });
 
-// Every wake is held to the owner's daily cap, on a ledger that outlives restarts.
-export const agent = budgeted({
-  agent: claudeAgent,
-  ledger,
-  caps: base.config.budget,
-  clock: base.clock,
-  timeZone: base.config.timeZone,
+// Every wake first decides who its owner is, then is held to the owner's daily
+// cap, on a ledger that outlives restarts.
+export const agent = authorized({
+  agent: budgeted({
+    agent: claudeAgent,
+    ledger,
+    caps: base.config.budget,
+    clock: base.clock,
+    timeZone: base.config.timeZone,
+  }),
+  authority: base.authority,
 });
 
 export const assistant = makeAgent(base, agent, restart);
