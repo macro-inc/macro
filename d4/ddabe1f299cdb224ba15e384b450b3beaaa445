@@ -1,0 +1,33 @@
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_9e3a53e0dea748::t_793afd126756b6 111
+crates/mcp_client/src/domain/models/server.rs
+  s_9e3a53e0dea748::t_4b3cf121ab14a3 6,55-60,66
+crates/mcp_client/src/domain/models/server/test.rs
+  s_2464bae6f9efda::t_641fb37cd25cf6 85-135
+crates/mcp_toolset/src/lib.rs
+  s_9e3a53e0dea748::t_3a80526a755d34 22,32-37,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d4ddabe1f299cdb224ba15e384b450b3beaaa445",
+  "prompts": {},
+  "sessions": {
+    "s_2464bae6f9efda": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "138b8aba-507f-44c8-81da-ebd6f96292b3",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9e3a53e0dea748": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6f589a3-9330-426f-aed1-485b00dff402",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
