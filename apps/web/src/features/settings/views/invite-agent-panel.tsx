@@ -3,12 +3,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { useUploadAgentAvatarMutation } from '@queries/agents/avatar';
-import {
-  useComputerOffersQuery,
-  useNotifyComputerSizeMutation,
-} from '@queries/computers/computers';
+import { useComputerOffersQuery } from '@queries/computers/computers';
 import { useCreateTeamAgentMutation } from '@queries/team-agents/team-agents';
-import type { ComputerSize } from '@service-auth/computers';
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -41,7 +37,6 @@ export function InviteAgentPanel(props: {
   onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
-  const notify = useNotifyComputerSizeMutation();
   const upload = useUploadAgentAvatarMutation();
   const create = useCreateTeamAgentMutation();
   const [error, setError] = createSignal<string>();
@@ -68,24 +63,12 @@ export function InviteAgentPanel(props: {
     }
   };
 
-  const requestNotify = async (size: ComputerSize) => {
-    try {
-      await notify.mutateAsync(size);
-    } catch {
-      toast.failure(t('computers.notifyFailed'));
-    }
-  };
-
   return (
     <InviteAgentForm
       header={props.header}
       offers={offers.isSuccess ? offers.data : undefined}
       offersFailed={offers.isError}
       onRetryOffers={() => fireAndForget(offers.refetch(), 'team-agent.offers')}
-      notifyPending={notify.isPending ? notify.variables : undefined}
-      onNotify={(size) =>
-        fireAndForget(requestNotify(size), 'team-agent.offers')
-      }
       uploadPicture={(file) => upload.mutateAsync(file)}
       pending={create.isPending}
       error={error()}
