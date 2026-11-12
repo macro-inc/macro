@@ -301,13 +301,10 @@ impl AccessRepository for PgAccessRepository {
         let initiative_uuid = initiative_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid initiative ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
         Ok(queries::initiative_access::get_initiative_access(
             &self.pool,
             &initiative_uuid,
-            &source_ids,
+            Viewer::from_user(user_id),
         )
         .await?)
     }
@@ -591,7 +588,7 @@ impl AccessRepository for PgAccessRepository {
                 queries::initiative_access::get_initiative_access(
                     &self.pool,
                     &entity_uuid,
-                    &source_ids,
+                    viewer,
                 )
                 .await
             }
