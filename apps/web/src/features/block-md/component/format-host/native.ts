@@ -215,7 +215,14 @@ export function createNativeDocumentFormattingHost(
         const selected = readNativeFormattingSelection(view);
         const table = readTables();
         const convertible = actions.canConvertList();
-        selectionText = view.clipboard.formats(0).plain;
+        const textSelection = view.selection().selection;
+        selectionText =
+          textSelection.kind === 'range' &&
+          (textSelection.anchor.key !== textSelection.focus.key ||
+            textSelection.anchor.offset !== textSelection.focus.offset ||
+            textSelection.anchor.type !== textSelection.focus.type)
+            ? view.clipboard.formats(0).plain
+            : '';
         setSelection(selected);
         setTables(table);
         setCanConvertList(convertible);
