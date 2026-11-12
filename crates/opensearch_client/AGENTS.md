@@ -64,6 +64,9 @@ projects.
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
   across a large mailbox runs for minutes.
+- The request-level `_source` filter does not reach `has_child` inner hits:
+  each one returns the child's whole document unless its `InnerHits` names
+  `source_fields`. Name exactly the fields the hit's `_source` struct decodes.
 
 ## Related
 
