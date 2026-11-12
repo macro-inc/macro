@@ -13,6 +13,7 @@ import { useUpdateBotMutation } from '@queries/bots/bots';
 import { useClaudeSignOutMutation } from '@queries/computers/claude';
 import { useCompleteComputerSetupMutation } from '@queries/computers/computers';
 import { invalidateHarnesses } from '@queries/harnesses/harnesses';
+import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus } from '@service-auth/computers';
 import { ActionDialogShell, Button, cn, Input } from '@ui';
 import {
@@ -34,7 +35,6 @@ import {
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 export type SetupStepId = 'computer' | 'agent' | 'claude' | 'ready';
-export type ClaudeChoice = 'own_account' | 'macro_credits';
 
 /** "Maya's Agent", or "Agent" for a viewer without a first name. */
 export function defaultAgentName(firstName: string | undefined): string {
@@ -149,9 +149,9 @@ export function ComputerSetupSteps(props: {
   firstName?: string;
   step: Exclude<SetupStepId, 'computer'>;
   name: string | undefined;
-  choice: ClaudeChoice | undefined;
+  choice: ClaudeMode | undefined;
   onName: (name: string) => void;
-  onChoice: (choice: ClaudeChoice) => void;
+  onChoice: (choice: ClaudeMode) => void;
   onStep: (step: SetupStepId) => void;
   onClose: () => void;
 }) {

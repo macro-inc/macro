@@ -4,8 +4,6 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ComputerStatusKind } from './computerStatusKind';
 
-/**
- * Computer status supplied by its owning service.
- */
-export type SubscriptionBillingLineItemStatus = string | null;
+export type SubscriptionBillingLineItemStatus = null | ComputerStatusKind;

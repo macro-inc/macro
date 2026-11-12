@@ -616,6 +616,10 @@ async fn run_server() -> anyhow::Result<()> {
                 teams_repo_impl.clone(),
             ),
             plan_gateway,
+            feature_flags
+                .clone()
+                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                .unwrap_or_default(),
         ),
     );
     let gtm_invite_service = Arc::new(gtm_invite_service);

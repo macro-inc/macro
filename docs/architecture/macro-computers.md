@@ -35,9 +35,9 @@ mounted by authentication_service.
 
 `domain::rollout::ComputerRollout` reads `enable-macro-computers` for the
 authenticated Macro user through `feature_flags`. Missing providers, missing
-flags and load errors refuse team purchase, quote and offers with 403.
-Composition roots inject it with `with_rollout`; `quote_for_team` takes the
-caller user id. Existing reads and management, Stripe reconciliation and workers remain
+flags and load errors refuse team purchase and offers with 403.
+Composition roots inject it with `with_rollout`; `offers` takes the caller
+user id. Existing reads and management, Stripe reconciliation and workers remain
 available when rollout is off. The web hides the computer UI with the flag off
 while existing computers keep running and billing: the flag is a sales kill
 switch, not a way to manage computers.
@@ -46,7 +46,7 @@ switch, not a way to manage computers.
 
 Report environment sale availability through `Billing::sales_available` and
 reject unavailable purchases in the domain before reserving capacity. Map
-`BillingError::NotAvailable` to 503 on public and internal computer routes;
+`BillingError::NotAvailable` to 503 on the team computer routes;
 keep missing subscription and unsupported billing intervals distinct.
 
 Require image, host reserve and oversell factor for either enabled fleet;
@@ -74,11 +74,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   attachment-source failures return `ComputerError::Internal`. `FleetAttachment`
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
-  Gate purchase, purchase_for_team (including comps), quote, quote_for_team,
-  offers, status, set_power, retry, cancel, undo_cancel and release_now
+  Gate purchase, purchase_for_team (including comps), quote, offers, status, set_power, retry, cancel, undo_cancel and release_now
   before reads, billing or writes; preserve existing rollout denial
-  first. Internal purchase/quote/status authenticate through `InternalOnly`
-  before entering the same gate. Missing rows on a detached fleet return 503.
+  first. Missing rows on a detached fleet return 503.
   Do not gate catalog(), size_spec(), observe_subscription, confirm_reservations,
   run_billing_effects, operator methods or `list`: every team member's
   Settings and Billing list the team's computers, so a detached fleet still
@@ -215,13 +213,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   returns `Result<Option<String>, Self::Err>`; inject it with `with_comp_policy`.
   authentication_service wires `MacroStaffCompPolicy`. Team purchase calls
   `purchase_for_team(PurchaseRequest)` and overwrites billing from policy; its
-  JSON body only accepts `purchaseKey`, `size` and `name`. Team quotes and
-  offers also use policy (`quote_for_team`). Computers are for paying teams:
+  JSON body only accepts `purchaseKey`, `size` and `name`. Offers also use
+  policy. Computers are for paying teams:
   `Billing::require_paid_plan` refuses a trialing subscription with
   `BillingError::TeamOnTrial` (403, body `code: "team_on_trial"`) before a
   Stripe quote, offer, purchase reservation, undo or restore; comped
-  purchases skip it. There is no internal purchase
-  route: funding always comes from `CompPolicy`. Comped purchases reject nonempty `extraItems` (`CompedExtraItems`), never call the
+  purchases skip it. Funding always comes from `CompPolicy`. Comped purchases reject nonempty `extraItems` (`CompedExtraItems`), never call the
   Billing port, and convert at once with `Billing::Comped{reason}`. A comped
   cancel stops at once and starts retention; restore comps it again. A comped
   quote reads the Stripe quote and sets amount to zero.

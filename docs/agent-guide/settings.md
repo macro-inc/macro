@@ -825,9 +825,9 @@ PostHog in every environment unless explicitly overridden locally. With the
 flag off, the computer UI is hidden (Machines, Billing, Agents and settings
 search show nothing about computers), while existing computers keep running and
 billing. Turning the flag off is a sales kill switch, not a way to manage
-computers. Team purchase, quote and offers return 403 when the rollout is off,
+computers. Team purchase and offers return 403 when the rollout is off,
 missing or unavailable. If the environment has no computer prices configured,
-offers, quotes, and purchases answer 503 with `computers are not available in
+offers and purchases answer 503 with `computers are not available in
 this environment`; partial price configuration prevents the authentication
 service from starting.
 

@@ -248,23 +248,9 @@ impl<
         )
     }
 
-    /// Quote using server-side team policy.
-    #[tracing::instrument(skip(self, user_id), err)]
-    pub async fn quote_for_team(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        team_id: Uuid,
-        size: ComputerSize,
-    ) -> Result<Quote, ComputerError> {
-        self.require_rollout(user_id).await?;
-        self.require_attached().await?;
-        self.quote(team_id, size, &self.purchase_billing(team_id).await?)
-            .await
-    }
-
     /// The price of one computer of `size` for the team.
     #[tracing::instrument(skip(self, billing), err)]
-    pub async fn quote(
+    async fn quote(
         &self,
         team_id: Uuid,
         size: ComputerSize,

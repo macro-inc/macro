@@ -121,7 +121,9 @@ impl ClaudeSignIns for PgClaudeSignIns {
 
 impl PgClaudeSignIns {
     /// Every awake computer that has a harness, as `(harness, computer)`.
-    pub async fn awake_computers(&self) -> Result<Vec<(HarnessId, ComputerId)>, ClaudeSignInsError> {
+    pub async fn awake_computers(
+        &self,
+    ) -> Result<Vec<(HarnessId, ComputerId)>, ClaudeSignInsError> {
         let rows = sqlx::query!(
             r#"
             SELECT id, harness_id AS "harness_id!"

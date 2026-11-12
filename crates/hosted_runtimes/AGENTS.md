@@ -19,13 +19,13 @@ read it before changing behaviour.
 ## Start here
 
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
-- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, retry, cancel, release).
+- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, status, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
-- `src/inbound/axum_router.rs`: `/team/computers*` and `/internal/computers*`,
-  mounted by authentication_service.
+- `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
+  authentication_service.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 

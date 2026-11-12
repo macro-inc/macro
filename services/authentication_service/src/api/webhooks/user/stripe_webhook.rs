@@ -916,35 +916,16 @@ async fn subscription_items(
     ctx: &ApiContext,
     id: &stripe::SubscriptionId,
 ) -> Result<Vec<hosted_runtimes::domain::service::ObservedItem>, stripe::StripeError> {
-    let mut params = stripe::ListSubscriptionItems::new(id.clone());
-    params.limit = Some(100);
-    let mut items = Vec::new();
-    loop {
-        let page = stripe::SubscriptionItem::list(&ctx.stripe_client, &params).await?;
-        for item in &page.data {
-            let computer_id = match teams::outbound::customer_repo::item_computer_id(item) {
-                Some(id) => match hosted_runtimes::domain::ids::ComputerId::parse_uuid_str(id) {
-                    Ok(id) => Some(id),
-                    Err(_) => {
-                        tracing::warn!(subscription_item = %item.id, "subscription item has an invalid computer id");
-                        None
-                    }
-                },
-                None => None,
-            };
-            items.push(hosted_runtimes::domain::service::ObservedItem {
-                subscription_item: item.id.clone(),
-                computer_id,
-            });
-        }
-        if !page.has_more {
-            return Ok(items);
-        }
-        params.starting_after = page.data.last().map(|item| item.id.clone());
-        if params.starting_after.is_none() {
-            return Ok(items);
-        }
-    }
+    let items =
+        teams::outbound::customer_repo::list_subscription_items(&ctx.stripe_client, id).await?;
+    Ok(items
+        .iter()
+        .map(|item| hosted_runtimes::domain::service::ObservedItem {
+            subscription_item: item.id.clone(),
+            computer_id: teams::outbound::customer_repo::item_computer_uuid(item)
+                .map(hosted_runtimes::domain::ids::ComputerId::new_from_uuid),
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize)]

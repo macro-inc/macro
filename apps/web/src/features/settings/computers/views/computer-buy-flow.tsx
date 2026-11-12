@@ -8,6 +8,7 @@ import {
   usePurchaseComputerMutation,
 } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Dialog } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
@@ -15,7 +16,6 @@ import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
 import { computerFailureMessage } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
-  type ClaudeChoice,
   ComputerSetupSteps,
   computerConnected,
   type SetupStepId,
@@ -65,7 +65,7 @@ export function ComputerBuyFlow(props: {
   const [boughtId, setBoughtId] = createSignal<string>();
   const [step, setStep] = createSignal<SetupStepId>('computer');
   const [name, setName] = createSignal<string>();
-  const [choice, setChoice] = createSignal<ClaudeChoice>();
+  const [choice, setChoice] = createSignal<ClaudeMode>();
   const [reopened, setReopened] = createSignal(false);
   const [waitingForLink, setWaitingForLink] = createSignal(false);
 

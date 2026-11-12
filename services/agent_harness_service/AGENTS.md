@@ -39,14 +39,19 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
   `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
   its `Authorization: Bearer` header (re-minted on every attach, so restart
-  the runtime with the latest one). Requests pass through unchanged with
+  the runtime with the latest one). Only sessions whose bot runs on a Macro
+  computer (`harnesses.computer_id`), for an owner with
+  `enable-macro-computers`, are served; anything else, a failed lookup
+  included, is a 403 with nothing forwarded. Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
   defaults). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
-  only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+  only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
+  not stop the read: the rest is drained (up to ten minutes) so its usage is
+  still recorded. Span: `anthropic_gateway.messages`.
 - `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects

@@ -139,12 +139,18 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
         .with_comp_policy(TeamCompPolicy)
         .with_rollout(super::rollout::enabled_rollout());
         let quote = service
-            .quote_for_team(
-                &MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            .offers(
                 TEAM,
-                ComputerSize::Standard,
+                MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             )
-            .await;
+            .await
+            .map(|offers| {
+                offers
+                    .into_iter()
+                    .find(|offer| offer.size == ComputerSize::Standard)
+                    .unwrap()
+                    .quote
+            });
         if no_subscription {
             assert!(matches!(
                 quote,
