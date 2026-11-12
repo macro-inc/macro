@@ -20,7 +20,7 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - Preserve the raw saved layout when phones display List instead of Gantt; exclude temporary saved-view edits from entry snapshots.
 - Keep built-in scopes viewer-relative and independent of editable filters; sharing a definition never grants project access.
 - Keep Projects separate from Tasks in phone navigation while reusing the Tasks workspace for project details and push/back history.
-- Match phone task-list row height and insets; keep the column header only off phones.
+- Share `PropertyIconControl`, `ListColumnHeader`, `NarrowRowGrid`, and task-grid tracks with task rows; lead with Priority then Status, keep the project glyph beside its name, and collapse Progress/Updated with the shared 160ms reduced-motion-aware transition.
 - Use the combined New task split button on desktop and the floating create menu on phones; retain the current project's edit gate.
 - Show the project task empty state only when the project has no tasks, not when filters hide linked tasks.
 - Keep existing-task assignment failures selected for retry and reject stale completion after the project or picker lifetime changes.

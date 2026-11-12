@@ -2,14 +2,13 @@ import { ViewShell } from '@app/components/view-shell';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import type { Property } from '@property/types';
+import { withApiValues } from '@property/utils/transforms';
 import { ImperativeDialogHost } from '@ui';
 import { batch, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { createSavedViewDraft } from '../../saved-views/primitives/create-saved-view-draft';
 import { ProjectSavedViewsContext } from '../context/project-saved-views-context';
 import {
-  type ProjectRow,
   type ProjectsContext,
   ProjectsProvider,
 } from '../context/projects-context';
@@ -27,63 +26,9 @@ import {
 import { createProjectCollection } from '../primitives/project-collection';
 import { ProjectSavedViewRows } from '../views/project-saved-views';
 import { ProjectsCollection } from '../views/projects-collection';
+import { priority, rows, status } from './collection-data';
 import { savedRecords, seedUnsupported } from './saved-view-transport';
 
-const status: Property = {
-  propertyId: 'status-value',
-  propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
-  displayName: 'Status',
-  isMultiSelect: false,
-  owner: { scope: 'system' },
-  createdAt: '',
-  updatedAt: '',
-  valueType: 'SELECT_STRING',
-  value: null,
-  options: [
-    {
-      id: 'open',
-      value: { type: 'string', value: 'Open' },
-      display_order: 0,
-      color: null,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      created_at: '',
-      updated_at: '',
-    },
-    {
-      id: 'done',
-      value: { type: 'string', value: 'Done' },
-      display_order: 1,
-      color: null,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      created_at: '',
-      updated_at: '',
-    },
-  ],
-};
-const rows: ProjectRow[] = [
-  {
-    project: {
-      id: 'alpha',
-      name: 'Alpha launch',
-      access: 'owner',
-      updatedAt: '2026-01-02T00:00:00Z',
-      taskCount: 3,
-      completedTaskCount: 1,
-    },
-    properties: [{ ...status, value: ['open'] }],
-  },
-  {
-    project: {
-      id: 'beta',
-      name: 'Beta review',
-      access: 'owner',
-      updatedAt: '2026-01-01T00:00:00Z',
-      taskCount: 2,
-      completedTaskCount: 2,
-    },
-    properties: [{ ...status, value: ['done'] }],
-  },
-];
 const unavailable = (): never => {
   throw new Error('External capability unavailable in collection fixture');
 };
@@ -94,6 +39,23 @@ export function CollectionFixture() {
   const [scope, setScope] = createSignal<ProjectScope>('all');
   const [creating, setCreating] = createSignal(false);
   const [opened, setOpened] = createSignal('');
+  const params = new URLSearchParams(location.search);
+  const [projectRows, setProjectRows] = createSignal(
+    rows.map((row) => ({
+      ...row,
+      project: {
+        ...row.project,
+        access: params.has('readOnly') ? ('view' as const) : ('owner' as const),
+      },
+      properties: params.has('noPriority')
+        ? row.properties.filter(
+            (property) =>
+              property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY
+          )
+        : row.properties,
+    }))
+  );
+  const [savedProperty, setSavedProperty] = createSignal('');
   const [state, setState] = createStore({
     settings: { ...DEFAULT_PROJECT_SETTINGS },
     scope: 'all' as ProjectScope,
@@ -178,7 +140,7 @@ export function CollectionFixture() {
       rows: createMemo(() => {
         if (enabled && !enabled()) return undefined;
         const selected: ProjectFilters = filters?.() ?? {};
-        return rows.filter(
+        return projectRows().filter(
           (row) =>
             (!selected.status ||
               row.properties.some(
@@ -205,7 +167,7 @@ export function CollectionFixture() {
     }),
     createProjectSource: unavailable,
     createPropertyDefinitionsSource: () => ({
-      properties: () => [status],
+      properties: () => [status, priority],
       loading: () => false,
       error: () => undefined,
     }),
@@ -218,7 +180,24 @@ export function CollectionFixture() {
       assignTasks: unavailable,
       delete: unavailable,
       deleteMany: unavailable,
-      saveProperty: unavailable,
+      saveProperty: async (id, property, value) => {
+        setSavedProperty(
+          `${id}:${property.propertyDefinitionId}:${JSON.stringify(value)}`
+        );
+        setProjectRows((rows) =>
+          rows.map((row) => {
+            if (row.project.id !== id) return row;
+            const properties = row.properties.filter(
+              (current) =>
+                current.propertyDefinitionId !== property.propertyDefinitionId
+            );
+            return {
+              ...row,
+              properties: [...properties, withApiValues(property, value)],
+            };
+          })
+        );
+      },
       saveProperties: unavailable,
     }),
   };
@@ -261,6 +240,12 @@ export function CollectionFixture() {
             {JSON.stringify(state.settings)}
           </output>
           <output data-testid="selected">{selectedId() ?? ''}</output>
+          <output hidden data-testid="saved-property">
+            {savedProperty()}
+          </output>
+          <output hidden data-testid="project-records">
+            {JSON.stringify(projectRows())}
+          </output>
           <button type="button" onClick={seedUnsupported}>
             Seed unsupported view
           </button>

@@ -58,8 +58,12 @@ and saved project views. The plus beside the section opens the project composer.
 Phones have a separate `Projects` destination in the bottom navigation's More
 menu (or dock after customization), not a Projects pill inside Tasks. Its picker
 contains the same built-in and saved project views; the leading filter button
-opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
-use the same 44px phone height and narrow insets as task rows. Opening a project
+opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows lead with editable Priority then Status controls before the project
+icon and name. The controls share task-row sizes and touch targets. Due date,
+Assignees, Tasks progress, and Updated keep aligned columns on desktop/tablet;
+headers become icons at 840px and below. Progress and Updated fade and collapse
+over 160ms below 600px, without animation under reduced motion. Phone rows use
+the same 44px grid and narrow insets as task rows. Opening a project
 pushes its detail and Back returns to the collection. Project scope applies
 before pagination and cannot be removed by clearing editable filters.
 Cached project rows remain available through offline/background refresh failures.

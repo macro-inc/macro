@@ -125,6 +125,8 @@ export function ProjectsCollection(props: {
     return view?.kind !== 'saved' || view.issues.length === 0;
   };
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const [timestampHeaderWidth, setTimestampHeaderWidth] =
+    createSignal<number>();
   let grid: HTMLDivElement | undefined;
   let timeline: HTMLDivElement | undefined;
   let focusSearch: (() => void) | undefined;
@@ -656,9 +658,19 @@ export function ProjectsCollection(props: {
                 aria-activedescendant={list.focus.key()}
                 tabIndex={0}
                 class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden px-2 @min-[640px]/u-list:px-3 mobile:px-1 outline-none"
+                style={{
+                  '--task-updated-header-width':
+                    timestampHeaderWidth() === undefined
+                      ? undefined
+                      : `${timestampHeaderWidth()}px`,
+                }}
               >
                 <Show when={!isMobile()}>
-                  <ProjectListHeader />
+                  <ProjectListHeader
+                    onSortUpdated={() => collection.setSort('updated')}
+                    updatedSelected={collection.sort() === 'updated'}
+                    onTimestampWidthChange={setTimestampHeaderWidth}
+                  />
                 </Show>
                 <Show when={backgroundError()}>
                   <p role="status" class="px-3 text-xs text-ink-muted">
@@ -755,6 +767,7 @@ export function ProjectsCollection(props: {
                                 <ProjectRow
                                   rowId={item().id}
                                   row={item().entity}
+                                  definitions={definitions.properties()}
                                   highlighted={list.focus.isFocused(item().id)}
                                   checked={list.selection.isSelected(item().id)}
                                   onFocus={() =>

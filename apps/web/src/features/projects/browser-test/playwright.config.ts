@@ -19,6 +19,10 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
     {
+      name: 'tablet',
+      use: { ...devices['iPad Mini'], browserName: 'chromium' },
+    },
+    {
       name: 'phone',
       use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' },
     },

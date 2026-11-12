@@ -33,6 +33,9 @@ export default defineConfig({
   resolve: {
     dedupe: ['solid-js'],
     alias: {
+      '@queries/properties/options': fileURLToPath(
+        new URL('./property-options.ts', import.meta.url)
+      ),
       '@property/editors/selectors/PropertyEntitySelector': fileURLToPath(
         new URL('./picker-data.tsx', import.meta.url)
       ),

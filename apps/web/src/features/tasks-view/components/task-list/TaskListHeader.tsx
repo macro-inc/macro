@@ -1,26 +1,27 @@
-import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import {
+  ListColumnHeader,
+  type ListColumnHeaderProps,
+} from '@app/components/list/ListColumnHeader';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { cn, Tooltip } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { Tooltip } from '@ui';
+import { Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
 import { type TaskGridColumnId, taskGridTemplate } from './task-grid-template';
 
-function SortableHeader(props: {
-  label: string;
-  area: string;
+type SortableHeaderProps = Omit<
+  ListColumnHeaderProps,
+  'onClick' | 'active' | 'reversed'
+> & {
   sortId?: TaskSortId;
   reverseSortId?: TaskSortId;
-  align?: 'start' | 'end';
-  class?: string;
-  narrowIcon?: JSX.Element;
-  onWidthChange?: (width: number) => void;
-}) {
+};
+
+function SortableHeader(props: SortableHeaderProps) {
   const { state, setPrimarySort } = useTasksView();
   const active = () =>
     state.sort[0]?.id === props.sortId ||
@@ -30,84 +31,21 @@ function SortableHeader(props: {
     active() &&
     (state.sort[0]?.id === props.reverseSortId ||
       state.sort[0]?.reversed === true);
-  const alignment = () => {
-    if (props.align === 'end') return 'justify-end';
-    return 'justify-start';
+  const sort = () => {
+    if (!props.sortId) return;
+    if (props.reverseSortId && state.sort[0]?.id === props.sortId) {
+      setPrimarySort(props.reverseSortId);
+      return;
+    }
+    setPrimarySort(props.sortId);
   };
-  const label = () => (
-    <>
-      <span class={props.narrowIcon ? '@max-[840px]/u-list:hidden' : undefined}>
-        {props.label}
-      </span>
-      <Show when={props.narrowIcon}>
-        <span class="hidden @max-[840px]/u-list:inline-flex">
-          <Tooltip
-            label={props.label}
-            as="span"
-            tabIndex={props.sortId ? undefined : 0}
-          >
-            {props.narrowIcon}
-          </Tooltip>
-        </span>
-      </Show>
-    </>
-  );
-
   return (
-    <div
-      role="columnheader"
-      aria-label={props.label}
-      class={cn(
-        'ms-2 flex min-w-0 items-center',
-        alignment(),
-        props.narrowIcon &&
-          props.align !== 'end' &&
-          '@max-[840px]/u-list:justify-center',
-        props.class
-      )}
-      style={{ 'grid-area': props.area }}
-    >
-      <Switch>
-        <Match when={props.sortId}>
-          {(sortId) => (
-            <button
-              ref={(element) => {
-                if (props.onWidthChange) {
-                  createResizeObserver(element, ({ width }) =>
-                    props.onWidthChange?.(width)
-                  );
-                }
-              }}
-              type="button"
-              aria-label={props.label}
-              data-blocks-navigation
-              class={cn(
-                'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
-                active() && 'text-ink'
-              )}
-              onClick={() => {
-                if (props.reverseSortId && state.sort[0]?.id === sortId()) {
-                  setPrimarySort(props.reverseSortId);
-                  return;
-                }
-                setPrimarySort(sortId());
-              }}
-            >
-              {label()}
-              <ArrowDownIcon
-                class={cn(
-                  'size-3 shrink-0 transition-transform',
-                  reversed() && 'rotate-180'
-                )}
-              />
-            </button>
-          )}
-        </Match>
-        <Match when={true}>
-          <span class="truncate">{label()}</span>
-        </Match>
-      </Switch>
-    </div>
+    <ListColumnHeader
+      {...props}
+      active={active()}
+      reversed={reversed()}
+      onClick={props.sortId ? sort : undefined}
+    />
   );
 }
 
