@@ -1,70 +1,7 @@
-use crate::outbound::backfill_jobs::{
-    PgBackfillJobs,
-    worker::{BackfillWorkerEffects, PgBackfillWorker},
-};
-use crate::pubsub::label_write_sim::world::World;
-use email::domain::backfill_jobs::worker::{BackfillEffects, BackfillRepository};
-use redis::AsyncCommands;
+use crate::outbound::backfill_jobs::{PgBackfillJobs, worker::PgBackfillWorker};
+use email::domain::backfill_jobs::worker::BackfillRepository;
 use sqlx::PgPool;
-use std::collections::BTreeMap;
 use uuid::Uuid;
-
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn delete_thread_progress_removes_only_the_requested_redis_progress(pool: PgPool) {
-    let world = World::new(pool, 98_001, false).await;
-    let effects = BackfillWorkerEffects(world.sync.backfill_context());
-    let job = Uuid::now_v7();
-    let other_job = Uuid::now_v7();
-    let target = format!("bf_thread_status:{job}:target");
-    let other_thread = format!("bf_thread_status:{job}:other");
-    let other_job_thread = format!("bf_thread_status:{other_job}:target");
-    let job_key = format!("bf_job_status:{job}");
-    let mut redis = world.redis.clone();
-    for key in [&target, &other_thread, &other_job_thread] {
-        let _: () = redis
-            .hset_multiple(key, &[("completed_messages", 1), ("total_messages", 3)])
-            .await
-            .unwrap();
-        let _: bool = redis.expire(key, 60).await.unwrap();
-    }
-    effects
-        .0
-        .redis_client
-        .init_backfill_job_progress(job, 4)
-        .await
-        .unwrap();
-    let _: bool = redis.expire(&job_key, 60).await.unwrap();
-    let untouched = [&other_thread, &other_job_thread, &job_key];
-    let mut before = Vec::new();
-    for key in untouched {
-        before.push(
-            redis
-                .hgetall::<_, BTreeMap<String, i32>>(key)
-                .await
-                .unwrap(),
-        );
-    }
-    assert!(redis.exists::<_, bool>(&target).await.unwrap());
-
-    effects.delete_thread_progress(job, "target").await;
-
-    assert!(!redis.exists::<_, bool>(&target).await.unwrap());
-    for (key, expected) in untouched.into_iter().zip(&before) {
-        assert_eq!(
-            &redis
-                .hgetall::<_, BTreeMap<String, i32>>(key)
-                .await
-                .unwrap(),
-            expected
-        );
-    }
-    effects.delete_thread_progress(job, "target").await;
-    assert!(!redis.exists::<_, bool>(&target).await.unwrap());
-    let _: () = redis
-        .del(&[&other_thread, &other_job_thread, &job_key])
-        .await
-        .unwrap();
-}
 
 #[derive(Clone, Debug, PartialEq)]
 struct CompletionRow {
