@@ -62,3 +62,27 @@ impl ToolSchemaGenerator for LegacyConversationSchemas {
         Vec::new()
     }
 }
+
+/// Chat runs the user-scoped `ExecuteCode`, whose arguments and receipt differ
+/// from an agent session's under the same tool name, so the frontend's
+/// `ExecuteCode` types accept either. Merged after the session code tools.
+pub(super) struct UserCodeModeSchemas;
+
+impl ToolSchemaGenerator for UserCodeModeSchemas {
+    fn register_schemas(&self, generator: &mut SchemaGenerator) -> Vec<FrontendToolEntry> {
+        let user_input: serde_json::Value = generator
+            .subschema_for::<agent_code_mode::inbound::toolset::UserExecuteCode>()
+            .into();
+        let user_output: serde_json::Value = generator
+            .subschema_for::<agent_code_mode::domain::UserExecutionReceipt>()
+            .into();
+        let definitions = generator.definitions_mut();
+        for (name, user) in [("ExecuteCode", user_input), ("ExecutionReceipt", user_output)] {
+            let session = definitions
+                .remove(name)
+                .expect("the session code tools are merged first");
+            definitions.insert(name.into(), json!({ "anyOf": [session, user] }));
+        }
+        Vec::new()
+    }
+}

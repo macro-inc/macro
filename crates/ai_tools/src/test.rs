@@ -1117,3 +1117,25 @@ fn chat_runs_in_code_mode() {
     assert!(prompt.contains("present them with `DisplayResults` without being asked"));
     assert!(!prompt.contains("SelfKnowledge"));
 }
+
+/// Chat's user-scoped `ExecuteCode` takes different arguments and returns a
+/// different receipt than an agent session's, and both render in the app.
+#[test]
+fn frontend_execute_code_types_accept_chat_and_session_calls() {
+    let json = all_tool_frontend_schemas().to_json_pretty().unwrap();
+    let schemas: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let execute_code = schemas["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "ExecuteCode")
+        .expect("ExecuteCode has a frontend schema");
+    for side in ["input", "output"] {
+        let definition = &schemas["$defs"][execute_code[side].as_str().unwrap()];
+        assert_eq!(
+            definition["anyOf"].as_array().map(Vec::len),
+            Some(2),
+            "{side}: {definition}"
+        );
+    }
+}

@@ -485,6 +485,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
         .merge(&agent_code_mode::inbound::toolset::toolset())
+        .merge(&frontend_compat::UserCodeModeSchemas)
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<
             ToolChatService,
