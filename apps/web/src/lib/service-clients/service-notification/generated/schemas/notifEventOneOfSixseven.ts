@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ChannelAccessRequestedMetadata } from './channelAccessRequestedMetadata';
 import type { NotifEventOneOfSixsevenTag } from './notifEventOneOfSixsevenTag';
-import type { RoutineRunFinishedMetadata } from './routineRunFinishedMetadata';
 
 /**
- * One of the user's routines finished a run, successfully or not.
+ * Someone asked to join a channel the user participates in.
  */
 export type NotifEventOneOfSixseven = {
-  /** One of the user's routines finished a run, successfully or not. */
-  content: RoutineRunFinishedMetadata;
+  /** Someone asked to join a channel the user participates in. */
+  content: ChannelAccessRequestedMetadata;
   tag: NotifEventOneOfSixsevenTag;
 };

@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
+import type { ExternalChatAccountEndedMetadata } from './externalChatAccountEndedMetadata';
 import type { NotifEventOneOfThreenineTag } from './notifEventOneOfThreenineTag';
 
 /**
- * A calendar event alarm came due.
+ * A linked external chat account stopped syncing.
  */
 export type NotifEventOneOfThreenine = {
-  /** A calendar event alarm came due. */
-  content: CalendarEventReminderMetadata;
+  /** A linked external chat account stopped syncing. */
+  content: ExternalChatAccountEndedMetadata;
   tag: NotifEventOneOfThreenineTag;
 };

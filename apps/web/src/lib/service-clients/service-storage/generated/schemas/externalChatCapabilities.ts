@@ -34,4 +34,6 @@ export interface ExternalChatCapabilities {
    * @minimum 0
    */
   textLimitBytes: number;
+  /** Messages can start threads, and sends can reply in one. */
+  threads: boolean;
 }
