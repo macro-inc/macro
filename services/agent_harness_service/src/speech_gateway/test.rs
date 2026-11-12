@@ -10,9 +10,9 @@ use team_agents::domain::voice::VoiceProvider;
 use tokio_tungstenite::connect_async;
 use uuid::Uuid;
 
+use super::protocol::{GenerationConfig, check_event, check_query};
 use super::*;
 use crate::anthropic_gateway::brain::BrainLookup;
-use super::protocol::{GenerationConfig, check_event, check_query};
 
 const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
 const AGENT_KEY: &str = "mak_agent";

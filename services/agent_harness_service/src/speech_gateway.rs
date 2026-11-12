@@ -29,7 +29,8 @@ use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use futures::{SinkExt, StreamExt};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use serde::Serialize;
-use team_agents::domain::voice::{Voice, VoiceModel};
+use team_agents::domain::models::VoiceModel;
+use team_agents::domain::voice::Voice;
 use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream, connect_async_with_config,
     tungstenite::{

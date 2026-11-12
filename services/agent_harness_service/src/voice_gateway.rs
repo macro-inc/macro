@@ -16,8 +16,8 @@ use entity_access::{
 use feature_flags::FeatureFlags;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
-use team_agents::domain::models::TeamAgentError;
-use team_agents::domain::voice::{Voice, VoiceModel, VoiceProvider, Voices};
+use team_agents::domain::models::{TeamAgentError, VoiceModel};
+use team_agents::domain::voice::{Voice, VoiceProvider, Voices};
 
 /// How long a browser may reuse a sample; a voice's sample never changes.
 const SAMPLE_CACHE_CONTROL: &str = "private, max-age=86400";

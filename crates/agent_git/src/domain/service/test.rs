@@ -311,6 +311,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 1_000,
+                files: Arc::default(),
             },
             admins: FakeAdmins {
                 admins: HashSet::from([(TEAM, ADMIN.to_owned())]),
@@ -455,6 +456,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
     let full_store = FakeStore {
         repos: Arc::default(),
         size_bytes: 500,
+        files: Arc::default(),
     };
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
@@ -515,6 +517,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
             store: FakeStore {
                 repos: Arc::default(),
                 size_bytes: 600,
+                files: Arc::default(),
             },
             admins: FakeAdmins::default(),
             limiter: FakeLimiter {

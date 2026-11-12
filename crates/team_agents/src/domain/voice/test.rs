@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue};
+use macro_user_id::cowlike::CowLike;
 use rootcause::Report;
 
 use super::*;
