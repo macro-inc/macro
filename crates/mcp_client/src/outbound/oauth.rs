@@ -3,7 +3,9 @@
 use crate::domain::models::{
     MCP_CLIENT_NAME, MacroUserIdStr, McpServerRecord, OAuthClientMetadata,
 };
-use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
+use crate::domain::ports::{
+    McpServerHttp, McpServerStore, OAuthClient, OAuthStateStore, PendingAuth,
+};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
 use crate::outbound::guarded_http::McpHttp;

@@ -1,7 +1,6 @@
 use super::consts::MCP_CLIENT_NAME;
-use crate::domain::ports::{McpConnector, McpServerStore};
+use crate::domain::ports::{McpConnector, McpServerHttp, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
-use crate::outbound::guarded_http::McpHttp;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientConfig, Implementation};
@@ -91,7 +90,7 @@ impl McpConnector for McpServerRecord {
     #[tracing::instrument(skip_all, err, fields(handshake = tracing::field::Empty))]
     async fn connect<S: McpServerStore>(
         &self,
-        http: &McpHttp,
+        http: &impl McpServerHttp,
         server_store: Arc<S>,
     ) -> anyhow::Result<McpServer> {
         http.check_url(&url::Url::parse(&self.url)?)?;
