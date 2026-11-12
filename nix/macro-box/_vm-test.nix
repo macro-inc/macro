@@ -25,26 +25,27 @@ let
       neededForBoot = true;
     };
   };
-  # A fake agent environment as `macrod enroll` writes it. Macro itself is
+  # A fake agent environment as `macrod enroll` writes it (systemd's quoted
+  # KEY="value" lines). Macro itself is
   # unreachable; the repo is the in-VM git server.
   agentEnvironment =
     repoUrl:
     pkgs.writeText "agent.env" ''
-      MACRO_API_KEY=mak_test
-      MACRO_GATEWAY=http://127.0.0.1:9
-      OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_AUTH_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_AGENT_HARNESS_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_SCHEDULED_ACTION_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_MCP_SERVICE_URL=http://127.0.0.1:9
-      OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL=ws://127.0.0.1:9
-      ANTHROPIC_BASE_URL=http://127.0.0.1:9/anthropic
-      ANTHROPIC_AUTH_TOKEN=test-gateway-token
-      MACRO_REPO_URL=${repoUrl}
-      MACRO_REPO_TOKEN=test-token
-      MACRO_AGENT_USER_ID=macro|ada@example.com
-      MACRO_AGENT_NAME=Ada
+      MACRO_API_KEY="mak_test"
+      MACRO_GATEWAY="http://127.0.0.1:9"
+      OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_AUTH_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_AGENT_HARNESS_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_SCHEDULED_ACTION_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_MCP_SERVICE_URL="http://127.0.0.1:9"
+      OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL="ws://127.0.0.1:9"
+      ANTHROPIC_BASE_URL="http://127.0.0.1:9/anthropic"
+      ANTHROPIC_AUTH_TOKEN="test-gateway-token"
+      MACRO_REPO_URL="${repoUrl}"
+      MACRO_REPO_TOKEN="test-token"
+      MACRO_AGENT_USER_ID="macro|ada@example.com"
+      MACRO_AGENT_NAME="Ada"
     '';
   goodAgentEnvironment = agentEnvironment "http://127.0.0.1:8080/repo.git";
   credentialedAgentEnvironment = agentEnvironment "http://agent:test-token@127.0.0.1:8080/repo.git";
@@ -187,11 +188,31 @@ pkgs.testers.runNixOSTest {
           agent.fail("systemctl is-active --quiet macro-agent.service")
           agent.succeed("[ $(systemctl show macro-agent.service --property=ConditionResult --value) = no ]")
 
-      with subtest("the agent's desktop and computer use are up"):
-          agent.wait_for_open_port(${toString (5900 + nodes.agent.macro.box.agent.display)})
+      with subtest("the agent's browser runs on its desktop, DevTools on loopback only"):
+          port = 9223
+          agent.wait_for_open_port(port)
+          agent.succeed(f"curl --fail http://127.0.0.1:{port}/json/version")
+          listeners = agent.succeed(f"ss -ltnH 'sport = :{port}'")
+          assert all(line.split()[3].startswith("127.0.0.1:") for line in listeners.splitlines()), listeners
+          agent.wait_until_succeeds("test -d /home/macro/agent/browser/Default")
+          agent.succeed("[ $(stat -c %U /home/macro/agent/browser) = macro ]")
+
+      with subtest("the agent's virtual sink and its monitor source exist"):
+          pactl = "su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 pactl list short {}'"
+          agent.wait_until_succeeds(pactl.format("sinks") + " | grep -w agent")
+          agent.succeed(pactl.format("sources") + " | grep -w agent.monitor")
+
+      with subtest("a call can capture the agent's desktop and sound"):
+          agent.succeed("su - macro -c 'DISPLAY=:1 ${pkgs.ffmpeg-full}/bin/ffmpeg -loglevel error -f x11grab -video_size 1920x1080 -i :1 -frames:v 1 /tmp/frame.png' && test -s /tmp/frame.png")
+          sound = agent.succeed("su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 timeout 2 parec -d @DEFAULT_MONITOR@ --raw | head -c 4096 | wc -c' || true").strip()
+          assert int(sound) == 4096, sound
+
+      with subtest("computer use sees and captures the agent's desktop"):
+          agent.wait_for_open_port(5901)
           agent.wait_until_succeeds("systemctl --user --machine=macro@ is-active --quiet macro-agent-openbox.service")
           servers = "${pkgs.writeText "mcp-servers.json" (builtins.toJSON nodes.agent.macro.box.agent.mcpServers)}"
-          size = agent.succeed(f"su - macro -c '${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}'").strip()
+          # Chromium's AT-SPI tree appears a few seconds after its window.
+          size = agent.wait_until_succeeds(f"su - macro -c '${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}'", timeout=120).strip()
           assert int(size) > 1000, size
 
       with subtest("the agent rejects a repo URL with credentials"):
@@ -260,6 +281,8 @@ pkgs.testers.runNixOSTest {
           assert not probe["otherHome"], probe
           assert probe["apiKeyInEnvironment"] is False, probe
           assert probe["credentialsReadable"], probe
+          # 1: bwrap ran (user namespaces work in the unit) and the file was hidden.
+          assert probe["credentialsInChildren"] == 1, probe
 
       with subtest("the restart marker restarts the agent"):
           before = agent.succeed("systemctl show macro-agent.service --property=InvocationID --value").strip()

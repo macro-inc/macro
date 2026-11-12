@@ -91,11 +91,13 @@ PID 1 (for the dev-only DockerFleet).
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
   agent (`ConditionPathExists`).
+- The agent's units exist only with `macro.box.agentMode` (the
+  `macro-box-agent` images), where macro has no sudo or docker.
 - `macro-agent.service` is a system unit running as `macro`, the user
   harnessd keeps Claude's sign-in for (`/home/.system/harnessd`, bound
   read-only). It is sandboxed: `ProtectHome=tmpfs` with only
   `/home/macro/agent` (its `HOME`) and `/run/user/1000` bound, no capabilities,
-  `NoNewPrivileges` (so macro's sudo does not work), `ProtectSystem=strict`,
+  `NoNewPrivileges`, `ProtectSystem=strict`,
   `PrivateTmp` with the X socket directory bound read-only, `PrivateDevices`
   and `MemoryMax`. It keeps user namespaces (Chromium's sandbox) and W+X
   memory (JITs). `KillMode=process`: calls outlive a restart.
@@ -105,27 +107,29 @@ PID 1 (for the dev-only DockerFleet).
   (env, exit codes, last-good) is in `packages/muppet`'s docs; the unit sets
   `AGENT_WORKSPACE=/home/macro/agent/workspace`, `MUPPET_LAST_GOOD_FILE`,
   `MUPPET_RESTART_FILE`, `MUPPET_MCP_SERVERS_JSON` (computer-use-linux on the
-  agent's display), `DISPLAY`, the user bus, and the screen's fonts, ffmpeg
-  and libstdc++ paths.
+  agent's display), `MUPPET_BROWSER_CDP_URL`, `DISPLAY`, the user bus,
+  `PULSE_SERVER`, LiveKit's ffmpeg and the libstdc++ path. A call shares `:1`
+  (`ffmpeg-x11grab`) and records the default sink's monitor (`parec`).
 - `start-agent run` reads `MACRO_REPO_URL` (HTTP(S), no credentials),
   `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID` (`macro|email`) and
   `MACRO_AGENT_NAME` from the credential file (missing or invalid: exit 78),
   clones into a staging sibling on first start, points `origin` at the
   current URL, sets git's identity and the exact-repo credential helper
   (`git-credential-agent <credential file>`, never the token), links the
-  image's `node_modules` (or runs `bun install --frozen-lockfile` and links
-  muppet and the SDK when a self-edit changed `bun.lock`), then execs
+  image's `node_modules` (a `bun.lock` that differs from the image's fails
+  the boot: new packages need a new image), then execs
   `bun cli.ts run`. Exit 0 (stop), 75 (restart after a land) and 78
   (configuration) are not failures; `agent-stopped` (`ExecStopPost`) counts
   any other exit before the runtime wrote `~/agent/state/last-good` for that
-  boot's HEAD, and after `macro.box.agent.maxFailedBoots` (3) the next start
+  boot's HEAD, and after 3 the next start
   resets the workspace to last-good. It pushes nothing.
-- `macro-agent-screen.service` (same sandbox) runs `start-agent screen`,
-  `bun cli.ts serveScreen`: the call-share browser on its own Xvfb and
-  PulseAudio.
-- The agent's desktop for computer use is a pair of user services for
-  `macro`: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901) and
-  `macro-agent-openbox`, with AT-SPI on macro's session bus.
+- The agent's desktop is three user services for `macro`:
+  `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901), `macro-agent-openbox`
+  and `macro-agent-browser` (Chromium with forced accessibility, profile
+  `~macro/agent/browser`, DevTools on 127.0.0.1:9223 as
+  `MUPPET_BROWSER_CDP_URL`). AT-SPI runs on macro's session bus. macro's
+  PulseAudio (started on demand, `PULSE_SERVER`) has the default null sink
+  `agent`, whose monitor is what a call records.
 - Claude signs in through Claude Code's own `/login`, in a herdr pane; its
   credentials stay in `~macro/.claude` on the data disk.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
@@ -216,9 +220,10 @@ The control plane, per computer:
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
   A third VM boots the guest in agent mode: macro has no sudo or docker
-  group; the agent stays down without `agent.env`; the agent's display
-  comes up and computer-use-linux answers `tools/list` and returns a
-  screenshot PNG; the agent rejects a credentialed repo URL without
+  group; the agent stays down without `agent.env`; its Chromium serves
+  DevTools on loopback only with a profile under its home; the `agent` sink
+  and its monitor exist; computer-use-linux lists Chromium's
+  window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
