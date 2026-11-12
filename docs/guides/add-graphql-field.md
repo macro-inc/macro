@@ -73,7 +73,8 @@ domain operation doesn't exist, add it to the domain crate first.
   reads codes with `thrownResultErrorHasCode` (`apps/web/src/lib/core/util/result.ts`).
 - **Never make a committed write look retryable.** The web's durable mutation
   queue retries only transport failures and releases the queue on any GraphQL
-  error (`apps/web/src/lib/service-clients/service-storage/graphql-mutation-retry.ts`).
+  error (`apps/web/src/lib/service-clients/service-storage/graphql-mutation-retry.ts`),
+  except the email draft and channel message writes listed there.
   An archive mutation whose post-write reload found nothing once retried hundreds
   of times and blocked every queued write behind it. If the write committed but
   the reload is empty, return a terminal `NOT_FOUND`.

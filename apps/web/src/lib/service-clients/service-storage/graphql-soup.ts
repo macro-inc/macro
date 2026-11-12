@@ -114,7 +114,10 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
-import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import {
+  isGraphqlMutationBackPressure,
+  shouldRetryGraphqlMutation,
+} from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
@@ -928,6 +931,8 @@ export function getGraphqlSoupClient(): Client {
                 ?.id,
             // Preserve optimistic intent only while transport failures retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
+            // A channel write the server was too busy for waits it out.
+            isMutationBackPressure: isGraphqlMutationBackPressure,
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,

@@ -474,6 +474,15 @@ export interface NormalizedCacheExchangeOptions {
     error: CombinedError,
     mutation?: ClaimedMutation
   ) => boolean | Promise<boolean>;
+  /**
+   * Whether a refusal `shouldRetryMutation` retries is the server shedding
+   * load rather than failing. Such a retry is not counted as a server
+   * failure, so it never exhausts the mutation's retries. Defaults to `false`.
+   */
+  isMutationBackPressure?: (
+    error: CombinedError,
+    mutation?: ClaimedMutation
+  ) => boolean;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
 }

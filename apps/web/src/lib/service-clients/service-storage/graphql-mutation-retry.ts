@@ -8,6 +8,13 @@ type QueuedMutation = Pick<
 >;
 
 const DRAFT_WRITES = ['SaveEmailDraft', 'DeleteEmailDraft'];
+/** The channel message writes the queue delivers; each is replay safe. */
+export const CHANNEL_MESSAGE_WRITES: readonly string[] = [
+  'PostChannelMessage',
+  'EditChannelMessage',
+  'DeleteChannelMessage',
+  'ReactToChannelMessage',
+];
 // The queue head blocks every write behind it while it retries, so a draft
 // write the server keeps faulting gives up after a few seconds of backoff.
 const MAX_DRAFT_SERVER_FAULT_RETRIES = 2;
@@ -42,13 +49,31 @@ function retriesDraftServerFault(
 }
 
 /**
+ * The server turned a channel message write away because too many writes
+ * were in flight. Nothing was written, so the write is sent again for as long
+ * as it takes: the refusal is not a failure of the write.
+ */
+export function isGraphqlMutationBackPressure(
+  error: CombinedError,
+  mutation?: QueuedMutation
+): boolean {
+  return (
+    CHANNEL_MESSAGE_WRITES.includes(mutation?.operationName ?? '') &&
+    error.graphQLErrors.length > 0 &&
+    error.graphQLErrors.every((entry) => entry.extensions.code === 'BUSY')
+  );
+}
+
+/**
  * Retry transport failures. Application errors release the queue head, except
- * a server fault on an email draft write, which is retried twice in a row.
+ * a server fault on an email draft write, which is retried twice in a row, and
+ * a channel message write the server was too busy to take.
  */
 export function shouldRetryGraphqlMutation(
   error: CombinedError,
   mutation?: QueuedMutation
 ): boolean {
+  if (isGraphqlMutationBackPressure(error, mutation)) return true;
   const refused = error.graphQLErrors.length > 0;
   if (refused && mutation && retriesDraftServerFault(error, mutation))
     return true;

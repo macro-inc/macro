@@ -1,15 +1,23 @@
-import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  PostChannelMessageDocument,
+  SaveEmailDraftDocument,
+} from '@service-storage/graphql/generated/graphql';
+import {
+  isGraphqlMutationBackPressure,
+  shouldRetryGraphqlMutation,
+} from '@service-storage/graphql-mutation-retry';
 import {
   CombinedError,
   createClient,
   createRequest,
   makeOperation,
   type Operation,
+  type OperationResult,
   stringifyDocument,
 } from '@urql/core';
 import { getOperationAST, parse } from 'graphql';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { filter, makeSubject, mergeMap, pipe } from 'wonka';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { filter, makeSubject, mergeMap, pipe, type Subject } from 'wonka';
 import type { CacheHost } from '../host/types';
 import {
   type ClaimedMutation,
@@ -29,6 +37,7 @@ import {
   type MutationAttemptTelemetry,
   NOOP_MUTATION_QUEUE_TELEMETRY,
 } from './mutation-queue-telemetry';
+import { optimisticMutationDispositionOf } from './optimistic';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -77,6 +86,8 @@ function enqueue(
 }
 function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
   const forwarded: Operation[] = [];
+  // Each request the client sent, ending its wait when answered.
+  const replies = new Map<Operation, Subject<OperationResult>>();
   const commit = vi.fn<CacheHost['commitOptimisticWrite']>(
     async () =>
       ({
@@ -114,7 +125,9 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
             filter((op) => op.kind === 'mutation'),
             mergeMap((op) => {
               forwarded.push(op);
-              return makeSubject<import('@urql/core').OperationResult>().source;
+              const reply = makeSubject<OperationResult>();
+              replies.set(op, reply);
+              return reply.source;
             })
           ),
       ],
@@ -133,7 +146,7 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
     replayExplicitEffects: () => undefined,
     revalidate: async () => {},
   });
-  return { runner, forwarded, commit, host };
+  return { runner, forwarded, replies, commit, host };
 }
 it.each([false, true])(
   'ignores an older lease arriving after a newer draft claim, already settled: %s',
@@ -249,6 +262,128 @@ it('preserves a pump claim when its unclaimed enqueue acknowledgement arrives af
     '1',
     { owner: 'owner', generation: '5' },
     expect.anything()
+  );
+});
+
+describe('a channel write the server keeps turning away', () => {
+  const post = () =>
+    makeOperation(
+      'mutation',
+      createRequest(parse(stringifyDocument(PostChannelMessageDocument)), {
+        input: { channelId: 'channel', id: 'message', content: 'Hello' },
+      }),
+      { url: 'http://test', requestPolicy: 'cache-first' }
+    );
+  const refusal = (code: string) =>
+    new CombinedError({
+      graphQLErrors: [{ message: 'refused', extensions: { code } }],
+    });
+  const transportFailure = () =>
+    new CombinedError({ networkError: new TypeError('Failed to fetch') });
+  const accepted = {
+    postChannelMessage: { seq: 1, message: { id: 'message' } },
+  };
+
+  // The real runner and retry policy over a durable queue that keeps the
+  // write's server failure tally across claims, as the engine does.
+  function durableWrite() {
+    const fx = fixture({
+      shouldRetryMutation: shouldRetryGraphqlMutation,
+      isMutationBackPressure: isGraphqlMutationBackPressure,
+    });
+    const op = post();
+    const queue = { serverFailures: 0, retryAt: 0, claims: 0 };
+    Object.assign(fx.host, {
+      claimNextMutation: async (_owner: string, now: number) => {
+        const settled =
+          fx.commit.mock.calls.length > 0 ||
+          vi.mocked(fx.host.rollbackOptimisticWrite).mock.calls.length > 0;
+        if (settled || queue.retryAt > now) return undefined;
+        queue.claims += 1;
+        return {
+          transactionId: '1',
+          uuid: 'message',
+          query: stringifyDocument(op.query),
+          operationName: 'PostChannelMessage',
+          variables: op.variables ?? {},
+          leaseGeneration: String(queue.claims),
+          attemptCount: queue.claims,
+          serverFailureCount: queue.serverFailures,
+          superseded: false,
+          requiresConfirmation: false,
+        } satisfies ClaimedMutation;
+      },
+      deferOptimisticWrite: vi.fn(
+        async (
+          _transactionId: string,
+          _claim: unknown,
+          retryAt: number,
+          _message: string,
+          serverFailure: boolean
+        ) => {
+          queue.retryAt = retryAt;
+          if (serverFailure) queue.serverFailures += 1;
+          return { kind: 'deferred' };
+        }
+      ),
+    });
+    fx.runner.start();
+    // Each round waits out the longest backoff, so the queue reclaims the
+    // write, then answers the attempt it sent, as the exchange does.
+    const answer = async (
+      response: Pick<OperationResult, 'data' | 'error'>
+    ) => {
+      await vi.advanceTimersByTimeAsync(60_000);
+      const sent = fx.forwarded.at(-1)!;
+      const settled = await fx.runner.settle(
+        { operation: sent, stale: false, hasNext: false, ...response },
+        queueAttemptOf(sent)!
+      );
+      fx.replies.get(sent)?.next(settled);
+      return optimisticMutationDispositionOf(settled)?.kind;
+    };
+    return { ...fx, queue, answer };
+  }
+
+  it('stays queued through more BUSY answers than the failure budget, then commits', async () => {
+    const { answer, queue, commit, host } = durableWrite();
+    for (let attempt = 0; attempt < 15; attempt++) {
+      expect(await answer({ error: refusal('BUSY') })).toBe('queued');
+    }
+    expect(queue.serverFailures).toBe(0);
+    expect(await answer({ data: accepted })).toBe('committed');
+    expect(queue.claims).toBe(16);
+    expect(commit).toHaveBeenCalledOnce();
+    expect(host.rollbackOptimisticWrite).not.toHaveBeenCalled();
+  });
+
+  it('stays queued through a long run of transport failures, then commits', async () => {
+    const { answer, queue, commit, host } = durableWrite();
+    for (let attempt = 0; attempt < 15; attempt++) {
+      expect(await answer({ error: transportFailure() })).toBe('queued');
+    }
+    expect(queue.serverFailures).toBe(0);
+    expect(await answer({ data: accepted })).toBe('committed');
+    expect(commit).toHaveBeenCalledOnce();
+    expect(host.rollbackOptimisticWrite).not.toHaveBeenCalled();
+  });
+
+  it.each(['FORBIDDEN', 'NOT_FOUND', 'BAD_USER_INPUT', 'INTERNAL_SERVER_ERROR'])(
+    'fails for good on a %s refusal, even after BUSY answers',
+    async (code) => {
+      const { answer, commit, host } = durableWrite();
+      expect(await answer({ error: refusal('BUSY') })).toBe('queued');
+      expect(await answer({ error: refusal(code) })).toBe(
+        'permanently-failed'
+      );
+      expect(host.rollbackOptimisticWrite).toHaveBeenCalledWith(
+        '1',
+        expect.anything(),
+        expect.any(String),
+        code
+      );
+      expect(commit).not.toHaveBeenCalled();
+    }
   );
 });
 
