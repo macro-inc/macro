@@ -933,7 +933,7 @@ async fn seed_emails(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Resul
             .context("valid inbox owner id")?;
         let email_str = macro_user_id::email::EmailStr::try_from(address.clone())
             .map_err(|e| anyhow::anyhow!("invalid inbox address {address}: {e:?}"))?;
-        let is_primary = Link::derive_is_primary(&macro_id, &email_str);
+        let is_primary = Link::derive_is_primary(UserProvider::Gmail);
 
         let link = ctx
             .db

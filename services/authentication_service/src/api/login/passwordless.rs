@@ -122,13 +122,42 @@ pub async fn handler(
                             signup_forbidden_response()
                         })?;
 
+                    let handle = req
+                        .handle
+                        .as_deref()
+                        .ok_or_else(|| {
+                            (StatusCode::BAD_REQUEST, "handle is required for signup")
+                                .into_response()
+                        })
+                        .and_then(|handle| {
+                            macro_user_id::handle::MailboxHandle::parse(handle).map_err(|_| {
+                                (StatusCode::BAD_REQUEST, "invalid or reserved handle")
+                                    .into_response()
+                            })
+                        })?;
+                    if macro_db_client::macro_user::check_username_exists(&ctx.db, handle.as_str())
+                        .await
+                        .map_err(|error| {
+                            tracing::error!(?error, "unable to check mailbox handle availability");
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "unable to check handle availability",
+                            )
+                                .into_response()
+                        })?
+                    {
+                        return Err(
+                            (StatusCode::CONFLICT, "handle is already taken").into_response()
+                        );
+                    }
+
                     let fusionauth_user_id = ctx
                         .auth_client
                         .create_user(
                             fusionauth::user::create::User {
                                 email: (&lowercase_email).into(),
                                 password: generate_random_password().into(),
-                                username: None,
+                                username: Some(handle.into_string().into()),
                                 data: req.is_agent.then(|| {
                                     serde_json::json!({ AGENT_SIGNUP_DATA_KEY: true })
                                 }),

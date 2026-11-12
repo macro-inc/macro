@@ -28,14 +28,14 @@ import type {
 export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
   files: {
     category: 'files',
-    headline: 'Bring your files to Macro',
+    headline: 'Import files into Drive',
     pitch:
-      'Import docs and files from Notion, Google Drive, Dropbox, and more.',
+      'Your native documents and files live in Drive. Import copies from Notion, Google Drive, Dropbox, and more.',
     action: 'Import files',
     dialogDescription:
       'Connect an app, then pick what to bring into your Drive with the agent.',
     items: 'documents and files',
-    destination: 'my Macro Drive',
+    destination: 'my Drive',
     providers: [
       {
         appSlug: 'notion',
@@ -47,7 +47,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
       {
         appSlug: 'google_drive',
         name: 'Google Drive',
-        detail: 'Docs, PDFs, and files',
+        detail: 'Import docs, PDFs, and files',
         icon: IconGoogleDrive as ImportIcon,
       },
       {

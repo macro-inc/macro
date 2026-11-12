@@ -5657,6 +5657,75 @@
         }
       }
     },
+    "/user/handle": {
+      "put": {
+        "tags": ["user::claim_handle"],
+        "summary": "Claims a handle once for this account. Existing usernames are unchanged\nuntil this endpoint is called; a taken handle is never replaced with a suffix.",
+        "operationId": "claim_handle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimHandleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimHandleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/name": {
       "get": {
         "tags": ["user::get_name"],
@@ -7443,6 +7512,10 @@
             "type": "boolean",
             "description": "Whether the user has trialed through stripe"
           },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "The claimed first-party mailbox handle, if one exists."
+          },
           "isAgent": {
             "type": "boolean",
             "description": "Whether this is an agent account rather than a person"
@@ -8232,6 +8305,32 @@
           }
         }
       },
+      "ClaimHandleRequest": {
+        "type": "object",
+        "description": "An authenticated request to claim the account's first-party mailbox handle.",
+        "required": ["handle"],
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "A lowercase handle satisfying the shared Rox mailbox grammar."
+          }
+        }
+      },
+      "ClaimHandleResponse": {
+        "type": "object",
+        "description": "The claimed handle and its first-party address.",
+        "required": ["handle", "address"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "`handle@rox.one`."
+          },
+          "handle": {
+            "type": "string",
+            "description": "The canonical handle."
+          }
+        }
+      },
       "PasswordRequest": {
         "type": "object",
         "required": ["email", "password"],
@@ -8252,6 +8351,10 @@
           "email": {
             "type": "string",
             "description": "The email to initiate passwordless authentication for"
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one."
           },
           "is_agent": {
             "type": "boolean",

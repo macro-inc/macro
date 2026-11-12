@@ -262,7 +262,7 @@ export function DriveList() {
     if (source.hasMore()) return 'Looking for matching files…';
     if (isSearching()) return 'No files match this search.';
 
-    return 'No files in this view.';
+    return 'Your native files live in Drive. Upload or create files here, or import them from another service.';
   };
 
   return (

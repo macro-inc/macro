@@ -5,11 +5,14 @@ import { AuthButton, FormError, FormInput } from './form-fields';
 
 export function EmailForm(props: {
   email: string;
+  handle?: string;
+  signup: boolean;
   password: string;
   passwordRequired: boolean;
   sending: boolean;
   error?: string;
   onEmailInput: (value: string) => void;
+  onHandleInput: (value: string) => void;
   onPasswordInput: (value: string) => void;
   onSubmit: () => void;
   onBack: () => void;
@@ -32,6 +35,15 @@ export function EmailForm(props: {
         value={props.email}
         onInput={props.onEmailInput}
       />
+      <Show when={props.signup}>
+        <FormInput
+          id="handle"
+          type="text"
+          placeholder="Your Rox handle"
+          value={props.handle ?? ''}
+          onInput={props.onHandleInput}
+        />
+      </Show>
       <Show when={props.passwordRequired}>
         <FormInput
           id="password"

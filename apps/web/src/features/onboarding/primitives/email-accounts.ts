@@ -42,7 +42,7 @@ export function createEmailAccounts(
     return {
       t: 'ready',
       value: orderEmailAccounts(
-        state.value,
+        state.value.filter((account) => account.provider !== 'ROX'),
         viewer.t === 'signed-in' ? viewer.viewer.id : undefined
       ),
     };

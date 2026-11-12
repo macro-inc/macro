@@ -70,6 +70,7 @@ impl DraftAttachmentRepository for EmailPgRepo {
         let provider = match mailbox.provider.as_str() {
             "GMAIL" => UserProvider::Gmail,
             "OUTLOOK" => UserProvider::Outlook,
+            "ROX" => UserProvider::Rox,
             _ => return Err(AttachmentError::Infrastructure),
         };
         let total=sqlx::query_scalar!(r#"

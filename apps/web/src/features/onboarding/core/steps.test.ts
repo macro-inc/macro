@@ -3,7 +3,7 @@ import { restoreOnboardingStep } from './steps';
 
 describe('onboarding resume', () => {
   it.each([
-    ['email', 'work'],
+    ['email', 'handle'],
     ['connect-linear', 'tools'],
     ['building', 'plan'],
     ['summary', 'plan'],
@@ -36,7 +36,7 @@ describe('onboarding resume', () => {
 
   it('prefers saved progress over the step link', () => {
     expect(restoreOnboardingStep('team', false, 'plan')).toBe('team');
-    expect(restoreOnboardingStep('email', false, 'plan')).toBe('work');
+    expect(restoreOnboardingStep('email', false, 'plan')).toBe('handle');
   });
 
   it('lets a checkout return beat saved progress and the step link', () => {

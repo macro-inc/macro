@@ -189,7 +189,7 @@ fn link_for(macro_id: &str, email: &str) -> Link {
     let email_address = macro_user_id::email::EmailStr::try_from(email.to_string()).expect("email");
     Link {
         id: Uuid::nil(),
-        is_primary: Link::derive_is_primary(&macro_id, &email_address),
+        is_primary: Link::derive_is_primary(models_email::service::link::UserProvider::Gmail),
         macro_id,
         fusionauth_user_id: "fa".to_string(),
         email_address,

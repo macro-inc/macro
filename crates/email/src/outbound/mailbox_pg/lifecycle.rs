@@ -30,6 +30,7 @@ async fn snapshot(
         provider: match row.provider.as_str() {
             "GMAIL" => UserProvider::Gmail,
             "OUTLOOK" => UserProvider::Outlook,
+            "ROX" => UserProvider::Rox,
             _ => return Err(InboxLifecycleError::Unavailable),
         },
         promoted: row.promoted,
@@ -304,6 +305,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     already_in_progress: in_progress && stream.is_some(),
                 }
             }
+            UserProvider::Rox => return Err(InboxLifecycleError::Unavailable),
         };
         tx.commit().await.map_err(failed)?;
         if current.provider == UserProvider::Outlook && !result.already_in_progress {

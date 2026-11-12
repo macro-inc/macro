@@ -7891,7 +7891,7 @@
       },
       "UserProvider": {
         "type": "string",
-        "enum": ["GMAIL", "OUTLOOK"]
+        "enum": ["GMAIL", "OUTLOOK", "ROX"]
       },
       "Value": {},
       "ViewerCapabilities": {

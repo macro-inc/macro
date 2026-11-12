@@ -97,6 +97,8 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   `recompute_thread_metadata` and the email crate's
   `thread_mail_projections_by_ids` restate this rule; change both together.
 
+`fetch_primary_link_by_macro_id` resolves CRM population and teardown through explicit `is_primary` ownership, which may be a Rox address rather than the legacy `macro|{email}` address.
+
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`

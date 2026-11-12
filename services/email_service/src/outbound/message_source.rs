@@ -45,6 +45,7 @@ where
                     .await
                     .map_err(provider_error)
             }
+            UserProvider::Rox => Err(AttachmentError::NotFound),
         }
     }
 }

@@ -44,6 +44,58 @@ impl CompletedMailboxGrantSource for MicrosoftGrantSource {
 #[derive(Clone)]
 pub struct PgMailboxInitialization(pub PgPool);
 
+/// Returns the existing first-party link or creates it from the claimed handle.
+/// No provider client is involved: Rox provisioning is a separate capability,
+/// and this link does not start a Gmail backfill or provider synchronization.
+pub async fn ensure_rox_mailbox(
+    db: &PgPool,
+    fusionauth_user_id: &str,
+    macro_id: MacroUserIdStr<'static>,
+) -> anyhow::Result<Option<models_email::email::service::link::Link>> {
+    use models_email::email::service::link::{Link, UserProvider};
+
+    let user = macro_db_client::macro_user::get_macro_user(db, fusionauth_user_id).await?;
+    let Ok(handle) = macro_user_id::handle::MailboxHandle::parse(&user.username) else {
+        return Ok(None);
+    };
+    let address = handle.email_address();
+    if let Some(link) =
+        email_db_client::links::get::fetch_link_by_email(db, &address, UserProvider::Rox).await?
+    {
+        if link.macro_id.as_ref() != macro_id.as_ref()
+            || link.fusionauth_user_id != fusionauth_user_id
+        {
+            anyhow::bail!("Rox mailbox link belongs to a different account");
+        }
+        return Ok(Some(link));
+    }
+    let email_address = macro_user_id::email::EmailStr::try_from(address)?;
+    let link = Link {
+        id: macro_uuid::generate_uuid_v7(),
+        macro_id: macro_id.clone(),
+        fusionauth_user_id: fusionauth_user_id.to_owned(),
+        email_address,
+        provider: UserProvider::Rox,
+        is_sync_active: false,
+        is_primary: Link::derive_is_primary(UserProvider::Rox),
+        needs_reauth: false,
+        last_sync_error_at: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    };
+
+    let mut tx = db.begin().await?;
+    sqlx::query!(
+        "UPDATE email_links SET is_primary = false WHERE macro_id = $1 AND provider <> 'ROX'",
+        macro_id.as_ref(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    let link = email_db_client::links::insert::upsert_link(&mut *tx, link).await?;
+    tx.commit().await?;
+    Ok(Some(link))
+}
+
 /// Fence legacy Gmail initialization against concurrent connections of either provider.
 /// The email domain owns the limit; storage supplies fresh facts under the same
 /// actor lock used by Outlook initialization and holds it until access commits.

@@ -56,6 +56,7 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- `POST /email/init` without `link_id` returns or creates the claimed handle's non-syncing primary `ROX` link without calling Gmail. `link_id` remains the Gmail/Outlook import path. `outbound/rox_provisioning` calls only the existing mail-host contract with a caller-supplied broker token; no broker token source is wired yet.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.

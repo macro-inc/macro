@@ -42,13 +42,10 @@ impl std::fmt::Debug for Link {
 }
 
 impl Link {
-    /// Client-side mirror of the `email_links.is_primary` generated column,
-    /// for constructing a [`Link`] that hasn't been persisted yet.
-    pub fn derive_is_primary(macro_id: &MacroUserIdStr<'_>, email_address: &EmailStr<'_>) -> bool {
-        email_address
-            .0
-            .as_ref()
-            .eq_ignore_ascii_case(macro_id.email_str())
+    /// Whether a newly constructed link is the account's first-party mailbox.
+    /// External links can become primary only through an explicit promotion.
+    pub fn derive_is_primary(provider: UserProvider) -> bool {
+        provider == UserProvider::Rox
     }
 }
 
@@ -57,6 +54,8 @@ pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    /// The account's first-party Rox mailbox.
+    Rox,
 }
 
 impl UserProvider {
@@ -64,6 +63,7 @@ impl UserProvider {
         match self {
             UserProvider::Gmail => "GMAIL",
             UserProvider::Outlook => "OUTLOOK",
+            UserProvider::Rox => "ROX",
         }
     }
 }

@@ -2049,7 +2049,7 @@ export type UpsertScheduledResponse = {
     send_time: string;
 };
 
-export type UserProvider = 'GMAIL' | 'OUTLOOK';
+export type UserProvider = 'GMAIL' | 'OUTLOOK' | 'ROX';
 
 export type Value = unknown;
 

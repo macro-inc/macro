@@ -36,6 +36,8 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 Preview wire names include `spam` and `trash`; provider folder semantics belong to
 the email domain and use normalized mailbox facts, not Gmail-only label names.
 
+`UserProvider::Rox` identifies the account's first-party mailbox. New Gmail and Outlook links are non-primary unless explicitly promoted; the Rox link is primary.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

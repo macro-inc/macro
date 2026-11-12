@@ -27,10 +27,11 @@ const referralCode = () =>
 /** Starts passwordless sign-in, or signs in a password account directly. */
 export async function sendEmailCode(input: {
   email: string;
+  handle?: string;
   password?: string;
   isAgent: boolean;
 }): Promise<SendCodeResult> {
-  const { email, password, isAgent } = input;
+  const { email, handle, password, isAgent } = input;
   if (await isPasswordLogin(email)) {
     if (!password) return { t: 'password-required' };
     const tokens = await authServiceClient.passwordLogin({ password, email });
@@ -52,6 +53,7 @@ export async function sendEmailCode(input: {
       body: JSON.stringify({
         redirect_uri: REDIRECT_URI,
         email,
+        ...(handle && { handle }),
         ...(referral_code && { referral_code }),
         ...(isAgent && { is_agent: true }),
       }),

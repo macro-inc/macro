@@ -11,6 +11,7 @@ pub enum DbUserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    Rox,
 }
 
 impl DbUserProvider {
@@ -18,6 +19,7 @@ impl DbUserProvider {
         match self {
             DbUserProvider::Gmail => "GMAIL",
             DbUserProvider::Outlook => "OUTLOOK",
+            DbUserProvider::Rox => "ROX",
         }
     }
 }
@@ -52,6 +54,7 @@ impl From<models_email::email::service::link::Link> for DbLink {
             provider: match service_link.provider {
                 models_email::service::link::UserProvider::Gmail => DbUserProvider::Gmail,
                 models_email::service::link::UserProvider::Outlook => DbUserProvider::Outlook,
+                models_email::service::link::UserProvider::Rox => DbUserProvider::Rox,
             },
             is_sync_active: service_link.is_sync_active,
             is_primary: service_link.is_primary,
@@ -88,6 +91,7 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
             provider: match provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
                 DbUserProvider::Outlook => UserProvider::Outlook,
+                DbUserProvider::Rox => UserProvider::Rox,
             },
             is_sync_active,
             is_primary,

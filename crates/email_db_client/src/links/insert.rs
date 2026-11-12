@@ -35,7 +35,7 @@ pub async fn upsert_link(
         email_address,
         provider,
         is_sync_active,
-        is_primary: _,
+        is_primary,
         needs_reauth: _,
         last_sync_error_at: _,
         created_at,
@@ -47,8 +47,10 @@ pub async fn upsert_link(
     let result = sqlx::query_as!(
         LinkId,
         r#"
-        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, is_primary
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (fusionauth_user_id, email_address, provider)
         DO UPDATE SET
             is_sync_active = EXCLUDED.is_sync_active,
@@ -63,10 +65,11 @@ pub async fn upsert_link(
         fusionauth_user_id,
         email_address.0.as_ref(),
         db_provider as _,
-        is_sync_active
+        is_sync_active,
+        is_primary
     )
-        .fetch_optional(&mut *conn)
-        .await?;
+    .fetch_optional(&mut *conn)
+    .await?;
 
     let Some(result) = result else {
         anyhow::bail!(

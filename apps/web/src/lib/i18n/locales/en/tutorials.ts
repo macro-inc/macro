@@ -90,8 +90,8 @@ export default {
   macrodSnippet:
     'Connect the coding agent you already use, then @mention it or assign it a task',
   macrodLength: '1:17',
-  driveTitle: 'Learn how to use Macro Drive',
-  driveBlock: 'Macro Drive',
+  driveTitle: 'Learn how to use Drive',
+  driveBlock: 'Drive',
   driveSnippet:
     'Files from channels, DMs and email in one place, linked to everything else',
   driveLength: '1:29',

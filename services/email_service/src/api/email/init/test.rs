@@ -78,6 +78,25 @@ async fn no_gmail_grant_is_a_coded_400() {
 }
 
 #[tokio::test]
+async fn handle_required_is_a_coded_400() {
+    let response = InitError::HandleRequired.into_response();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_json(response).await;
+    assert_eq!(body["code"], HANDLE_REQUIRED_CODE);
+}
+
+#[test]
+fn gmail_import_is_not_primary() {
+    let link = new_gmail_link(
+        Uuid::now_v7().to_string(),
+        MacroUserIdStr::try_from("macro|ada@example.com".to_owned()).unwrap(),
+        "ada@gmail.example".to_owned(),
+    )
+    .unwrap();
+    assert!(!link.is_primary);
+}
+
+#[tokio::test]
 async fn already_initialized_is_a_coded_400() {
     let response = InitError::AlreadyInitialized.into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);

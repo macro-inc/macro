@@ -12,6 +12,8 @@ import type {
   ChangePlanRequest,
   ChangePlanResponse,
   CheckoutSessionV2Response,
+  ClaimHandleRequest,
+  ClaimHandleResponse,
   CodexConfigRequest,
   CodexConnectionStatus,
   CodexEnvironment,
@@ -6573,6 +6575,76 @@ export const deleteUser = async (
     status: res.status,
     headers: res.headers,
   } as deleteUserResponse;
+};
+
+/**
+ * @summary Claims a handle once for this account. Existing usernames are unchanged
+until this endpoint is called; a taken handle is never replaced with a suffix.
+ */
+export type claimHandleResponse200 = {
+  data: ClaimHandleResponse;
+  status: 200;
+};
+
+export type claimHandleResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type claimHandleResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type claimHandleResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type claimHandleResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type claimHandleResponseSuccess = claimHandleResponse200 & {
+  headers: Headers;
+};
+export type claimHandleResponseError = (
+  | claimHandleResponse400
+  | claimHandleResponse401
+  | claimHandleResponse409
+  | claimHandleResponse500
+) & {
+  headers: Headers;
+};
+
+export type claimHandleResponse =
+  | claimHandleResponseSuccess
+  | claimHandleResponseError;
+
+export const getClaimHandleUrl = () => {
+  return `/user/handle`;
+};
+
+export const claimHandle = async (
+  claimHandleRequest: ClaimHandleRequest,
+  options?: RequestInit
+): Promise<claimHandleResponse> => {
+  const res = await fetch(getClaimHandleUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(claimHandleRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: claimHandleResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as claimHandleResponse;
 };
 
 /**

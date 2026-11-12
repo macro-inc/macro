@@ -1,3 +1,4 @@
+import { isAllowedHandle } from '@core/constant/mailbox-handle';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
@@ -46,6 +47,7 @@ export function createEmailLogin(
     options.initialEmail || options.fallbackNotice ? 'email' : 'choose'
   );
   const [email, setEmail] = createSignal(options.initialEmail ?? '');
+  const [handle, setHandle] = createSignal('');
   const [password, setPassword] = createSignal('');
   const [passwordRequired, setPasswordRequired] = createSignal(false);
   const [sending, setSending] = createSignal(false);
@@ -123,12 +125,19 @@ export function createEmailLogin(
   const send = async (): Promise<boolean> => {
     const address = email().trim();
     if (sending() || !address) return false;
+    if (options.intent !== 'login' && !isAllowedHandle(handle())) {
+      setSendError(
+        'Choose 3–32 lowercase letters, numbers, dots, underscores, or hyphens. Reserved names and consecutive dots are not allowed.'
+      );
+      return false;
+    }
     resetAttempt();
     setSending(true);
     setSendError();
     try {
       const result = await context.sendEmailCode({
         email: address,
+        handle: options.intent === 'login' ? undefined : handle(),
         password: passwordRequired() ? password() : undefined,
         isAgent: options.intent === 'agent-signup',
       });
@@ -166,6 +175,9 @@ export function createEmailLogin(
   return {
     step,
     email,
+    handle,
+    setHandle,
+    isSignup: () => options.intent !== 'login',
     setEmail: (address: string) => {
       if (address !== email()) resetAttempt();
       return setEmail(address);

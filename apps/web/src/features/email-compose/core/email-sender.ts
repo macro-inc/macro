@@ -10,7 +10,7 @@ export type SenderInbox = {
   email_address: string;
   displayName?: string;
   photo_url?: string | null;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: 'GMAIL' | 'OUTLOOK' | 'ROX';
   /** null means this inbox's provider lookup failed; undefined is not loaded. */
   sendAs?: readonly EmailSenderAddress[] | null;
 };
@@ -19,7 +19,7 @@ export type FromInboxOption = EmailSenderAddress & {
   id: string;
   inboxId: string;
   photo_url?: string | null;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: 'GMAIL' | 'OUTLOOK' | 'ROX';
   isAlias: boolean;
 };
 

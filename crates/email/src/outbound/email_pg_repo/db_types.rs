@@ -155,6 +155,7 @@ pub enum DbUserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    Rox,
 }
 
 #[derive(Debug, Clone)]

@@ -578,6 +578,8 @@ The backend-free desktop/phone/tablet regression is
 
 ## Development Patterns
 
+Onboarding requires a valid Rox handle only when the account has not already claimed one. Native documents and files are Drive; Gmail, Outlook, Google Drive, Dropbox, OneDrive, and Box are optional imports, not account-creation prerequisites.
+
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
 

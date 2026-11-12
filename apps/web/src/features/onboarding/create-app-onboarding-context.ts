@@ -9,6 +9,7 @@ import { idToDisplayName } from '@core/user/util';
 import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { platformFetch } from '@core/util/platformFetch';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -147,6 +148,7 @@ function toViewerState(result: UserInfoResult): ViewerState {
     viewer: {
       id: data.userId,
       email: data.email ?? undefined,
+      handle: data.handle ?? undefined,
       tutorialComplete: data.tutorialComplete === true,
       licensed:
         data.licenseStatus === 'active' || data.licenseStatus === 'trialing',
@@ -159,6 +161,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const analytics = useAnalytics();
   const userInfo = useUserInfoQuery();
   const startAddInbox = useAddInboxFlow();
+  const { initEmailLink } = useEmailLinks();
   const createTeam = useCreateTeamWithInvitesMutation();
   const joinTeam = useJoinTeamMutation();
   const checkout = useCreateCheckoutSessionMutation();
@@ -200,6 +203,24 @@ export function createAppOnboardingContext(): OnboardingContext {
       return toViewerState(await userInfo.refetch());
     },
 
+    claimHandle: async (handle) => {
+      const claimed = await platformFetch(
+        `${SERVER_HOSTS['auth-service']}/user/handle`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle }),
+        }
+      );
+      if (!claimed.ok) throw new Error(await claimed.text());
+      const initialized = await initEmailLink();
+      if (initialized.isErr())
+        throw new Error(
+          'Your handle was claimed, but Rox mail could not be initialized.'
+        );
+      await Promise.all([invalidateEmailLinks(), userInfo.refetch()]);
+    },
+
     createOnboardingRecord: () => {
       // Reading the record creates it and starts gathers, so only a viewer who
       // is actually onboarding may read it.
@@ -220,6 +241,7 @@ export function createAppOnboardingContext(): OnboardingContext {
           loadableQuery(query, (data) =>
             data.links.map((link) => ({
               address: link.email_address,
+              provider: link.provider,
               isPrimary: link.is_primary,
               ownerId: link.macro_id,
             }))

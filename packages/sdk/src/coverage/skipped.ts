@@ -45,6 +45,8 @@ export const authExcluded = [
   'appleLogin',
   'cancelCodexLogin',
   'changePlan',
+  // First-party mailbox setup belongs to the app's required onboarding flow.
+  'claimHandle',
   'checkGithubLinkStatus',
   'checkGmailLinkStatus',
   'configureCodex',

@@ -6,6 +6,9 @@ pub struct PasswordlessRequest {
     pub email: String,
     /// The redirect uri to redirect to after login
     pub redirect_uri: String,
+    /// Required when this address creates a new account; ignored for an
+    /// existing account, whose username remains unchanged until it claims one.
+    pub handle: Option<String>,
     /// The referral code
     pub referral_code: Option<String>,
     /// Create an agent account if this address has no account yet. Otherwise

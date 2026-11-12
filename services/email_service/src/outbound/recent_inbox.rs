@@ -84,6 +84,11 @@ where
                 .into_iter()
                 .map(|message| message.content.message)
                 .collect(),
+            UserProvider::Rox => {
+                return Err(EmailApiError::Permanent {
+                    message: "first-party recent-inbox reads are not available".into(),
+                });
+            }
         };
 
         Ok(messages

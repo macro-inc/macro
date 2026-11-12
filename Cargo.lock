@@ -7690,6 +7690,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

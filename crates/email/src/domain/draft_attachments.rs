@@ -85,6 +85,11 @@ pub fn validate_attachment_edit(
     let maximum = match facts.provider {
         UserProvider::Gmail => 18_000_000,
         UserProvider::Outlook => 150_000_000,
+        UserProvider::Rox => {
+            return Err(AttachmentError::Invalid(
+                "first-party mailbox attachments are not available",
+            ));
+        }
     };
     if added_bytes > 0 && facts.total_bytes.saturating_add(added_bytes) > maximum {
         return Err(AttachmentError::Invalid(

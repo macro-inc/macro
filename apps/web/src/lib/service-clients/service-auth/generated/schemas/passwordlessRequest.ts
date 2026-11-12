@@ -4,11 +4,14 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PasswordlessRequestHandle } from './passwordlessRequestHandle';
 import type { PasswordlessRequestReferralCode } from './passwordlessRequestReferralCode';
 
 export interface PasswordlessRequest {
   /** The email to initiate passwordless authentication for */
   email: string;
+  /** Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one. */
+  handle?: PasswordlessRequestHandle;
   /** Create an agent account if this address has no account yet. Otherwise
 `true` has no effect, and `false` reverts an agent flag nobody has proven:
 see `revert_unconfirmed_agent`. */

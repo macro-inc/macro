@@ -4857,6 +4857,10 @@ enum GraphqlEmailProvider {
 	Microsoft Outlook and Microsoft 365.
 	"""
 	OUTLOOK
+	"""
+	The account's first-party Rox mailbox.
+	"""
+	ROX
 }
 
 """
