@@ -465,6 +465,35 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     assert!(details.contains(
         "INNER JOIN initiative i ON i.id = (CASE WHEN t.item_type = 'initiative' THEN t.id END)::uuid"
     ));
+
+    // A listing that names its initiatives checks each one instead.
+    filter.initiative_filter = Some(Arc::new(Expr::and(
+        Expr::or(
+            Expr::val(InitiativeLiteral::Id(Uuid::from_u128(1))),
+            Expr::val(InitiativeLiteral::Id(Uuid::from_u128(2))),
+        ),
+        Expr::val(InitiativeLiteral::NameContains("plan".into())),
+    )));
+    let named = build_query(
+        &filter,
+        false,
+        SimpleSortMethod::UpdatedAt.into(),
+        &mut DocumentIdArrays::starting_at(9),
+    );
+    assert!(!named.sql().contains("i.id = ANY(ARRAY("));
+    assert!(named.sql().contains("WHERE ea.entity_id = i.id"));
+    // Unless one branch can admit initiatives it does not name.
+    filter.initiative_filter = Some(Arc::new(Expr::or(
+        Expr::val(InitiativeLiteral::Id(Uuid::from_u128(1))),
+        Expr::val(InitiativeLiteral::NameContains("plan".into())),
+    )));
+    let open = build_query(
+        &filter,
+        false,
+        SimpleSortMethod::UpdatedAt.into(),
+        &mut DocumentIdArrays::starting_at(9),
+    );
+    assert!(open.sql().contains("i.id = ANY(ARRAY("));
 }
 
 /// Rows a plan read from `table` (returned or filtered out) across all loops
@@ -484,68 +513,77 @@ fn rows_read(node: &serde_json::Value, table: &str) -> f64 {
     own + children
 }
 
-#[sqlx::test(
-    fixtures("../../initiative/test/access_paths.sql"),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
-    pool: PgPool,
-) -> anyhow::Result<()> {
-    // 20,000 initiatives the viewer cannot see, each with its owner's grant:
-    // most of production's table belongs to other people.
+/// Adds `count` initiatives owned by other people, each with its owner's
+/// grant: most of production's table belongs to someone else.
+async fn seed_background_initiatives(pool: &PgPool, count: i32) -> anyhow::Result<()> {
     sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
         SELECT ('a2000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'background-' || n,
             'background-' || n || '@paths.test', 'background-stripe-' || n
-        FROM generate_series(1, 20000) n"#
+        FROM generate_series(1, $1::int) n"#,
+        count
     )
-    .execute(&pool)
+    .execute(pool)
     .await?;
     sqlx::query!(
         r#"INSERT INTO "User" (id, email, macro_user_id)
         SELECT 'macro|background-' || n || '@paths.test', 'background-' || n || '@paths.test',
             ('a2000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
-        FROM generate_series(1, 20000) n"#
+        FROM generate_series(1, $1::int) n"#,
+        count
     )
-    .execute(&pool)
+    .execute(pool)
     .await?;
     sqlx::query!(
-        r#"INSERT INTO "SharePermission" (id) SELECT 'background-share-' || n FROM generate_series(1, 20000) n"#
+        r#"INSERT INTO "SharePermission" (id) SELECT 'background-share-' || n FROM generate_series(1, $1::int) n"#,
+        count
     )
-    .execute(&pool)
+    .execute(pool)
     .await?;
     sqlx::query!(
         r#"INSERT INTO initiative (id, name, owner_user_id, share_permission_id)
         SELECT ('a8000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'Background ' || n,
             'macro|background-' || n || '@paths.test', 'background-share-' || n
-        FROM generate_series(1, 20000) n"#
+        FROM generate_series(1, $1::int) n"#,
+        count
     )
-    .execute(&pool)
+    .execute(pool)
     .await?;
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         SELECT id, 'initiative', owner_user_id, 'user', 'owner'
         FROM initiative WHERE name LIKE 'Background %'"#
     )
-    .execute(&pool)
+    .execute(pool)
     .await?;
-    sqlx::query!("ANALYZE").execute(&pool).await?;
+    Ok(())
+}
 
-    let filter = EntityFilterAst {
-        initiative_filter: Some(Arc::new(Expr::val(InitiativeLiteral::Include))),
+/// A listing of initiatives only, with the other kinds ruled out as the
+/// Projects list rules them out.
+fn initiative_listing(initiatives: Expr<InitiativeLiteral>) -> EntityFilterAst {
+    EntityFilterAst {
+        initiative_filter: Some(Arc::new(initiatives)),
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil())))),
         chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::Importance(false)))),
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         ..EntityFilterAst::mock_empty()
-    };
-    let viewer = "macro|viewer@paths.test";
+    }
+}
+
+/// `EXPLAIN ANALYZE` of the first page of `filter` for `viewer`, run and bound
+/// as `expanded_dynamic_cursor_soup` runs it.
+async fn explain_first_page(
+    pool: &PgPool,
+    viewer: &str,
+    filter: &EntityFilterAst,
+) -> anyhow::Result<serde_json::Value> {
     let sort = DynamicSort::from(SimpleSortMethod::UpdatedAt);
-    // The first page, run and bound as expanded_dynamic_cursor_soup runs it.
-    let mut transaction = begin_dynamic_query(&pool).await?;
+    let mut transaction = begin_dynamic_query(pool).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-    let builder = build_query(&filter, false, sort, &mut document_ids);
+    let builder = build_query(filter, false, sort, &mut document_ids);
     let sql = format!("EXPLAIN (ANALYZE, FORMAT JSON) {}", builder.sql());
 
     #[expect(
@@ -565,7 +603,25 @@ async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
-    let plan = query.persistent(false).fetch_one(&mut *transaction).await?;
+    Ok(query.persistent(false).fetch_one(&mut *transaction).await?)
+}
+
+#[sqlx::test(
+    fixtures("../../initiative/test/access_paths.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    seed_background_initiatives(&pool, 20_000).await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    let plan = explain_first_page(
+        &pool,
+        "macro|viewer@paths.test",
+        &initiative_listing(Expr::val(InitiativeLiteral::Include)),
+    )
+    .await?;
 
     // The viewer can list 8 initiatives and their team owns 17; the table holds 20,018.
     let read = rows_read(&plan[0]["Plan"], "initiative");
@@ -574,6 +630,64 @@ async fn initiative_listing_reads_the_callers_initiatives_not_the_table(
         read < 100.0,
         "the listing read {read} initiative rows; it should start from the viewer's access: {plan}"
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures("../../initiative/test/access_paths.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn initiatives_named_by_id_check_access_per_row(pool: PgPool) -> anyhow::Result<()> {
+    // The viewer can also list 5,000 initiatives other people shared with them.
+    seed_background_initiatives(&pool, 5_000).await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT id, 'initiative', 'macro|viewer@paths.test', 'user', 'view'
+        FROM initiative WHERE name LIKE 'Background %'"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    // GraphQL hydrates entities through this query, naming each initiative by
+    // id, and every other request names the nil id to rule initiatives out.
+    let named = [
+        (
+            "one initiative",
+            Expr::val(InitiativeLiteral::Id(Uuid::from_u128(
+                0xa7000000000000000000000000000001,
+            ))),
+        ),
+        (
+            "two initiatives",
+            Expr::or(
+                Expr::val(InitiativeLiteral::Id(Uuid::from_u128(
+                    0xa7000000000000000000000000000002,
+                ))),
+                Expr::val(InitiativeLiteral::Id(Uuid::from_u128(
+                    0xa7000000000000000000000000000009,
+                ))),
+            ),
+        ),
+        (
+            "no initiative",
+            Expr::val(InitiativeLiteral::Id(Uuid::nil())),
+        ),
+    ];
+    for (label, initiatives) in named {
+        let plan = explain_first_page(
+            &pool,
+            "macro|viewer@paths.test",
+            &initiative_listing(initiatives),
+        )
+        .await?;
+        let read = rows_read(&plan[0]["Plan"], "entity_access");
+        println!("entity_access rows read for {label}: {read}");
+        assert!(
+            read < 100.0,
+            "naming {label} read {read} grants; ids named up front should be checked one by one: {plan}"
+        );
+    }
     Ok(())
 }
 

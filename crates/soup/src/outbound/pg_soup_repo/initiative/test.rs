@@ -369,6 +369,29 @@ async fn listings_and_per_row_gates_agree_on_every_access_path(pool: PgPool) -> 
             "flat listing for {viewer}"
         );
 
+        // GraphQL hydrates initiatives through the same listing, naming them by id.
+        let mut named = filters();
+        named.initiative_filter = all_ids
+            .iter()
+            .map(|id| Expr::val(InitiativeLiteral::Id(*id)))
+            .reduce(Expr::or)
+            .map(Arc::new);
+        let listed_by_id = expanded_dynamic_cursor_soup(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.clone(),
+                limit: 50,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), named),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+        assert_eq!(
+            listed_by_id.iter().map(Identify::id).collect::<Vec<_>>(),
+            expected,
+            "listing by id for {viewer}"
+        );
+
         let grouped = expanded_dynamic_cursor_soup_grouped(
             &pool,
             GroupedDynamicCursorArgs {
