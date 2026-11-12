@@ -149,7 +149,7 @@ fn run(blocks: usize, edit: Edit, general: bool) -> Result<(Outcome, Work), Erro
 }
 
 #[test]
-fn enter_after_the_first_block_does_root_child_work_independent_of_document_size()
+fn enter_after_the_first_block_diffs_the_root_order_independent_of_document_size()
 -> Result<(), Error> {
     let mut residuals = Vec::new();
     for blocks in [50, 500, 5000] {
@@ -163,8 +163,8 @@ fn enter_after_the_first_block_does_root_child_work_independent_of_document_size
             outcome, general,
             "new and old splice paths differ at {blocks}"
         );
-        // The host contract sends the complete next root order once; nothing else of the root
-        // is collected, and the previous order is read only up to its first difference.
+        // The host contract sends the complete next root order once; the previous order is read
+        // only up to its first difference. Splice counts are pinned separately below.
         assert_eq!(
             work.diff.root_keys,
             blocks + 1,
@@ -173,11 +173,6 @@ fn enter_after_the_first_block_does_root_child_work_independent_of_document_size
         assert_eq!(
             work.diff.root_steps, 2,
             "diff previous-order reads at {blocks}"
-        );
-        assert_eq!(work.splice.root_keys, 0, "splice root keys at {blocks}");
-        assert_eq!(
-            work.splice.root_steps, 1,
-            "splice nearer-end steps at {blocks}"
         );
         residuals.push((
             work.diff.other_keys,
@@ -192,6 +187,28 @@ fn enter_after_the_first_block_does_root_child_work_independent_of_document_size
         residuals.windows(2).all(|pair| pair[0] == pair[1]),
         "non-root and unscoped child work must not depend on document size: {residuals:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn enter_after_the_first_block_splices_without_collecting_the_root_order() -> Result<(), Error> {
+    for blocks in [50, 500, 5000] {
+        let edit = Edit::InsertAfter {
+            anchor: 0,
+            count: 1,
+        };
+        let (outcome, work) = run(blocks, edit, false)?;
+        let (general, _) = run(blocks, edit, true)?;
+        assert_eq!(
+            outcome, general,
+            "new and old splice paths differ at {blocks}"
+        );
+        assert_eq!(work.splice.root_keys, 0, "splice root keys at {blocks}");
+        assert_eq!(
+            work.splice.root_steps, 1,
+            "splice nearer-end steps at {blocks}"
+        );
+    }
     Ok(())
 }
 
