@@ -71,7 +71,7 @@ PHONE_RE = re.compile(
     r"(?<!\w)(?:\+\d{1,3}[\s.-]*)?(?:\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\+\d{8,15})(?!\w)"
 )
 ADDRESS_RE = re.compile(
-    r"\b\d{1,5}[A-Za-z]?\s+(?:[A-Z][A-Za-z0-9.'-]+\s+){0,3}"
+    r"(?<![\w-])\d{1,5}[A-Za-z]?\s+(?:[A-Z][A-Za-z0-9.'-]+\s+){0,3}"
     r"(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|"
     r"Lane|Ln\.?|Drive|Dr\.?|Court|Ct\.?|Way|Place|Pl\.?)\b"
 )

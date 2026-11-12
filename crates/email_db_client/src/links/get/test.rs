@@ -673,7 +673,8 @@ async fn fetch_primary_link_uses_first_party_address_not_legacy_user_id(
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
     let (external, _, _) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
-    let (rox, _, _) = insert_inbox_with_thread_and_message(&pool, CHILD, "ada@rox.one").await;
+    let rox_address = format!("ada@{macro_user_id::handle::ROX_MAIL_DOMAIN}");
+    let (rox, _, _) = insert_inbox_with_thread_and_message(&pool, CHILD, &rox_address).await;
     sqlx::query!(
         "UPDATE email_links SET is_primary = (id = $1), provider = CASE WHEN id = $1 THEN 'ROX' ELSE provider END",
         rox

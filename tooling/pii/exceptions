@@ -11,3 +11,20 @@
 
 # Preserve the pinned upstream API specification verbatim.
 crates/incus_client/spec/rest-api.yaml:lxc-devel@lists.linuxcontainers.org
+
+# Public DFARS citation in the legal terms, not a phone number.
+apps/marketing/src/app/routes/RouteTerms.tsx:252.227-7015
+
+# Established synthetic repository fixtures; retain their existing identities.
+crates/projects/src/outbound/pg_project_repo/tests.rs:owner@test.com
+crates/teams/src/outbound/team_repo/test.rs:user@user.com
+
+# Synthetic WhatsApp group JID required by the external-chat repository fixture.
+crates/external_chat/src/outbound/pg/timeline/test.rs:12345@g.us
+
+# Schematic handle placeholder, not a person's address. Preserve generated auth
+# artifacts because their declared build is blocked by unrelated product errors.
+services/authentication_service/src/api/user/claim_handle.rs:handle@rox.one
+apps/web/src/lib/service-clients/service-auth/openapi.json:handle@rox.one
+apps/web/src/lib/service-clients/service-auth/generated/schemas/claimHandleResponse.ts:handle@rox.one
+packages/sdk/specs/auth.json:handle@rox.one
