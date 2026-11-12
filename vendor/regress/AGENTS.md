@@ -2,7 +2,8 @@
 
 ## What it is
 
-The crates.io 0.12.0 regex engine with the legacy ECMAScript case-folding fix.
+The crates.io 0.12.0 regex engine with legacy ECMAScript case-folding and the
+encoding-independent anchored-search shortcut retained in UTF-16 builds.
 Read `README-MACRO.md` before refreshing it from upstream.
 
 ## Scope
@@ -22,6 +23,7 @@ Read `README-MACRO.md` before refreshing it from upstream.
 
 - UTF-16 consumers use `Regex::is_unicode` to choose the matching input decoder.
 - Legacy and Unicode case folding are different. Keep `u`/`v` behavior unchanged.
+- Keep UTF-16 byte prefilters disabled; only the compiled nonmultiline `StartAnchored` predicate uses the existing anchored executor.
 - Generate `src/legacy_case.rs` with the consumer's recorder under Node 24 / ICU 77.
 - The crate is excluded from the root workspace. Do not commit its generated
   `Cargo.lock` or build output; the workspace lockfile owns the shipping graph.

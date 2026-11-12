@@ -2,6 +2,8 @@ use regress::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+mod anchored;
+
 #[derive(Deserialize)]
 struct Fixture {
     classes: Vec<(u16, Vec<usize>)>,

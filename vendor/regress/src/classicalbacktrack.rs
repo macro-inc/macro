@@ -6,7 +6,6 @@ use crate::cursor;
 use crate::cursor::{Backward, Direction, Forward};
 use crate::exec;
 use crate::indexing::{AsciiInput, ElementType, InputIndexer, Utf8Input};
-#[cfg(not(feature = "utf16"))]
 use crate::insn::StartPredicate;
 use crate::insn::{CompiledRegex, Insn, LoopFields};
 use crate::matchers;
@@ -19,6 +18,10 @@ use crate::util::DebugCheckIndex;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::ops::Range;
+
+#[cfg(all(test, feature = "std", feature = "utf16"))]
+#[path = "classicalbacktrack/anchored_utf16_tests.rs"]
+mod anchored_utf16_tests;
 
 #[derive(Clone, Debug)]
 enum BacktrackInsn<Input: InputIndexer> {
@@ -632,6 +635,8 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         mut pos: Input::Position,
         dir: Dir,
     ) -> Option<Input::Position> {
+        #[cfg(all(test, feature = "std", feature = "utf16"))]
+        anchored_utf16_tests::record_attempt();
         debug_assert!(
             self.bts.len() == 1,
             "Should be only initial exhausted backtrack insn"
@@ -1039,7 +1044,6 @@ impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
 
     /// \return the next match for an anchored regex that only matches at the start.
     /// This avoids any string searching and only tries matching at the given position.
-    #[cfg(not(feature = "utf16"))]
     fn next_match_anchored(
         &mut self,
         pos: Input::Position,
@@ -1104,9 +1108,18 @@ impl<Input: InputIndexer> exec::MatchProducer for BacktrackExecutor<'_, Input> {
         pos: Input::Position,
         next_start: &mut Option<Input::Position>,
     ) -> Option<Match> {
-        // When UTF-16 support is active prefix search is not used due to the different encoding.
+        // Start anchoring is encoding-independent; byte prefix search is not.
         #[cfg(feature = "utf16")]
-        return self.next_match_with_prefix_search(pos, next_start, &bytesearch::EmptyString {});
+        {
+            if matches!(&self.matcher.re.start_pred, StartPredicate::StartAnchored) {
+                return self.next_match_anchored(pos, next_start);
+            }
+            return self.next_match_with_prefix_search(
+                pos,
+                next_start,
+                &bytesearch::EmptyString {},
+            );
+        }
 
         #[cfg(not(feature = "utf16"))]
         match &self.matcher.re.start_pred {

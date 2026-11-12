@@ -8,6 +8,7 @@ Dependency conformance for the portable Lexical workspace. No runtime API.
 
 - `src/test.rs`: exhaustive UTF-16 regex equivalence and Loro snapshot smoke test.
 - `record-icase.mjs`: records the V8 oracle and generates the legacy case table.
+- `record-anchored.mjs`: records complete V8 ranges, UTF-16 captures and named groups for anchor and source-pattern controls.
 
 ## Boundaries
 

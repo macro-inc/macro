@@ -30,6 +30,19 @@ Singleton identity classes are implicit; negated sets are their complement.
 `Regex::is_unicode` exposes the compiled Unicode flag so UTF-16 consumers can
 select the code-point or code-unit input decoder without reparsing patterns.
 
+The UTF-16 build also retains the existing encoding-independent
+`StartAnchored` shortcut. A failed nonmultiline leading `^` is attempted only
+at the initial position rather than at every remaining code unit. Byte prefix
+search and every non-anchored UTF-16 search retain their upstream behavior.
+Engine-private tests compare the same compiled regex against the previous
+search, including captures, names, empty matches and surrogate-interior offsets;
+a test-only scoped counter verifies failed-start work without wall-clock gates.
+Consumer conformance is recorded by
+`crates/client/lexical/lexical_workspace_tests/record-anchored.mjs` with the
+reference Node 24 / ICU 77 engine, alongside the existing case-folding oracle.
+This isolated anchored-search fix can be submitted upstream independently of
+the legacy case-folding patch; no upstream publication is included here.
+
 Upstream repository: https://github.com/ridiculousfish/regress.
 Upstream PR: not submitted (this work does not authorize external publication).
 Remove the patch after an upstream release passes the consumer fixture unchanged.
