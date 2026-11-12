@@ -71,6 +71,13 @@ fn check_artifact_config() -> Step<Run> {
     Step::new("Check artifact config")
         .run(indoc::indoc! {r#"
             set -euo pipefail
+            # The deploy runs Pulumi in infra/stacks/$STACK, so any other
+            # spelling of a folder (`stack/`, `./stack`) would deploy it while
+            # missing its services-config entry below.
+            if [[ ! "$STACK" =~ ^[A-Za-z0-9_-]+$ ]]; then
+              echo "::error::pulumi-service-name must be a folder name under infra/stacks, such as agent-harness-service; got '$STACK'."
+              exit 1
+            fi
             ships_code=$(jq -r --arg stack_path "infra/stacks/$STACK/**" '
               [.services[] | select(.stack_path == $stack_path) | (.deploy_binaries // []) + (.deploy_lambdas // []) | length]
               | add // 0
