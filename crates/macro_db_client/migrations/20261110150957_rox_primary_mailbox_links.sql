@@ -4,7 +4,7 @@ ALTER TABLE macro_user
     ADD COLUMN mailbox_handle_claimed_at TIMESTAMPTZ;
 
 ALTER TABLE email_links
-    DROP COLUMN is_primary;
+    DROP COLUMN IF EXISTS is_primary CASCADE;
 
 ALTER TABLE email_links
     ADD COLUMN is_primary boolean NOT NULL DEFAULT false;

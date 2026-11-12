@@ -191,8 +191,8 @@ where
             UserProvider::Gmail => 18_000_000,
             UserProvider::Outlook => 150_000_000,
             UserProvider::Rox => {
-                return Err(AttachmentError::Invalid(
-                    "first-party mailbox attachments are not available",
+                return Err(EmailErr::InvalidDraft(
+                    "first-party mailbox attachments are not available".to_string(),
                 ));
             }
         };
