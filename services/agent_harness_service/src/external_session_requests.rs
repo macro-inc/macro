@@ -45,14 +45,22 @@ where
         request: RequestedExternalSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let session_id = request.session_id;
+        // A caller-named id that already holds a session is taken, whoever's
+        // it is: answering with it would hand a retry or a racing create a
+        // session this request did not open, and its first prompt with it.
+        match self.sessions.get(session_id).await {
+            Ok(_) => return Err(AgentSessionError::SessionIdTaken(session_id)),
+            Err(AgentSessionError::NotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
         let event = AgentSessionMacroEvent::requested_event(AgentSessionRequestedEvent {
             bot_id: request.bot_id,
             repo_url: request.repo_url,
             session_id,
             owner: request.owner.as_ref().to_owned(),
             origin: request.origin,
-            // The requester's prompt follows through the session's control
-            // endpoint, from the app; nothing composes it with this event.
+            // The requester's first prompt follows through the session's
+            // control path once it exists; nothing composes it with this event.
             context: None,
         });
         self.broker
