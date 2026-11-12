@@ -6776,6 +6776,7 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "models_search",
  "models_soup",
  "notification",
  "notification_inbox",

@@ -7,5 +7,6 @@ pub mod canvas_images;
 pub mod docx_export;
 pub mod entity_mutation;
 pub mod filed_items;
+pub mod name_sources;
 pub mod saved_view_changes;
 pub mod stream_contacts;

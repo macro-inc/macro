@@ -1025,6 +1025,10 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
+    /// Name sources for `POST /search/names` over the kinds this service
+    /// hosts, built once at startup (`outbound::name_sources`).
+    #[from_ref(skip)]
+    pub name_sources: Vec<Arc<dyn search_service::names::NameSource>>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
@@ -1106,7 +1110,7 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
-            name_sources: Vec::new(),
+            name_sources: ctx.name_sources.clone(),
         }
     }
 }

@@ -58,6 +58,9 @@ threads, pins, recents, notifications, folders, activity.
   which a promoted shared mailbox's older events do not carry as their owner.
   Nudges follow a committed write, so they share `event_broker_tracker`'s
   bounded shutdown drain with event broker publishes.
+- `src/outbound/name_sources.rs`: `search_service` name sources for `POST /search/names`
+  over the kinds DSS hosts (people, folders, initiatives, databases, agents, email labels,
+  tags, channel labels), each through its owning domain service; built once in `server.rs`.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
