@@ -376,7 +376,7 @@ Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
 and `crates/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/ai_tools/src/lib.rs` (`subagent_toolset()` or the
+- Register it in `crates/ai_tools/src/lib.rs` (`base_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
   `crates/ai_tools/src/build_context.rs`,

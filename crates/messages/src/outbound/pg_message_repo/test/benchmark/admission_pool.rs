@@ -395,7 +395,15 @@ async fn repository_admission_pool_isolation(pool: PgPool) {
 }
 
 async fn simultaneous_posts(options: sqlx::postgres::PgConnectOptions) {
-    let pool = pool(options).await;
+    // Admission lets four writes per channel reach the database at once, so a
+    // small pool is enough; this test runs beside the whole suite and must not
+    // take the server's connections from it.
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(8)
+        .connect_with(options.disable_statement_logging())
+        .await
+        .unwrap();
+    setup(&pool).await;
     let repo = PgMessageRepository::new(pool.clone());
     for hold in [None, Some(Duration::from_millis(5))] {
         let channel = super::super::sequences::channel_fixture(&pool).await;
