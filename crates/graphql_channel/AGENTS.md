@@ -44,7 +44,7 @@ separately from Soup's thread-root projection.
   `post_once` (the client id returns the stored message) and delete through
   `delete_once` (the tombstone); edit and react are already repeatable. A root
   is returned with its thread summary so the cached row stays complete.
-- `MessageError::Contended` maps to `SERVICE_UNAVAILABLE`; the client retries it.
+- `MessageError::Contended` maps to `SERVICE_UNAVAILABLE`; the client keeps the write queued and retries it without counting a failure.
 - Keep `id` for global identities; thread metadata and attachment references are embedded.
 
 ## Related
