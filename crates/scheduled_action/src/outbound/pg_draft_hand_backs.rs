@@ -150,7 +150,6 @@ fn stale_draft(session: Uuid, owner: String, agent: Uuid) -> Option<StaleDraft> 
 }
 
 /// A job as its row keeps it; parts this build can't read read as empty.
-#[expect(clippy::too_many_arguments, reason = "one argument per column read")]
 fn stored_job(
     session: Uuid,
     request: Option<serde_json::Value>,
