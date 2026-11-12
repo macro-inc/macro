@@ -9356,6 +9356,95 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::set_contact_company"],
+        "summary": "Remove a contact's company link. A contact with an address on one of its\ncompany's domains cannot be unlinked. Idempotent.",
+        "operationId": "unlink_crm_contact_company",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/crm/contacts/{contact_id}/email": {
@@ -9380,6 +9469,206 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SetContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/emails": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Add an address to a contact. It must not belong to another contact in the\nteam, and becomes the primary only when the contact has none. Idempotent.",
+        "operationId": "add_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::contact_emails"],
+        "summary": "Remove an address from a contact. Nothing else is deleted: the contact\nstops showing that address's email history. Removing the primary promotes\nthe oldest address left. The last address on a domain of the contact's\ncompany cannot be removed while the contact is linked to it. Idempotent.",
+        "operationId": "remove_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
               }
             }
           },
@@ -25457,6 +25746,103 @@
         }
       }
     },
+    "/projects/upload_extract/{request_id}": {
+      "get": {
+        "tags": ["project"],
+        "summary": "Where the caller's folder upload stands, so the uploader can follow it to\nthe end even when a websocket update is missed.",
+        "operationId": "get_upload_extract_status_handler",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The upload request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error", "data"],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "description": "Where a folder upload stands, for the uploader to follow it to the end.",
+                          "required": ["status"],
+                          "properties": {
+                            "progress": {
+                              "oneOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/UploadFolderProgress",
+                                  "description": "Files stored so far, once the extractor has counted them."
+                                }
+                              ]
+                            },
+                            "projectId": {
+                              "type": ["string", "null"],
+                              "description": "The uploaded folder, once it exists."
+                            },
+                            "status": {
+                              "$ref": "#/components/schemas/UploadFolderStatus"
+                            }
+                          }
+                        }
+                      ],
+                      "description": "Data to be returned"
+                    },
+                    "error": {
+                      "type": "boolean",
+                      "description": "Indicates if an error occurred"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}": {
       "get": {
         "tags": ["projects_hex::inbound::axum_router::get_project"],
@@ -35425,6 +35811,17 @@
         "description": "How a group's conditions combine.",
         "enum": ["and", "or"]
       },
+      "ContactEmailRequest": {
+        "type": "object",
+        "description": "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add or remove. An identical retry is accepted."
+          }
+        }
+      },
       "ConversationId": {
         "type": "string",
         "description": "Source Slack conversation ID (C, G or D prefix); unique only within a source."
@@ -37217,6 +37614,17 @@
           "updatedAt"
         ],
         "properties": {
+          "companyDomain": {
+            "type": "boolean",
+            "description": "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
+          "companyDomainEmails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+          },
           "companyId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -37229,7 +37637,14 @@
           },
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address; absent for contacts added by name\nalone."
+            "description": "The contact's primary email address; absent for contacts added by\nname alone."
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`."
           },
           "firstInteraction": {
             "type": "string",
@@ -37256,7 +37671,7 @@
           },
           "personalEmail": {
             "type": "boolean",
-            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+            "description": "Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only."
           },
           "updatedAt": {
             "type": "string",
@@ -56450,18 +56865,18 @@
           "companyId": {
             "type": "string",
             "format": "uuid",
-            "description": "Destination company in the same team. Unlinking is not supported."
+            "description": "Destination company in the same team."
           }
         }
       },
       "SetContactEmailRequest": {
         "type": "object",
-        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "description": "Choose a contact's primary email.",
         "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
-            "description": "The address to add. An identical retry is accepted."
+            "description": "The address to make primary. It is added when the contact does not\nhold it yet. An identical retry is accepted."
           }
         }
       },
@@ -63429,6 +63844,31 @@
           }
         }
       },
+      "UploadFolderProgress": {
+        "type": "object",
+        "description": "Files of an extracted folder moved into storage so far.",
+        "required": ["filesTotal", "filesStored", "filesFailed"],
+        "properties": {
+          "filesFailed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files that could not be stored.",
+            "minimum": 0
+          },
+          "filesStored": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files stored successfully.",
+            "minimum": 0
+          },
+          "filesTotal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files the folder holds.",
+            "minimum": 0
+          }
+        }
+      },
       "UploadFolderRequest": {
         "type": "object",
         "required": ["content", "rootFolderName", "uploadRequestId"],
@@ -63460,6 +63900,19 @@
             "description": "The upload request id"
           }
         }
+      },
+      "UploadFolderStatus": {
+        "type": "string",
+        "description": "The upload status of the folder",
+        "enum": [
+          "pending",
+          "uploaded",
+          "processing",
+          "partially_completed",
+          "completed",
+          "failed",
+          "unknown"
+        ]
       },
       "UploadGrant": {
         "type": "object",
