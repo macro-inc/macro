@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
@@ -17,6 +18,8 @@ import {
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import ArrowsInLineHorizontal from '@icon/system/regular/arrows-in-line-horizontal.svg';
+import ArrowsOutLineHorizontal from '@icon/system/regular/arrows-out-line-horizontal.svg';
 import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import Download from '@icon/system/regular/download.svg';
@@ -27,6 +30,7 @@ import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
+import { markdownWideMode, setMarkdownWideMode } from '../wide-mode';
 import {
   DispatchAgentButton,
   useDispatchAgentSplitFileActions,
@@ -151,6 +155,20 @@ export function useMarkdownDocumentTools() {
       action: () => history.enter(),
       focusTarget: () =>
         element()?.querySelector<HTMLElement>('[data-history-close]') ?? null,
+    },
+    {
+      label: () =>
+        markdownWideMode()
+          ? t('entityActions.turnOffWideMode')
+          : t('entityActions.turnOnWideMode'),
+      get icon() {
+        return markdownWideMode()
+          ? ArrowsInLineHorizontal
+          : ArrowsOutLineHorizontal;
+      },
+      // Phones already give the document the whole screen.
+      condition: () => !isMobile(),
+      action: () => setMarkdownWideMode((wide) => !wide),
     },
     {
       label: 'Ask Macro',

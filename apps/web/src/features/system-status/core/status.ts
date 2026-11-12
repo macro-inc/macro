@@ -5,6 +5,8 @@ export type StatusLevel = 'operational' | 'degraded' | 'major_outage';
 
 /** A status that shows a banner. */
 export type BannerStatus = {
+  /** The update that set this status; dismissals are remembered by it. */
+  id: string;
   level: Exclude<StatusLevel, 'operational'>;
   message: string;
 };
@@ -30,6 +32,8 @@ export function bannerStatus(
   return match(status)
     .with({ status: 'operational' }, () => undefined)
     .with({ status: 'degraded' }, { status: 'major_outage' }, (s) => ({
+      // Servers older than the id fall back to when the status was set.
+      id: s.id ?? s.updatedAt ?? s.message,
       level: s.status,
       message: s.message,
     }))

@@ -22,21 +22,19 @@ import {
 } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   AssigneePickerStatus,
-  buildContactLabel,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
-import { useContacts } from '@queries/contacts/contacts';
 import {
   Button,
   ButtonGroup,
@@ -65,7 +63,6 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from './filter-menu';
-import type { SearchableOption } from './searchable-multi-select';
 
 export { buildContactLabel } from '@app/features/soup/assignee-picker';
 
@@ -551,9 +548,17 @@ export const UnifiedFilterDropdown = (
   props: UnifiedFilterDropdownProps = {}
 ) => {
   const [internalOpen, setInternalOpen] = createSignal(false);
+  const [assigneeOpen, setAssigneeOpen] = createSignal(false);
+  const [createdByOpen, setCreatedByOpen] = createSignal(false);
   const open = () => props.open?.() ?? internalOpen();
   const setOpen = (v: boolean) => {
     setInternalOpen(v);
+    if (!v) {
+      setAssigneeOpen(false);
+      setCreatedByOpen(false);
+      assigneePicker.onOpenChange(false);
+      createdBySource.setSearch('');
+    }
     props.onOpenChange?.(v);
   };
   const panel = useSplitPanelOrThrow();
@@ -566,7 +571,6 @@ export const UnifiedFilterDropdown = (
     readFilter,
     setReadFilter,
   } = useSoupView();
-  const contacts = useContacts();
   const userId = useUserId();
   const selectFilters = useSoupView().extensions?.selectFilters ?? [];
 
@@ -724,31 +728,10 @@ export const UnifiedFilterDropdown = (
     () => queryFilters.state.include.documentOwnerId ?? []
   );
 
-  const createdByOptions = createMemo((): SearchableOption[] => {
-    const currentUserId = userId();
-    let meOption: SearchableOption | undefined;
-    const otherContactOptions: SearchableOption[] = [];
-    for (const contact of contacts()) {
-      const opt: SearchableOption = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [...(meOption ? [meOption] : []), ...otherContactOptions];
-  });
+  const createdBySource = useContactFilterOptions(
+    createdByIds,
+    () => open() && createdByOpen() && showCreatedByFilter()
+  );
 
   const handleCreatedByChange = (ids: string[]) => {
     const nextIds = ids.length > 0 ? ids : baseCreatedByIds();
@@ -896,6 +879,11 @@ export const UnifiedFilterDropdown = (
                       onSelectionComplete={() => setOpen(false)}
                       label={t('viewMenus.assignee')}
                       options={assigneePicker.options}
+                      open={assigneeOpen}
+                      onOpenChange={(value) => {
+                        setAssigneeOpen(value);
+                        assigneePicker.onOpenChange(value);
+                      }}
                       activeIds={assigneeFilter}
                       onChange={handleAssigneeChange}
                       placeholder={assigneePicker.placeholder()}
@@ -907,7 +895,13 @@ export const UnifiedFilterDropdown = (
                     <SearchableFilterSubmenu
                       onSelectionComplete={() => setOpen(false)}
                       label={t('viewMenus.createdBy')}
-                      options={createdByOptions}
+                      source={createdBySource}
+                      options={createdBySource.options}
+                      open={createdByOpen}
+                      onOpenChange={(value) => {
+                        setCreatedByOpen(value);
+                        if (!value) createdBySource.setSearch('');
+                      }}
                       activeIds={createdByIds}
                       onChange={handleCreatedByChange}
                       placeholder={t('viewMenus.searchCreators')}

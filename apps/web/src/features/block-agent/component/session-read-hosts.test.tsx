@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
 
 // Keep both real session hosts and the real read marker. Replace unrelated
 // editor/chrome surfaces and provide the session/notification boundary data.
+vi.mock('@app/features/runtime-sharing/views/SessionAgentRuntime', () => ({
+  SessionAgentRuntime: () => null,
+}));
+
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
@@ -126,10 +130,15 @@ vi.mock('@app/features/changes/changes', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
+    FLOATING_CLEARANCE_PX: 344,
     Layout: (props: { children: JSX.Element }) => props.children,
     Root: (props: { children: JSX.Element }) => props.children,
     Toggle: () => null,
   },
+  useSidePanel: () => null,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   SplitFileMenu: () => null,
