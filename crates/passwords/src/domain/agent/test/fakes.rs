@@ -128,7 +128,13 @@ impl AgentRepository for FakeAgents {
             .lock()
             .unwrap()
             .get(&key.0)
-            .map(|entry| (entry.team_id, entry.item_id, entry.active || entry.cleanup_started));
+            .map(|entry| {
+                (
+                    entry.team_id,
+                    entry.item_id,
+                    entry.active || entry.cleanup_started,
+                )
+            });
         if let Some((owner_team, owner_item, settled)) = existing {
             let own_pending = owner_team == team
                 && owner_item == item

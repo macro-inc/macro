@@ -559,7 +559,13 @@ impl AgentRepository for PgRepository {
         let rows = sqlx::query!(
             r#"SELECT access.agent_user_id,access.approved_by IS NOT NULL AS "approved!",access.permission_revision,access.request_id,access.request_permission,access.request_status,access.request_revision,access.request_updated_at,
                 item.metadata,item.user_id,item.grants,item.deleting,item.revision,item.totp_key_id
-            FROM password_agent_access access JOIN password_item_entities item ON item.team_id=access.team_id AND item.id=access.item_id
+            FROM password_agent_access access
+            CROSS JOIN LATERAL (
+                SELECT keyed_item.metadata,keyed_item.user_id,keyed_item.grants,keyed_item.deleting,keyed_item.revision,keyed_item.totp_key_id,keyed_item.deleted_at
+                FROM password_item_entities keyed_item
+                WHERE keyed_item.team_id=access.team_id AND keyed_item.id=access.item_id
+                OFFSET 0
+            ) item
             WHERE access.team_id=$1 AND access.request_status='pending' AND item.deleted_at IS NULL AND NOT item.deleting
                 AND ($2::text IS NULL OR item.user_id=$2) AND ($3::uuid IS NULL OR access.request_id>$3)
             ORDER BY access.request_id LIMIT $4"#,
@@ -760,3 +766,6 @@ impl AgentRepository for PgRepository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;

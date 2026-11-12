@@ -49,11 +49,16 @@ CREATE INDEX password_agent_access_events_due ON password_agent_access_events(re
 
 -- Agent identity retained with a write intent or enrollment, so whichever
 -- reconciler completes it records the agent's audit in the same transaction.
+-- Its CHECKs are validated by a later migration, so existing intents are not
+-- scanned under this migration's lock.
 ALTER TABLE password_write_intents
     ADD COLUMN agent_user_id TEXT,
     ADD COLUMN wake_id UUID,
-    ADD COLUMN agent_action TEXT CHECK (agent_action IN ('agent_create','agent_update')),
-    ADD CHECK ((agent_user_id IS NULL) = (agent_action IS NULL));
+    ADD COLUMN agent_action TEXT,
+    ADD CONSTRAINT password_write_intents_agent_action_check
+        CHECK (agent_action IN ('agent_create','agent_update')) NOT VALID,
+    ADD CONSTRAINT password_write_intents_agent_identity_check
+        CHECK ((agent_user_id IS NULL) = (agent_action IS NULL)) NOT VALID;
 ALTER TABLE password_totp_enrollments
     ADD COLUMN agent_user_id TEXT,
     ADD COLUMN wake_id UUID;
