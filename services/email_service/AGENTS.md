@@ -118,7 +118,8 @@ the gateway `/email` prefix.
 ## Checks
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
-  tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
+  and `emulated_inbox` tests also need Redis, at `REDIS_URI` or
+  `redis://127.0.0.1:6379`).
 - `just check` from this directory runs `cargo check` with `SQLX_OFFLINE=true`.
   Run root `just check` as well for the shared code-rule and privacy checks.
   Changes to the boundary rules also run their
@@ -248,6 +249,13 @@ the gateway `/email` prefix.
   batches off, each message's operation settles only that message's markers.
   Markers expire after 12 hours, which must outlast an operation's redelivery
   through the gmail_ops queues.
+- `pubsub::emulated_inbox` connects one inbox to `crates/gmail_emulator` or
+  `crates/outlook_emulator` and runs the production inbox sync workers,
+  outbox publisher or Outlook mailbox sync loops against it, delivering
+  queued work as SQS does (three receives on the primary inbox sync queue).
+  Add a spec there, written as what the owner sees, for sync behavior a
+  provider failure or an odd message can break. `pubsub::test_support`
+  holds the fake SQS and worker wiring it shares with `label_write_sim`.
 - `pubsub::label_write_sim` wires one mailbox to the production label-write,
   gmail_ops and inbox sync code with fake Gmail and SQS. Add a test there for a
   new race between writes and syncs; its ignored `randomized_shard_*` tests run

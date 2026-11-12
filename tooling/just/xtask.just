@@ -65,6 +65,11 @@ local-e2e-rust *ARGS:
 local-e2e-all *ARGS:
   tooling/scripts/run-local-e2e.sh --suite all -- "$@"
 
+# Start an isolated stack whose Google is the Gmail emulator, then run
+# the email Playwright suite (apps/web/tests/e2e/local-email.config.ts).
+local-e2e-email *ARGS:
+  tooling/scripts/run-local-e2e.sh --suite email -- "$@"
+
 # Start and seed the stack, then open Playwright UI mode.
 local-e2e-ui *ARGS:
   tooling/scripts/run-local-e2e.sh --suite web --ui -- "$@"

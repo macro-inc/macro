@@ -32,7 +32,18 @@ fn derives_host_endpoints_and_test_environment_from_the_instance() {
 }
 
 #[test]
-fn ui_requires_the_web_suite() {
+fn ui_runs_with_the_email_suite() {
+    let args = LocalE2eArgs {
+        suite: LocalE2eSuite::Email,
+        ui: true,
+        ..LocalE2eArgs::default()
+    };
+
+    assert!(validate_args(&args).is_ok());
+}
+
+#[test]
+fn ui_requires_a_playwright_suite() {
     let args = LocalE2eArgs {
         suite: LocalE2eSuite::Rust,
         ui: true,
@@ -43,6 +54,6 @@ fn ui_requires_the_web_suite() {
     assert!(
         error
             .to_string()
-            .contains("only supported with --suite web")
+            .contains("only supported with --suite web or email")
     );
 }

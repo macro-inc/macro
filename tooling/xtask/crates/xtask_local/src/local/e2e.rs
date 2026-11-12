@@ -14,6 +14,9 @@ use super::instance::{Instance, Port};
 use super::{Mode, frontend, proxy, repo_root, stack};
 
 const DEFAULT_INSTANCE: &str = "local-e2e";
+/// The email suite's stack runs without Doppler, so it gets its own instance
+/// rather than reconfiguring the one the other suites share.
+const DEFAULT_EMAIL_INSTANCE: &str = "local-e2e-email";
 
 /// Which local E2E suite xtask should run after seeding.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
@@ -25,6 +28,10 @@ pub enum LocalE2eSuite {
     Rust,
     /// Run Rust first, then Playwright.
     All,
+    /// Run the email Playwright suite. The stack runs without Doppler, so
+    /// the Gmail emulator stands in for Google with its seeded users, and
+    /// specs sign in through it.
+    Email,
 }
 
 /// Arguments for `cargo x local-e2e`.
@@ -106,25 +113,40 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
     validate_args(args)?;
     super::kafka::ensure_available("local-e2e")?;
 
+    let email = args.suite == LocalE2eSuite::Email;
     let instance_name = args
         .instance
         .clone()
         .or_else(|| macro_env_var::maybe_read_env("LOCAL_E2E_INSTANCE"))
-        .unwrap_or_else(|| DEFAULT_INSTANCE.to_string());
+        .unwrap_or_else(|| {
+            if email {
+                DEFAULT_EMAIL_INSTANCE
+            } else {
+                DEFAULT_INSTANCE
+            }
+            .to_string()
+        });
     let up_args = stack::UpArgs {
         run: RunArgs {
             instance: InstanceArgs {
                 instance: Some(instance_name),
                 port_base: args.port_base,
             },
-            env: EnvArgs::default(),
+            // Without Doppler the stack has no real Google client, so it
+            // runs the Gmail emulator.
+            env: EnvArgs {
+                no_doppler: email,
+                ..EnvArgs::default()
+            },
             build: BuildArgs::default(),
             // No computers: E2E suites do not exercise them.
             computers: ComputersArgs {
                 no_computers: true,
                 ..ComputersArgs::default()
             },
-            no_frontend: true,
+            // The email suite signs in through the stack's own frontend, so a
+            // session carries the persona's real FusionAuth identity.
+            no_frontend: !email,
             // E2E stacks are ephemeral and throughput-sensitive; no collector,
             // and Playwright brings its own browsers.
             traces: TracesBackend::Off,
@@ -143,22 +165,61 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
         endpoints.generated_env.display()
     );
 
-    run_seed(&endpoints)?;
-    let test_env = endpoints.test_env();
     match args.suite {
-        LocalE2eSuite::Web => run_web(&test_env, args.ui, &args.test_args),
-        LocalE2eSuite::Rust => run_rust(&test_env, &args.test_args),
+        LocalE2eSuite::Email => run_email(&instance, &endpoints, args.ui, &args.test_args),
+        LocalE2eSuite::Web => run_web(&seeded(&endpoints)?, args.ui, &args.test_args),
+        LocalE2eSuite::Rust => run_rust(&seeded(&endpoints)?, &args.test_args),
         LocalE2eSuite::All => {
+            let test_env = seeded(&endpoints)?;
             run_rust(&test_env, &[])?;
             run_web(&test_env, false, &args.test_args)
         }
     }
 }
 
+/// Apply the smoke seed and return the test environment the web and Rust
+/// suites read.
+fn seeded(endpoints: &Endpoints) -> Result<BTreeMap<String, String>> {
+    run_seed(endpoints)?;
+    Ok(endpoints.test_env())
+}
+
+/// Run the email specs against the stack's frontend and its Gmail emulator,
+/// which seeds its own users (`crates/gmail_emulator/seed.example.yaml`).
+fn run_email(
+    instance: &Instance,
+    endpoints: &Endpoints,
+    ui: bool,
+    test_args: &[String],
+) -> Result<()> {
+    println!("\nRunning the email Playwright suite...");
+    let mut command = Command::new("bunx");
+    command.current_dir(repo_root().join("apps/web")).args([
+        "playwright",
+        "test",
+        "--config",
+        "tests/e2e/local-email.config.ts",
+    ]);
+    if ui {
+        command.arg("--ui");
+    }
+    command
+        .args(test_args)
+        .env(
+            "LOCAL_EMAIL_E2E_APP_URL",
+            format!("{}/app", endpoints.proxy_url),
+        )
+        .env(
+            "GMAIL_EMULATOR_URL",
+            format!("http://localhost:{}", instance.port(Port::GmailEmulator)),
+        );
+    require_success(&mut command, "email Playwright suite")
+}
+
 fn validate_args(args: &LocalE2eArgs) -> Result<()> {
     ensure!(
-        !args.ui || args.suite == LocalE2eSuite::Web,
-        "--ui is only supported with --suite web"
+        !args.ui || matches!(args.suite, LocalE2eSuite::Web | LocalE2eSuite::Email),
+        "--ui is only supported with --suite web or email"
     );
     Ok(())
 }
