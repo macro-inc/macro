@@ -7,3 +7,7 @@
 
 export * from './addContactRequest';
 export * from './getContactsResponse';
+export * from './searchedPerson';
+export * from './searchedPersonName';
+export * from './searchPeopleParams';
+export * from './searchPeopleResponse';
