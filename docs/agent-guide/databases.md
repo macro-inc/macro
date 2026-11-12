@@ -67,7 +67,8 @@ never automatically retry a write statement.
 `POST /databases/queries` saves a question; the service compiles it against the
 caller's databases, refuses anything but one `SELECT`, and, when the request names
 chart columns, refuses columns the `SELECT` does not return. The SDK's
-`database.saveQuery({ sql, title, display })` (or `table.saveQuery`) returns a
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`, or
+`macro.databases.saveQuery` for a question whose tables span databases) returns a
 `SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
 and whose `withView()` restyles the answer without saving a new question.
 

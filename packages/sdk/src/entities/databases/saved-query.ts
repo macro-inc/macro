@@ -223,7 +223,9 @@ export class SavedQuery {
    */
   static async save(
     client: MacroClient,
-    scope: { database?: Database; table?: DatabaseTable },
+    scope:
+      | { database: Database; table?: DatabaseTable }
+      | { database?: undefined; table?: undefined },
     options: SaveQueryOptions,
   ): Promise<SavedQuery> {
     const title = checkTitle(options.title);

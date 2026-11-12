@@ -83,12 +83,12 @@ export class DatabaseNamespace {
   }
 
   /**
-   * Save a `SELECT` that spans the caller's databases as a live question, no
-   * one database's tables winning name resolution. Prefer
-   * {@link Database.saveQuery} when the question is about one database. Run
-   * the SQL with {@link query} first, then save exactly that SQL; the server
-   * refuses anything but one `SELECT` that compiles across the caller's
-   * databases, and chart columns it does not return. Put
+   * Save a `SELECT` whose tables come from more than one database as a live
+   * question; use {@link Database.saveQuery} when every table is in one
+   * database. Answer a question about the data, or a request for a chart,
+   * with this: run the SQL with {@link query} first, then save exactly that
+   * SQL. The server refuses anything but one `SELECT` that compiles across
+   * the caller's databases, and chart columns it does not return. Put
    * {@link SavedQuery.toBlock} in a document verbatim.
    *
    * @write
