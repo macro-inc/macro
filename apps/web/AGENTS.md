@@ -765,6 +765,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
+  and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, send one `purchaseKey`
+  per Buy dialog on every retry (202 `confirming` is success), offer no power,
+  billing or release while `purchasing`, confirm Restore before billing again,
+  and release only after the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
@@ -1409,6 +1419,38 @@ phone, and tablet, and checks Space playback on opening and reopening the viewer
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
+## Macro computers
+
+### Claude access
+
+Computer rows show the Claude mode (`Signed in with Claude` on the computer's
+own account, never its email) from `claude-mode` for managers, and the harness list's derived
+`claude_mode` for other members. Sign-in is a dialog
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
+claude.ai control stays a plain `target="_blank"` link; never open it after an
+await. The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/settings/computers`.
+
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+null breakdown keeps the existing plan and computers UI. With the flag off the
+backend returns no breakdown and the page shows only the plan.
+
+Reuse `PriceBreakdown` for Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
+
+### Capacity
+
+Computer offers expose `soldOut` availability. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.
+
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
 - Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
@@ -1548,3 +1590,18 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+### Passwords
+
+The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
+source; the rail and phone dock show it only for team members (flag and team).
+Keep field values and drafts outside query caches and browser storage; drafts
+live in the vault primitive's in-memory store, and lock, blur and hidden tabs
+only conceal revealed values, never drafts. The vault is keyed by account,
+sign-in session and team: a scope change remounts it and aborts its requests,
+so drafts and late responses never cross viewers. Load and copy usernames
+through their field-scoped endpoints, and derive sharing counts from metadata.
+Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
+rather than feature-local chrome. The responsive vault fixture is exercised with
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
+See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
