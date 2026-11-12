@@ -13,7 +13,6 @@ import {
   DmWorkProvider,
   DmWorkToggle,
 } from '@app/features/agent-work/views/dm-work';
-import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -182,18 +181,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
-
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       <Show when={activeTab() !== 'call'}>
@@ -224,17 +211,6 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           <DebugSuspense name="ChannelDetail.call-button">
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
-        </Show>
-        <Show when={activeTab() !== 'call' && askMacroEntity()}>
-          {(entity) => (
-            <DebugSuspense name="ChannelDetail.ask-macro">
-              <ChatWithAgentButton
-                grouped
-                entity={entity()}
-                label="Ask Macro"
-              />
-            </DebugSuspense>
-          )}
         </Show>
       </HeaderActionGroup>
       <Show when={channelType() === ChannelType.direct_message}>

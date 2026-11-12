@@ -13,6 +13,7 @@ import type {
   ScheduledActionResponse,
   TemplateVariable,
 } from '../../../generated/scheduled-action/types.gen';
+import type { EntityAppearance } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
@@ -190,6 +191,24 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
 
   /** Routine name. */
   readonly name = this.field('name');
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /**
+   * Replace shared appearance without rescheduling. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.scheduledAction.setScheduledActionAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** Configured triggers. */
   readonly trigger = this.field('trigger');
