@@ -1659,35 +1659,36 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. On narrow desktop panes, the tabs
-collapse from text labels to icons. Standalone mobile channels
+`Invite` and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. `Ask Macro` lives in the channel
+title menu (the `...` after the name, or the split title's menu) on every
+platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
 recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
-already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
-`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
+already @mentioned as context (see ai-chat.md). On mobile the title menu is a
+drawer. Clicking the radio input can time out — click the adjacent label text
 instead.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. An ellipsis follows the name — after the breadcrumb where
+`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
 `Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
-`Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
-given a picture without finding its row, from Chat and from every view that
+`Remind me`, `Copy Link`, `Copy ID`, then `Ask Macro`. A channel can
+therefore be favorited or given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,
 reusing a cached conversation without another activation fetch. Opening the
 conversation still refreshes its unread notifications. The split's own title
-`...` menu offers the same picture actions.
+`...` menu offers the same picture actions and `Ask Macro`.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and
