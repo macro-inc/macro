@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                   description\n            FROM scheduled_action\n            WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL\n              AND (claimed IS NULL OR claimed < $1)\n            ORDER BY next_run_at ASC, id ASC\n            LIMIT $2\n            ",
+  "query": "\n            UPDATE scheduled_action\n            SET parent_id = NULL, created_by_run_id = NULL, child_key = NULL,\n                paused_by_parent = FALSE, updated_at = now()\n            WHERE id = $1 AND parent_id IS NOT NULL\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                      description, parent_id, created_by_run_id, child_key, paused_by_parent\n            ",
   "describe": {
     "columns": [
       {
@@ -107,12 +107,31 @@
         "ordinal": 20,
         "name": "description",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "created_by_run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "child_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "paused_by_parent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Timestamptz",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -136,8 +155,12 @@
       false,
       true,
       true,
+      false,
+      true,
+      true,
+      true,
       false
     ]
   },
-  "hash": "1a570e64a4de191f4a1a89c66cda9aea6d8c41268e3300d7530a9593caf7f736"
+  "hash": "a8fae9621df9751fe7bc093d53a4986eee4288c809c747bedfb8d88a2d9bffb2"
 }

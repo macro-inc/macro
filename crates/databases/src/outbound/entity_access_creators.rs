@@ -1,4 +1,8 @@
-//! A webhook creator's current grant, asked of entity access on every call.
+//! A creator's current grant on a database, asked of entity access on every
+//! call.
+
+#[cfg(all(test, feature = "postgres"))]
+mod test;
 
 use std::sync::Arc;
 
@@ -7,8 +11,8 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::DatabaseId;
 
+use crate::domain::models::DatabaseId;
 use crate::domain::ports::CreatorAccess;
 
 /// [`CreatorAccess`] through entity access.
@@ -54,9 +58,7 @@ impl<EntityAccess: EntityAccessService> CreatorAccess for EntityAccessCreators<E
                 | AccessError::UnauthorizedWithMessage(_)
                 | AccessError::NotFound(_),
             ) => Ok(None),
-            Err(error) => Err(rootcause::report!(
-                "checking the webhook creator's access: {error}"
-            )),
+            Err(error) => Err(rootcause::report!("checking the creator's access: {error}")),
         }
     }
 }
