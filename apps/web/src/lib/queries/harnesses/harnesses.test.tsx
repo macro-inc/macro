@@ -1,15 +1,20 @@
 import { render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useHarnessesQuery } from './harnesses';
+import { useHarnessDirectoryQuery, useHarnessesQuery } from './harnesses';
 
 const mocks = vi.hoisted(() => ({
   getHarnesses: vi.fn(),
+  getHarnessDirectory: vi.fn(),
 }));
 
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getHarnesses: mocks.getHarnesses },
+  storageServiceClient: {
+    getHarnesses: mocks.getHarnesses,
+    getHarnessDirectory: mocks.getHarnessDirectory,
+  },
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@queries/agents/agents', () => ({ invalidateAgents: vi.fn() }));
@@ -35,6 +40,7 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false } },
   });
   mocks.getHarnesses.mockReset();
+  mocks.getHarnessDirectory.mockReset();
 });
 
 afterEach(() => {
@@ -71,4 +77,40 @@ it('keeps polling through errors that are not a dead session', async () => {
   await vi.advanceTimersByTimeAsync(0);
   await vi.advanceTimersByTimeAsync(30_000);
   expect(mocks.getHarnesses).toHaveBeenCalledTimes(3);
+});
+
+it('fetches the runtime directory only after its caller enables sharing', async () => {
+  const [enabled, setEnabled] = createSignal(false);
+  mocks.getHarnessDirectory.mockResolvedValue(ok([]));
+  function Probe() {
+    useHarnessDirectoryQuery(enabled);
+    return null;
+  }
+  unmount = render(() => (
+    <QueryClientProvider client={queryClient}>
+      <Probe />
+    </QueryClientProvider>
+  )).unmount;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.getHarnessDirectory).not.toHaveBeenCalled();
+  setEnabled(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
+});
+
+it('does not poll the runtime directory', async () => {
+  mocks.getHarnessDirectory.mockResolvedValue(ok([]));
+  function Probe() {
+    useHarnessDirectoryQuery();
+    return null;
+  }
+  unmount = render(() => (
+    <QueryClientProvider client={queryClient}>
+      <Probe />
+    </QueryClientProvider>
+  )).unmount;
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
 });
