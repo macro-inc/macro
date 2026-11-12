@@ -33,8 +33,9 @@ PID 1 (for the dev-only DockerFleet).
 - `_agent.nix` (imported by `_guest.nix`, options `macro.box.agent.*`) runs
   the agent teammate: `packages/starter-agent` on `packages/muppet`.
   `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
-  `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` (TypeScript
-  source) and `@macro-inc/sdk` (built against those packages) beside them.
+  `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` and
+  `@macro-inc/observability` (TypeScript source) and `@macro-inc/sdk` (built
+  against those packages) beside them.
   `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
   pinned release.
 - `files/` holds the enrollment probe script, the agent's `start-agent`,
@@ -129,7 +130,11 @@ PID 1 (for the dev-only DockerFleet).
   `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901), `macro-agent-openbox`
   and `macro-agent-browser` (Chromium with forced accessibility, profile
   `~macro/agent/browser`, DevTools on 127.0.0.1:9223 as
-  `MUPPET_BROWSER_CDP_URL`). AT-SPI runs on macro's session bus. macro's
+  `MUPPET_BROWSER_CDP_URL`). AT-SPI runs on macro's session bus; macro's user
+  manager and computer-use-linux get `GSETTINGS_SCHEMA_DIR` with GNOME's
+  `toolkit-accessibility` on by default (there is no dconf), which
+  computer-use-linux needs before it reads a tree. `xclip` is on the unit's
+  PATH for the clipboard. macro's
   PulseAudio (started on demand, `PULSE_SERVER`) has the default null sink
   `agent`, whose monitor is what a call records.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
@@ -237,7 +242,8 @@ The control plane, per computer:
   A third VM boots the guest in agent mode: macro has no sudo or docker
   group; the agent stays down without `agent.env`; its Chromium serves
   DevTools on loopback only with a profile under its home; the `agent` sink
-  and its monitor exist; computer-use-linux lists Chromium's
+  and its monitor exist; the clipboard round-trips on `:1`; AT-SPI reports
+  `IsEnabled`; computer-use-linux lists Chromium's
   window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its

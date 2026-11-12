@@ -1,6 +1,6 @@
 # The agent teammate's runtime: the starter agent's packages, installed from
-# its own bun.lock, with @macro-inc/muppet (TypeScript source) and
-# @macro-inc/sdk (built) placed beside them. An agent's repository is the
+# its own bun.lock, with @macro-inc/muppet and @macro-inc/observability
+# (TypeScript source) and @macro-inc/sdk (built) placed beside them. An agent's repository is the
 # rendered starter agent; the launcher links this node_modules into it.
 { pkgs }:
 let
@@ -18,6 +18,14 @@ let
     fileset = lib.fileset.difference ../../packages/muppet (
       lib.fileset.maybeMissing ../../packages/muppet/node_modules
     );
+  };
+  # Its OpenTelemetry packages are the starter agent's own.
+  observabilitySource = lib.fileset.toSource {
+    root = ../../packages/observability;
+    fileset = lib.fileset.unions [
+      ../../packages/observability/package.json
+      ../../packages/observability/src
+    ];
   };
   sdkSource = lib.fileset.toSource {
     root = ../../packages/sdk;
@@ -87,6 +95,7 @@ pkgs.stdenvNoCC.mkDerivation {
     mkdir -p $out/node_modules/@macro-inc/sdk
     cp -r package.json dist $out/node_modules/@macro-inc/sdk/
     cp -r ${muppetSource} $out/node_modules/@macro-inc/muppet
+    cp -r ${observabilitySource} $out/node_modules/@macro-inc/observability
     cp ${lockSource}/bun.lock $out/bun.lock
     runHook postInstall
   '';
