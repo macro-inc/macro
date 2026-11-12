@@ -1,14 +1,22 @@
 //! Append a channel's change only after all message work has completed.
 
+#[cfg(test)]
+mod test;
+
 use super::{PgMessageRepository, database_error};
 use crate::domain::{changes::ChannelChangeKind, models::MessageParent, ports::MessageError};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
+// PostgreSQL also uses 57014 for user cancellation. Match only its English
+// statement-timeout message; other locales or cancellation causes stay generic.
 fn append_error(error: sqlx::Error) -> MessageError {
     if matches!(
         &error,
-        sqlx::Error::Database(database) if database.code().as_deref() == Some("55P03")
+        sqlx::Error::Database(database)
+            if database.code().as_deref() == Some("55P03")
+                || (database.code().as_deref() == Some("57014")
+                    && database.message() == "canceling statement due to statement timeout")
     ) {
         MessageError::Contended(rootcause::Report::new(error).into())
     } else {

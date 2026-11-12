@@ -467,8 +467,26 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
             .unwrap(),
         Some(2)
     );
-    for lock_timeout in ["75ms", "1ms"] {
-        let statement_timeout = "0";
+    for (lock_timeout, statement_timeout, expected_code, expected_message) in [
+        (
+            "75ms",
+            "0",
+            "57014",
+            "canceling statement due to statement timeout",
+        ),
+        (
+            "1ms",
+            "0",
+            "55P03",
+            "canceling statement due to lock timeout",
+        ),
+        (
+            "0",
+            "10ms",
+            "57014",
+            "canceling statement due to statement timeout",
+        ),
+    ] {
         let options = pool.connect_options().as_ref().clone().options([
             ("lock_timeout", lock_timeout),
             ("statement_timeout", statement_timeout),
@@ -493,11 +511,8 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
         };
         let error = report.downcast_current_context::<sqlx::Error>().unwrap();
         let database = error.as_database_error().unwrap();
-        assert_eq!(database.code().as_deref(), Some("55P03"));
-        assert_eq!(
-            database.message(),
-            "canceling statement due to lock timeout"
-        );
+        assert_eq!(database.code().as_deref(), Some(expected_code));
+        assert_eq!(database.message(), expected_message);
 
         // Acquiring the sole connection again also waits for SQLx's rollback.
         assert!(timed_repo.get(&parent, failed_id).await.unwrap().is_none());
@@ -553,7 +568,7 @@ async fn channel_counter_wait_is_bounded_with_database_timeouts_disabled(pool: P
     // Reusing the single pooled connection waits for rollback and verifies the
     // SET LOCAL value did not leak from the failed transaction.
     assert_eq!(
-        sqlx::query_scalar!("SELECT current_setting('lock_timeout') AS \"timeout!\"")
+        sqlx::query_scalar!("SELECT current_setting('statement_timeout') AS \"timeout!\"")
             .fetch_one(&waiting_pool)
             .await
             .unwrap(),

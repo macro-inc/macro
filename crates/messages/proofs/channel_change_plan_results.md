@@ -6,7 +6,7 @@ Each version ran 18 exact SQL shapes twice with custom plans and twice with gene
 
 No final plan has a sequential scan. Narrowing predicates are index conditions; root/thread counts are bounded by 200 requested roots and 99 replies per seeded root, previews by three rows per root. The prune uses the created_at index to select 10,000 TIDs and a Tid Scan to delete exactly those rows. The service enforces a 15s timeout for changes hydration/log reads and prune transactions.
 
-Counter/log SQL lives in `crates/channel_change_db_utils`. The counter read, log snapshot and prune SQL remain identical to the measured queries in the main matrix. The scalar and activity appends now include a scoped counter lock timeout; their updated exact-SQL measurements and prior comparison are recorded separately below. Callers retain their transaction boundaries and domain policy.
+Counter/log SQL lives in `crates/channel_change_db_utils`. The counter read, log snapshot and prune SQL remain identical to the measured queries in the main matrix. The scalar and activity appends now use a scoped total statement deadline; their updated exact-SQL measurements and prior comparison are recorded separately below. Callers retain their transaction boundaries and domain policy.
 
 Call deletion captures `channel_id` from `call_entities` only when its stored discussion is `channel_thread`, before deletion triggers remove the call entity. Archival uses the channel and discussion it already reads. Both paths append the canonical call ID through the same scalar utility as other message changes, as their final statement before commit. It no longer queries message storage to locate the root; logging an absent root is deliberate so the delta read can return its removed ID. The metadata lookup is reproduced separately by `channel_call_metadata_plans.sql`; the scalar append is reproduced by `channel_change_append_plans.sql`.
 
@@ -95,12 +95,11 @@ Reproduction: `crates/messages/proofs/channel_change_plans.py` extracts the exac
 
 Evidence paths: `/tmp/channel_seq_read_plans/summary.json` (PostgreSQL 18.4) and `/tmp/channel_seq_read_plans_pg14/summary.json` (PostgreSQL 14.23); full plans are `*_*.json.txt` in the same directories.
 
-## Scoped counter timeout append plans
+## Historical per-lock timeout append plans
 
-The current **50 ms** scalar and activity statements were extracted byte for
-byte from `crates/channel_change_db_utils/src/append.rs` into
-`channel_change_append_plans.sql`; `sync_append_plan_sql.py --check` verifies
-that match without a database connection. These 32 current runs cover PostgreSQL
+The earlier **50 ms per-lock** scalar and activity statements were extracted
+byte for byte from the source at measurement time. These 32 historical runs
+cover PostgreSQL
 18.4 and 14.23, fresh/stale statistics, custom/generic plans, and first/repeated
 executions. Each statistics case used a new scratch database with 1,100,000 log
 rows across 11 counters. Stale statistics were collected on one row before
@@ -110,7 +109,7 @@ seeding the remainder, with autovacuum disabled. Planner settings were
 temporarily caps counter row waits at 50 ms and restores that inherited value.
 Every measured write and its fixture were rolled back.
 
-No current plan has a sequential scan or a large-table scan. The counter
+No recorded plan has a sequential scan or a large-table scan. The counter
 INSERT uses `channel_change_counters_pkey` for conflict arbitration: one
 counter for a scalar append, two for the four-activity batch. Returned log rows
 are respectively one and four. No node returns more than four rows per loop.
@@ -120,7 +119,7 @@ restoration stages remain in all plans. These are uncontended statement-cost
 measurements, not a bound on commit time or a substitute for the separate
 concurrent-writer and pool-isolation tests.
 
-Current 50 ms values are first / repeated execution milliseconds and shared
+Historical 50 ms per-lock values are first / repeated execution milliseconds and shared
 hit+read buffers:
 
 | PostgreSQL | Stats | Append | Custom ms | Custom buffers H+R | Generic ms | Generic buffers H+R |
@@ -139,7 +138,7 @@ The earlier runs below are preserved as historical measurements, with phases
 were taken before the cap was increased; they do not describe current SQL.
 The three phases ran at different times and are not a paired latency experiment.
 
-| PostgreSQL | Append | Unbounded min–max ms | Historical 5 ms min–max ms | Current 50 ms min–max ms |
+| PostgreSQL | Append | Unbounded min–max ms | Historical 5 ms min–max ms | Historical 50 ms per-lock min–max ms |
 | --- | --- | --- | --- | --- |
 | 18.4 | scalar | 0.021–0.256 | 0.035–0.193 | 0.067–0.206 |
 | 18.4 | four activities | 0.070–0.153 | 0.089–0.187 | 0.099–0.223 |
@@ -147,13 +146,76 @@ The three phases ran at different times and are not a paired latency experiment.
 | 14.23 | four activities | 0.064–0.133 | 0.086–0.172 | 0.076–0.155 |
 
 [All 96 run summaries](channel_change_append_plan_runs.csv) retain the
-measurements and row/index checks. Current 50 ms full plans are in
+measurements and row/index checks. Historical 50 ms per-lock full plans are in
 `/tmp/channel-seq-timeout50-append-{18,14}-{fresh,stale}-20261112_064802.log`;
 the normalized artifact is `/tmp/channel-seq-timeout50-append-summary.json`.
 Historical 5 ms plans are
 `/tmp/channel-seq-timeout-append-{18,14}-{fresh,stale}-20261112_064000_711895.log`
 and `/tmp/channel-seq-timeout-append-summary.json`. Unbounded full plans are
 `/tmp/channel-append-plans{,14}-{fresh,stale}.log`.
+The current statement-deadline implementation differs from these historical
+per-lock statements; its source-synchronized proof is described below.
+
+## Statement-deadline append plans
+
+The current implementation sets a total 50 ms append statement deadline in one
+preflight query and restores the prior value inside the final append. All three
+queries were extracted byte for byte from the source; the synchronizer checks
+this without a database connection. The `deadline50ms` phase contains 48 runs:
+three queries, fresh/stale statistics, custom/generic plans, first/repeated
+executions, and PostgreSQL 14.23/18.4. Every statistics case used a new migrated
+scratch database with the same 1,100,000-row fixture and planner settings as
+the historical append phases above.
+
+The preflight runs under the fixture's 15-second statement timeout and changes
+it to 50 ms; rollback to the sample savepoint restores the prior setting. Each
+scalar/batch sample sets the effective statement timeout to 50 ms before
+`EXPLAIN EXECUTE` and supplies `15s` as the saved timeout argument. Thus these
+are exact current query plans under the current append deadline. Functional
+tests separately exercise the Rust preflight-to-append transition and rollback.
+The existing 5-second `lock_timeout` is unchanged. Seeds use 300 seconds and
+all fixture writes and measured mutations roll back.
+
+Every preflight returns one row, reads no table, and uses no execution buffers
+(planning buffer access is excluded). Scalar appends return one row and affect
+one counter through `channel_change_counters_pkey` conflict arbitration. The
+four-activity batch affects two counters through that primary key and returns
+four rows. There are no sequential or large-table scans; all scan nodes consume
+bounded CTE/input rows. The restoration aggregate consumes the complete log
+output before the final return. These are statement-plan measurements, not
+end-to-end write latency or pool-isolation evidence.
+
+Current values are first / repeated execution milliseconds and shared execution
+hit+read buffers:
+
+| PostgreSQL | Stats | Query | Custom ms | Custom buffers H+R | Generic ms | Generic buffers H+R |
+| --- | --- | --- | --- | --- | --- | --- |
+| 18.4 | fresh | preflight | 0.035 / 0.017 | 0+0 / 0+0 | 0.049 / 0.007 | 0+0 / 0+0 |
+| 18.4 | fresh | scalar | 0.214 / 0.083 | 9+4 / 10+0 | 0.104 / 0.079 | 10+0 / 10+0 |
+| 18.4 | fresh | four activities | 0.201 / 0.144 | 27+2 / 32+0 | 0.171 / 0.156 | 32+0 / 32+0 |
+| 18.4 | stale | preflight | 0.049 / 0.021 | 0+0 / 0+0 | 0.006 / 0.017 | 0+0 / 0+0 |
+| 18.4 | stale | scalar | 0.217 / 0.136 | 7+3 / 10+0 | 0.098 / 0.081 | 10+0 / 10+0 |
+| 18.4 | stale | four activities | 0.213 / 0.171 | 28+1 / 32+0 | 0.171 / 0.155 | 32+0 / 32+0 |
+| 14.23 | fresh | preflight | 0.043 / 0.021 | 0+0 / 0+0 | 0.007 / 0.007 | 0+0 / 0+0 |
+| 14.23 | fresh | scalar | 0.205 / 0.096 | 9+4 / 10+0 | 0.058 / 0.054 | 10+0 / 10+0 |
+| 14.23 | fresh | four activities | 0.275 / 0.174 | 27+2 / 32+0 | 0.188 / 0.153 | 32+0 / 32+0 |
+| 14.23 | stale | preflight | 0.036 / 0.014 | 0+0 / 0+0 | 0.008 / 0.005 | 0+0 / 0+0 |
+| 14.23 | stale | scalar | 0.172 / 0.086 | 7+3 / 10+0 | 0.049 / 0.057 | 10+0 / 10+0 |
+| 14.23 | stale | four activities | 0.207 / 0.120 | 28+1 / 32+0 | 0.136 / 0.092 | 32+0 / 32+0 |
+
+Across these runs, PostgreSQL 18.4 took 0.006–0.049 ms for preflight,
+0.079–0.217 ms for scalar append, and 0.144–0.213 ms for the four-activity
+batch. PostgreSQL 14.23 took 0.005–0.043 ms, 0.049–0.205 ms, and
+0.092–0.275 ms respectively. These phases were measured at different times;
+their ranges are not paired estimates of latency changes.
+
+[All 144 historical/current run summaries](channel_change_append_plan_runs.csv)
+retain the new `deadline50ms` phase beside `unbounded`, `bounded5ms`, and
+`bounded50ms`; the historical measurements were not relabeled. Counter-index
+fields are `n/a` for the preflight because it touches no counter table. Current
+full plans are
+`/tmp/channel-seq-deadline50-append-{18,14}-{fresh,stale}-20261112_065815.log`;
+the normalized artifact is `/tmp/channel-seq-deadline50-append-summary.json`.
 Reproduce the current phase with `sync_append_plan_sql.py --check`, then run
 `channel_change_append_plans.sql` as described in [README.md](README.md).
 
