@@ -66,8 +66,18 @@ projects.
   across a large mailbox runs for minutes.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
-  `source_fields`. Agent sessions name the fields their hit's `_source` struct
-  decodes; the other join queries still fetch whole children.
+  `source_fields`. Every join query names the fields its hit's `_source`
+  struct decodes; do the same for a new one, or each child comes back with
+  its full `content`.
+- Fetch time and response size follow the number of inner hits returned,
+  because the plain highlighter re-analyses each one. Document content
+  clauses share one budget per document (`INNER_HITS_PER_DOCUMENT`); do not
+  give each term its own.
+- Document content has two matching shapes (`DocumentTermMatching`). `All`
+  is one `has_child` per term: every term somewhere in the document, each a
+  prefix. `Dynamic` is one `has_child` for queries of three or more terms:
+  most non-stopword terms in the same chunk, only the last term a prefix.
+  It changes which documents match, so callers opt in per request.
 
 ## Related
 

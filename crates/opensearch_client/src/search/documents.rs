@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     Result, delegate_methods,
@@ -27,18 +27,38 @@ const CHILD_RELATION: &str = "chunk";
 /// set on the analyzer and risk hitting `max_clause_count`.
 const MIN_PREFIX_LEN: usize = 3;
 
-/// Cap on chunks returned per `has_child` clause inside `inner_hits`.
-/// Applied per term, so an N-term query can surface up to N times this many
-/// chunks per document. Highlight cost and response size scale with it (and
-/// with the term count), so it stays small. A grouped result row only previews
-/// a handful of matching passages per document.
-const INNER_HITS_PER_TERM: u32 = 10;
+/// Budget of chunks returned for one document, shared by its `has_child`
+/// clauses. Every returned chunk is re-analysed by the plain highlighter and
+/// shipped in the response, so fetch time and payload follow the chunk count,
+/// not the term count. A grouped result row previews one passage and expands
+/// to the rest.
+const INNER_HITS_PER_DOCUMENT: u32 = 10;
+
+/// The chunk `_source` fields a `SearchHit` carries. Inner hits do not inherit
+/// the request-level `_source` filter, so without this every chunk comes back
+/// with its full `content`, which only the highlight needs.
+const CHUNK_SOURCE_FIELDS: [&str; 2] = ["node_id", "raw_content"];
+
+/// Fewest terms a query needs before [`DocumentTermMatching::Dynamic`]
+/// relaxes it. Shorter queries stay a strict AND.
+pub const MIN_TERMS_FOR_DYNAMIC_MATCHING: usize = 3;
+
+/// Words too common to tell passages apart. A sentence query matches on its
+/// other words. This is Lucene's English stop set.
+const STOPWORDS: [&str; 33] = [
+    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it",
+    "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these",
+    "they", "this", "to", "was", "will", "with",
+];
 
 /// Cap on terms a `match_phrase_prefix` may expand the last word to.
 /// OpenSearch's default of 50 is too aggressive — a prefix like `wo`
 /// can expand to far more real tokens. Picking a fixed ceiling keeps
 /// query cost bounded without truncating common cases.
 const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
+
+/// Name of the one `inner_hits` block of the passage clause.
+const PASSAGE_INNER_HITS_NAME: &str = "passage";
 
 /// Which fields a document search matches against.
 ///
@@ -53,6 +73,18 @@ pub enum DocumentSearchMode {
     Content,
     /// Match a document by its name or its content.
     NameContent,
+}
+
+/// How a multi-term content search combines its terms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DocumentTermMatching {
+    /// Every term matches somewhere in the document, each as a prefix.
+    #[default]
+    All,
+    /// Queries of three or more terms match a document when one passage holds
+    /// most of the terms that are not stopwords; only the last term is a
+    /// prefix. Shorter queries behave as `All`.
+    Dynamic,
 }
 
 /// UTC bounds for an indexed DATE property.
@@ -97,6 +129,7 @@ pub(crate) struct DocumentQueryBuilder {
     property_filters: Vec<PropertyFilterArg>,
     tag_option_ids: Vec<String>,
     match_all_tags: bool,
+    term_matching: DocumentTermMatching,
 }
 
 impl DocumentQueryBuilder {
@@ -108,6 +141,7 @@ impl DocumentQueryBuilder {
             property_filters: Vec::new(),
             tag_option_ids: Vec::new(),
             match_all_tags: false,
+            term_matching: DocumentTermMatching::default(),
         }
     }
 
@@ -147,8 +181,14 @@ impl DocumentQueryBuilder {
         self
     }
 
+    pub fn term_matching(mut self, term_matching: DocumentTermMatching) -> Self {
+        self.term_matching = term_matching;
+        self
+    }
+
     /// Parent/child join query: one `has_child` clause per term, ANDed
-    /// inside `bool.must`. Parent metadata filters (owner, ids,
+    /// inside `bool.must`, or a single passage clause under
+    /// [`DocumentTermMatching::Dynamic`]. Parent metadata filters (owner, ids,
     /// sub_type) sit on `bool.filter` directly because they live on
     /// the parent doc.
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
@@ -210,10 +250,10 @@ impl DocumentQueryBuilder {
         );
 
         if include_name && include_content {
-            // A document matches when its name matches every term, or every
-            // term matches some chunk's content.
+            // A document matches when its name matches every term, or its
+            // content matches.
             let mut content_bool = BoolQueryBuilder::new();
-            for clause in self.build_content_has_child_clauses() {
+            for clause in self.build_content_clauses() {
                 content_bool.must(clause);
             }
             let mut matched = BoolQueryBuilder::new();
@@ -224,8 +264,7 @@ impl DocumentQueryBuilder {
         } else if include_name {
             bool_query.must(self.inner.build_title_term_query()?);
         } else {
-            // Content-only: one has_child clause per term, ANDed via bool.must.
-            for clause in self.build_content_has_child_clauses() {
+            for clause in self.build_content_clauses() {
                 bool_query.must(clause);
             }
         }
@@ -233,30 +272,104 @@ impl DocumentQueryBuilder {
         Ok(bool_query)
     }
 
+    /// The clauses a document's content must all satisfy.
+    fn build_content_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
+        match self.build_passage_has_child_clause() {
+            Some(passage_clause) => vec![passage_clause],
+            None => self.build_content_has_child_clauses(),
+        }
+    }
+
     /// One `has_child` clause per term, each carrying its own `inner_hits` so
-    /// highlights and chunk-nav data come back alongside the parent. `size` is
-    /// bumped well above OpenSearch's default of 3 so a doc with many matching
-    /// chunks returns all of them. The shared `highlight_query` ORs every term
-    /// so a returned chunk gets tagged for every term it contains, not just the
-    /// one its clause matched.
+    /// highlights and chunk-nav data come back alongside the parent. The
+    /// clauses split [`INNER_HITS_PER_DOCUMENT`] between them, so a document
+    /// returns about that many chunks however many terms the query has. The
+    /// shared `highlight_query` ORs every term so a returned chunk gets tagged
+    /// for every term it contains, not just the one its clause matched.
     fn build_content_has_child_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
-        let highlight_query =
-            build_all_terms_highlight_query(&self.inner.terms, &self.inner.match_type);
-        self.inner
+        let term_queries: Vec<QueryType<'a>> = self
+            .inner
             .terms
             .iter()
+            .map(|term| build_child_content_query(term, &self.inner.match_type))
+            .collect();
+        let highlight_query = build_any_term_highlight_query(&term_queries);
+        let term_count = u32::try_from(term_queries.len()).unwrap_or(u32::MAX);
+        let inner_hits_per_term = (INNER_HITS_PER_DOCUMENT / term_count.max(1)).max(1);
+
+        term_queries
+            .into_iter()
             .enumerate()
-            .map(|(idx, term)| {
-                let inner_query = build_child_content_query(term, &self.inner.match_type);
+            .map(|(idx, inner_query)| {
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
-                    .size(INNER_HITS_PER_TERM)
+                    .size(inner_hits_per_term)
+                    .source_fields(CHUNK_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
                 HasChildQuery::new(CHILD_RELATION, inner_query)
                     .inner_hits(inner_hits)
                     .into()
             })
             .collect()
+    }
+
+    /// The single `has_child` clause of [`DocumentTermMatching::Dynamic`], or
+    /// `None` when the query keeps the per-term AND: it has too few terms, or
+    /// nothing but stopwords.
+    ///
+    /// A document matches when one chunk holds enough of the query's terms:
+    /// all of them up to two, three quarters (rounded down) beyond that.
+    /// Stopwords and repeated terms are left out of the count. Only the last
+    /// term expands as a prefix, because it is the one still being typed; the
+    /// per-term AND expands every term, which is what makes long queries slow
+    /// to match.
+    fn build_passage_has_child_clause<'a>(&'a self) -> Option<QueryType<'a>> {
+        let terms = &self.inner.terms;
+        if self.term_matching != DocumentTermMatching::Dynamic
+            || terms.len() < MIN_TERMS_FOR_DYNAMIC_MATCHING
+        {
+            return None;
+        }
+
+        let mut counted_terms: Vec<String> = Vec::new();
+        let mut term_queries: Vec<QueryType<'a>> = Vec::new();
+        for (idx, term) in terms.iter().enumerate() {
+            let lowercase = term.to_lowercase();
+            if STOPWORDS.contains(&lowercase.as_str()) || counted_terms.contains(&lowercase) {
+                continue;
+            }
+            counted_terms.push(lowercase);
+
+            let is_last_term = idx + 1 == terms.len();
+            let match_type = if is_last_term {
+                self.inner.match_type.as_str()
+            } else {
+                "exact"
+            };
+            term_queries.push(build_child_content_query(term, match_type));
+        }
+        if term_queries.is_empty() {
+            return None;
+        }
+
+        let highlight_query = build_any_term_highlight_query(&term_queries);
+        let required = i32::try_from(required_term_count(term_queries.len())).ok()?;
+        let mut passage = BoolQueryBuilder::new();
+        passage.minimum_should_match(required);
+        for term_query in term_queries {
+            passage.should(term_query);
+        }
+
+        let inner_hits = InnerHits::new()
+            .name(PASSAGE_INNER_HITS_NAME)
+            .size(INNER_HITS_PER_DOCUMENT)
+            .source_fields(CHUNK_SOURCE_FIELDS)
+            .highlight(inner_hits_content_highlight(&highlight_query));
+        Some(
+            HasChildQuery::new(CHILD_RELATION, passage.build().into())
+                .inner_hits(inner_hits)
+                .into(),
+        )
     }
 
     /// Build the access-control filter using parent-side fields: either
@@ -361,20 +474,28 @@ fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_js
 /// Single-term queries return that one term's query directly; multi-term
 /// builds a `bool.should` so the highlighter tags every search term it
 /// finds in the chunk's content.
-fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_json::Value {
-    let term_queries: Vec<serde_json::Value> = terms
-        .iter()
-        .map(|t| build_child_content_query(t, match_type).to_json())
-        .collect();
-    if term_queries.len() == 1 {
-        return term_queries.into_iter().next().unwrap();
+fn build_any_term_highlight_query(term_queries: &[QueryType<'_>]) -> serde_json::Value {
+    if let [term_query] = term_queries {
+        return term_query.to_json();
     }
+    let term_queries: Vec<serde_json::Value> =
+        term_queries.iter().map(ToOpenSearchJson::to_json).collect();
     serde_json::json!({
         "bool": {
             "should": term_queries,
             "minimum_should_match": 1,
         }
     })
+}
+
+/// How many of `term_count` terms one passage must hold under
+/// [`DocumentTermMatching::Dynamic`]: all of them up to two, three quarters
+/// (rounded down) beyond that. OpenSearch writes this rule `2<75%`.
+fn required_term_count(term_count: usize) -> usize {
+    if term_count <= 2 {
+        return term_count;
+    }
+    term_count * 3 / 4
 }
 
 /// Build the per-term query that runs inside `has_child` against `content`.
@@ -425,6 +546,7 @@ pub struct DocumentSearchArgs {
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub term_matching: DocumentTermMatching,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -442,6 +564,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .property_filters(args.property_filters)
             .tag_option_ids(args.tag_option_ids)
             .match_all_tags(args.match_all_tags)
+            .term_matching(args.term_matching)
     }
 }
 
@@ -493,7 +616,8 @@ struct InnerHitsList {
 ///
 /// A chunk matched by multiple `has_child` clauses (multi-term queries)
 /// appears once per term in the response; we dedup by chunk `_id` so a
-/// single chunk maps to a single `SearchHit` downstream.
+/// single chunk maps to a single `SearchHit` downstream. Clauses are read in
+/// name order, so the same response always yields the same first passage.
 ///
 /// Returns an empty vec if `inner_hits` is malformed or carries no
 /// chunks — callers fall back to emitting a single parent hit so the
@@ -503,7 +627,8 @@ pub(crate) fn expand_inner_hits_to_search_hits(
     updated_at: Option<DateTime<Utc>>,
     inner_hits: &serde_json::Value,
 ) -> Vec<SearchHit> {
-    let groups: HashMap<String, InnerHitsGroup> = match serde_json::from_value(inner_hits.clone()) {
+    let groups: BTreeMap<String, InnerHitsGroup> = match serde_json::from_value(inner_hits.clone())
+    {
         Ok(g) => g,
         Err(_) => return Vec::new(),
     };
