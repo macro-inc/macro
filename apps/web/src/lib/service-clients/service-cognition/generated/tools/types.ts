@@ -4299,107 +4299,6 @@ export type SqlStatement =
  */
 export type ReactionAction = 'add' | 'remove';
 /**
- * One activity action returned to the AI.
- */
-export type ToolActivityAction =
-  | {
-      type: 'created';
-    }
-  | {
-      type: 'edited';
-    }
-  | {
-      type: 'opened';
-    }
-  | {
-      type: 'deleted';
-    }
-  | {
-      type: 'messaged';
-    }
-  | {
-      type: 'sent';
-    }
-  | {
-      type: 'responded';
-    }
-  | {
-      /**
-       * The property definition id.
-       */
-      property: string;
-      /**
-       * The property definition's human-readable display name, when it is
-       * still visible to the caller.
-       */
-      propertyName?: string | null;
-      /**
-       * The property's canonical data type, including `tag` for tag sets.
-       */
-      propertyType?: string | null;
-      /**
-       * The previous value, when known.
-       */
-      from?: {
-        [k: string]: unknown;
-      };
-      /**
-       * Previous select/tag option ids resolved to display labels.
-       */
-      fromLabels?: string[] | null;
-      /**
-       * The new value, or `None` when cleared.
-       */
-      to?: {
-        [k: string]: unknown;
-      };
-      /**
-       * New select/tag option ids resolved to display labels.
-       */
-      toLabels?: string[] | null;
-      type: 'propertyChanged';
-    }
-  | {
-      /**
-       * The added principal.
-       */
-      participant: string;
-      type: 'participantAdded';
-    }
-  | {
-      /**
-       * The removed principal.
-       */
-      participant: string;
-      type: 'participantRemoved';
-    }
-  | {
-      /**
-       * The started call's id.
-       */
-      callId: string;
-      type: 'callStarted';
-    }
-  | {
-      type: 'taskAdded';
-    }
-  | {
-      type: 'taskRemoved';
-    }
-  | {
-      /**
-       * The stored action tag.
-       */
-      tag: string;
-      /**
-       * The stored payload, verbatim.
-       */
-      payload?: {
-        [k: string]: unknown;
-      };
-      type: 'unknown';
-    };
-/**
  * Who or what archived a session.
  */
 export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
@@ -5050,6 +4949,107 @@ export type ReadThreadReadContent =
   | {
       formatted_preview: string;
       type: 'itemPreviews';
+    };
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction =
+  | {
+      type: 'created';
+    }
+  | {
+      type: 'edited';
+    }
+  | {
+      type: 'opened';
+    }
+  | {
+      type: 'deleted';
+    }
+  | {
+      type: 'messaged';
+    }
+  | {
+      type: 'sent';
+    }
+  | {
+      type: 'responded';
+    }
+  | {
+      /**
+       * The property definition id.
+       */
+      property: string;
+      /**
+       * The property definition's human-readable display name, when it is
+       * still visible to the caller.
+       */
+      propertyName?: string | null;
+      /**
+       * The property's canonical data type, including `tag` for tag sets.
+       */
+      propertyType?: string | null;
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
+      /**
+       * The new value, or `None` when cleared.
+       */
+      to?: {
+        [k: string]: unknown;
+      };
+      /**
+       * New select/tag option ids resolved to display labels.
+       */
+      toLabels?: string[] | null;
+      type: 'propertyChanged';
+    }
+  | {
+      /**
+       * The added principal.
+       */
+      participant: string;
+      type: 'participantAdded';
+    }
+  | {
+      /**
+       * The removed principal.
+       */
+      participant: string;
+      type: 'participantRemoved';
+    }
+  | {
+      /**
+       * The started call's id.
+       */
+      callId: string;
+      type: 'callStarted';
+    }
+  | {
+      type: 'taskAdded';
+    }
+  | {
+      type: 'taskRemoved';
+    }
+  | {
+      /**
+       * The stored action tag.
+       */
+      tag: string;
+      /**
+       * The stored payload, verbatim.
+       */
+      payload?: {
+        [k: string]: unknown;
+      };
+      type: 'unknown';
     };
 
 /**
@@ -13388,54 +13388,6 @@ export interface ReactToChannelMessageResponse {
   count: number;
 }
 /**
- * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
- */
-export interface ReadActivity {
-  /**
-   * Inclusive start of the range as an RFC 3339 timestamp.
-   */
-  from: string;
-  /**
-   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
-   */
-  to: string;
-}
-/**
- * Response from [`ReadActivity`].
- */
-export interface ReadActivityResponse {
-  /**
-   * Matching activity events, newest first.
-   */
-  activities: ToolActivityEvent[];
-  /**
-   * Whether more than 100 events matched the requested range.
-   */
-  truncated: boolean;
-}
-/**
- * One activity event returned by [`ReadActivity`].
- */
-export interface ToolActivityEvent {
-  /**
-   * The principal that mechanically performed the action.
-   */
-  actorId: string;
-  /**
-   * The kind of entity acted on.
-   */
-  entityType: string;
-  /**
-   * The entity acted on.
-   */
-  entityId: string;
-  action: ToolActivityAction;
-  /**
-   * When the action occurred.
-   */
-  occurredAt: string;
-}
-/**
  * Read an agent session by its ID from an agent-session mention or search result. Returns the latest 20 messages in chronological order, including prompts, replies, tool activity and errors. Optionally select a turn number to inspect earlier history. Each message is capped at 4000 characters; truncated flags identify omitted history or text. Requires view access to the session.
  */
 export interface ReadAgentSession {
@@ -16879,4 +16831,52 @@ export interface Subagent {
 }
 export interface SubagentResponse {
   result: string;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ */
+export interface ReadActivity {
+  /**
+   * Inclusive start of the range as an RFC 3339 timestamp.
+   */
+  from: string;
+  /**
+   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
+   */
+  to: string;
+}
+/**
+ * Response from [`ReadActivity`].
+ */
+export interface ReadActivityResponse {
+  /**
+   * Matching activity events, newest first.
+   */
+  activities: ToolActivityEvent[];
+  /**
+   * Whether more than 100 events matched the requested range.
+   */
+  truncated: boolean;
+}
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export interface ToolActivityEvent {
+  /**
+   * The principal that mechanically performed the action.
+   */
+  actorId: string;
+  /**
+   * The kind of entity acted on.
+   */
+  entityType: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  action: ToolActivityAction;
+  /**
+   * When the action occurred.
+   */
+  occurredAt: string;
 }

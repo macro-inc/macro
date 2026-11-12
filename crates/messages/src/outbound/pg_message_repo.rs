@@ -191,6 +191,7 @@ impl PgMessageRepository {
                 .push(CountedReaction {
                     emoji: r.emoji,
                     users: r.users,
+                    names: None,
                 });
         }
         let string_ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
@@ -540,6 +541,34 @@ impl PgMessageRepository {
 }
 
 impl MessageRepository for PgMessageRepository {
+    async fn account_display_names(
+        &self,
+        sender_ids: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        let rows = sqlx::query!(
+            r#"SELECT u.id, NULLIF(BTRIM(mui.first_name), 'N/A') AS first_name,
+                      NULLIF(BTRIM(mui.last_name), 'N/A') AS last_name
+               FROM "User" u JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
+               WHERE u.id = ANY($1)"#,
+            sender_ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let name = [row.first_name, row.last_name]
+                    .into_iter()
+                    .flatten()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                (!name.is_empty()).then_some((row.id, name))
+            })
+            .collect())
+    }
+
     async fn call_thread_facts(
         &self,
         call_id: Uuid,

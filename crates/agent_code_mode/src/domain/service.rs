@@ -400,7 +400,6 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateMemory"
                 // User.activity(), macro.activity.mine() and Initiative.activity().
                 | "GetUserActivity"
-                | "ReadActivity"
                 | "ReadInitiativeActivity"
                 // Document.readPresentation, editPresentation and copyPresentation.
                 | "ReadPresentation"
