@@ -46,11 +46,19 @@ requires a native app release; an OTA frontend bundle cannot relocate the jar.
 ## Native HTTP connections
 
 Service requests from the native apps go through the HTTP plugin
-(`src/lib/core/util/platformFetch.ts`), not the WebView.
+(`src/lib/core/util/platformFetch.ts`), not the WebView. The plugin fork keeps
+one client for them, so requests to a host share its connections. A client per
+request gives every request its own TCP and TLS handshake, which on a slow
+mobile network is most of the time the request takes.
 
 Keep the plugin's `gzip` feature on: the services compress a response only for
-a client that asks. Changing it needs a native app release and changes nothing
-a web bundle sees.
+a client that asks.
+
+A connection kept from before a mobile app was suspended can be dead without
+either end knowing, and a request sent on it hangs. The mobile resume handler in
+`src/lib.rs` therefore calls `Http::reset_connections`; call it from any new
+path that learns the network changed. These need a native app release and
+change nothing a web bundle sees.
 
 ## OTA bundle storage
 
