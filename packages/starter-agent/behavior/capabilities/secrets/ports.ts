@@ -7,6 +7,8 @@ import type { Vault } from './vault.ts';
 export type SecretsPorts = {
   readonly vault: Vault;
   readonly clipboard: Clipboard;
+  /** Milliseconds on a clock that only goes forward (performance.now), for timing a code's round trip. */
+  readonly monotonic: () => number;
   /** The schedule that checks pending access requests: on while any is pending. */
   readonly polling: {
     readonly ensure: () => Promise<void>;

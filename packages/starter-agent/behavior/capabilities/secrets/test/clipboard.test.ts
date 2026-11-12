@@ -85,3 +85,11 @@ test('reading takes the clipboard as it is, and an empty one is refused', async 
     '-o',
   ]);
 });
+
+test('a shorter hold is passed to timeout, to the millisecond, and never past 20 seconds', async () => {
+  const { started, clipboard } = fake();
+  await clipboard.put('code', 8_000);
+  await clipboard.put('code', 4_321.9);
+  await clipboard.put('code', 60_000);
+  expect(started.map(({ argv }) => argv[1])).toEqual(['8', '4.321', '20']);
+});

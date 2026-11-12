@@ -1,92 +1,85 @@
 /**
  * The vault API's JSON, in one place: what its answers look like, and the
- * tagged selectors and secret payloads a request carries. The selector and
- * payload tags are provisional (the vault's typed-secret schema isn't frozen),
- * so nothing else spells them: swapping them is a change to this file only.
+ * selectors and secret payloads a request carries, as frozen in the agent
+ * vault contract (rev 4). Agents use two kinds, `login` and `api`, and only
+ * their fixed fields; every other kind shows in search but can't be copied
+ * or written.
  */
 import { z } from 'zod';
 
 /** Every item kind the vault has. */
-export const ItemKind = z.enum(['login', 'card', 'note', 'identity', 'api']);
+export const ItemKind = z.enum([
+  'login',
+  'api',
+  'card',
+  'note',
+  'identity',
+  'verification_code',
+]);
 export type ItemKind = z.infer<typeof ItemKind>;
 
-/** The kinds an agent can create, and the one secret field each has besides a login's username. */
-export const primaryFields = {
-  login: 'password',
-  api: 'key',
-  note: 'text',
+/** The fields an agent may copy or write, per kind. */
+export const kindFields = {
+  login: ['username', 'password'],
+  api: ['key', 'secret'],
 } as const;
-export type CreatableKind = keyof typeof primaryFields;
+export type AgentKind = keyof typeof kindFields;
+export type FieldOf<Kind extends AgentKind> = (typeof kindFields)[Kind][number];
+export type SecretField = FieldOf<AgentKind>;
 
-/** The fields a secret can be copied from: a login's username and password, an API credential's key, a note's text. */
-export type SecretField = 'username' | 'password' | 'key' | 'text';
+/** The field each agent kind can't be created without. */
+export const requiredField = { login: 'password', api: 'secret' } as const;
 
-// Provisional selector tags: one per (kind, field) an agent may copy.
-const selectorTags = {
-  login: { username: 'login_username', password: 'login_password' },
-  api: { key: 'api_key' },
-  note: { text: 'note_text' },
-} as const;
+export const isAgentKind = (kind: ItemKind): kind is AgentKind =>
+  kind in kindFields;
 
-type Tags = typeof selectorTags;
-type SelectorTag = {
-  [Kind in keyof Tags]: Tags[Kind][keyof Tags[Kind]];
-}[keyof Tags];
-
-const allTags: readonly [SelectorTag, ...SelectorTag[]] = [
-  'login_username',
-  'login_password',
-  'api_key',
-  'note_text',
-];
-
-export const SecretSelector = z.strictObject({ type: z.enum(allTags) });
+export const SecretSelector = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('login'),
+    field: z.enum(kindFields.login),
+  }),
+  z.strictObject({ kind: z.literal('api'), field: z.enum(kindFields.api) }),
+]);
 export type SecretSelector = z.infer<typeof SecretSelector>;
 
-const isCreatable = (kind: ItemKind): kind is CreatableKind =>
-  kind in primaryFields;
+/** The fields an item of `kind` can be copied from: none for a kind agents can't use. */
+export const fieldsOf = (kind: ItemKind): readonly SecretField[] =>
+  isAgentKind(kind) ? kindFields[kind] : [];
 
 /** The selector for one field of an item of `kind`, or undefined if that kind has no such field. */
 export const selectorFor = (
   kind: ItemKind,
   field: SecretField
 ): SecretSelector | undefined => {
-  if (!isCreatable(kind)) return undefined;
-  const tags: Readonly<Partial<Record<SecretField, SelectorTag>>> =
-    selectorTags[kind];
-  const type = tags[field];
-  return type === undefined ? undefined : { type };
+  const parsed = SecretSelector.safeParse({ kind, field });
+  return parsed.success ? parsed.data : undefined;
 };
 
-/** The fields an item of `kind` can be copied from. */
-export const fieldsOf = (kind: ItemKind): readonly SecretField[] =>
-  (['username', 'password', 'key', 'text'] as const).filter(
-    (field) => selectorFor(kind, field) !== undefined
-  );
-
-// Provisional typed secrets, one per creatable kind.
-export const ItemSecret = z.discriminatedUnion('type', [
+export const ItemSecret = z.discriminatedUnion('kind', [
   z.strictObject({
-    type: z.literal('login'),
-    username: z.string().nullable(),
+    kind: z.literal('login'),
+    username: z.string().optional(),
     password: z.string(),
   }),
-  z.strictObject({ type: z.literal('api_credential'), key: z.string() }),
-  z.strictObject({ type: z.literal('note'), text: z.string() }),
+  z.strictObject({
+    kind: z.literal('api'),
+    key: z.string().optional(),
+    secret: z.string(),
+  }),
 ]);
 export type ItemSecret = z.infer<typeof ItemSecret>;
 
-export const ItemSecretPatch = z.discriminatedUnion('type', [
+export const ItemSecretPatch = z.discriminatedUnion('kind', [
   z.strictObject({
-    type: z.literal('login'),
-    username: z.string().nullable().optional(),
+    kind: z.literal('login'),
+    username: z.string().optional(),
     password: z.string().optional(),
   }),
   z.strictObject({
-    type: z.literal('api_credential'),
+    kind: z.literal('api'),
     key: z.string().optional(),
+    secret: z.string().optional(),
   }),
-  z.strictObject({ type: z.literal('note'), text: z.string().optional() }),
 ]);
 export type ItemSecretPatch = z.infer<typeof ItemSecretPatch>;
 
@@ -96,86 +89,8 @@ export const AgentEditableMetadata = z.strictObject({
 });
 export type AgentEditableMetadata = z.infer<typeof AgentEditableMetadata>;
 
-/** What a new item's secret is: the kind's own field, and a login's username. */
-export const itemSecret = (
-  kind: CreatableKind,
-  {
-    username,
-    primary,
-  }: { readonly username?: string; readonly primary: string }
-): ItemSecret =>
-  kind === 'login'
-    ? { type: 'login', username: username ?? null, password: primary }
-    : kind === 'api'
-      ? { type: 'api_credential', key: primary }
-      : { type: 'note', text: primary };
-
-/** A change to an item's secret, or undefined if nothing in it changes. */
-export const itemSecretPatch = (
-  kind: CreatableKind,
-  {
-    username,
-    primary,
-  }: { readonly username?: string; readonly primary?: string }
-): ItemSecretPatch | undefined => {
-  if (kind === 'login')
-    return username === undefined && primary === undefined
-      ? undefined
-      : {
-          type: 'login',
-          ...(username === undefined ? {} : { username }),
-          ...(primary === undefined ? {} : { password: primary }),
-        };
-  if (primary === undefined) return undefined;
-  return kind === 'api'
-    ? { type: 'api_credential', key: primary }
-    : { type: 'note', text: primary };
-};
-
-/** The kind a secret payload is for, so it can be checked against its item's. */
-export const kindOfSecret = (
-  secret: ItemSecret | ItemSecretPatch
-): CreatableKind =>
-  secret.type === 'login'
-    ? 'login'
-    : secret.type === 'api_credential'
-      ? 'api'
-      : 'note';
-
-/** The value a selector picks out of a secret (the stub vault's half of the selector contract). */
-export const selected = (
-  secret: ItemSecret,
-  selector: SecretSelector
-): string | undefined => {
-  const { type } = selector;
-  if (secret.type === 'login')
-    return type === 'login_password'
-      ? secret.password
-      : type === 'login_username'
-        ? (secret.username ?? undefined)
-        : undefined;
-  if (secret.type === 'api_credential')
-    return type === 'api_key' ? secret.key : undefined;
-  return type === 'note_text' ? secret.text : undefined;
-};
-
-/** A secret with a patch applied. */
-export const patched = (
-  secret: ItemSecret,
-  patch: ItemSecretPatch
-): ItemSecret => {
-  if (secret.type === 'login' && patch.type === 'login')
-    return {
-      type: 'login',
-      username: patch.username === undefined ? secret.username : patch.username,
-      password: patch.password ?? secret.password,
-    };
-  if (secret.type === 'api_credential' && patch.type === 'api_credential')
-    return { type: 'api_credential', key: patch.key ?? secret.key };
-  if (secret.type === 'note' && patch.type === 'note')
-    return { type: 'note', text: patch.text ?? secret.text };
-  return secret;
-};
+/** The one purpose v1 has: the value goes to the clipboard. */
+export const purpose = 'copy';
 
 // The vault's answers.
 
@@ -216,11 +131,14 @@ export const Disclosed = z.object({
   selector: SecretSelector,
 });
 
+/** A one-time code; `validForMs` is how long it has left when the vault answered, which is all the agent trusts. */
 export const TotpCode = z.object({
   code: z.string(),
   expiresAt: z.string(),
   periodSeconds: z.number().int(),
+  validForMs: z.number().int().positive(),
 });
+export type TotpCode = z.infer<typeof TotpCode>;
 
 export const Written = z.object({
   item: AgentSearchHit,
@@ -258,6 +176,9 @@ export const ErrorCode = z.enum([
   'pending',
   'forbidden',
   'invalid_request',
+  'unsupported_kind',
+  'field_not_set',
+  'rate_limited',
   'version_conflict',
   'vault_busy',
   'vault_unavailable',
