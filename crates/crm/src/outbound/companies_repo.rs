@@ -279,6 +279,10 @@ impl CompaniesRepositoryImpl {
     /// mailbox's eligible history. Returns whether it was refreshed, and so
     /// whether the mailbox is now one of its sources: a contact under a company with
     /// email sync disabled keeps its identity and takes no email-derived data.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one population's identifiers and interaction range"
+    )]
     async fn refresh_existing_contact(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,

@@ -71,18 +71,21 @@ async fn sync(
 }
 
 async fn team_contact_count(pool: &PgPool, team: Uuid) -> sqlx::Result<i64> {
-    sqlx::query_scalar("SELECT COUNT(*) FROM crm_contacts WHERE team_id = $1")
-        .bind(team)
-        .fetch_one(pool)
-        .await
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM crm_contacts WHERE team_id = $1"#,
+        team
+    )
+    .fetch_one(pool)
+    .await
 }
 
 async fn source_count(pool: &PgPool, contact: Uuid, link: Uuid) -> sqlx::Result<i64> {
-    sqlx::query_scalar(
-        "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1 AND link_id = $2",
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM crm_contact_sources
+           WHERE contact_id = $1 AND link_id = $2"#,
+        contact,
+        link
     )
-    .bind(contact)
-    .bind(link)
     .fetch_one(pool)
     .await
 }
@@ -113,7 +116,7 @@ async fn addresses_are_added_chosen_and_removed_without_touching_the_record(
     let second = personal("second");
     let id = insert_contact_with_source(&pool, company, &first, link).await?;
     let before = repo.get_contact_for_team(&team, &id, true).await?.unwrap();
-    assert_eq!(before.emails, [first.clone()]);
+    assert_eq!(before.emails, std::slice::from_ref(&first));
     let access = CrmContactReceipt::<EditAccessLevel>::dangerously_internal(id, team);
 
     let added = service
@@ -139,7 +142,7 @@ async fn addresses_are_added_chosen_and_removed_without_touching_the_record(
     // Removing the primary promotes the oldest address left.
     let removed = service.remove_contact_email(&access, &second).await?;
     assert_eq!(removed.email.as_deref(), Some(first.as_str()));
-    assert_eq!(removed.emails, [first.clone()]);
+    assert_eq!(removed.emails, std::slice::from_ref(&first));
     assert!(
         repo.get_contact_by_email_for_team(&team, &second, true)
             .await?
@@ -251,8 +254,9 @@ async fn concurrent_adds_of_one_address_reach_one_contact(pool: PgPool) -> anyho
         a.and(b),
         Err(CrmError::ContactAlreadyExistsForTeam)
     ));
-    let holders: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM crm_contact_emails WHERE email = 'shared@example.net'",
+    let holders = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM crm_contact_emails
+           WHERE email = 'shared@example.net'"#
     )
     .fetch_one(&pool)
     .await?;
