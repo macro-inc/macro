@@ -1563,13 +1563,33 @@ async fn run() -> anyhow::Result<()> {
     // harness's prompt queue and capture what the turn changed, and a
     // runtime closed on purpose archives its session when its owner opted in.
     let auto_archive_tasks = tokio_util::task::TaskTracker::new();
+    // While a turn runs tool calls, Nemotron words them as one live status
+    // line for the session's viewers, throttled per turn.
+    let activity_summary_tasks = tokio_util::task::TaskTracker::new();
+    let activity_summaries = agent_session::domain::activity_summary::ActivitySummaries::new(
+        session_repo.clone(),
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_audience.clone(),
+        ),
+        agent_session::outbound::activity_summarizer::NemotronActivitySummarizer::new(
+            recorder.clone(),
+        ),
+        admission.clone(),
+        feature_flags.clone(),
+        activity_summary_tasks.clone(),
+        service_shutdown.child_token(),
+    );
     turn_observer.bind((
         harness.clone(),
         (
             CaptureOnTurnEnd::new(changes.clone()),
-            agent_harness::domain::runtime_closed::ArchiveOnRuntimeClosed::new(
-                runtime_close_archive,
-                auto_archive_tasks.clone(),
+            (
+                agent_harness::domain::runtime_closed::ArchiveOnRuntimeClosed::new(
+                    runtime_close_archive,
+                    auto_archive_tasks.clone(),
+                ),
+                activity_summaries,
             ),
         ),
     ));
@@ -2425,6 +2445,8 @@ async fn run() -> anyhow::Result<()> {
     runtime_gauge_tasks.wait().await;
     auto_archive_tasks.close();
     auto_archive_tasks.wait().await;
+    activity_summary_tasks.close();
+    activity_summary_tasks.wait().await;
     work_registration_tasks.close();
     work_registration_tasks.wait().await;
     http.abort();
