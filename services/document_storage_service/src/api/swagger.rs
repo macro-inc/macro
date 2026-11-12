@@ -664,6 +664,7 @@ use utoipa::OpenApi;
         crm::inbound::pipeline_workflows::add_entries,
         crm::inbound::pipeline_workflows::update_entries,
         crm::inbound::pipeline_workflows::remove_entries,
+        crm::inbound::pipeline_workflows::create,
         crm::inbound::pipeline_workflows::edit,
         crm::inbound::pipeline_workflows::import_pipeline,
         crm::inbound::pipeline_workflows::import_companies,

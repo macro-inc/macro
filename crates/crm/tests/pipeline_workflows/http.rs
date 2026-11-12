@@ -397,6 +397,31 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
         json!({"type": "text", "value": "Site"})
     );
 
+    let (status, hiring) = call(
+        &app,
+        "POST",
+        "/crm/pipelines/create",
+        Some(json!({
+            "name": "Hiring",
+            "recordType": "contact",
+            "stages": ["Sourced", "Interview", "Hired"],
+            "fields": [{"name": "Role", "type": "select", "options": ["Engineer", "Designer"]}],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{hiring}");
+    assert_eq!(hiring["name"], "Hiring");
+    assert_eq!(hiring["recordType"], "contact");
+    let fields = hiring["fields"].as_array().unwrap();
+    let stage = fields
+        .iter()
+        .find(|field| field["name"] == "Stage")
+        .unwrap();
+    assert_eq!(stage["options"], json!(["Sourced", "Interview", "Hired"]));
+    let role = fields.iter().find(|field| field["name"] == "Role").unwrap();
+    assert_eq!(role["type"], "select");
+    assert_eq!(role["options"], json!(["Engineer", "Designer"]));
+
     // The pipeline routes still answer beside the workflow routes.
     let (status, read) = call(&app, "GET", &format!("/crm/pipelines/{id}"), None).await;
     assert_eq!(status, StatusCode::OK, "{read}");
