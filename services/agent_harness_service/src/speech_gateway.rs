@@ -81,8 +81,7 @@ pub(crate) struct SpeechGateway {
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,
     client: reqwest::Client,
-    /// `None` when the service has no LiveKit project; every socket is refused.
-    credentials: Option<ProviderCredentials>,
+    credentials: ProviderCredentials,
     upstream_url: String,
     catalog_url: String,
     catalog: tokio::sync::Mutex<Option<(Instant, Vec<Voice>)>>,
@@ -90,8 +89,7 @@ pub(crate) struct SpeechGateway {
 }
 
 impl SpeechGateway {
-    /// Both credentials empty disables speech; one without the other is a
-    /// configuration error.
+    /// Both credentials are required: a gateway without them fails at boot.
     pub(crate) fn new(
         brains: Arc<dyn BrainAuthenticator>,
         admission: Arc<dyn AiAdmissionService>,
@@ -101,15 +99,13 @@ impl SpeechGateway {
         upstream_url: &str,
         catalog_url: &str,
     ) -> anyhow::Result<Self> {
-        let credentials = match (api_key.trim(), api_secret.trim()) {
-            ("", "") => None,
-            ("", _) | (_, "") => {
-                anyhow::bail!("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set together")
-            }
-            (api_key, secret) => Some(ProviderCredentials {
-                api_key: api_key.to_owned(),
-                secret: EncodingKey::from_secret(secret.as_bytes()),
-            }),
+        let (api_key, secret) = (api_key.trim(), api_secret.trim());
+        if api_key.is_empty() || secret.is_empty() {
+            anyhow::bail!("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must both be set");
+        }
+        let credentials = ProviderCredentials {
+            api_key: api_key.to_owned(),
+            secret: EncodingKey::from_secret(secret.as_bytes()),
         };
         Ok(Self {
             brains,
@@ -154,10 +150,7 @@ impl SpeechGateway {
 
     /// `Bearer <JWT>` that only performs inference, valid for a minute.
     fn provider_authorization(&self) -> Result<HeaderValue, StatusCode> {
-        let credentials = self
-            .credentials
-            .as_ref()
-            .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        let credentials = &self.credentials;
         let now = chrono::Utc::now().timestamp();
         let claims = InferenceClaims {
             iss: &credentials.api_key,

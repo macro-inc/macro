@@ -136,8 +136,8 @@ async fn only_agent_keys_are_admitted() {
 }
 
 #[test]
-fn credentials_come_in_pairs() {
-    for (key, secret) in [("project-key", ""), ("", "project-secret")] {
+fn both_credentials_are_required() {
+    for (key, secret) in [("project-key", ""), ("", "project-secret"), ("", "")] {
         assert!(
             SpeechGateway::new(
                 Arc::new(OneAgent),
@@ -151,20 +151,6 @@ fn credentials_come_in_pairs() {
             .is_err()
         );
     }
-    let disabled = SpeechGateway::new(
-        Arc::new(OneAgent),
-        Arc::new(CountingAdmission::default()),
-        Arc::new(Recorder::default()),
-        "",
-        "",
-        "http://localhost",
-        "http://localhost/models",
-    )
-    .unwrap();
-    assert_eq!(
-        disabled.provider_authorization().unwrap_err(),
-        StatusCode::SERVICE_UNAVAILABLE
-    );
 }
 
 #[test]
