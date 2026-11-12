@@ -144,7 +144,7 @@ async fn channel_changes_keep_tombstones_reply_roots_and_report_hard_deletes() {
             call: None,
         },
         ChannelMessageChange::Reply {
-            message: reply.clone(),
+            message: Box::new(reply.clone()),
         },
     ];
     let service = MessageService::new(repo.clone(), Events::default())

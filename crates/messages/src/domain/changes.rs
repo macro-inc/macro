@@ -70,7 +70,7 @@ pub enum ChannelMessageChange {
     /// A changed reply, including a tombstone.
     Reply {
         /// Current reply state.
-        message: Message,
+        message: Box<Message>,
     },
 }
 

@@ -127,7 +127,9 @@ impl PgMessageRepository {
             messages
                 .into_iter()
                 .filter(|message| message.thread_id.is_some())
-                .map(|message| ChannelMessageChange::Reply { message }),
+                .map(|message| ChannelMessageChange::Reply {
+                    message: Box::new(message),
+                }),
         );
         Ok(result)
     }
