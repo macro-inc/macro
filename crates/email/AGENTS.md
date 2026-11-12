@@ -198,6 +198,16 @@ tools — hexagonal, heavily feature-gated.
   Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
+- The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
+  the inbox: each inbox takes a page of opened threads from its history
+  (`idx_email_user_history_link_viewed`, which must not gain `thread_id`: the
+  planner would then scan an inbox's history for every per-thread history
+  lookup) and a page of never-opened threads
+  (`idx_email_threads_inbox_reminder_sort` for `viewed_updated`,
+  `idx_email_threads_inbox_id` for `viewed_at`), and the pages are sorted
+  together. Never-opened threads are read only down to the page's last opened
+  thread. Keep the `OFFSET 0` in the history `NOT EXISTS`: as a join the
+  planner reads and sorts the whole inbox.
 - Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
