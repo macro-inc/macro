@@ -63,9 +63,9 @@ const partnerFaq: FaqItem[] = [
     q: 'Can I white-label Rox?',
     a: (
       <>
-        White-labeling is not currently supported in Rox. However, if you
-        would like to join the wait list for a white-labeled version, please
-        email <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+        White-labeling is not currently supported in Rox. However, if you would
+        like to join the wait list for a white-labeled version, please email{' '}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
       </>
     ),
   },
@@ -92,11 +92,11 @@ const partnerFaq: FaqItem[] = [
     q: 'Is our workspace data secure?',
     a: (
       <>
-        Yes. Open source means the Rox application code is available to
-        inspect. It does not make your workspace public. Data in your Rox
-        account, including your team&apos;s email, documents, messages, and
-        other workspace content, remains private and secure. For more
-        information on security in Rox please visit our{' '}
+        Yes. Open source means the Rox application code is available to inspect.
+        It does not make your workspace public. Data in your Rox account,
+        including your team&apos;s email, documents, messages, and other
+        workspace content, remains private and secure. For more information on
+        security in Rox please visit our{' '}
         <a
           href="https://docs.macro.com/security"
           target="_blank"
@@ -411,8 +411,8 @@ export const RoutePartners: Component = () => {
           <div class="partners-hero-copy">
             <h1 class="posts-title">Build your business with Rox.</h1>
             <h2 class="partners-subtitle">
-              Help clients adopt Rox. Earn on referrals and get early access
-              to new features.
+              Help clients adopt Rox. Earn on referrals and get early access to
+              new features.
             </h2>
             <div class="partners-header-cta">
               <PartnerCtaBar />
@@ -476,9 +476,9 @@ export const RoutePartners: Component = () => {
           <h2>Where partners come in.</h2>
           <p>
             System integrators, consultants, and agencies help clients set up
-            Rox and bring their existing work into it. Email, documents,
-            tasks, and customer records use one workspace, with shared
-            navigation, search, and agent tools.
+            Rox and bring their existing work into it. Email, documents, tasks,
+            and customer records use one workspace, with shared navigation,
+            search, and agent tools.
           </p>
 
           <h2>How to become a partner</h2>

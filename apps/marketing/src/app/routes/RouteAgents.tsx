@@ -1530,8 +1530,8 @@ function ComparisonSection() {
             'max-width': '560px',
           }}
         >
-          A chatbot makes you paste in context. Rox already has it — and acts
-          on it.
+          A chatbot makes you paste in context. Rox already has it — and acts on
+          it.
         </p>
       </div>
       <div

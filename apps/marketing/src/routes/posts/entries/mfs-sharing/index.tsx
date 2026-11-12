@@ -213,9 +213,9 @@ export default function MfsSharingPost() {
           </figcaption>
         </figure>
         <p>
-          This is nothing unique to Rox. It happens half the time someone
-          pastes a Google Docs link in Slack, or a Figma in a Notion. So we
-          didn't initially recognize this was a problem we could solve.
+          This is nothing unique to Rox. It happens half the time someone pastes
+          a Google Docs link in Slack, or a Figma in a Notion. So we didn't
+          initially recognize this was a problem we could solve.
         </p>
         <p>One day, though, we were sitting in the office and thought...</p>
         <p class="mfs-hl">

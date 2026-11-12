@@ -4,9 +4,7 @@ import { Dynamic } from 'solid-js/web';
 // Brand marks for the comparison-table headers.
 
 export function MacroLogo() {
-  return (
-    <img class="mvn-logo-macro" src="/macro-favicon.svg" alt="" />
-  );
+  return <img class="mvn-logo-macro" src="/macro-favicon.svg" alt="" />;
 }
 
 export function LinearLogo() {

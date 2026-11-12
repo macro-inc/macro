@@ -844,10 +844,10 @@ export const RouteMigrate: Component = () => {
                 <CaretDown aria-hidden="true" />
               </summary>
               <p class="migrate-faq__answer">
-                Imports create copies in Rox. Later edits in Notion or Linear
-                do not automatically replace those copies. Connected tools
-                remain available to agents. Gmail works differently: your
-                connected mailbox continues to sync.
+                Imports create copies in Rox. Later edits in Notion or Linear do
+                not automatically replace those copies. Connected tools remain
+                available to agents. Gmail works differently: your connected
+                mailbox continues to sync.
               </p>
             </details>
             <details class="migrate-faq__item">

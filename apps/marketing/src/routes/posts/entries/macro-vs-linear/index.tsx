@@ -312,8 +312,8 @@ export default function MacroVsLinearPost() {
           In Rox you spin one up without leaving where you are working. Every
           task is linked back to its source bidirectionally — the task remembers
           where it came from and the source knows the task exists. Linear can be
-          notified about a Slack thread; in Rox the message and the task are
-          two views of one object.
+          notified about a Slack thread; in Rox the message and the task are two
+          views of one object.
         </p>
 
         <h3>From a customer email</h3>
@@ -364,15 +364,14 @@ export default function MacroVsLinearPost() {
           height={330}
         />
         <p class="mvn-figcaption">
-          Mention <code>@Rox</code> in a channel and it creates a task from
-          the conversation, linked back to the thread.
+          Mention <code>@Rox</code> in a channel and it creates a task from the
+          conversation, linked back to the thread.
         </p>
 
         <h3>Keyboard shortcut</h3>
         <p>
           Hit <code>c</code> then <code>t</code> from anywhere to bring up the
-          create task modal — the same Linear-style speed, without leaving
-          Rox.
+          create task modal — the same Linear-style speed, without leaving Rox.
         </p>
         <PostScreenshot
           src={taskCreateCurrent}
@@ -422,10 +421,10 @@ export default function MacroVsLinearPost() {
           Spin up a huddle in any channel or DM without sharing a link, or run a
           full meet with one. Calls record, transcribe and diarize by default,
           so what got said on the standup is searchable and shared with the
-          team. Mention <code>@Rox</code> during or after the call and ask it
-          to create tasks from what was discussed — Rox assigns them to the
-          right people and links each one back to the recording. No one has to
-          play secretary.
+          team. Mention <code>@Rox</code> during or after the call and ask it to
+          create tasks from what was discussed — Rox assigns them to the right
+          people and links each one back to the recording. No one has to play
+          secretary.
         </p>
         <PostScreenshot
           src={taskFromHuddle}
@@ -441,10 +440,10 @@ export default function MacroVsLinearPost() {
         <hr class="post-section-rule" aria-hidden="true" />
         <h2>Linked to GitHub, both ways</h2>
         <p>
-          For engineering work, Rox tasks link to GitHub bidirectionally and
-          to the agents working on them. Click the GitHub pill to jump from a
-          task to its pull request, or the other way around, all opening in a
-          split inside Rox so you never leave your workspace.
+          For engineering work, Rox tasks link to GitHub bidirectionally and to
+          the agents working on them. Click the GitHub pill to jump from a task
+          to its pull request, or the other way around, all opening in a split
+          inside Rox so you never leave your workspace.
         </p>
         <p>Here's what this looks like on mobile:</p>
         <PostPhoneScreenshot
@@ -475,11 +474,11 @@ export default function MacroVsLinearPost() {
         <h2>One linked system, one team memory</h2>
         <p>
           In Linear you link issues to issues, and to PRs and a handful of
-          connected apps. In Rox you can @-mention anything in your company
-          from a task: a doc, a file, a customer email, a support ticket, a
-          channel message, a recorded call. The links are bidirectional, so the
-          task and whatever it touches both know about each other, and your
-          workspace becomes context you can navigate in either direction.
+          connected apps. In Rox you can @-mention anything in your company from
+          a task: a doc, a file, a customer email, a support ticket, a channel
+          message, a recorded call. The links are bidirectional, so the task and
+          whatever it touches both know about each other, and your workspace
+          becomes context you can navigate in either direction.
         </p>
         <PostScreenshot
           src={taskDetailCurrent}
@@ -499,8 +498,8 @@ export default function MacroVsLinearPost() {
           because membership is the permission.
         </p>
         <p>
-          The same linked graph feeds shared memory across your whole team.
-          Rox builds it from your docs, email, tasks, channels, calls and CRM,
+          The same linked graph feeds shared memory across your whole team. Rox
+          builds it from your docs, email, tasks, channels, calls and CRM,
           refreshes it nightly, and lets agents do work a standalone tracker
           cannot: assign a task to whoever actually owns that area, route an
           incoming customer report to the right person, or tell you who to ask
@@ -561,9 +560,9 @@ export default function MacroVsLinearPost() {
 
           <PostFaqItem question="Can I move my Linear issues over?">
             <p>
-              Run Rox alongside Linear while you switch — create tasks from
-              live email and channels so new work lands in Rox without a
-              big-bang migration, then bring the rest across as you go.
+              Run Rox alongside Linear while you switch — create tasks from live
+              email and channels so new work lands in Rox without a big-bang
+              migration, then bring the rest across as you go.
             </p>
           </PostFaqItem>
         </div>

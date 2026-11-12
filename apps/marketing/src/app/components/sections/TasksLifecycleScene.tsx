@@ -1870,8 +1870,8 @@ export function TasksLifecycleScene(props: { t: Accessor<number> }) {
                       <span class="tls-act-l">
                         <ActivityDisc icon={IconPullRequest} />
                         <span>
-                          <span class="tls-at">@Rox</span> pushed 2 commits
-                          and checked off 2 items
+                          <span class="tls-at">@Rox</span> pushed 2 commits and
+                          checked off 2 items
                         </span>
                       </span>
                       <span class="tls-act-t">6:10 PM</span>

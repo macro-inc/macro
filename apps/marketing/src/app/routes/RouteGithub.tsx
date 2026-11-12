@@ -3169,8 +3169,8 @@ function ComparisonSection() {
             'max-width': '580px',
           }}
         >
-          Your code stays on GitHub. Rox brings the PRs into your inbox, next
-          to your tasks and chat.
+          Your code stays on GitHub. Rox brings the PRs into your inbox, next to
+          your tasks and chat.
         </p>
       </div>
       <div

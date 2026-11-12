@@ -44,8 +44,7 @@ const comparisonRows: ComparisonRow[] = [
   },
   {
     feature: 'No-cost access',
-    macro:
-      'Free Guest access to a workspace, with limits on storage and AI',
+    macro: 'Free Guest access to a workspace, with limits on storage and AI',
     them: "Covers Grammarly, Docs, and Go — Mail isn't included until Business",
   },
   {
@@ -268,11 +267,11 @@ export default function MacroVsSuperhumanPost() {
 
         <h3>Better "Signal" vs. "Noise" split</h3>
         <p>
-          Superhuman calls this <em>important</em> and <em>other</em>. Rox
-          uses large language models to make this split, and we're introducing
-          even more customization. In Superhuman, to our understanding, this
-          feature has been around for a long time and they don't use the latest
-          AI models to triage your email for you.
+          Superhuman calls this <em>important</em> and <em>other</em>. Rox uses
+          large language models to make this split, and we're introducing even
+          more customization. In Superhuman, to our understanding, this feature
+          has been around for a long time and they don't use the latest AI
+          models to triage your email for you.
         </p>
         <PostScreenshot
           src={signalNoise}
@@ -308,9 +307,9 @@ export default function MacroVsSuperhumanPost() {
         <p>
           To our knowledge, the way Superhuman works is it uses the Gmail API or
           the Outlook API to pull your emails in for synchronization and then
-          uses a local cache. Rox actually creates a whole backup of your
-          emails so that we are not rate limited by the Gmail API after the
-          initial backfill process is complete.
+          uses a local cache. Rox actually creates a whole backup of your emails
+          so that we are not rate limited by the Gmail API after the initial
+          backfill process is complete.
         </p>
 
         <SectionGlyph route="/agents" />
@@ -535,22 +534,22 @@ export default function MacroVsSuperhumanPost() {
         <h2>Rox vs. Superhuman: the verdict</h2>
         <p>
           Superhuman is genuinely great, and it shaped a lot of how we think
-          about speed and polish in Rox. But it's built for one inbox at a
-          time. If your job is answering email as fast as possible and nothing
-          else, it's excellent at that. If you're trying to keep email, chat,
-          docs, and tasks from splintering into four different products your
-          team half-checks, Rox is built for that instead.
+          about speed and polish in Rox. But it's built for one inbox at a time.
+          If your job is answering email as fast as possible and nothing else,
+          it's excellent at that. If you're trying to keep email, chat, docs,
+          and tasks from splintering into four different products your team
+          half-checks, Rox is built for that instead.
         </p>
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
         <div class="post-faq">
           <PostFaqItem question="Is Rox better than Superhuman?">
             <p>
-              For teams that live across email, chat, and docs, yes. Rox
-              triages all of it from one inbox with the same shortcuts
-              Superhuman popularized. For someone whose entire job is answering
-              a single inbox as fast as possible, Superhuman is still excellent
-              at that one thing.
+              For teams that live across email, chat, and docs, yes. Rox triages
+              all of it from one inbox with the same shortcuts Superhuman
+              popularized. For someone whose entire job is answering a single
+              inbox as fast as possible, Superhuman is still excellent at that
+              one thing.
             </p>
           </PostFaqItem>
 

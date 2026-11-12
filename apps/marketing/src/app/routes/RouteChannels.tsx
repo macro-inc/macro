@@ -834,8 +834,8 @@ function ChannelsFounderLetter() {
             communication.
             <br />
             <br />
-            Rox Chat lives in the same workspace as your email, docs, and
-            tasks. It removes the chasm between communication and execution with
+            Rox Chat lives in the same workspace as your email, docs, and tasks.
+            It removes the chasm between communication and execution with
             powerful @mentions for instant sharing, built-in task management,
             and agents that track and take on work without you having to leave
             the thread.
@@ -1832,9 +1832,9 @@ const channelsFaq: FaqItem[] = [
     q: 'How is Rox Chat different from Slack?',
     a: (
       <>
-        Rox Chat includes channels, threads, and emoji. It also shares an
-        inbox with email and tasks, and @Rox can use the workspace context
-        available to it.
+        Rox Chat includes channels, threads, and emoji. It also shares an inbox
+        with email and tasks, and @Rox can use the workspace context available
+        to it.
       </>
     ),
   },

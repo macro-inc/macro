@@ -174,8 +174,8 @@ const docsFaq: FaqItem[] = [
     q: 'How is Rox Docs different from Notion?',
     a: (
       <>
-        Rox Docs uses Markdown and supports real-time, offline-capable
-        editing. Documents link directly to related tasks, email, and channels.
+        Rox Docs uses Markdown and supports real-time, offline-capable editing.
+        Documents link directly to related tasks, email, and channels.
       </>
     ),
   },
@@ -313,10 +313,10 @@ function PowerInSimplicity() {
               'text-wrap': 'pretty',
             }}
           >
-            At the end of the day, a Rox Doc is just a markdown file. As
-            simple as you want it to be, with advanced features when you need
-            them. Collaborate online, smart link to other Rox entities, loop
-            in agents, edit offline, or export for another markdown editor.
+            At the end of the day, a Rox Doc is just a markdown file. As simple
+            as you want it to be, with advanced features when you need them.
+            Collaborate online, smart link to other Rox entities, loop in
+            agents, edit offline, or export for another markdown editor.
             <br />
             <br />
             Nothing is trapped in a proprietary format.

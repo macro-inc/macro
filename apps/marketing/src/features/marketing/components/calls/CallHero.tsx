@@ -76,11 +76,7 @@ export function CallHeroDemo() {
           After the call
         </button>
       </div>
-      <WorkspaceDesktopDemo
-        heroFrame
-        view="messages"
-        label="Explore Rox Calls"
-      >
+      <WorkspaceDesktopDemo heroFrame view="messages" label="Explore Rox Calls">
         <ProductDemo label="Training call">
           <Show
             when={ended() || historyOpen()}
