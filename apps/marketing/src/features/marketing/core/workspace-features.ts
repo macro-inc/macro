@@ -44,7 +44,12 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Macro Agents edit the sheet, like teammates.',
         description:
-          'Agents can edit the sheet too, including external agents like ChatGPT or Claude. Ask one to add up the spend by team, or build a forecast for next quarter, and you can all collaborate in the same sheet.',
+          'Agents can edit the sheet too, including external agents like ChatGPT or Claude. Ask one to add up the spend by team, or build a forecast for next quarter, and watch its cursor move through the cells as it works. You can all collaborate in the same sheet.',
+      },
+      {
+        title: 'Tightly integrated with Macro CRM.',
+        description:
+          'Mention a company or a contact in a cell, and it’s the same record you work from in your CRM. See the stage, the owner, the last email, and the next call right from the sheet, or open the record. Your customer list and your CRM stop being two things to keep in sync.',
       },
       {
         title: 'Add formulas, charts, and comments.',
