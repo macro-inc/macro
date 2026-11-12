@@ -56,9 +56,9 @@ afterEach(() => {
   else Reflect.deleteProperty(Element.prototype, 'animate');
 });
 
-function setup() {
+function setup(sourceClass = 'homepage-unification') {
   const scroller = document.createElement('div');
-  scroller.innerHTML = `<section class="homepage-unification"><div class="feature-flow"><div class="feature-flow-node"><div class="feature-flow-icon"><svg></svg></div></div></div></section><section class="homepage-open-source"><div class="homepage-github-mark"></div></section>`;
+  scroller.innerHTML = `<section class="${sourceClass}"><div class="feature-flow"><div class="feature-flow-node"><div class="feature-flow-icon"><svg></svg></div></div></div></section><section class="homepage-open-source"><div class="homepage-github-mark"></div></section>`;
   document.body.append(scroller);
   const section = scroller.querySelector<HTMLElement>('.homepage-open-source')!;
   const scene = scroller.querySelector<HTMLElement>('.feature-flow')!;
@@ -108,7 +108,23 @@ function step() {
   pending.forEach((callback) => callback(16));
 }
 
-describe('mobile bubble scroll transition', () => {
+describe('bubble scroll transition', () => {
+  it('moves the desktop homepage feature bubbles into GitHub', () => {
+    const { section, source, scroll } = setup('homepage-feature-links');
+    const overlay = section.querySelector<HTMLElement>(
+      '.homepage-open-source-travel'
+    )!;
+    expect(overlay.children).toHaveLength(1);
+    scroll(500);
+    step();
+    expect(overlay.hidden).toBe(false);
+    expect(source.style.visibility).toBe('hidden');
+    expect(effects[0].currentTime).toBeGreaterThan(0);
+    scroll(0);
+    step();
+    expect(source.style.visibility).toBe('');
+    expect(overlay.hidden).toBe(true);
+  });
   it('prepares settled bubble geometry before the first gesture and batches scrolling', () => {
     const { section, source, scroll } = setup();
     expect(effects).toHaveLength(2);

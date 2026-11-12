@@ -352,7 +352,7 @@ export function HomepageUnification(
       class="homepage-unification"
       aria-labelledby="unification-heading"
     >
-      <FeatureConstellation expanded />
+      <FeatureConstellation expanded linked />
       <div class="unification-copy">
         <div class="unification-before" aria-hidden="true">
           The unified workspace

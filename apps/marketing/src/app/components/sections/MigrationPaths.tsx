@@ -1,11 +1,11 @@
-import At from '@phosphor/at.svg';
-import Buildings from '@phosphor/buildings.svg';
-import Chat from '@phosphor/chat-teardrop.svg';
-import Database from '@phosphor/database.svg';
-import Envelope from '@phosphor/envelope.svg';
-import FileText from '@phosphor/file-text.svg';
-import Folder from '@phosphor/folder-simple.svg';
-import Plugs from '@phosphor/plugs-connected.svg';
+import At from '@icon/system/regular/at.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
+import Chat from '@icon/system/regular/chat-teardrop.svg';
+import Database from '@icon/system/regular/database.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Folder from '@icon/system/regular/folder-simple.svg';
+import Plugs from '@icon/system/regular/plugs-connected.svg';
 import type { JSX } from 'solid-js';
 import { SwitchBrandIcon } from '../graphics/SwitchGraphic';
 import { MigrationPathSelector } from './MigrationPathSelector';
@@ -137,7 +137,7 @@ export function MigrationPaths(props: { helpHref: string }) {
             title="Linear tasks"
           >
             Connect Linear and ask an agent to find the issues you need.
-            Selected issues become Rox tasks with their descriptions, source
+            Selected issues become Rox Tasks with their descriptions, source
             links, and supported task properties. You can also upload a Linear
             CSV export, review the preview, and match assignees before
             importing.
@@ -146,10 +146,7 @@ export function MigrationPaths(props: { helpHref: string }) {
             Connect your app in Settings and ask an agent what it can bring
             over. Files and CSV exports are another route for tools without a
             dedicated importer.{' '}
-            <a href="https://docs.macro.com/switch-to-macro">
-              See import details
-            </a>
-            .
+            <a href="/docs/switch-to-macro">See import details</a>.
           </PathSection>
         </PathContent>
       ),

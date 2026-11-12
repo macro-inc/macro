@@ -1,8 +1,7 @@
-import MacroLogo from '@icon/macro-logo.svg';
 import { For, onCleanup, onMount, Show } from 'solid-js';
 import {
   CheckMark,
-  ComparisonTable,
+  ComparisonCell,
   CrossMark,
   PartialMark,
 } from '../../../../app/components/sections/ComparisonTable';
@@ -76,31 +75,51 @@ export function FeatureComparisons(props: {
         )}
       </For>
       <h2 class="feature-comparison-heading">{props.title}</h2>
-      <ComparisonTable
-        presentation="framed"
-        minWidth={props.tableMinWidth}
-        columns={[
-          { label: 'Rox', macro: true, icon: <ComparisonMacroLogo /> },
-          ...props.comparisons.map((comparison) => ({
-            label: comparison.competitor,
-          })),
-        ]}
-        rows={rows()}
-        sortRows={false}
-        mobileCellWidth={110}
-        mobileMinWidth={240 + (props.comparisons.length + 1) * 110}
-        scrollLabel="Compare Rox"
-      />
+      <div
+        class="feature-comparison-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label={props.title}
+      >
+        <table class="feature-comparison-table" aria-label={props.title}>
+          <thead>
+            <tr>
+              <th scope="col">Features</th>
+              <th scope="col">Rox</th>
+              <For each={props.comparisons}>
+                {(comparison) => <th scope="col">{comparison.competitor}</th>}
+              </For>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={rows()}>
+              {(row) => (
+                <tr>
+                  <th scope="row">{row.feature}</th>
+                  <For each={row.cells}>
+                    {(cell, index) => (
+                      <td>
+                        <ComparisonCell
+                          value={cell}
+                          macro={index() === 0}
+                          valueWrap="normal"
+                          description={row.cellNotes[index()]}
+                        />
+                      </td>
+                    )}
+                  </For>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
+      </div>
       <FeatureComparisonKey
         partial={rows().some((row) => row.cells.includes('partial'))}
         unavailable={rows().some((row) => row.cells.includes(false))}
       />
     </div>
   );
-}
-
-export function ComparisonMacroLogo() {
-  return <MacroLogo class="feature-comparison-macro-logo" aria-hidden="true" />;
 }
 
 function FeatureComparisonKey(props: {

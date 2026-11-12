@@ -1,4 +1,4 @@
-import Sparkle from '@phosphor/sparkle.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { UserMessageBubble } from '@ui/components/UserMessageBubble';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
 import { meetingDraft } from '../../core/email-demo-story';
@@ -20,7 +20,7 @@ import './email-agentic-editing.css';
 const EmailDemoSource = lazy(() => import('./EmailDemoSource'));
 
 const request =
-  'Draft a reply to Valentina confirming Thursday at 9. Use the call notes, include the setup plan and Rox overview, and copy Julia. Leave it as a draft.';
+  'Draft a reply to Austin Barron confirming Thursday at 9. Use the call notes, include the setup plan and Rox overview, and copy Julia. Leave it as a draft.';
 
 /** User request → source context → editable email, as in the app's agent chat. */
 export function EmailAgenticEditingDemo() {
@@ -183,7 +183,7 @@ export function EmailAgenticEditingDemo() {
                     <HomepageMention
                       kind="call"
                       label="Demo call"
-                      description="Valentina confirmed Thursday at 9. Julia will help with setup."
+                      description="Austin Barron confirmed Thursday at 9. Julia will help with setup."
                       href="/calls"
                       onOpen={(trigger) => openSource('call', trigger)}
                     />
@@ -205,7 +205,7 @@ export function EmailAgenticEditingDemo() {
                       draft={meetingDraft}
                       bodyContent={
                         <>
-                          <p>Hi Valentina,</p>
+                          <p>Hi Austin Barron,</p>
                           <p>Thursday at 9 works.</p>
                           <p>
                             Here’s the{' '}

@@ -1,12 +1,7 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import '../macro-vs-notion/MacroVsNotion.css';
 import { featureNavGlyphs } from '../../../../app/components/graphics/FeatureNavGlyphs';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import agentsShot from '../../../../assets/posts/macro-vs-clickup/agents.png';
-import emailSignal from '../../../../assets/posts/macro-vs-clickup/email-signal.png';
-import githubTaskPr from '../../../../assets/posts/macro-vs-clickup/github-task-pr.png';
-import docMention from '../../../../assets/posts/macro-vs-notion/doc-mention.jpg';
-import agentInChannel from '../../../../assets/posts/macro-vs-slack/agent-in-channel.png';
-import splitScreen from '../../../../assets/posts/macro-vs-slack/split-screen.png';
 import {
   ClickUpLogo,
   type ComparisonRow,
@@ -110,34 +105,6 @@ function SectionGlyph(props: { route: string }) {
   );
 }
 
-function PostScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-graphic">
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <img
-            src={props.src}
-            alt={props.alt}
-            loading="lazy"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 export const postMeta: PostMeta = {
   slug: 'clickup-alternative',
   title: 'Rox vs ClickUp',
@@ -151,6 +118,12 @@ export const postMeta: PostMeta = {
   tags: ['macro', 'clickup', 'comparison'],
   category: 'Comparison',
   hideFromHome: true,
+  heroVideo: {
+    id: EMAIL_VIDEO_ID,
+    title: 'Rox Email',
+    caption:
+      'A real email client inside the workspace \u2014 inbox, triage, and AI drafting without leaving Rox.',
+  },
   coverBrand: 'clickup',
   image: '/og/clickup-alternative.png',
   showTOC: true,
@@ -246,12 +219,7 @@ export default function MacroVsClickUpPost() {
             Schedule emails and snooze your inbox to block out focused time
           </li>
         </ul>
-        <PostScreenshot
-          src={emailSignal}
-          alt="Rox email client with the Signal tab open, showing prioritized threads next to the full workspace sidebar"
-          width={1650}
-          height={902}
-        />
+        <PostProductGraphic kind="email-signal" />
         <p class="mvn-figcaption">
           Email lives in the same app as tasks, docs and channels — Signal keeps
           the important threads up front.
@@ -264,20 +232,6 @@ export default function MacroVsClickUpPost() {
           somewhere else — another tab, another mental model.
         </p>
 
-        <div class="mvn-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${EMAIL_VIDEO_ID}?rel=0`}
-            title="Rox email"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-        <p class="mvn-figcaption">
-          A real email client inside the workspace — inbox, triage, and AI
-          drafting without leaving Rox.
-        </p>
-
         <h3>Rox agents can perform tasks with full context</h3>
         <p>
           It's not just you who can work more efficiently thanks to the built-in
@@ -286,15 +240,9 @@ export default function MacroVsClickUpPost() {
           share the same memory, agents can act with full context of what's
           going on.
         </p>
-        <PostScreenshot
-          src={agentsShot}
-          alt="Rox Agents tab listing chats that catch people up, draft outbound email, and recap conversations"
-          width={1650}
-          height={902}
-        />
+        <PostProductGraphic kind="agent-team" />
         <p class="mvn-figcaption">
-          Open an agent from anywhere — it already knows your email, channels,
-          tasks and docs.
+          People and agents work from the same conversation and linked work.
         </p>
         <p>
           You can open the agent from any page, and it can answer questions or
@@ -313,12 +261,7 @@ export default function MacroVsClickUpPost() {
           it will read the thread, create the task, and link it back to the
           conversation.
         </p>
-        <PostScreenshot
-          src={agentInChannel}
-          alt="A bug report in a Rox channel where @Rox is asked to make a task and replies with the created, linked task"
-          width={1465}
-          height={937}
-        />
+        <PostProductGraphic kind="task-agent" />
         <p class="mvn-figcaption">
           <code>@Rox</code> reads the thread, creates the task and links it back
           — then asks if it should assign and prioritize it.
@@ -345,12 +288,7 @@ export default function MacroVsClickUpPost() {
           side, instead of switching back and forth between tabs to keep track
           of everything.
         </p>
-        <PostScreenshot
-          src={splitScreen}
-          alt="Three Rox channels — Engineers, bug-reports and creative team — open side by side in split view"
-          width={2347}
-          height={1237}
-        />
+        <PostProductGraphic kind="chat-splits" />
         <p class="mvn-figcaption">
           Split view lets you keep multiple surfaces open at once — triage a
           bug, follow eng and answer design without tab-hopping.
@@ -363,20 +301,15 @@ export default function MacroVsClickUpPost() {
 
         <h3>GitHub pull requests land in your Rox inbox</h3>
         <p>
-          Another feature our engineers love is that Rox tasks link
+          Another feature our engineers love is that Rox Tasks link
           bidirectionally to <a href="/github">GitHub</a>, so their pull
           requests and reviews land right in the inbox, letting them check
           notifications without ever leaving Rox.
         </p>
-        <PostScreenshot
-          src={githubTaskPr}
-          alt="Rox task detail with status, priority, assignee and a linked GitHub pull request pill"
-          width={1486}
-          height={640}
-        />
+        <PostProductGraphic kind="task-github" />
         <p class="mvn-figcaption">
-          A task with its GitHub PR linked both ways — open the review in a
-          split without leaving Rox.
+          The task updates as its linked pull request moves through review and
+          merge.
         </p>
         <p>
           Additionally, comments are synced both ways, from Rox to GitHub and
@@ -389,15 +322,10 @@ export default function MacroVsClickUpPost() {
           Bidirectional linking means you can @mention any document you have
           permission to access in any message, AI chat, task or document.
         </p>
-        <PostScreenshot
-          src={docMention}
-          alt="Typing @ in a Rox doc opens a picker listing documents, agent chats, tasks and emails to mention"
-          width={1200}
-          height={528}
-        />
+        <PostProductGraphic kind="doc-mentions" />
         <p class="mvn-figcaption">
-          Type <code>@</code> anywhere and pull in a doc, task, email or agent
-          chat — links go both ways.
+          Open the email or task mentioned in the brief beside the document. The
+          links go both ways.
         </p>
         <p>
           When something is linked, a relationship is created between the two
@@ -647,7 +575,7 @@ export default function MacroVsClickUpPost() {
         <p class="post-footnote">
           For tasks, GitHub linking, agents and the rest of the workspace, see
           the{' '}
-          <a href="https://docs.macro.com" target="_blank" rel="noreferrer">
+          <a href="/docs" target="_blank" rel="noreferrer">
             Rox documentation
           </a>
           .

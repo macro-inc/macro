@@ -1,14 +1,7 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import '../macro-vs-notion/MacroVsNotion.css';
 import { featureNavGlyphs } from '../../../../app/components/graphics/FeatureNavGlyphs';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import agentBulkSearch from '../../../../assets/posts/macro-vs-slack/agent-bulk-search.png';
-import agentInChannel from '../../../../assets/posts/macro-vs-slack/agent-in-channel.png';
-import agentMentionContext from '../../../../assets/posts/macro-vs-slack/agent-mention-context.png';
-import inlineReplies from '../../../../assets/posts/macro-vs-slack/inline-replies.png';
-import signalNoise from '../../../../assets/posts/macro-vs-slack/signal-noise.png';
-import splitScreen from '../../../../assets/posts/macro-vs-slack/split-screen.png';
-import tasksIntegration from '../../../../assets/posts/macro-vs-slack/tasks-integration.png';
-import threadExpand from '../../../../assets/posts/macro-vs-slack/thread-expand.png';
 import {
   type ComparisonRow,
   ComparisonTable,
@@ -103,42 +96,6 @@ function SectionGlyph(props: { route: string }) {
   );
 }
 
-function PostScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-  phone?: boolean;
-  fadeRight?: boolean;
-}) {
-  return (
-    <figure
-      classList={{
-        'mvn-graphic': true,
-        'mvn-graphic--phone': !!props.phone,
-        'mvn-graphic--fade-right': !!props.fadeRight,
-      }}
-    >
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <img
-            src={props.src}
-            alt={props.alt}
-            loading="lazy"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 export const postMeta: PostMeta = {
   slug: 'slack-alternative',
   title: 'Rox vs Slack',
@@ -151,6 +108,12 @@ export const postMeta: PostMeta = {
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'slack', 'comparison'],
   category: 'Comparison',
+  heroVideo: {
+    id: SLACK_VIDEO_ID,
+    title: 'What we learned from Slack',
+    caption:
+      'What Slack got right about team chat, and where a chat-only app leaves real work on the table.',
+  },
   coverBrand: 'slack',
   image: '/og/slack-alternative.png',
   showTOC: true,
@@ -201,20 +164,6 @@ export default function MacroVsSlackPost() {
           didn't really grok it until we switched off it onto Rox Chat.
         </p>
 
-        <div class="mvn-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${SLACK_VIDEO_ID}?rel=0`}
-            title="What we learned from Slack"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-        <p class="mvn-figcaption">
-          What Slack got right about team chat, and where a chat-only app leaves
-          real work on the table.
-        </p>
-
         <h2>At a glance</h2>
         <ComparisonTable
           competitor="Slack"
@@ -229,12 +178,7 @@ export default function MacroVsSlackPost() {
           Noise split. Important emails, messages and @mentions go into Signal,
           and non-important things go into Noise.
         </p>
-        <PostScreenshot
-          src={signalNoise}
-          alt="Rox inbox with Signal, Noise and All tabs, showing grouped channel replies from #bug-reports and an email draft"
-          width={1435}
-          height={751}
-        />
+        <PostProductGraphic kind="email-signal" />
         <p class="mvn-figcaption">
           One inbox, pre-sorted: what matters lands in Signal; everything else
           waits in Noise until you want it.
@@ -255,25 +199,20 @@ export default function MacroVsSlackPost() {
         <h2>Rox Chat tightly integrates with engineering tasks</h2>
         <p>
           If you read our{' '}
-          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>, you'll
-          see me talk about how tightly channels are integrated with Rox tasks.
-          This has been really helpful for our engineering team staying on track
-          without needing a dedicated PM keeping track of everything — which
-          works well with our culture of agency and no micromanaging. We no
-          longer have to "stay on top" of everybody, because everybody is
-          creating tasks and marking them complete (or it happens automatically
-          with the GitHub integration) without me having to prod them to keep
-          things updated.
+          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>,
+          you'll see me talk about how tightly channels are integrated with
+          Rox Tasks. This has been really helpful for our engineering team
+          staying on track without needing a dedicated PM keeping track of
+          everything — which works well with our culture of agency and no
+          micromanaging. We no longer have to "stay on top" of everybody,
+          because everybody is creating tasks and marking them complete (or it
+          happens automatically with the GitHub integration) without me having
+          to prod them to keep things updated.
         </p>
-        <PostScreenshot
-          src={tasksIntegration}
-          alt="A task pill in a Rox channel thread expanded into a preview card showing status, assignees and due date"
-          width={1213}
-          height={658}
-        />
+        <PostProductGraphic kind="task-context" />
         <p class="mvn-figcaption">
-          Tasks render as live pills right in the conversation — hover to see
-          status, assignees and the linked GitHub PR.
+          Open the task and the conversation, brief or email it came from stays
+          one click away.
         </p>
 
         <SectionGlyph route="/documents" />
@@ -285,15 +224,9 @@ export default function MacroVsSlackPost() {
           Slack. This makes it easy to carry out multiple conversations in
           parallel.
         </p>
-        <PostScreenshot
-          src={splitScreen}
-          alt="Three Rox channels — Engineers, bug-reports and creative team — open side by side in split view"
-          width={2347}
-          height={1237}
-        />
+        <PostProductGraphic kind="chat-splits" />
         <p class="mvn-figcaption">
-          Three channels open at once: triage a bug, follow the engineering
-          thread and answer the design question in parallel.
+          Keep several channels open and follow the conversations side by side.
         </p>
 
         <SectionGlyph route="/channels" />
@@ -315,26 +248,15 @@ export default function MacroVsSlackPost() {
           For example, here's how I can read multiple threads at a time without
           needing to expand and collapse:
         </p>
-        <PostScreenshot
-          src={inlineReplies}
-          alt="A Rox channel where several threads show their first replies inline, with a '2 more replies' pill for the longer one"
-          width={1573}
-          height={1213}
-        />
+        <PostProductGraphic kind="threads" />
         <p class="mvn-figcaption">
           Short threads read top to bottom, in place — no side flap, no clicking
           into each one.
         </p>
         <p>
           Replying to a thread works like this. Just click the <code>+</code>{' '}
-          button and the thread expands:
+          button in the example above and the thread expands.
         </p>
-        <PostScreenshot
-          src={threadExpand}
-          alt="An expanded Rox thread with a reply composer open inline under the messages"
-          width={1443}
-          height={418}
-        />
 
         <SectionGlyph route="/agents" />
         <h2>Better access for agents: a real MCP surface</h2>
@@ -346,12 +268,7 @@ export default function MacroVsSlackPost() {
           agent — and for your own agents that you can plug in. Here's an
           example of that:
         </p>
-        <PostScreenshot
-          src={agentBulkSearch}
-          alt="The Rox agent reading 30 messages each from the Engineers and bug-reports channels in bulk, then summarizing the team's day"
-          width={1240}
-          height={775}
-        />
+        <PostProductGraphic kind="agent-context" />
         <p class="mvn-figcaption">
           One prompt, whole channels read in bulk — the agent summarizes a day
           of team activity across channels, tasks and docs.
@@ -360,12 +277,7 @@ export default function MacroVsSlackPost() {
           You can also feed the agent context manually by @mentioning, like
           this:
         </p>
-        <PostScreenshot
-          src={agentMentionContext}
-          alt="An @mention picker in the agent composer suggesting a channel and an email thread as context"
-          width={1357}
-          height={604}
-        />
+        <PostProductGraphic kind="agent-mentions" />
 
         <SectionGlyph route="/agents" />
         <h2>Powerful built-in agents, integrated with your workspace</h2>
@@ -378,15 +290,10 @@ export default function MacroVsSlackPost() {
           permissions of the person sending the message, allowing it to access
           everything, create tasks, send messages, and more.
         </p>
-        <PostScreenshot
-          src={agentInChannel}
-          alt="A bug report in a Rox channel where @Rox is asked to make a task and replies with the created, linked task"
-          width={1465}
-          height={937}
-        />
+        <PostProductGraphic kind="task-agent" />
         <p class="mvn-figcaption">
-          <code>@Rox</code> reads the thread, creates the task and links it back
-          — then asks if it should assign and prioritize it.
+          <code>@Rox</code> reads the thread, creates the task and links it
+          back. You can change the assignment in the same conversation.
         </p>
 
         <h2>Conclusion</h2>
@@ -444,11 +351,7 @@ export default function MacroVsSlackPost() {
         <p class="post-footnote">
           For the inbox, Signal and Noise, @mentions and turning messages into
           tasks, see the{' '}
-          <a
-            href="https://docs.macro.com/product/channels"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="/channels#guide" target="_blank" rel="noreferrer">
             Rox channels documentation
           </a>
           .

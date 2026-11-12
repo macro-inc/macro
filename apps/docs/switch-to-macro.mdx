@@ -1,49 +1,33 @@
 ---
-title: "Switch to Rox"
+title: "Switching guide"
 icon: "arrow-right-arrow-left"
-description: "Migration guides for moving to Rox from Superhuman, Notion, Slack, Linear, and ClickUp."
+description: "Move your work into Rox with bulk importers for Notion, Linear, and Slack, or use MCP for other tools."
 ---
 
-Rox replaces several tools with one unified system, but you don't have to move over all at once. Most teams like to connect their old tools first to ensure nothing gets lost. Then, when you're ready, you can ask the agent to fully migrate you.
+Use the dedicated importers for high-volume migrations. For other tools, connect them through MCP and ask an agent to bring over the work you need. You can move one project first; you don't need to move everything at once.
 
-If you want to keep most of your existing tools and just use Rox for Email\+Tasks or Docs\+Files, for example, you're able to keep your other tools connected via MCP.
+## Import from Notion
 
-At a glance, here's what maps to what:
+Connect Notion, then ask the Rox Agent to import your workspace or a specific page and everything under it.
 
-| Coming from | The Rox equivalent |
-| :-- | :-- |
-| Superhuman | [Email](/product/email) and [Home](/product/home) (both are Gmail and Outlook clients) |
-| Notion | [Docs](/product/docs) and [databases](/product/databases), plus built-in [tasks](/product/tasks) and [CRM](/product/crm) |
-| Slack | [Channels](/product/channels) |
-| Linear | [Tasks](/product/tasks) |
-| ClickUp | [Tasks](/product/tasks), with [docs](/product/docs), [CRM](/product/crm), and [channels](/product/channels) replacing the rest of the suite |
-| Google Drive / Dropbox | [Drive](/product/drive) |
-| Google Sheets / Excel | [Spreadsheets](/product/spreadsheets) |
-| Zoom / Meet | [Calls](/product/calls) |
+- Pages become documents, with folders preserving the page hierarchy.
+- Databases become Rox databases, including their rows and relations.
+- Task trackers become tasks.
 
-## From Superhuman
+Try: **“Import our Product space from Notion into Rox.”**
 
-The main difference between us and Superhuman is that Rox supports multiple accounts in one inbox. It also adds more intelligent Signal vs. Noise splits, and it fully unifies messaging, tasks, @mentions and more into a single inbox. Another benefit of Rox is that Agents can draft, triage, and send mail for you right from AI chat with an embedded email widget.
+The importer prepares a plan for you to review before it creates anything. Choose whether the imported work is personal or shared with your team, then approve the plan. Content already imported and shared by a teammate is linked rather than duplicated.
 
-<div className="switch-mark" role="img" aria-label="The Superhuman app icon with an arrow pointing to the Rox app icon">
-  <img className="switch-mark-cream" src="/images/switch-from-superhuman-cream.svg" alt="" />
-  <img className="switch-mark-dark" src="/images/switch-from-superhuman.svg" alt="" />
-</div>
+## Import from Linear
 
-Both Rox and Superhuman are clients on top of Gmail and Outlook, so there's no migration in either direction. Your mail stays in Gmail or Outlook / Microsoft 365.
+Connect Linear, then ask the Rox Agent to import your workspace.
 
-The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know work unchanged.
+- Issues become tasks.
+- Teams, projects, and initiatives become Rox projects.
 
-|  | Superhuman | Rox |
-| :-- | :-: | :-: |
-| Built on Gmail and Outlook (no migration) | ✓ | ✓ |
-| <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts | ✓ | ✓ |
-| Multiple accounts in one unified inbox | X | ✓ |
-| [Signal vs. Noise](/product/email#signal-vs-noise) split | X | ✓ |
-| Messages, tasks, and @mentions in the same inbox | X | ✓ |
-| [Agents](/product/agents) that draft, triage, and send | X | ✓ |
+Try: **“Import our Linear workspace into Rox.”**
 
-<iframe src="https://www.youtube.com/embed/tnsxkywzTvY" title="Email on Rox" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
+Review the plan and sharing settings, then approve the import. Your Linear workspace stays unchanged. You can check progress or cancel an import; completed copies stay in Rox.
 
 **To switch:**
 
@@ -51,28 +35,19 @@ The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know
 2. Choose Gmail or Outlook / Microsoft 365 and finish signing in.
 3. Your mail and history are already there because Rox syncs with that account directly.
 
-That's it. You can run both during the transition, or keep Superhuman around if you want.
+If you only need the channel structure, connect Slack and use **Import channels** to recreate channels with the members who are already on your Rox team. This imports channel names and membership, not messages.
 
-## From Notion
+### Keep Slack connected
 
-In Rox, tasks, CRM, email, channels, and files (docs, databases, spreadsheets, canvases, and other files in Drive) are each their own best-in-class, purpose-built Block, and they all share one data model and one search index. **Each Block works like a real product**, and agents can read all of it as one context vs. paging through a rate-limited API.
+You can keep Slack for older conversations or Slack Connect channels with external companies. In **Settings → Connectors**, add a Slack MCP server so agents can reference the conversations it exposes while you use Rox. The available history and actions depend on that server and its permissions.
 
-<div className="switch-mark" role="img" aria-label="The Notion app icon with an arrow pointing to the Rox app icon">
-  <img className="switch-mark-cream" src="/images/switch-from-notion-cream.svg" alt="" />
-  <img className="switch-mark-dark" src="/images/switch-from-notion.svg" alt="" />
-</div>
+## Use MCP for other tools
 
-|  | Notion | Rox |
-| :-- | :-: | :-: |
-| Markdown-native docs | ✓ | ✓ |
-| [Databases](/product/databases) | ✓ | ✓ |
-| [Spreadsheets](/product/spreadsheets) | X | ✓ |
-| Tasks | Sort of | Built in |
-| CRM | No | Built in |
-| Email and channels | X | ✓ |
-| Agent access to your workspace | Rate-limited API | One unified search index |
+For ClickUp and other tools with an MCP server, connect the source to an agent that can also access Rox. Ask it to read the work you want to move and create the corresponding tasks, documents, or projects in Rox.
 
-<iframe src="https://www.youtube.com/embed/hyU1XYmxkYM" title="What We Learned from Notion" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
+Try: **“Bring our open ClickUp tasks into Rox. Show me how you'll map their status, assignee, and project before you start.”**
+
+What can be moved depends on the tools the source's MCP server exposes. Start with one project, check the result, then bring over the rest. You can also leave older work where it is and keep the connection so agents can reference it.
 
 **To switch:**
 
@@ -88,147 +63,18 @@ Pages become docs, kept in the same folder tree. Databases become databases. Dat
 
 We have a dedicated Notion importer. It reads the connected workspace and shows a plan of the pages, databases, and task lists it found. You choose what to include and whether the team can see it. Nothing is created until you approve the plan, and anything already imported stays.
 
-## From Slack
+[Home](/product/home) brings together your messages, email, tasks, and agent activity. Press **Cmd-K** for the command menu, or **/** to search. Find the full keyboard shortcut list in the app.
 
-The main thing Rox improves on versus Slack is making channels/DM's less noisy and more focused for technical discussions. The first few replies in a thread show inline, so you don't have to open a thread every time someone replies, and a busy channel looks more like Reddit: organized, and easy to remember where a conversation happened.
+To start with an agent, press **C**, then **A**, or mention **@Rox** in a channel. Connect the tools it needs and reference the work you want it to use. You can also [bring your own agent](/AI/bring-your-own).
 
-<div className="switch-mark" role="img" aria-label="The Slack app icon with an arrow pointing to the Rox app icon">
-  <img className="switch-mark-cream" src="/images/switch-from-slack-cream.svg" alt="" />
-  <img className="switch-mark-dark" src="/images/switch-from-slack.svg" alt="" />
-</div>
+<span id="next-steps" />
+<span id="demos-case-studies" />
+<span id="demos--case-studies" />
 
-Channel messages and @mentions appear on [Home](/product/home) with your email.
+## Check the import
 
-The other big thing is [channel-based sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically. This avoids the Slack\+Notion footgun where people need to ask "hey can you share \_\_ with me?"
+Imports copy your work into Rox; they do not keep the original tool in continuous sync. Connected Gmail is different: it stays synced as an email account.
 
-|  | Slack | Rox |
-| :-- | :-: | :-: |
-| Channels, threads, emoji | ✓ | ✓ |
-| Inline thread replies (forum-style reading) | X | ✓ |
-| One inbox shared with your email | X | ✓ |
-| @mention a doc or task to share it automatically | X | ✓ |
-| External channels with customers (Slack Connect) | ✓ | Keep Slack for external channels |
+Start with one project. Check the imported content, assignees, and sharing before inviting the rest of the team or importing more. Keep the original workspace until you have checked what you need.
 
-<iframe src="https://www.youtube.com/embed/1gDOXUxHo0U" title="What Rox learned from Slack/Superhuman" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-**To switch:**
-
-An admin does this from team settings.
-
-1. Open **Settings → Team → Connections**.
-2. Click **Import from Slack**.
-
-**Import with history** uses a Slack export from a workspace admin. Pick the channels, leave **Include message history** on to bring messages and threads, confirm the export belongs to the team's Slack workspace, and click **Import selected channels**. Files are not imported.
-
-**Import channels without history** copies public channels and the teammates who are on your team. Messages stay in Slack.
-
-## From Linear
-
-<div className="switch-mark" role="img" aria-label="The Linear app icon with an arrow pointing to the Rox app icon">
-  <img className="switch-mark-cream" src="/images/switch-from-linear-cream.svg" alt="" />
-  <img className="switch-mark-dark" src="/images/switch-from-linear.svg" alt="" />
-</div>
-
-The difference between Rox and Linear is that on Rox, tasks live in the same app as your email, channels, and docs. You can turn an email or a channel message into a task in one click, and non-engineers can see engineering work without a seat in a separate tool. Tasks are also less ceremonious: fields are minimal by default, and story points, effort, etc. are there via [properties](/concepts/properties) if you really want them, but we advise keeping it light.
-
-|  | Linear | Rox |
-| :-- | :-: | :-: |
-| Status, priority, assignee | ✓ | ✓ |
-| [GitHub integration](/integrations/github): branch, PR, and merge move the task | ✓ | ✓ |
-| Tasks in the same app as your email, channels, and docs | X | ✓ |
-| Turn an email or channel message into a task in one click | X | ✓ |
-| Non-engineers see engineering work | Separate seat in a separate tool | Same workspace |
-| Deep workflow configuration (cycles, triage, custom flows) | ✓ | Minimal by default, [properties](/concepts/properties) when you want them |
-
-<iframe src="https://www.youtube.com/embed/nHxqE2mVKrA" title="What We Learned from Linear" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-**To switch:**
-
-1. Open **Settings → Integrations**.
-2. Under **MCP integrations**, click **Connect** on Linear and finish signing in.
-3. Open Agents, click **New conversation**, and ask it to import. For example:
-
-```text
-Import my Linear workspace. Show me the plan before you create anything.
-```
-
-Issues become tasks. Linear teams, projects, and initiatives become projects.
-
-## From ClickUp
-
-ClickUp covers tasks, docs, chat, goals, and whiteboards through a deep stack of spaces, folders, lists, and custom statuses that you configure yourself. Rox covers the same ground with dedicated [tasks](/product/tasks), [docs](/product/docs), [channels](/product/channels), and [CRM](/product/crm) that share one data model.
-
-There's less setup and fewer knobs because each tool is already built for its job. Tasks keep the essentials (status, priority, assignee, and [properties](/concepts/properties) when you want them), and [agents](/product/agents) can read across all of it as one context.
-
-<div className="switch-mark" role="img" aria-label="The ClickUp app icon with an arrow pointing to the Rox app icon">
-  <img className="switch-mark-cream" src="/images/switch-from-clickup-cream.svg" alt="" />
-  <img className="switch-mark-dark" src="/images/switch-from-clickup.svg" alt="" />
-</div>
-
-The biggest day-to-day change is that tasks live in the same app as your email, channels, and docs. You can turn a message or an email into a task in one click, and @mentioning a task in a channel shares it automatically.
-
-|  | ClickUp | Rox |
-| :-- | :-: | :-: |
-| Tasks, docs, chat | ✓ | ✓ |
-| Setup required | Spaces, folders, lists, custom statuses | Works out of the box |
-| CRM | Configure it yourself | [Built in](/product/crm) |
-| Email | X | ✓ |
-| One data model, one search index | X | ✓ |
-| [Agents](/product/agents) with your whole workspace as context | X | ✓ |
-
-<iframe src="https://www.youtube.com/embed/gxJquVXRX5A" title="Tasks on Rox" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-**To switch:**
-
-1. Open **Settings → Integrations**.
-2. Under **MCP integrations**, click **Add server**.
-3. Set **Name** to ClickUp and **URL** to `https://mcp.clickup.com/mcp`.
-4. Sign in to ClickUp when Rox asks.
-5. Open Agents, click **New conversation**, and tell it what to copy. For example:
-
-```text
-Import my open ClickUp tasks and the Docs in the Engineering space.
-Skip archived work. Show me the list before you create anything.
-```
-
-The agent reads ClickUp and lists what it will create. It creates tasks and docs only after you say to.
-
-## Everything else
-
-**Settings → Integrations → MCP integrations** is where these connections live. Notion and Linear have a **Connect** button. For any other tool, click **Add server**, enter its name and MCP URL, and sign in.
-
-Then start a chat and name what to copy and what to skip. Ask the agent to show the list before it creates anything. The connected tool is only read.
-
-Rox's MCP server has no rate limit. That includes the Free plan.
-
-Files mostly migrate themselves: email attachments are extracted into [Drive](/product/drive) automatically, and anything you drag into a channel or doc is imported and searchable.
-
-## Rox vs. the world
-
-Here's the full picture side by side of how Rox compares to the rest of the toolset.
-
-|  | Rox | Superhuman | Notion | Slack | Linear | ClickUp |
-| :-- | :-: | :-: | :-: | :-: | :-: | :-: |
-| [Email](/product/email) | ✓ | ✓ | X | X | X | X |
-| [Channels](/product/channels) | ✓ | X | X | ✓ | X | ✓ |
-| [Tasks](/product/tasks) | ✓ | X | Via databases | X | ✓ | ✓ |
-| [Docs](/product/docs) | ✓ | X | ✓ | X | X | ✓ |
-| [Databases](/product/databases) | ✓ | X | ✓ | X | X | X |
-| [Spreadsheets](/product/spreadsheets) | ✓ | X | X | X | X | X |
-| [Canvas](/product/canvas) | ✓ | X | X | X | X | Whiteboards |
-| [CRM](/product/crm) | ✓ | X | Via databases | X | X | Via setup |
-| [Drive](/product/drive) | ✓ | X | Attachments | Attachments | X | Attachments |
-| [Calendar](/product/calendar) | ✓ | ✓ | Separate app | X | X | ✓ |
-| [Calls](/product/calls) | ✓ | X | X | Huddles | X | X |
-| [Reviews](/product/reviews) | ✓ | X | X | X | X | X |
-| [Agents](/product/agents) | ✓ | X | ✓ | X | ✓ | ✓ |
-| [Routines](/product/routines) | ✓ | X | Automations | Workflows | X | Automations |
-| [Home feed](/product/home) | ✓ | X | X | X | X | X |
-| [Projects](/product/projects) | ✓ | X | Via databases | X | ✓ | ✓ |
-| [Unified Tagging](/product/tagging) | ✓ | X | X | X | X | X |
-| [Unified Search](/product/search) | ✓ | X | X | X | X | X |
-| [Unified Memory](/product/unified-memory) | ✓ | X | X | X | X | X |
-
-<Card title="Want help switching?" icon="calendar" href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo">
-  Book a call and we'll walk your team through the migration.
-</Card>
+Need help with a larger migration? [Book a demo](https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo) with the team. You can also [watch Desync's customer story](https://macro.com/posts/desync-customer-story).

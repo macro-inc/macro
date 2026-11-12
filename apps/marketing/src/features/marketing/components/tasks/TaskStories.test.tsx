@@ -132,7 +132,7 @@ it('shows the created task without a cursor for reduced motion', () => {
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
 
-it('types Jacob’s requests into the composer before sending them', () => {
+it('types Peter’s requests into the composer before sending them', () => {
   const view = render(() => <TaskAgentChannelDemo />);
   const input = view.getByRole('textbox', { name: 'Message #sales' });
   const log = within(view.getByRole('log', { name: 'Channel sales' }));
@@ -146,13 +146,13 @@ it('types Jacob’s requests into the composer before sending them', () => {
   advanceTo(() =>
     view
       .queryByRole('textbox', { name: 'Thread reply' })
-      ?.textContent?.includes('Julia')
+      ?.textContent?.includes('Wolf')
   );
   const threadInput = view.getByRole('textbox', { name: 'Thread reply' });
-  expect(threadInput.textContent).toContain('Julia');
+  expect(threadInput.textContent).toContain('Wolf');
   expect(threadInput.textContent).not.toContain('@Rox');
   expect(
-    log.queryByText(/Julia will draft/, { selector: 'article p' })
+    log.queryByText(/Wolf will draft/, { selector: 'article p' })
   ).toBeNull();
   fireEvent.pointerDown(threadInput);
   threadInput.textContent = 'Keep my draft';
@@ -160,7 +160,7 @@ it('types Jacob’s requests into the composer before sending them', () => {
   vi.advanceTimersByTime(30000);
   expect(threadInput.textContent).toBe('Keep my draft');
   expect(
-    log.queryByText(/Julia will draft/, { selector: 'article p' })
+    log.queryByText(/Wolf will draft/, { selector: 'article p' })
   ).toBeNull();
 });
 
@@ -188,8 +188,12 @@ it('lets @Rox create assigned tasks from one channel message', () => {
 
 it('moves the task to In Review, then Completed, as its pull request changes', () => {
   const view = render(() => <TaskGithubDemo />);
+  const badge = view.getByText('company/website#491').closest('.task-pr-pill');
+  expect(badge?.getAttribute('aria-hidden')).toBe('true');
   visible(true);
   vi.advanceTimersByTime(1100);
+  expect(badge?.getAttribute('aria-hidden')).toBe('false');
+  expect(badge?.getAttribute('data-status')).toBe('open');
   expect(
     view.getAllByRole('button', { name: 'Change status' })[0].textContent
   ).toContain('In Review');
@@ -223,19 +227,19 @@ it('opens the linked brief and returns through its inline task mention without c
   ).toBeTruthy();
 });
 
-it('changes the existing proposal task to Julia after an explicit request', () => {
+it('changes the existing proposal task to Wolf after an explicit request', () => {
   const view = render(() => <TaskAgentChannelDemo />);
   visible(true);
-  advanceTo(() => view.queryByText('The proposal is now assigned to Julia.'));
+  advanceTo(() => view.queryByText('The proposal is now assigned to Wolf.'));
   expect(
     view
-      .getByText('The proposal is now assigned to Julia.')
+      .getByText('The proposal is now assigned to Wolf.')
       .closest('.sample-thread-replies')
       ?.closest('[data-thread-id]')
       ?.getAttribute('data-thread-id')
   ).toBe('make-tasks');
   const followup = view.getByText(
-    'Julia will draft the proposal instead. Can you update the task?'
+    'Wolf will draft the proposal instead. Can you update the task?'
   );
   expect(
     followup
@@ -249,7 +253,7 @@ it('changes the existing proposal task to Julia after an explicit request', () =
   );
   expect(
     view.getAllByRole('button', { name: 'Change assignee' })[0].textContent
-  ).toContain('Julia');
+  ).toContain('Wolf');
 });
 
 it('keeps edits to the linked brief and reflects its new name on the task', () => {
@@ -290,7 +294,7 @@ it('does not perform the scripted reassignment after the visitor takes over', ()
   );
   reduce();
   vi.advanceTimersByTime(20000);
-  expect(view.queryByText('The proposal is now assigned to Julia.')).toBeNull();
+  expect(view.queryByText('The proposal is now assigned to Wolf.')).toBeNull();
 });
 
 it('pauses an offscreen or hidden walkthrough without losing its place', () => {
@@ -348,7 +352,7 @@ it('finishes a partially played conversation in reduced motion without duplicate
     within(log).getAllByText('Created and assigned both tasks.')
   ).toHaveLength(1);
   expect(
-    within(log).getAllByText('The proposal is now assigned to Julia.')
+    within(log).getAllByText('The proposal is now assigned to Wolf.')
   ).toHaveLength(1);
   expect(view.queryByRole('textbox', { name: 'Thread reply' })).toBeNull();
 });
@@ -364,11 +368,11 @@ it('resumes the same agent draft after leaving view without skipping or duplicat
   expect(input.textContent).toBe(draft);
   expect(view.queryByText('Created and assigned both tasks.')).toBeNull();
   visible(true);
-  advanceTo(() => view.queryByText('The proposal is now assigned to Julia.'));
+  advanceTo(() => view.queryByText('The proposal is now assigned to Wolf.'));
   expect(
     view.getByRole('log', { name: 'Channel sales' }).querySelectorAll('article')
   ).toHaveLength(4);
-  expect(view.getByText('The proposal is now assigned to Julia.')).toBeTruthy();
+  expect(view.getByText('The proposal is now assigned to Wolf.')).toBeTruthy();
 });
 
 function advanceTo(reached: () => unknown) {
@@ -376,3 +380,25 @@ function advanceTo(reached: () => unknown) {
     vi.advanceTimersByTime(50);
   expect(!!reached()).toBe(true);
 }
+
+it('shows channel thinking status for each pending agent response', () => {
+  const view = render(() => <TaskAgentChannelDemo />);
+  visible(true);
+  const waitForThinking = () => {
+    for (let elapsed = 0; elapsed < 15000; elapsed += 50) {
+      if (view.queryByText('Rox is thinking')) return;
+      vi.advanceTimersByTime(50);
+    }
+    throw new Error('Expected the channel agent thinking indicator');
+  };
+  waitForThinking();
+  expect(view.queryByText('Created and assigned both tasks.')).toBeNull();
+  vi.advanceTimersByTime(1400);
+  expect(view.queryByText('Rox is thinking')).toBeNull();
+  expect(view.getByText('Created and assigned both tasks.')).toBeTruthy();
+  waitForThinking();
+  expect(view.queryByText('The proposal is now assigned to Wolf.')).toBeNull();
+  vi.advanceTimersByTime(1400);
+  expect(view.queryByText('Rox is thinking')).toBeNull();
+  expect(view.getByText('The proposal is now assigned to Wolf.')).toBeTruthy();
+});

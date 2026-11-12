@@ -32,73 +32,45 @@
   "favicon": "/favicon.svg",
   "navigation": {
     "pages": [
-      "index",
-      "getting-started",
       "switch-to-macro",
-      "apps",
       {
         "group": "Features",
         "pages": [
-          "product/search",
+          "product/home",
           "product/unified-memory",
-          "product/tagging",
-          "product/sharing"
+          "concepts/properties"
         ]
       },
       {
         "group": "Blocks",
         "pages": [
-          "product/home",
-          {
-            "group": "Drive",
-            "icon": "folder",
-            "root": "product/drive",
-            "pages": [
-              "product/docs",
-              "product/spreadsheets",
-              "product/canvas",
-              "product/snippets",
-              "product/databases"
-            ]
-          },
+          "product/agents",
           "product/email",
+          "product/docs",
+          "product/canvas",
+          "product/tasks",
+          "product/snippets",
           "product/channels",
-          {
-            "group": "Tasks",
-            "icon": "square-check",
-            "root": "product/tasks",
-            "pages": [
-              "product/projects"
-            ]
-          },
-          {
-            "group": "Calendar",
-            "icon": "calendar",
-            "root": "product/calendar",
-            "pages": [
-              "product/booking-links"
-            ]
-          },
-          {
-            "group": "Agents",
-            "icon": "sparkle",
-            "root": "product/agents",
-            "pages": [
-              "product/routines",
-              "product/skills"
-            ]
-          },
-          "product/crm",
           "product/calls",
-          "product/reviews"
+          "product/calendar",
+          "product/crm",
+          "product/booking-links",
+          "product/drive",
+          "product/spreadsheets",
+          "product/databases",
+          "product/forms",
+          "product/routines",
+          "product/skills"
         ]
       },
       {
         "group": "Key Concepts",
         "pages": [
           "concepts/mentions",
-          "concepts/properties",
-          "permissions"
+          "product/tagging",
+          "product/sharing",
+          "concepts/event-system",
+          "product/search"
         ]
       },
       {
@@ -106,180 +78,7 @@
         "pages": [
           "AI/bring-your-own",
           "AI/cursor",
-          "AI/mcp/overview",
-          {
-            "group": "Tool Reference",
-            "icon": "wrench",
-            "pages": [
-              "AI/mcp/tools/index",
-              "AI/mcp/tools/add-shared-calendar-event",
-              "AI/mcp/tools/add-to-pipeline",
-              "AI/mcp/tools/apply-canvas-edits",
-              "AI/mcp/tools/bash-code-execution",
-              "AI/mcp/tools/bulk-set-entity-property-options",
-              "AI/mcp/tools/calculate-spreadsheet",
-              "AI/mcp/tools/change-booking",
-              "AI/mcp/tools/comment",
-              "AI/mcp/tools/comment-on-text",
-              "AI/mcp/tools/configure-agent",
-              "AI/mcp/tools/configure-bot",
-              "AI/mcp/tools/content-search",
-              "AI/mcp/tools/create-agent-session",
-              "AI/mcp/tools/create-booking-link",
-              "AI/mcp/tools/create-bot",
-              "AI/mcp/tools/create-calendar-event",
-              "AI/mcp/tools/create-channel",
-              "AI/mcp/tools/create-channel-media-upload",
-              "AI/mcp/tools/create-company",
-              "AI/mcp/tools/create-contact",
-              "AI/mcp/tools/create-document",
-              "AI/mcp/tools/create-form",
-              "AI/mcp/tools/create-import-entity",
-              "AI/mcp/tools/create-initiative",
-              "AI/mcp/tools/create-pipeline",
-              "AI/mcp/tools/create-project",
-              "AI/mcp/tools/create-routine",
-              "AI/mcp/tools/create-skill",
-              "AI/mcp/tools/create-tag",
-              "AI/mcp/tools/decide",
-              "AI/mcp/tools/delete-bot",
-              "AI/mcp/tools/delete-calendar-event",
-              "AI/mcp/tools/delete-call-record",
-              "AI/mcp/tools/delete-channel-message",
-              "AI/mcp/tools/delete-comment",
-              "AI/mcp/tools/delete-database-view",
-              "AI/mcp/tools/delete-import-entity",
-              "AI/mcp/tools/delete-initiative",
-              "AI/mcp/tools/delete-routine",
-              "AI/mcp/tools/delete-tag",
-              "AI/mcp/tools/describe-database",
-              "AI/mcp/tools/dispatch-coding-agent",
-              "AI/mcp/tools/duplicate-item",
-              "AI/mcp/tools/edit-booking-link",
-              "AI/mcp/tools/edit-canvas",
-              "AI/mcp/tools/edit-channel-message",
-              "AI/mcp/tools/edit-comment",
-              "AI/mcp/tools/edit-document",
-              "AI/mcp/tools/edit-form",
-              "AI/mcp/tools/edit-pipeline",
-              "AI/mcp/tools/edit-presentation",
-              "AI/mcp/tools/edit-spreadsheet",
-              "AI/mcp/tools/edit-tag",
-              "AI/mcp/tools/edit-word-document",
-              "AI/mcp/tools/export-pipeline-csv",
-              "AI/mcp/tools/find-pipeline-entries",
-              "AI/mcp/tools/generate-image",
-              "AI/mcp/tools/generate-object",
-              "AI/mcp/tools/get-booking-insights",
-              "AI/mcp/tools/get-booking-reschedule-slots",
-              "AI/mcp/tools/get-bot-webhooks",
-              "AI/mcp/tools/get-company",
-              "AI/mcp/tools/get-entity-properties",
-              "AI/mcp/tools/get-team-availability",
-              "AI/mcp/tools/get-thread",
-              "AI/mcp/tools/get-user-activity",
-              "AI/mcp/tools/import-companies-csv",
-              "AI/mcp/tools/import-from-jira",
-              "AI/mcp/tools/import-from-linear",
-              "AI/mcp/tools/import-from-notion",
-              "AI/mcp/tools/import-notion-page",
-              "AI/mcp/tools/import-pipeline-csv",
-              "AI/mcp/tools/issue-bot-credential",
-              "AI/mcp/tools/list-agents",
-              "AI/mcp/tools/list-agent-updates",
-              "AI/mcp/tools/list-booking-links",
-              "AI/mcp/tools/list-bookings",
-              "AI/mcp/tools/list-bots",
-              "AI/mcp/tools/list-calendar-events",
-              "AI/mcp/tools/list-calendars",
-              "AI/mcp/tools/list-coding-agents",
-              "AI/mcp/tools/list-companies",
-              "AI/mcp/tools/list-databases",
-              "AI/mcp/tools/list-entities",
-              "AI/mcp/tools/list-forms",
-              "AI/mcp/tools/list-import-entities",
-              "AI/mcp/tools/list-inboxes",
-              "AI/mcp/tools/list-initiatives",
-              "AI/mcp/tools/list-labels",
-              "AI/mcp/tools/list-notifications",
-              "AI/mcp/tools/list-pipelines",
-              "AI/mcp/tools/list-routines",
-              "AI/mcp/tools/list-skills",
-              "AI/mcp/tools/list-tags",
-              "AI/mcp/tools/list-team-members",
-              "AI/mcp/tools/manage-agent-session",
-              "AI/mcp/tools/manage-bot-channel-access",
-              "AI/mcp/tools/manage-channel-participants",
-              "AI/mcp/tools/mark-notifications-done",
-              "AI/mcp/tools/mark-notifications-seen",
-              "AI/mcp/tools/move-to-project",
-              "AI/mcp/tools/move-to-trash",
-              "AI/mcp/tools/mute-notifications",
-              "AI/mcp/tools/name-search",
-              "AI/mcp/tools/open-direct-message",
-              "AI/mcp/tools/query-database",
-              "AI/mcp/tools/react-to-channel-message",
-              "AI/mcp/tools/read-activity",
-              "AI/mcp/tools/read-agent-session",
-              "AI/mcp/tools/read-agent-session-sharing",
-              "AI/mcp/tools/read-booking-settings",
-              "AI/mcp/tools/read-calendar-event",
-              "AI/mcp/tools/read-call-record",
-              "AI/mcp/tools/read-canvas",
-              "AI/mcp/tools/read-channel-message-context",
-              "AI/mcp/tools/read-channel-messages",
-              "AI/mcp/tools/read-channel-thread",
-              "AI/mcp/tools/read-content",
-              "AI/mcp/tools/read-design",
-              "AI/mcp/tools/read-discussion",
-              "AI/mcp/tools/read-form",
-              "AI/mcp/tools/read-illustrator-document",
-              "AI/mcp/tools/read-initiative",
-              "AI/mcp/tools/read-initiative-activity",
-              "AI/mcp/tools/read-memory",
-              "AI/mcp/tools/read-metadata",
-              "AI/mcp/tools/read-photoshop-document",
-              "AI/mcp/tools/read-presentation",
-              "AI/mcp/tools/read-project",
-              "AI/mcp/tools/read-routine",
-              "AI/mcp/tools/read-skill",
-              "AI/mcp/tools/read-spreadsheet",
-              "AI/mcp/tools/read-word-document",
-              "AI/mcp/tools/remove-from-pipeline",
-              "AI/mcp/tools/rename-channel",
-              "AI/mcp/tools/rename-document",
-              "AI/mcp/tools/rename-item",
-              "AI/mcp/tools/render-canvas",
-              "AI/mcp/tools/resolve-comment",
-              "AI/mcp/tools/run-routine",
-              "AI/mcp/tools/save-database-query",
-              "AI/mcp/tools/save-database-view",
-              "AI/mcp/tools/search-skills",
-              "AI/mcp/tools/self-knowledge",
-              "AI/mcp/tools/send-channel-message",
-              "AI/mcp/tools/set-entity-property",
-              "AI/mcp/tools/set-favorite",
-              "AI/mcp/tools/set-form-access",
-              "AI/mcp/tools/set-sender-policy",
-              "AI/mcp/tools/share-with-channel",
-              "AI/mcp/tools/subagent",
-              "AI/mcp/tools/text-editor-code-execution",
-              "AI/mcp/tools/update-agent-session-sharing",
-              "AI/mcp/tools/update-booking-settings",
-              "AI/mcp/tools/update-calendar-event",
-              "AI/mcp/tools/update-call-record",
-              "AI/mcp/tools/update-initiative",
-              "AI/mcp/tools/update-initiative-sharing",
-              "AI/mcp/tools/update-memory",
-              "AI/mcp/tools/update-pipeline-entries",
-              "AI/mcp/tools/update-routine",
-              "AI/mcp/tools/update-sharing",
-              "AI/mcp/tools/update-thread-labels",
-              "AI/mcp/tools/upload-file",
-              "AI/mcp/tools/web-fetch",
-              "AI/mcp/tools/web-search"
-            ]
-          }
+          "AI/mcp/overview"
         ]
       },
       {
@@ -292,13 +91,10 @@
         "group": "Account",
         "pages": [
           "account/teams",
-          "account/billing",
           "security"
         ]
       },
       "support",
-      "faq",
-      "keyboard-shortcuts",
       {
         "group": "Changelog",
         "pages": [
@@ -330,20 +126,1949 @@
   },
   "redirects": [
     {
-      "source": "/product/inbox",
-      "destination": "/product/home"
+      "source": "/keyboard-shortcuts.md",
+      "destination": "https://macro.com/docs/support",
+      "permanent": true
     },
     {
-      "source": "/product/folders",
-      "destination": "/product/drive"
+      "source": "/keyboard-shortcuts",
+      "destination": "https://macro.com/docs/support",
+      "permanent": true
+    },
+    {
+      "source": "/account/billing.md",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/account/billing",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/apps.md",
+      "destination": "https://macro.com/download",
+      "permanent": true
+    },
+    {
+      "source": "/apps",
+      "destination": "https://macro.com/download",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/blocks.md",
+      "destination": "https://macro.com/docs/product/home.md",
+      "permanent": true
     },
     {
       "source": "/concepts/blocks",
-      "destination": "/concepts/mentions"
+      "destination": "https://macro.com/docs/product/home",
+      "permanent": true
+    },
+    {
+      "source": "/permissions.md",
+      "destination": "https://macro.com/docs/product/sharing.md",
+      "permanent": true
+    },
+    {
+      "source": "/permissions",
+      "destination": "https://macro.com/docs/product/sharing",
+      "permanent": true
+    },
+    {
+      "source": "/product/reviews.md",
+      "destination": "https://macro.com/docs/integrations/github.md",
+      "permanent": true
+    },
+    {
+      "source": "/product/reviews",
+      "destination": "https://macro.com/github",
+      "permanent": true
+    },
+    {
+      "source": "/product/folders.md",
+      "destination": "https://macro.com/docs/product/drive.md",
+      "permanent": true
+    },
+    {
+      "source": "/product/folders",
+      "destination": "https://macro.com/drive",
+      "permanent": true
+    },
+    {
+      "source": "/product/inbox.md",
+      "destination": "https://macro.com/docs/product/home.md",
+      "permanent": true
+    },
+    {
+      "source": "/product/inbox",
+      "destination": "https://macro.com/docs/product/home",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started.md",
+      "destination": "https://macro.com/docs/switch-to-macro.md",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started",
+      "destination": "https://macro.com/docs/switch-to-macro",
+      "permanent": true
+    },
+    {
+      "source": "/product/skills",
+      "destination": "https://macro.com/skills",
+      "permanent": true
+    },
+    {
+      "source": "/product/routines",
+      "destination": "https://macro.com/routines",
+      "permanent": true
+    },
+    {
+      "source": "/product/projects.md",
+      "destination": "https://macro.com/docs/product/tasks.md",
+      "permanent": true
+    },
+    {
+      "source": "/product/projects",
+      "destination": "https://macro.com/tasks",
+      "permanent": true
+    },
+    {
+      "source": "/product/drive",
+      "destination": "https://macro.com/drive",
+      "permanent": true
+    },
+    {
+      "source": "/product/booking-links",
+      "destination": "https://macro.com/booking-links",
+      "permanent": true
+    },
+    {
+      "source": "/product/calendar",
+      "destination": "https://macro.com/calendar",
+      "permanent": true
+    },
+    {
+      "source": "/product/snippets",
+      "destination": "https://macro.com/snippets",
+      "permanent": true
+    },
+    {
+      "source": "/product/canvas",
+      "destination": "https://macro.com/canvas",
+      "permanent": true
+    },
+    {
+      "source": "/product/databases",
+      "destination": "https://macro.com/databases",
+      "permanent": true
+    },
+    {
+      "source": "/product/forms",
+      "destination": "https://macro.com/forms",
+      "permanent": true
+    },
+    {
+      "source": "/product/spreadsheets",
+      "destination": "https://macro.com/spreadsheets",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "destination": "https://macro.com/docs/switch-to-macro",
+      "permanent": true
+    },
+    {
+      "source": "/index",
+      "destination": "https://macro.com/docs/switch-to-macro",
+      "permanent": true
+    },
+    {
+      "source": "/index.md",
+      "destination": "https://macro.com/docs/switch-to-macro.md",
+      "permanent": true
+    },
+    {
+      "source": "/index.mdx",
+      "destination": "https://macro.com/docs/switch-to-macro.md",
+      "permanent": true
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://macro.com/sitemap.xml",
+      "permanent": true
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://macro.com/robots.txt",
+      "permanent": true
+    },
+    {
+      "source": "/favicon.svg",
+      "destination": "https://macro.com/docs-assets/favicon.svg",
+      "permanent": true
+    },
+    {
+      "source": "/product/email",
+      "destination": "https://macro.com/email",
+      "permanent": true
+    },
+    {
+      "source": "/product/tasks",
+      "destination": "https://macro.com/tasks",
+      "permanent": true
+    },
+    {
+      "source": "/product/channels",
+      "destination": "https://macro.com/channels",
+      "permanent": true
+    },
+    {
+      "source": "/product/docs",
+      "destination": "https://macro.com/documents",
+      "permanent": true
+    },
+    {
+      "source": "/product/calls",
+      "destination": "https://macro.com/calls",
+      "permanent": true
+    },
+    {
+      "source": "/product/crm",
+      "destination": "https://macro.com/crm",
+      "permanent": true
+    },
+    {
+      "source": "/product/agents",
+      "destination": "https://macro.com/agents",
+      "permanent": true
+    },
+    {
+      "source": "/integrations/github",
+      "destination": "https://macro.com/github",
+      "permanent": true
+    },
+    {
+      "source": "/images/:path*",
+      "destination": "https://macro.com/docs-assets/images/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/videos/:path*",
+      "destination": "https://macro.com/docs-assets/videos/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/logo/:path*",
+      "destination": "https://macro.com/docs-assets/logo/:path*",
+      "permanent": true
     },
     {
       "source": "/AI/recipes",
-      "destination": "/product/agents"
+      "destination": "https://macro.com/agents",
+      "permanent": true
+    },
+    {
+      "source": "/AI/recipes.md",
+      "destination": "https://macro.com/docs/product/agents.md",
+      "permanent": true
+    },
+    {
+      "source": "/faq",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/faq.md",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/add-shared-calendar-event",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/add-shared-calendar-event.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/add-to-pipeline",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/add-to-pipeline.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/apply-canvas-edits",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/apply-canvas-edits.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/bash-code-execution",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/bash-code-execution.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/bulk-set-entity-property-options",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/bulk-set-entity-property-options.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/calculate-spreadsheet",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/calculate-spreadsheet.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/change-booking",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/change-booking.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/comment",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/comment-on-text",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/comment-on-text.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/comment.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/configure-agent",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/configure-agent.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/configure-bot",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/configure-bot.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/content-search",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/content-search.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-agent-session",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-agent-session.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-booking-link",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-booking-link.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-bot",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-bot.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-calendar-event",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-calendar-event.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-channel",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-channel-media-upload",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-channel-media-upload.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-channel.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-company",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-company.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-contact",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-contact.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-form",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-form.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-import-entity",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-import-entity.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-initiative",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-initiative.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-pipeline",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-pipeline.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-project",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-project.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-routine",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-routine.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-skill",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-skill.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-tag",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/create-tag.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/decide",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/decide.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-bot",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-bot.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-calendar-event",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-calendar-event.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-call-record",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-call-record.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-channel-message",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-channel-message.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-comment",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-comment.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-database-view",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-database-view.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-import-entity",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-import-entity.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-initiative",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-initiative.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-routine",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-routine.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-tag",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/delete-tag.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/describe-database",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/describe-database.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/dispatch-coding-agent",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/dispatch-coding-agent.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/duplicate-item",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/duplicate-item.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-booking-link",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-booking-link.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-canvas",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-canvas.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-channel-message",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-channel-message.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-comment",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-comment.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-form",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-form.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-pipeline",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-pipeline.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-presentation",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-presentation.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-spreadsheet",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-spreadsheet.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-tag",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-tag.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-word-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/edit-word-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/export-pipeline-csv",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/export-pipeline-csv.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/find-pipeline-entries",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/find-pipeline-entries.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/generate-image",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/generate-image.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/generate-object",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/generate-object.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-booking-insights",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-booking-insights.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-booking-reschedule-slots",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-booking-reschedule-slots.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-bot-webhooks",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-bot-webhooks.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-company",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-company.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-entity-properties",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-entity-properties.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-team-availability",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-team-availability.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-thread",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-thread.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-user-activity",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/get-user-activity.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-companies-csv",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-companies-csv.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-jira",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-jira.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-linear",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-linear.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-notion",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-from-notion.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-notion-page",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-notion-page.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-pipeline-csv",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/import-pipeline-csv.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/index",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/index.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/issue-bot-credential",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/issue-bot-credential.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-agent-updates",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-agent-updates.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-agents",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-agents.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-booking-links",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-booking-links.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-bookings",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-bookings.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-bots",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-bots.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-calendar-events",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-calendar-events.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-calendars",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-calendars.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-coding-agents",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-coding-agents.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-companies",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-companies.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-databases",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-databases.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-entities",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-entities.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-forms",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-forms.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-import-entities",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-import-entities.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-inboxes",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-inboxes.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-initiatives",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-initiatives.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-labels",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-labels.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-notifications",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-notifications.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-pipelines",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-pipelines.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-routines",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-routines.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-skills",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-skills.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-tags",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-tags.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-team-members",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/list-team-members.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-agent-session",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-agent-session.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-bot-channel-access",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-bot-channel-access.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-channel-participants",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/manage-channel-participants.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mark-notifications-done",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mark-notifications-done.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mark-notifications-seen",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mark-notifications-seen.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/move-to-project",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/move-to-project.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/move-to-trash",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/move-to-trash.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mute-notifications",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/mute-notifications.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/name-search",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/name-search.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/open-direct-message",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/open-direct-message.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/query-database",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/query-database.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/react-to-channel-message",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/react-to-channel-message.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-activity",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-activity.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-agent-session",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-agent-session-sharing",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-agent-session-sharing.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-agent-session.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-booking-settings",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-booking-settings.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-calendar-event",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-calendar-event.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-call-record",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-call-record.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-canvas",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-canvas.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-message-context",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-message-context.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-messages",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-messages.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-thread",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-channel-thread.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-content",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-content.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-design",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-design.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-discussion",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-discussion.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-form",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-form.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-illustrator-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-illustrator-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-initiative",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-initiative-activity",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-initiative-activity.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-initiative.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-memory",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-memory.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-metadata",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-metadata.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-photoshop-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-photoshop-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-presentation",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-presentation.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-project",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-project.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-routine",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-routine.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-skill",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-skill.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-spreadsheet",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-spreadsheet.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-word-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/read-word-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/remove-from-pipeline",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/remove-from-pipeline.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-channel",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-channel.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-document",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-document.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-item",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/rename-item.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/render-canvas",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/render-canvas.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/resolve-comment",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/resolve-comment.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/run-routine",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/run-routine.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/save-database-query",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/save-database-query.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/save-database-view",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/save-database-view.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/search-skills",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/search-skills.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/self-knowledge",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/self-knowledge.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/send-channel-message",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/send-channel-message.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-entity-property",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-entity-property.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-favorite",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-favorite.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-form-access",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-form-access.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-sender-policy",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/set-sender-policy.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/share-with-channel",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/share-with-channel.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/subagent",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/subagent.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/text-editor-code-execution",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/text-editor-code-execution.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-agent-session-sharing",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-agent-session-sharing.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-booking-settings",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-booking-settings.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-calendar-event",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-calendar-event.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-call-record",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-call-record.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-initiative",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-initiative-sharing",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-initiative-sharing.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-initiative.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-memory",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-memory.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-pipeline-entries",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-pipeline-entries.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-routine",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-routine.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-sharing",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-sharing.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-thread-labels",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/update-thread-labels.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/upload-file",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/upload-file.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/web-fetch",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/web-fetch.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/web-search",
+      "destination": "https://macro.com/docs/AI/mcp/overview",
+      "permanent": true
+    },
+    {
+      "source": "/AI/mcp/tools/web-search.md",
+      "destination": "https://macro.com/docs/AI/mcp/overview.md",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "destination": "https://macro.com/docs/:path*",
+      "permanent": true
     }
   ],
   "navbar": {

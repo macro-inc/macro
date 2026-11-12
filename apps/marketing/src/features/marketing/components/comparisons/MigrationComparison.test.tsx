@@ -6,7 +6,7 @@ import { FeatureComparisons } from './FeatureComparisons';
 
 afterEach(cleanup);
 
-it('uses the framed comparison with plain headers and feature labels', () => {
+it('renders accessible comparison headers and feature labels', () => {
   setViewportWidth(1440);
   const view = render(() => (
     <FeatureComparisons
@@ -15,8 +15,7 @@ it('uses the framed comparison with plain headers and feature labels', () => {
       tableMinWidth={900}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Rox' });
-  expect(table.getAttribute('data-presentation')).toBe('framed');
+  const table = view.getByRole('region', { name: 'Compare all tools' });
   expect(table.querySelectorAll('a')).toHaveLength(0);
   for (const name of [
     'Rox',
@@ -40,7 +39,7 @@ it('credits CRM templates and Salesforce-backed CRM with explained partial marks
       tableMinWidth={900}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Rox' });
+  const table = view.getByRole('region', { name: 'Compare all tools' });
   let cell = within(table).getByText('Dedicated CRM').nextElementSibling;
   const cells: Element[] = [];
   for (let index = 0; index < 6; index++) {
@@ -66,8 +65,4 @@ it('credits CRM templates and Salesforce-backed CRM with explained partial marks
       .querySelector('[aria-label="Partial"]')
       ?.getAttribute('aria-description')
   ).toContain('custom fields');
-  expect(table.style.overflowX).toBe('auto');
-  expect(table.firstElementChild?.getAttribute('style')).toContain(
-    'min-width: 900px'
-  );
 });

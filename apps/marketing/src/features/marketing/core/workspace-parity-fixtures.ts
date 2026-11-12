@@ -54,7 +54,7 @@ export const sampleAgentSessions = [
     provider: 'chatgpt',
     prompt: 'Summarize the Meadow conversation and suggest next steps.',
     answer:
-      'Valentina confirmed the Thursday check-in. Share the team rollout plan, introduce Julia, and confirm the workspace owner before the meeting.',
+      'Austin Barron confirmed the Thursday check-in. Share the team rollout plan, introduce Julia, and confirm the workspace owner before the meeting.',
   },
   {
     id: 'release-notes',
@@ -127,7 +127,7 @@ export function extraWorkspaceDocuments(): WorkspaceDocument[] {
       title: 'Design review notes',
       tags: ['Design'],
       updated: 'Sep 27',
-      body: '## Review\n\n- [x] Check desktop navigation\n- [x] Review email replies\n- [ ] Check mobile layouts\n\nValentina will share the final review with the team.',
+      body: '## Review\n\n- [x] Check desktop navigation\n- [x] Review email replies\n- [ ] Check mobile layouts\n\nAustin Barron will share the final review with the team.',
       comments: [],
     },
     {

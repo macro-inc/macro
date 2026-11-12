@@ -33,7 +33,7 @@ describe('detectDesktopPlatform', () => {
 describe('desktopReleaseVersion', () => {
   it('uses the selected installer release, including fallback installers', () => {
     expect(desktopReleaseVersion(FALLBACK_DOWNLOAD_URLS.macos)).toBe(
-      'v2026.10.6.0'
+      'v2026.11.6.1'
     );
     expect(
       desktopReleaseVersion(

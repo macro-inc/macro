@@ -51,7 +51,7 @@ function Message(props: { message: HomepageMessage }) {
       data-side={props.message.person === 'jacob' ? 'self' : 'peer'}
     >
       <span class="homepage-message-name">
-        {person().shortName}
+        {person().name}
         <Show
           when={
             props.message.person === 'claude' ||
@@ -100,7 +100,7 @@ function Message(props: { message: HomepageMessage }) {
             size="sm"
             variant="outline"
             class="homepage-message-reaction gap-1.5 rounded-full px-2.5 text-xs"
-            aria-label={`${reaction().label} reaction to ${person().shortName}'s message`}
+            aria-label={`${reaction().label} reaction to ${person().name}'s message`}
             aria-pressed={reacted()}
             onClick={() => setReacted((previous) => !previous)}
           >

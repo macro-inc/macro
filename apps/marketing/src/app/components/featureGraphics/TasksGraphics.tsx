@@ -1,3 +1,24 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconTaskMacro from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import PriorityHigh from '@icon/system/regular/priority-high.svg';
+import PriorityLow from '@icon/system/regular/priority-low.svg';
+import PriorityMedium from '@icon/system/regular/priority-medium.svg';
+import PriorityUrgent from '@icon/system/regular/priority-urgent.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import StatusCancelled from '@icon/system/regular/task-cancelled.svg';
+import StatusCreated from '@icon/system/regular/task-created.svg';
+import StatusDone from '@icon/system/regular/task-done.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import StatusInReview from '@icon/system/regular/task-in-review.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createSignal,
@@ -8,28 +29,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconCompany from '../../../assets/icons/icon-company.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import StatusCancelled from '../../../assets/icons/square-task-cancelled-circle.svg';
-import StatusCreated from '../../../assets/icons/square-task-created-circle.svg';
-import StatusDone from '../../../assets/icons/square-task-done-circle.svg';
-import StatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import StatusInReview from '../../../assets/icons/square-task-in-review-circle.svg';
-import PriorityHigh from '../../../assets/icons/wide-priority-high.svg';
-import PriorityLow from '../../../assets/icons/wide-priority-low.svg';
-import PriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
-import PriorityUrgent from '../../../assets/icons/wide-priority-urgent.svg';
-import IconTaskMacro from '../../../assets/icons/wide-task.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
@@ -3269,11 +3269,7 @@ const faqItems: { q: string; a: JSX.Element }[] = [
         you open the PR, and <strong>Done</strong> when it merges. The task
         records which pull request is associated with it, so status updates
         itself instead of waiting on standup. See the{' '}
-        <a
-          href="https://docs.macro.com/integrations/github"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="/github#guide" target="_blank" rel="noreferrer">
           GitHub integration
         </a>{' '}
         docs.

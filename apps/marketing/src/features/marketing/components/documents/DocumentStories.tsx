@@ -1,5 +1,5 @@
-import Cloud from '@phosphor/cloud.svg';
-import CloudWarning from '@phosphor/cloud-warning.svg';
+import Cloud from '@icon/system/regular/cloud.svg';
+import CloudWarning from '@icon/system/regular/cloud-warning.svg';
 import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, Show } from 'solid-js';
 import { type AgentToolCall, AgentToolGroup } from '../agents/AgentTranscript';

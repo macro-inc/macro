@@ -1,9 +1,7 @@
-import { A } from '@solidjs/router';
 import type { Component } from 'solid-js';
 import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
-import '../../routes/posts/posts-shell.css';
-import './RoutePartnerTerms.css';
+import './RouteLegal.css';
 
 const content = `Rox
 
@@ -606,17 +604,8 @@ export const RoutePartnerTerms: Component = () => {
   });
 
   return (
-    <article class="posts-shell posts-article">
-      <header class="posts-article-header">
-        <nav class="posts-eyebrow" aria-label="Breadcrumb">
-          <A href="/partners">Partners</A>
-          <span class="posts-eyebrow-sep">/</span>
-          Terms
-        </nav>
-        <h1 class="posts-title">Rox Partner Program Terms</h1>
-        <p class="posts-updated">Effective August 31, 2026 · Version 1.3</p>
-      </header>
-      <UtilPlainText content={content} lists variant="post" />
-    </article>
+    <>
+      <UtilPlainText content={content} lists />
+    </>
   );
 };

@@ -1,9 +1,9 @@
 import ChatGptIcon from '@icon/openai.svg';
+import GitPull from '@icon/system/regular/git-pull-request.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Terminal from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import GitPull from '@phosphor/git-pull-request.svg';
-import Plus from '@phosphor/plus.svg';
-import Terminal from '@phosphor/terminal-window.svg';
 import { Button } from '@ui';
 import { createEffect, For, on, Show } from 'solid-js';
 import { DEPLOY_PROMPT, DEPLOY_TRACE } from '../../core/deploy-agent-demo';

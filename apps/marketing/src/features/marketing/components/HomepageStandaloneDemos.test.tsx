@@ -48,7 +48,7 @@ describe('standalone website demos', () => {
     const view = render(() => <HomepageEmailCompose />);
     expect(
       (view.getByRole('textbox', { name: 'To' }) as HTMLInputElement).value
-    ).toBe('Valentina <valentina@coparse.com>');
+    ).toBe('Austin Barron <austin@example.com>');
     expect(
       (view.getByRole('textbox', { name: 'Cc' }) as HTMLInputElement).value
     ).toBe('Julia <julia@macro.com>');
@@ -119,11 +119,11 @@ describe('standalone website demos', () => {
         .getByRole('gridcell', { name: 'B2: Coparse' })
         .getAttribute('aria-selected')
     ).toBe('true');
-    fireEvent.click(view.getByRole('button', { name: 'Open Valentina' }));
+    fireEvent.click(view.getByRole('button', { name: 'Open Austin Barron' }));
     const contact = await screen.findByRole('dialog', {
-      name: 'Valentina · Coparse',
+      name: 'Austin Barron · Coparse',
     });
-    expect(within(contact).getByText('valentina@coparse.com')).toBeTruthy();
+    expect(within(contact).getByText('austin@example.com')).toBeTruthy();
     fireEvent.click(
       within(contact).getByRole('button', { name: 'Close linked record' })
     );
@@ -153,18 +153,18 @@ describe('standalone website demos', () => {
       view.getByRole('gridcell', { name: 'C4: owen@fieldnote.example' })
     ).toBeTruthy();
     const cell = view.getByRole('gridcell', {
-      name: 'A2: Valentina',
+      name: 'A2: Austin Barron',
     });
     fireEvent.click(cell);
     fireEvent.dblClick(cell);
     fireEvent.input(view.getByRole('textbox', { name: 'Edit A2' }), {
-      target: { value: 'Valentina Test' },
+      target: { value: 'Austin Barron Test' },
     });
     fireEvent.keyDown(view.getByRole('textbox', { name: 'Edit A2' }), {
       key: 'Enter',
     });
     expect(
-      view.getByRole('gridcell', { name: 'A2: Valentina Test' })
+      view.getByRole('gridcell', { name: 'A2: Austin Barron Test' })
     ).toBeTruthy();
     expect(
       view
@@ -172,10 +172,12 @@ describe('standalone website demos', () => {
         .getAttribute('aria-selected')
     ).toBe('true');
     fireEvent.click(view.getByRole('button', { name: 'Undo' }));
-    expect(view.getByRole('gridcell', { name: 'A2: Valentina' })).toBeTruthy();
+    expect(
+      view.getByRole('gridcell', { name: 'A2: Austin Barron' })
+    ).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Redo' }));
     expect(
-      view.getByRole('gridcell', { name: 'A2: Valentina Test' })
+      view.getByRole('gridcell', { name: 'A2: Austin Barron Test' })
     ).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Bold' }));
     expect(

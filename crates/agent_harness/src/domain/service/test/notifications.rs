@@ -158,6 +158,7 @@ fn harness_with_outbox(outbox: Arc<Outbox>) -> (TestBench, TurnSignals) {
         None,
         None,
         Some(outbox),
+        None,
     )
 }
 async fn event(outbox: &Outbox, session: AgentSessionId, subject: &str, wake: bool) {

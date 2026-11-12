@@ -15,13 +15,13 @@ const call: SampleCall = {
   title: 'Demo call',
   ended: 'Oct 14, 2026 · 9:20 AM',
   duration: 1200,
-  people: ['jacob', 'valentina', 'julia'],
+  people: ['jacob', 'austin', 'julia'],
   summary:
-    '- Valentina confirmed Thursday at 9.\n- Send the setup plan and Rox overview before the meeting.\n- Julia will help with setup.',
+    '- Austin Barron confirmed Thursday at 9.\n- Send the setup plan and Rox overview before the meeting.\n- Julia will help with setup.',
   segments: [
     {
       id: 'time',
-      person: 'valentina',
+      person: 'austin',
       at: 30,
       text: 'Thursday at 9 works for me. Could you send the setup plan before we meet?',
     },
@@ -40,7 +40,7 @@ const call: SampleCall = {
   ],
   poster: [
     { person: 'jacob', video: false },
-    { person: 'valentina', video: false },
+    { person: 'austin', video: false },
     { person: 'julia', video: false },
   ],
 };

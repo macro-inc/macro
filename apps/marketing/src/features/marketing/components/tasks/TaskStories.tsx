@@ -4,6 +4,7 @@ import type {
   WorkspaceComment,
   WorkspaceTask,
 } from '../../core/dummy-workspace';
+import { homepagePeople } from '../../core/homepage-demo-people';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
 import { demoTypingActions } from '../../primitives/demoTypingActions';
@@ -25,10 +26,10 @@ export function TaskFromMessageDemo() {
 }
 
 const proposalAsks = [
-  { title: 'Draft the customer proposal', owner: 'teo', priority: 'High' },
+  { title: 'Draft the customer proposal', owner: 'eric', priority: 'High' },
   {
     title: 'Review the pricing',
-    owner: 'jacob',
+    owner: 'peter',
     priority: 'Medium',
   },
 ] as const;
@@ -40,10 +41,11 @@ export function TaskAgentChannelDemo() {
   w.open('messages', 'sales');
   w.setData('tasks', []);
   const [typing, setTyping] = createSignal(false);
+  const [thinking, setThinking] = createSignal(false);
   const firstRequest =
-    '@Rox make tasks for this proposal. Teo drafts it; I’ll review the pricing.';
+    '@Rox make tasks for this proposal. Eric drafts it; I’ll review the pricing.';
   const secondRequest =
-    'Julia will draft the proposal instead. Can you update the task?';
+    'Wolf will draft the proposal instead. Can you update the task?';
   w.setData('channels', 0, 'messages', []);
   const [replyTarget, setReplyTarget] = createSignal<string>();
   const composers = new Map<string, ChannelComposerHandle>();
@@ -79,17 +81,20 @@ export function TaskAgentChannelDemo() {
       ...items,
       {
         id: 'make-tasks',
-        person: 'jacob',
+        person: 'peter',
         time: '9:20 AM',
-        body: '@[Rox](demo-mention:macro) make tasks for this proposal. Teo drafts it; I’ll review the pricing.',
+        body: '@[Rox](demo-mention:macro) make tasks for this proposal. Eric drafts it; I’ll review the pricing.',
       },
     ]);
     w.setChannelThread('make-tasks');
+    setThinking(true);
+    follow();
   };
   let ids: string[] = [];
   const create = () =>
     batch(() => {
       if (ids.length) return;
+      setThinking(false);
       const tasks: WorkspaceTask[] = proposalAsks.map((ask) => ({
         id: crypto.randomUUID(),
         title: ask.title,
@@ -99,7 +104,7 @@ export function TaskAgentChannelDemo() {
             : 'Check the price and scope before we send the proposal.',
         owner: ask.owner,
         priority: ask.priority,
-        creator: 'jacob',
+        creator: 'peter',
         status: 'Not Started',
         tags: ['Customers'],
         relatedDocumentIds: ['brief'],
@@ -134,24 +139,26 @@ export function TaskAgentChannelDemo() {
       {
         id: 'reassign',
         replyTo: 'make-tasks',
-        person: 'jacob',
+        person: 'peter',
         body: secondRequest,
         time: '9:24 AM',
       },
     ]);
     setReplyTarget(undefined);
+    setThinking(true);
     follow();
   };
   const update = () => {
     if (hasMessage('updated') || !ids.length) return;
-    w.updateTask(ids[0], { owner: 'julia' });
+    setThinking(false);
+    w.updateTask(ids[0], { owner: 'wolf' });
     w.setData('channels', 0, 'messages', (items): WorkspaceComment[] => [
       ...items,
       {
         id: 'updated',
         replyTo: 'make-tasks',
         person: 'macro',
-        body: 'The proposal is now assigned to Julia.',
+        body: 'The proposal is now assigned to Wolf.',
         time: '9:24 AM',
         taskId: ids[0],
       },
@@ -183,6 +190,7 @@ export function TaskAgentChannelDemo() {
       w.setChannelThread(undefined);
       ids = [];
       setTyping(false);
+      setThinking(false);
       const log = root.querySelector('[role="log"]');
       if (log) log.scrollTop = 0;
     },
@@ -202,6 +210,7 @@ export function TaskAgentChannelDemo() {
     scrollFrame = undefined;
     playback.pause();
     setTyping(false);
+    setThinking(false);
   };
   return (
     <ProductDemo
@@ -220,6 +229,32 @@ export function TaskAgentChannelDemo() {
             workspace={w}
             scriptedReply={replyTarget}
             stableComposer
+            agentActivity={
+              <Show when={thinking()}>
+                {/* Mirrors agent-activity/TypingRow and its channel phase label. */}
+                <div class="task-agent-thinking" data-agent-typing>
+                  <img src={homepagePeople.macro.photo} alt="" />
+                  <div role="status" aria-live="polite">
+                    <span>Rox is thinking</span>
+                    <span aria-hidden="true">
+                      <span class="animate-typing-dot">.</span>
+                      <span
+                        class="animate-typing-dot"
+                        style={{ 'animation-delay': '200ms' }}
+                      >
+                        .
+                      </span>
+                      <span
+                        class="animate-typing-dot"
+                        style={{ 'animation-delay': '400ms' }}
+                      >
+                        .
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </Show>
+            }
             onComposerReady={(handle, thread) => {
               const key = thread ?? 'main';
               if (handle) composers.set(key, handle);
@@ -250,7 +285,7 @@ export function TaskGithubDemo() {
       messages: [
         {
           id: 'sign-in-request',
-          person: 'julia',
+          person: 'wolf',
           body: 'The sign-in button does nothing on mobile. Can you fix it?',
           time: '9:10 AM',
           taskId: 'invite',
@@ -312,17 +347,19 @@ export function TaskGithubDemo() {
           workspace={w}
           task={task()}
           pills={
-            <Show when={pr() !== 'none'}>
-              <span class="task-pr-pill" data-status={pr()}>
-                <PrStatusIcon status={pr()} class="size-3 shrink-0" />
-                <span class="truncate">{PR.title}</span>
-                <span class="text-ink-muted">
-                  {PR.repo}#{PR.number}
-                </span>
-                <span class="text-success">+38</span>
-                <span class="text-failure">−6</span>
+            <span
+              class="task-pr-pill"
+              data-status={pr()}
+              aria-hidden={pr() === 'none'}
+            >
+              <PrStatusIcon status={pr()} class="size-3 shrink-0" />
+              <span class="truncate">{PR.title}</span>
+              <span class="text-ink-muted">
+                {PR.repo}#{PR.number}
               </span>
-            </Show>
+              <span class="text-success">+38</span>
+              <span class="text-failure">−6</span>
+            </span>
           }
         />
       </Show>

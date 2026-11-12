@@ -1,12 +1,12 @@
+import IconCompany from '@icon/system/fill/buildings-fill.svg';
+import IconChannels from '@icon/system/fill/chats-circle-fill.svg';
+import IconEmail from '@icon/system/fill/envelope-fill.svg';
+import IconTasks from '@icon/system/fill/list-checks-fill.svg';
+import IconCall from '@icon/system/fill/phone-call-fill.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
 import type { Component, JSX } from 'solid-js';
-import IconAi from '../../assets/icons/icon-ai.svg';
-import IconCall from '../../assets/icons/icon-call-solid.svg';
-import IconChannels from '../../assets/icons/icon-channels-solid.svg';
-import IconCompany from '../../assets/icons/icon-company-solid.svg';
 import IconDocuments from '../../assets/icons/icon-documents-solid.svg';
-import IconEmail from '../../assets/icons/icon-email-solid.svg';
 import IconGithub from '../../assets/icons/icon-github.svg';
-import IconTasks from '../../assets/icons/icon-tasks-solid.svg';
 
 export type FeaturePage = {
   Icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -22,48 +22,48 @@ export const featurePages: FeaturePage[] = [
     Icon: IconAi,
     title: 'Agents',
     href: '/agents',
-    description: 'Agents that search, edit, and remember your work.',
+    description: 'Unified memory and tools across model providers.',
   },
   {
     Icon: IconEmail,
     title: 'Rox Mail',
     href: '/email',
-    description: 'Fast email search, shared threads, and agent drafts.',
+    description: 'All your email accounts in one inbox.',
   },
   {
     Icon: IconDocuments,
     title: 'Documents',
     href: '/documents',
-    description: 'CRDT documents with offline sync and live agent edits.',
+    description: 'Markdown with live collaboration and offline editing.',
   },
   {
     Icon: IconChannels,
     title: 'Channels',
     href: '/channels',
-    description: 'Inline threads, channel sharing, and agent participants.',
+    description: 'An actual inbox for team chat, with Signal and Noise.',
   },
   {
     Icon: IconCall,
     title: 'Calls',
     href: '/calls',
-    description: 'Recordings and transcripts your agents can read.',
+    description: 'Transcripts and summaries for agents.',
   },
   {
     Icon: IconCompany,
     title: 'CRM',
     href: '/crm',
-    description: 'A CRM that builds itself from email.',
+    description: 'CRM built into the core workspace.',
   },
   {
     Icon: IconTasks,
     title: 'Tasks',
     href: '/tasks',
-    description: 'Tasks from messages, assigned to people and agents.',
+    description: 'Simple to create, assign, prioritize, and close.',
   },
   {
     Icon: IconGithub,
     title: 'Pull Requests',
     href: '/github',
-    description: 'Review pull requests in your inbox.',
+    description: 'Pull requests in your unified inbox.',
   },
 ];

@@ -1,98 +1,21 @@
 ---
 title: "Security"
 icon: "shield-check"
-description: "Learn more about our data security practices and data handling."
+description: "Security and compliance at Rox."
 ---
 
-## Overview
+<SecurityBadges />
 
-Rox is built with security practices to keep your work safe at every layer. This includes encryption and infrastructure partners.
+Review our security controls, policies, and subprocessors in our Trust Center. Request the documents you need for your security review there.
 
-Rox is also open source under the AGPLv3. The code that runs the hosted product is on [GitHub](https://github.com/macro-inc/macro).
+<a class="security-portal-link" href="https://security.macro.com" target="_blank" rel="noreferrer">Visit our Trust Center <span aria-hidden="true">↗</span></a>
 
-To request a Data Processing Agreement (DPA) with specific details, contact us at [support@macro.com](mailto:support@macro.com).
+## Contact security
 
-## Shared responsibility
+Contact [security@macro.com](mailto:security@macro.com). To report a vulnerability, include steps to reproduce it and avoid posting it publicly before a fix is available.
 
-Under our shared responsibility model, Rox secures the components that we control, including the application layer, underlying platform, and cloud infrastructure. This includes protecting against threats targeting these components through security controls, monitoring, and incident response.
+Read our [Privacy Policy](https://macro.com/privacy) and [Data Processing Agreement](https://macro.com/dpa).
 
-Customers are responsible for how they use Rox. This includes configuring team access and roles, determining what data they share into which channels, deciding which documents have public links enabled, managing the agents and MCP clients they connect, and maintaining the security settings on the Google account they sign in with and on the Microsoft account connected for Outlook mail.
+## Self-hosting
 
-## Access control
-
-Access in Rox is derived from [channel-based sharing](/permissions) rather than per-file permission dialogs. That model is the security boundary:
-
-* Mentioning a Block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
-* [Teams](/account/teams) set the defaults for some Block types. Tasks are shared with the team unless **Share with** your team is turned off. Calls started from a channel are shared with the team unless **Share with team** is turned off. Standalone calls stay with the people on the call. Emails stay on the thread unless Email Sync is on for that company.
-* Team roles are **Member**, **Admin**, and **Owner**. Admins and owners can remove members and can limit invitations to admins.
-* **Auto-join on domain**, when an admin enables it, adds anyone who signs up with an email on the owner's domain to the team.
-* **Anyone with the link** lets anyone with the URL open that Block, including people without a Rox account.
-
-Rox does not store passwords. You sign in with Google, with Apple on iOS, or with a one-time link sent to your email. Signing in with Google means your Google Workspace policies — two-factor authentication, session length, and device restrictions — apply to Rox. Revoking Rox's access from your Google or Microsoft account, or disconnecting it in **Settings → Email**, ends email sync.
-
-## Agents and your data
-
-Agents operate on your workspace data under the following guarantees:
-
-<CardGroup cols={2}>
-  <Card title="No training on your data" icon="ban">
-    Your content is never used to train models, ours or anyone else's.
-  </Card>
-
-  <Card title="Zero data retention" icon="clock-rotate-left">
-    We hold zero-retention agreements with our model providers, so prompts and content aren't retained on their side.
-  </Card>
-
-  <Card title="Agents inherit your permissions" icon="user-lock">
-    An agent can reach only what you can reach. Content that isn't shared with you isn't in your agent's context.
-  </Card>
-
-  <Card title="You choose the connections" icon="plug">
-    Agent connections and MCP clients are opt-in, from **Settings → Agent connections** and **Settings → MCP server**.
-  </Card>
-</CardGroup>
-
-Rox routes requests to model providers including Anthropic and OpenAI, depending on the task. Data you send to a third-party MCP server that you connect yourself is governed by that provider's terms, not ours.
-
-## Retention and deletion
-
-* Deleting a Block moves it to trash first, so it can be recovered.
-* Deleting your account is permanent. **Settings → Account → Delete account** removes your account and its associated data after a confirmation step.
-* Organizations can set a retention window that deletes documents and chats which haven't been accessed within a set number of days. Contact [support@macro.com](mailto:support@macro.com) to configure one for your organization.
-
-Disconnecting a Gmail or Outlook account stops future sync but doesn't delete mail that has already synced.
-
-## Report a vulnerability
-
-Send suspected security issues to [security@macro.com](mailto:security@macro.com). We pay bounties in accordance with the severity and impact of the finding.
-
-Please include steps to reproduce, the affected surface (web, iOS, Android, API, or MCP), and any accounts involved, and give us a chance to ship a fix before disclosing publicly. Because the codebase is open source, you can reference specific files or commits.
-
-<Warning>
-  Don't file security issues on the public GitHub tracker. Use [security@macro.com](mailto:security@macro.com) so a report isn't visible before there's a fix.
-</Warning>
-
-## FAQ
-
-<AccordionGroup>
-  <Accordion title="Is your data encrypted?">
-    All data is encrypted in transit with TLS, and our databases, file storage, and backups are encrypted at rest with AES-256 using AWS KMS-managed keys.
-  </Accordion>
-
-  <Accordion title="Do you train models on my data?">
-    No. We don't train on customer content, and we hold zero-retention agreements with the model providers we route to, so they don't retain it either.
-  </Accordion>
-
-  <Accordion title="How can I access, transfer or delete my data?">
-    You can delete your account and its data from **Settings → Account → Delete account**. For a bulk export, or deletion scoped to part of your workspace, contact [support@macro.com](mailto:support@macro.com).
-  </Accordion>
-
-  <Accordion title="Who at Rox can see my workspace?">
-    Access to production data is restricted to the engineers who need it to operate the service, and infrastructure access is logged and monitored. We don't browse customer content, and support will ask before looking at anything specific to debug an issue.
-  </Accordion>
-
-  <Accordion title="Which subprocessors does Rox use?">
-    The hosted product runs on AWS. We sublicense LiveKit for video calls, FusionAuth for authentication, and PostHog for product analytics, alongside the model providers described above. Email [security@macro.com](mailto:security@macro.com) for the current list as part of a vendor review.
-  </Accordion>
-
-</AccordionGroup>
+Rox is [open source](https://github.com/macro-inc/macro) under the AGPLv3. For help running it on your own infrastructure, contact [self-host@macro.com](mailto:self-host@macro.com). Hosted-product certifications do not cover your own deployment.

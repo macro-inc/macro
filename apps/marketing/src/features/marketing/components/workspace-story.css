@@ -2,7 +2,8 @@
 .homepage-sections { position: relative; overflow-x: clip; background: #000; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; }
 .homepage-sections-inner { width: min(1000px, calc(100% - 48px)); margin-inline: auto; padding-bottom: 100px; }
 .homepage-feature { padding: 64px 0; }
-.homepage-conversation { display: flex; flex-direction: column; gap: 28px; width: min(760px, 100%); margin: 0 auto 48px; padding: 0; list-style: none; font-family: var(--font-sans), 'Inter', sans-serif; font-size: 16px; font-weight: 400; line-height: 1.65; letter-spacing: normal; }
+.macro-homepage .homepage-sections-inner > :is(.homepage-feature, .homepage-testimonials, .homepage-blog, .homepage-feature-end) { width: min(680px, 100%); margin-inline: auto; }
+.homepage-conversation { display: flex; flex-direction: column; gap: 28px; width: min(760px, 100%); margin: 0 auto 48px; padding: 0; list-style: none; font-family: var(--font-sans), 'Inter', sans-serif; font-size: 16px; font-weight: 370; line-height: 1.65; letter-spacing: normal; }
 .homepage-message { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: ". name" "avatar bubble" ". reaction"; align-self: flex-start; gap: 6px 10px; max-width: 82%; }
 .homepage-message[data-side=self] { grid-template-columns: minmax(0, 1fr) 32px; grid-template-areas: "name ." "bubble avatar" "reaction ."; align-self: flex-end; }
 .homepage-message-name { grid-area: name; padding-inline: 16px; color: var(--color-ink-muted); font-size: 12px; line-height: 1.4; }
@@ -47,7 +48,7 @@
 .homepage-feature-title { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; }
 #coding-agents .homepage-feature-title { flex-direction: column; }
 .homepage-feature-heading h2 { text-wrap: balance; margin: 0; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(28px, 3.2vw, 40px); font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); line-height: 1.25; letter-spacing: -.035em; }
-.homepage-section-break { display: flex; align-items: center; gap: 24px; width: 100%; color: var(--color-ink-placeholder); font: 400 14px/1.65 'Inter Variable', Inter, sans-serif; }
+.homepage-section-break { display: flex; align-items: center; gap: 24px; width: 100%; color: var(--color-ink-placeholder); font: 370 14px/1.65 'Inter Variable', Inter, sans-serif; }
 .homepage-section-break > span { flex: 1; height: 1px; background: color-mix(in srgb, var(--color-ink) 16%, transparent); }
 .homepage-section-break p { flex: 0 1 440px; min-width: 0; margin: 0; color: inherit; text-wrap: balance; }
 @media (max-width: 699px) { .homepage-feature-heading { margin-bottom: 36px; } .homepage-feature-title { margin-bottom: 16px; } #coding-agents .homepage-feature-title { gap: 10px; } #coding-agents .homepage-feature-heading h2 { font-size: clamp(18px, 5.5vw, 28px); white-space: nowrap; } .homepage-section-break { gap: 12px; font-size: 13px; } .homepage-section-break > span { flex: 0 0 20px; } .homepage-section-break p { flex: 1; } }
@@ -64,7 +65,11 @@
 }
 .homepage-feature-end { position: relative; margin-top: 0; padding: clamp(72px, 12svh, 140px) 0 56px; }
 .homepage-closing-rule { position: absolute; top: 0; left: 0; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--color-edge-muted); }
-.homepage-app-landing { height: 200px; }
+.homepage-closing-signup { display: flex; justify-content: center; }
+.homepage-closing-signup .feature-page-cta { width: 180px; min-height: 48px; font-size: 16px; }
+@media (max-width: 699px) {
+  .homepage-closing-signup .feature-page-cta { width: 100%; max-width: 420px; min-height: 60px; font-size: 20px; }
+}
 @media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } }
 @media (max-width: 699px) {
   #documents { padding-bottom: 20px; }
@@ -111,3 +116,9 @@
 .homepage-person-mention { padding: 1px 3px; border-radius: 4px; color: var(--marketing-mention); background: color-mix(in srgb, var(--marketing-mention) 12%, transparent); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 /* Keep the next transition's traveling layer behind the unification copy. */
 .homepage-sections { z-index: 1; }
+
+/* Demo composers control their own height; never expose the native resize grip. */
+.feature-page textarea,
+.macro-homepage textarea,
+.guide-graphic textarea,
+.agents-view-portal textarea { resize: none; }

@@ -1,4 +1,4 @@
-import { Route, Router, useLocation } from '@solidjs/router';
+import { Navigate, Route, Router, useLocation } from '@solidjs/router';
 import type { Component, ParentComponent } from 'solid-js';
 import {
   createEffect,
@@ -11,12 +11,14 @@ import {
   Suspense,
 } from 'solid-js';
 import { isServer } from 'solid-js/web';
+import { Homepage } from '../../features/setup/Homepage';
 import {
   applyPalette,
   onPaletteChange,
   preferredPalette,
 } from '../../features/setup/sitePalette';
 import '../../styles/dark-theme.css';
+import '../../styles/body-headings.css';
 import '../../features/setup/cream-preview.css';
 import { DemoMentionMenu } from '../../features/marketing/components/DemoMentionMenu';
 import { PageVignette } from '../../features/marketing/components/PageVignette';
@@ -36,16 +38,28 @@ import {
   MOBILE_SIGNUP_SENT_PATH,
 } from '../utils/utilMobileSignup';
 
-function JourneyEntry() {
-  onMount(() => {
-    window.location.replace('/app/signup');
-  });
-  return null;
+function RouteHomepage() {
+  return <Homepage embedded />;
 }
+
+const RouteReplaceApps = lazy(
+  () => import('../../features/marketing/views/ReplaceAppsPage')
+);
+
+const RouteWallOfLove = lazy(() =>
+  import('../routes/RouteWallOfLove').then((module) => ({
+    default: module.RouteWallOfLove,
+  }))
+);
 
 const RouteJobs = lazy(() =>
   import('../routes/RouteJobs').then((module) => ({
     default: module.RouteJobs,
+  }))
+);
+const RouteLegal = lazy(() =>
+  import('../routes/RouteLegal').then((module) => ({
+    default: module.RouteLegal,
   }))
 );
 const RouteTerms = lazy(() =>
@@ -81,6 +95,9 @@ const RouteTasks = lazy(() =>
   import('../routes/RouteTasks').then((module) => ({
     default: module.RouteTasks,
   }))
+);
+const DocumentationPage = lazy(
+  () => import('../../features/documentation/views/DocumentationPage')
 );
 const RouteDemo = lazy(() => import('../routes/RouteDemo'));
 const RouteEmail = lazy(() =>
@@ -122,10 +139,19 @@ const RouteGithub = lazy(() =>
     })
   )
 );
+const RouteForms = lazy(
+  () => import('../../features/marketing/views/ProductFormsPage')
+);
+const RouteWorkspaceFeature = lazy(
+  () => import('../../features/marketing/views/WorkspaceFeaturePage')
+);
 // Resolve the requested product module (including its CSS) before replacing
 // prerendered HTML. Otherwise the root paints only the header on a cold visit.
 export function preloadProductRoute(pathname: string) {
   const routes = new Map([
+    ['/wall-of-love', RouteWallOfLove],
+    ['/replace-apps', RouteReplaceApps],
+    ['/pricing', RoutePricing],
     ['/tasks', RouteTasks],
     ['/email', RouteEmail],
     ['/documents', RouteDocuments],
@@ -134,6 +160,16 @@ export function preloadProductRoute(pathname: string) {
     ['/crm', RouteCrm],
     ['/agents', RouteAgents],
     ['/github', RouteGithub],
+    ['/spreadsheets', RouteWorkspaceFeature],
+    ['/databases', RouteWorkspaceFeature],
+    ['/forms', RouteForms],
+    ['/canvas', RouteWorkspaceFeature],
+    ['/snippets', RouteWorkspaceFeature],
+    ['/calendar', RouteWorkspaceFeature],
+    ['/booking-links', RouteWorkspaceFeature],
+    ['/drive', RouteWorkspaceFeature],
+    ['/routines', RouteWorkspaceFeature],
+    ['/skills', RouteWorkspaceFeature],
   ]);
   return routes.get(pathname.replace(/\/$/, ''))?.preload();
 }
@@ -160,11 +196,6 @@ const RoutePartners = lazy(() =>
 const RoutePartnerTerms = lazy(() =>
   import('../routes/RoutePartnerTerms').then((module) => ({
     default: module.RoutePartnerTerms,
-  }))
-);
-const RouteMigrate = lazy(() =>
-  import('../routes/RouteMigrate').then((module) => ({
-    default: module.RouteMigrate,
   }))
 );
 const RouteMobileSignup = lazy(() =>
@@ -195,7 +226,8 @@ const RootLayout: ParentComponent = (props) => {
   const location = useLocation();
   createEffect(() => {
     void location.search;
-    if (!isServer) applyPalette(preferredPalette());
+    void location.pathname;
+    if (!isServer) applyPalette(preferredPalette(), location.pathname);
   });
   onMount(() => onCleanup(onPaletteChange(applyPalette)));
   let scrollRef!: HTMLDivElement;
@@ -248,6 +280,7 @@ const RootLayout: ParentComponent = (props) => {
           <>
             <div
               id="app-scroll-root"
+              classList={{ 'macro-homepage': location.pathname === '/' }}
               ref={scrollRef}
               style={{
                 'overscroll-behavior': 'none',
@@ -261,7 +294,7 @@ const RootLayout: ParentComponent = (props) => {
                 // grid content off to the right. Divide by the zoom to land exactly
                 // on the real viewport.
                 height: 'calc(100dvh / var(--site-scale, 1))',
-                display: 'grid',
+                display: location.pathname === '/' ? 'block' : 'grid',
                 width: 'calc(100vw / var(--site-scale, 1))',
               }}
             >
@@ -274,13 +307,16 @@ const RootLayout: ParentComponent = (props) => {
                 }
               >
                 <BaseHeader
+                  currentPath={location.pathname}
                   ctaActive={headerCtaActive()}
-                  hideOpenApp={
-                    location.pathname.replace(/\/$/, '') === '/download'
-                  }
                 />
               </Show>
-              <UtilWrap>{props.children}</UtilWrap>
+              <Show
+                when={location.pathname === '/'}
+                fallback={<UtilWrap>{props.children}</UtilWrap>}
+              >
+                <Suspense>{props.children}</Suspense>
+              </Show>
             </div>
             <PageVignette />
             <DialogTheme />
@@ -306,8 +342,13 @@ export const App: Component<{
 
   return (
     <Router root={RootLayout} url={props.url}>
-      <Route path="/" component={JourneyEntry} />
+      <Route path="/" component={RouteHomepage} />
+      <Route path="/wall-of-love" component={RouteWallOfLove} />
+      <Route path="/replace-apps" component={RouteReplaceApps} />
+      <Route path="/docs" component={DocumentationPage} />
+      <Route path="/docs/*" component={DocumentationPage} />
       <Route path="/jobs" component={RouteJobs} />
+      <Route path="/legal" component={RouteLegal} />
       <Route path="/terms" component={RouteTerms} />
       <Route path="/privacy" component={RoutePrivacy} />
       <Route path="/delete-account" component={RouteDeleteAccount} />
@@ -324,6 +365,24 @@ export const App: Component<{
       <Route path="/crm" component={RouteCrm} />
       <Route path="/agents" component={RouteAgents} />
       <Route path="/github" component={RouteGithub} />
+      <Route path="/spreadsheets" component={RouteWorkspaceFeature} />
+      <Route path="/databases" component={RouteWorkspaceFeature} />
+      <Route path="/forms" component={RouteForms} />
+      <Route path="/canvas" component={RouteWorkspaceFeature} />
+      <Route path="/snippets" component={RouteWorkspaceFeature} />
+      <Route path="/calendar" component={RouteWorkspaceFeature} />
+      <Route path="/booking-links" component={RouteWorkspaceFeature} />
+      <Route path="/drive" component={RouteWorkspaceFeature} />
+      <Route
+        path="/projects"
+        component={() => {
+          const location = useLocation();
+          return <Navigate href={`/tasks${location.search}${location.hash}`} />;
+        }}
+      />
+      <Route path="/routines" component={RouteWorkspaceFeature} />
+      <Route path="/skills" component={RouteWorkspaceFeature} />
+
       <Route path="/pricing" component={RoutePricing} />
       <Route path="/download" component={RouteDownload} />
       {/* Paid-social landing page: noindex and kept out of the nav. */}
@@ -338,7 +397,17 @@ export const App: Component<{
       <Route path={MOBILE_SIGNUP_SENT_PATH} component={RouteMobileSignupSent} />
       {/* The switching guide. Prerendered and in the sitemap; reached from the
           versus posts and the footer rather than the header nav. */}
-      <Route path="/migrate" component={RouteMigrate} />
+      <Route
+        path="/migrate"
+        component={() => {
+          const location = useLocation();
+          return (
+            <Navigate
+              href={`/docs/switch-to-macro${location.search}${location.hash}`}
+            />
+          );
+        }}
+      />
       <Route path="/test" component={RouteTest} />
     </Router>
   );

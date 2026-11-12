@@ -1,16 +1,7 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import '../macro-vs-notion/MacroVsNotion.css';
 import { featureNavGlyphs } from '../../../../app/components/graphics/FeatureNavGlyphs';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import accountsSidebar from '../../../../assets/posts/macro-vs-superhuman/accounts-sidebar.jpg';
-import agentDraft from '../../../../assets/posts/macro-vs-superhuman/agent-draft.jpg';
-import blockEmail from '../../../../assets/posts/macro-vs-superhuman/block-email.jpg';
-import crmBoard from '../../../../assets/posts/macro-vs-superhuman/crm-board.jpg';
-import emailShareDemo from '../../../../assets/posts/macro-vs-superhuman/email-share-demo.mp4';
-import emailSplits from '../../../../assets/posts/macro-vs-superhuman/email-splits.jpg';
-import propertiesPanel from '../../../../assets/posts/macro-vs-superhuman/properties-panel.jpg';
-import signalNoise from '../../../../assets/posts/macro-vs-superhuman/signal-noise.jpg';
-import superhumanShared from '../../../../assets/posts/macro-vs-superhuman/superhuman-shared.jpg';
-import unifiedInbox from '../../../../assets/posts/macro-vs-superhuman/unified-inbox.jpg';
 import {
   type ComparisonRow,
   ComparisonTable,
@@ -99,67 +90,6 @@ function SectionGlyph(props: { route: string }) {
   );
 }
 
-function PostScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-graphic">
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <img
-            src={props.src}
-            alt={props.alt}
-            loading="lazy"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
-function PostAutoplayClip(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-graphic">
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <video
-            src={props.src}
-            aria-label={props.alt}
-            autoplay
-            loop
-            muted
-            playsinline
-            preload="metadata"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-              display: 'block',
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 export const postMeta: PostMeta = {
   slug: 'superhuman-alternative',
   title: 'Rox vs Superhuman',
@@ -173,6 +103,12 @@ export const postMeta: PostMeta = {
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'superhuman', 'comparison'],
   category: 'Comparison',
+  heroVideo: {
+    id: SUPERHUMAN_VIDEO_ID,
+    title: 'What we learned from Superhuman',
+    caption:
+      'What Superhuman taught the industry about email speed, and what we set out to build on top of it.',
+  },
   coverBrand: 'superhuman',
   image: '/og/superhuman-alternative.png',
   showTOC: true,
@@ -201,20 +137,6 @@ export default function MacroVsSuperhumanPost() {
           {ARTICLE_SECOND_PARAGRAPH.after}
         </p>
 
-        <div class="mvn-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${SUPERHUMAN_VIDEO_ID}?rel=0`}
-            title="What we learned from Superhuman"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-        <p class="mvn-figcaption">
-          What Superhuman taught the industry about email speed, and what we set
-          out to build on top of it.
-        </p>
-
         <h2>Rox vs. Superhuman at a glance</h2>
         <ComparisonTable
           competitor="Superhuman"
@@ -236,12 +158,7 @@ export default function MacroVsSuperhumanPost() {
           you want. Connect 2 emails as a Guest or unlimited emails with a paid
           plan.
         </p>
-        <PostScreenshot
-          src={accountsSidebar}
-          alt="Rox sidebar with two email accounts nested under Email, alongside Channels and Calls"
-          width={1120}
-          height={600}
-        />
+        <PostProductGraphic kind="email-accounts" />
         <p class="mvn-figcaption">
           Every account lives under one Email section — triage them together or
           filter to just one.
@@ -253,12 +170,7 @@ export default function MacroVsSuperhumanPost() {
           <code>k</code> and <code>e</code> shortcuts to triage all of these
           content types from one list.
         </p>
-        <PostScreenshot
-          src={unifiedInbox}
-          alt="Rox inbox list mixing docs, emails, tasks, channel messages and shared threads in one triage list"
-          width={1400}
-          height={439}
-        />
+        <PostProductGraphic kind="inbox" />
         <p class="mvn-figcaption">
           One list, every content type: docs, emails, tasks and channel
           messages, all triaged the same way.
@@ -273,12 +185,7 @@ export default function MacroVsSuperhumanPost() {
           has been around for a long time and they don't use the latest AI
           models to triage your email for you.
         </p>
-        <PostScreenshot
-          src={signalNoise}
-          alt="Rox email view with Signal, Noise, Sent, Calendar and Drafts tabs, Signal selected"
-          width={1052}
-          height={610}
-        />
+        <PostProductGraphic kind="email-signal" />
         <p class="mvn-figcaption">
           Signal is the mail worth reading; Noise is still one keystroke away
           when you want it.
@@ -292,12 +199,7 @@ export default function MacroVsSuperhumanPost() {
           can see though, and oftentimes you just have to go into a new tab and
           open HubSpot anyways. Rox's CRM is native to the workspace.
         </p>
-        <PostScreenshot
-          src={crmBoard}
-          alt="Rox CRM board with Lead, Demo, Customer and Churned columns of company cards"
-          width={1400}
-          height={905}
-        />
+        <PostProductGraphic kind="crm" />
         <p class="mvn-figcaption">
           The CRM is a first-class surface in the same app as your inbox, not a
           read-only widget beside it.
@@ -321,12 +223,7 @@ export default function MacroVsSuperhumanPost() {
           build up agent-specific context before drafting the email. You can
           iterate with it and then hit send without leaving the agent.
         </p>
-        <PostScreenshot
-          src={agentDraft}
-          alt="Rox agent drafting a catch-up email in the composer after searching recent conversations"
-          width={1400}
-          height={905}
-        />
+        <PostProductGraphic kind="email-agent" />
         <p class="mvn-figcaption">
           Ask for a draft, watch it pull context from prior threads, then
           iterate and send without leaving the agent.
@@ -350,12 +247,7 @@ export default function MacroVsSuperhumanPost() {
           multiple things at once. It's basically as good as Outlook Desktop,
           which is the gold standard for multitasking.
         </p>
-        <PostScreenshot
-          src={emailSplits}
-          alt="Two Rox email splits side by side: an open thread on the left and a new draft being composed on the right"
-          width={1400}
-          height={864}
-        />
+        <PostProductGraphic kind="email-splits" />
         <p class="mvn-figcaption">
           Read a thread in one split while you draft in another — no tabs, no
           popped-out compose windows.
@@ -370,15 +262,10 @@ export default function MacroVsSuperhumanPost() {
           on user calls, emails from users with feedback, and messages we send
           in our <code>#bug-reports</code> channel.
         </p>
-        <PostScreenshot
-          src={propertiesPanel}
-          alt="Rox side panel on an email showing Actions, Tags including user feedback, and Properties"
-          width={876}
-          height={670}
-        />
+        <PostProductGraphic kind="tags" />
         <p class="mvn-figcaption">
-          The same tags and properties panel appears on emails, docs, tasks and
-          messages alike.
+          A shared tag brings related emails, docs, tasks and messages together
+          in search.
         </p>
 
         <SectionGlyph route="/channels" />
@@ -388,12 +275,7 @@ export default function MacroVsSuperhumanPost() {
           instantly send a message to any one of your contacts or any member of
           your team.
         </p>
-        <PostAutoplayClip
-          src={emailShareDemo}
-          alt="Sharing an email thread from Rox: hit Share, pick a recipient, add a note, and the thread lands in the channel"
-          width={1920}
-          height={1080}
-        />
+        <PostProductGraphic kind="email-sharing" />
         <p class="mvn-figcaption">
           Hit <strong>Share</strong> on a thread, pick who gets it, add a note —
           the email itself lands in the channel, not a screenshot of it.
@@ -456,25 +338,10 @@ export default function MacroVsSuperhumanPost() {
           Rox's <code>block-email</code> interface, where you actually see,
           respond to, and triage the email, is modeled after Superhuman.
         </p>
-        <PostScreenshot
-          src={superhumanShared}
-          alt="A Superhuman Shared Conversation thread with the shared reply highlighted inside Superhuman"
-          width={1400}
-          height={869}
-        />
+        <PostProductGraphic kind="email-thread" />
         <p class="mvn-figcaption">
-          Superhuman: the thread view, and a Shared Conversation living inside
-          it.
-        </p>
-        <PostScreenshot
-          src={blockEmail}
-          alt="The same thread open in Rox's block-email view with Actions, Tags and Properties beside it"
-          width={1400}
-          height={905}
-        />
-        <p class="mvn-figcaption">
-          Rox's block-email view of the same thread — the shortcuts and layout
-          come straight from Superhuman.
+          The current Rox Email reader, with the conversation and reply
+          controls together.
         </p>
 
         <h2>Rox vs. Superhuman pricing comparison</h2>
@@ -586,11 +453,7 @@ export default function MacroVsSuperhumanPost() {
         <p class="post-footnote">
           For keyboard shortcuts, the multi-account inbox, sharing and AI
           drafting, see the{' '}
-          <a
-            href="https://docs.macro.com/product/email"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="/email#guide" target="_blank" rel="noreferrer">
             Rox Mail documentation
           </a>
           .

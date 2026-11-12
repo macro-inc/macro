@@ -1,76 +1,50 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
-  ChannelAgentDemo,
-  ChannelHero,
   ChannelPermissionsDemo,
-  ChannelSharedWorkDemo,
   ChannelThreadDemo,
 } from '../components/channels/ChannelStories';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import {
-  ContextGraphic,
-  LinkedWorkGraphic,
-  ThreadGraphic,
-} from '../components/product/ProductGraphics';
+import { PaperChatCall } from '../components/paper/PaperChatCall';
+import { PaperChatCreate } from '../components/paper/PaperChatCreate';
+import { PaperFeatureGraphic } from '../components/paper/PaperFeatureGraphic';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import { TaskAgentsGraphic } from '../components/tasks/TasksFeatureGraphics';
 import { chatComparisons } from '../core/feature-comparisons';
 
 export function RouteChannels() {
   setPageSeo({
-    title: 'Rox Chat: Bring the Work into the Conversation',
+    title: 'Rox Chat — Focused team chat',
     description:
-      'Share documents, tasks, and email threads in team chat. Channel members get access, work stays linked to its discussion, and follow-ups wait in one inbox.',
+      'Rox channels are filed into Signal or Noise, with an actual inbox like email. Mention work to share it with the channel, or create tasks from the conversation.',
     path: '/channels',
   });
   return (
     <ProductPage>
       <ProductHero
         product="Chat"
-        title={['Team chat connected to', 'the rest of your work.']}
-        description={[
-          '@mention a doc, task, person, or company',
-          'and the whole channel can open it natively.',
-        ]}
+        title="Chat for people and agents."
+        description="Rox Chat brings your people and agents together in channels. Share context and work on the same tasks."
         cta="channels_hero_get_started"
         tutorial="chat"
       />
-      <ChannelHero />
-      <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#shared-work">
-          <LinkedWorkGraphic />
-          <span>Open the work</span>
-        </a>
-        <a href="#channel-access">
-          <ContextGraphic />
-          <span>Channel access</span>
-        </a>
-        <a href="#channel-agents">
-          <TaskAgentsGraphic />
-          <span>Agents</span>
-        </a>
-        <a href="#catch-up">
-          <ThreadGraphic />
-          <span>Catch up</span>
-        </a>
-      </nav>
       <FeaturePageSection
         id="shared-work"
-        title={['Open all your work', 'straight from chat.']}
-        description="Share work in your team channels. Click on a document, task, email, company, person, or any file to see it beside your chat."
+        title="Share emails, docs, and tasks in chat."
+        description="@mention an email, doc, or task to share it with the channel. Create a task from a message without leaving the conversation."
       >
-        <DemoInteractionBoundary
-          class="feature-page-visual channel-wide-demo"
-          render={() => <ChannelSharedWorkDemo />}
-        />
+        <PaperFeatureGraphic label="Create a task, share a document, or ask Rox from the channel composer.">
+          <PaperChatCreate />
+        </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-access"
-        title={['Easily share files', 'with your team.']}
-        description="After sharing files in a conversation, anyone in that chat automatically gets access. Anyone added later will gain access, and anyone you remove will lose access."
+        demo={{
+          tone: 'chat',
+        }}
+        title="Share access with channel members."
+        description="Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -79,18 +53,20 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-agents"
-        title={['Bring your agents', 'into the conversation.']}
-        description="Tag your agent to ask for help, add context, assign a task, or get something done. You can use the Rox agent or bring your own."
+        title="Bring Rox Agents into the conversation."
+        description="Mention the Rox Agent and ask it to create tasks or update a document from the conversation."
       >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <ChannelAgentDemo />}
-        />
+        <PaperFeatureGraphic label="Ask Rox in a channel and see its completed work in the conversation.">
+          <PaperChatCall />
+        </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="catch-up"
-        title={['Read and reply to', 'every thread inline.']}
-        description="Read replies inline, follow the full thread, and respond without opening each conversation."
+        demo={{
+          tone: 'chat',
+        }}
+        title="Mark conversations done as you go."
+        description="Keep messages waiting in your inbox until you’re ready to reply, then mark them done. The first couple of replies show inline, so you don’t have to open a side panel to read every thread."
       >
         <span id="channel-threads" />
         <span id="chat-inbox" />
@@ -104,6 +80,7 @@ export function RouteChannels() {
         comparisons={chatComparisons}
       />
       <FeaturePageFaq
+        guide={{ href: '/channels#guide', label: 'chat' }}
         id="channels-faq-title"
         title="Questions about Rox Chat"
         items={[
@@ -115,9 +92,9 @@ export function RouteChannels() {
             q: 'Can I bring conversations from another app?',
             a: (
               <>
-                See <a href="/migrate">migration options</a> for supported
-                imports and what carries over. Importing conversation history is
-                separate from keeping another app in sync.
+                See <a href="/docs/switch-to-macro">migration options</a> for
+                supported imports and what carries over. Importing conversation
+                history is separate from keeping another app in sync.
               </>
             ),
           },
@@ -144,7 +121,7 @@ export function RouteChannels() {
           },
           {
             q: 'Who can see a channel and its files?',
-            a: 'Team channels are discoverable by the team; private channels are limited to invited members. New members can read the channel’s history. Sharing files in a channel gives members access, so check membership before sharing sensitive work.',
+            a: 'Your team can discover team channels; private channels are only visible to invited members. New members can read the history and open files shared with the channel.',
           },
           {
             q: 'Can I mute a busy channel?',
@@ -155,8 +132,7 @@ export function RouteChannels() {
             a: (
               <>
                 Yes. Rox has a free plan with usage limits. See{' '}
-                <a href="/pricing">plans and limits</a> before choosing a plan
-                for your team.
+                <a href="/pricing">plans and limits</a> for details.
               </>
             ),
           },

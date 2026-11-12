@@ -1,6 +1,6 @@
+import Play from '@icon/system/fill/play-fill.svg';
+import X from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import X from '@phosphor/x.svg';
-import Play from '@phosphor-fill/play-fill.svg';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { createFrameEscape } from '../primitives/createFrameEscape';
 import './homepage-interactive-demo.css';

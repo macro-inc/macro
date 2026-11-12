@@ -1,3 +1,14 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createSignal,
@@ -7,18 +18,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import IconAi from '../../assets/icons/icon-ai.svg';
-import IconCall from '../../assets/icons/icon-call.svg';
-import IconChannels from '../../assets/icons/icon-channels.svg';
-import IconCompany from '../../assets/icons/icon-company.svg';
-import IconEmail from '../../assets/icons/icon-email.svg';
-import IconFolder from '../../assets/icons/icon-folder.svg';
 import IconGithub from '../../assets/icons/icon-github.svg';
-import IconHome from '../../assets/icons/icon-home.svg';
-import IconInbox from '../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../assets/icons/icon-plus.svg';
-import IconSearch from '../../assets/icons/icon-search.svg';
-import IconTasks from '../../assets/icons/icon-tasks.svg';
 import avatarGabriel from '../../assets/people/gabriel.webp';
 import avatarJulia from '../../assets/people/julia.webp';
 import { GithubFeatureGrid } from '../components/sections/GithubFeatureGrid';
@@ -2826,7 +2826,7 @@ const reviewBlock: LoopsFeatureBlock = {
   ),
   description:
     'Jump between PRs, open diffs, comment, and approve — without leaving the keyboard.',
-  href: 'https://docs.macro.com/product/github',
+  href: '/github#guide',
   heroShot: ReviewSpotlight,
   heroBare: true,
 };
@@ -2842,7 +2842,7 @@ const syncedBlock: LoopsFeatureBlock = {
   ),
   description:
     'Comment in Rox and it posts to GitHub. Comment on GitHub and it shows up here. One thread.',
-  href: 'https://docs.macro.com/product/github',
+  href: '/github#guide',
   heroShot: SyncedCommentsSpotlight,
   heroBare: true,
 };
@@ -3479,7 +3479,7 @@ export const RouteGithub: Component = () => {
                 'white-space': mobile() ? 'normal' : 'nowrap',
               }}
             >
-              Review PRs in your inbox.
+              PRs right in your channels.
             </h1>
             <p
               style={{

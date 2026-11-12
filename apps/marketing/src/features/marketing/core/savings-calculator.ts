@@ -112,6 +112,7 @@ export const SAVINGS_TOOLS: readonly SavingsTool[] = [
 ];
 
 export type ToolChoice = { selected: boolean; planId: string };
+export type CustomToolChoice = { selected: boolean; monthlyCents?: number };
 
 /** Yearly cost for the whole team. */
 export type SavingsSummary = {
@@ -119,12 +120,22 @@ export type SavingsSummary = {
   macroCents: number;
 };
 
-/** Every tool selected, on its entry plan. */
-export function initialChoices(): Record<SavingsToolId, ToolChoice> {
+/** Every tool selected, using entry plans unless higher plans are requested. */
+export function initialChoices(
+  tier: 'entry' | 'higher' = 'entry'
+): Record<SavingsToolId, ToolChoice> {
   return Object.fromEntries(
     SAVINGS_TOOLS.map((tool) => [
       tool.id,
-      { selected: true, planId: tool.plans[0].id },
+      {
+        selected: true,
+        planId: (tier === 'higher'
+          ? tool.plans.reduce((higher, plan) =>
+              plan.monthlyCents > higher.monthlyCents ? plan : higher
+            )
+          : tool.plans[0]
+        ).id,
+      },
     ])
   ) as Record<SavingsToolId, ToolChoice>;
 }
@@ -150,7 +161,8 @@ export function macroAnnualCost(seats: number): number {
 /** Yearly team cost of the selected tools and of Rox. */
 export function summarizeSavings(
   choices: Record<SavingsToolId, ToolChoice>,
-  seats: number
+  seats: number,
+  customTools: readonly CustomToolChoice[] = []
 ): SavingsSummary {
   const perSeatCents = SAVINGS_TOOLS.reduce((total, tool) => {
     const choice = choices[tool.id];
@@ -158,8 +170,12 @@ export function summarizeSavings(
       ? total + annualPlanPrice(tool, choice.planId)
       : total;
   }, 0);
+  const customMonthlyCents = customTools.reduce(
+    (total, tool) => total + (tool.selected ? (tool.monthlyCents ?? 0) : 0),
+    0
+  );
   return {
-    toolsCents: perSeatCents * seats,
+    toolsCents: (perSeatCents + customMonthlyCents * 12) * seats,
     macroCents: macroAnnualCost(seats),
   };
 }

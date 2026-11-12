@@ -1,4 +1,4 @@
-.homepage-app-reassurance { margin-top: 32px; text-align: center; font: 400 14px/1.8 'Inter Variable', Inter, sans-serif; color: var(--color-ink-extra-muted); }
+.homepage-app-reassurance { margin-top: 32px; text-align: center; font: 370 14px/1.8 'Inter Variable', Inter, sans-serif; color: var(--color-ink-extra-muted); }
 .homepage-app-reassurance p { margin: 0; }
 .homepage-app-reassurance p:first-child { color: var(--color-ink-muted); }
 @media (max-width: 599px) { .homepage-app-reassurance { font-size: 12px; } }

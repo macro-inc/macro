@@ -1,21 +1,21 @@
+import IconShare from '@icon/share.svg';
+import IconChannel from '@icon/system/regular/chats-circle.svg';
+import IconCheck from '@icon/system/regular/check.svg';
+import IconPullRequest from '@icon/system/regular/git-pull-request.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import PriorityHigh from '@icon/system/regular/priority-high.svg';
+import PriorityLow from '@icon/system/regular/priority-low.svg';
+import PriorityMedium from '@icon/system/regular/priority-medium.svg';
+import PriorityUrgent from '@icon/system/regular/priority-urgent.svg';
+import StatusCreated from '@icon/system/regular/task-created.svg';
+import StatusDone from '@icon/system/regular/task-done.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import StatusInReview from '@icon/system/regular/task-in-review.svg';
 import type { Component, JSX } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconChannel from '../../../assets/icons/icon-channels.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconCheck from '../../../assets/icons/phosphor/check.svg';
-import IconPullRequest from '../../../assets/icons/phosphor/git-pull-request.svg';
-import IconLink from '../../../assets/icons/phosphor/link.svg';
-import IconShare from '../../../assets/icons/phosphor/share.svg';
-import StatusCreated from '../../../assets/icons/square-task-created-circle.svg';
-import StatusDone from '../../../assets/icons/square-task-done-circle.svg';
-import StatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import StatusInReview from '../../../assets/icons/square-task-in-review-circle.svg';
-import PriorityHigh from '../../../assets/icons/wide-priority-high.svg';
-import PriorityLow from '../../../assets/icons/wide-priority-low.svg';
-import PriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
-import PriorityUrgent from '../../../assets/icons/wide-priority-urgent.svg';
-import IconTask from '../../../assets/icons/wide-task.svg';
 import { MacroMarkIcon } from './MacroMarkIcon';
 
 // ---------------------------------------------------------------------------

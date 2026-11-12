@@ -1,6 +1,6 @@
-import CheckIcon from '@phosphor/check.svg';
-import MinusIcon from '@phosphor/minus.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { demoHref } from '../../../../app/utils/utilCta';
 import {

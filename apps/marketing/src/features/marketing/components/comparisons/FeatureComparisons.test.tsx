@@ -20,7 +20,7 @@ it('shows one table with all email competitors with a heading and no disclosure'
       comparisons={emailComparisons}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Rox' });
+  const table = view.getByRole('region', { name: 'Compare Email Clients' });
   expect(view.container.querySelector('details')).toBeNull();
   expect(
     view.getByRole('heading', { name: 'Compare Email Clients', level: 2 })
@@ -53,11 +53,11 @@ it('combines Linear and Jira in one mobile-scrollable table', () => {
       comparisons={taskComparisons}
     />
   ));
-  const table = view.getByRole('region', { name: 'Compare Rox' });
+  const table = view.getByRole('region', { name: 'Compare Task Managers' });
   expect(within(table).getByText('Linear')).toBeTruthy();
   expect(within(table).getByText('Jira')).toBeTruthy();
   expect(table.tabIndex).toBe(0);
-  expect(table.style.overflowX).toBe('auto');
+  expect(within(table).getByRole('table')).toBeTruthy();
   expect(view.container.querySelector('#compare-linear')).toBeTruthy();
   expect(view.container.querySelector('#compare-jira')).toBeTruthy();
 });
@@ -68,7 +68,7 @@ it('credits shared CRM capabilities and competitors’ dedicated reporting', () 
   expect(
     view.getByRole('heading', { name: 'Compare CRMs', level: 2 })
   ).toBeTruthy();
-  const table = view.getByRole('region', { name: 'Compare Rox' });
+  const table = view.getByRole('region', { name: 'Compare CRMs' });
   expect(view.container.querySelector('details')).toBeNull();
   expect(within(table).getByText('Features')).toBeTruthy();
   expect(table.querySelector('[title$="logo placeholder"]')).toBeNull();
@@ -95,7 +95,7 @@ it('credits shared CRM capabilities and competitors’ dedicated reporting', () 
   expect(view.getByText('Partial')).toBeTruthy();
   expect(view.queryByText('Not included')).toBeNull();
   expect(table.tabIndex).toBe(0);
-  expect(table.style.overflowX).toBe('auto');
+  expect(within(table).getByRole('table')).toBeTruthy();
   expect(view.queryByText(/Includes paid features/)).toBeNull();
 });
 

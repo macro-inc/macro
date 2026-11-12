@@ -1,5 +1,5 @@
+import '../../post-product-graphic.css';
 import './GmailRateLimits.css';
-import gmailBulkWarning from '../../../../assets/posts/gmail-rate-limits/gmail-bulk-warning.png';
 import { Diagram, DiagramArrow, DiagramBox } from '../../PostDiagram';
 import type { PostMeta } from '../../registry';
 
@@ -148,24 +148,15 @@ export default function GmailRateLimitsPost() {
           acknowledges the usage limit when you try to archive or mark a large
           number of emails at once:
         </p>
-        <figure class="grl-shot">
-          <div class="grl-shot-frame">
-            <img
-              src={gmailBulkWarning}
-              alt="A Gmail banner reading: We marked some conversations as read. We'll do the same for any remaining conversations in a few minutes. This might take longer, depending on how many conversations are selected."
-              loading="lazy"
-              width={1284}
-              height={222}
-              style={{
-                width: '100%',
-                height: 'auto',
-                'aspect-ratio': '1284 / 222',
-              }}
-            />
-          </div>
-          <figcaption class="grl-figcaption">
-            Even Gmail tells you it will get to the rest of your conversations
-            in a few minutes.
+        <figure class="post-history-quote">
+          <blockquote>
+            We marked some conversations as read. We'll do the same for any
+            remaining conversations in a few minutes. This might take longer,
+            depending on how many conversations are selected.
+          </blockquote>
+          <figcaption>
+            Gmail's bulk-operation notice. Even Gmail tells you it will get to
+            the rest in a few minutes.
           </figcaption>
         </figure>
         <p>

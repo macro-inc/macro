@@ -96,8 +96,7 @@ export function RouteTour() {
             </div>
           </div>
 
-          {/* The homepage's `HomepageUnification` section, without its
-              hero-to-section scroll animation. */}
+          {/* Reuse the homepage feature constellation with tour-specific copy. */}
           <section
             class="homepage-unification tour-constellation"
             aria-labelledby="unification-heading"

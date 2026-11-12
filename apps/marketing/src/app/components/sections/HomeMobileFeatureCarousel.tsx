@@ -1,12 +1,12 @@
+import IconDocs from '@icon/system/regular/file.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconChat from '@icon/system/regular/sparkle.svg';
+import IconAi from '@icon/system/regular/star.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import IconHandSwipeLeft from '../../../assets/icons/phosphor/hand-swipe-left.svg';
-import IconCall from '../../../assets/icons/wide-call.svg';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconDocs from '../../../assets/icons/wide-file-md.svg';
-import IconInbox from '../../../assets/icons/wide-inbox.svg';
-import IconAi from '../../../assets/icons/wide-star.svg';
-import IconTasks from '../../../assets/icons/wide-task.svg';
 import agentsUrl from '../../../assets/mobile-feature-screens/agents.svg?url';
 import bezelUrl from '../../../assets/mobile-feature-screens/bezel.svg?url';
 import callsUrl from '../../../assets/mobile-feature-screens/calls.svg?url';

@@ -8,7 +8,6 @@ import partnerAnnouncementVideo from '../../assets/partners/partnership-program-
 import partnerAnnouncementPoster from '../../assets/partners/partnership-program-poster.jpg';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { type FaqItem, SectionFaq } from '../components/sections/SectionFaq';
-import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { demoHref } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
@@ -92,16 +91,12 @@ const partnerFaq: FaqItem[] = [
     q: 'Is our workspace data secure?',
     a: (
       <>
-        Yes. Open source means the Rox application code is available to inspect.
-        It does not make your workspace public. Data in your Rox account,
-        including your team&apos;s email, documents, messages, and other
-        workspace content, remains private and secure. For more information on
-        security in Rox please visit our{' '}
-        <a
-          href="https://docs.macro.com/security"
-          target="_blank"
-          rel="noreferrer"
-        >
+        Yes. Open source means the Rox application code is available to
+        inspect. It does not make your workspace public. Data in your Rox
+        account, including your team&apos;s email, documents, messages, and
+        other workspace content, remains private and secure. For more
+        information on security in Rox please visit our{' '}
+        <a href="/docs/security" target="_blank" rel="noreferrer">
           docs page
         </a>
         .
@@ -517,9 +512,6 @@ export const RoutePartners: Component = () => {
             Full partner program terms
           </A>
         </section>
-      </div>
-      <div class="posts-page-footer posts-shell">
-        <SectionMoreFeatures currentPath="/partners" footerOnly />
       </div>
     </>
   );

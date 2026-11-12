@@ -1,15 +1,8 @@
 import { For } from 'solid-js';
+import { PostProductGraphic } from '../../PostProductGraphic';
 import '../macro-vs-notion/MacroVsNotion.css';
 import './MacroVsLinear.css';
-import { PhoneFrame } from '../../../../app/components/utils/UtilPhoneFrame';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import taskCreateButton from '../../../../assets/posts/macro-vs-linear/task-create-button.mp4';
-import taskCreateCurrent from '../../../../assets/posts/macro-vs-linear/task-create-current.webp';
-import taskDetailCurrent from '../../../../assets/posts/macro-vs-linear/task-detail-current.webp';
-import taskEmailAction from '../../../../assets/posts/macro-vs-linear/task-email-action.png';
-import taskFromChannel from '../../../../assets/posts/macro-vs-linear/task-from-channel.jpg';
-import taskFromHuddle from '../../../../assets/posts/macro-vs-linear/task-from-huddle.jpg';
-import taskGithubPr from '../../../../assets/posts/macro-vs-linear/task-github-pr.jpg';
 import {
   type ComparisonRow,
   ComparisonTable,
@@ -21,7 +14,7 @@ import type { PostMeta } from '../../registry';
 const LINEAR_VIDEO_ID = 'nHxqE2mVKrA';
 const TASKS_VIDEO_ID = 'gxJquVXRX5A';
 const ARTICLE_PARAGRAPHS = [
-  'We loved Linear. Before Rox we ran our old company on it, and Rox Tasks is inspired by its keyboard-first speed and design principles.',
+  'We loved Linear. Before Rox, we ran our old company on it, and Rox Tasks is inspired by its keyboard-first speed and design principles.',
   'Linear is really really good for pure task tracking.',
 ] as const;
 const ARTICLE_PREVIEW = ARTICLE_PARAGRAPHS.join(' ');
@@ -40,8 +33,7 @@ const comparisonRows: ComparisonRow[] = [
   {
     feature: 'Create tasks from email',
     macro: 'Yes, native',
-    them: 'No',
-    themNo: true,
+    them: 'Yes, via Asks',
   },
   {
     feature: 'Create tasks from chat',
@@ -51,8 +43,7 @@ const comparisonRows: ComparisonRow[] = [
   {
     feature: 'Create tasks from calls',
     macro: 'Yes (recorded, transcribed)',
-    them: 'No',
-    themNo: true,
+    them: 'Via connected tools',
   },
   {
     feature: 'Links',
@@ -68,10 +59,9 @@ const comparisonRows: ComparisonRow[] = [
     themNo: true,
   },
   {
-    feature: 'Shared AI memory across team',
-    macro: 'Yes',
-    them: 'No',
-    themNo: true,
+    feature: 'AI context',
+    macro: 'Shared memory from email, chat, docs, tasks, calls and CRM',
+    them: 'Linear workspace, code and connected tools',
   },
   {
     feature: 'Cycles, projects and roadmaps',
@@ -116,107 +106,25 @@ const USER_QUOTES: { name: string; text: string }[] = [
   },
 ];
 
-function PostScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-graphic">
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <img
-            src={props.src}
-            alt={props.alt}
-            loading="lazy"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
-function PostPhoneScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-phone">
-      <PhoneFrame>
-        <img
-          src={props.src}
-          alt={props.alt}
-          loading="lazy"
-          width={props.width}
-          height={props.height}
-          style={{
-            display: 'block',
-            width: '100%',
-            height: 'auto',
-            'aspect-ratio': `${props.width} / ${props.height}`,
-          }}
-        />
-      </PhoneFrame>
-    </figure>
-  );
-}
-
-function PostAutoplayClip(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-}) {
-  return (
-    <figure class="mvn-graphic">
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <video
-            src={props.src}
-            aria-label={props.alt}
-            autoplay
-            loop
-            muted
-            playsinline
-            preload="metadata"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-              display: 'block',
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 export const postMeta: PostMeta = {
   slug: 'linear-alternative',
   title: 'Rox vs Linear',
   seoTitle: 'Rox vs Linear — The Open-Source Linear Alternative',
   subtitle:
-    'Rox is the open source alternative to Linear for fast engineering task management.',
+    'Rox is the open-source Linear alternative for fast engineering task management.',
   date: '2026-06-25',
-  updated: '2026-09-25',
+  updated: '2026-11-09',
   description:
     'Rox is the open-source alternative to Linear: fast, keyboard-first task management inside one workspace with email, chat, docs, calls and a CRM, linked to GitHub and a shared team memory.',
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'linear', 'comparison'],
   category: 'Comparison',
+  heroVideo: {
+    id: LINEAR_VIDEO_ID,
+    title: 'What we learned from Linear',
+    caption:
+      'What we took from years of running on Linear, and why we eventually wanted tasks to live next to everything.',
+  },
   coverBrand: 'linear',
   image: '/og/linear-alternative.png',
   showTOC: true,
@@ -241,15 +149,12 @@ export default function MacroVsLinearPost() {
         </p>
         <p>
           Architecturally, task management should not be a separate tab from the
-          rest of the work — they should be part of the same system.{' '}
+          rest of the work — it should be part of the same system.{' '}
           <span class="mvn-hl">Rox is that system</span>: tasks in the same
           @linked workspace as email, messages, agents, docs, calls and CRM.
         </p>
 
-        <p>
-          The problem with standalone issue tracking is as Linear says
-          themselves...
-        </p>
+        <p>As Linear puts it...</p>
         <div class="mvn-quote">
           <blockquote>
             <a
@@ -272,20 +177,6 @@ export default function MacroVsLinearPost() {
           to create and manage issues. Agents were the death knell.
         </p>
 
-        <div class="mvn-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${LINEAR_VIDEO_ID}?rel=0`}
-            title="What we learned from Linear"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-        <p class="mvn-figcaption">
-          What we took from years of running on Linear, and why we eventually
-          wanted tasks to live next to everything.
-        </p>
-
         <h2>At a glance</h2>
 
         <ComparisonTable
@@ -295,15 +186,15 @@ export default function MacroVsLinearPost() {
         />
 
         <hr class="post-section-rule" aria-hidden="true" />
-        <h2>Task creation: Linear is manual, Rox is automatic</h2>
+        <h2>Task creation without another tab</h2>
         <p>
           Rox and Linear are comparably fast once you are inside the tracker:
           tasks are quick to create, assign, prioritize and close with keyboard
           shortcuts.
         </p>
         <p>
-          But most tasks are ideated somewhere else — an email from a customer,
-          a line in a spec, a comment on a call — and when we used Linear that
+          But most tasks come up somewhere else — an email from a customer, a
+          line in a spec, a comment on a call — and when we used Linear that
           meant switching tabs to hit c/t. Sounds fast, but since it's another
           thing to do, the Slack conversation, eng huddle, or customer email
           often never led to a ticket.
@@ -311,9 +202,9 @@ export default function MacroVsLinearPost() {
         <p>
           In Rox you spin one up without leaving where you are working. Every
           task is linked back to its source bidirectionally — the task remembers
-          where it came from and the source knows the task exists. Linear can be
-          notified about a Slack thread; in Rox the message and the task are two
-          views of one object.
+          where it came from and the source knows the task exists. Linear can
+          create issues from Slack too. In Rox, the conversation and the task
+          live in the same workspace.
         </p>
 
         <h3>From a customer email</h3>
@@ -323,12 +214,7 @@ export default function MacroVsLinearPost() {
           create-task modal with the email already attached as context, so the
           assignee can jump straight back to the thread.
         </p>
-        <PostScreenshot
-          src={taskEmailAction}
-          alt="Email sidebar Actions panel with Ask Rox and Task buttons, cursor on Task"
-          width={517}
-          height={291}
-        />
+        <PostProductGraphic kind="task-email" />
         <p class="mvn-figcaption">
           Hit <strong>Task</strong> on any email to turn it into a tracked item
           without leaving your inbox.
@@ -337,15 +223,9 @@ export default function MacroVsLinearPost() {
         <h3>From a channel message</h3>
         <p>
           Hover any message and click <strong>Create task</strong>. Rox spins
-          one up deterministically, linked to that thread — no copy-paste into
-          another tab.
+          one up linked to that thread — no copy-paste into another tab.
         </p>
-        <PostAutoplayClip
-          src={taskCreateButton}
-          alt="Hovering a channel message and clicking Create task in the message toolbar"
-          width={1278}
-          height={720}
-        />
+        <PostProductGraphic kind="task-create" />
         <p class="mvn-figcaption">
           Click <strong>Create task</strong> on any message to spin one up,
           linked to that thread.
@@ -357,12 +237,7 @@ export default function MacroVsLinearPost() {
           from what was just said. It assigns the work and links the task back
           to the conversation.
         </p>
-        <PostScreenshot
-          src={taskFromChannel}
-          alt="Channel thread where a user asks @Rox to create a task from a bug report and Rox assigns it with a linked task title"
-          width={1024}
-          height={330}
-        />
+        <PostProductGraphic kind="task-agent" />
         <p class="mvn-figcaption">
           Mention <code>@Rox</code> in a channel and it creates a task from the
           conversation, linked back to the thread.
@@ -373,15 +248,9 @@ export default function MacroVsLinearPost() {
           Hit <code>c</code> then <code>t</code> from anywhere to bring up the
           create task modal — the same Linear-style speed, without leaving Rox.
         </p>
-        <PostScreenshot
-          src={taskCreateCurrent}
-          alt="Current Rox create-task dialog with title, description, status, priority, assignee, due date and tags"
-          width={840}
-          height={366}
-        />
+        <PostProductGraphic kind="task-composer" />
         <p class="mvn-figcaption">
-          Set the task’s status, priority, assignee and due date in the create
-          dialog. Captured from Rox in September 2026.
+          Set the task’s status, priority and assignee in the create dialog.
         </p>
 
         <h3>From markdown to-dos</h3>
@@ -419,19 +288,14 @@ export default function MacroVsLinearPost() {
         </p>
         <p>
           Spin up a huddle in any channel or DM without sharing a link, or run a
-          full meet with one. Calls record, transcribe and diarize by default,
-          so what got said on the standup is searchable and shared with the
-          team. Mention <code>@Rox</code> during or after the call and ask it to
-          create tasks from what was discussed — Rox assigns them to the right
-          people and links each one back to the recording. No one has to play
-          secretary.
+          full meeting with one. Calls record, transcribe and diarize by
+          default, so what got said on the standup is searchable and shared with
+          the team. Mention <code>@Rox</code> during or after the call and ask
+          it to create tasks from what was discussed — Rox assigns them to the
+          right people and links each one back to the recording. No one has to
+          play secretary.
         </p>
-        <PostScreenshot
-          src={taskFromHuddle}
-          alt="Channel message with an active Rox huddle showing participants and in-call controls on mobile"
-          width={1024}
-          height={665}
-        />
+        <PostProductGraphic kind="call" />
         <p class="mvn-figcaption">
           Start a huddle from any channel — on desktop or mobile — and turn what
           gets said into assigned tasks when it ends.
@@ -440,21 +304,16 @@ export default function MacroVsLinearPost() {
         <hr class="post-section-rule" aria-hidden="true" />
         <h2>Linked to GitHub, both ways</h2>
         <p>
-          For engineering work, Rox tasks link to GitHub bidirectionally and to
-          the agents working on them. Click the GitHub pill to jump from a task
-          to its pull request, or the other way around, all opening in a split
-          inside Rox so you never leave your workspace.
+          For engineering work, Rox Tasks link to GitHub bidirectionally and
+          to the agents working on them. Click the GitHub pill to jump from a
+          task to its pull request, or the other way around, all opening in a
+          split inside Rox so you never leave your workspace.
         </p>
-        <p>Here's what this looks like on mobile:</p>
-        <PostPhoneScreenshot
-          src={taskGithubPr}
-          alt="Rox task detail with a linked GitHub pull request pill, status, assignees and discussion thread"
-          width={472}
-          height={820}
-        />
+        <p>The task and its pull request stay connected:</p>
+        <PostProductGraphic kind="task-github" />
         <p class="mvn-figcaption">
-          A task with its GitHub PR linked bidirectionally — click the pill to
-          open the review in a split.
+          The linked pull request moves through review and merge. The task
+          updates with it.
         </p>
         <p>
           The integration goes one step further into your inbox. GitHub's own
@@ -465,31 +324,24 @@ export default function MacroVsLinearPost() {
           goes up for the boring reason that nothing waits unseen.
         </p>
         <p>
-          Linear recently added the ability to view PRs alongside issues, albeit
-          not unified in an inbox with messages and mail in one place, it is
-          still a separate thing to check.
+          Linear also lets you view PRs alongside issues. But without messages
+          and email in the same inbox, it is still a separate place to check.
         </p>
 
         <hr class="post-section-rule" aria-hidden="true" />
         <h2>One linked system, one team memory</h2>
         <p>
-          In Linear you link issues to issues, and to PRs and a handful of
-          connected apps. In Rox you can @-mention anything in your company from
-          a task: a doc, a file, a customer email, a support ticket, a channel
-          message, a recorded call. The links are bidirectional, so the task and
-          whatever it touches both know about each other, and your workspace
-          becomes context you can navigate in either direction.
+          In Linear you link issues to issues, and to PRs and connected apps. In
+          Rox you can @-mention anything in your company from a task: a doc, a
+          file, a customer email, a support ticket, a channel message, a
+          recorded call. The links are bidirectional, so the task and whatever
+          it touches both know about each other, and your workspace becomes
+          context you can navigate in either direction.
         </p>
-        <PostScreenshot
-          src={taskDetailCurrent}
-          alt="Current Rox task editor with status, priority, assignee, description, discussion and the shared workspace navigation"
-          width={1200}
-          height={650}
-        />
+        <PostProductGraphic kind="task-context" />
         <p class="mvn-figcaption">
           The current task editor keeps properties, the description and
           discussion together, with the rest of the workspace one click away.
-          Captured from Rox in September 2026.
         </p>
         <p>
           That web is also how permissions work. Anything you @-mention in a
@@ -570,12 +422,8 @@ export default function MacroVsLinearPost() {
         <p class="post-footnote">
           For shortcuts, @mentions, the task component and GitHub integration,
           see the{' '}
-          <a
-            href="https://docs.macro.com/product/tasks"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Rox tasks documentation
+          <a href="/tasks#guide" target="_blank" rel="noreferrer">
+            Rox Tasks documentation
           </a>
           .
         </p>
