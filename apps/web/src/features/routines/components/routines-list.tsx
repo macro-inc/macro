@@ -4,14 +4,32 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button, ComposerSurface, Layer, Tabs } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 import { RoutineTemplateStrip } from './routine-template-strip';
+
+/**
+ * Suggestions on the Routines page: one row above the list, and a Discover
+ * tab with all of them.
+ */
+export type RoutinesDiscover = {
+  /** The row above the list on All; `openDiscover` switches to Discover. */
+  row(openDiscover: () => void): JSX.Element;
+  /** Discover in place of the list, narrowed by the list's search. */
+  page(search: Accessor<string>): JSX.Element;
+  /** Discover has something the person hasn't seen there. */
+  unseen(): boolean;
+  /** Discover was opened or left, so what it shows has been seen. */
+  onSeen(): void;
+};
+
+type ListTab = 'all' | 'on' | 'discover';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
@@ -25,22 +43,45 @@ export function RoutinesList(props: {
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
-  /** Templates to start from, above the list; absent where none are offered. */
+  /**
+   * Templates to start from, above the list; absent where none are offered.
+   * Suggestions take their place where they are on.
+   */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
-  /** Scrolls with the list, below it, e.g. suggested routines. */
-  footer?: JSX.Element;
+  /** Suggestions and the Discover tab; absent where they are off. */
+  discover?: RoutinesDiscover;
 }) {
   const [search, setSearch] = createSignal('');
-  const [show, setShow] = createSignal<'all' | 'on'>('all');
+  const [show, setShowState] = createSignal<ListTab>('all');
+  const showing = (): ListTab =>
+    show() === 'discover' && !props.discover ? 'all' : show();
+  // Opening or leaving Discover marks what it shows as seen.
+  const setShow = (next: ListTab) => {
+    if (next === showing()) return;
+    if (next === 'discover' || showing() === 'discover')
+      props.discover?.onSeen();
+    setShowState(next);
+  };
   let list: HTMLDivElement | undefined;
+  const matches = (row: RoutineRow) =>
+    (showing() !== 'on' || row.enabled) &&
+    `${row.name} ${row.when} ${row.does}`
+      .toLowerCase()
+      .includes(search().trim().toLowerCase());
+  // A routine shows for its own match or for one of what its runs created.
   const filtered = () =>
-    props.rows.filter(
-      (row) =>
-        (show() === 'all' || row.enabled) &&
-        `${row.name} ${row.when} ${row.does}`
-          .toLowerCase()
-          .includes(search().trim().toLowerCase())
+    props.rows.filter((row) => matches(row) || row.children.some(matches));
+  const [expanded, setExpanded] = createSignal<string[]>([]);
+  const isExpanded = (row: RoutineRow) =>
+    expanded().includes(row.id) ||
+    // A search that finds only a sub-routine shows it.
+    (Boolean(search().trim()) && !matches(row));
+  const expand = (id: string, open: boolean) =>
+    setExpanded((ids) =>
+      open
+        ? [...ids.filter((other) => other !== id), id]
+        : ids.filter((other) => other !== id)
     );
   const groups = () =>
     (
@@ -64,8 +105,20 @@ export function RoutinesList(props: {
           label: 'On',
           count: props.rows.filter((row) => row.enabled).length,
         },
+        ...(props.discover
+          ? [
+              {
+                value: 'discover' as const,
+                label: t('routineSuggestions.discover'),
+                dot:
+                  showing() !== 'discover' && props.discover.unseen()
+                    ? ('violet' as const)
+                    : undefined,
+              },
+            ]
+          : []),
       ]}
-      value={show()}
+      value={showing()}
       onChange={setShow}
     />
   );
@@ -138,114 +191,192 @@ export function RoutinesList(props: {
         </div>
       </Show>
       <div class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto">
-        {/* Templates sit above the list, out of the way of a search. */}
         <Show
-          when={
-            !search().trim() &&
-            show() === 'all' &&
-            (props.templates?.length ?? 0) > 0 &&
-            props.onTemplate
+          when={showing() === 'discover' && props.discover}
+          fallback={
+            <RoutinesTable
+              {...props}
+              search={search()}
+              show={showing()}
+              groups={groups()}
+              isExpanded={isExpanded}
+              onExpand={expand}
+              empty={!filtered().length}
+              listRef={(element) => (list = element)}
+              onOpenDiscover={() => setShow('discover')}
+            />
           }
         >
-          {(onTemplate) => (
-            <RoutineTemplateStrip
-              templates={props.templates ?? []}
-              onUse={onTemplate()}
-              onAll={props.onCreate}
-            />
-          )}
+          {(discover) => discover().page(search)}
         </Show>
+      </div>
+    </div>
+  );
+}
+
+/** Above the list: the suggestions row, else the templates strip. */
+function RoutinesTable(props: {
+  rows: RoutineRow[];
+  loading: boolean;
+  error: boolean;
+  pendingId?: string;
+  search: string;
+  show: ListTab;
+  groups: { key: string; title: string; rows: RoutineRow[] }[];
+  isExpanded(row: RoutineRow): boolean;
+  onExpand(id: string, expanded: boolean): void;
+  empty: boolean;
+  listRef(element: HTMLDivElement): void;
+  onCreate: () => void;
+  onOpen: (id: string, history?: boolean) => void;
+  onToggle: (row: RoutineRow) => void;
+  templates?: RoutineTemplate[];
+  onTemplate?: (template: RoutineTemplate) => void;
+  discover?: RoutinesDiscover;
+  onOpenDiscover(): void;
+}) {
+  // Both sit above the list, out of the way of a search.
+  const above = () => !props.search.trim() && props.show === 'all';
+  return (
+    <>
+      <Show
+        when={props.discover}
+        fallback={
+          <Show
+            when={
+              above() && (props.templates?.length ?? 0) > 0 && props.onTemplate
+            }
+          >
+            {(onTemplate) => (
+              <RoutineTemplateStrip
+                templates={props.templates ?? []}
+                onUse={onTemplate()}
+                onAll={props.onCreate}
+              />
+            )}
+          </Show>
+        }
+      >
+        {(discover) => (
+          <Show when={above()}>{discover().row(props.onOpenDiscover)}</Show>
+        )}
+      </Show>
+      <div
+        ref={props.listRef}
+        role="table"
+        aria-label="Routines"
+        aria-busy={props.loading}
+        tabIndex={-1}
+        class="min-w-0 outline-none"
+      >
         <div
-          ref={list}
-          role="table"
-          aria-label="Routines"
-          aria-busy={props.loading}
-          tabIndex={-1}
-          class="min-w-0 outline-none"
+          role="rowgroup"
+          class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
         >
-          <div
-            role="rowgroup"
-            class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
+          <RoutineRowLayout
+            role="row"
+            class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
           >
-            <RoutineRowLayout
-              role="row"
-              class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
-            >
-              <span role="columnheader">Name</span>
-              <span role="columnheader">Trigger</span>
-              <span role="columnheader">Steps</span>
-              <span role="columnheader">Last run</span>
-              <span role="columnheader" class="sr-only">
-                On
-              </span>
-            </RoutineRowLayout>
-          </div>
-          <div
-            role="rowgroup"
-            class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
-          >
-            <For each={groups()}>
-              {(group) => (
-                <>
-                  {/* A band like the tasks list's group headers. */}
-                  <div role="row" class="pb-0.5 pt-3">
-                    <div role="cell" aria-colspan={5}>
-                      <Layer depth={3}>
-                        <ComposerSurface
-                          as="div"
-                          class="mx-1 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight text-ink-muted touch:rounded-lg touch:border touch:border-edge-muted touch:bg-surface"
-                        >
-                          {group.title}
-                          <span class="font-normal tabular-nums text-ink-extra-muted">
-                            {group.rows.length}
-                          </span>
-                        </ComposerSurface>
-                      </Layer>
-                    </div>
+            <span role="columnheader">Name</span>
+            <span role="columnheader">Trigger</span>
+            <span role="columnheader">Steps</span>
+            <span role="columnheader">Last run</span>
+            <span role="columnheader" class="sr-only">
+              On
+            </span>
+          </RoutineRowLayout>
+        </div>
+        <div
+          role="rowgroup"
+          class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
+        >
+          <For each={props.groups}>
+            {(group) => (
+              <>
+                {/* A band like the tasks list's group headers. */}
+                <div role="row" class="pb-0.5 pt-3">
+                  <div role="cell" aria-colspan={5}>
+                    <Layer depth={3}>
+                      <ComposerSurface
+                        as="div"
+                        class="mx-1 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight text-ink-muted touch:rounded-lg touch:border touch:border-edge-muted touch:bg-surface"
+                      >
+                        {group.title}
+                        <span class="font-normal tabular-nums text-ink-extra-muted">
+                          {group.rows.length}
+                        </span>
+                      </ComposerSurface>
+                    </Layer>
                   </div>
-                  <For each={group.rows}>
-                    {(row) => (
+                </div>
+                <For each={group.rows}>
+                  {(row) => (
+                    <>
                       <RoutineListRow
                         row={row}
                         pending={props.pendingId === row.id}
                         onOpen={props.onOpen}
                         onToggle={props.onToggle}
+                        expanded={props.isExpanded(row)}
+                        caretGutter={props.rows.some(
+                          (other) => other.children.length > 0
+                        )}
+                        onExpand={
+                          row.children.length > 0
+                            ? (open) => props.onExpand(row.id, open)
+                            : undefined
+                        }
                       />
-                    )}
-                  </For>
-                </>
-              )}
-            </For>
-          </div>
-          <Show when={!filtered().length}>
-            <div role="row">
-              <div
-                role="cell"
-                aria-colspan={5}
-                class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
-              >
-                <ClockIcon class="size-6 text-ink-extra-muted" />
-                <p>
-                  {props.loading
-                    ? 'Loading routines…'
-                    : props.error
-                      ? 'Routines are unavailable'
-                      : search().trim() || show() === 'on'
-                        ? 'No matching routines'
-                        : 'No routines yet'}
-                </p>
-                <Show when={!props.loading && !props.error && !search().trim()}>
-                  <p>
-                    Create a routine to act on new email, tasks and messages, or
-                    on a schedule.
-                  </p>
-                </Show>
-              </div>
-            </div>
-          </Show>
+                      <Show when={props.isExpanded(row)}>
+                        <For each={row.children}>
+                          {(child) => (
+                            <RoutineListRow
+                              nested
+                              caretGutter
+                              row={child}
+                              pending={props.pendingId === child.id}
+                              onOpen={props.onOpen}
+                              onToggle={props.onToggle}
+                            />
+                          )}
+                        </For>
+                      </Show>
+                    </>
+                  )}
+                </For>
+              </>
+            )}
+          </For>
         </div>
-        {props.footer}
+        <Show when={props.empty}>
+          <div role="row">
+            <div
+              role="cell"
+              aria-colspan={5}
+              class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
+            >
+              <ClockIcon class="size-6 text-ink-extra-muted" />
+              <p>
+                {props.loading
+                  ? 'Loading routines…'
+                  : props.error
+                    ? 'Routines are unavailable'
+                    : props.search.trim() || props.show === 'on'
+                      ? 'No matching routines'
+                      : 'No routines yet'}
+              </p>
+              <Show
+                when={!props.loading && !props.error && !props.search.trim()}
+              >
+                <p>
+                  Create a routine to act on new email, tasks and messages, or
+                  on a schedule.
+                </p>
+              </Show>
+            </div>
+          </div>
+        </Show>
       </div>
-    </div>
+    </>
   );
 }

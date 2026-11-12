@@ -186,7 +186,12 @@ function UserDisplay(props: { item: UserItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 mobile:scale-150 flex items-center justify-center shrink-0">
-        <UserIcon id={props.item.id} size="sm" isDeleted={false} />
+        <UserIcon
+          id={props.item.id}
+          name={props.item.data.name}
+          size="sm"
+          isDeleted={false}
+        />
       </div>
       <span class="truncate">
         <Show when={showEmail()} fallback={email()}>

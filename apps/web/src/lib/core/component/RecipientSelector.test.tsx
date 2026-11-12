@@ -116,3 +116,47 @@ describe('RecipientSelector typed addresses', () => {
     expect(emails()).toEqual([]);
   });
 });
+
+describe('RecipientSelector scrolling', () => {
+  const nextFrame = () =>
+    new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+  const recipient = (email: string): WithCustomUserInput => ({
+    kind: 'custom',
+    id: email,
+    data: { id: email, email, invalid: false },
+  });
+
+  it('keeps the page where it is when the owner rebuilds the same selection', async () => {
+    // Owners often derive the selection from wider state, so an unrelated
+    // edit hands back a new array with the same recipients.
+    const [revision, setRevision] = createSignal(0);
+    const [emails, setEmails] = createSignal(['a@example.com']);
+    const selection = () => {
+      revision();
+      return emails().map(recipient);
+    };
+    render(() => (
+      <RecipientSelector
+        options={() => []}
+        selectedOptions={selection()}
+        setSelectedOptions={(next) =>
+          setEmails(
+            next.flatMap((option) =>
+              option.kind === 'custom' ? [option.data.email] : []
+            )
+          )
+        }
+      />
+    ));
+    const scrollIntoView = vi.mocked(HTMLElement.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+
+    setRevision(1);
+    await nextFrame();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    setEmails(['a@example.com', 'b@example.com']);
+    await nextFrame();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+});

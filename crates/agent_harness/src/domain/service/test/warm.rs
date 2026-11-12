@@ -167,7 +167,8 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
 }
 
 /// A claimed warm session delivers the create's first prompt under the id the
-/// caller already shows it under, like a cold open.
+/// caller already shows it under, and records the tab it was typed in on the
+/// first turn, like a cold open.
 #[tokio::test]
 async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     let (service, repo, containers, _, _) = harness();
@@ -189,6 +190,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     assert_eq!(warmed.unwrap().unwrap().id, id);
 
     let action_id = AgentActionId::mint();
+    let tab = agent_session::domain::model::UiClientId::from_uuid(Uuid::from_u128(0xc1));
     service
         .open_managed_session(OpenManagedSession {
             billing: Default::default(),
@@ -199,6 +201,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
                 action_id: Some(action_id),
                 prompt: "inspect".to_owned(),
                 attachments: Vec::new(),
+                client: Some(tab),
             }),
             repo_url: None,
             repo_branch: None,
@@ -232,23 +235,12 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
         })
         .collect();
     assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
-}
-
-fn span_exporter() -> (
-    opentelemetry_sdk::trace::InMemorySpanExporter,
-    opentelemetry_sdk::trace::SdkTracerProvider,
-    tracing::subscriber::DefaultGuard,
-) {
-    use opentelemetry::trace::TracerProvider as _;
-    use tracing_subscriber::layer::SubscriberExt as _;
-    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
-    let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
-    tracing::callsite::rebuild_interest_cache();
-    (exporter, provider, guard)
+    let prompter = repo
+        .turn_prompter(id)
+        .await
+        .expect("the prompter is readable")
+        .expect("the first turn recorded its prompter");
+    assert_eq!(prompter.client, Some(tab));
 }
 
 fn attributes(

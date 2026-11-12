@@ -83,6 +83,76 @@ describe('GraphQL mutation retries', () => {
     ).toBe(false);
   });
 
+  describe('email draft writes', () => {
+    const fault = (code: string) =>
+      new CombinedError({
+        graphQLErrors: [{ message: 'failed', extensions: { code } }],
+      });
+    const write = (operationName = 'SaveEmailDraft') => ({
+      transactionId: '1',
+      uuid: crypto.randomUUID(),
+      operationName,
+    });
+
+    it.each(['SaveEmailDraft', 'DeleteEmailDraft'])(
+      'retries a server fault on %s twice, then gives up',
+      (operationName) => {
+        const mutation = write(operationName);
+        expect(shouldRetryGraphqlMutation(fault('INTERNAL'), mutation)).toBe(
+          true
+        );
+        expect(shouldRetryGraphqlMutation(fault('INTERNAL'), mutation)).toBe(
+          true
+        );
+        expect(shouldRetryGraphqlMutation(fault('INTERNAL'), mutation)).toBe(
+          false
+        );
+      }
+    );
+
+    it('counts each write by itself', () => {
+      const first = write();
+      shouldRetryGraphqlMutation(fault('INTERNAL'), first);
+      shouldRetryGraphqlMutation(fault('INTERNAL'), first);
+      expect(shouldRetryGraphqlMutation(fault('INTERNAL'), write())).toBe(true);
+    });
+
+    it('starts counting again after a different failure', () => {
+      const mutation = write();
+      shouldRetryGraphqlMutation(fault('INTERNAL'), mutation);
+      shouldRetryGraphqlMutation(fault('INTERNAL'), mutation);
+      // An unavailable server is retried on its own budget.
+      expect(
+        shouldRetryGraphqlMutation(
+          new CombinedError({
+            networkError: new Error('request failed'),
+            response: new Response(null, { status: 503 }),
+          }),
+          mutation
+        )
+      ).toBe(true);
+      expect(shouldRetryGraphqlMutation(fault('INTERNAL'), mutation)).toBe(
+        true
+      );
+    });
+
+    it.each(['INVALID', 'DRAFT_VERSION_CONFLICT', 'DRAFT_ALREADY_SENT'])(
+      'does not retry a %s refusal',
+      (code) => {
+        expect(shouldRetryGraphqlMutation(fault(code), write())).toBe(false);
+      }
+    );
+
+    it('does not retry a server fault on any other mutation', () => {
+      expect(
+        shouldRetryGraphqlMutation(
+          fault('INTERNAL'),
+          write('SetEmailThreadArchived')
+        )
+      ).toBe(false);
+    });
+  });
+
   it('does not retry a response that also contains a permanent rejection', () => {
     expect(
       shouldRetryGraphqlMutation(
