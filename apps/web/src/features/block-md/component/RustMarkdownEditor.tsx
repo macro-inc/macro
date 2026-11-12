@@ -67,6 +67,11 @@ import {
 import { registerNativeBlameTooltip } from '@core/component/LexicalMarkdown/plugins/blame-tooltip/native';
 import { createNativeChecklistPlanHost } from '@core/component/LexicalMarkdown/plugins/checklist-controls/native-plan-host';
 import {
+  createNativeCodeAccessories,
+  type NativeCodeAccessories,
+} from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
+import { installNativeCodeHighlightDOM } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
+import {
   type PersistentLocation,
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
@@ -74,11 +79,6 @@ import {
   nativeGoToLocation,
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
-import {
-  createNativeCodeAccessories,
-  type NativeCodeAccessories,
-} from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
-import { installNativeCodeHighlightDOM } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
