@@ -1,4 +1,6 @@
-set -uo pipefail
+# No -e: a failing cargo test is a result to record, not a reason to stop the step.
+set +e
+set -u
 
 # The Rust unit tests of src-tauri on macOS. Best effort: the result is
 # recorded either way and the QA harness reports it as the `cargo-test` check.
@@ -7,6 +9,9 @@ mkdir -p "$QA_OUT"
 # tests do not use its contents.
 mkdir -p apps/web/dist
 [ -e apps/web/dist/index.html ] || echo '<!doctype html>' > apps/web/dist/index.html
+# A production build.rs insists on the embedded bundle manifest; a development
+# one falls back to bundle build 0 (the native E2E build does the same).
+echo development > apps/web/tauri/src-tauri/.macro-tauri-env
 
 nix develop --command cargo test \
   --manifest-path apps/web/tauri/Cargo.toml -p app --lib --locked \
