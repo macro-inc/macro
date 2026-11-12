@@ -1,4 +1,4 @@
-//! PostgreSQL store for ideas: the base `suggestion` row, one child row per kind,
+//! PostgreSQL store for suggestions: the base `suggestion` row, one child row per kind,
 //! the items in `suggestion_target`, and every generation session's change in
 //! `suggestion_change`.
 
@@ -11,17 +11,17 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, GenerationSession, Idea, IdeaContent, IdeaKind, IdeaState, NewKind,
-    SessionKind, Target, TargetRole,
+    Category, Change, GenerationSession, NewKind, SessionKind, Suggestion, SuggestionContent,
+    SuggestionKind, SuggestionState, Target, TargetRole,
 };
-use crate::domain::ports::{IdeaRepo, Limits, Written};
+use crate::domain::ports::{Limits, SuggestionRepo, Written};
 
 #[cfg(test)]
 pub(crate) mod test;
 
-/// Why reading or writing ideas failed.
+/// Why reading or writing suggestions failed.
 #[derive(Debug, thiserror::Error)]
-pub enum PgIdeaRepoError {
+pub enum PgSuggestionRepoError {
     /// The database failed.
     #[error(transparent)]
     Database(#[from] sqlx::Error),
@@ -30,7 +30,7 @@ pub enum PgIdeaRepoError {
     Decode(String),
 }
 
-/// Which of a person's ideas a read loads.
+/// Which of a person's suggestions a read loads.
 enum Read<'a> {
     /// Open, and done since `done_since`: the feed.
     Shown { done_since: DateTime<Utc> },
@@ -42,8 +42,8 @@ enum Read<'a> {
     Key(&'a str),
 }
 
-/// An idea's base row with its kind's columns.
-struct IdeaRow {
+/// A suggestion's base row with its kind's columns.
+struct SuggestionRow {
     id: Uuid,
     kind: String,
     dedup_key: String,
@@ -62,24 +62,24 @@ struct IdeaRow {
     routine_suggestion_id: Option<Uuid>,
 }
 
-/// [`IdeaRepo`] on MacroDB.
-pub struct PgIdeaRepo {
+/// [`SuggestionRepo`] on MacroDB.
+pub struct PgSuggestionRepo {
     pool: PgPool,
 }
 
-impl PgIdeaRepo {
-    /// Ideas in `pool`.
+impl PgSuggestionRepo {
+    /// Suggestions in `pool`.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
-    /// The person's ideas that `read` names, one query per kind of read so
+    /// The person's suggestions that `read` names, one query per kind of read so
     /// each plan uses its own index.
     async fn load(
         &self,
         user: &MacroUserIdStr<'_>,
         read: Read<'_>,
-    ) -> Result<Vec<Idea>, PgIdeaRepoError> {
+    ) -> Result<Vec<Suggestion>, PgSuggestionRepoError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
             .execute(&mut *tx)
@@ -87,7 +87,7 @@ impl PgIdeaRepo {
         let rows = match read {
             Read::Shown { done_since } => {
                 sqlx::query_as!(
-                    IdeaRow,
+                    SuggestionRow,
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
@@ -109,7 +109,7 @@ impl PgIdeaRepo {
             }
             Read::Review { closed } => {
                 sqlx::query_as!(
-                    IdeaRow,
+                    SuggestionRow,
                     r#"SELECT i.id AS "id!", i.kind AS "kind!", i.dedup_key AS "dedup_key!",
                               i.title AS "title!", i.summary AS "summary!",
                               i.importance AS "importance!", i.categories AS "categories!",
@@ -139,7 +139,7 @@ impl PgIdeaRepo {
             }
             Read::Id(id) => {
                 sqlx::query_as!(
-                    IdeaRow,
+                    SuggestionRow,
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
@@ -159,7 +159,7 @@ impl PgIdeaRepo {
             }
             Read::Key(dedup_key) => {
                 sqlx::query_as!(
-                    IdeaRow,
+                    SuggestionRow,
                     r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                               i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                               i.state_changed_at,
@@ -189,8 +189,8 @@ impl PgIdeaRepo {
         .fetch_all(&mut *tx)
         .await?;
         tx.commit().await?;
-        type Decoded = Result<(TargetRole, Target), PgIdeaRepoError>;
-        let mut by_idea: HashMap<Uuid, Vec<Decoded>> = HashMap::new();
+        type Decoded = Result<(TargetRole, Target), PgSuggestionRepoError>;
+        let mut by_suggestion: HashMap<Uuid, Vec<Decoded>> = HashMap::new();
         for row in targets {
             let target = parse::<TargetRole>(&row.role).and_then(|role| {
                 Ok((
@@ -202,12 +202,15 @@ impl PgIdeaRepo {
                     },
                 ))
             });
-            by_idea.entry(row.suggestion_id).or_default().push(target);
+            by_suggestion
+                .entry(row.suggestion_id)
+                .or_default()
+                .push(target);
         }
-        let ideas = rows.into_iter().filter_map(|row| {
+        let suggestions = rows.into_iter().filter_map(|row| {
             let id = row.id;
-            let idea = (|| -> Result<Idea, PgIdeaRepoError> {
-                let targets = by_idea
+            let suggestion = (|| -> Result<Suggestion, PgSuggestionRepoError> {
+                let targets = by_suggestion
                     .remove(&row.id)
                     .unwrap_or_default()
                     .into_iter()
@@ -226,33 +229,33 @@ impl PgIdeaRepo {
                     row.action,
                     row.routine_suggestion_id,
                 ) {
-                    ("prompt", Some(prompt), Some(run_mode), None, None) => IdeaKind::Prompt {
+                    ("prompt", Some(prompt), Some(run_mode), None, None) => SuggestionKind::Prompt {
                         prompt,
                         run_mode: parse(&run_mode)?,
                     },
-                    ("entity", None, None, Some(action), None) => IdeaKind::Entity {
+                    ("entity", None, None, Some(action), None) => SuggestionKind::Entity {
                         action: parse(&action)?,
                         draft: of(TargetRole::Draft).into_iter().next(),
                     },
                     ("routine", None, None, None, Some(routine_suggestion_id)) => {
-                        IdeaKind::Routine {
+                        SuggestionKind::Routine {
                             routine_suggestion_id,
                         }
                     }
                     (kind, ..) => {
-                        return Err(PgIdeaRepoError::Decode(format!(
+                        return Err(PgSuggestionRepoError::Decode(format!(
                             "suggestion {} of kind {kind} lacks its kind's row",
                             row.id
                         )));
                     }
                 };
-                Ok(Idea {
+                Ok(Suggestion {
                     id: row.id,
                     dedup_key: row.dedup_key,
                     title: row.title,
                     summary: row.summary,
                     importance: u8::try_from(row.importance)
-                        .map_err(|_| PgIdeaRepoError::Decode("importance".to_owned()))?,
+                        .map_err(|_| PgSuggestionRepoError::Decode("importance".to_owned()))?,
                     categories: row
                         .categories
                         .iter()
@@ -268,20 +271,20 @@ impl PgIdeaRepo {
                     kind,
                 })
             })();
-            // One broken row must not hide the person's other ideas.
-            idea.inspect_err(|error| {
-                tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable suggestion row");
+            // One broken row must not hide the person's other suggestions.
+            suggestion.inspect_err(|error| {
+                tracing::warn!(suggestion_id = %id, error = %error, "skipped an undecodable suggestion row");
             })
             .ok()
         });
-        Ok(ideas.collect())
+        Ok(suggestions.collect())
     }
 }
 
-fn parse<T: std::str::FromStr>(value: &str) -> Result<T, PgIdeaRepoError> {
+fn parse<T: std::str::FromStr>(value: &str) -> Result<T, PgSuggestionRepoError> {
     value
         .parse()
-        .map_err(|_| PgIdeaRepoError::Decode(format!("unknown value `{value}`")))
+        .map_err(|_| PgSuggestionRepoError::Decode(format!("unknown value `{value}`")))
 }
 
 fn category_names(categories: &[Category]) -> Vec<String> {
@@ -291,7 +294,7 @@ fn category_names(categories: &[Category]) -> Vec<String> {
         .collect()
 }
 
-/// Serialize writes to one person's ideas for the rest of the transaction,
+/// Serialize writes to one person's suggestions for the rest of the transaction,
 /// so limits hold under concurrent writes.
 async fn lock(conn: &mut PgConnection, user: &MacroUserIdStr<'_>) -> Result<(), sqlx::Error> {
     sqlx::query!(
@@ -303,7 +306,7 @@ async fn lock(conn: &mut PgConnection, user: &MacroUserIdStr<'_>) -> Result<(), 
     Ok(())
 }
 
-/// Whether one more open idea stays within `limits`.
+/// Whether one more open suggestion stays within `limits`.
 async fn within(
     conn: &mut PgConnection,
     user: &MacroUserIdStr<'_>,
@@ -333,7 +336,7 @@ async fn within(
 
 async fn insert_targets(
     conn: &mut PgConnection,
-    idea: Uuid,
+    suggestion: Uuid,
     role: TargetRole,
     targets: &[Target],
 ) -> Result<(), sqlx::Error> {
@@ -341,7 +344,7 @@ async fn insert_targets(
         sqlx::query!(
             r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id, part_id)
                VALUES ($1, $2, $3, $4, $5, $6)"#,
-            idea,
+            suggestion,
             role.as_ref(),
             i16::try_from(position).unwrap_or(i16::MAX),
             target.entity_type.as_ref(),
@@ -357,7 +360,7 @@ async fn insert_targets(
 async fn log(
     conn: &mut PgConnection,
     user: &MacroUserIdStr<'_>,
-    idea: Uuid,
+    suggestion: Uuid,
     change: &Change,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
@@ -369,7 +372,7 @@ async fn log(
         user.as_ref(),
         change.generation,
         change.session,
-        idea,
+        suggestion,
         change.action.as_ref(),
         change.old,
         change.new,
@@ -381,8 +384,8 @@ async fn log(
     Ok(())
 }
 
-impl IdeaRepo for PgIdeaRepo {
-    type Err = PgIdeaRepoError;
+impl SuggestionRepo for PgSuggestionRepo {
+    type Err = PgSuggestionRepoError;
 
     async fn generation_session(
         &self,
@@ -401,7 +404,7 @@ impl IdeaRepo for PgIdeaRepo {
                 session: row.session_id,
                 generation: row.generation_id,
                 user: MacroUserIdStr::try_from(row.user_id)
-                    .map_err(|_| PgIdeaRepoError::Decode("a session's user".to_owned()))?,
+                    .map_err(|_| PgSuggestionRepoError::Decode("a session's user".to_owned()))?,
                 kind: parse::<SessionKind>(&row.kind)?,
             })
         })
@@ -412,7 +415,7 @@ impl IdeaRepo for PgIdeaRepo {
         &self,
         user: &MacroUserIdStr<'_>,
         done_since: DateTime<Utc>,
-    ) -> Result<Vec<Idea>, Self::Err> {
+    ) -> Result<Vec<Suggestion>, Self::Err> {
         self.load(user, Read::Shown { done_since }).await
     }
 
@@ -420,7 +423,7 @@ impl IdeaRepo for PgIdeaRepo {
         &self,
         user: &MacroUserIdStr<'_>,
         closed: u32,
-    ) -> Result<Vec<Idea>, Self::Err> {
+    ) -> Result<Vec<Suggestion>, Self::Err> {
         self.load(
             user,
             Read::Review {
@@ -430,7 +433,11 @@ impl IdeaRepo for PgIdeaRepo {
         .await
     }
 
-    async fn idea(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<Option<Idea>, Self::Err> {
+    async fn suggestion(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<Option<Suggestion>, Self::Err> {
         Ok(self.load(user, Read::Id(id)).await?.into_iter().next())
     }
 
@@ -438,7 +445,7 @@ impl IdeaRepo for PgIdeaRepo {
         &self,
         user: &MacroUserIdStr<'_>,
         dedup_key: &str,
-    ) -> Result<Option<Idea>, Self::Err> {
+    ) -> Result<Option<Suggestion>, Self::Err> {
         Ok(self
             .load(user, Read::Key(dedup_key))
             .await?
@@ -463,7 +470,7 @@ impl IdeaRepo for PgIdeaRepo {
         user: &MacroUserIdStr<'_>,
         id: Uuid,
         kind: &NewKind,
-        content: &IdeaContent,
+        content: &SuggestionContent,
         limits: Limits,
         change: &Change,
     ) -> Result<Written, Self::Err> {
@@ -531,9 +538,9 @@ impl IdeaRepo for PgIdeaRepo {
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        content: &IdeaContent,
-        from: IdeaState,
-        to: IdeaState,
+        content: &SuggestionContent,
+        from: SuggestionState,
+        to: SuggestionState,
         limits: Limits,
         change: &Change,
     ) -> Result<Written, Self::Err> {
@@ -593,8 +600,8 @@ impl IdeaRepo for PgIdeaRepo {
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        from: &[IdeaState],
-        to: IdeaState,
+        from: &[SuggestionState],
+        to: SuggestionState,
         change: Option<&Change>,
         now: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {

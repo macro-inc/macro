@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use shown_text::{is_invisible, line, personal_detail};
 
-use super::model::{Category, KindName, NewKind, SuggestIdea, Target};
+use super::model::{Category, KindName, NewKind, NewSuggestion, Target};
 
 #[cfg(test)]
 mod test;
@@ -26,13 +26,13 @@ pub const MAX_SUMMARY_CHARS: usize = 400;
 pub const MAX_PROMPT_CHARS: usize = 2000;
 /// Longest change-log reason, in characters.
 pub const MAX_REASON_CHARS: usize = 300;
-/// Most items one idea is about.
+/// Most items one suggestion is about.
 pub const MAX_TARGETS: usize = 5;
 /// Longest item or part id, in characters.
 const MAX_ID_CHARS: usize = 200;
 
-/// A new idea's kind, from what the session asked for.
-pub fn new_kind(request: &SuggestIdea, problems: &mut Vec<String>) -> Option<NewKind> {
+/// A new suggestion's kind, from what the session asked for.
+pub fn new_kind(request: &NewSuggestion, problems: &mut Vec<String>) -> Option<NewKind> {
     match request.kind {
         KindName::Routine => {
             problems.push(
@@ -149,7 +149,7 @@ pub fn categories(categories: Vec<Category>) -> Vec<Category> {
         .collect()
 }
 
-/// The items an idea is about: at most [`MAX_TARGETS`], each once, with
+/// The items a suggestion is about: at most [`MAX_TARGETS`], each once, with
 /// short plain ids. Whether the person can open them is checked apart.
 pub fn targets(targets: Vec<Target>, problems: &mut Vec<String>) -> Option<Vec<Target>> {
     if targets.len() > MAX_TARGETS {

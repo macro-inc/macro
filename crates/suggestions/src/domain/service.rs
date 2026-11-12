@@ -1,7 +1,7 @@
-//! The ideas service: the person's feed and the tools hidden generation
+//! The suggestions service: the person's feed and the tools hidden generation
 //! sessions write it with.
 //!
-//! Code here only validates and stores. Which ideas exist, how they are
+//! Code here only validates and stores. Which suggestions exist, how they are
 //! worded and ranked, and when one stops mattering are all decided by the
 //! generation sessions through these tools; a refused write answers with
 //! problems the session can read and fix. Every accepted write is logged in
@@ -18,29 +18,32 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Change, ChangeAction, GenerationSession, Idea, IdeaContent, IdeaError, IdeaKind, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea, RunMode, SessionKind,
-    SuggestIdea, Target,
+    Change, ChangeAction, GenerationSession, KindName, NewSuggestion, RetireSuggestionRequest,
+    RewriteSuggestion, RunMode, SessionKind, Suggestion, SuggestionContent, SuggestionError,
+    SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome, SuggestionsReview,
+    Target,
 };
-use super::ports::{IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions, Written};
+use super::ports::{
+    Limits, RequestSessions, SuggestionAccess, SuggestionApi, SuggestionRepo, Written,
+};
 
 #[cfg(test)]
 mod test;
 
-/// The PostHog flag that turns ideas on for a person.
-pub const IDEAS_FLAG: &str = "enable-suggestions";
-/// Most open ideas a person may have.
+/// The PostHog flag that turns suggestions on for a person.
+pub const SUGGESTIONS_FLAG: &str = "enable-suggestions";
+/// Most open suggestions a person may have.
 pub const OPEN_LIMIT: u32 = 30;
-/// Most ideas one generation may add or bring back.
+/// Most suggestions one generation may add or bring back.
 pub const NEW_PER_GENERATION: u32 = 12;
 
-/// How long a finished idea stays in the feed's `done`.
+/// How long a finished suggestion stays in the feed's `done`.
 pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
 
-/// Ideas whose items the feed checks at once.
+/// Suggestions whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
 
-/// How many of the person's closed ideas a session's review shows, most
+/// How many of the person's closed suggestions a session's review shows, most
 /// recently closed first: enough not to suggest again what they just turned
 /// down. Older ones still count: proposing one comes back to the same row.
 const REVIEW_CLOSED: u32 = 60;
@@ -50,21 +53,21 @@ const LIMITS: Limits = Limits {
     new_per_generation: NEW_PER_GENERATION,
 };
 
-/// Serves ideas from `Repo`, checking items with `Access`.
-pub struct IdeaService<Repo, Access, Flags> {
+/// Serves suggestions from `Repo`, checking items with `Access`.
+pub struct SuggestionService<Repo, Access, Flags> {
     repo: Arc<Repo>,
     access: Arc<Access>,
     request_sessions: Arc<dyn RequestSessions>,
     flags: Option<Flags>,
 }
 
-impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
+impl<Repo, Access, Flags> SuggestionService<Repo, Access, Flags>
 where
-    Repo: IdeaRepo,
-    Access: IdeaAccess,
+    Repo: SuggestionRepo,
+    Access: SuggestionAccess,
     Flags: FeatureFlags + 'static,
 {
-    /// Without `flags`, ideas are off for everyone.
+    /// Without `flags`, suggestions are off for everyone.
     pub fn new(
         repo: Arc<Repo>,
         access: Arc<Access>,
@@ -79,10 +82,10 @@ where
         }
     }
 
-    #[tracing::instrument(name = "ideas.flag", err, skip_all)]
-    async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<(), IdeaError> {
+    #[tracing::instrument(name = "suggestions.flag", err, skip_all)]
+    async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<(), SuggestionError> {
         let Some(flags) = &self.flags else {
-            return Err(IdeaError::NotFound);
+            return Err(SuggestionError::NotFound);
         };
         let enabled = flags
             .load(user)
@@ -90,28 +93,28 @@ where
             .inspect_err(|error| {
                 tracing::warn!(?error, "feature flags unavailable; suggestions stay off");
             })
-            .is_ok_and(|flags| flags.is_enabled(IDEAS_FLAG));
+            .is_ok_and(|flags| flags.is_enabled(SUGGESTIONS_FLAG));
         if enabled {
             Ok(())
         } else {
-            Err(IdeaError::NotFound)
+            Err(SuggestionError::NotFound)
         }
     }
 
-    /// The person's open ideas session the request came from.
+    /// The person's open suggestions session the request came from.
     async fn session(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
-    ) -> Result<GenerationSession, IdeaError> {
+    ) -> Result<GenerationSession, SuggestionError> {
         let owner = principal.owner();
-        let user = owner.as_user().ok_or(IdeaError::NotGenerating)?;
+        let user = owner.as_user().ok_or(SuggestionError::NotGenerating)?;
         let session = match correlation {
             Some(correlation) => self
                 .request_sessions
                 .session_of(correlation)
                 .await
-                .map_err(IdeaError::Internal)?,
+                .map_err(SuggestionError::Internal)?,
             None => None,
         };
         let session = match session {
@@ -119,12 +122,12 @@ where
                 .repo
                 .generation_session(session)
                 .await
-                .map_err(IdeaError::internal)?,
+                .map_err(SuggestionError::internal)?,
             None => None,
         };
         let session = session
-            .filter(|session| session.user == *user && session.kind == SessionKind::Ideas)
-            .ok_or(IdeaError::NotGenerating)?;
+            .filter(|session| session.user == *user && session.kind == SessionKind::Suggestions)
+            .ok_or(SuggestionError::NotGenerating)?;
         self.require_flag(&session.user).await?;
         let span = tracing::Span::current();
         span.record("agent.session.id", session.session.to_string());
@@ -138,19 +141,19 @@ where
         user: &MacroUserIdStr<'_>,
         targets: &[Target],
         problems: &mut Vec<String>,
-    ) -> Result<(), IdeaError> {
+    ) -> Result<(), SuggestionError> {
         for target in targets {
             let mut viewable = self
                 .access
                 .can_view(user, target)
                 .await
-                .map_err(IdeaError::internal)?;
+                .map_err(SuggestionError::internal)?;
             if let Some(part) = target.part_id.as_deref().filter(|_| viewable) {
                 viewable = self
                     .access
                     .is_part_of(target, part)
                     .await
-                    .map_err(IdeaError::internal)?;
+                    .map_err(SuggestionError::internal)?;
             }
             if !viewable {
                 let item = target.entity_type.as_ref();
@@ -172,14 +175,18 @@ where
         Ok(())
     }
 
-    /// Whether the person can open every item `idea` is about.
-    async fn viewable(&self, user: &MacroUserIdStr<'_>, idea: &Idea) -> Result<bool, IdeaError> {
-        for target in &idea.about {
+    /// Whether the person can open every item `suggestion` is about.
+    async fn viewable(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        suggestion: &Suggestion,
+    ) -> Result<bool, SuggestionError> {
+        for target in &suggestion.about {
             let viewable = self
                 .access
                 .can_view(user, target)
                 .await
-                .map_err(IdeaError::internal)?;
+                .map_err(SuggestionError::internal)?;
             if !viewable {
                 return Ok(false);
             }
@@ -187,20 +194,20 @@ where
         Ok(true)
     }
 
-    /// The idea as stored after a write.
+    /// The suggestion as stored after a write.
     async fn reread(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         match self
             .repo
-            .idea(user, id)
+            .suggestion(user, id)
             .await
-            .map_err(IdeaError::internal)?
+            .map_err(SuggestionError::internal)?
         {
-            Some(idea) => Ok(IdeaWriteOutcome::applied(idea)),
-            None => Err(IdeaError::NotFound),
+            Some(suggestion) => Ok(SuggestionWriteOutcome::applied(suggestion)),
+            None => Err(SuggestionError::NotFound),
         }
     }
 }
@@ -222,175 +229,192 @@ fn written_problem(written: Written) -> Option<String> {
     }
 }
 
-fn snapshot(content: &IdeaContent) -> Option<serde_json::Value> {
+fn snapshot(content: &SuggestionContent) -> Option<serde_json::Value> {
     serde_json::to_value(content).ok()
 }
 
-impl<Repo, Access, Flags> IdeaApi for IdeaService<Repo, Access, Flags>
+impl<Repo, Access, Flags> SuggestionApi for SuggestionService<Repo, Access, Flags>
 where
-    Repo: IdeaRepo,
-    Access: IdeaAccess,
+    Repo: SuggestionRepo,
+    Access: SuggestionAccess,
     Flags: FeatureFlags + 'static,
 {
-    #[tracing::instrument(name = "ideas.feed", skip_all, fields(
-        ideas.open = tracing::field::Empty,
-        ideas.done = tracing::field::Empty,
-        ideas.hidden = tracing::field::Empty,
+    #[tracing::instrument(name = "suggestions.feed", skip_all, fields(
+        suggestions.open = tracing::field::Empty,
+        suggestions.done = tracing::field::Empty,
+        suggestions.hidden = tracing::field::Empty,
     ), err)]
-    async fn feed(&self, user: &MacroUserIdStr<'static>) -> Result<Ideas, IdeaError> {
+    async fn feed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<SuggestionFeed, SuggestionError> {
         self.require_flag(user).await?;
         let done_since = Utc::now() - DONE_WITHIN;
-        let shown: Vec<Idea> = self
+        let shown: Vec<Suggestion> = self
             .repo
             .shown(user, done_since)
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         let before = shown.len();
-        // Up to 30 ideas of up to 5 items each: check a few at a time.
-        let viewable: Vec<Idea> = futures::stream::iter(shown)
-            .map(|idea| async move {
-                Ok::<_, IdeaError>(self.viewable(user, &idea).await?.then_some(idea))
+        // Up to 30 suggestions of up to 5 items each: check a few at a time.
+        let viewable: Vec<Suggestion> = futures::stream::iter(shown)
+            .map(|suggestion| async move {
+                Ok::<_, SuggestionError>(
+                    self.viewable(user, &suggestion)
+                        .await?
+                        .then_some(suggestion),
+                )
             })
             .buffer_unordered(ACCESS_CHECKS_AT_ONCE)
-            .try_filter_map(|idea| async move { Ok(idea) })
+            .try_filter_map(|suggestion| async move { Ok(suggestion) })
             .try_collect()
             .await?;
         let hidden = before - viewable.len();
-        let (mut ideas, mut done): (Vec<Idea>, Vec<Idea>) =
-            viewable.into_iter().partition(|idea| idea.state.is_open());
-        ideas.sort_by(|a, b| {
+        let (mut suggestions, mut done): (Vec<Suggestion>, Vec<Suggestion>) = viewable
+            .into_iter()
+            .partition(|suggestion| suggestion.state.is_open());
+        suggestions.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
                 .then(b.updated_at.cmp(&a.updated_at))
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let span = tracing::Span::current();
-        span.record("ideas.open", ideas.len());
-        span.record("ideas.done", done.len());
-        span.record("ideas.hidden", hidden);
-        Ok(Ideas { ideas, done })
+        span.record("suggestions.open", suggestions.len());
+        span.record("suggestions.done", done.len());
+        span.record("suggestions.hidden", hidden);
+        Ok(SuggestionFeed { suggestions, done })
     }
 
-    #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]
-    async fn accept(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
+    #[tracing::instrument(name = "suggestions.accept", skip_all, fields(suggestion.id = %id), err)]
+    async fn accept(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
-        let idea = self
+        let suggestion = self
             .repo
-            .idea(user, id)
+            .suggestion(user, id)
             .await
-            .map_err(IdeaError::internal)?
-            .ok_or(IdeaError::NotFound)?;
+            .map_err(SuggestionError::internal)?
+            .ok_or(SuggestionError::NotFound)?;
         // A background prompt is taken on and runs; anything else the person
         // acts on themself (opens the item, the composer, the routine) is
-        // done when they do. Accepting a done idea again changes nothing.
+        // done when they do. Accepting a done suggestion again changes nothing.
         let background = matches!(
-            idea.kind,
-            IdeaKind::Prompt {
+            suggestion.kind,
+            SuggestionKind::Prompt {
                 run_mode: RunMode::Background,
                 ..
             }
         );
         let to = if background {
-            IdeaState::Accepted
+            SuggestionState::Accepted
         } else {
-            IdeaState::Done
+            SuggestionState::Done
         };
-        if idea.state == to {
+        if suggestion.state == to {
             return Ok(());
         }
-        let from: &[IdeaState] = if background {
-            &[IdeaState::Proposed]
+        let from: &[SuggestionState] = if background {
+            &[SuggestionState::Proposed]
         } else {
-            &[IdeaState::Proposed, IdeaState::Accepted]
+            &[SuggestionState::Proposed, SuggestionState::Accepted]
         };
         let moved = self
             .repo
             .set_state(user, id, from, to, None, Utc::now())
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         if !moved {
-            return Err(IdeaError::NotFound);
+            return Err(SuggestionError::NotFound);
         }
-        tracing::info!(event = "ideas.accepted", done = !background);
+        tracing::info!(event = "suggestions.accepted", done = !background);
         Ok(())
     }
 
-    #[tracing::instrument(name = "ideas.dismiss", skip_all, fields(idea.id = %id), err)]
-    async fn dismiss(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
+    #[tracing::instrument(name = "suggestions.dismiss", skip_all, fields(suggestion.id = %id), err)]
+    async fn dismiss(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
         self.require_flag(user).await?;
         let moved = self
             .repo
             .set_state(
                 user,
                 id,
-                &[IdeaState::Proposed, IdeaState::Accepted],
-                IdeaState::Dismissed,
+                &[SuggestionState::Proposed, SuggestionState::Accepted],
+                SuggestionState::Dismissed,
                 None,
                 Utc::now(),
             )
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         if !moved {
-            return Err(IdeaError::NotFound);
+            return Err(SuggestionError::NotFound);
         }
-        tracing::info!(event = "ideas.dismissed");
+        tracing::info!(event = "suggestions.dismissed");
         Ok(())
     }
 
-    #[tracing::instrument(name = "ideas.review", skip_all, fields(
+    #[tracing::instrument(name = "suggestions.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
-        ideas.count = tracing::field::Empty,
+        suggestions.count = tracing::field::Empty,
     ), err)]
     async fn review(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
-    ) -> Result<IdeaReview, IdeaError> {
+    ) -> Result<SuggestionsReview, SuggestionError> {
         let session = self.session(principal, correlation).await?;
-        let (ideas, added) = tokio::try_join!(
+        let (suggestions, added) = tokio::try_join!(
             async {
                 self.repo
                     .for_review(&session.user, REVIEW_CLOSED)
                     .await
-                    .map_err(IdeaError::internal)
+                    .map_err(SuggestionError::internal)
             },
             async {
                 self.repo
                     .added_in(session.generation)
                     .await
-                    .map_err(IdeaError::internal)
+                    .map_err(SuggestionError::internal)
             },
         )?;
-        let (mut open, mut closed): (Vec<Idea>, Vec<Idea>) =
-            ideas.into_iter().partition(|idea| idea.state.is_open());
+        let (mut open, mut closed): (Vec<Suggestion>, Vec<Suggestion>) = suggestions
+            .into_iter()
+            .partition(|suggestion| suggestion.state.is_open());
         open.sort_by(|a, b| b.importance.cmp(&a.importance));
         closed.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let open_count = u32::try_from(open.len()).unwrap_or(u32::MAX);
         open.append(&mut closed);
-        tracing::Span::current().record("ideas.count", open.len());
-        Ok(IdeaReview {
-            ideas: open,
+        tracing::Span::current().record("suggestions.count", open.len());
+        Ok(SuggestionsReview {
+            suggestions: open,
             open: open_count,
             open_limit: OPEN_LIMIT,
             new_left: NEW_PER_GENERATION.saturating_sub(added),
         })
     }
 
-    #[tracing::instrument(name = "ideas.suggest", skip_all, fields(
+    #[tracing::instrument(name = "suggestions.suggest", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
-        idea.kind = request.kind.as_ref(),
-        idea.id = tracing::field::Empty,
-        idea.outcome = tracing::field::Empty,
-        idea.problems = tracing::field::Empty,
+        suggestion.kind = request.kind.as_ref(),
+        suggestion.id = tracing::field::Empty,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
     ), err)]
     async fn suggest(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
-        request: SuggestIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        request: NewSuggestion,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         let session = self.session(principal, correlation).await?;
         let span = tracing::Span::current();
         let user = session.user.clone();
@@ -436,7 +460,7 @@ where
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
-        let content = IdeaContent {
+        let content = SuggestionContent {
             dedup_key,
             title,
             summary,
@@ -450,7 +474,7 @@ where
             .repo
             .by_dedup_key(&user, &content.dedup_key)
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         let Some(existing) = existing else {
             let id = Uuid::now_v7();
             let change = Change {
@@ -466,15 +490,15 @@ where
                 .repo
                 .create(&user, id, &kind, &content, LIMITS, &change)
                 .await
-                .map_err(IdeaError::internal)?;
+                .map_err(SuggestionError::internal)?;
             if let Some(problem) = written_problem(written) {
                 return Ok(rejected(&span, vec![problem]));
             }
-            span.record("idea.id", id.to_string());
-            span.record("idea.outcome", "created");
+            span.record("suggestion.id", id.to_string());
+            span.record("suggestion.outcome", "created");
             return self.reread(&user, id).await;
         };
-        span.record("idea.id", existing.id.to_string());
+        span.record("suggestion.id", existing.id.to_string());
         if existing.kind.name() != request.kind {
             return Ok(rejected(
                 &span,
@@ -487,12 +511,13 @@ where
         }
         let same_kind_data = match (&existing.kind, &kind) {
             (
-                IdeaKind::Prompt { run_mode, .. },
+                SuggestionKind::Prompt { run_mode, .. },
                 super::model::NewKind::Prompt { run_mode: asked },
             ) => run_mode == asked,
-            (IdeaKind::Entity { action, .. }, super::model::NewKind::Entity { action: asked }) => {
-                action == asked
-            }
+            (
+                SuggestionKind::Entity { action, .. },
+                super::model::NewKind::Entity { action: asked },
+            ) => action == asked,
             _ => false,
         };
         if !same_kind_data {
@@ -505,8 +530,10 @@ where
             ));
         }
         let (action, to) = match existing.state {
-            IdeaState::Proposed | IdeaState::Accepted => (ChangeAction::Rewritten, existing.state),
-            IdeaState::Dismissed => {
+            SuggestionState::Proposed | SuggestionState::Accepted => {
+                (ChangeAction::Rewritten, existing.state)
+            }
+            SuggestionState::Dismissed => {
                 if reason.is_none() {
                     return Ok(rejected(
                         &span,
@@ -518,17 +545,17 @@ where
                         )],
                     ));
                 }
-                (ChangeAction::Restored, IdeaState::Proposed)
+                (ChangeAction::Restored, SuggestionState::Proposed)
             }
-            IdeaState::Done | IdeaState::Resolved | IdeaState::Retired => {
-                (ChangeAction::Restored, IdeaState::Proposed)
+            SuggestionState::Done | SuggestionState::Resolved | SuggestionState::Retired => {
+                (ChangeAction::Restored, SuggestionState::Proposed)
             }
         };
         let change = Change {
             session: session.session,
             generation: session.generation,
             action,
-            old: snapshot(&IdeaContent::of(&existing)),
+            old: snapshot(&SuggestionContent::of(&existing)),
             new: snapshot(&content),
             reason,
             at: now,
@@ -545,38 +572,38 @@ where
                 &change,
             )
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         if let Some(problem) = written_problem(written) {
             return Ok(rejected(&span, vec![problem]));
         }
-        span.record("idea.outcome", action.as_ref());
+        span.record("suggestion.outcome", action.as_ref());
         self.reread(&user, existing.id).await
     }
 
-    #[tracing::instrument(name = "ideas.rewrite", skip_all, fields(
+    #[tracing::instrument(name = "suggestions.rewrite", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
-        idea.id = %id,
-        idea.outcome = tracing::field::Empty,
-        idea.problems = tracing::field::Empty,
+        suggestion.id = %id,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
     ), err)]
     async fn rewrite(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
         id: Uuid,
-        request: RewriteIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        request: RewriteSuggestion,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         let session = self.session(principal, correlation).await?;
         let span = tracing::Span::current();
         let user = session.user.clone();
         let Some(existing) = self
             .repo
-            .idea(&user, id)
+            .suggestion(&user, id)
             .await
-            .map_err(IdeaError::internal)?
+            .map_err(SuggestionError::internal)?
         else {
-            return Err(IdeaError::NotFound);
+            return Err(SuggestionError::NotFound);
         };
         let mut problems = Vec::new();
         if !existing.state.is_open() {
@@ -601,7 +628,7 @@ where
             check::MAX_REASON_CHARS,
             &mut problems,
         );
-        let mut content = IdeaContent::of(&existing);
+        let mut content = SuggestionContent::of(&existing);
         if let Some(title) = request.title {
             content.title = check::text(&title, "`title`", check::MAX_TITLE_CHARS, &mut problems)
                 .unwrap_or_default();
@@ -641,7 +668,7 @@ where
             session: session.session,
             generation: session.generation,
             action: ChangeAction::Rewritten,
-            old: snapshot(&IdeaContent::of(&existing)),
+            old: snapshot(&SuggestionContent::of(&existing)),
             new: snapshot(&content),
             reason,
             at: Utc::now(),
@@ -658,38 +685,38 @@ where
                 &change,
             )
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         if let Some(problem) = written_problem(written) {
             return Ok(rejected(&span, vec![problem]));
         }
-        span.record("idea.outcome", "rewritten");
+        span.record("suggestion.outcome", "rewritten");
         self.reread(&user, id).await
     }
 
-    #[tracing::instrument(name = "ideas.retire", skip_all, fields(
+    #[tracing::instrument(name = "suggestions.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
-        idea.id = %id,
-        idea.outcome = tracing::field::Empty,
-        idea.problems = tracing::field::Empty,
+        suggestion.id = %id,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
     ), err)]
     async fn retire(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
         id: Uuid,
-        request: RetireIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        request: RetireSuggestionRequest,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         let session = self.session(principal, correlation).await?;
         let span = tracing::Span::current();
         let user = session.user.clone();
         let Some(existing) = self
             .repo
-            .idea(&user, id)
+            .suggestion(&user, id)
             .await
-            .map_err(IdeaError::internal)?
+            .map_err(SuggestionError::internal)?
         else {
-            return Err(IdeaError::NotFound);
+            return Err(SuggestionError::NotFound);
         };
         let mut problems = Vec::new();
         let reason = check::text(
@@ -721,7 +748,7 @@ where
                 existing.state.as_ref().to_owned(),
             )),
             new: Some(serde_json::Value::String(
-                IdeaState::Retired.as_ref().to_owned(),
+                SuggestionState::Retired.as_ref().to_owned(),
             )),
             reason,
             at: Utc::now(),
@@ -731,26 +758,26 @@ where
             .set_state(
                 &user,
                 id,
-                &[IdeaState::Proposed, IdeaState::Accepted],
-                IdeaState::Retired,
+                &[SuggestionState::Proposed, SuggestionState::Accepted],
+                SuggestionState::Retired,
                 Some(&change),
                 change.at,
             )
             .await
-            .map_err(IdeaError::internal)?;
+            .map_err(SuggestionError::internal)?;
         if !moved {
             return Ok(rejected(
                 &span,
                 written_problem(Written::Conflict).into_iter().collect(),
             ));
         }
-        span.record("idea.outcome", "retired");
+        span.record("suggestion.outcome", "retired");
         self.reread(&user, id).await
     }
 }
 
-fn rejected(span: &tracing::Span, problems: Vec<String>) -> IdeaWriteOutcome {
-    span.record("idea.outcome", "rejected");
-    span.record("idea.problems", problems.len());
-    IdeaWriteOutcome::rejected(problems)
+fn rejected(span: &tracing::Span, problems: Vec<String>) -> SuggestionWriteOutcome {
+    span.record("suggestion.outcome", "rejected");
+    span.record("suggestion.problems", problems.len());
+    SuggestionWriteOutcome::rejected(problems)
 }

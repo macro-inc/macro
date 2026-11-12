@@ -1,4 +1,4 @@
-//! What ideas need from outside, and the API they serve.
+//! What suggestions need from outside, and the API they serve.
 
 use std::future::Future;
 
@@ -8,36 +8,37 @@ use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, Idea, IdeaContent, IdeaError, IdeaReview, IdeaState,
-    IdeaWriteOutcome, Ideas, NewKind, RetireIdea, RewriteIdea, SuggestIdea, Target,
+    Change, GenerationSession, NewKind, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    Suggestion, SuggestionContent, SuggestionError, SuggestionFeed, SuggestionState,
+    SuggestionWriteOutcome, SuggestionsReview, Target,
 };
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
-    /// Most open ideas a person may have.
+    /// Most open suggestions a person may have.
     pub open: u32,
-    /// Most ideas one generation may add or bring back.
+    /// Most suggestions one generation may add or bring back.
     pub new_per_generation: u32,
 }
 
-/// How a write that adds an open idea went.
+/// How a write that adds an open suggestion went.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Written {
     /// Stored.
     Applied,
-    /// The person has [`Limits::open`] open ideas already.
+    /// The person has [`Limits::open`] open suggestions already.
     OverOpenLimit,
     /// The generation added [`Limits::new_per_generation`] already.
     OverNewLimit,
-    /// Another write took the idea first: its dedup key is taken, or its
+    /// Another write took the suggestion first: its dedup key is taken, or its
     /// state moved on.
     Conflict,
 }
 
-/// Ideas, their items and the change log, in storage.
-pub trait IdeaRepo: Send + Sync + 'static {
+/// Suggestions, their items and the change log, in storage.
+pub trait SuggestionRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
@@ -47,50 +48,50 @@ pub trait IdeaRepo: Send + Sync + 'static {
         session: Uuid,
     ) -> impl Future<Output = Result<Option<GenerationSession>, Self::Err>> + Send;
 
-    /// The person's open ideas, and those done since `done_since`.
+    /// The person's open suggestions, and those done since `done_since`.
     fn shown(
         &self,
         user: &MacroUserIdStr<'_>,
         done_since: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Suggestion>, Self::Err>> + Send;
 
-    /// The person's open ideas, and the `closed` most recently closed.
+    /// The person's open suggestions, and the `closed` most recently closed.
     fn for_review(
         &self,
         user: &MacroUserIdStr<'_>,
         closed: u32,
-    ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Suggestion>, Self::Err>> + Send;
 
-    /// The person's idea `id`.
-    fn idea(
+    /// The person's suggestion `id`.
+    fn suggestion(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-    ) -> impl Future<Output = Result<Option<Idea>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Suggestion>, Self::Err>> + Send;
 
-    /// The person's idea with `dedup_key`.
+    /// The person's suggestion with `dedup_key`.
     fn by_dedup_key(
         &self,
         user: &MacroUserIdStr<'_>,
         dedup_key: &str,
-    ) -> impl Future<Output = Result<Option<Idea>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Suggestion>, Self::Err>> + Send;
 
-    /// How many ideas generation `generation` added or brought back.
+    /// How many suggestions generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
-    /// Add a proposed idea `id` with `content` for the person, within
+    /// Add a proposed suggestion `id` with `content` for the person, within
     /// `limits`, logging `change`.
     fn create(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
         kind: &NewKind,
-        content: &IdeaContent,
+        content: &SuggestionContent,
         limits: Limits,
         change: &Change,
     ) -> impl Future<Output = Result<Written, Self::Err>> + Send;
 
-    /// Replace idea `id`'s content and move it from state `from` to `to`,
+    /// Replace suggestion `id`'s content and move it from state `from` to `to`,
     /// logging `change`. Moving it from closed to open stays within
     /// `limits`.
     #[expect(clippy::too_many_arguments, reason = "one write, all of its parts")]
@@ -98,28 +99,28 @@ pub trait IdeaRepo: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        content: &IdeaContent,
-        from: IdeaState,
-        to: IdeaState,
+        content: &SuggestionContent,
+        from: SuggestionState,
+        to: SuggestionState,
         limits: Limits,
         change: &Change,
     ) -> impl Future<Output = Result<Written, Self::Err>> + Send;
 
-    /// Move the person's idea `id` to `to` when it is in one of `from`,
+    /// Move the person's suggestion `id` to `to` when it is in one of `from`,
     /// logging `change` when given; whether it moved.
     fn set_state(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        from: &[IdeaState],
-        to: IdeaState,
+        from: &[SuggestionState],
+        to: SuggestionState,
         change: Option<&Change>,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Whether the person can open an item.
-pub trait IdeaAccess: Send + Sync + 'static {
+pub trait SuggestionAccess: Send + Sync + 'static {
     /// The error type returned by access checks.
     type Err: std::error::Error + Send + Sync + 'static;
 
@@ -147,61 +148,61 @@ pub trait RequestSessions: Send + Sync + 'static {
     async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>, rootcause::Report>;
 }
 
-/// Ideas as the API serves them: the person's feed, and the tools hidden
+/// Suggestions as the API serves them: the person's feed, and the tools hidden
 /// generation sessions manage it with.
-pub trait IdeaApi: Send + Sync + 'static {
-    /// The person's open ideas they can still open every item of, best
+pub trait SuggestionApi: Send + Sync + 'static {
+    /// The person's open suggestions they can still open every item of, best
     /// first.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Ideas, IdeaError>> + Send;
+    ) -> impl Future<Output = Result<SuggestionFeed, SuggestionError>> + Send;
 
-    /// The person acts on a proposed idea.
+    /// The person acts on a proposed suggestion.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
-    ) -> impl Future<Output = Result<(), IdeaError>> + Send;
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
-    /// The person isn't interested in an open idea.
+    /// The person isn't interested in an open suggestion.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
-    ) -> impl Future<Output = Result<(), IdeaError>> + Send;
+    ) -> impl Future<Output = Result<(), SuggestionError>> + Send;
 
-    /// Every idea of the person's, for the ideas session the request
+    /// Every suggestion of the person's, for the suggestions session the request
     /// `correlation` names.
     fn review(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
-    ) -> impl Future<Output = Result<IdeaReview, IdeaError>> + Send;
+    ) -> impl Future<Output = Result<SuggestionsReview, SuggestionError>> + Send;
 
-    /// Add an idea, or a new version of the one with its dedup key.
+    /// Add a suggestion, or a new version of the one with its dedup key.
     fn suggest(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
-        request: SuggestIdea,
-    ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
+        request: NewSuggestion,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 
-    /// Change an open idea's words, importance, categories or items.
+    /// Change an open suggestion's words, importance, categories or items.
     fn rewrite(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
         id: Uuid,
-        request: RewriteIdea,
-    ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
+        request: RewriteSuggestion,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 
-    /// Retire an open idea that no longer matters.
+    /// Retire an open suggestion that no longer matters.
     fn retire(
         &self,
         principal: &CreationPrincipal,
         correlation: Option<Uuid>,
         id: Uuid,
-        request: RetireIdea,
-    ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
+        request: RetireSuggestionRequest,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 }

@@ -3,7 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use super::*;
 use crate::domain::model::{ChangeAction, RunMode};
 
-/// A person who can own ideas.
+/// A person who can own suggestions.
 pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = Uuid::now_v7();
     sqlx::query!(
@@ -40,8 +40,8 @@ async fn generation(pool: &PgPool) -> Uuid {
     id
 }
 
-fn content(key: &str) -> IdeaContent {
-    IdeaContent {
+fn content(key: &str) -> SuggestionContent {
+    SuggestionContent {
         dedup_key: key.to_owned(),
         title: "Compare quotes".to_owned(),
         summary: "Three arrived.".to_owned(),
@@ -58,7 +58,7 @@ fn content(key: &str) -> IdeaContent {
 async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
     insert_user(&pool, OWNER).await;
     let generation = generation(&pool).await;
-    let repo = std::sync::Arc::new(PgIdeaRepo::new(pool));
+    let repo = std::sync::Arc::new(PgSuggestionRepo::new(pool));
     let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
     let limits = Limits {
         open: 30,
@@ -83,7 +83,7 @@ async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
                 &NewKind::Prompt {
                     run_mode: RunMode::Composer,
                 },
-                &content(&format!("idea:{n}")),
+                &content(&format!("suggestion:{n}")),
                 limits,
                 &change,
             )
@@ -100,7 +100,7 @@ async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
     assert_eq!(repo.for_review(&user, 60).await.unwrap().len(), 3);
 }
 
-async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
+async fn routine_card(pool: &PgPool) -> (Uuid, Uuid) {
     let suggestion = Uuid::now_v7();
     sqlx::query!(
         r#"INSERT INTO routine_suggestion
@@ -113,13 +113,13 @@ async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
     .execute(pool)
     .await
     .unwrap();
-    let idea = Uuid::now_v7();
+    let card = Uuid::now_v7();
     sqlx::query!(
         r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
                              categories, state, session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'routine', 'routine:inbox', 'Inbox digest', 'Busy inbox.', 50,
                    '{}', 'proposed', $3, now(), now(), now())"#,
-        idea,
+        card,
         OWNER,
         Uuid::now_v7(),
     )
@@ -128,28 +128,28 @@ async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
     .unwrap();
     sqlx::query!(
         "INSERT INTO suggestion_routine (suggestion_id, routine_suggestion_id) VALUES ($1, $2)",
-        idea,
+        card,
         suggestion,
     )
     .execute(pool)
     .await
     .unwrap();
-    (idea, suggestion)
+    (card, suggestion)
 }
 
-/// Deleting a routine suggestion, by any code, deletes its idea, so the
-/// person never holds an idea without its kind's row.
+/// Deleting a routine suggestion, by any code, deletes its suggestion, so the
+/// person never holds a suggestion without its kind's row.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn deleting_a_routine_suggestion_deletes_its_idea(pool: PgPool) {
+async fn deleting_a_routine_suggestion_deletes_its_suggestion(pool: PgPool) {
     insert_user(&pool, OWNER).await;
-    let (idea, suggestion) = routine_idea(&pool).await;
+    let (card, suggestion) = routine_card(&pool).await;
     sqlx::query!("DELETE FROM routine_suggestion WHERE id = $1", suggestion)
         .execute(&pool)
         .await
         .unwrap();
     let left = sqlx::query_scalar!(
         r#"SELECT count(*) AS "n!" FROM suggestion WHERE id = $1"#,
-        idea
+        card
     )
     .fetch_one(&pool)
     .await
@@ -157,12 +157,12 @@ async fn deleting_a_routine_suggestion_deletes_its_idea(pool: PgPool) {
     assert_eq!(left, 0);
 }
 
-/// A row that doesn't decode is skipped, so the person's other ideas still
+/// A row that doesn't decode is skipped, so the person's other suggestions still
 /// read.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
+async fn a_broken_suggestion_row_is_skipped_and_the_rest_read(pool: PgPool) {
     insert_user(&pool, OWNER).await;
-    let (idea, _) = routine_idea(&pool).await;
+    let (suggestion, _) = routine_card(&pool).await;
     let broken = Uuid::now_v7();
     sqlx::query!(
         r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
@@ -176,23 +176,26 @@ async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let repo = PgIdeaRepo::new(pool);
+    let repo = PgSuggestionRepo::new(pool);
     let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
-    let ideas = repo.for_review(&user, 60).await.unwrap();
+    let suggestions = repo.for_review(&user, 60).await.unwrap();
     assert_eq!(
-        ideas.iter().map(|idea| idea.id).collect::<Vec<_>>(),
-        vec![idea]
+        suggestions
+            .iter()
+            .map(|suggestion| suggestion.id)
+            .collect::<Vec<_>>(),
+        vec![suggestion]
     );
-    assert!(repo.idea(&user, broken).await.unwrap().is_none());
+    assert!(repo.suggestion(&user, broken).await.unwrap().is_none());
 }
 
-/// The feed reads open ideas and those done lately; a review reads open
-/// ideas and only the most recently closed.
+/// The feed reads open suggestions and those done lately; a review reads open
+/// suggestions and only the most recently closed.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
+async fn reads_load_only_the_suggestions_they_show(pool: PgPool) {
     insert_user(&pool, OWNER).await;
     let generation = generation(&pool).await;
-    let repo = PgIdeaRepo::new(pool);
+    let repo = PgSuggestionRepo::new(pool);
     let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
     let limits = Limits {
         open: 30,
@@ -217,7 +220,7 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
             &NewKind::Prompt {
                 run_mode: RunMode::Composer,
             },
-            &content(&format!("idea:{n}")),
+            &content(&format!("suggestion:{n}")),
             limits,
             &change,
         )
@@ -228,12 +231,12 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
     let hours = chrono::TimeDelta::hours;
     // Done two days ago, done an hour ago, dismissed an hour ago; two open.
     for (id, to, at) in [
-        (ids[0], IdeaState::Done, now - hours(48)),
-        (ids[1], IdeaState::Done, now - hours(1)),
-        (ids[2], IdeaState::Dismissed, now - hours(2)),
+        (ids[0], SuggestionState::Done, now - hours(48)),
+        (ids[1], SuggestionState::Done, now - hours(1)),
+        (ids[2], SuggestionState::Dismissed, now - hours(2)),
     ] {
         assert!(
-            repo.set_state(&user, id, &[IdeaState::Proposed], to, None, at)
+            repo.set_state(&user, id, &[SuggestionState::Proposed], to, None, at)
                 .await
                 .unwrap()
         );
@@ -243,7 +246,7 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
         .await
         .unwrap()
         .iter()
-        .map(|idea| idea.id)
+        .map(|suggestion| suggestion.id)
         .collect();
     shown.sort();
     assert_eq!(shown, vec![ids[1], ids[3], ids[4]]);
@@ -252,16 +255,16 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
         .await
         .unwrap()
         .iter()
-        .map(|idea| idea.id)
+        .map(|suggestion| suggestion.id)
         .collect();
     reviewed.sort();
     assert_eq!(reviewed, vec![ids[1], ids[3], ids[4]]);
     assert_eq!(repo.for_review(&user, 60).await.unwrap().len(), 5);
     assert_eq!(
-        repo.by_dedup_key(&user, "idea:2")
+        repo.by_dedup_key(&user, "suggestion:2")
             .await
             .unwrap()
-            .map(|idea| idea.id),
+            .map(|suggestion| suggestion.id),
         Some(ids[2])
     );
 }

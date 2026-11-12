@@ -1,4 +1,4 @@
-//! What an idea is, as stored, served to the person and written by
+//! What a suggestion is, as stored, served to the person and written by
 //! generation sessions.
 
 use chrono::{DateTime, Utc};
@@ -10,8 +10,7 @@ use utoipa::ToSchema;
 /// One proactive suggestion for one person.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[schema(as = Suggestion)]
-pub struct Idea {
+pub struct Suggestion {
     /// The suggestion's id.
     #[schema(value_type = String, format = Uuid)]
     pub id: Uuid,
@@ -27,7 +26,7 @@ pub struct Idea {
     /// The feed's filters it shows under.
     pub categories: Vec<Category>,
     /// Where it is for the person.
-    pub state: IdeaState,
+    pub state: SuggestionState,
     /// Why it was resolved; only on resolved suggestions.
     pub state_reason: Option<String>,
     /// The items it is about.
@@ -42,14 +41,13 @@ pub struct Idea {
     pub state_changed_at: DateTime<Utc>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
-    pub kind: IdeaKind,
+    pub kind: SuggestionKind,
 }
 
 /// What kind of suggestion it is, with that kind's data. A kind never changes.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-#[schema(as = SuggestionKind)]
-pub enum IdeaKind {
+pub enum SuggestionKind {
     /// A prompt for an agent: opened in the composer, or run in the
     /// background.
     #[serde(rename_all = "camelCase")]
@@ -76,7 +74,7 @@ pub enum IdeaKind {
     },
 }
 
-impl IdeaKind {
+impl SuggestionKind {
     /// The kind, without its data.
     pub fn name(&self) -> KindName {
         match self {
@@ -126,8 +124,7 @@ pub enum KindName {
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-#[schema(as = SuggestionState)]
-pub enum IdeaState {
+pub enum SuggestionState {
     /// Shown, not acted on yet.
     Proposed,
     /// The person acted on it, and it is under way.
@@ -142,7 +139,7 @@ pub enum IdeaState {
     Retired,
 }
 
-impl IdeaState {
+impl SuggestionState {
     /// Proposed or accepted: shown, and open to sessions' changes.
     pub fn is_open(self) -> bool {
         matches!(self, Self::Proposed | Self::Accepted)
@@ -251,25 +248,21 @@ pub struct Target {
 /// finished in the last day, newest first.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[schema(as = SuggestionFeed)]
-pub struct Ideas {
+pub struct SuggestionFeed {
     /// The open suggestions.
-    #[serde(rename = "suggestions")]
-    pub ideas: Vec<Idea>,
+    pub suggestions: Vec<Suggestion>,
     /// Suggestions done in the last 24 hours, with what they produced.
-    pub done: Vec<Idea>,
+    pub done: Vec<Suggestion>,
 }
 
 /// What a generation session reads before managing the person's suggestions:
 /// every suggestion they have, open or not, and how many more it may add.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[schema(as = SuggestionsReview)]
-pub struct IdeaReview {
+pub struct SuggestionsReview {
     /// Open suggestions first, best first, then closed ones newest first. A
     /// dismissed suggestion's `stateChangedAt` is when the person dismissed it.
-    #[serde(rename = "suggestions")]
-    pub ideas: Vec<Idea>,
+    pub suggestions: Vec<Suggestion>,
     /// Open suggestions the person has, and the most they may have.
     pub open: u32,
     /// The most open suggestions a person may have.
@@ -282,8 +275,7 @@ pub struct IdeaReview {
 /// generation session hands it back through `macro.suggestions.suggest`.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schema(as = NewSuggestion)]
-pub struct SuggestIdea {
+pub struct NewSuggestion {
     /// `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
     pub kind: KindName,
     /// Names the suggestion across nights; the same key updates the same suggestion.
@@ -318,8 +310,7 @@ pub struct SuggestIdea {
 /// Changes to an open suggestion; fields left out stay.
 #[derive(Debug, Clone, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schema(as = RewriteSuggestion)]
-pub struct RewriteIdea {
+pub struct RewriteSuggestion {
     /// A new title.
     #[serde(default)]
     pub title: Option<String>,
@@ -345,8 +336,7 @@ pub struct RewriteIdea {
 /// Retiring an open suggestion that no longer matters.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schema(as = RetireSuggestionRequest)]
-pub struct RetireIdea {
+pub struct RetireSuggestionRequest {
     /// Why, for the change log.
     pub reason: String,
 }
@@ -354,33 +344,31 @@ pub struct RetireIdea {
 /// What became of a session's write.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[schema(as = SuggestionWriteOutcome)]
-pub struct IdeaWriteOutcome {
+pub struct SuggestionWriteOutcome {
     /// Whether it was applied.
     pub ok: bool,
     /// Why it wasn't, to fix and try again.
     pub problems: Vec<String>,
     /// The suggestion as it now is.
-    #[serde(rename = "suggestion")]
-    pub idea: Option<Idea>,
+    pub suggestion: Option<Suggestion>,
 }
 
-impl IdeaWriteOutcome {
+impl SuggestionWriteOutcome {
     /// Not applied, for `problems`.
     pub fn rejected(problems: Vec<String>) -> Self {
         Self {
             ok: false,
             problems,
-            idea: None,
+            suggestion: None,
         }
     }
 
     /// Applied; `suggestion` as it now is.
-    pub fn applied(idea: Idea) -> Self {
+    pub fn applied(suggestion: Suggestion) -> Self {
         Self {
             ok: true,
             problems: Vec::new(),
-            idea: Some(idea),
+            suggestion: Some(suggestion),
         }
     }
 }
@@ -388,36 +376,36 @@ impl IdeaWriteOutcome {
 /// A suggestion's words and items, checked and ready to store.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IdeaContent {
-    /// See [`Idea::dedup_key`].
+pub struct SuggestionContent {
+    /// See [`Suggestion::dedup_key`].
     pub dedup_key: String,
-    /// See [`Idea::title`].
+    /// See [`Suggestion::title`].
     pub title: String,
-    /// See [`Idea::summary`].
+    /// See [`Suggestion::summary`].
     pub summary: String,
-    /// See [`Idea::importance`].
+    /// See [`Suggestion::importance`].
     pub importance: u8,
-    /// See [`Idea::categories`].
+    /// See [`Suggestion::categories`].
     pub categories: Vec<Category>,
-    /// See [`Idea::about`].
+    /// See [`Suggestion::about`].
     pub about: Vec<Target>,
     /// A prompt suggestion's prompt.
     pub prompt: Option<String>,
 }
 
-impl IdeaContent {
+impl SuggestionContent {
     /// `suggestion`'s content.
-    pub fn of(idea: &Idea) -> Self {
+    pub fn of(suggestion: &Suggestion) -> Self {
         Self {
-            dedup_key: idea.dedup_key.clone(),
-            title: idea.title.clone(),
-            summary: idea.summary.clone(),
-            importance: idea.importance,
-            categories: idea.categories.clone(),
-            about: idea.about.clone(),
-            prompt: match &idea.kind {
-                IdeaKind::Prompt { prompt, .. } => Some(prompt.clone()),
-                IdeaKind::Entity { .. } | IdeaKind::Routine { .. } => None,
+            dedup_key: suggestion.dedup_key.clone(),
+            title: suggestion.title.clone(),
+            summary: suggestion.summary.clone(),
+            importance: suggestion.importance,
+            categories: suggestion.categories.clone(),
+            about: suggestion.about.clone(),
+            prompt: match &suggestion.kind {
+                SuggestionKind::Prompt { prompt, .. } => Some(prompt.clone()),
+                SuggestionKind::Entity { .. } | SuggestionKind::Routine { .. } => None,
             },
         }
     }
@@ -443,7 +431,7 @@ pub enum NewKind {
 #[strum(serialize_all = "snake_case")]
 pub enum SessionKind {
     /// Writes suggestions.
-    Ideas,
+    Suggestions,
     /// Writes routine suggestions.
     Routines,
 }
@@ -496,7 +484,7 @@ pub struct Change {
 
 /// Why a suggestions call failed.
 #[derive(Debug, thiserror::Error)]
-pub enum IdeaError {
+pub enum SuggestionError {
     /// No such suggestion for the person, or suggestions are off for them.
     #[error("suggestion not found")]
     NotFound,
@@ -508,7 +496,7 @@ pub enum IdeaError {
     Internal(rootcause::Report),
 }
 
-impl IdeaError {
+impl SuggestionError {
     /// An adapter's error, as an internal one.
     pub fn internal<E: std::error::Error + Send + Sync + 'static>(error: E) -> Self {
         Self::Internal(rootcause::Report::new(error).into_dynamic())

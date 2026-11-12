@@ -1,4 +1,4 @@
-//! Whether a person can open an idea's item, as the owning entity-access
+//! Whether a person can open a suggestion's item, as the owning entity-access
 //! service decides it, and whether a part named with it is one of its own.
 
 use entity_access::domain::models::{AccessError, AccessLevel};
@@ -9,7 +9,7 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 
 use crate::domain::model::Target;
-use crate::domain::ports::IdeaAccess;
+use crate::domain::ports::SuggestionAccess;
 
 #[cfg(test)]
 mod test;
@@ -25,16 +25,16 @@ pub enum ItemAccessError {
     Parts(#[from] sqlx::Error),
 }
 
-/// [`IdeaAccess`] through an [`EntityAccessService`], with parts read from
+/// [`SuggestionAccess`] through an [`EntityAccessService`], with parts read from
 /// the items' own tables.
-pub struct EntityIdeaAccess<S> {
+pub struct EntitySuggestionAccess<S> {
     /// Decides access to the item.
     pub access: S,
     /// Reads which item a part belongs to.
     pub pool: PgPool,
 }
 
-impl<S: EntityAccessService> IdeaAccess for EntityIdeaAccess<S> {
+impl<S: EntityAccessService> SuggestionAccess for EntitySuggestionAccess<S> {
     type Err = ItemAccessError;
 
     async fn can_view(
@@ -65,7 +65,7 @@ impl<S: EntityAccessService> IdeaAccess for EntityIdeaAccess<S> {
 }
 
 /// Whether `part` is a part of `target`'s item: a message of its channel or
-/// of its email thread. Other items have no parts an idea can name.
+/// of its email thread. Other items have no parts a suggestion can name.
 pub(crate) async fn part_of(
     pool: &PgPool,
     target: &Target,

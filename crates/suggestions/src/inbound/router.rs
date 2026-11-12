@@ -1,4 +1,4 @@
-//! The ideas routes: the person's feed and what they do with an idea, and
+//! The suggestions routes: the person's feed and what they do with a suggestion, and
 //! the tools generation sessions call from code mode.
 
 use std::sync::Arc;
@@ -16,19 +16,20 @@ use macro_authorization::{
 use macro_uuid::Uuid;
 
 use crate::domain::model::{
-    IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
+    NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError, SuggestionFeed,
+    SuggestionWriteOutcome, SuggestionsReview,
 };
-use crate::domain::ports::IdeaApi;
+use crate::domain::ports::SuggestionApi;
 
 /// What the suggestions routes share.
-pub struct IdeaRouterState<S, Auth> {
+pub struct SuggestionRouterState<S, Auth> {
     /// The suggestions service.
     pub service: Arc<S>,
     /// Who is calling.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, Auth> Clone for IdeaRouterState<S, Auth> {
+impl<S, Auth> Clone for SuggestionRouterState<S, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
@@ -37,71 +38,80 @@ impl<S, Auth> Clone for IdeaRouterState<S, Auth> {
     }
 }
 
-impl<S, Auth> FromRef<IdeaRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &IdeaRouterState<S, Auth>) -> Self {
+impl<S, Auth> FromRef<SuggestionRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &SuggestionRouterState<S, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// A generation session's agent reaches the domain, which accepts only the
 /// person's own open suggestions sessions.
-impl<S, Auth> FromRef<IdeaRouterState<S, Auth>> for NonUserOwners {
-    fn from_ref(_state: &IdeaRouterState<S, Auth>) -> Self {
+impl<S, Auth> FromRef<SuggestionRouterState<S, Auth>> for NonUserOwners {
+    fn from_ref(_state: &SuggestionRouterState<S, Auth>) -> Self {
         NonUserOwners::Enabled
     }
 }
 
 /// The suggestions routes.
-pub fn idea_router<S, Auth, St>(state: IdeaRouterState<S, Auth>) -> Router<St>
+pub fn suggestion_router<S, Auth, St>(state: SuggestionRouterState<S, Auth>) -> Router<St>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
     St: Send + Sync,
 {
     Router::new()
         .route(
             "/suggestions",
-            get(list_ideas::<S, Auth>).post(suggest_idea::<S, Auth>),
+            get(list_suggestions::<S, Auth>).post(add_suggestion::<S, Auth>),
         )
-        .route("/suggestions/review", get(review_ideas::<S, Auth>))
+        .route("/suggestions/review", get(review_suggestions::<S, Auth>))
         .route(
             "/suggestions/{id}",
-            axum::routing::patch(rewrite_idea::<S, Auth>),
+            axum::routing::patch(rewrite_suggestion::<S, Auth>),
         )
-        .route("/suggestions/{id}/retire", post(retire_idea::<S, Auth>))
-        .route("/suggestions/{id}/accept", post(accept_idea::<S, Auth>))
-        .route("/suggestions/{id}/dismiss", post(dismiss_idea::<S, Auth>))
+        .route(
+            "/suggestions/{id}/retire",
+            post(retire_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/accept",
+            post(accept_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/dismiss",
+            post(dismiss_suggestion::<S, Auth>),
+        )
         .with_state(state)
 }
 
 /// A suggestions call's failure, as an HTTP answer.
-pub enum IdeaApiError {
+pub enum SuggestionApiError {
     /// The body didn't parse.
     InvalidRequest(JsonRejection),
     /// The service refused or failed.
-    Service(IdeaError),
+    Service(SuggestionError),
 }
 
-impl From<IdeaError> for IdeaApiError {
-    fn from(error: IdeaError) -> Self {
+impl From<SuggestionError> for SuggestionApiError {
+    fn from(error: SuggestionError) -> Self {
         Self::Service(error)
     }
 }
 
-impl IntoResponse for IdeaApiError {
+impl IntoResponse for SuggestionApiError {
     fn into_response(self) -> axum::response::Response {
         match self {
             Self::InvalidRequest(rejection) => {
                 // The caller's own input, naming the field it rejected.
                 (StatusCode::BAD_REQUEST, rejection.body_text()).into_response()
             }
-            Self::Service(error @ IdeaError::NotFound) => {
+            Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
-            Self::Service(error @ IdeaError::NotGenerating) => {
+            Self::Service(error @ SuggestionError::NotGenerating) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
-            Self::Service(IdeaError::Internal(report)) => {
+            Self::Service(SuggestionError::Internal(report)) => {
                 tracing::error!(error = ?report, "suggestions call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
@@ -115,19 +125,19 @@ impl IntoResponse for IdeaApiError {
     tag = "suggestions",
     operation_id = "list_suggestions",
     responses(
-        (status = 200, body = Ideas, description = "The caller's open suggestions they can open every item of, best first"),
+        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions they can open every item of, best first"),
         (status = 401, body = String),
         (status = 404, body = String, description = "Suggestions are off for the caller"),
         (status = 500, body = String),
     )
 )]
 /// The caller's feed.
-pub async fn list_ideas<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn list_suggestions<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
-) -> Result<Json<Ideas>, IdeaApiError>
+) -> Result<Json<SuggestionFeed>, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
     Ok(Json(
@@ -154,13 +164,13 @@ where
 /// The caller acts on a suggestion: a background prompt suggestion is taken on; any
 /// other is done once they act on it (open its item, the composer, the
 /// routine), and shows in the feed's `done`.
-pub async fn accept_idea<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn accept_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, IdeaApiError>
+) -> Result<StatusCode, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
     state
@@ -184,13 +194,13 @@ where
     )
 )]
 /// The caller isn't interested in an open suggestion.
-pub async fn dismiss_idea<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn dismiss_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, IdeaApiError>
+) -> Result<StatusCode, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
     state
@@ -206,7 +216,7 @@ where
     tag = "suggestions",
     operation_id = "review_suggestions",
     responses(
-        (status = 200, body = IdeaReview, description = "Every suggestion of the user's, open first, and how many more this generation may add"),
+        (status = 200, body = SuggestionsReview, description = "Every suggestion of the user's, open first, and how many more this generation may add"),
         (status = 401, body = String),
         (status = 403, body = String, description = "Only a suggestions generation session may review"),
         (status = 404, body = String, description = "Suggestions are off for the user"),
@@ -214,12 +224,12 @@ where
     )
 )]
 /// What a suggestions generation session reads before managing suggestions.
-pub async fn review_ideas<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn review_suggestions<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-) -> Result<Json<IdeaReview>, IdeaApiError>
+) -> Result<Json<SuggestionsReview>, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
     // The code-mode invocation the credential names, already validated
@@ -233,9 +243,9 @@ where
     path = "/suggestions",
     tag = "suggestions",
     operation_id = "add_suggestion",
-    request_body = SuggestIdea,
+    request_body = NewSuggestion,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was added or updated, and what to fix when it wasn't"),
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the suggestion was added or updated, and what to fix when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "Only a suggestions generation session may suggest"),
@@ -245,16 +255,16 @@ where
 )]
 /// Add a suggestion from a suggestions generation session, or a new version of the
 /// one with its dedup key.
-pub async fn suggest_idea<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn add_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<SuggestIdea>, JsonRejection>,
-) -> Result<Json<IdeaWriteOutcome>, IdeaApiError>
+    body: Result<Json<NewSuggestion>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
-    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
@@ -270,9 +280,9 @@ where
     tag = "suggestions",
     operation_id = "rewrite_suggestion",
     params(("id" = String, Path, description = "ID of the suggestion")),
-    request_body = RewriteIdea,
+    request_body = RewriteSuggestion,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was rewritten, and what to fix when it wasn't"),
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the suggestion was rewritten, and what to fix when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "Only a suggestions generation session may rewrite"),
@@ -281,17 +291,17 @@ where
     )
 )]
 /// Change an open suggestion from a suggestions generation session.
-pub async fn rewrite_idea<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn rewrite_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     Path(id): Path<Uuid>,
-    body: Result<Json<RewriteIdea>, JsonRejection>,
-) -> Result<Json<IdeaWriteOutcome>, IdeaApiError>
+    body: Result<Json<RewriteSuggestion>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
-    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
@@ -307,9 +317,9 @@ where
     tag = "suggestions",
     operation_id = "retire_suggestion",
     params(("id" = String, Path, description = "ID of the suggestion")),
-    request_body = RetireIdea,
+    request_body = RetireSuggestionRequest,
     responses(
-        (status = 200, body = IdeaWriteOutcome, description = "Whether the suggestion was retired, and why not when it wasn't"),
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the suggestion was retired, and why not when it wasn't"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "Only a suggestions generation session may retire"),
@@ -318,17 +328,17 @@ where
     )
 )]
 /// Retire an open suggestion from a suggestions generation session.
-pub async fn retire_idea<S, Auth>(
-    State(state): State<IdeaRouterState<S, Auth>>,
+pub async fn retire_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     Path(id): Path<Uuid>,
-    body: Result<Json<RetireIdea>, JsonRejection>,
-) -> Result<Json<IdeaWriteOutcome>, IdeaApiError>
+    body: Result<Json<RetireSuggestionRequest>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
 where
-    S: IdeaApi,
+    S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
-    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state

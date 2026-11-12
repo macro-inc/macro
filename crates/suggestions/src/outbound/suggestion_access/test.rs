@@ -72,7 +72,7 @@ async fn email_link(pool: &PgPool) -> Uuid {
     id
 }
 
-/// An idea names a part only together with the item it belongs to.
+/// A suggestion names a part only together with the item it belongs to.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_part_counts_only_with_its_own_item(pool: PgPool) {
     let (channel, other_channel) = (channel(&pool).await, Uuid::now_v7());
@@ -105,7 +105,7 @@ async fn a_part_counts_only_with_its_own_item(pool: PgPool) {
             false,
         ),
         (target(EntityType::Channel, channel), part(mail), false),
-        // Other items have no parts an idea can name.
+        // Other items have no parts a suggestion can name.
         (target(EntityType::Document, channel), part(message), false),
         (
             target(EntityType::Channel, channel),

@@ -54,8 +54,8 @@ fn targets_are_bounded_and_named_by_id() {
 }
 
 #[test]
-fn a_new_ideas_kind_has_its_own_fields_only() {
-    let request = |kind: KindName| SuggestIdea {
+fn a_new_suggestions_kind_has_its_own_fields_only() {
+    let request = |kind: KindName| NewSuggestion {
         kind,
         dedup_key: "k".to_owned(),
         title: "t".to_owned(),

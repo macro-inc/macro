@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Ideas: each person's feed of proactive suggestions, written and managed
+//! Suggestions: each person's feed of proactive suggestions, written and managed
 //! by hidden generation sessions through tools (`macro.suggestions.*`), and read
 //! and acted on by the person.
 

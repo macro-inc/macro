@@ -1,4 +1,4 @@
--- An suggestion is its base row plus exactly one row of its kind. Whatever deletes
+-- A suggestion is its base row plus exactly one row of its kind. Whatever deletes
 -- the kind's row (a deleted routine suggestion cascading into suggestion_routine, a
 -- cleanup, a deleted user) deletes the suggestion with it, so no base row is left
 -- without its kind.

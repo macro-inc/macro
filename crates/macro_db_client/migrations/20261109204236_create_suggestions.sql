@@ -1,5 +1,5 @@
 -- Suggestions: each person's feed of proactive suggestions, written and managed by
--- hidden generation sessions through tools. An suggestion is one of three kinds,
+-- hidden generation sessions through tools. A suggestion is one of three kinds,
 -- fixed for its life: a prompt to run, a note about specific items, or a
 -- pointer to a routine suggestion. The base row holds what the feed sorts,
 -- filters and shows; each kind keeps its own data in a child table.
@@ -36,7 +36,7 @@ CREATE TABLE suggestion_generation_session (
     generation_id uuid NOT NULL REFERENCES suggestion_generation (id) ON DELETE CASCADE,
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
     agent_id text NOT NULL,
-    kind text NOT NULL CHECK (kind IN ('ideas', 'routines')),
+    kind text NOT NULL CHECK (kind IN ('suggestions', 'routines')),
     -- The surfaces a routines session suggests for; empty for suggestions.
     surfaces text[] NOT NULL DEFAULT '{}',
     opened_at timestamptz NOT NULL,
@@ -109,7 +109,7 @@ CREATE TABLE suggestion_routine (
     FOREIGN KEY (suggestion_id, kind) REFERENCES suggestion (id, kind) ON DELETE CASCADE
 );
 
--- The items an suggestion is about, what a run of it produced, and the draft it
+-- The items a suggestion is about, what a run of it produced, and the draft it
 -- made. Indexed by item, so an event about one finds its suggestions.
 CREATE TABLE suggestion_target (
     suggestion_id uuid NOT NULL REFERENCES suggestion (id) ON DELETE CASCADE,
@@ -124,7 +124,7 @@ CREATE TABLE suggestion_target (
 
 CREATE INDEX suggestion_target_entity_idx ON suggestion_target (entity_type, entity_id);
 
--- Every change a generation session made to an suggestion or a routine suggestion,
+-- Every change a generation session made to a suggestion or a routine suggestion,
 -- for us, never shown to the person: what, how, the values before and after,
 -- and the session's reason.
 CREATE TABLE suggestion_change (
