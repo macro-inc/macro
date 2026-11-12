@@ -5,9 +5,9 @@
 import { SQL } from 'bun';
 
 import type { Case, Context, DraftResult, Effects, Fire } from './cases';
-import { setTaskStatus } from './setup';
+import { seedId, setTaskStatus } from './setup';
 import { type Stack, call, sdk } from './stack';
-import { OWNER, PERSON_KEYS, userId } from './workspace';
+import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
 
 /** Tokens for every seeded person, by key. */
 export type Tokens = Record<string, string>;
@@ -34,6 +34,8 @@ export async function listRoutines(at: Stack, token: string): Promise<SavedRouti
 
 /** Seeded ids start with the seed CLI's prefix; anything else the eval or a routine made. */
 const SEEDED = '5eed';
+/** This scenario's seeded ids: the prefix and two bytes of the scenario's name. */
+const OURS = seedId(SCENARIO_NAME, '', '').slice(0, 8);
 
 const personOf = (sender: string) =>
   PERSON_KEYS.find((key) => userId(key) === sender) ?? sender;
@@ -71,7 +73,7 @@ export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string
   const messages = await db`
     select id, sender_id, parent_entity_id as channel from comms_messages
     where deleted_at is null and id::text not like ${`${SEEDED}%`} and parent_entity_type = 'channel'
-      and (parent_entity_id::text like ${`${SEEDED}%`} or sender_id like ${'%@routines-eval.seed.macro.local'})`;
+      and (parent_entity_id::text like ${`${OURS}%`} or sender_id like ${'%@routines-eval.seed.macro.local'})`;
   for (const message of messages as { id: string; sender_id: string; channel: string }[]) {
     // The sender can delete their message; the owner owns every seeded channel.
     const person = personOf(message.sender_id);
@@ -81,6 +83,14 @@ export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string
     } catch {
       await sdk(at, owner).channels.byId(message.channel).message(message.id).delete();
     }
+    removed++;
+  }
+  // A channel a draft made (#marketing, say) would give a later draft a match the case says isn't there.
+  const channels = await db`
+    select id from comms_channels
+    where owner_id = ${userId(OWNER)} and channel_type <> 'direct_message' and id::text not like ${`${OURS}%`}`;
+  for (const { id } of channels as { id: string }[]) {
+    await macro.channels.byId(id).delete();
     removed++;
   }
   return removed;
@@ -185,22 +195,28 @@ export async function runCheck(
   }
   let runs: Effects['runs'] = [];
   let timedOut = false;
-  if (!error) {
-    for (;;) {
-      runs = await runsSince(at, owner, routine.id, t0);
-      if (runs.length) break;
-      if (performance.now() - started > RUN_TIMEOUT_MS) {
-        timedOut = true;
-        break;
+  let ms = 0;
+  let effects: Effects;
+  try {
+    if (!error) {
+      for (;;) {
+        runs = await runsSince(at, owner, routine.id, t0);
+        if (runs.length) break;
+        if (performance.now() - started > RUN_TIMEOUT_MS) {
+          timedOut = true;
+          break;
+        }
+        await Bun.sleep(2000);
       }
-      await Bun.sleep(2000);
     }
+    ms = performance.now() - started;
+    if (runs.length) await Bun.sleep(SETTLE_MS);
+    effects = await read(db, context, t0, firedMessage);
+    effects.runs = runs.length ? await runsSince(at, owner, routine.id, t0) : runs;
+  } finally {
+    // Left changed, the task couldn't fire the next draft's run.
+    await restore?.().catch(() => undefined);
   }
-  const ms = performance.now() - started;
-  if (runs.length) await Bun.sleep(SETTLE_MS);
-  const effects = await read(db, context, t0, firedMessage);
-  effects.runs = runs.length ? await runsSince(at, owner, routine.id, t0) : runs;
-  await restore?.().catch(() => undefined);
   return {
     says: item.run.says,
     fired: fire.type,

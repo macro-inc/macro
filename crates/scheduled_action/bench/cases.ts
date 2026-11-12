@@ -27,10 +27,11 @@ export type Case = {
   /** What a good draft does, checked on the returned draft. */
   expect: Expectation[];
   /**
-   * Whether asking the person instead of drafting is right: a name with no
-   * single match. A bare session that asks passes; a draft must leave it out.
+   * Asking the person instead of drafting is right here: a name with no
+   * single match, which the question must mention. A bare session that asks
+   * passes; a draft must leave the name out.
    */
-  asking?: boolean;
+  asking?: RegExp;
   /** How to run the drafted routine once, and what the run must do. */
   run?: RunCheck;
 };
@@ -177,7 +178,7 @@ function local(date: Date, timezone: string) {
 const once = (daysAhead: number, hour: number, minute: number): Expectation => ({
   says: `runs once, ${daysAhead === 1 ? 'tomorrow' : `in ${daysAhead} days`} at ${hour}:${String(minute).padStart(2, '0')}`,
   holds: (draft, { now, timezone }) => {
-    const want = local(new Date(now.getTime() + daysAhead * 86_400_000), timezone);
+    const want = { ...local(new Date(now.getTime() + daysAhead * 86_400_000), timezone), hour, minute };
     const trigger = draft.trigger as { type?: string; at?: string; schedule?: string; timezone?: string } | undefined;
     if (trigger?.type === 'once' && trigger.at) {
       const got = local(new Date(trigger.at), timezone);
@@ -257,15 +258,29 @@ const stepKind = (kind: 'code' | 'agent'): Expectation => ({
 
 // ---------- run checks ----------
 
+/** A run that did its steps: a condition that wasn't met still records a success. */
+const didRun = (run: Effects['runs'][number]) =>
+  run.isSuccess && (run.result as { condition?: { status?: string } } | null)?.condition?.status !== 'not_met';
+
+/**
+ * Notifications the routine sent itself. Left out: one per message (the
+ * message is read already, and the fired one must not count), the run's own
+ * finished notice, which names the routine, and the agent chat's replies.
+ */
+const ownNotification = (metadata: string) => {
+  const parsed = JSON.parse(metadata) as Record<string, unknown> | null;
+  return !(parsed && ('messageId' in parsed || 'routineId' in parsed || 'excerpt' in parsed));
+};
+
 const said = (effects: Effects) =>
   [
     ...effects.messages.map((message) => message.text),
     ...effects.tasks.map((task) => `${task.name}\n${task.text}`),
-    ...effects.notifications,
-    ...effects.runs.map((run) => text(run.result)),
+    ...effects.notifications.filter(ownNotification),
+    ...effects.runs.filter(didRun).map((run) => text(run.result)),
   ].join('\n');
 
-const ran = (effects: Effects) => effects.runs.some((run) => run.isSuccess);
+const ran = (effects: Effects) => effects.runs.some(didRun);
 
 /** The run succeeded and something it produced, anywhere, matches every pattern. */
 const reports =
@@ -383,7 +398,7 @@ export const CASES: Case[] = [
     id: 'missing-channel-left-out',
     kind: 'routine',
     code: true,
-    asking: true,
+    asking: /marketing/i,
     text: 'Every Monday at 9am, post the open tasks in the Q4 Launch project to the #marketing channel.',
     expect: [
       drafted,
@@ -491,7 +506,7 @@ export const CASES: Case[] = [
     id: 'two-jordans',
     kind: 'routine',
     code: true,
-    asking: true,
+    asking: /jordan/i,
     text: 'Every Thursday at 10am, DM Jordan the open tasks assigned to them.',
     expect: [
       drafted,
