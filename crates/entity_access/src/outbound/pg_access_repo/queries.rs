@@ -48,7 +48,11 @@ mod viewer;
 pub(crate) use viewer::{Viewer, team_bot_viewer};
 
 #[cfg(test)]
+mod source_list_oracle;
+#[cfg(test)]
 mod test;
+#[cfg(test)]
+pub(crate) mod test_viewers;
 #[cfg(test)]
 mod typed_owner_test;
 

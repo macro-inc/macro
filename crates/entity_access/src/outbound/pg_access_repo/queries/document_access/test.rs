@@ -1,4 +1,8 @@
 use super::*;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 #[cfg(feature = "explain_binary")]
 use macro_user_id::user_id::MacroUserIdStr;
@@ -726,4 +730,60 @@ async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<
         } if *id == owner_team_id
     )));
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_document")
+    )
+)]
+async fn document_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let documents = sqlx::query_scalar!(r#"SELECT id FROM "Document" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+    let (current, legacy): (Vec<_>, Vec<_>) = documents
+        .into_iter()
+        .partition(|id| id.parse::<Uuid>().is_ok());
+    let current: Vec<Uuid> = current
+        .iter()
+        .map(|id| id.parse())
+        .collect::<Result<_, _>>()?;
+
+    assert_matrix_agrees(&viewers, &current, async |viewer, document_id| {
+        let user_id = viewer.user_id();
+        Ok((
+            source_list_oracle::get_document_access(
+                &pool,
+                document_id,
+                &viewer.sources,
+                user_id.as_deref(),
+            )
+            .await?,
+            get_document_access(&pool, document_id, viewer.viewer()).await?,
+        ))
+    })
+    .await?;
+
+    // Only users reach legacy documents: a team scope checks uuids alone.
+    let users: Vec<_> = viewers
+        .into_iter()
+        .filter(|viewer| viewer.viewer().scope_team().is_none())
+        .collect();
+    assert_matrix_agrees(&users, &legacy, async |viewer, document_id| {
+        let user_id = viewer.user_id();
+        Ok((
+            source_list_oracle::get_legacy_document_access(
+                &pool,
+                document_id,
+                &viewer.sources,
+                user_id.as_deref(),
+            )
+            .await?,
+            get_legacy_document_access(&pool, document_id, viewer.viewer().user_id()).await?,
+        ))
+    })
+    .await
 }
