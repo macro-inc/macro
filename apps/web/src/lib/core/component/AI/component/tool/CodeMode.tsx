@@ -4,6 +4,8 @@ import { createToolRenderer } from './ToolRenderer';
 
 // People never see that the agent works in code: its lookups render nothing,
 // and an execution reads as work in the workspace, without its program or result.
+// These cover the chat host's RenderTool; agent sessions skip lookups in
+// ToolCallPart (`isCodeModeSupportCall`) and render code runs in CodeExecutionPart.
 
 export const describeCodeToolsHandler = createToolRenderer({
   name: 'DescribeCodeTools',

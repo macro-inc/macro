@@ -1832,7 +1832,7 @@ its turn ends reads **Stopped**; a failed call is faded with **Failed** in the f
 color after its label (for example **Add to calendar Failed**), and when the
 tool gave a reason, the row's caret opens it. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
-tool's name. Labels stay in the present tense (**Fetch**, **Load tools**) until
+tool's name. Labels stay in the present tense (**Fetch**, **Read email**) until
 a result arrives.
 
 Only tools with a supported result view can expand. Unknown tools, unsupported

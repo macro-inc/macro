@@ -210,9 +210,56 @@ fn code_mode_lookups_are_not_steps() {
             },
         ),
     ];
-    let segments = segments(&parts, true);
+    assert_eq!(kinds(&segments(&parts, true)), []);
+
+    // Between two steps, a lookup neither splits the run nor adds a row.
+    let between = [
+        run("a", "ls", ToolStatus::Completed),
+        parts[0].clone(),
+        run("b", "pwd", ToolStatus::Completed),
+    ];
+    let segments = segments(&between, true);
     assert_eq!(kinds(&segments), [(SegmentKind::Activity, true)]);
-    assert_eq!(segments[0].rows, []);
+    assert_eq!(segments[0].rows.len(), 2);
+}
+
+#[test]
+fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
+    let code = |status: ToolStatus| MessagePart::ToolUse {
+        id: ToolUseId("code-3".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: None,
+            error: None,
+        },
+    };
+    let row = |status: ToolStatus, closed: bool| {
+        let row = segments(&[code(status)], closed)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    assert_eq!(
+        row(ToolStatus::Running, false),
+        (
+            "Working in your workspace".to_owned(),
+            ActivityStatus::Running
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Running, true),
+        (
+            "Worked in your workspace".to_owned(),
+            ActivityStatus::Interrupted
+        )
+    );
+    assert_eq!(
+        row(ToolStatus::Failed, true),
+        ("Workspace step failed".to_owned(), ActivityStatus::Failed)
+    );
 }
 
 #[test]

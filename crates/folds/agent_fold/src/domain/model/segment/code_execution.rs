@@ -1,26 +1,28 @@
-//! SDK activity carried by the internal code tool's receipt, independent of harness.
+//! How code-mode calls read in a conversation, independent of harness.
 //!
 //! People never see that the agent writes code: a code execution reads as the
-//! workspace steps it took, and the tools it uses to find its way around are
-//! not steps at all.
+//! SDK activity its receipt carries, and the agent's lookups of its own tools
+//! are not steps at all.
 
 use serde::Deserialize;
 
 use super::{ActivityRow, ActivityStatus, ToolDetail, ToolName, ToolStatus};
 
-/// The agent's own lookups for working in code: no row of their own.
-const SUPPORT_TOOLS: [&str; 4] = [
+/// The agent looking up its own tools: code-mode discovery and deferred-tool
+/// search. Like a thought, it belongs to no segment and makes no row.
+const LOOKUP_TOOLS: [&str; 4] = [
     "DescribeCodeTools",
     "ReadCodeDocs",
     "SearchTools",
     "LoadTools",
 ];
 
-fn is_macro_tool(name: &ToolName, tools: &[&str]) -> bool {
+pub(super) fn is_tool_lookup(name: &ToolName) -> bool {
     match name {
-        ToolName::Native { name } => tools.contains(&name.as_str()),
+        ToolName::Native { name } => LOOKUP_TOOLS.contains(&name.as_str()),
         ToolName::Mcp { server, tool } => {
-            matches!(server.as_str(), "macro" | "macro_internal") && tools.contains(&tool.as_str())
+            matches!(server.as_str(), "macro" | "macro_internal")
+                && LOOKUP_TOOLS.contains(&tool.as_str())
         }
     }
 }
@@ -51,7 +53,7 @@ pub(super) fn rows(
     detail: &ToolDetail,
     closed: bool,
 ) -> Option<Vec<ActivityRow>> {
-    if is_macro_tool(name, &SUPPORT_TOOLS) {
+    if is_tool_lookup(name) {
         return Some(Vec::new());
     }
     if !matches!(name, ToolName::Mcp { server, tool } if server == "macro_internal" && tool == "ExecuteCode")
