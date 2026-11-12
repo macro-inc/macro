@@ -36,11 +36,15 @@ nearly all of it. So:
   the limit it skips the export and makes no calls; the collector stops at the
   same line. Otherwise it lists the run's jobs once, for both the collector and
   its own checks of the upstream action's limits.
-- The trace step runs only when a job ran: a trace of skipped jobs costs two
-  calls and shows nothing. The preflight also checks every field the pinned
-  trace action asserts, since that action retries a failed assertion, and an API
-  error, up to 240 times at two calls a try. An API error during the trace can
-  still start that loop.
+- The trace step runs only on an attempt the pinned trace action can represent.
+  That action retries a failed assertion, and an API error, up to 240 times at
+  two calls a try, and sends a job that ends before it starts as a broken span,
+  so the preflight checks first. When it refuses, the exporter still ends green,
+  without an annotation, and the `export` line's `untraced` says why. The
+  common reason is `job_never_ran`: GitHub dates a skipped job, or one
+  cancelled before it started, as completed a second before it started, and most
+  PR CI runs skip some jobs. An API error during the trace can still start the
+  retry loop.
 
 An exporter run costs one call to list jobs, two for the trace, and, on a PR
 event, one to list the head's runs. The run that completes a push adds one call
@@ -60,7 +64,7 @@ without a parser; each line's `trace_id` links to the run's trace.
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
 | `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
-| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, and `skipped` (`budget`, `no_listing`) when it made no calls |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, `skipped` (`budget`, `no_listing`) when it made no calls, and `untraced` when it sent no trace (`no_job_ran`, `job_never_ran`, `job_unfinished`, `no_conclusion`, `step_timing`, `duplicate_name`, `over_100_jobs`, `over_511_spans`) |
 
 `pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
 `other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
