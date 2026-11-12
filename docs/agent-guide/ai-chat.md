@@ -1909,11 +1909,15 @@ in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
-("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+("Searching your workspace…", "Reading your emails…") with a cheap model and
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls; a settled run reads **Used N tools**.
+or the newest run while the agent thinks between calls. The line carries no
+count (the server drops a trailing "(N)" the model adds), and it is the turn's
+only working indicator: no separate working row shows under it. Without a line,
+the indicator is the group's own **Using N tools** while a call runs, or a single
+**Working** row between calls. The caret still opens the raw calls; a
+settled run reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is
