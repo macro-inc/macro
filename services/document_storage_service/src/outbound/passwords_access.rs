@@ -81,6 +81,7 @@ impl<I: NotificationIngress, B> PasswordAccessDelivery<I, B> {
                 .with_conn_gateway(),
             )
             .await
+            .map(|_| ())
             .map_err(|_| Error::Unavailable)
     }
 }
