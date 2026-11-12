@@ -25,6 +25,7 @@ export class AccountManagerNamespace {
 
   /**
    * Ask to manage `user`'s account, in your DM. The caller must be an agent account and `user` a person.
+   * The agent account asks with its own credential; an agent's program (a code-mode run, or a token signed for an agent) is refused (403).
    *
    * @write
    */
@@ -34,6 +35,7 @@ export class AccountManagerNamespace {
 
   /**
    * Ask `user`, an agent account, to manage the caller's account, in your DM. The caller must be a person.
+   * An agent's program (a code-mode run, or a token signed for an agent) is refused (403): the person asks in Macro.
    *
    * @write
    */

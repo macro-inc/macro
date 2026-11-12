@@ -51,7 +51,10 @@ export class Webhook extends MacroEntity<WebhookRecord> {
     );
   }
 
-  /** Register a webhook. */
+  /**
+   * Register a webhook. An agent's program (a code-mode run, or a token signed for an agent) is refused (403): ask the user to set the
+   * webhook up in Macro's settings.
+   */
   static async create(
     client: MacroClient,
     opts: {
@@ -134,7 +137,7 @@ export class Webhook extends MacroEntity<WebhookRecord> {
   }
 
   /**
-   * Update the webhook.
+   * Update the webhook. An agent's program (a code-mode run, or a token signed for an agent) is refused (403).
    *
    * @write
    * @idempotent

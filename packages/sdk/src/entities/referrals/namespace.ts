@@ -39,7 +39,8 @@ export class ReferralNamespace {
    * from a document, email or message unless the user named it. Sends are
    * rate limited to about 50 an hour, and a refused send throws, so report
    * which addresses were not invited. To add someone to the caller's team
-   * instead, use `Team.invite`.
+   * instead, use `Team.invite`. An agent's program (a code-mode run, or a token signed for an agent) is refused (403): ask the user
+   * to invite them from Macro.
    *
    * @param email - The address to invite.
    *

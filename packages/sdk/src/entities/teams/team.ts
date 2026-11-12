@@ -99,6 +99,9 @@ export class Team extends MacroEntity<TeamRecord> {
    * a paid seat when the team has a subscription. An existing account keeps its
    * type and accepts like any other invite.
    *
+   * An agent's program (a code-mode run, or a token signed for an agent) is refused (403): ask the user to invite them from the team
+   * settings in Macro.
+   *
    * @param emails - One address or a list of addresses to invite.
    * @param options - `agent` invites the addresses as agents.
    * @returns `true` when at least one new invite was sent, `false` when every
