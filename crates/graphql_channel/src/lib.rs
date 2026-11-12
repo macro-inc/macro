@@ -1,6 +1,16 @@
-//! GraphQL inbound mutation adapter for channel activity.
+//! GraphQL inbound adapter for channel messages and activity.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
+
+mod inputs;
+mod objects;
+mod reads;
+mod user_query;
+
+pub use inputs::{ChannelChangesInput, ChannelThreadInput, ChannelTimelineInput};
+pub use objects::*;
+pub use reads::ChannelGraphqlContext;
+pub use user_query::GraphqlChannelQuery;
 
 #[cfg(test)]
 mod test;
@@ -202,4 +212,36 @@ where
 
         Ok(GraphqlChannelActivity(activity))
     }
+}
+
+/// Transport validation error with the shared GraphQL code.
+fn bad_input(message: impl Into<String>) -> async_graphql::Error {
+    use async_graphql::ErrorExtensions;
+    async_graphql::Error::new(message.into()).extend_with(|_, e| e.set("code", "BAD_USER_INPUT"))
+}
+
+/// Preserve REST's error categories without leaking persistence details.
+fn message_error(error: messages::domain::ports::MessageError) -> async_graphql::Error {
+    use async_graphql::ErrorExtensions;
+    use messages::domain::ports::MessageError;
+    let (message, code) = match error {
+        MessageError::NotFound => ("message or parent not found", "NOT_FOUND"),
+        MessageError::Forbidden => ("forbidden", "FORBIDDEN"),
+        MessageError::Invalid(message) => (message, "BAD_USER_INPUT"),
+        MessageError::Conflict => ("message id already exists", "CONFLICT"),
+        MessageError::Contended(_) => (
+            "conversation is busy; retry the request",
+            "SERVICE_UNAVAILABLE",
+        ),
+        MessageError::Repository(error) => {
+            tracing::error!(error = ?error, "channel read failed");
+            ("channel read is unavailable", "INTERNAL_SERVER_ERROR")
+        }
+    };
+    async_graphql::Error::new(message).extend_with(|_, e| e.set("code", code))
+}
+
+/// Apply this adapter's validation code to the shared UUID parser.
+fn parse_read_id(id: ID, field: &str) -> async_graphql::Result<Uuid> {
+    graphql_common::parse_id(id, field).map_err(|_| bad_input(format!("invalid {field}")))
 }

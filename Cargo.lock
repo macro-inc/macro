@@ -9261,7 +9261,11 @@ dependencies = [
  "entity_access",
  "graphql_common",
  "macro_user_id",
+ "messages",
+ "nom 8.0.0",
+ "serde_json",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
