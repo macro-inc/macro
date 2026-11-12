@@ -1,0 +1,23 @@
+mutation SendChannelMessage($input: SendChannelMessageInput!) {
+	sendChannelMessage(input: $input) {
+		...ChannelMessageFields
+	}
+}
+
+mutation EditChannelMessage($input: EditChannelMessageInput!) {
+	editChannelMessage(input: $input) {
+		...ChannelMessageFields
+	}
+}
+
+mutation DeleteChannelMessage($input: DeleteChannelMessageInput!) {
+	deleteChannelMessage(input: $input) {
+		...ChannelMessageFields
+	}
+}
+
+mutation ReactToChannelMessage($input: ReactToChannelMessageInput!) {
+	reactToChannelMessage(input: $input) {
+		...ChannelMessageFields
+	}
+}

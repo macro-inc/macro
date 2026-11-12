@@ -153,6 +153,50 @@ describe('GraphQL mutation retries', () => {
     });
   });
 
+  describe('channel message writes', () => {
+    const refusal = (code: string) =>
+      new CombinedError({
+        graphQLErrors: [{ message: 'refused', extensions: { code } }],
+      });
+    const write = (operationName: string) => ({
+      transactionId: '1',
+      uuid: crypto.randomUUID(),
+      operationName,
+    });
+
+    it.each([
+      'SendChannelMessage',
+      'EditChannelMessage',
+      'DeleteChannelMessage',
+      'ReactToChannelMessage',
+    ])('retries a busy channel on %s three times, then gives up', (name) => {
+      const mutation = write(name);
+      for (const expected of [true, true, true, false]) {
+        expect(
+          shouldRetryGraphqlMutation(refusal('SERVICE_UNAVAILABLE'), mutation)
+        ).toBe(expected);
+      }
+    });
+
+    it.each(['FORBIDDEN', 'NOT_FOUND', 'BAD_USER_INPUT', 'INTERNAL'])(
+      'does not retry a %s refusal',
+      (code) => {
+        expect(
+          shouldRetryGraphqlMutation(refusal(code), write('SendChannelMessage'))
+        ).toBe(false);
+      }
+    );
+
+    it('does not retry a busy answer on any other mutation', () => {
+      expect(
+        shouldRetryGraphqlMutation(
+          refusal('SERVICE_UNAVAILABLE'),
+          write('RecordChannelActivity')
+        )
+      ).toBe(false);
+    });
+  });
+
   it('does not retry a response that also contains a permanent rejection', () => {
     expect(
       shouldRetryGraphqlMutation(

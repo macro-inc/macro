@@ -7,53 +7,78 @@ type QueuedMutation = Pick<
   'transactionId' | 'uuid' | 'operationName'
 >;
 
-const DRAFT_WRITES = ['SaveEmailDraft', 'DeleteEmailDraft'];
-// The queue head blocks every write behind it while it retries, so a draft
-// write the server keeps faulting gives up after a few seconds of backoff.
-const MAX_DRAFT_SERVER_FAULT_RETRIES = 2;
+/** A refusal the server answers before writing anything, worth sending again. */
+type RefusalRetry = {
+  operations: readonly string[];
+  code: string;
+  attempts: number;
+};
+
+// The queue head blocks every write behind it while it retries, so a write
+// the server keeps refusing gives up after a few seconds of backoff.
+const REFUSAL_RETRIES: readonly RefusalRetry[] = [
+  // A draft write is a full-state upsert (or an idempotent delete) under its
+  // own handle, so sending it again after the server faulted is safe.
+  {
+    operations: ['SaveEmailDraft', 'DeleteEmailDraft'],
+    code: 'INTERNAL',
+    attempts: 2,
+  },
+  // The channel write guard turns a write away before it runs when too many
+  // are in flight for the channel, and asks for another try.
+  {
+    operations: [
+      'SendChannelMessage',
+      'EditChannelMessage',
+      'DeleteChannelMessage',
+      'ReactToChannelMessage',
+    ],
+    code: 'SERVICE_UNAVAILABLE',
+    attempts: 3,
+  },
+];
 const MAX_TRACKED_WRITES = 256;
-/** Server faults in a row for each queued draft write. */
-const draftFaults = new Map<string, number>();
-// Transaction ids restart when the cache is rebuilt; the draft's key does not.
+/** Retried refusals in a row for each queued write. */
+const refusals = new Map<string, number>();
+// Transaction ids restart when the cache is rebuilt; the write's key does not.
 const writeKey = (mutation: QueuedMutation) =>
   `${mutation.uuid}:${mutation.transactionId}`;
 
-/**
- * A draft write is a full-state upsert (or an idempotent delete) under its own
- * handle, so sending it again after the server faulted is safe.
- */
-function retriesDraftServerFault(
+function retriesRefusal(
   error: CombinedError,
   mutation: QueuedMutation
 ): boolean {
-  if (
-    !DRAFT_WRITES.includes(mutation.operationName ?? '') ||
-    !error.graphQLErrors.every((entry) => entry.extensions.code === 'INTERNAL')
-  )
-    return false;
+  const retry = REFUSAL_RETRIES.find(
+    (entry) =>
+      entry.operations.includes(mutation.operationName ?? '') &&
+      error.graphQLErrors.every(
+        (refusal) => refusal.extensions.code === entry.code
+      )
+  );
+  if (!retry) return false;
 
-  const faults = (draftFaults.get(writeKey(mutation)) ?? 0) + 1;
-  if (faults > MAX_DRAFT_SERVER_FAULT_RETRIES) return false;
+  const count = (refusals.get(writeKey(mutation)) ?? 0) + 1;
+  if (count > retry.attempts) return false;
 
   // Writes that later succeed never report back; keep their counts bounded.
-  if (draftFaults.size >= MAX_TRACKED_WRITES) draftFaults.clear();
-  draftFaults.set(writeKey(mutation), faults);
+  if (refusals.size >= MAX_TRACKED_WRITES) refusals.clear();
+  refusals.set(writeKey(mutation), count);
   return true;
 }
 
 /**
  * Retry transport failures. Application errors release the queue head, except
- * a server fault on an email draft write, which is retried twice in a row.
+ * a server fault on an email draft write (retried twice in a row) and a busy
+ * channel turning a message write away (retried three times in a row).
  */
 export function shouldRetryGraphqlMutation(
   error: CombinedError,
   mutation?: QueuedMutation
 ): boolean {
   const refused = error.graphQLErrors.length > 0;
-  if (refused && mutation && retriesDraftServerFault(error, mutation))
-    return true;
+  if (refused && mutation && retriesRefusal(error, mutation)) return true;
 
-  // Any other failure ends the write's run of server faults.
-  if (mutation) draftFaults.delete(writeKey(mutation));
+  // Any other failure ends the write's run of retried refusals.
+  if (mutation) refusals.delete(writeKey(mutation));
   return !refused && isTransientRequestError(error);
 }

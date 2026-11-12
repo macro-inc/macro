@@ -37,6 +37,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { MessageNonceKeys } from './keys';
+import { channelCacheHost } from './local/flag';
+import {
+  deleteChannelMessage,
+  editChannelMessage,
+  sendChannelMessage,
+} from './local/writes';
 import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
@@ -437,6 +443,23 @@ export function useSendMessageMutation(
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
       const parent = vars.parentSpan ?? Telemetry.captureContext();
+      // With the device cache serving channels, the write goes through its
+      // durable queue, which keeps it across a lost connection or a reload.
+      const host =
+        vars.parent.type === 'channel' && !vars.message.anchor
+          ? channelCacheHost()
+          : undefined;
+      if (host) {
+        const channelId = vars.parent.id;
+        return parent.run(() =>
+          sendChannelMessage(host, {
+            channelId,
+            id: vars.optimisticId,
+            senderId: vars.senderId,
+            message: vars.message,
+          })
+        );
+      }
       try {
         return await parent.run(() =>
           entityMessagesClient.post(vars.parent, {
@@ -590,6 +613,15 @@ export function useDeleteMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
+      const host =
+        vars.parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return deleteChannelMessage(host, {
+          channelId: vars.parent.id,
+          id: vars.messageID,
+          nonce: deleteNonce.use(vars),
+        });
+      }
       return entityMessagesClient.delete(
         vars.parent,
         vars.messageID,
@@ -673,6 +705,19 @@ export function usePatchMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
+      const host =
+        vars.parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return editChannelMessage(host, {
+          channelId: vars.parent.id,
+          id: vars.messageID,
+          content: vars.content,
+          mentions: vars.mentions,
+          removeAttachmentIds: vars.attachmentIDsToDelete ?? [],
+          addAttachments: vars.attachmentsToAdd ?? [],
+          nonce: patchNonce.use(vars),
+        });
+      }
       return entityMessagesClient.patch(vars.parent, vars.messageID, {
         content: vars.content,
         mentions: vars.mentions,
