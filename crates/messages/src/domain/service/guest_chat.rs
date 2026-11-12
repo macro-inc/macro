@@ -682,7 +682,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
     ) -> Result<Message, MessageError> {
         let actor = self.guest_actor(call_id, token).await?;
         let parent = MessageParent::Call(call_id);
-        let current = self.messages.active_message(&parent, id, false).await?;
+        let current = self
+            .messages
+            .active_message(&EntityAccessAuth::Unauthenticated, &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
@@ -732,7 +735,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
     ) -> Result<(), MessageError> {
         let actor = self.guest_actor(call_id, token).await?;
         let parent = MessageParent::Call(call_id);
-        let current = self.messages.active_message(&parent, id, false).await?;
+        let current = self
+            .messages
+            .active_message(&EntityAccessAuth::Unauthenticated, &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
@@ -763,7 +769,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
     ) -> Result<Message, MessageError> {
         let actor = self.guest_actor(call_id, token).await?;
         let parent = MessageParent::Call(call_id);
-        let current = self.messages.active_message(&parent, id, false).await?;
+        let current = self
+            .messages
+            .active_message(&EntityAccessAuth::Unauthenticated, &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
