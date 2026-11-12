@@ -64,13 +64,24 @@ export function RoutinesList(props: {
     setShowState(next);
   };
   let list: HTMLDivElement | undefined;
+  const matches = (row: RoutineRow) =>
+    (showing() !== 'on' || row.enabled) &&
+    `${row.name} ${row.when} ${row.does}`
+      .toLowerCase()
+      .includes(search().trim().toLowerCase());
+  // A routine shows for its own match or for one of what its runs created.
   const filtered = () =>
-    props.rows.filter(
-      (row) =>
-        (showing() !== 'on' || row.enabled) &&
-        `${row.name} ${row.when} ${row.does}`
-          .toLowerCase()
-          .includes(search().trim().toLowerCase())
+    props.rows.filter((row) => matches(row) || row.children.some(matches));
+  const [expanded, setExpanded] = createSignal<string[]>([]);
+  const isExpanded = (row: RoutineRow) =>
+    expanded().includes(row.id) ||
+    // A search that finds only a sub-routine shows it.
+    (Boolean(search().trim()) && !matches(row));
+  const expand = (id: string, open: boolean) =>
+    setExpanded((ids) =>
+      open
+        ? [...ids.filter((other) => other !== id), id]
+        : ids.filter((other) => other !== id)
     );
   const groups = () =>
     (
@@ -188,6 +199,8 @@ export function RoutinesList(props: {
               search={search()}
               show={showing()}
               groups={groups()}
+              isExpanded={isExpanded}
+              onExpand={expand}
               empty={!filtered().length}
               listRef={(element) => (list = element)}
               onOpenDiscover={() => setShow('discover')}
@@ -210,6 +223,8 @@ function RoutinesTable(props: {
   search: string;
   show: ListTab;
   groups: { key: string; title: string; rows: RoutineRow[] }[];
+  isExpanded(row: RoutineRow): boolean;
+  onExpand(id: string, expanded: boolean): void;
   empty: boolean;
   listRef(element: HTMLDivElement): void;
   onCreate: () => void;
@@ -296,12 +311,37 @@ function RoutinesTable(props: {
                 </div>
                 <For each={group.rows}>
                   {(row) => (
-                    <RoutineListRow
-                      row={row}
-                      pending={props.pendingId === row.id}
-                      onOpen={props.onOpen}
-                      onToggle={props.onToggle}
-                    />
+                    <>
+                      <RoutineListRow
+                        row={row}
+                        pending={props.pendingId === row.id}
+                        onOpen={props.onOpen}
+                        onToggle={props.onToggle}
+                        expanded={props.isExpanded(row)}
+                        caretGutter={props.rows.some(
+                          (other) => other.children.length > 0
+                        )}
+                        onExpand={
+                          row.children.length > 0
+                            ? (open) => props.onExpand(row.id, open)
+                            : undefined
+                        }
+                      />
+                      <Show when={props.isExpanded(row)}>
+                        <For each={row.children}>
+                          {(child) => (
+                            <RoutineListRow
+                              nested
+                              caretGutter
+                              row={child}
+                              pending={props.pendingId === child.id}
+                              onOpen={props.onOpen}
+                              onToggle={props.onToggle}
+                            />
+                          )}
+                        </For>
+                      </Show>
+                    </>
                   )}
                 </For>
               </>
