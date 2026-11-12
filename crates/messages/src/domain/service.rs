@@ -1075,6 +1075,9 @@ fn can_moderate(permission: &EntityPermission) -> bool {
 fn log_read_error(error: &MessageError) {
     match error {
         MessageError::Repository(_) => tracing::error!(error = %error),
+        MessageError::Contended(_) => {
+            tracing::warn!(error = ?error, "channel sequence is contended")
+        }
         MessageError::NotFound
         | MessageError::Forbidden
         | MessageError::Invalid(_)

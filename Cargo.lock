@@ -4279,6 +4279,7 @@ dependencies = [
  "chrono",
  "macro_db_migrator",
  "sqlx",
+ "tokio",
  "uuid",
  "workspace-hack",
 ]

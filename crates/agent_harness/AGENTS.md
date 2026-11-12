@@ -177,6 +177,8 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
 
 ## Gotchas
 
+- A `MessageError::Contended` prompt-context read is retryable like a repository
+  failure; never classify it as a deleted or forbidden origin.
 - A session's first prompt carries static files from the mentioning message
   and the rest of its thread (mention first, then root and replies), capped
   at 8 and deduped by file id; follow-ups carry only their own files.

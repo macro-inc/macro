@@ -1,5 +1,9 @@
 //! Start a comment thread on a quoted passage of a document, as the
 //! CommentOnText tool does.
+
+#[cfg(test)]
+mod test;
+
 use super::DocumentRouterState;
 use crate::domain::{
     models::DocumentError,
@@ -9,7 +13,7 @@ use crate::domain::{
 use axum::{
     Extension, Json,
     extract::{State, rejection::JsonRejection},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
 };
 use entity_access::{
@@ -131,6 +135,17 @@ impl IntoResponse for CommentOnTextError {
                     StatusCode::CONFLICT,
                     "message id already exists".to_string(),
                 ),
+                MessageError::Contended(error) => {
+                    tracing::warn!(error = ?error, "channel sequence is contended");
+                    let mut response = message(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "channel is busy; retry the request".to_string(),
+                    );
+                    response
+                        .headers_mut()
+                        .insert(RETRY_AFTER, HeaderValue::from_static("1"));
+                    response
+                }
                 MessageError::Repository(error) => {
                     tracing::error!(error = ?error, "could not post comment on text");
                     message(
@@ -162,7 +177,8 @@ impl IntoResponse for CommentOnTextError {
         (status = 404, description = "Document not found"),
         (status = 422, description = "The quote appears more than once or not at all; nothing was posted", body = CommentOnTextRefused),
         (status = 500, description = "The comment could not be posted", body = ErrorResponse),
-        (status = 502, description = "The comment could not be anchored; nothing was posted", body = ErrorResponse)
+        (status = 502, description = "The comment could not be anchored; nothing was posted", body = ErrorResponse),
+        (status = 503, description = "Message storage is busy; retry after Retry-After seconds", body = ErrorResponse)
     )
 )]
 pub async fn comment_on_text_handler<

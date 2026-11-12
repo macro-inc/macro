@@ -3,6 +3,8 @@ use chrono::{Duration, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod timeout;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rollback_keeps_counter_and_log_atomic(pool: PgPool) {
     let channel = Uuid::from_u128(1);

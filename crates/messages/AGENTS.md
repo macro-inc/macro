@@ -90,6 +90,10 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 ## Gotchas
 
+- A channel counter lock timeout is `MessageError::Contended`, with the database
+  cause retained in its report. Message HTTP returns a safe 503 with
+  `Retry-After: 1`; tools tell callers to retry. Classify it only at the channel
+  append boundary so unrelated database errors keep their existing behavior.
 - Channel change rows retain 30 days of history; the calendar outbox worker
   runs their bounded hourly prune even when calendar sync is disabled. Changes
   pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000

@@ -5,6 +5,7 @@ use super::{
     delete_channel_message::DeleteChannelMessage,
     edit_channel_message::EditChannelMessage,
     manage_channel_participants::{ManageChannelParticipants, ParticipantAction},
+    message_mutation_error,
     open_direct_message::OpenDirectMessage,
     parse_participants,
     react_to_channel_message::{ReactToChannelMessage, ReactionAction},
@@ -34,6 +35,7 @@ use entity_access::domain::{
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use messages::domain::ports::MessageError;
 use std::{
     collections::HashMap,
     sync::{
@@ -947,6 +949,20 @@ fn mutation_errors_are_actionable_without_exposing_repository_details() {
         ChannelMutationErr::Repo(anyhow::anyhow!("database password leaked")),
     );
     assert_eq!(repository.description, "failed to rename the channel");
+}
+
+#[test]
+fn contended_message_mutation_has_retry_guidance_and_retains_the_internal_cause() {
+    let error = message_mutation_error("edit the message")(MessageError::Contended(
+        rootcause::report!("private database detail"),
+    ));
+
+    assert_eq!(error.description, "channel is busy; retry the request");
+    let Some(MessageError::Contended(cause)) = error.internal_error.downcast_ref::<MessageError>()
+    else {
+        panic!("expected the typed contention cause");
+    };
+    assert!(cause.to_string().contains("private database detail"));
 }
 
 #[tokio::test]

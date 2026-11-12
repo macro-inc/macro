@@ -24,6 +24,9 @@ pub enum MessageError {
     /// A client-supplied message id is already taken.
     #[error("message id already exists")]
     Conflict,
+    /// The channel's sequence is contended; no change committed and retrying may succeed.
+    #[error("channel is busy; retry the request")]
+    Contended(rootcause::Report),
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
