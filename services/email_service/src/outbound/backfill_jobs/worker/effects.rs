@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use super::*;
 use crate::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
