@@ -37,7 +37,8 @@ export async function refreshProjectQueries(
 export function registerProjectRevalidation(
   client: () => Client,
   enabled: () => boolean,
-  refetch: () => Promise<unknown>
+  refetch: () => Promise<unknown>,
+  { followsLiveUpdates }: { followsLiveUpdates?: boolean } = {}
 ) {
   let disposed = false;
   const refresh = createTrailingRefetch(() => !disposed && enabled(), refetch);
@@ -48,7 +49,9 @@ export function registerProjectRevalidation(
   };
   const timer = setInterval(backgroundRefresh, 30_000);
   window.addEventListener('focus', backgroundRefresh);
-  onCleanup(registerActivityRevalidator({ client, refresh }));
+  onCleanup(
+    registerActivityRevalidator({ client, refresh, followsLiveUpdates })
+  );
   onCleanup(() => {
     disposed = true;
     clearInterval(timer);

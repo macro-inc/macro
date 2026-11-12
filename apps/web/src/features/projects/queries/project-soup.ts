@@ -15,6 +15,7 @@ import {
   type ProjectSoupQueryVariables,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
@@ -135,6 +136,7 @@ export function createProjectSoupSource(
       enabled: enabled(),
       initialPageParam: null,
       requestPolicy: 'cache-and-network',
+      context: FOLLOWS_LIVE_UPDATES,
       keepPreviousData: false,
       variables: (cursor) => ({
         input: cursor
@@ -155,7 +157,9 @@ export function createProjectSoupSource(
     const result = await query.refetch({ requestPolicy: 'network-only' });
     if (result.error) throw result.error;
   };
-  onCleanup(registerActivityRevalidator({ client, refresh }));
+  onCleanup(
+    registerActivityRevalidator({ client, refresh, followsLiveUpdates: true })
+  );
   onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
   onCleanup(
     registerGraphqlSoupRevalidations(() => {

@@ -4,6 +4,7 @@ import {
   type MyActivityOverviewQuery,
   type MyActivityOverviewQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
@@ -31,12 +32,14 @@ export function createMyActivityOverviewQuery(
     },
     enabled: options.enabled(),
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     keepPreviousData: true,
     select: (data) => decodeActivityOverview(data.user.activityOverview),
   }));
   onCleanup(
     registerActivityRevalidator({
       client,
+      followsLiveUpdates: true,
       refresh: () => {
         if (options.enabled())
           return result.refetch({ requestPolicy: 'network-only' });

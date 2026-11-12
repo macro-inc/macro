@@ -4,6 +4,7 @@ import {
   type ChannelUnreadPresenceQuery,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import {
   getGraphqlSoupClient,
   hasGraphqlCacheHost,
@@ -34,6 +35,7 @@ export function createChannelUnreadQuery(
     variables,
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     select: unreadWitnesses,
   }));
   onCleanup(
@@ -54,6 +56,7 @@ export function createChannelUnreadQuery(
       enabled: enabled(),
       fetching: query.isFetching,
       filtered: true,
+      followsLiveUpdates: true,
       notificationIds: query.isSuccess
         ? (query.data ?? []).map((n) => n.id)
         : [],

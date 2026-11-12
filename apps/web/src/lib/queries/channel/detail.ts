@@ -3,6 +3,7 @@ import {
   ChannelDetailSoupDocument,
   type ChannelDetailSoupQuery,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import {
   getGraphqlSoupClient,
   mapGraphqlSoupPage,
@@ -39,6 +40,9 @@ export function createChannelDetailQuery(
   enabled: Accessor<boolean>,
   requestPolicy: RequestPolicy = 'cache-and-network'
 ) {
+  // A display-only reader can reuse the cache, so its read may never go out.
+  const followsLiveUpdates =
+    requestPolicy !== 'cache-first' && requestPolicy !== 'cache-only';
   // Only a server result can decide that a channel is inaccessible. Cache
   // projections can temporarily omit a newly joined channel, including after
   // its network response has arrived but before persistence catches up.
@@ -71,6 +75,7 @@ export function createChannelDetailQuery(
       client,
       enabled: enabled(),
       requestPolicy,
+      context: followsLiveUpdates ? FOLLOWS_LIVE_UPDATES : undefined,
       keepPreviousData: false,
       onResult: (result) => {
         const source = normalizedCacheResultMetadata(result)?.source;
@@ -134,6 +139,7 @@ export function createChannelDetailQuery(
       fetching: query.isFetching,
       channelId: channelId(),
       filtered: true,
+      followsLiveUpdates,
       notificationIds: query.isSuccess
         ? (
             query.data?.user.soup.items.find((item) => item.id === channelId())

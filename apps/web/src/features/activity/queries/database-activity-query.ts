@@ -4,6 +4,7 @@ import {
   type DatabaseActivityQuery,
   type DatabaseActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
@@ -46,6 +47,7 @@ export function createDatabaseActivityQuery(
     },
     enabled: databaseId() !== undefined,
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     keepPreviousData: false,
     select: (data) => ({
       kind: 'found',
@@ -56,6 +58,7 @@ export function createDatabaseActivityQuery(
   onCleanup(
     registerActivityRevalidator({
       client,
+      followsLiveUpdates: true,
       refresh: (entities) => {
         const id = databaseId();
         if (id === undefined || (entities !== null && !entities.has(id)))

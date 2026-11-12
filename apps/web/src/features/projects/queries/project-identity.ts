@@ -10,6 +10,7 @@ import {
   type InitiativeQuery,
   type InitiativeQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import {
   mapInitiativeDetail,
@@ -92,6 +93,10 @@ function createAuthorizedProjectQuery<
   const operationName = getOperationName(
     createRequest(document, { initiativeId: '' }).query
   );
+  // A cache-first read (an identity chip) may never reach the network, so it
+  // has no read to hold and is read again once the socket is live.
+  const followsLiveUpdates =
+    requestPolicy !== 'cache-first' && requestPolicy !== 'cache-only';
   const currentClient = createMemo(client);
   const currentViewer = createMemo(userId);
   const currentProject = createMemo(projectId);
@@ -123,7 +128,9 @@ function createAuthorizedProjectQuery<
         requestPolicy: untrack(() =>
           auth.error() ? 'network-only' : requestPolicy
         ),
-        context: auth.requestContext(),
+        context: followsLiveUpdates
+          ? { ...auth.requestContext(), ...FOLLOWS_LIVE_UPDATES }
+          : auth.requestContext(),
         keepPreviousData: false,
         onResult: (result) => {
           if (result.data && result.data.user.id !== current.viewerId) return;
@@ -138,8 +145,11 @@ function createAuthorizedProjectQuery<
       ...options,
       context: { ...options.context, ...authorization().requestContext() },
     });
-  registerProjectRevalidation(client, active, () =>
-    refetch({ requestPolicy: 'cache-and-network' })
+  registerProjectRevalidation(
+    client,
+    active,
+    () => refetch({ requestPolicy: 'cache-and-network' }),
+    { followsLiveUpdates }
   );
   let recoveredScope: ReturnType<typeof scope> | undefined;
   createEffect(() => {

@@ -3,6 +3,7 @@ import {
   ChannelDetailSoupDocument,
   type ChannelDetailSoupQuery,
 } from '@service-storage/graphql/generated/graphql';
+import { FOLLOWS_LIVE_UPDATES } from '@service-storage/graphql-live-updates';
 import {
   getGraphqlSoupClient,
   mapGraphqlNotification,
@@ -30,6 +31,7 @@ export function createChannelNotificationsQuery(
     variables,
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
+    context: FOLLOWS_LIVE_UPDATES,
     select: (data: ChannelDetailSoupQuery) =>
       (
         data.user.soup.items.find((item) => item.id === channelId)
@@ -45,6 +47,7 @@ export function createChannelNotificationsQuery(
       channelId,
       // Unread only: a read update can remove a known notification.
       filtered: true,
+      followsLiveUpdates: true,
       notificationIds: query.isSuccess
         ? (query.data ?? []).map((n) => n.id)
         : [],
