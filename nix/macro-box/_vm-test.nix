@@ -317,7 +317,8 @@ pkgs.testers.runNixOSTest {
               agent.fail(f"{inside} test -e /run/user/1000/bus")
               agent.fail(f"{inside} test -e /home/macro/.macrod/escape-probe")
               # macro's display, by socket or VNC, and its DevTools.
-              agent.succeed(f"{inside} {xclip} -display :0 -o 2>&1 | grep -F 'open display'")
+              status, refused = agent.execute(f"{inside} {xclip} -display :0 -o 2>&1")
+              assert status != 0 and "open display" in refused, refused
               for port in (5900, 9222):
                   agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")
               # Its own desktop and browser.
@@ -342,7 +343,9 @@ pkgs.testers.runNixOSTest {
           bad = agent.succeed(f"{git} rev-parse HEAD").strip()
           assert bad != good
           agent.succeed("systemctl restart macro-agent.service")
-          agent.wait_until_succeeds(f"[ $({git} rev-parse HEAD) = {good} ]", timeout=180)
+          # last-good's tree, committed on top of the broken head.
+          agent.wait_until_succeeds(f"[ $({git} rev-parse HEAD^{{tree}}) = $({git} rev-parse {good}^{{tree}}) ]", timeout=180)
+          agent.succeed(f"[ $({git} rev-parse HEAD^) = {bad} ]")
           agent.succeed("journalctl -u macro-agent.service | grep -F 'rolling back from'")
 
       with subtest("inside its unit the agent has no root, docker, credentials in env or other homes"):
