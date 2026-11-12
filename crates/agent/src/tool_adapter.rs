@@ -203,7 +203,7 @@ impl DynToolSetAdapter {
     /// built with [`provider_definition`] from `toolset`'s
     /// [`AiToolSet::request_schemas`]. Calls are dispatched through the shared
     /// `toolset`.
-    pub fn from_definitions<Context>(
+    pub(crate) fn from_definitions<Context>(
         definitions: Vec<rig_core::completion::ToolDefinition>,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
