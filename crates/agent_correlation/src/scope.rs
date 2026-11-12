@@ -85,6 +85,7 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/documents/{id}/comments/text"),
     ("PUT", "/documents/{id}/team_share"),
     ("PUT", "/crm/pipelines/{id}/sharing"),
+    ("PUT", "/passwords/teams/{id}/items/{id}/share"),
     ("PUT", "/databases/{id}/awareness"),
     ("POST", "/databases/{id}/webhooks"),
     ("POST", "/webhook/webhooks"),
