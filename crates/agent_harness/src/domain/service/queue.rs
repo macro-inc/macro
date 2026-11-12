@@ -968,8 +968,7 @@ where
                 // would leak them for the life of the process. The published
                 // empty snapshot is the viewers' goodbye.
                 self.busy.clear(session_id);
-                self.queues.drop_session(session_id);
-                self.hydrated.remove(&session_id);
+                self.forget_queue(session_id);
                 self.publish_queue(session_id).await;
                 match identity {
                     Ok(identity) => {
@@ -1384,6 +1383,14 @@ where
         self.reload_queue(session_id).await?;
         self.hydrated.insert(session_id);
         Ok(())
+    }
+
+    /// Forget this process's working copy of the session's queue and its
+    /// `hydrated` mark, which only change together: the next command reloads
+    /// the durable queue.
+    pub(super) fn forget_queue(&self, session_id: AgentSessionId) {
+        self.queues.drop_session(session_id);
+        self.hydrated.remove(&session_id);
     }
 
     /// Load the durable queue the first time this process handles the session,

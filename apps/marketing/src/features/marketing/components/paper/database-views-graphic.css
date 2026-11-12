@@ -1,0 +1,100 @@
+/* The app's database table: its header, saved-view tabs, and the table, board, and timeline views. */
+.database-views {
+  --database-views-raised: oklch(100% 0 0 / 5%);
+  --database-views-line: var(--color-ui-border-secondary);
+  margin: 20px 24px;
+  color: var(--color-ui-content-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+}
+.database-views svg { flex: none; width: 14px; height: 14px; }
+.database-views [data-status=Planned] { --tone: #929292; }
+.database-views [data-status='In progress'] { --tone: #d1a34b; }
+.database-views [data-status=Done] { --tone: #58ae83; }
+
+/* One row: the database's name, its saved-view tabs, then the view's tools. */
+.database-views-bar, .database-views-tabs { display: flex; align-items: center; gap: 6px; }
+.database-views-bar { padding-bottom: 12px; }
+.database-views-bar > strong { margin-right: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.database-views-mark { width: 16px !important; height: 16px !important; color: oklch(78% 0.19 135); }
+.database-views-tabs { margin-right: auto; }
+
+/* The app's rounded controls: table tabs, view tabs, and toolbar buttons. */
+.database-views-pill {
+  display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border: 0; border-radius: 999px;
+  background: var(--database-views-raised); color: var(--color-ui-content-secondary);
+  font: inherit; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease;
+}
+.database-views-pill[aria-pressed=true] { background: oklch(100% 0 0 / 12%); color: var(--color-ui-content-primary); font-weight: 500; }
+.database-views-pill:focus-visible { outline: 2px solid var(--color-ui-content-tertiary); outline-offset: 1px; }
+
+/* A fixed height, so switching views never moves the page. */
+.database-views-body { position: relative; height: 290px; overflow: hidden; mask-image: linear-gradient(to bottom, #000 84%, transparent); }
+
+.database-views-status { gap: 6px; height: auto; padding: 1px 8px; font-size: 12px; font-weight: 400; }
+.database-views-status i, .database-views-lane-head i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
+.database-views-owner { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--color-ui-content-secondary); }
+.database-views-owner img { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+
+.database-views-row {
+  display: grid; grid-template-columns: 30px minmax(0, 1.7fr) minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.8fr); align-items: center;
+  height: 36px; border-bottom: 1px solid var(--database-views-line);
+}
+.database-views-row > span { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0 10px; }
+.database-views-columns { height: 32px; color: var(--color-ui-content-secondary); font-size: 12px; }
+.database-views-columns svg { color: var(--color-ui-content-tertiary); }
+.database-views-row > span:first-child { justify-content: center; padding: 0; color: var(--color-ui-content-tertiary); font-size: 11px; }
+.database-views-name { display: block !important; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.database-views-due { color: var(--color-ui-content-secondary); }
+.database-views-count { margin: 0; padding: 9px 10px; color: var(--color-ui-content-tertiary); font-size: 12px; }
+
+.database-views-body[data-view=board] { display: flex; align-items: flex-start; gap: 10px; }
+.database-views-lane { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; padding: 6px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--database-views-line); }
+.database-views-lane-head { display: flex; align-items: center; gap: 8px; padding: 7px 6px 5px; }
+.database-views-lane-head strong { font-weight: 600; white-space: nowrap; }
+.database-views-lane-head span { margin-right: auto; color: var(--color-ui-content-tertiary); font-size: 11px; }
+.database-views-lane-head svg { color: var(--color-ui-content-tertiary); }
+.database-views-card { display: flex; flex-direction: column; padding: 10px; border-radius: 9px; background: var(--database-views-raised); }
+.database-views-card-title { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; }
+.database-views-card-title span { flex: 1; min-width: 0; }
+.database-views-card-title svg { margin-top: 2px; color: var(--color-ui-content-tertiary); }
+.database-views-card small { margin-top: 8px; color: var(--color-ui-content-tertiary); font-size: 11px; line-height: 16px; }
+.database-views-card > span { color: var(--color-ui-content-secondary); font-size: 12px; }
+
+/* The scale and the bars share one range: `--at` and `--start` are shares of it. */
+.database-views-body[data-view=timeline] {
+  /* The range runs on past the frame: fade it out to the right as well as down. */
+  mask-image: linear-gradient(to right, #000 72%, transparent), linear-gradient(to bottom, #000 78%, transparent);
+  mask-composite: intersect;
+}
+.database-views-scale { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; color: var(--color-ui-content-tertiary); font-size: 11.5px; }
+.database-views-scale svg { color: var(--color-ui-content-tertiary); }
+.database-views-scale strong, .database-views-month { color: var(--color-ui-content-primary); font-weight: 600; }
+.database-views-scale span { position: absolute; left: calc(var(--at) * 100%); }
+.database-views-tracks { position: relative; height: 260px; padding-top: 8px; box-sizing: border-box; border-top: 1px solid var(--database-views-line); }
+.database-views-gridline, .database-views-today { position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 1px; background: linear-gradient(to bottom, oklch(100% 0 0 / 7%), transparent 85%); }
+.database-views-today { left: 68.5%; background: linear-gradient(to bottom, oklch(100% 0 0 / 45%), transparent 90%); }
+.database-views-track { position: relative; height: 36px; }
+/* A record is a bar washed in its status colour, strongest where it starts. */
+.database-views-span {
+  position: absolute; top: 5px; bottom: 5px; left: calc(var(--start) * 100%); width: calc(var(--length) * 100%);
+  overflow: hidden; padding: 0 10px; box-sizing: border-box; border-radius: 7px;
+  background: linear-gradient(90deg, color-mix(in oklch, var(--tone) 34%, transparent), color-mix(in oklch, var(--tone) 9%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone) 28%, transparent);
+  font-size: 12px; font-weight: 500; line-height: 26px; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Phone artboard: the name and the view tabs share the row; the tools go. */
+.paper-feature-art[data-compact=true] .database-views { margin: 10px; }
+.paper-feature-art[data-compact=true] .database-views-bar > strong { margin-right: 4px; font-size: 13px; }
+.paper-feature-art[data-compact=true] .database-views-pill { height: 26px; padding: 0 9px; font-size: 12px; }
+.paper-feature-art[data-compact=true] .database-views-extra,
+.paper-feature-art[data-compact=true] .database-views-due { display: none; }
+.paper-feature-art[data-compact=true] .database-views-row { grid-template-columns: 24px minmax(0, 1fr) 104px 84px; }
+.paper-feature-art[data-compact=true] .database-views-row > span { padding: 0 6px; }
+/* The board scrolls sideways in the app; here the third lane runs off the edge. */
+.paper-feature-art[data-compact=true] .database-views-body[data-view=board] { mask-image: linear-gradient(to right, #000 80%, transparent); }
+.paper-feature-art[data-compact=true] .database-views-lane { flex: none; width: 176px; }
+/* The month names need the room of the week marks beside them. */
+.paper-feature-art[data-compact=true] .database-views-minor { display: none; }

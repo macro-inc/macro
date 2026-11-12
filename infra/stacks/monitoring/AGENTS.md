@@ -13,11 +13,8 @@ APM retention filter and span-based metrics it reads; it has no monitors.
 ## Checks
 
 From `infra/`:
-- `bun test --isolate stacks/monitoring` (routing and notification retention
-  tests). `--isolate` matters: the Pulumi mock tests
-  each import modules that register resources, and a shared module cache
-  hides them from the second file.
-- `bun run check`
+- `bun run check` (tsc and the bun tests, including `bun test stacks/monitoring`;
+  CI runs it on every `infra/**` change).
 - Biome on changed files.
 - An authenticated `pulumi preview` may change adopted monitors only in
   `message` and `renotifyInterval`, apart from the exceptions README.md lists
@@ -35,7 +32,8 @@ From `infra/`:
   secrets in stack config, and GoAlert (infra/stacks/observability) reachable
   at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
-  thresholds by hand; change both. `routing.test.ts` matches them by title.
+  thresholds by hand; change both. `routing.test.ts` matches them by title
+  and lists every prod monitor by name; add a new one there.
   The long-running transaction monitor takes the lowest
   `postgresql.activity.xact_start_age` over 5 minutes, and its graph plots the
   same `moving_rollup(..., 300, 'min')`. A single-sample spike from
@@ -46,6 +44,9 @@ From `infra/`:
   webhook, Slack handle or email address: GoAlert posts to the channel. Only
   `goalert-health` posts to `@webhook-macro-alert-hook` directly.
   `routing.test.ts` enforces it.
+- The Pulumi mock tests import modules that register resources once, and bun
+  shares one module cache across test files. Call `evictStackModules()` before
+  importing the stack in a new test file.
 - Notification retention adds nine monitors, one dashboard and a downtime muting
   the prod missing-telemetry alarm; delete the downtime once DSS health
   instrumentation is deployed. Missing telemetry is deliberately an alert, not
@@ -61,6 +62,10 @@ From `infra/`:
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
+- `monitors/computers.ts` reads the error logs `computer billing item removal
+  abandoned` (authentication-service) and `computer needs an operator`
+  (agent-harness-service) that `crates/hosted_runtimes` writes; its header is
+  the message and field contract. Renaming either message silences its monitor.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
   `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
@@ -68,6 +73,11 @@ From `infra/`:
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
+- `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
+  `ai usage priced` logs (`crates/genai_telemetry/src/provider_account.rs`,
+  `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
+  `ai.provider_account_unavailable` span; its header is the field contract.
+  `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log
   events (`@event`) that `crates/scheduled_action` emits; its header is the
   field contract. Its failure monitor does not page while suggestions are
