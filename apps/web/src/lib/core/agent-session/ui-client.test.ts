@@ -18,6 +18,22 @@ import {
   vi,
 } from 'vitest';
 
+const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => device.phoneBrowser,
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: unknown) => flag === actual.enableAgentNavigation,
+  };
+});
+
 const NativeChannel = globalThis.BroadcastChannel;
 const opened: BroadcastChannel[] = [];
 let recording: BroadcastChannel[] | undefined;
@@ -170,4 +186,38 @@ describe('uiClientId', () => {
     await vi.waitFor(() => expect(copy.id()).not.toBe(id));
     expect(original.id()).toBe(id);
   });
+});
+
+describe('startUiClientId', () => {
+  afterEach(() => {
+    device.nativeApp = false;
+    device.phoneBrowser = false;
+  });
+
+  it('takes the id and joins the channel as the app starts', async () => {
+    vi.resetModules();
+    const { startUiClientId, typedInClientId } = await import('./ui-client');
+
+    startUiClientId();
+
+    expect(opened).toHaveLength(1);
+    const stored = sessionStorage.getItem('macro.ui-client-id');
+    expect(stored).toMatch(/^[0-9a-f-]{36}$/);
+    expect(typedInClientId()).toBe(stored);
+  });
+
+  it.each(['nativeApp', 'phoneBrowser'] as const)(
+    'starts neither the id nor its channel on mobile (%s), nor sends one',
+    async (kind) => {
+      device[kind] = true;
+      vi.resetModules();
+      const { startUiClientId, typedInClientId } = await import('./ui-client');
+
+      startUiClientId();
+
+      expect(typedInClientId()).toBeUndefined();
+      expect(opened).toEqual([]);
+      expect(sessionStorage.getItem('macro.ui-client-id')).toBeNull();
+    }
+  );
 });

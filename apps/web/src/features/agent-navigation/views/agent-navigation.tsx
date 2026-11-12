@@ -14,6 +14,7 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   agentNavigationRunsHere,
+  startUiClientId,
   uiClientId,
 } from '@core/agent-session/ui-client';
 import { toast } from '@core/component/Toast/Toast';
@@ -29,7 +30,7 @@ import {
   type FromWebsocketMessage,
   parseWebsocketPayload,
 } from '@service-connection/websocket';
-import type { ParentProps } from 'solid-js';
+import { createEffect, type ParentProps } from 'solid-js';
 import {
   type AgentArrivals,
   AgentArrivalsProvider,
@@ -209,9 +210,8 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
-  // Take this tab's id as the app starts, so this page answers a tab
-  // duplicated from it, which starts with a copy of the id, from the start.
-  uiClientId();
+  // Reruns when a window leaves the phone layout, which takes the id then.
+  createEffect(startUiClientId);
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();

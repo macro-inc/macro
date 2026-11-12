@@ -122,10 +122,7 @@ function rejoin(event: PageTransitionEvent) {
   if (event.persisted) join();
 }
 
-/**
- * This tab's id, minted on first use. The app shell calls it as it starts,
- * so this page answers a tab duplicated from it from the start.
- */
+/** This tab's id, minted on first use. */
 export function uiClientId(): string {
   if (current) return current;
 
@@ -150,6 +147,17 @@ export function uiClientId(): string {
  */
 export function agentNavigationRunsHere(): boolean {
   return !isNativeMobilePlatform() && !isMobile();
+}
+
+/**
+ * Takes this tab's id as the app starts, so this page answers a tab
+ * duplicated from it, which starts with a copy of the id, from the start. On
+ * mobile it starts neither the id nor its channel.
+ */
+export function startUiClientId() {
+  if (!agentNavigationRunsHere()) return;
+
+  uiClientId();
 }
 
 /**
