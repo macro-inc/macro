@@ -67,8 +67,8 @@ export type PullRequest = { created_at: string; draft?: boolean };
 
 /**
  * What the preflight leaves for this step: the API budget it saw, its own calls,
- * whether the trace step will run, and the run's jobs. No jobs means the budget was
- * already down to the share kept for other workflows.
+ * whether the trace step will run and why not, and the run's jobs. No jobs means the
+ * budget was already down to the share kept for other workflows.
  */
 export type Listing = {
   limit: number;
@@ -76,6 +76,7 @@ export type Listing = {
   reserve: number;
   calls: number;
   trace: boolean;
+  untraced: string | null;
   jobs: Job[] | null;
 };
 
@@ -601,6 +602,7 @@ async function runCollection() {
     collect_seconds: Math.round((performance.now() - started) / 1000),
   };
   if (!listing?.jobs) counts.skipped = listing ? 'budget' : 'no_listing';
+  if (listing?.untraced) counts.untraced = listing.untraced;
   if (github.rateRemaining !== null) counts.rate_remaining = github.rateRemaining;
   if (github.rateLimit) counts.rate_limit = github.rateLimit;
   events.push({
