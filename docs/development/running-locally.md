@@ -326,9 +326,16 @@ Older local-tool builds can recreate the shared LGTM collector and drop other
 stacks' network attachments. For a static frontend refresh, reuse the
 complete recorded binary set with `just stack update --frontend --binaries-dir
 <recorded-dir> --instance <name>` to avoid backend builds and collector startup.
-`--traces off` also skips collector startup, but omits automatic backend OTLP
-wiring and disables Vite browser telemetry. When collecting trace proof, preserve
-explicit backend and browser exporter settings and connect the existing collector
+`--traces off` skips collector startup, omits automatic backend OTLP wiring,
+and disables Vite browser telemetry and the local Docker sync-service exporter.
+For both local and dev runs, the resolved tracing policy owns
+`SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT`: it is empty when tracing is off or
+no collector is available, and uses the collector's HTTP intake when enabled.
+The Compose launcher removes an inherited shell value for this key so its
+explicit generated env file remains authoritative. The Docker worker forwards
+the resulting value through Wrangler `--var`; direct Compose defaults to an
+empty endpoint, with no fallback hostname. Deployed Worker settings are separate.
+When collecting trace proof, enable tracing and connect the existing collector
 to the instance's services network with the `otel-collector` alias, without
 restarting it.
 
