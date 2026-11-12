@@ -113,7 +113,8 @@ def source_context(rows):
             "waits can exceed 50 ms in total. This did not isolate the shared pool."
         ),
         "deadline50ms": (
-            "Total 50 ms counter-allocation statement deadline, preserving a "
+            "Source `70d9301ff9ed571d2c849624f02a2c4f9fc60802`: total 50 ms "
+            "counter-allocation statement deadline, preserving a "
             "stricter inherited statement timeout. One preflight round trip sets "
             "the deadline before allocation; the append restores it in-statement."
         ),
@@ -147,6 +148,26 @@ def source_context(rows):
             "was shared with other worktrees; this was not an isolated-host or",
             "production-disk measurement. These facts are recorded context, not",
             "settings inferred by the parser from the CSV.", "",
+        ]
+    deadline = [row for row in rows if row["label"] == "deadline50ms"
+                and row["variant"] == "after" and row["lane"] == "flood"]
+    # This server-log cross-check belongs to these recorded runs, not any
+    # future invocation that happens to reuse the same descriptive label.
+    if {(row["run"], row["errors"]) for row in deadline} == {
+        ("1", "28187"), ("2", "28364"), ("3", "28321"),
+    }:
+        lines += [
+            "The dedicated server log `/tmp/channel-seq-pg.log` was cross-checked",
+            "for 2026-11-12 07:06:00–07:09:59 UTC, inclusive. That window contains",
+            "exactly 84,872 `canceling statement due to statement timeout` errors",
+            "and zero `canceling statement due to user request` errors. This",
+            "matches all 84,872 failed flood requests in the three final deadline",
+            "runs. The evidence applies to these runs and this window only.",
+            "Those statement-timeout messages match the recognized contention",
+            "classification in the message repository, whose HTTP adapter maps",
+            "it to 503 with `Retry-After: 1`. The benchmark calls the repository",
+            "directly; it does not itself measure HTTP responses. See the",
+            "[transaction audit](channel_transaction_audit.md#caller-visible-failures-and-rollback).", "",
         ]
     return lines
 
@@ -204,7 +225,9 @@ def main():
         "latency includes failed writes. Successful-write latency and observed",
         "sleep duration exclude errors; NA means there were no successful writes.",
         "The sleep is a controlled stress input, not a measured production commit",
-        "latency.", "",
+        "latency. A failed attempt includes any pool-acquisition wait and other",
+        "repository work before the counter-allocation statement deadline; its",
+        "end-to-end duration can therefore exceed that 50 ms statement budget.", "",
         "| Label | Run | Variant | Lane | Attempts / successes | Attempt p50 / p95 / p99 ms | Success p50 / p95 / p99 ms | Successes/s | Observed 5 ms hold p50 / p95 / p99 ms |",
         "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: |",
     ]

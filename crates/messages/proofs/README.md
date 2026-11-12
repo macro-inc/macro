@@ -470,3 +470,20 @@ wall time. It writes `channel_deadline_arrival_latency_runs.csv` and
 of each run's p50/p95/p99 and achieved rates. Historical arrival/commit-delay
 files are unchanged. The old saturation-with-delay runner remains historical;
 use the result-recording shared-pool runner for current saturation evidence.
+
+
+The recorded complete shared-pool comparison combines the pre-timeout,
+5 ms per-lock, and final total-deadline phases; the discarded incomplete
+50 ms per-lock experiment stays in its separate artifact:
+
+```sh
+python3 crates/messages/proofs/summarize_pool_isolation.py \
+  /tmp/channel-seq-pool-baseline.log \
+  /tmp/channel-seq-pool-bounded.log \
+  /tmp/channel-seq-pool-deadline.log
+```
+
+The [combined report](channel_pool_isolation_results.md) records the final
+source revision and the dedicated server-log cross-check for those three
+final deadline runs. Its failed-request latency includes pool acquisition
+before the statement deadline begins.
