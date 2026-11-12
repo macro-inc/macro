@@ -2,7 +2,6 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: 544px;
   padding: 24px;
   box-sizing: border-box;
   color: var(--color-ui-content-primary);
@@ -18,7 +17,7 @@
 }
 .paper-chat-channel-header strong { font-weight: 600; }
 .paper-chat-channel-hash { color: var(--color-ui-content-tertiary); font-size: 17px; }
-.paper-chat-conversation { display: flex; flex-direction: column; gap: 24px; width: 100%; }
+.paper-chat-conversation { display: flex; flex-direction: column; gap: 20px; width: 100%; }
 .paper-chat-message { display: flex; align-items: flex-start; gap: 14px; }
 .paper-chat-avatar {
   display: flex; align-items: center; justify-content: center;
@@ -76,7 +75,7 @@
 
 /* The phone artboard is narrower, so the card runs closer to its edges and the
    session link drops below the sender line. */
-.paper-feature-art[data-compact=true] .paper-chat-call { height: 520px; padding: 8px; }
+.paper-feature-art[data-compact=true] .paper-chat-call { padding: 8px; }
 .paper-feature-art[data-compact=true] .paper-chat-channel { padding: 16px 14px; }
 .paper-feature-art[data-compact=true] .paper-chat-message { gap: 10px; }
 .paper-feature-art[data-compact=true] .paper-chat-avatar { flex-basis: 30px; height: 30px; font-size: 13px; }

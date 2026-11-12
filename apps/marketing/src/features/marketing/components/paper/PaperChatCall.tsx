@@ -1,14 +1,37 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import MacroLogo from '../../../../assets/app-icons/macro-logo.svg';
 import './paper-chat-call.css';
 
 const createdTasks = [
   { title: 'Bulk archive shortcut', account: 'Northwind' },
   { title: 'Remap the command menu', account: 'Acme' },
-  { title: 'Jump to channel by number', account: 'Globex' },
 ];
 
-/** A channel where the Macro agent answers a mention and lists the tasks it created. */
+function AgentSender(props: { time: string; session?: boolean }) {
+  return (
+    <div class="paper-chat-sender">
+      <strong>Macro</strong>
+      <span class="paper-chat-agent-badge">Agent</span>
+      <span class="paper-chat-time">{props.time}</span>
+      <Show when={props.session}>
+        <span class="paper-chat-session">Open Session ↗</span>
+      </Show>
+    </div>
+  );
+}
+
+function MacroAvatar() {
+  return (
+    <div class="paper-chat-avatar paper-chat-macro-avatar">
+      <MacroLogo />
+    </div>
+  );
+}
+
+/**
+ * A channel where the Macro agent first replies without being mentioned, then
+ * does the work once it is asked to.
+ */
 export function PaperChatCall() {
   return (
     <div class="paper-chat-call">
@@ -19,6 +42,28 @@ export function PaperChatCall() {
         </div>
         <div class="paper-chat-conversation">
           <div class="paper-chat-message">
+            <div class="paper-chat-avatar">R</div>
+            <div class="paper-chat-message-body">
+              <div class="paper-chat-sender">
+                <strong>Rahul Batra</strong>
+                <span class="paper-chat-time">6:34 PM</span>
+              </div>
+              <div class="paper-chat-copy">
+                Another customer asked for keyboard shortcuts today.
+              </div>
+            </div>
+          </div>
+          <div class="paper-chat-message">
+            <MacroAvatar />
+            <div class="paper-chat-message-body">
+              <AgentSender time="6:34 PM" />
+              <div class="paper-chat-copy">
+                That’s 7 requests across 5 accounts now. Want me to add them to
+                the Shortcuts project?
+              </div>
+            </div>
+          </div>
+          <div class="paper-chat-message">
             <div class="paper-chat-avatar">P</div>
             <div class="paper-chat-message-body">
               <div class="paper-chat-sender">
@@ -26,25 +71,17 @@ export function PaperChatCall() {
                 <span class="paper-chat-time">6:36 PM</span>
               </div>
               <div class="paper-chat-copy">
-                <span class="paper-chat-mention">@Macro</span> which customers
-                asked for this?
+                <span class="paper-chat-mention">@Macro</span> yes, and assign
+                them to me.
               </div>
             </div>
           </div>
           <div class="paper-chat-message">
-            <div class="paper-chat-avatar paper-chat-macro-avatar">
-              <MacroLogo />
-            </div>
+            <MacroAvatar />
             <div class="paper-chat-message-body">
-              <div class="paper-chat-sender">
-                <strong>Macro</strong>
-                <span class="paper-chat-agent-badge">Agent</span>
-                <span class="paper-chat-time">6:36 PM</span>
-                <span class="paper-chat-session">Open Session ↗</span>
-              </div>
+              <AgentSender time="6:36 PM" session />
               <div class="paper-chat-copy">
-                Found 7 requests across 5 accounts and added them to the
-                Shortcuts project.
+                Done. They’re in Shortcuts, assigned to you.
               </div>
               <div class="paper-chat-tasks">
                 <For each={createdTasks}>
@@ -77,7 +114,7 @@ export function PaperChatCall() {
                     </div>
                   )}
                 </For>
-                <div class="paper-chat-task-more">4 more in Shortcuts</div>
+                <div class="paper-chat-task-more">5 more in Shortcuts</div>
               </div>
             </div>
           </div>
