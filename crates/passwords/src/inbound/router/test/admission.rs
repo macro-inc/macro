@@ -15,7 +15,8 @@ fn tested_inventory_matches_every_registered_public_method_including_head() {
             .unwrap()
             .replace("{team}", &Uuid::from_u128(1).to_string())
             .replace("{item}", &Uuid::from_u128(2).to_string())
-            .replace("{folder}", &Uuid::from_u128(3).to_string());
+            .replace("{folder}", &Uuid::from_u128(3).to_string())
+            .replace("{import_id}", &Uuid::from_u128(4).to_string());
         for (method, syntax) in [
             ("GET", "get("),
             ("POST", "post("),
@@ -36,7 +37,7 @@ fn tested_inventory_matches_every_registered_public_method_including_head() {
         .map(|(method, path, _)| (method.to_owned(), path))
         .collect();
     assert_eq!(registered, tested);
-    assert_eq!(tested.len(), 31);
+    assert_eq!(tested.len(), 32);
 }
 
 #[tokio::test]
@@ -308,4 +309,83 @@ async fn session_shaped_agent_account_is_denied_with_team_and_existing_direct_gr
             "both flags, provider configuration and a human admit normal access"
         );
     }
+}
+
+#[tokio::test]
+async fn import_enforces_body_and_batch_limits_without_echoing_payloads() {
+    use crate::domain::service::test::fakes::*;
+    let repository = Arc::new(FakeRepository::new());
+    let team = TeamId(Uuid::from_u128(1));
+    repository
+        .memberships
+        .lock()
+        .unwrap()
+        .insert("macro|synthetic@example.test".into(), vec![team]);
+    let app = router(PasswordRouterState {
+        authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
+        service: Arc::new(PasswordService {
+            repository,
+            provider: Arc::new(FakeProvider::new()),
+            availability: Arc::new(FakeAvailability),
+        }),
+    });
+    let import = Uuid::now_v7();
+    let path = format!("/teams/{}/imports/{import}/items", team.0);
+    // A payload above the ordinary route's 256 KiB limit is allowed on this route.
+    let value = "x".repeat(65536);
+    let item = serde_json::json!({"sourceKey":"one","name":"Synthetic fixture","kind":"login","favorite":false,
+        "values":{"username":value,"password":value,"notes":value,"fields":[{"label":"Synthetic","value":value}]}});
+    let mut body = serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":true,"folders":[],"items":[item]});
+    let text = body.to_string();
+    assert!(text.len() > 256 * 1024);
+    for (text, expected) in [
+        (text, StatusCode::OK),
+        (
+            {
+                body["items"] = serde_json::json!(
+                    (0..26)
+                        .map(|_| body["items"][0].clone())
+                        .collect::<Vec<_>>()
+                );
+                body.to_string()
+            },
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+        (
+            "x".repeat(4 * 1024 * 1024 + 1),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&path)
+                    .header("authorization", "Bearer session")
+                    .header("x-macro-passwords", "1")
+                    .header("content-type", "application/json")
+                    .body(Body::from(text))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        assert_eq!(response.headers()[CACHE_CONTROL], "private, no-store");
+    }
+    let invalid = serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":true,"folders":[],"items":(0..26).map(|i|serde_json::json!({"sourceKey":i.to_string(),"name":"Synthetic","kind":"login","favorite":false,"values":{"username":"","password":"","notes":"","fields":[]}})).collect::<Vec<_>>()});
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(path)
+                .header("authorization", "Bearer session")
+                .header("x-macro-passwords", "1")
+                .header("content-type", "application/json")
+                .body(Body::from(invalid.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }

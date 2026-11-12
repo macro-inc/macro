@@ -136,6 +136,9 @@ together. Partial configuration fails startup; absent configuration denies vault
 Human requests evaluate `enable-passwords-v1` for their authenticated user only;
 missing, disabled or failed evaluations fail closed. Local explicitly enables it.
 Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
+The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
+normalized import batches up to 4 MiB; its domain service reuses ordinary creation
+and TOTP enrollment and records counts-only batch activity.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

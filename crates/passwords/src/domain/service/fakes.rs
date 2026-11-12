@@ -21,6 +21,7 @@ pub struct FakeRepository {
     pub staged: Mutex<HashMap<Uuid, Record>>,
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
+    pub fail_import_audit: AtomicBool,
     pub lock_calls: AtomicUsize,
     pub calls: AtomicUsize,
     pub closed_teams: Mutex<HashSet<Uuid>>,
@@ -29,6 +30,9 @@ pub struct FakeRepository {
     pub cleanup_calls: AtomicUsize,
     pub erased_items: Mutex<HashSet<Uuid>>,
     pub audits: Mutex<Vec<Action>>,
+    pub folders: Mutex<HashMap<(TeamId, Uuid), Folder>>,
+    pub imports: Mutex<Vec<(TeamId, Uuid, ImportFormat, ImportCounts)>>,
+    pub busy_items: Mutex<HashSet<Uuid>>,
     pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
 }
 impl FakeRepository {
@@ -38,6 +42,7 @@ impl FakeRepository {
             staged: Mutex::new(HashMap::new()),
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
+            fail_import_audit: AtomicBool::new(false),
             lock_calls: AtomicUsize::new(0),
             calls: AtomicUsize::new(0),
             closed_teams: Mutex::new(HashSet::new()),
@@ -46,12 +51,20 @@ impl FakeRepository {
             cleanup_calls: AtomicUsize::new(0),
             erased_items: Mutex::new(HashSet::new()),
             audits: Mutex::new(vec![]),
+            folders: Mutex::new(HashMap::new()),
+            imports: Mutex::new(vec![]),
+            busy_items: Mutex::new(HashSet::new()),
             enrollments: Mutex::new(HashMap::new()),
         }
     }
 }
 struct FakeLock;
-impl ItemLock for FakeLock {}
+#[async_trait]
+impl ItemLock for FakeLock {
+    async fn release(self: Box<Self>) -> Result<(), Error> {
+        Ok(())
+    }
+}
 #[async_trait]
 impl Repository for FakeRepository {
     async fn is_human(
@@ -93,7 +106,14 @@ impl Repository for FakeRepository {
                 .unwrap()
                 .values()
                 .any(|entry| entry.team_id == team)
-            || self.closed_teams.lock().unwrap().contains(&team.0))
+            || self.closed_teams.lock().unwrap().contains(&team.0)
+            || self
+                .imports
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|entry| entry.0 == team)
+            || self.folders.lock().unwrap().keys().any(|key| key.0 == team))
     }
 
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {
@@ -107,6 +127,8 @@ impl Repository for FakeRepository {
             .lock()
             .unwrap()
             .retain(|_, record| record.metadata.team_id != team);
+        self.imports.lock().unwrap().retain(|entry| entry.0 != team);
+        self.folders.lock().unwrap().retain(|key, _| key.0 != team);
         Ok(())
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
@@ -252,9 +274,12 @@ impl Repository for FakeRepository {
         Ok(())
     }
 
-    async fn lock(&self, _: TeamId, _: ItemId) -> Result<Box<dyn ItemLock>, Error> {
+    async fn lock(&self, _: TeamId, item: ItemId) -> Result<Box<dyn ItemLock>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.lock_calls.fetch_add(1, Ordering::SeqCst);
+        if self.busy_items.lock().unwrap().contains(&item.0) {
+            return Err(Error::Busy);
+        }
         Ok(Box::new(FakeLock))
     }
     async fn stage(
@@ -389,9 +414,54 @@ impl Repository for FakeRepository {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![])
     }
-    async fn folders(&self, _: TeamId) -> Result<Vec<Folder>, Error> {
+    async fn folders(&self, team: TeamId) -> Result<Vec<Folder>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(vec![])
+        Ok(self
+            .folders
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|folder| folder.team_id == team)
+            .cloned()
+            .collect())
+    }
+    async fn ensure_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut folders = self.folders.lock().unwrap();
+        Ok(folders
+            .entry((team, id))
+            .or_insert_with(|| Folder {
+                id,
+                team_id: team,
+                name: name.into(),
+                parent_id,
+            })
+            .clone())
+    }
+    async fn audit_import(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        _: &Actor,
+        format: ImportFormat,
+        counts: ImportCounts,
+    ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.fail_import_audit.load(Ordering::SeqCst) {
+            return Err(Error::Unavailable);
+        }
+
+        self.imports
+            .lock()
+            .unwrap()
+            .push((team, id, format, counts));
+        Ok(())
     }
     async fn save_folder(&self, _: &Folder) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);

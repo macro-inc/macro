@@ -263,3 +263,176 @@ async fn cross_team_parent_and_contended_tree_lock_are_rejected(pool: PgPool) {
         .await
         .expect("retry after contention");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ensure_folder_preserves_existing_location_and_name_and_serializes_retries(pool: PgPool) {
+    let (repository, _, record) = folder_fixture(pool).await;
+    let team = record.metadata.team_id;
+    let id = Uuid::now_v7();
+    let (first, retry) = tokio::join!(
+        repository.ensure_folder(team, id, "Synthetic original", None),
+        repository.ensure_folder(team, id, "Synthetic original", None),
+    );
+    assert_eq!(first.unwrap().id, retry.unwrap().id);
+    let parent = repository
+        .ensure_folder(team, Uuid::now_v7(), "Parent", None)
+        .await
+        .unwrap();
+    repository
+        .move_folder(team, id, Some(parent.id))
+        .await
+        .unwrap();
+    repository.rename_folder(team, id, "Renamed").await.unwrap();
+    let kept = repository
+        .ensure_folder(team, id, "Import original", None)
+        .await
+        .unwrap();
+    assert_eq!(kept.name, "Renamed");
+    assert_eq!(kept.parent_id, Some(parent.id));
+    let (other, _) = another_team(&repository.pool).await;
+    assert!(matches!(
+        repository
+            .ensure_folder(other, Uuid::now_v7(), "Foreign parent", Some(parent.id))
+            .await,
+        Err(Error::Invalid)
+    ));
+    assert_eq!(repository.folders(team).await.unwrap().len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn import_audit_is_counts_only_retained_without_items_and_purged_with_team(pool: PgPool) {
+    let (repository, actor, record) = folder_fixture(pool).await;
+    let team = record.metadata.team_id;
+    let import_id = Uuid::now_v7();
+    repository
+        .audit_import(
+            team,
+            import_id,
+            &actor,
+            ImportFormat::BitwardenJson,
+            ImportCounts {
+                created: 0,
+                already_present: 0,
+                failed: 1,
+                folders: 0,
+            },
+        )
+        .await
+        .unwrap();
+    let activity = sqlx::query!("SELECT import_id,format,created,already_present,failed,folders FROM password_import_activity WHERE team_id=$1",team.0)
+        .fetch_one(&repository.pool).await.unwrap();
+    assert_eq!(activity.import_id, import_id);
+    assert_eq!(activity.format, "bitwarden_json");
+    assert_eq!(
+        (
+            activity.created,
+            activity.already_present,
+            activity.failed,
+            activity.folders
+        ),
+        (0, 0, 1, 0)
+    );
+    sqlx::query!(
+        "DELETE FROM password_item_entities WHERE team_id=$1",
+        team.0
+    )
+    .execute(&repository.pool)
+    .await
+    .unwrap();
+    assert!(repository.has_team_data(team).await.unwrap());
+    repository.purge_team_metadata(team).await.unwrap();
+    assert!(!repository.has_team_data(team).await.unwrap());
+    let count = sqlx::query_scalar!(
+        "SELECT count(*) FROM password_import_activity WHERE team_id=$1",
+        team.0
+    )
+    .fetch_one(&repository.pool)
+    .await
+    .unwrap();
+    assert_eq!(count, Some(0));
+    repository
+        .audit_import(
+            team,
+            import_id,
+            &actor,
+            ImportFormat::BitwardenJson,
+            ImportCounts {
+                created: 0,
+                already_present: 0,
+                failed: 0,
+                folders: 0,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query!("DELETE FROM team WHERE id=$1", team.0)
+        .execute(&repository.pool)
+        .await
+        .unwrap();
+    let count = sqlx::query_scalar!(
+        "SELECT count(*) FROM password_import_activity WHERE team_id=$1",
+        team.0
+    )
+    .fetch_one(&repository.pool)
+    .await
+    .unwrap();
+    assert_eq!(count, Some(0));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn awaited_lease_release_allows_the_next_batch_step_immediately(pool: PgPool) {
+    let (repository, _, record) = folder_fixture(pool).await;
+    let team = record.metadata.team_id;
+    let held = repository.lock(team, record.metadata.id).await.unwrap();
+    assert!(matches!(
+        repository.lock(team, record.metadata.id).await,
+        Err(Error::Busy)
+    ));
+    held.release().await.unwrap();
+    repository
+        .lock(team, record.metadata.id)
+        .await
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn contended_item_lease_returns_busy_result_and_still_records_batch_audit(pool: PgPool) {
+    use crate::domain::service::{
+        PasswordService,
+        test::fakes::{FakeAvailability, FakeProvider},
+    };
+    let (repository, actor, record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let repository = Arc::new(repository);
+    let held = repository.lock(team, record.metadata.id).await.unwrap();
+    let service = PasswordService {
+        repository: repository.clone(),
+        provider: Arc::new(FakeProvider::new()),
+        availability: Arc::new(FakeAvailability),
+    };
+    let input = serde_json::json!({"format":"bitwarden_json","target":{"kind":"root"},"private":false,"folders":[],
+        "items":[{"sourceKey":"busy","name":"Synthetic","kind":"login","favorite":false,"values":{"username":"","password":"","notes":"","fields":[]}}]});
+    let result = service
+        .import_batch(
+            &actor,
+            team,
+            Uuid::now_v7(),
+            serde_json::from_value(input).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Failed);
+    assert_eq!(result.items[0].error_code, Some(ImportErrorCode::Busy));
+    let count = sqlx::query_scalar!(
+        "SELECT count(*) FROM password_import_activity WHERE team_id=$1",
+        team.0
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, Some(1));
+    held.release().await.unwrap();
+}
