@@ -1,0 +1,183 @@
+id: email-worker-no-runtime-io
+language: rust
+severity: error
+message: Compose concrete worker dependencies in context(); delivery loops use the composed service.
+note: |-
+  Only context() in these composition files may construct adapters or open connections.
+  Service aliases, field types and worker parameter types are declarative wiring; raw fields are separately forbidden.
+  The listed existing import declarations only name composition types; aliases or added client imports are not exempt.
+  Tests are exempt. Receive/ack via sqs_worker remains inbound transport.
+files:
+  - services/email_service/src/api/context.rs
+  - services/email_service/src/pubsub/**/worker.rs
+  - services/email_service/src/pubsub/**/context.rs
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+rule:
+  all:
+    - any:
+        - any:
+            - all:
+                - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*env\b|(?:GoogleCalendarClient|PgCalendarRepository|ConnectionGatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)\s*::)
+                - any:
+                    - any:
+                        - kind: scoped_identifier
+                        - kind: scoped_type_identifier
+                        - kind: scoped_use_list
+                        - kind: use_as_clause
+                        - kind: use_wildcard
+                      not:
+                        any:
+                          - inside:
+                              any:
+                                - kind: scoped_identifier
+                                - kind: scoped_type_identifier
+                                - kind: use_as_clause
+                          - inside:
+                              kind: scoped_use_list
+                              stopBy: end
+                    - kind: identifier
+                      inside:
+                        any:
+                          - kind: use_declaration
+                          - kind: use_list
+                      not:
+                        inside:
+                          kind: scoped_use_list
+                          stopBy: end
+            - kind: scoped_use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?email_api_client$
+                - has:
+                    field: list
+                    has:
+                      regex: ^(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound|self)\b|^\*
+            - kind: scoped_use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?crate$
+                - has:
+                    field: list
+                    has:
+                      regex: ^(?:outbound|calendar_tokens|calendar_request_gate|calendar_refresh|util\s*::\s*redis)\b|^\*
+            - kind: scoped_use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?email$
+                - has:
+                    field: list
+                    has:
+                      regex: ^(?:outbound)\b|^\*
+            - kind: scoped_use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?calendar_events$
+                - has:
+                    field: list
+                    has:
+                      regex: ^(?:outbound)\b|^\*
+            - kind: scoped_use_list
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?crate$
+                - has:
+                    field: list
+                    has:
+                      kind: scoped_use_list
+                      all:
+                        - has:
+                            field: path
+                            regex: ^util$
+                        - has:
+                            field: list
+                            has:
+                              regex: ^redis\b
+            - kind: scoped_use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+              all:
+                - has:
+                    field: path
+                    regex: ^(::\s*)?std$
+                - has:
+                    field: list
+                    has:
+                      regex: ^(?:env)\b|^\*
+        - kind: call_expression
+          has:
+            field: function
+            kind: identifier
+            regex: ^(?:GoogleCalendarClient|PgCalendarRepository|ConnectionGatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)$
+    - not:
+        any:
+          - inside:
+              kind: type_item
+              stopBy: end
+          - inside:
+              kind: field_declaration
+              stopBy: end
+          - inside:
+              kind: parameters
+              stopBy: end
+          - inside:
+              kind: use_declaration
+              any:
+                - pattern: use calendar_events::{domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
+                    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository}};
+                - pattern: use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
+                - pattern: use crate::calendar_request_gate::RedisCalendarRequestGate;
+                - pattern: use crate::calendar_tokens::CalendarTokenProviderAdapter;
+                - pattern: use email::{domain::service::EmailServiceImpl, inbound::axum::{axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,
+                    previews_router::EmailRouterState}, outbound::{EmailPgRepo, GmailTokenProviderImpl}};
+                - pattern: use crate::outbound::mailbox_init::{MicrosoftGrantSource, PgMailboxInitialization};
+                - pattern: use crate::outbound::crm_cleanup::{CrmCleanupClock, CrmCleanupContacts, CrmCleanupQueue, PgCrmCleanup};
+                - pattern: use crate::outbound::sfs_upload::{PgSfsPhotoContacts, PgSfsPhotoMappings, PhotoSyncedGateway, SfsPhotoUploadClient};
+                - pattern: use crate::outbound::sfs_deletion::{PgSfsDeletion, SfsDeletionClient};
+                - pattern: use crate::outbound::email_api::GmailApi;
+                - pattern: use crate::util::redis::RedisClient;
+                - pattern: use crate::outbound::inbox_lifecycle::inbox_sync::{GmailInboxSync, InboxSync, InboxSyncEffects,
+                    InboxSyncSqs, PgInboxSync};
+                - pattern: use crate::outbound::message_labels::gmail_ops::PgGmailOps;
+                - pattern: use crate::outbound::message_labels::gmail_ops::{GmailOpsProvider, GmailOpsQueue, PgGmailOps};
+                - pattern: use connection_gateway_client::client::ConnectionGatewayClient;
+                - pattern: use sqlx::PgPool;
+                - pattern: use static_file_service_client::StaticFileServiceClient;
+                - pattern: use document_storage_service_client::DocumentStorageServiceClient;
+                - pattern: use authentication_service_client::AuthServiceClient;
+                - pattern: use sqs_client::SQS;
+              stopBy: end
+          - inside:
+              kind: function_item
+              has:
+                field: name
+                regex: ^context$
+              stopBy: end

@@ -1,0 +1,49 @@
+id: email-worker-no-runtime-io
+valid:
+  - |
+    use sqlx::PgPool;
+    fn context(db: PgPool) { let _ = crate::outbound::Repo(db); }
+  - |
+    use crate::outbound::email_api::GmailApi;
+    fn context() { let _ = GmailApi::new(); }
+  - |
+    async fn context() { let _ = redis::Client::open("redis://localhost"); }
+  - |
+    type Service = Domain<crate::outbound::PgRepo>;
+  - |
+    struct Context { service: Domain<crate::outbound::PgRepo> }
+  - |
+    async fn run_worker(db: sqlx::PgPool) { let ctx = context(db); ctx.service.process().await; }
+  - |
+    async fn run_worker(worker: sqs_worker::SQSWorker) { worker.receive_messages().await; }
+  - |
+    async fn run_worker() { tracing::info!(target: "redis::Client", "sqlx::query"); }
+invalid:
+  - |
+    async fn run_worker() { sqlx::query!("SELECT 1"); }
+  - |
+    async fn run_worker() { let _ = crate::outbound::Repo; }
+  - |
+    use sqlx::PgPool;
+    async fn run_worker() { PgPool::connect("db").await; }
+  - |
+    use crate::outbound::email_api::GmailApi;
+    fn run_worker() { GmailApi::new(); }
+  - |
+    fn run_worker() { PgGmailOps(pool); }
+  - |
+    fn other() { email_api_client::OutlookApiClientRepository::new(); }
+  - |
+    fn other() { GoogleCalendarClient::new(); }
+  - |
+    use sqlx::PgPool as P;
+  - |
+    use sqlx::{PgPool as P};
+  - |
+    use {sqlx as storage};
+  - |
+    use redis::Client;
+  - |
+    use crate::outbound::Repo;
+  - |
+    use email_api_client::GmailApiClientRepository;

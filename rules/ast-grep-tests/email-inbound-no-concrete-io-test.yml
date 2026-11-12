@@ -1,0 +1,122 @@
+id: email-inbound-no-concrete-io
+valid:
+  - |
+    use sqlx::types::Uuid;
+  - |
+    use sqlx::types::{Uuid};
+  - |
+    use sqlx_core::types::chrono::{DateTime, Utc};
+  - |
+    use aws_sdk_sqs::types::Message;
+  - |
+    use aws_sdk_sqs::types::{Message};
+  - |
+    use sqs_worker::cleanup_message;
+    async fn process(worker: &sqs_worker::SQSWorker, message: &aws_sdk_sqs::types::Message) { cleanup_message(worker, message).await; }
+  - |
+    fn process(message: &aws_sdk_sqs::types::Message) { sqs_client::email::trace_context::adopt(message); }
+  - |
+    use sqs_client::email::trace_context::{adopt, ATTRIBUTE};
+  - |
+    use sqs_client::email::SFSDeleteMessage;
+  - |
+    use sqs_client::email::BACKFILL_DEFERRALS_ATTRIBUTE;
+  - |
+    enum GetThreadError { QueryError(sqlx::Error) }
+  - |
+    enum ImportSignatureError { GmailApiError(gmail_client::GmailApiHttpError) }
+  - |
+    use crate::outbound::persistence_error::InboxPersistenceError;
+  - |
+    use email_api_client::domain::models::EmailApiError;
+  - |
+    async fn process(ctx: Context) { ctx.service.process().await; }
+  - |
+    fn process() { tracing::warn!(target: "email_db_client::messages", "sqlx::Error"); }
+invalid:
+  - |
+    use email_db_client::Client;
+  - |
+    use sqlx::Client;
+  - |
+    use sqlx_core::Client;
+  - |
+    use sqs_client::Client;
+  - |
+    use redis::Client;
+  - |
+    use reqwest::Client;
+  - |
+    use gmail_client::Client;
+  - |
+    use s3_client::Client;
+  - |
+    use aws_config::Client;
+  - |
+    use aws_sdk_sqs::Client;
+  - |
+    use rdkafka::Client;
+  - |
+    use opensearch::Client;
+  - |
+    use static_file_service_client::Client;
+  - |
+    use document_storage_service_client::Client;
+  - |
+    use authentication_service_client::Client;
+  - |
+    use connection_gateway_client::Client;
+  - |
+    use {sqlx as db};
+  - |
+    use sqlx::*;
+  - |
+    use email_api_client::*;
+  - |
+    use {redis, std::sync::Arc};
+  - |
+    use ::email_db_client::messages;
+  - |
+    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository as Provider};
+  - |
+    use email_api_client::{OutlookApiClientRepository};
+  - |
+    use sqlx::{types::Uuid, PgPool};
+  - |
+    use aws_sdk_sqs::types::{Message, DeleteMessageRequest};
+  - |
+    use sqs_client::email::{SFSDeleteMessage, Publisher};
+  - |
+    use sqs_client::email::trace_context::{adopt, Client};
+  - |
+    use gmail_client::GmailApiHttpError;
+  - |
+    enum WrongError { QueryError(sqlx::Error) }
+  - |
+    enum GetThreadError { WrongVariant(sqlx::Error) }
+  - |
+    fn process() { let _ = sqlx::Error::RowNotFound; }
+  - |
+    async fn context() { sqlx::query!("SELECT 1"); }
+  - |
+    use crate::{outbound::Repo};
+  - |
+    use crate::outbound::persistence_error::Database;
+  - |
+    use crate::util::redis::RedisClient;
+  - |
+    use email::outbound::EmailPgRepo;
+  - |
+    use calendar_events::outbound::google::GoogleCalendarClient;
+  - |
+    use calendar_events::{outbound::google::GoogleCalendarClient};
+  - |
+    use crate::calendar_tokens::CalendarTokenProviderAdapter;
+  - |
+    use crate::{util::redis::RedisClient};
+  - |
+    use crate::{util::{redis::RedisClient}};
+  - |
+    use crate::{calendar_tokens::{CalendarTokenProviderAdapter}};
+  - |
+    use email::{outbound::EmailPgRepo};

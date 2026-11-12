@@ -1,0 +1,64 @@
+id: email-outbound-no-inbound-host
+language: rust
+severity: error
+message: Email outbound adapters must not depend on API or pubsub implementations.
+note: |-
+  Tests may compose either side. Three existing adapter helpers remain temporarily at their old pubsub paths:
+  util::cg_refresh_email (gateway I/O), util::complete_transaction_with_processing_error (transaction mechanics),
+  and publish_email_event (best-effort broker adapter). Only those exact paths are exempt; no module or context is exempt.
+files:
+  - services/email_service/src/outbound.rs
+  - services/email_service/src/outbound/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+rule:
+  all:
+    - any:
+        - all:
+            - regex: ^(::\s*)?crate\s*::\s*(?:api|pubsub)\b
+            - any:
+                - any:
+                    - kind: scoped_identifier
+                    - kind: scoped_type_identifier
+                    - kind: scoped_use_list
+                    - kind: use_as_clause
+                    - kind: use_wildcard
+                  not:
+                    any:
+                      - inside:
+                          any:
+                            - kind: scoped_identifier
+                            - kind: scoped_type_identifier
+                            - kind: use_as_clause
+                      - inside:
+                          kind: scoped_use_list
+                          stopBy: end
+                - kind: identifier
+                  inside:
+                    any:
+                      - kind: use_declaration
+                      - kind: use_list
+                  not:
+                    inside:
+                      kind: scoped_use_list
+                      stopBy: end
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?crate$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:api|pubsub)\b|^\*
+    - not:
+        regex: ^(::\s*)?crate\s*::\s*pubsub\s*::\s*(?:util\s*::\s*(?:cg_refresh_email|complete_transaction_with_processing_error)|publish_email_event)(?:\s+as\s+\w+)?$

@@ -1,0 +1,51 @@
+id: email-worker-no-raw-state-access
+language: rust
+severity: error
+message: Worker contexts and loops must use services, not raw client state.
+note: |-
+  Only worker context() startup composition may access concrete dependency fields or call local clients.
+  Receive/ack via sqs_worker and composed service/broker capabilities remain allowed. Tests are exempt.
+files:
+  - services/email_service/src/api/context.rs
+  - services/email_service/src/pubsub/**/worker.rs
+  - services/email_service/src/pubsub/**/context.rs
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+rule:
+  any:
+    - kind: field_declaration
+      has:
+        field: name
+        regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+    - all:
+        - any:
+            - kind: field_expression
+              has:
+                field: field
+                regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+            - kind: call_expression
+              has:
+                field: function
+                kind: field_expression
+                has:
+                  field: value
+                  kind: identifier
+                  regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+        - inside:
+            kind: block
+            inside:
+              kind: function_item
+              stopBy: end
+            stopBy: end
+        - not:
+            inside:
+              kind: function_item
+              has:
+                field: name
+                regex: ^context$
+              stopBy: end

@@ -1,0 +1,82 @@
+id: email-outbound-no-inbound-host
+snapshots:
+  ? |
+    fn send() { crate::api::handler(); }
+  : labels:
+    - source: crate::api::handler
+      style: primary
+      start: 12
+      end: 31
+  ? |
+    fn send() { crate::pubsub::util::cg_refresh_email_unchecked(); }
+  : labels:
+    - source: crate::pubsub::util::cg_refresh_email_unchecked
+      style: primary
+      start: 12
+      end: 59
+  ? |
+    use crate::api::context::ApiContext;
+  : labels:
+    - source: crate::api::context::ApiContext
+      style: primary
+      start: 4
+      end: 35
+  ? |
+    use crate::pubsub as inbound;
+  : labels:
+    - source: crate::pubsub as inbound
+      style: primary
+      start: 4
+      end: 28
+  ? |
+    use crate::pubsub::context::PubSubContext;
+  : labels:
+    - source: crate::pubsub::context::PubSubContext
+      style: primary
+      start: 4
+      end: 41
+  ? |
+    use crate::pubsub::util::cg_refresh_calendar;
+  : labels:
+    - source: crate::pubsub::util::cg_refresh_calendar
+      style: primary
+      start: 4
+      end: 44
+  ? |
+    use crate::{api::context::ApiContext};
+  : labels:
+    - source: crate::{api::context::ApiContext}
+      style: primary
+      start: 4
+      end: 37
+    - source: crate
+      style: secondary
+      start: 4
+      end: 9
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+    - source: api::context::ApiContext
+      style: secondary
+      start: 12
+      end: 36
+  ? |
+    use crate::{pubsub::context::PubSubContext};
+  : labels:
+    - source: crate::{pubsub::context::PubSubContext}
+      style: primary
+      start: 4
+      end: 43
+    - source: crate
+      style: secondary
+      start: 4
+      end: 9
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 12
+      end: 42
+    - source: pubsub::context::PubSubContext
+      style: secondary
+      start: 12
+      end: 42

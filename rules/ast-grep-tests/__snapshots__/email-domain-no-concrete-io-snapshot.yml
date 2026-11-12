@@ -1,0 +1,428 @@
+id: email-domain-no-concrete-io
+snapshots:
+  ? |
+    fn process() { let _ = email_api_client::GmailApiClientRepository::new(); }
+  : labels:
+    - source: email_api_client::GmailApiClientRepository::new
+      style: primary
+      start: 23
+      end: 70
+  ? |
+    fn process() { let _ = sqlx::query!("SELECT 1"); }
+  : labels:
+    - source: sqlx::query
+      style: primary
+      start: 23
+      end: 34
+  ? |
+    fn process() { let _ = std::env::var("FLAG"); }
+  : labels:
+    - source: std::env::var
+      style: primary
+      start: 23
+      end: 36
+  ? |
+    type Repo = ::sqlx::Pool<::sqlx::Postgres>;
+  : labels:
+    - source: ::sqlx::Pool
+      style: primary
+      start: 12
+      end: 24
+  ? |
+    use ::email_api_client::OutlookApiClientRepository;
+  : labels:
+    - source: ::email_api_client::OutlookApiClientRepository
+      style: primary
+      start: 4
+      end: 50
+  ? |
+    use ::redis::Client;
+  : labels:
+    - source: ::redis::Client
+      style: primary
+      start: 4
+      end: 19
+  ? |
+    use ::sqlx as storage;
+  : labels:
+    - source: ::sqlx as storage
+      style: primary
+      start: 4
+      end: 21
+  ? |
+    use authentication_service_client::Client;
+  : labels:
+    - source: authentication_service_client::Client
+      style: primary
+      start: 4
+      end: 41
+  ? |
+    use aws_config::Client;
+  : labels:
+    - source: aws_config::Client
+      style: primary
+      start: 4
+      end: 22
+  ? |
+    use aws_sdk_sqs::Client;
+  : labels:
+    - source: aws_sdk_sqs::Client
+      style: primary
+      start: 4
+      end: 23
+  ? |
+    use calendar_events::outbound::google::GoogleCalendarClient;
+  : labels:
+    - source: calendar_events::outbound::google::GoogleCalendarClient
+      style: primary
+      start: 4
+      end: 59
+  ? |
+    use calendar_events::{outbound::google::GoogleCalendarClient};
+  : labels:
+    - source: calendar_events::{outbound::google::GoogleCalendarClient}
+      style: primary
+      start: 4
+      end: 61
+    - source: calendar_events
+      style: secondary
+      start: 4
+      end: 19
+    - source: outbound::google::GoogleCalendarClient
+      style: secondary
+      start: 22
+      end: 60
+    - source: outbound::google::GoogleCalendarClient
+      style: secondary
+      start: 22
+      end: 60
+  ? |
+    use connection_gateway_client::Client;
+  : labels:
+    - source: connection_gateway_client::Client
+      style: primary
+      start: 4
+      end: 37
+  ? |
+    use crate::inbound::handler;
+  : labels:
+    - source: crate::inbound::handler
+      style: primary
+      start: 4
+      end: 27
+  ? |
+    use crate::outbound as adapters;
+  : labels:
+    - source: crate::outbound as adapters
+      style: primary
+      start: 4
+      end: 31
+  ? |
+    use crate::util::redis::RedisClient;
+  : labels:
+    - source: crate::util::redis::RedisClient
+      style: primary
+      start: 4
+      end: 35
+  ? |
+    use crate::{outbound::Repo};
+  : labels:
+    - source: crate::{outbound::Repo}
+      style: primary
+      start: 4
+      end: 27
+    - source: crate
+      style: secondary
+      start: 4
+      end: 9
+    - source: outbound::Repo
+      style: secondary
+      start: 12
+      end: 26
+    - source: outbound::Repo
+      style: secondary
+      start: 12
+      end: 26
+  ? |
+    use document_storage_service_client::Client;
+  : labels:
+    - source: document_storage_service_client::Client
+      style: primary
+      start: 4
+      end: 43
+  ? |
+    use email::outbound::EmailPgRepo;
+  : labels:
+    - source: email::outbound::EmailPgRepo
+      style: primary
+      start: 4
+      end: 32
+  ? |
+    use email::{outbound::EmailPgRepo};
+  : labels:
+    - source: email::{outbound::EmailPgRepo}
+      style: primary
+      start: 4
+      end: 34
+    - source: email
+      style: secondary
+      start: 4
+      end: 9
+    - source: outbound::EmailPgRepo
+      style: secondary
+      start: 12
+      end: 33
+    - source: outbound::EmailPgRepo
+      style: secondary
+      start: 12
+      end: 33
+  ? |
+    use email_api_client as provider;
+  : labels:
+    - source: email_api_client as provider
+      style: primary
+      start: 4
+      end: 32
+  ? |
+    use email_api_client::*;
+  : labels:
+    - source: email_api_client::*
+      style: primary
+      start: 4
+      end: 23
+  ? |
+    use email_api_client::{OutlookApiClientRepository as Provider};
+  : labels:
+    - source: email_api_client::{OutlookApiClientRepository as Provider}
+      style: primary
+      start: 4
+      end: 62
+    - source: email_api_client
+      style: secondary
+      start: 4
+      end: 20
+    - source: OutlookApiClientRepository as Provider
+      style: secondary
+      start: 23
+      end: 61
+    - source: OutlookApiClientRepository as Provider
+      style: secondary
+      start: 23
+      end: 61
+  ? |
+    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository};
+  : labels:
+    - source: email_api_client::{domain::models::EmailApiError, GmailApiClientRepository}
+      style: primary
+      start: 4
+      end: 79
+    - source: email_api_client
+      style: secondary
+      start: 4
+      end: 20
+    - source: GmailApiClientRepository
+      style: secondary
+      start: 54
+      end: 78
+    - source: GmailApiClientRepository
+      style: secondary
+      start: 54
+      end: 78
+  ? |
+    use email_api_client::{outbound::{GmailApiClientRepository}};
+  : labels:
+    - source: email_api_client::{outbound::{GmailApiClientRepository}}
+      style: primary
+      start: 4
+      end: 60
+    - source: email_api_client
+      style: secondary
+      start: 4
+      end: 20
+    - source: outbound::{GmailApiClientRepository}
+      style: secondary
+      start: 23
+      end: 59
+    - source: outbound::{GmailApiClientRepository}
+      style: secondary
+      start: 23
+      end: 59
+  ? |
+    use email_api_client::{self as provider, domain::models::EmailApiError};
+  : labels:
+    - source: email_api_client::{self as provider, domain::models::EmailApiError}
+      style: primary
+      start: 4
+      end: 71
+    - source: email_api_client
+      style: secondary
+      start: 4
+      end: 20
+    - source: self as provider
+      style: secondary
+      start: 23
+      end: 39
+    - source: self as provider
+      style: secondary
+      start: 23
+      end: 39
+  ? |
+    use email_db_client::Client;
+  : labels:
+    - source: email_db_client::Client
+      style: primary
+      start: 4
+      end: 27
+  ? |
+    use gmail_client::Client;
+  : labels:
+    - source: gmail_client::Client
+      style: primary
+      start: 4
+      end: 24
+  ? |
+    use opensearch::Client;
+  : labels:
+    - source: opensearch::Client
+      style: primary
+      start: 4
+      end: 22
+  ? |
+    use rdkafka::Client;
+  : labels:
+    - source: rdkafka::Client
+      style: primary
+      start: 4
+      end: 19
+  ? |
+    use redis as cache;
+  : labels:
+    - source: redis as cache
+      style: primary
+      start: 4
+      end: 18
+  ? |
+    use redis::Client;
+  : labels:
+    - source: redis::Client
+      style: primary
+      start: 4
+      end: 17
+  ? |
+    use reqwest::Client;
+  : labels:
+    - source: reqwest::Client
+      style: primary
+      start: 4
+      end: 19
+  ? |
+    use s3_client::Client;
+  : labels:
+    - source: s3_client::Client
+      style: primary
+      start: 4
+      end: 21
+  ? |
+    use sqlx::*;
+  : labels:
+    - source: sqlx::*
+      style: primary
+      start: 4
+      end: 11
+  ? |
+    use sqlx::Client;
+  : labels:
+    - source: sqlx::Client
+      style: primary
+      start: 4
+      end: 16
+  ? |
+    use sqlx::{PgPool, query};
+  : labels:
+    - source: sqlx::{PgPool, query}
+      style: primary
+      start: 4
+      end: 25
+  ? |
+    use sqlx_core::Client;
+  : labels:
+    - source: sqlx_core::Client
+      style: primary
+      start: 4
+      end: 21
+  ? |
+    use sqs_client::Client;
+  : labels:
+    - source: sqs_client::Client
+      style: primary
+      start: 4
+      end: 22
+  ? |
+    use sqs_worker::Client;
+  : labels:
+    - source: sqs_worker::Client
+      style: primary
+      start: 4
+      end: 22
+  ? |
+    use static_file_service_client::Client;
+  : labels:
+    - source: static_file_service_client::Client
+      style: primary
+      start: 4
+      end: 38
+  ? |
+    use std::env as environment;
+  : labels:
+    - source: std::env as environment
+      style: primary
+      start: 4
+      end: 27
+  ? |
+    use std::{env};
+  : labels:
+    - source: std::{env}
+      style: primary
+      start: 4
+      end: 14
+    - source: std
+      style: secondary
+      start: 4
+      end: 7
+    - source: env
+      style: secondary
+      start: 10
+      end: 13
+    - source: env
+      style: secondary
+      start: 10
+      end: 13
+  ? |
+    use {email_api_client};
+  : labels:
+    - source: email_api_client
+      style: primary
+      start: 5
+      end: 21
+    - source: '{email_api_client}'
+      style: secondary
+      start: 4
+      end: 22
+  ? |
+    use {email_db_client, std::sync::Arc};
+  : labels:
+    - source: email_db_client
+      style: primary
+      start: 5
+      end: 20
+    - source: '{email_db_client, std::sync::Arc}'
+      style: secondary
+      start: 4
+      end: 37
+  ? |
+    use {sqlx as db, std::sync::Arc};
+  : labels:
+    - source: sqlx as db
+      style: primary
+      start: 5
+      end: 15

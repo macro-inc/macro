@@ -1,0 +1,130 @@
+id: email-domain-no-concrete-io
+language: rust
+severity: error
+message: Email domain code must use ports, not concrete infrastructure or adapter modules.
+note: |-
+  Domain use cases own policy; outbound adapters own I/O and environment reads.
+  Tests may compose real adapters. email_api_client::domain contracts remain allowed.
+  Tracing target strings are not Rust paths and are not matched. No production exemptions.
+files:
+  - crates/email/src/domain.rs
+  - crates/email/src/domain/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+rule:
+  any:
+    - all:
+        - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|sqs_worker|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*(?:inbound|outbound)\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*env\b)
+        - any:
+            - any:
+                - kind: scoped_identifier
+                - kind: scoped_type_identifier
+                - kind: scoped_use_list
+                - kind: use_as_clause
+                - kind: use_wildcard
+              not:
+                any:
+                  - inside:
+                      any:
+                        - kind: scoped_identifier
+                        - kind: scoped_type_identifier
+                        - kind: use_as_clause
+                  - inside:
+                      kind: scoped_use_list
+                      stopBy: end
+            - kind: identifier
+              inside:
+                any:
+                  - kind: use_declaration
+                  - kind: use_list
+              not:
+                inside:
+                  kind: scoped_use_list
+                  stopBy: end
+    - kind: scoped_use_list
+      not:
+        inside:
+          kind: scoped_use_list
+          stopBy: end
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?email_api_client$
+        - has:
+            field: list
+            has:
+              regex: ^(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound|self)\b|^\*
+    - kind: scoped_use_list
+      not:
+        inside:
+          kind: scoped_use_list
+          stopBy: end
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?crate$
+        - has:
+            field: list
+            has:
+              regex: ^(?:inbound|outbound|calendar_tokens|calendar_request_gate|calendar_refresh|util\s*::\s*redis)\b|^\*
+    - kind: scoped_use_list
+      not:
+        inside:
+          kind: scoped_use_list
+          stopBy: end
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?email$
+        - has:
+            field: list
+            has:
+              regex: ^(?:outbound)\b|^\*
+    - kind: scoped_use_list
+      not:
+        inside:
+          kind: scoped_use_list
+          stopBy: end
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?calendar_events$
+        - has:
+            field: list
+            has:
+              regex: ^(?:outbound)\b|^\*
+    - kind: scoped_use_list
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?crate$
+        - has:
+            field: list
+            has:
+              kind: scoped_use_list
+              all:
+                - has:
+                    field: path
+                    regex: ^util$
+                - has:
+                    field: list
+                    has:
+                      regex: ^redis\b
+    - kind: scoped_use_list
+      not:
+        inside:
+          kind: scoped_use_list
+          stopBy: end
+      all:
+        - has:
+            field: path
+            regex: ^(::\s*)?std$
+        - has:
+            field: list
+            has:
+              regex: ^(?:env)\b|^\*

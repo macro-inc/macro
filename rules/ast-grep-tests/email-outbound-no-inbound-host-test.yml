@@ -1,0 +1,35 @@
+id: email-outbound-no-inbound-host
+valid:
+  - |
+    use crate::domain::Service;
+  - |
+    use crate::composition::workers::Service;
+  - |
+    use crate::pubsub::util::cg_refresh_email;
+  - |
+    fn send() { crate::pubsub::util::cg_refresh_email(client, owner, event); }
+  - |
+    use crate::pubsub::util::complete_transaction_with_processing_error;
+  - |
+    fn finish() { crate::pubsub::util::complete_transaction_with_processing_error(tx, result); }
+  - |
+    fn send() { crate::pubsub::publish_email_event(broker, event); }
+  - |
+    fn send() { tracing::warn!(target: "crate::pubsub::util", "adapter failure"); }
+invalid:
+  - |
+    use crate::pubsub::context::PubSubContext;
+  - |
+    use crate::api::context::ApiContext;
+  - |
+    use crate::{pubsub::context::PubSubContext};
+  - |
+    use crate::{api::context::ApiContext};
+  - |
+    use crate::pubsub as inbound;
+  - |
+    use crate::pubsub::util::cg_refresh_calendar;
+  - |
+    fn send() { crate::pubsub::util::cg_refresh_email_unchecked(); }
+  - |
+    fn send() { crate::api::handler(); }

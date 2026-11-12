@@ -1,0 +1,110 @@
+id: email-domain-no-concrete-io
+valid:
+  - |
+    use email_api_client::domain::models::EmailApiError;
+  - |
+    use email_api_client::{domain::{models::EmailApiError, ports::RateLimiter}};
+  - |
+    use crate::domain::mailbox::MailboxService;
+  - |
+    use crate::{domain::{redis as metrics, sqlx::Model}};
+  - |
+    fn process<R: Repository>(repo: &R) { repo.read(); }
+  - |
+    fn process() { tracing::info!(target: "email_db_client::messages::update", "redis::Client"); }
+  - |
+    // use sqlx::PgPool;
+    fn process() { let redis = 1; let _ = redis; }
+invalid:
+  - |
+    use email_db_client::Client;
+  - |
+    use sqlx::Client;
+  - |
+    use sqlx_core::Client;
+  - |
+    use sqs_client::Client;
+  - |
+    use redis::Client;
+  - |
+    use reqwest::Client;
+  - |
+    use gmail_client::Client;
+  - |
+    use s3_client::Client;
+  - |
+    use aws_config::Client;
+  - |
+    use aws_sdk_sqs::Client;
+  - |
+    use rdkafka::Client;
+  - |
+    use opensearch::Client;
+  - |
+    use static_file_service_client::Client;
+  - |
+    use document_storage_service_client::Client;
+  - |
+    use authentication_service_client::Client;
+  - |
+    use connection_gateway_client::Client;
+  - |
+    use sqs_worker::Client;
+  - |
+    use sqlx::{PgPool, query};
+  - |
+    use sqlx::*;
+  - |
+    use ::redis::Client;
+  - |
+    use {sqlx as db, std::sync::Arc};
+  - |
+    use {email_db_client, std::sync::Arc};
+  - |
+    use redis as cache;
+  - |
+    use ::sqlx as storage;
+  - |
+    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository};
+  - |
+    use email_api_client::{OutlookApiClientRepository as Provider};
+  - |
+    use calendar_events::outbound::google::GoogleCalendarClient;
+  - |
+    use calendar_events::{outbound::google::GoogleCalendarClient};
+  - |
+    use email_api_client::{outbound::{GmailApiClientRepository}};
+  - |
+    use ::email_api_client::OutlookApiClientRepository;
+  - |
+    use email_api_client as provider;
+  - |
+    use {email_api_client};
+  - |
+    use email_api_client::*;
+  - |
+    use email_api_client::{self as provider, domain::models::EmailApiError};
+  - |
+    use crate::{outbound::Repo};
+  - |
+    use crate::inbound::handler;
+  - |
+    use email::outbound::EmailPgRepo;
+  - |
+    use crate::util::redis::RedisClient;
+  - |
+    use email::{outbound::EmailPgRepo};
+  - |
+    use crate::outbound as adapters;
+  - |
+    use std::{env};
+  - |
+    use std::env as environment;
+  - |
+    fn process() { let _ = sqlx::query!("SELECT 1"); }
+  - |
+    type Repo = ::sqlx::Pool<::sqlx::Postgres>;
+  - |
+    fn process() { let _ = email_api_client::GmailApiClientRepository::new(); }
+  - |
+    fn process() { let _ = std::env::var("FLAG"); }
