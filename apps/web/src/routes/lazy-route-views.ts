@@ -193,3 +193,8 @@ export const OTHER_APP_VIEWS = [
   ExternalRouteView,
   ExternalChatRouteView,
 ];
+
+export const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);

@@ -101,3 +101,11 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+## Team vault cleanup
+
+- Run `OwnedEntityCleanup::prepare_team_deletion` before census and ordinary cleanup;
+  namespace failures stop before entity, session, subscription or team deletion.
+  Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
+- Keep membership removal and rollback unchanged: vault items belong to the team,
+  retain their creator, and lose departing members through current membership checks.
