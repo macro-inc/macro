@@ -3,6 +3,7 @@
  * I420 frames for the track. A worker, because the call's thread must never
  * wait on this: reading 720p frames on it would be heard in the agent's voice.
  */
+import { Worker } from 'node:worker_threads';
 import { z } from 'zod';
 import type { FrameFeed } from '../share.ts';
 import { latestFrameQueue, shareSettings } from '../share.ts';
@@ -34,6 +35,7 @@ const endsWithin = 500;
 
 /** Captures `display` until stopped. */
 export const workerFrames = (display: string): FrameFeed => {
+  // node:worker_threads's Worker, not the web one: sharp's WebAssembly build overwrites the global.
   const frames = new Worker(new URL(worker, import.meta.url));
   const { width, height, fps } = shareSettings;
   const queue = latestFrameQueue(width, height);
@@ -46,7 +48,7 @@ export const workerFrames = (display: string): FrameFeed => {
     state.onEnd?.();
   };
   const tell = (message: ToWorker): void => frames.postMessage(message);
-  frames.addEventListener('message', ({ data }) => {
+  frames.on('message', (data: unknown) => {
     const told = FromWorker.safeParse(data);
     if (!told.success) return;
     if (told.data.kind === 'started') state.pid = told.data.pid;
@@ -54,7 +56,7 @@ export const workerFrames = (display: string): FrameFeed => {
       queue.push(new Uint8Array(told.data.data));
     else end();
   });
-  frames.addEventListener('error', end);
+  frames.on('error', end);
   tell({ kind: 'start', display, width, height, fps });
   return {
     stop: async () => {

@@ -2,6 +2,7 @@
  * The worker of a share's frame feed (`share-feed.ts`): ffmpeg captures the
  * desktop, and frames are cut here, off the call's thread.
  */
+import { parentPort } from 'node:worker_threads';
 import {
   captureArgv,
   captureEnv,
@@ -11,11 +12,8 @@ import {
 } from './desktop.ts';
 import { type FromWorker, ToWorker } from './share-feed.ts';
 
-// Bun's types don't say this module is a worker.
-declare const self: Worker;
-
 const tell = (message: FromWorker, transfer: ArrayBuffer[] = []): void =>
-  self.postMessage(message, transfer);
+  parentPort?.postMessage(message, transfer);
 
 const state: { stopped: boolean; end?: () => void } = { stopped: false };
 
@@ -43,7 +41,7 @@ const capture = async (
   }
 };
 
-self.addEventListener('message', ({ data }) => {
+parentPort?.on('message', (data: unknown) => {
   const told = ToWorker.safeParse(data);
   if (!told.success) return;
   if (told.data.kind === 'stop') {
