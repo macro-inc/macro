@@ -20,24 +20,35 @@ describe('agent import handoff', () => {
     const notion = files.providers.find((p) => p.appSlug === 'notion')!;
     const handoff = agentImportHandoff(files, notion);
     expect(handoff.input).toBe('Import my Notion workspace into Macro.');
-    expect(handoff.instructions).toContain('ImportFromNotion');
-    expect(handoff.instructions).not.toContain('CreateImportEntity');
+    expect(handoff.instructions).toContain('macro.imports.notion');
+    expect(handoff.instructions).not.toMatch(
+      /ImportFromNotion|ImportNotionPage/
+    );
   });
 
   it('uses the reviewed Linear importer', () => {
     const tasks = IMPORT_CATEGORIES.tasks;
     const linear = tasks.providers.find((p) => p.appSlug === 'linear')!;
     const { instructions } = agentImportHandoff(tasks, linear);
-    expect(instructions).toContain('ImportFromLinear');
-    expect(instructions).not.toContain('CreateImportEntity');
+    expect(instructions).toContain('macro.imports.linear');
+    expect(instructions).not.toContain('ImportFromLinear');
   });
 
   it('uses the reviewed Jira importer', () => {
     const tasks = IMPORT_CATEGORIES.tasks;
     const jira = tasks.providers.find((p) => p.appSlug === 'jira')!;
-    expect(agentImportHandoff(tasks, jira).instructions).toContain(
-      'ImportFromJira'
-    );
+    const { instructions } = agentImportHandoff(tasks, jira);
+    expect(instructions).toContain('macro.imports.jira');
+    expect(instructions).not.toContain('ImportFromJira');
+  });
+
+  it('keeps the Slack ledger through macro.imports.ledger', () => {
+    const channels = IMPORT_CATEGORIES.channels;
+    const slack = channels.providers.find((p) => p.ledger === 'slack')!;
+    const { instructions } = agentImportHandoff(channels, slack);
+    expect(instructions).toContain('macro.imports.ledger.list');
+    expect(instructions).toContain('macro.imports.ledger.recordImported');
+    expect(instructions).not.toMatch(/ListImportEntities|CreateImportEntity/);
   });
 });
 

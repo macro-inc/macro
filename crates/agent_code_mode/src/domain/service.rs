@@ -314,6 +314,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.agents.coding() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                // macro.imports.
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ListImportEntities"
+                | "ImportNotionPage"
+                | "ImportFromNotion"
+                | "ImportFromLinear"
+                | "ImportFromJira"
                 // macro.connectedApps.discover and .addServer.
                 | "DiscoverConnectors"
                 | "ConnectMcpServer"

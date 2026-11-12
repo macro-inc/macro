@@ -120,6 +120,9 @@ enforced by the ordinary backend APIs.
   `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
+- `src/entities/imports/`: `macro.imports.<notion|linear|jira>` (reviewed
+  workspace plans, `notion.importPage`) and `macro.imports.ledger`
+  (`ImportItem` handles), over cognition `/import/*`.
 - `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
   thread to quoted text (`POST /documents/{id}/comments/text`, the
   `CommentOnText` tool's domain function); a 422 becomes
@@ -275,8 +278,10 @@ the existing gateway prefixes.
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
 
-- Workspace-import report/cancel endpoints remain app-only review plumbing,
-  explicitly classified alongside the existing Notion routes in coverage skips.
+- `macro.imports` plans, reports and cancels workspace imports through the
+  per-source `/import/workspaces/{source}` routes; the older Notion-only
+  report/cancel routes stay app-only in coverage skips. `start(review)` checks the
+  review presents that source's plan and submits it; there is no start route.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
 

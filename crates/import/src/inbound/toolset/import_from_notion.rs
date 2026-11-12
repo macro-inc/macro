@@ -1,12 +1,10 @@
 //! The agent's one tool for importing a Notion workspace.
 
-use std::time::Duration;
-
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
-use import_notion::domain::model::{ImportScope, NotionId};
+use import_notion::domain::model::ImportScope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -14,14 +12,10 @@ use super::{ImportToolContext, import_error, tool_error};
 use crate::domain::models::{NotionImportReport, NotionSharing, RunStatus};
 use crate::domain::ports::ImportError;
 use crate::domain::service::NotionWorkspaceImporter;
+use crate::inbound::workspace_plan::{PLAN_WAIT, notion_scope};
 
 #[cfg(test)]
 mod test;
-
-/// How long `plan` waits for planning before handing back a plan that is
-/// still being made: long enough for a tiny workspace to come back ready,
-/// short enough that the agent presents the review while it fills in.
-const PLAN_WAIT: Duration = Duration::from_secs(5);
 
 /// What the tool is asked to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
@@ -119,22 +113,12 @@ impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromN
 }
 
 fn scope(roots: &[String]) -> ToolResult<ImportScope> {
-    if roots.iter().all(|root| root.trim().is_empty()) {
-        return Ok(ImportScope::Everything);
-    }
-    let ids = roots
-        .iter()
-        .filter(|root| !root.trim().is_empty())
-        .map(|root| {
-            NotionId::parse(root).ok_or_else(|| {
-                tool_error(
-                    format!("`{root}` is not a Notion page or database URL or id."),
-                    anyhow::anyhow!("unparseable Notion root"),
-                )
-            })
-        })
-        .collect::<ToolResult<Vec<_>>>()?;
-    Ok(ImportScope::Roots { ids })
+    notion_scope(roots).map_err(|root| {
+        tool_error(
+            format!("`{root}` is not a Notion page or database URL or id."),
+            anyhow::anyhow!("unparseable Notion root"),
+        )
+    })
 }
 
 /// What the model should know and do next.

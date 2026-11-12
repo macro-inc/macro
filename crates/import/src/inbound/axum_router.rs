@@ -1,25 +1,31 @@
 //! HTTP surface for the import pipeline.
 
-use crate::domain::models::{ImportSource, ImportState, NotionImportReport};
+use crate::domain::models::{ImportSource, ImportState, NotionImportReport, NotionSharing};
 use crate::domain::ports::ImportError;
 use crate::domain::service::{
-    ImportService, NotionWorkspaceImporter, RunImportOutcome, WorkspaceImporter,
+    ImportService, ImportStager, NotionPageImporter, NotionWorkspaceImporter, RunImportOutcome,
+    WorkspaceImporter,
 };
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
+use import_tracker::domain::model::TrackerError;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+mod ledger;
+// A glob, so the OpenAPI derive finds the handlers' generated `__path_*` items.
+pub use ledger::*;
 
 #[cfg(test)]
 mod test;
@@ -70,13 +76,29 @@ impl<T, Auth> FromRef<ImportRouterState<T, Auth>> for MacroAuthorizationState<Au
 /// Build the import router.
 pub fn import_router<T, Auth, S>(state: ImportRouterState<T, Auth>) -> Router<S>
 where
-    T: ImportService + WorkspaceImporter,
+    T: ImportService + ImportStager + NotionPageImporter + WorkspaceImporter,
     Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
     Router::new()
         .route("/import/state", get(get_state_handler::<T, Auth>))
         .route("/import/run", post(run_import_handler::<T, Auth>))
+        .route(
+            "/import/entities",
+            get(list_entities_handler::<T, Auth>).post(track_entity_handler::<T, Auth>),
+        )
+        .route(
+            "/import/entities/{id}",
+            delete(discard_entity_handler::<T, Auth>),
+        )
+        .route(
+            "/import/notion/pages",
+            post(import_notion_page_handler::<T, Auth>),
+        )
+        .route(
+            "/import/workspaces/{source}/plan",
+            post(plan_workspace_handler::<T, Auth>),
+        )
         .route(
             "/import/runs/{source}/discover",
             post(discover_handler::<T, Auth>),
@@ -188,12 +210,138 @@ pub async fn cancel_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthoriza
     }
 }
 
-fn error_response(e: ImportError) -> Response {
-    if let ImportError::Admission(error) = e {
-        return error.into_response();
+/// Body for planning a workspace import.
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanWorkspaceImportRequest {
+    /// Who sees what the import writes, as the user chose. Required of a
+    /// user on a team (409 `sharing_required` without it); a user without a
+    /// team always gets a personal import.
+    #[serde(default)]
+    pub sharing: Option<NotionSharing>,
+    /// Notion only: page or database URLs (or ids) to import, each with
+    /// everything under it. Empty plans everything the connection can see.
+    #[serde(default)]
+    pub roots: Vec<String>,
+}
+
+/// Plan a reviewed workspace import, replacing any earlier plan for this
+/// source. Planning goes on in the background; this answers within seconds
+/// with where it got. Nothing is written until the plan's import review is
+/// approved.
+#[utoipa::path(
+    post,
+    path = "/import/workspaces/{source}/plan",
+    params(("source" = ImportSource, Path)),
+    request_body = PlanWorkspaceImportRequest,
+    responses(
+        (status = 200, body = NotionImportReport, description = "Where planning stands"),
+        (status = 400, description = "Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import"),
+        (status = 409, body = ImportErrorBody, description = "Sharing must be chosen, or the source is not connected"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "import"
+)]
+#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id, roots = body.roots.len(), sharing = ?body.sharing))]
+pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<T>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(source): Path<String>,
+    Json(body): Json<PlanWorkspaceImportRequest>,
+) -> Response {
+    let Ok(source) = ImportSource::from_str(&source) else {
+        return unknown_source_response(&source);
+    };
+
+    let user = user.authorization.user.macro_user_id;
+    let planned = match source {
+        ImportSource::Notion => {
+            let scope = match super::workspace_plan::notion_scope(&body.roots) {
+                Ok(scope) => scope,
+                Err(root) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("not a Notion page or database URL or id: {root}"),
+                    )
+                        .into_response();
+                }
+            };
+            service
+                .prepare_notion_import(&user, scope, body.sharing, super::workspace_plan::PLAN_WAIT)
+                .await
+        }
+        ImportSource::Slack => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Slack channels are discovered and imported from Settings, not planned",
+            )
+                .into_response();
+        }
+        ImportSource::Linear | ImportSource::Jira => {
+            if body.roots.iter().any(|root| !root.trim().is_empty()) {
+                return (StatusCode::BAD_REQUEST, "roots narrow Notion imports only")
+                    .into_response();
+            }
+            service
+                .prepare_workspace_import(
+                    &user,
+                    source,
+                    body.sharing,
+                    super::workspace_plan::PLAN_WAIT,
+                )
+                .await
+        }
+    };
+
+    match planned {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => error_response(error),
     }
-    tracing::error!(error = ?e, "import request failed");
-    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+}
+
+/// Why an import request could not go ahead, for the caller to act on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportErrorCode {
+    /// The user is on a team and must choose who sees the import.
+    SharingRequired,
+    /// The source is not connected, or its connection is turned off.
+    NotConnected,
+    /// The import is not in a state that allows this; `error` says why.
+    NotReady,
+}
+
+/// Error body for a request the caller can fix.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ImportErrorBody {
+    /// What to do about it.
+    pub code: ImportErrorCode,
+    /// The explanation.
+    pub error: String,
+}
+
+fn error_response(e: ImportError) -> Response {
+    let code = match &e {
+        ImportError::Admission(error) => return error.into_response(),
+        ImportError::NotionSharingRequired => ImportErrorCode::SharingRequired,
+        ImportError::NotionNotConnected | ImportError::Tracker(TrackerError::NotConnected) => {
+            ImportErrorCode::NotConnected
+        }
+        ImportError::NotReady(_) => ImportErrorCode::NotReady,
+        _ => {
+            tracing::error!(error = ?e, "import request failed");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    (
+        StatusCode::CONFLICT,
+        Json(ImportErrorBody {
+            code,
+            error: e.to_string(),
+        }),
+    )
+        .into_response()
 }
 
 fn unknown_source_response(source: &str) -> Response {

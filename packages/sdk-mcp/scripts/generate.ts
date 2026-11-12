@@ -564,8 +564,36 @@ function isSubObject(type: ts.Type) {
   return (
     declaration !== undefined &&
     !staticById(declaration) &&
-    publicMethods(declaration).length > 0
+    leadsToMethods(declaration, new Set())
   );
+}
+
+/**
+ * Whether a class has public methods, or readonly properties that lead to
+ * some (a namespace that only groups others, like `macro.imports.notion`).
+ */
+function leadsToMethods(
+  declaration: ts.ClassDeclaration,
+  visiting: Set<ts.ClassDeclaration>
+): boolean {
+  if (publicMethods(declaration).length > 0) return true;
+  if (visiting.has(declaration)) return false;
+  visiting.add(declaration);
+  return declaration.members.some((member) => {
+    if (
+      !ts.isPropertyDeclaration(member) ||
+      !isPublicMember(member) ||
+      hasModifier(member, ts.ModifierFlags.Static) ||
+      !hasModifier(member, ts.ModifierFlags.Readonly)
+    )
+      return false;
+    const target = classOf(checker.getTypeAtLocation(member));
+    return (
+      target !== undefined &&
+      !staticById(target) &&
+      leadsToMethods(target, visiting)
+    );
+  });
 }
 
 function publicMethods(declaration: ts.ClassDeclaration) {

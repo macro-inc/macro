@@ -270,6 +270,31 @@ fn code_mode_hides_tools_the_sdk_covers() {
 }
 
 #[test]
+fn code_mode_imports_through_the_sdk_instead_of_the_import_tools() {
+    let names = [
+        "CreateImportEntity",
+        "DeleteImportEntity",
+        "ListImportEntities",
+        "ImportNotionPage",
+        "ImportFromNotion",
+        "ImportFromLinear",
+        "ImportFromJira",
+    ];
+    let tools = tools_for_agent_code_mode();
+    for name in names {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    let direct = tools_for(AiHost::AgentSession);
+    for name in names {
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+}
+
+#[test]
 fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
     let tools = tools_for_agent_code_mode();
     for name in [

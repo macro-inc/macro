@@ -52,7 +52,9 @@ method signature or hint tag changes the snapshots: review the diff, then
 - Synchronous methods that only build a handle (`thread.channel()`) and
   `byId`/`toJSON` are not operations; argument-free calls returning a
   sub-object (`document.canvas()`) and readonly sub-object properties
-  (`document.access`) are paths to that object's operations.
+  (`document.access`) are paths to that object's operations, including a
+  namespace that only groups others (`macro.imports.notion`). A class gets
+  operations for methods it inherits only from abstract bases.
 - Results serialize handles through `toJSON`; any other class instance is
   reduced to its class name so no authenticated client leaks.
 - Groups are code mode's entity directories
