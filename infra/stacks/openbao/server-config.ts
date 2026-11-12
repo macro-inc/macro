@@ -1,6 +1,9 @@
 /** Mount point of the EFS access point; the upstream entrypoint owns `/openbao/file`. */
 export const DATA_MOUNT_PATH = '/openbao/file';
 export const API_PORT = 8200;
+// The AWS KMS seal plugin (openbao-plugins `kms-aws`), pinned by digest.
+const AWS_KMS_PLUGIN_VERSION = 'v0.1.1';
+const AWS_KMS_PLUGIN_IMAGE = `ghcr.io/openbao/openbao-plugin-kms-aws:${AWS_KMS_PLUGIN_VERSION}@sha256:24a0a1294385a34224848d0d6ff2c9287f9c9b0ded1de953cc539dc76ced160c`;
 
 /**
  * The server HCL. The upstream image's entrypoint writes `BAO_LOCAL_CONFIG` to
@@ -32,6 +35,16 @@ listener "tcp" {
 storage "raft" {
   path = "${DATA_MOUNT_PATH}/data"
   node_id = "macro-dev"
+}
+
+# OpenBao 2.7 no longer builds in the AWS KMS seal; it is an external plugin,
+# downloaded (digest-pinned) into the data volume at startup.
+plugin_directory = "${DATA_MOUNT_PATH}/plugins"
+plugin_auto_download = true
+
+plugin "kms" "awskms" {
+  image = "${AWS_KMS_PLUGIN_IMAGE}"
+  version = "${AWS_KMS_PLUGIN_VERSION}"
 }
 
 seal "awskms" {
