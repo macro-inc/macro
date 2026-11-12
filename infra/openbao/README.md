@@ -23,7 +23,7 @@ shred -u "$key"
 
 Rotating the key means re-running the provisioning for every team.
 
-1. Open the operator tunnel from the openbao stack README ("Operator tunnel").
+1. Open the [operator tunnel](../stacks/openbao/README.md#operator-tunnel).
    It listens on local port 18443.
 2. Derive the public key and read the issuer from the document storage
    service's dev Doppler config. Only the public half is written to disk:
