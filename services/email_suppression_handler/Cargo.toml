@@ -7,7 +7,6 @@ version = "0.1.0"
 [[bin]]
 name = "email_suppression_handler"
 path = "src/main.rs"
-test = false
 
 [dependencies]
 anyhow = { workspace = true }
@@ -24,3 +23,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }

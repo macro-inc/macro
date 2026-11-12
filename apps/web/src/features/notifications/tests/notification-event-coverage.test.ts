@@ -1,3 +1,4 @@
+import * as notificationSchemas from '@app/lib/service-clients/service-notification/generated/schemas';
 import type { NotificationType } from '@core/types';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
 import { describe, expect, it } from 'vitest';
@@ -5,17 +6,14 @@ import { getNotificationIcon } from '../../entity/extractors-notification/notifi
 import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 
 /**
- * Every `NotifEvent` tag, read from the generated notification-service
- * schemas rather than copied by hand: each variant's tag is its own
- * generated `NotifEventOneOf…Tag` constant.
+ * Every `NotifEvent` tag comes from the generated notification-service index.
+ * Unlike an import.meta.glob expansion, the index changes when schemas are
+ * renamed, so Vitest cannot reuse imports of removed files from its cache.
  */
-const tagModules = import.meta.glob<Record<string, Record<string, string>>>(
-  '../../../lib/service-clients/service-notification/generated/schemas/notifEventOneOf*Tag.ts',
-  { eager: true }
+const tagEnums = Object.entries(notificationSchemas).filter(
+  ([name]) => name.startsWith('NotifEventOneOf') && name.endsWith('Tag')
 );
-const generatedTags = Object.values(tagModules).flatMap((module) =>
-  Object.values(module).flatMap((tag) => Object.values(tag))
-);
+const generatedTags = tagEnums.flatMap(([, tag]) => Object.values(tag));
 // `call_started` is added to the generated tags by `NotificationType` itself.
 const tags = [...new Set([...generatedTags, 'call_started'])];
 
@@ -29,7 +27,7 @@ const BELL_ON_PURPOSE = new Set<string>(['reminder']);
 
 describe('notification event coverage', () => {
   it('reads every event tag from the generated schemas', () => {
-    expect(generatedTags.length).toBe(Object.keys(tagModules).length);
+    expect(generatedTags.length).toBe(tagEnums.length);
     expect(tags.length).toBeGreaterThan(30);
   });
 

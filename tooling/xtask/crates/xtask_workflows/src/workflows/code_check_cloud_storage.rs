@@ -182,6 +182,7 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
+        .add_env(("REDIS_URI", "redis://127.0.0.1:6379"))
         .map(with_test_compile_env)
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.

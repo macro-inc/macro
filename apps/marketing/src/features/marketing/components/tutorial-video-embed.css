@@ -67,6 +67,13 @@
   box-shadow: 0 8px 24px #0004;
 }
 
+/* A frame that is still loading waits out of sight, then fades in. */
+.tutorial-video-poster-window { transition: opacity 260ms ease-out; }
+.tutorial-video-poster-window[data-pending=true] { opacity: 0; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-video-poster-window { transition: none; }
+}
+
 /* The source frames share a 1700x918 window at (110, 132) in 1920x1080. */
 .tutorial-video-poster-window img {
   position: absolute;

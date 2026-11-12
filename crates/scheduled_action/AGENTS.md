@@ -64,7 +64,9 @@ each run.
   whole log); the first passing check ends the draft, else the turn ending
   does (all bounded by `DRAFT_TIMEOUT`). It turns the last
   passing check (else the last check) into the draft, then stops and deletes
-  the session and the row, also when the request is dropped mid-draft;
+  the session and the row, also once it sees the request dropped mid-draft
+  (the web composer, given no answer, sends the draft once more,
+  `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items

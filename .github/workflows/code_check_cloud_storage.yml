@@ -755,6 +755,7 @@ jobs:
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
+      REDIS_URI: redis://127.0.0.1:6379
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'

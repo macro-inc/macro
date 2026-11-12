@@ -1,7 +1,6 @@
 import './TutorialEntries.css';
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import VideoIcon from '@icon/system/regular/video-camera.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
@@ -40,7 +39,7 @@ type EntryProps = {
   onDismiss: () => void;
 };
 
-/** Shows the dismiss X on hover on desktop, always on touch (no hover there). */
+/** Shows the dismiss X on hover or keyboard focus. */
 function DismissButton(props: { onDismiss: () => void }) {
   return (
     <Button
@@ -48,11 +47,7 @@ function DismissButton(props: { onDismiss: () => void }) {
       size="icon-sm"
       aria-label={t('tutorials.dismiss')}
       tooltip={t('tutorials.dismiss')}
-      class={cn(
-        'mr-1 shrink-0',
-        !isTouchDevice() &&
-          'opacity-0 focus-visible:opacity-100 group-hover/tutorial:opacity-100'
-      )}
+      class="mr-1 shrink-0 opacity-0 focus-visible:opacity-100 group-hover/tutorial:opacity-100"
       onClick={props.onDismiss}
     >
       <XIcon class="size-4 shrink-0" />
@@ -73,7 +68,7 @@ export function TutorialRowView(props: EntryProps) {
   return (
     <div
       data-tutorial-row
-      class="soup-row-wide group/tutorial relative mx-(--soup-row-gutter) flex min-h-10 w-[calc(100%-2*var(--soup-row-gutter))] items-center rounded-xl not-touch:hover:bg-list-hover touch:min-h-[44px]"
+      class="soup-row-wide group/tutorial relative mx-(--soup-row-gutter) flex min-h-10 w-[calc(100%-2*var(--soup-row-gutter))] items-center rounded-xl not-touch:hover:bg-list-hover"
     >
       <button
         type="button"
@@ -156,12 +151,7 @@ export function TutorialSidebarItemView(
         <span class="truncate">
           {props.label ?? t('tutorials.watchTutorial')}
         </span>
-        <span
-          class={cn(
-            'ml-auto shrink-0 pr-1 text-xs text-ink-extra-muted',
-            isTouchDevice() ? 'invisible' : 'group-hover/tutorial:invisible'
-          )}
-        >
+        <span class="ml-auto shrink-0 pr-1 text-xs text-ink-extra-muted group-hover/tutorial:invisible">
           {props.length}
         </span>
       </ViewSidebar.Item>

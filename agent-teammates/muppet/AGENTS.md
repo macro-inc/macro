@@ -22,19 +22,28 @@ fails isn't run.
   of typed functions, and how scripts run.
 - `packages/lib/utilities/scripts/index.ts`: the type checker and loader for
   scripts.
+- `packages/lib/runtimes/`: how a behavior's events are worked through.
+  `simple` wakes the agent once at a time; `parallel` handles one event at a
+  time per source, for teammates whose replies must come in order; `factory`
+  hands every event to a pool of `workers`, in no order, for factories that
+  only need the work done fast. `pieces.ts` is what they are composed from.
 - `packages/lib/examples/`: two small agents that run without credentials.
 
 ## Scope
 
 - Owns: the behavior, event, hook, capability and runtime mechanisms; the
   Claude Code agent; utilities any agent can use (schedules, jobs,
-  credentials, browser, Macro chat and screen share, failures, time).
+  credentials, browser, Macro chat and screen share, failures, time, wake
+  telemetry).
 - Not here: any particular agent's prompts, memory or product logic →
   the agent's own repository, started from `../starter-agent`.
 
 ## Boundaries
 
 - Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript.
+- `utilities/telemetry` emits through `@macro-inc/observability`
+  (`packages/observability`), which the agent passes in: the library does
+  not import it.
 - Used by: agents built from `../starter-agent`, which link `packages/lib`.
 - Not in the root workspace: it has its own `package.json`, `bun.lock` and
   `flake.nix`, and the root checks don't cover it.
