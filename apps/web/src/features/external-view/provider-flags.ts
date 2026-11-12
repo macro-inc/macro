@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableWhatsappLinked,
+  isFeatureEnabled,
   type RemoteFlag,
 } from '@core/constant/featureFlags';
 import { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
@@ -17,6 +18,11 @@ export type EnabledProviders = {
   /** Providers whose flag is on, in sidebar order. */
   providers: ExternalChatProvider[];
 };
+
+/** Outside a reactive scope (navigation, menus): some provider's flag is on now. */
+export function anyProviderEnabled(): boolean {
+  return Object.values(PROVIDER_FLAGS).some((flag) => isFeatureEnabled(flag));
+}
 
 /** Providers whose flag is on. External exists while any one is. */
 export function useEnabledProviders(): Accessor<EnabledProviders> {

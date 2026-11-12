@@ -1,5 +1,10 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
-import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
+import {
+  SplitRouter,
+  useNavigate,
+  useParams,
+  useRouteState,
+} from '@app/lib/split-router';
 import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -31,9 +36,11 @@ export function ExternalView() {
   useSplitDisplayName(() => 'External');
   const enabled = useEnabledProviders();
   const providers = () => enabled().providers;
+  // A link (an account notification) can name the provider to show.
+  const routed = useRouteState(externalRoute);
   const [picked, setPicked] = createSignal<ExternalChatProvider>();
   const selected = () => {
-    const choice = picked();
+    const choice = picked() ?? routed()?.provider;
     return choice && providers().includes(choice) ? choice : providers()[0];
   };
 
