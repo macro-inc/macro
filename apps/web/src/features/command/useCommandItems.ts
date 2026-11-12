@@ -425,6 +425,7 @@ export function useCommandItems(
   const filteredItems = createMemo(() => {
     const q = query();
     const items = categoryItems();
+    const ranked = rankItems(items, q);
 
     if (
       q.trim().length <= 3 &&
@@ -433,7 +434,6 @@ export function useCommandItems(
       !CommandState.isEntityActionMode()
     ) {
       const trimmedQuery = q.trim();
-      const ranked = rankItems(items, q);
       const topCommands = ranked.filter(isCommandItem).slice(0, 3);
 
       if (!trimmedQuery || topCommands.length > 0) {
@@ -450,8 +450,6 @@ export function useCommandItems(
       }
     }
 
-    const ranked = rankItems(items, q);
-
     if (shouldShowSearchRow(q)) {
       // With no direct results the menu would only offer search, so also
       // offer handing the query to AI.
@@ -467,6 +465,7 @@ export function useCommandItems(
   return {
     items: filteredItems,
     isLoadingEntities: entities.isLoadingEntities,
+    isSearchingEntities: entities.isSearchingEntities,
     isSettling: entities.isSettling,
     pagination: entities.pagination,
   };

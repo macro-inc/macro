@@ -95,6 +95,7 @@ export function ProjectsCollection(props: {
   canOpenInNewSplit: Accessor<boolean>;
   onCopyLink(id: string): void;
   onCopyId(id: string): void;
+  onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
 }) {
@@ -314,6 +315,9 @@ export function ProjectsCollection(props: {
           openInNewTab(() => props.onOpen(row.project.id, { newSplit: false }))
         }
         onRename={(row) => setRenaming(row)}
+        onChangeIcon={
+          props.onChangeIcon && ((row) => props.onChangeIcon?.(row.project))
+        }
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }

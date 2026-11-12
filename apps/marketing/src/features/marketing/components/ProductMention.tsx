@@ -11,6 +11,7 @@ import TasksIcon from '@icon/system/regular/list-checks.svg';
 import CallsIcon from '@icon/system/regular/phone-call.svg';
 import CanvasIcon from '@icon/system/regular/shapes.svg';
 import AgentsIcon from '@icon/system/regular/sparkle.svg';
+import TagsIcon from '@icon/system/regular/tag.svg';
 import SpreadsheetsIcon from '@icon/wide-spreadsheet.svg';
 import SkillsIcon from '@phosphor/blueprint.svg';
 import SnippetsIcon from '@phosphor/brackets-curly.svg';
@@ -39,26 +40,44 @@ const products = [
   { name: 'Macro Skills', href: '/skills', icon: SkillsIcon },
   { name: 'Macro Snippets', href: '/snippets', icon: SnippetsIcon },
   { name: 'Macro GitHub', href: '/github', icon: GitHubIcon },
+  { name: 'Macro Tags', href: '/product/tagging', icon: TagsIcon },
 ];
 const productNames = new RegExp(
   `(${products.map((product) => product.name).join('|')})`,
   'g'
 );
 
-/** Explicit product names in section copy become navigable product mentions. */
+/**
+ * Explicit product names in section copy become navigable product mentions.
+ * Punctuation after a name stays on the mention's line.
+ */
 export function ProductCopy(props: { text: string }) {
+  const parts = () => {
+    const pieces = props.text.split(productNames);
+    return pieces.map((text, index) => {
+      const product = products.find((item) => item.name === text);
+      if (product) {
+        const after = pieces[index + 1]?.match(/^[.,;:!?)’]+/)?.[0] ?? '';
+        return { product, text: after };
+      }
+      // The punctuation was drawn with the mention before it.
+      const led =
+        index > 0 && products.some((item) => item.name === pieces[index - 1]);
+      return { text: led ? text.replace(/^[.,;:!?)’]+/, '') : text };
+    });
+  };
   return (
-    <For each={props.text.split(productNames)}>
+    <For each={parts()}>
       {(part) => (
-        <Show
-          when={products.find((product) => product.name === part)}
-          fallback={part}
-        >
+        <Show when={part.product} fallback={part.text}>
           {(product) => (
-            <a class="product-mention" href={product().href}>
-              <Dynamic component={product().icon} aria-hidden="true" />
-              <span>{product().name.replace('Macro ', '')}</span>
-            </a>
+            <span class="product-mention-line">
+              <a class="product-mention" href={product().href}>
+                <Dynamic component={product().icon} aria-hidden="true" />
+                <span>{product().name.replace('Macro ', '')}</span>
+              </a>
+              {part.text}
+            </span>
           )}
         </Show>
       )}

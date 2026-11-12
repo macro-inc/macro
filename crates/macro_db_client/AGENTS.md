@@ -38,6 +38,10 @@ errors; extend it additively before services begin writing new turn states.
 Install widened checks as `NOT VALID` and validate in a separate migration so
 the scan does not retain the replacement migration's exclusive table lock.
 
+Entity appearance is nullable JSON on each owning entity table (including routine
+template snapshots); appearance-only writes preserve content timestamps. Document
+lists and content save responses retain the stored appearance alongside ordinary metadata.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -133,6 +137,8 @@ foreign keys; the broker deletes expired rows.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
+Hosted runtime enrollment generations are additive counters owned by
+`hosted_runtimes`.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,

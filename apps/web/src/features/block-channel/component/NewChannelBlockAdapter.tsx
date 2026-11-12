@@ -1,6 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
-  ChatWithAgentButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -260,19 +259,18 @@ function NewTop(props: { channelId: string }) {
           mobileViews={isMobile() ? mobileViews() : undefined}
           tools={[
             {
-              label: 'Ask Macro',
+              label: () => t('entityActions.askMacro'),
               icon: ChatWithAgentIcon,
               action: () => {
                 const entity = askMacroEntity();
                 if (!entity) return;
                 fireAndForget(openChatWithAgent(entity), 'channel-header');
               },
-              // Desktop gets a header button instead (see below).
-              condition: () => isMobile() && !!askMacroEntity(),
+              condition: () => !!askMacroEntity(),
             },
             {
               group: 'file',
-              label: 'Rename',
+              label: () => t('entityActions.rename'),
               icon: RenameIcon,
               hotkeyToken: TOKENS.entity.action.rename,
               action: () => {
@@ -287,14 +285,14 @@ function NewTop(props: { channelId: string }) {
             },
             {
               group: 'file',
-              label: 'Set channel picture',
+              label: () => t('entityActions.setChannelPicture'),
               icon: PictureIcon,
               action: picture.pickFile,
               condition: picture.isAvailable,
             },
             {
               group: 'file',
-              label: 'Remove channel picture',
+              label: () => t('entityActions.removeChannelPicture'),
               icon: TrashIcon,
               action: picture.remove,
               condition: () => picture.isAvailable() && picture.hasPicture(),
@@ -314,22 +312,6 @@ function NewTop(props: { channelId: string }) {
             />
           </HeaderIsland>
         </SplitHeaderRight>
-      </Show>
-      {/* Desktop only: on mobile the action lives in the title drawer above. */}
-      <Show when={!isMobile() && askMacroEntity()}>
-        {(entity) => (
-          <SplitHeaderRight>
-            <HeaderIsland>
-              <HeaderActionGroup label="Conversation actions">
-                <ChatWithAgentButton
-                  grouped
-                  entity={entity()}
-                  label="Ask Macro"
-                />
-              </HeaderActionGroup>
-            </HeaderIsland>
-          </SplitHeaderRight>
-        )}
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
       <Show

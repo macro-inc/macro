@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -163,7 +164,28 @@ function FormBlockContent(props: {
   return (
     <FormProvider value={context}>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel name={name} />
+        <BlockItemSplitLabel
+          name={name}
+          icon={
+            <Show when={source.detail()}>
+              {(detail) => (
+                <EntityAppearanceTrigger
+                  entity={{
+                    type: 'form',
+                    id: detail().form.id,
+                    name: detail().form.name,
+                    ownerId: detail().form.ownerId,
+                    access: detail().access,
+                    appearance: detail().form.appearance,
+                  }}
+                  editable={
+                    detail().access === 'edit' || detail().access === 'owner'
+                  }
+                />
+              )}
+            </Show>
+          }
+        />
       </SplitHeaderLeft>
       <Show when={source.detail()}>
         {(detail) => (

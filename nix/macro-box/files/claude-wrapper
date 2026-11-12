@@ -1,0 +1,19 @@
+# `claude` on a Macro computer. With a Claude sign-in (harnessd's credential
+# file), sessions run on the customer's Claude plan: the Macro gateway env
+# macrod gives every session is dropped so credentials never mix. Without
+# one, nothing changes and the session runs on Macro credits.
+credential=@credential@
+if [ -e "$credential" ]; then
+  token=""
+  if [ -r "$credential" ]; then
+    token=$(@jq@ -r '.token // empty' "$credential" 2>/dev/null) || token=""
+  fi
+  if [ -n "$token" ]; then
+    unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+    export CLAUDE_CODE_OAUTH_TOKEN="$token"
+  else
+    echo "claude: the Claude sign-in at $credential is unreadable; using Macro credits" >&2
+  fi
+  unset token
+fi
+exec @claude@ "$@"
