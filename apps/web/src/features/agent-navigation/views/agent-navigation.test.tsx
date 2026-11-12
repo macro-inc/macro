@@ -91,15 +91,15 @@ describe('AgentNavigationProvider', () => {
     );
   });
 
-  it.each([
-    'nativeApp',
-    'phoneBrowser',
-  ] as const)('opens nothing on mobile (%s), even for a frame addressed to this tab', (kind) => {
-    device[kind] = true;
-    render(() => <AgentNavigationProvider />);
+  it.each(['nativeApp', 'phoneBrowser'] as const)(
+    'opens nothing on mobile (%s), even for a frame addressed to this tab',
+    (kind) => {
+      device[kind] = true;
+      render(() => <AgentNavigationProvider />);
 
-    socket.deliver?.(FRAME_FOR_THIS_TAB);
+      socket.deliver?.(FRAME_FOR_THIS_TAB);
 
-    expect(applyOpen).not.toHaveBeenCalled();
-  });
+      expect(applyOpen).not.toHaveBeenCalled();
+    }
+  );
 });

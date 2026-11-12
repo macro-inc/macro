@@ -508,19 +508,19 @@ describe('first prompt on the create', () => {
     );
   });
 
-  it.each([
-    'nativeApp',
-    'phoneBrowser',
-  ] as const)('names no tab for a first prompt typed on mobile (%s)', async (kind) => {
-    flags.agentNavigation = true;
-    device[kind] = true;
-    startPendingSession({ prompt: 'Open the plan', userId: 'me' });
-    await settle();
+  it.each(['nativeApp', 'phoneBrowser'] as const)(
+    'names no tab for a first prompt typed on mobile (%s)',
+    async (kind) => {
+      flags.agentNavigation = true;
+      device[kind] = true;
+      startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+      await settle();
 
-    const [request] = harness.create.mock.calls[0];
-    expect(request.prompt).toBe('Open the plan');
-    expect(request).not.toHaveProperty('promptClientId');
-  });
+      const [request] = harness.create.mock.calls[0];
+      expect(request.prompt).toBe('Open the plan');
+      expect(request).not.toHaveProperty('promptClientId');
+    }
+  );
 
   it("keeps an effort's first prompt for after the session is configured", async () => {
     const id = startPendingSession({

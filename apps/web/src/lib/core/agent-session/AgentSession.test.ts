@@ -350,26 +350,26 @@ describe('AgentSession', () => {
     live.release();
   });
 
-  it.each([
-    'nativeApp',
-    'phoneBrowser',
-  ] as const)('sends no tab with a prompt typed on mobile (%s)', async (kind) => {
-    flags.agentNavigation = true;
-    device[kind] = true;
-    onTestFinished(() => {
-      flags.agentNavigation = false;
-      device[kind] = false;
-    });
-    const live = AgentSession.acquire(SESSION);
-    await live.load();
+  it.each(['nativeApp', 'phoneBrowser'] as const)(
+    'sends no tab with a prompt typed on mobile (%s)',
+    async (kind) => {
+      flags.agentNavigation = true;
+      device[kind] = true;
+      onTestFinished(() => {
+        flags.agentNavigation = false;
+        device[kind] = false;
+      });
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
 
-    await live.issue({ type: 'prompt', prompt: 'open the plan' });
+      await live.issue({ type: 'prompt', prompt: 'open the plan' });
 
-    const [[, prompt]] = harness.control.mock.calls;
-    expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
-    expect(prompt).not.toHaveProperty('clientId');
-    live.release();
-  });
+      const [[, prompt]] = harness.control.mock.calls;
+      expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
+      expect(prompt).not.toHaveProperty('clientId');
+      live.release();
+    }
+  );
 
   it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
     harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
