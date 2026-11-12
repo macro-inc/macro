@@ -19,6 +19,13 @@ import { Project } from '../projects/project';
 import { visibleTags } from '../workspace/items';
 import { WorkspaceQuery } from '../workspace/query';
 import type { WorkspaceTag } from '../workspace/types';
+import {
+  type NameKind,
+  type NameQuery,
+  type NamesLookup,
+  nameQueries,
+  namesLookup,
+} from './names';
 import type {
   SearchOptions,
   SearchPage,
@@ -66,11 +73,14 @@ const searchTypes: readonly SearchType[] = [
  * transcripts, calendar events, agent session transcripts, AI chats, and CRM
  * companies when asked for. Results come most relevant first, as typed entity
  * handles, with the same filters as the per-type searches and more: exact
- * matching, tags, one inbox and agent session transcripts.
+ * matching, tags, one inbox and agent session transcripts. `names` finds
+ * the items the user named, of every kind, in one fast call.
  *
- * @routing Use when finding or looking up the user's own Macro content by keyword, across types or in one; not browsing recent items (`macro.workspace`), the web, or one item already in context.
+ * @routing Use when finding the user's own Macro content by keyword, or the items a request names (a #channel, a person, a folder, a project or document title), across types or in one; not browsing recent items (`macro.workspace`), the web, or one item already in context.
  *
  * @agent
+ * When the request names items (a #channel, @person, folder, project, document, task, database, agent, label or tag), resolve every name with one macro.search.names call before any keyword search: it checks every kind at once, so you need not guess the kind, and marks the exact matches. Keyword search below is for finding content, not a named item.
+ *
  * Search is keyword search, not semantic: pass 1-3 words that would literally appear in the item, not the user's description. Whitespace-separated terms are ANDed; for documents and email each word is a prefix and terms may match different passages, while for other kinds the query is one adjacent phrase prefix, so long phrases match nothing. Quote a multi-word phrase; use matchType 'exact' for a whole word, identifier or email address. Search a person and a topic separately. To find someone's email, search their quoted address, not their name.
  *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
@@ -145,6 +155,55 @@ export class SearchNamespace {
       const page = await this.fetch(scope, body, options, cursor);
       return { items: page.results, nextCursor: page.nextCursor };
     });
+  }
+
+  /**
+   * Resolve names the user wrote (#channel, @person, a folder, project, doc or tag) to items of every kind in one fast call, exact matches first.
+   *
+   * Pass every name at once, up to 10, each as written (`'#bug-reports'`,
+   * `'Q4 Launch'`, `'@Riley'`), or as `{ name, kinds }` to look in some
+   * kinds only; `options.kinds` limits every name that sets none. Kinds:
+   * `channel`, `person`, `project` (a folder), `initiative` (what the app
+   * calls a project), `document`, `task`, `database`, `agent`, `label` (an
+   * email label), `tag` and `channel_label`.
+   *
+   * Each result lists its name's exact matches first, at most 10, then up to
+   * 5 near ones whose name contains it. A match is `exact` when the item's
+   * name is the name asked for, ignoring case, spacing and one leading `#` or
+   * `@`; a person also matches on first name or email address. One exact
+   * match is the item the user meant. Several (a channel and a folder both
+   * named Launch) are told apart by the kind the request implies, or by
+   * asking. With none, the near matches are only candidates: "bug-reports"
+   * never means bug-reports-archive, so ask rather than pick one.
+   *
+   * `unavailable` lists the kinds that could not be checked this time; a
+   * name with no match may still name an item of one of them, so look those
+   * kinds up another way before saying it does not exist.
+   *
+   * @readonly
+   *
+   * @example Resolve the items a request names
+   * ```js
+   * const { results, unavailable } = await macro.search.names([
+   *   '#design-feedback', 'Q4 Launch', { name: 'Riley', kinds: ['person'] },
+   * ]);
+   * return { data: results.map(({ name, matches }) => {
+   *   const exact = matches.filter(m => m.exact);
+   *   return exact.length === 1
+   *     ? { name, type: exact[0].type, id: exact[0].entity.id }
+   *     : { name, ask: matches.map(m => ({ type: m.type, name: m.name })) };
+   * }), unavailable };
+   * ```
+   */
+  async names(
+    names: NameQuery[],
+    options: { kinds?: NameKind[] } = {},
+  ): Promise<NamesLookup> {
+    const queries = nameQueries(names, options.kinds);
+    const response = unwrap(
+      await this.client.search.searchNames({ body: { names: queries } }),
+    );
+    return namesLookup(this.client, response);
   }
 
   private async request(

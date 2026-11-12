@@ -6,6 +6,8 @@
  */
 import type {
   ErrorResponse,
+  NameSearchRequest,
+  NameSearchResponse,
   SimpleSearchResponse,
   SimpleUnifiedSearchParams,
   UnifiedSearchParams,
@@ -87,6 +89,71 @@ export const unifiedSearch = async (
     status: res.status,
     headers: res.headers,
   } as unifiedSearchResponse;
+};
+
+/**
+ * @summary Look up names: per name, the items of the kinds asked for that the caller
+can access whose name is that name, ignoring case and one leading `#` or
+`@`, then a few whose name contains it.
+ */
+export type searchNamesResponse200 = {
+  data: NameSearchResponse;
+  status: 200;
+};
+
+export type searchNamesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type searchNamesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type searchNamesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type searchNamesResponseSuccess = searchNamesResponse200 & {
+  headers: Headers;
+};
+export type searchNamesResponseError = (
+  | searchNamesResponse400
+  | searchNamesResponse401
+  | searchNamesResponse500
+) & {
+  headers: Headers;
+};
+
+export type searchNamesResponse =
+  | searchNamesResponseSuccess
+  | searchNamesResponseError;
+
+export const getSearchNamesUrl = () => {
+  return `/search/names`;
+};
+
+export const searchNames = async (
+  nameSearchRequest: NameSearchRequest,
+  options?: RequestInit
+): Promise<searchNamesResponse> => {
+  const res = await fetch(getSearchNamesUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nameSearchRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchNamesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchNamesResponse;
 };
 
 /**

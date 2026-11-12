@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { SimpleUnifiedSearchData, SimpleUnifiedSearchErrors, SimpleUnifiedSearchResponses, UnifiedSearchData, UnifiedSearchErrors, UnifiedSearchResponses } from './types.gen';
+import type { SearchNamesData, SearchNamesErrors, SearchNamesResponses, SimpleUnifiedSearchData, SimpleUnifiedSearchErrors, SimpleUnifiedSearchResponses, UnifiedSearchData, UnifiedSearchErrors, UnifiedSearchResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -63,6 +63,22 @@ export class Sdk extends HeyApiClient {
     public unifiedSearch<ThrowOnError extends boolean = false>(options: Options<UnifiedSearchData, ThrowOnError>): RequestResult<UnifiedSearchResponses, UnifiedSearchErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UnifiedSearchResponses, UnifiedSearchErrors, ThrowOnError>({
             url: '/search',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Look up names: per name, the items of the kinds asked for that the caller
+     * can access whose name is that name, ignoring case and one leading `#` or
+     * `@`, then a few whose name contains it.
+     */
+    public searchNames<ThrowOnError extends boolean = false>(options: Options<SearchNamesData, ThrowOnError>): RequestResult<SearchNamesResponses, SearchNamesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SearchNamesResponses, SearchNamesErrors, ThrowOnError>({
+            url: '/search/names',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

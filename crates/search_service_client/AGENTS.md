@@ -10,6 +10,8 @@ authenticating with the internal API key header instead of a user JWT.
 - `src/lib.rs`: `SearchServiceClient::new` — sets `INTERNAL_API_KEY_HEADER` on
   every request via `reqwest::Client::builder().default_headers(...)`.
 - `src/search_unified.rs` / `src/search_channel_name.rs`: one file per endpoint.
+- `src/search_names.rs`: `search_names`, the name lookup of every kind for one
+  user (`/internal/search/names`), with a 5 s timeout; a 400 is `Refused`.
 
 ## Scope
 
