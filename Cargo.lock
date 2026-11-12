@@ -23361,6 +23361,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "arrayvec 0.7.6",
  "async-graphql",
  "async-openai",
  "aws-config",
