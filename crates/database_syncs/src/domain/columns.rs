@@ -7,6 +7,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
+use import_notion::domain::macro_cells::MAX_NAME;
 use models_databases::{
     ColumnChange, ColumnId, ColumnKind, DatabaseOp, NewColumn, NewOption, OptionId, TableId,
 };
@@ -203,7 +204,13 @@ pub fn unique_name(name: &str, taken: &HashSet<String>) -> String {
 
     let mut index = 2;
     loop {
-        let candidate = format!("{name} {index}");
+        // Shorten the name so the suffix still fits the name limit.
+        let suffix = format!(" {index}");
+        let base: String = name
+            .chars()
+            .take(MAX_NAME.saturating_sub(suffix.chars().count()))
+            .collect();
+        let candidate = format!("{base}{suffix}");
         if !taken.contains(&candidate.to_lowercase()) {
             return candidate;
         }
