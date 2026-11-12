@@ -18,7 +18,7 @@ import { PaperFeatureGraphic } from '../../features/marketing/components/paper/P
 import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
-import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
+import { EmailTaskDemo } from '../../features/marketing/components/tasks/EmailTaskDemo';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/email/email-hero.css';
@@ -201,7 +201,7 @@ export function RouteEmail() {
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
-          render={() => <TaskContextDemo />}
+          render={() => <EmailTaskDemo />}
         />
       </FeaturePageSection>
       <FeaturePageSection
