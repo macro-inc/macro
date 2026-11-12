@@ -237,8 +237,9 @@ export function ChannelsMobileView(props: {
         <Show
           when={props.searchQuery.trim()}
           fallback={
-            // Phones have no conversation pane, so its tutorial pill
-            // sits in the empty conversation list instead.
+            // Touch layouts have no conversation pane, so its tutorial pill
+            // sits in the empty conversation list instead (on tablets;
+            // phones show no tutorials).
             <ChannelsEmptyState scope="recents">
               <TutorialPill tutorial="chat" />
             </ChannelsEmptyState>
