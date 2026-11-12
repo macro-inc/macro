@@ -2016,14 +2016,15 @@ impl GraphqlSoupChannelMessagePreview {
     }
 }
 
-/// Embedded persona of the viewer's private conversation with an agent.
+/// Persona of the viewer's DM with an agent, embedded in its channel.
 ///
-/// It has no `id` because it is how this channel presents its persona,
-/// placeholder name included, and must not merge into a shared bot record.
+/// It has no `id`: `botId` refers to the persona rather than identifying this
+/// value, and a viewer has at most one DM per persona.
 pub struct GraphqlSoupChannelAgentDm(SoupAgentDmProfile);
 
-/// The persona an agent DM shows. Embedded in its channel, with no `id`: once
-/// the persona is gone its name reads "Unavailable agent".
+/// The persona an agent DM shows, as the channel list reads it. Embedded in its
+/// channel, with no `id`. The name is "Unavailable agent" when the persona has no
+/// profile.
 #[Object]
 impl GraphqlSoupChannelAgentDm {
     /// The persona's bot identifier.

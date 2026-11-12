@@ -24,6 +24,23 @@ fn email_senders_are_embedded_and_legacy_participants_remain_available() {
 }
 
 #[test]
+fn channel_agent_dm_persona_is_embedded() {
+    let sdl = crate::build_schema().sdl();
+    let agent_dm = sdl
+        .split_once("type GraphqlSoupChannelAgentDm {")
+        .expect("channel agent DM type")
+        .1
+        .split_once('}')
+        .expect("end of channel agent DM type")
+        .0;
+    assert!(agent_dm.lines().any(|line| line.trim() == "botId: ID!"));
+    assert!(
+        !agent_dm.lines().any(|line| line.trim().starts_with("id:")),
+        "the persona is embedded in its channel, not normalized by bot ID"
+    );
+}
+
+#[test]
 fn soup_response_schema_exposes_frontend_fields() {
     let sdl = crate::build_schema().sdl();
 

@@ -8660,8 +8660,9 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 }
 
 """
-The persona an agent DM shows. Embedded in its channel, with no `id`: once
-the persona is gone its name reads "Unavailable agent".
+The persona an agent DM shows, as the channel list reads it. Embedded in its
+channel, with no `id`. The name is "Unavailable agent" when the persona has no
+profile.
 """
 type GraphqlSoupChannelAgentDm {
 	"""
