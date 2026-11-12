@@ -33,6 +33,21 @@ describe('documents.create', () => {
       'documents.create does not take `content`; its options are `name`, `markdown`, `project`.',
     );
     expect(requests).toEqual([]);
+  });
+
+  test('creates a document from its markdown option', async () => {
+    const requests: CreateMarkdownHandlerData['body'][] = [];
+    const client = {
+      storage: {
+        createMarkdownHandler: async ({
+          body,
+        }: Pick<CreateMarkdownHandlerData, 'body'>) => {
+          requests.push(body);
+          return { data: { documentId: DOCUMENT_ID } };
+        },
+      },
+    } as unknown as MacroClient;
+    const documents = new DocumentNamespace(client);
 
     const document = await documents.create({
       name: 'Launch plan',

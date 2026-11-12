@@ -144,11 +144,11 @@ export class DocumentNamespace {
     content: FileContent;
     project?: Project;
   }): Promise<Document> {
-    rejectUnknownOptions('documents.upload', options, [
-      'name',
-      'content',
-      'project',
-    ]);
+    rejectUnknownOptions('documents.upload', options, {
+      name: true,
+      content: true,
+      project: true,
+    });
     const { documentId } = unwrap(
       await this.client.storage.uploadFile({
         query: { fileName: options.name, projectId: options.project?.id },
@@ -175,17 +175,17 @@ export class DocumentNamespace {
     attachment?: EmailAttachment;
     isTask?: boolean;
   }) {
-    rejectUnknownOptions('documents.createUpload', options, [
-      'name',
-      'sha',
-      'fileType',
-      'mimeType',
-      'project',
-      'team',
-      'branchedFrom',
-      'attachment',
-      'isTask',
-    ]);
+    rejectUnknownOptions('documents.createUpload', options, {
+      name: true,
+      sha: true,
+      fileType: true,
+      mimeType: true,
+      project: true,
+      team: true,
+      branchedFrom: true,
+      attachment: true,
+      isTask: true,
+    });
     const body: CreateDocumentRequest = {
       documentName: options.name,
       sha: options.sha,
@@ -220,16 +220,11 @@ export class DocumentNamespace {
    *
    * @write
    */
-  async create(opts: {
+  create(opts: {
     name: string;
     markdown?: string;
     project?: Project;
   }): Promise<Document> {
-    rejectUnknownOptions('documents.create', opts, [
-      'name',
-      'markdown',
-      'project',
-    ]);
     return Document.create(this.client, opts);
   }
 
@@ -243,7 +238,10 @@ export class DocumentNamespace {
     name: string;
     project?: Project;
   }): Promise<Document> {
-    rejectUnknownOptions('documents.createCanvas', opts, ['name', 'project']);
+    rejectUnknownOptions('documents.createCanvas', opts, {
+      name: true,
+      project: true,
+    });
     const result = unwrap(
       await this.client.storage.createCanvasHandler({
         body: { documentName: opts.name, projectId: opts.project?.id },
@@ -282,10 +280,10 @@ export class DocumentNamespace {
     name: string;
     project?: Project;
   }): Promise<Spreadsheet> {
-    rejectUnknownOptions('documents.createSpreadsheet', opts, [
-      'name',
-      'project',
-    ]);
+    rejectUnknownOptions('documents.createSpreadsheet', opts, {
+      name: true,
+      project: true,
+    });
     const result = unwrap(
       await this.client.storage.createSpreadsheet({
         body: { documentName: opts.name, projectId: opts.project?.id },
@@ -309,16 +307,11 @@ export class DocumentNamespace {
    *
    * @write
    */
-  async createSnippet(opts: {
+  createSnippet(opts: {
     name: string;
     markdown?: string;
     project?: Project;
   }): Promise<Document> {
-    rejectUnknownOptions('documents.createSnippet', opts, [
-      'name',
-      'markdown',
-      'project',
-    ]);
     return Document.createSnippet(this.client, opts);
   }
 
@@ -341,18 +334,12 @@ export class DocumentNamespace {
    *
    * @write
    */
-  async createSkill(opts: {
+  createSkill(opts: {
     name: string;
     description: string;
     markdown?: string;
     project?: Project;
   }): Promise<Document> {
-    rejectUnknownOptions('documents.createSkill', opts, [
-      'name',
-      'description',
-      'markdown',
-      'project',
-    ]);
     return Document.createSkill(this.client, opts);
   }
 
