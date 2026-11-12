@@ -174,9 +174,9 @@ test('Source: orphan replacement resets style and format and keeps the caret off
   }
 });
 
-// Raw control (activation frontier): within one pending update Source tokenizes each code node once,
-// so an edit merged after the first pass keeps stale stored tokens until the next update. Native
-// does not mirror this yet (code.rs register_highlighting).
+// Within one pending update Source tokenizes each code node once, so an edit merged after the first
+// pass keeps stale stored tokens until the next update. Native pin:
+// dedupe_keeps_same_update_text_changes_stale_and_the_next_update_refreshes (tokens/test.rs).
 test('Source raw control: an edit merged into the same pending update keeps stale tokens', () => {
   const { editor, calls, tokenizer } = sourceEditor();
   editor.update(
@@ -229,6 +229,46 @@ test('Source raw control: an edit merged into the same pending update keeps stal
       'a',
       ' ',
       'bc',
+    ]);
+  } finally {
+    unregister();
+  }
+});
+
+// Native pin: an_orphan_still_becomes_text_while_its_code_node_is_deduped (tokens/test.rs).
+test('Source: an orphan becomes text while its code node is deduped in the same update', () => {
+  const { editor, calls, tokenizer } = sourceEditor();
+  editor.update(
+    () => {
+      const code = $createCodeNode('plaintext');
+      code.append($createTextNode('let a'));
+      $getRoot().append(code);
+    },
+    { discrete: true }
+  );
+  const unregister = registerCodeHighlighting(editor, tokenizer);
+  try {
+    // Joins registration's pending pass, which already tokenized the code node.
+    editor.update(
+      () => {
+        const code = $getRoot().getFirstChildOrThrow<CodeNode>();
+        code.getLastChildOrThrow().selectEnd().insertText('b');
+        const paragraph = $createParagraphNode();
+        paragraph.append(code.getFirstChildOrThrow());
+        $getRoot().append(paragraph);
+      },
+      { discrete: true }
+    );
+    expect(calls).toEqual([['plaintext', 'let a']]);
+    expect(shape(editor)).toEqual([
+      {
+        type: 'code',
+        children: [
+          ['code-highlight', ' ', null],
+          ['code-highlight', 'ab', 'word'],
+        ],
+      },
+      { type: 'paragraph', children: [['text', 'let', null]] },
     ]);
   } finally {
     unregister();

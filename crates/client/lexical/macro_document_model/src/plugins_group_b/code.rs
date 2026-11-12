@@ -226,6 +226,11 @@ pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Va
 /// Source `$codeNodeTransform`: a code node whose language is unset receives the
 /// tokenizer default through `setLanguage`, including the custom-code preview reset;
 /// every run reports the resulting language to the host.
+/// Source `nodesCurrentlyHighlighting`: code nodes already tokenized in the pending update. It
+/// lives in the transaction's update-local slot, which every publication clears.
+#[derive(Default)]
+struct Highlighted(std::collections::HashSet<NodeKey>);
+
 fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<(), Error> {
     let Some(language) = tx
         .view()
@@ -249,8 +254,12 @@ fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> R
             HIGHLIGHT_DEFAULT_LANGUAGE.to_owned()
         }
     };
-    // Source checks isCodeLanguageLoaded before anything else and returns when it is not.
-    if tx.is_attached(code) && tokens::is_loaded(tx, &language)? {
+    // Source order: `isCodeLanguageLoaded` on every pass, then the per-update dedupe; the key is
+    // recorded before `$tokenize`, so a failed tokenize is not retried within the update.
+    if tx.is_attached(code)
+        && tokens::is_loaded(tx, &language)?
+        && tx.update_local_mut::<Highlighted>()?.0.insert(code.key())
+    {
         let text = tx.text_content(code).into_owned();
         let descriptors = tokens::tokenize(tx, &language, &text)?;
         tokens::apply(tx, code.key(), &descriptors)?;
@@ -294,11 +303,9 @@ fn highlight_leaf(tx: &mut Transaction<'_>, leaf: Id<CodeHighlightNode>) -> Resu
 /// TextNode and CodeHighlightNode transforms). Source registers them only where an editor
 /// installs code highlighting, so headless editors leave this out.
 ///
-/// Not activation-qualified: Source tokenizes each code node at most once per pending update
-/// (`nodesCurrentlyHighlighting`, cleared at commit), so text changed after the first pass in that
-/// update keeps stale stored tokens until the next update. This retokenizes on every rerun, so
-/// stored tokens can differ from Source in that case (and provider calls always may). Mirroring
-/// the per-update dedupe is ruled required and pending its design review.
+/// Like Source, each code node is tokenized at most once per pending update
+/// (`nodesCurrentlyHighlighting`), so text changed after that pass keeps stale stored tokens until
+/// the next update.
 pub(super) fn register_highlighting(builder: EditorBuilder) -> EditorBuilder {
     builder
         .transform::<CodeNode>(default_highlight_language)

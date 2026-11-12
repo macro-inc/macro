@@ -467,3 +467,255 @@ fn an_orphan_code_highlight_resets_style_and_keeps_the_caret_like_the_source_fac
     assert_eq!((range.anchor.key(), range.anchor.offset()), (child, 2));
     Ok(())
 }
+
+// Source per-update tokenize dedupe (`nodesCurrentlyHighlighting`, code-prism 0.45): a code node is
+// tokenized at most once per pending update, the language check runs on every pass before the
+// dedupe, the key is recorded before `$tokenize`, and the set lives until the update is published.
+
+fn requests(fixture: &Fixture) -> Vec<(String, String)> {
+    fixture
+        .requests
+        .lock()
+        .expect("requests")
+        .iter()
+        .map(|(language, text, _)| (language.clone(), text.clone()))
+        .collect()
+}
+
+fn reset(fixture: &Fixture) {
+    fixture.requests.lock().expect("requests").clear();
+    fixture.loaded.lock().expect("loaded").clear();
+}
+
+fn last_child(tx: &Transaction<'_>, code: NodeKey) -> Result<NodeKey, Error> {
+    tx.children_keys(code)?
+        .last()
+        .copied()
+        .ok_or(Error::Invariant("code child"))
+}
+
+fn rust(text: &str) -> (String, String) {
+    ("rust".into(), text.into())
+}
+
+#[test]
+fn dedupe_tokenizes_a_new_code_node_once_per_update() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    insert_code(&mut editor, "rust", "let a")?;
+    assert_eq!(requests(&fixture), vec![rust("let a")]);
+    Ok(())
+}
+
+#[test]
+fn dedupe_keeps_same_update_text_changes_stale_and_the_next_update_refreshes() -> Result<(), Error>
+{
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab")?;
+    tx.flush()?;
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab c")?;
+    tx.flush()?;
+    tx.commit()?;
+    assert_eq!(requests(&fixture), vec![rust("let ab")]);
+    let some = |kind: &str| Some(kind.to_owned());
+    // Stored like Source: the second edit stays inside the stale `ab` token.
+    assert_eq!(
+        shape(&tokens_of(&editor, code)),
+        vec![
+            ("code-highlight:let".into(), some("keyword")),
+            ("code-highlight: ".into(), None),
+            ("code-highlight:ab c".into(), some("word")),
+        ]
+    );
+    editor.update(|tx| {
+        let last = last_child(tx, code)?;
+        tx.text(last)?.set_text_content("ab cd")?;
+        Ok(())
+    })?;
+    assert_eq!(requests(&fixture), vec![rust("let ab"), rust("let ab cd")]);
+    assert_eq!(
+        shape(&tokens_of(&editor, code)),
+        vec![
+            ("code-highlight:let".into(), some("keyword")),
+            ("code-highlight: ".into(), None),
+            ("code-highlight:ab".into(), some("word")),
+            ("code-highlight: ".into(), None),
+            ("code-highlight:cd".into(), some("word")),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn dedupe_is_per_code_node() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    editor.update(|tx| {
+        for text in ["let a", "let b"] {
+            let code = lexical_rich_nodes::code::create_code_node(tx, Some("rust"), None)
+                .map_err(|_| Error::Invariant("create code node"))?;
+            let text = tx.create_text(text)?;
+            tx.append(code, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[code.key()])?;
+        }
+        Ok(())
+    })?;
+    let mut calls = requests(&fixture);
+    calls.sort();
+    assert_eq!(calls, vec![rust("let a"), rust("let b")]);
+    Ok(())
+}
+
+#[test]
+fn dedupe_retries_after_a_failed_tokenize_in_the_next_update() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    reset(&fixture);
+    *fixture.answer.lock().expect("answer") = Some(Err(CodeTokenError::Host));
+    let edit = |tx: &mut Transaction<'_>| {
+        let last = last_child(tx, code)?;
+        tx.text(last)?.set_text_content("ab")?;
+        Ok(())
+    };
+    assert!(matches!(editor.update(edit), Err(Error::Extension(_))));
+    editor.update(edit)?;
+    assert_eq!(requests(&fixture), vec![rust("let ab"), rust("let ab")]);
+    assert_eq!(
+        tokens_of(&editor, code).last().map(|token| token.0.clone()),
+        Some("code-highlight:ab".to_owned())
+    );
+    Ok(())
+}
+
+#[test]
+fn dedupe_checks_the_language_on_every_pass_before_the_dedupe() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab")?;
+    tx.flush()?;
+    tx.get_mut::<CodeNode>(code)?.set_language(Some("cobol"));
+    tx.flush()?;
+    tx.commit()?;
+    assert_eq!(requests(&fixture), vec![rust("let ab")]);
+    // The already-tokenized node still reaches the language check for its new language.
+    assert!(
+        fixture
+            .loaded
+            .lock()
+            .expect("loaded")
+            .contains(&("cobol".into(), "native-fixture".into()))
+    );
+    assert_eq!(
+        tokens_of(&editor, code).last().map(|token| token.0.clone()),
+        Some("code-highlight:ab".to_owned())
+    );
+    Ok(())
+}
+
+#[test]
+fn dedupe_admits_a_node_whose_language_loads_later_in_the_same_update() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "cobol", "a b")?;
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("a bc")?;
+    tx.flush()?;
+    tx.get_mut::<CodeNode>(code)?.set_language(Some("rust"));
+    tx.flush()?;
+    tx.commit()?;
+    // An unloaded pass never records the key, so the loaded pass tokenizes.
+    assert_eq!(requests(&fixture), vec![rust("a bc")]);
+    Ok(())
+}
+
+#[test]
+fn set_editor_state_ends_the_dedupe_with_its_publication() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    let snapshot = editor.state().clone();
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab")?;
+    tx.flush()?;
+    tx.set_editor_state(snapshot, TagSet::default())?;
+    tx.commit()?;
+    editor.update(|tx| {
+        let last = last_child(tx, code)?;
+        tx.text(last)?.set_text_content("az")?;
+        Ok(())
+    })?;
+    // Control (the next update is a fresh transaction either way; D1 pins the slot reset itself).
+    assert_eq!(requests(&fixture), vec![rust("let ab"), rust("let az")]);
+    Ok(())
+}
+
+#[test]
+fn restore_editor_state_keeps_the_dedupe() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    let snapshot = editor.state().clone();
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab")?;
+    tx.flush()?;
+    tx.restore_editor_state(&snapshot)?;
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("a z")?;
+    tx.flush()?;
+    tx.commit()?;
+    // Source `$restoreEditorState` swaps the pending state without publishing: the key stays seen.
+    assert_eq!(requests(&fixture), vec![rust("let ab")]);
+    assert_eq!(
+        tokens_of(&editor, code).last().map(|token| token.0.clone()),
+        Some("code-highlight:a z".to_owned())
+    );
+    Ok(())
+}
+
+#[test]
+fn an_orphan_still_becomes_text_while_its_code_node_is_deduped() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    reset(&fixture);
+    let mut tx = editor.transaction();
+    let last = last_child(&tx, code)?;
+    tx.text(last)?.set_text_content("ab")?;
+    tx.flush()?;
+    let first = tx.children_keys(code)?[0];
+    let paragraph = tx.create(Paragraph {})?;
+    tx.append(paragraph, &[first])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.flush()?;
+    tx.commit()?;
+    assert_eq!(requests(&fixture), vec![rust("let ab")]);
+    assert_eq!(
+        shape(&tokens_of(&editor, paragraph.key())),
+        vec![("text:let".into(), None)]
+    );
+    assert_eq!(
+        shape(&tokens_of(&editor, code)),
+        vec![
+            ("code-highlight: ".into(), None),
+            ("code-highlight:ab".into(), Some("word".into())),
+        ]
+    );
+    Ok(())
+}
