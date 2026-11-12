@@ -3592,7 +3592,7 @@ export type CreateAgentSessionErrors = {
     422: string;
     500: string;
     /**
-     * AI usage validation unavailable; retry later
+     * AI usage validation unavailable or reply admission busy; retry later
      */
     503: AiAdmissionErrorBody;
 };
@@ -4216,7 +4216,7 @@ export type ControlAgentSessionErrors = {
     422: string;
     500: string;
     /**
-     * AI usage validation unavailable, or replica draining; retry later
+     * AI usage validation unavailable, replica draining, or reply admission busy; retry later
      */
     503: AiAdmissionErrorBody;
 };
