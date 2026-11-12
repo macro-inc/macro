@@ -29,6 +29,7 @@ pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
 pub mod gen_compose;
+pub mod google_emulator;
 pub mod identity;
 pub mod instance;
 pub mod inventory;
@@ -996,16 +997,13 @@ fn prepare(
     // through the proxy in every mode), and — for the self-contained local
     // stacks — the FusionAuth kickstart. (External networks/volumes are created
     // by the caller after the background teardown joins.)
-    let gmail_forwarder = env
-        .merged
-        .get("GMAIL_FORWARDER_SA_KEY")
-        .is_some_and(|key| !key.trim().is_empty());
+    let sidecars = gen_compose::Sidecars::from_env(mode, &env.merged);
     gen_compose::generate(
         mode,
         instance,
         &binaries,
         static_frontend,
-        gmail_forwarder,
+        sidecars,
         computers,
     )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
@@ -1013,9 +1011,11 @@ fn prepare(
         portmap::write(instance)?;
     }
     if mode.spec().runs_local_infra {
-        let google = kickstart::GoogleIdp::from_env(&env.merged);
+        // Without a real Google client the stack's Gmail emulator is Google.
+        let google = kickstart::GoogleIdp::from_env(&env.merged)
+            .unwrap_or_else(|| google_emulator::idp(instance));
         let github = kickstart::GithubIdp::from_env(&env.merged);
-        fusionauth::write_kickstart(instance, google.as_ref(), github.as_ref())?;
+        fusionauth::write_kickstart(instance, Some(&google), github.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1222,6 +1222,9 @@ fn bring_up_infra(
         // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
         fusionauth::apply_redirect_urls(stage, instance)?;
+        if google_emulator::stands_in(mode, &env.merged) {
+            fusionauth::apply_google_authorization_endpoint(stage, instance)?;
+        }
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
@@ -1795,7 +1798,17 @@ pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
     );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false, &computers)?;
+    // No env is resolved here, so the sidecars are those of a stack without
+    // integration secrets: the Gmail emulator, and no Gmail forwarder.
+    let sidecars = gen_compose::Sidecars::from_env(Mode::Local, &std::collections::BTreeMap::new());
+    let path = gen_compose::generate(
+        Mode::Local,
+        &instance,
+        &binaries,
+        false,
+        sidecars,
+        &computers,
+    )?;
     println!("{}", path.display());
     Ok(())
 }

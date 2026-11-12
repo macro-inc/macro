@@ -7,8 +7,13 @@
 //!   messages, threads, labels, drafts, send, attachments, filters, send-as,
 //!   history (a `startHistoryId` older than Gmail keeps answers 404) and watch;
 //! - the People API under [`GmailEmulator::people_url`];
+//! - "Sign in with Google": a page at
+//!   [`GmailEmulator::authorization_url`] where a person picks one of the
+//!   mailboxes' owners, the authorization code exchange with a signed ID
+//!   token, and userinfo;
 //! - Google's OAuth token, token-info and revoke endpoints, and the
-//!   certificates that verify push tokens ([`GmailEmulator::certs_url`]);
+//!   certificates that verify push and ID tokens
+//!   ([`GmailEmulator::certs_url`]);
 //! - a control API under `/_emulator/`, mirrored by the methods of
 //!   [`GmailEmulator`]: seed mailboxes, deliver mail, inject errors and rate
 //!   limits, advance the clock, and read what was received and pushed.
@@ -39,6 +44,7 @@ mod people;
 mod push;
 mod query;
 mod seed;
+mod sign_in;
 mod state;
 #[cfg(test)]
 mod test;
@@ -219,6 +225,7 @@ impl GmailEmulator {
         let app = control::router()
             .merge(gmail_routes::router())
             .merge(google_routes::router())
+            .merge(sign_in::router())
             .layer(axum::middleware::from_fn_with_state(
                 emulator.clone(),
                 gate::log_request,
@@ -277,13 +284,31 @@ impl GmailEmulator {
         format!("{}/token", self.base_url())
     }
 
+    /// The page where a person signs in as a seeded user, in place of
+    /// `https://accounts.google.com/o/oauth2/v2/auth`.
+    pub fn authorization_url(&self) -> String {
+        format!("{}{}", self.base_url(), sign_in::AUTHORIZATION_PATH)
+    }
+
+    /// The OpenID Connect userinfo endpoint, in place of
+    /// `https://openidconnect.googleapis.com/v1/userinfo`.
+    pub fn userinfo_url(&self) -> String {
+        format!("{}{}", self.base_url(), sign_in::USERINFO_PATH)
+    }
+
+    /// The OAuth revocation endpoint, in place of
+    /// `https://oauth2.googleapis.com/revoke`.
+    pub fn revoke_url(&self) -> String {
+        format!("{}/revoke", self.base_url())
+    }
+
     /// A stand-in for the authentication service's Google access-token
     /// route, for running `email_service` without that service.
     pub fn authentication_service_url(&self) -> String {
         format!("{}/_emulator/authentication-service", self.base_url())
     }
 
-    /// The key that signs push tokens, generated on first use.
+    /// The key that signs push and ID tokens, generated on first use.
     pub(crate) async fn signing_key(&self) -> Result<&SigningKey, SigningKeyError> {
         self.inner
             .signing_key

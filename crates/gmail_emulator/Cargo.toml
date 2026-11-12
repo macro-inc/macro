@@ -6,6 +6,7 @@ version = "0.1.0"
 description = "Test support: a stateful fake of the Google APIs Macro's email code calls (Gmail REST, People, OAuth token, signed Pub/Sub push), in process or as a standalone binary."
 
 [dependencies]
+askama = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
@@ -22,15 +23,18 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
 serde_yaml = { workspace = true }
+sha2 = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 email_api_client = { path = "../email_api_client", features = ["outbound-gmail"] }
+fusionauth = { path = "../fusionauth" }
 gmail_client = { path = "../gmail_client" }
 models_email = { path = "../models_email" }
 uuid = { workspace = true }

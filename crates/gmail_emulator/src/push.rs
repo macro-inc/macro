@@ -20,7 +20,7 @@ use crate::{GmailEmulator, PushDelivery};
 
 const SIGNING_KEY_ID: &str = "gmail-emulator-push-key-1";
 const SIGNING_KEY_BITS: usize = 2048;
-const ISSUER: &str = "https://accounts.google.com";
+pub(crate) const ISSUER: &str = "https://accounts.google.com";
 const SERVICE_ACCOUNT: &str = "gmail-emulator-push@emulator.example.com";
 const SERVICE_ACCOUNT_ID: &str = "100000000000000000001";
 const TOKEN_LIFETIME_SECONDS: i64 = 3600;
@@ -74,6 +74,16 @@ impl SigningKey {
             jwks: jwks.to_string(),
         })
     }
+
+    /// Signs a token the certificates endpoint's key verifies.
+    pub(crate) fn sign(
+        &self,
+        claims: &impl Serialize,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(SIGNING_KEY_ID.to_string());
+        jsonwebtoken::encode(&header, claims, &self.encoding)
+    }
 }
 
 #[derive(Serialize)]
@@ -94,24 +104,18 @@ pub(crate) fn signed_token(
     key: &SigningKey,
     audience: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let mut header = Header::new(Algorithm::RS256);
-    header.kid = Some(SIGNING_KEY_ID.to_string());
     let issued_at = Utc::now().timestamp();
 
-    jsonwebtoken::encode(
-        &header,
-        &Claims {
-            iss: ISSUER,
-            aud: audience,
-            azp: SERVICE_ACCOUNT_ID,
-            sub: SERVICE_ACCOUNT_ID,
-            email: SERVICE_ACCOUNT,
-            email_verified: true,
-            iat: issued_at,
-            exp: issued_at + TOKEN_LIFETIME_SECONDS,
-        },
-        &key.encoding,
-    )
+    key.sign(&Claims {
+        iss: ISSUER,
+        aud: audience,
+        azp: SERVICE_ACCOUNT_ID,
+        sub: SERVICE_ACCOUNT_ID,
+        email: SERVICE_ACCOUNT,
+        email_verified: true,
+        iat: issued_at,
+        exp: issued_at + TOKEN_LIFETIME_SECONDS,
+    })
 }
 
 /// The body Pub/Sub posts for a Gmail watch notification.
