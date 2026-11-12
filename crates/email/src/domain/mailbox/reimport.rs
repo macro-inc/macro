@@ -291,7 +291,7 @@ impl<R: FolderReimportRepository> FolderReimportService<R> {
             checked = checked.saturating_add(1);
             let end = match self.repo.phase_progress(mailbox).await? {
                 PhaseProgress::Running => {
-                    if checked % CHECKS_PER_PROGRESS_LOG == 0 {
+                    if checked.is_multiple_of(CHECKS_PER_PROGRESS_LOG) {
                         tracing::info!(
                             link_id = %mailbox.link_id,
                             phase = phase_name,
