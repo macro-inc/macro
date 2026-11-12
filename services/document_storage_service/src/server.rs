@@ -1381,6 +1381,11 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let graphql_channel_messages_context =
+        graphql_channel::messages::ChannelMessagesGraphqlContext::new(
+            message_service.clone(),
+            entity_access_service.clone(),
+        );
     let call_roots: Arc<dyn messages::domain::api::CallRootPoster> = message_service.clone();
     if call_root_poster.set(call_roots).is_err() {
         tracing::error!("the call root poster was set twice");
@@ -2514,6 +2519,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         graphql_contacts_context,
         graphql_calendar_context,
+        graphql_channel_messages_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,

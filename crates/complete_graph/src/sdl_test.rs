@@ -1020,3 +1020,45 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "membership tokens are internal"
     );
 }
+
+#[test]
+fn channel_message_reads_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "channelMessages(channelId: ID!): GraphqlChannelMessages!",
+        "timeline(input: GraphqlChannelTimelineInput): GraphqlChannelTimelinePage!",
+        "thread(rootId: ID!, input: GraphqlChannelThreadInput): GraphqlChannelThreadPage!",
+        "changes(since: Int!): GraphqlChannelChanges!",
+        "union GraphqlChannelTimelineEntry = GraphqlChannelMessage | GraphqlChannelTimelineActivity",
+        "entries: [GraphqlChannelTimelineEntry!]!",
+        "olderCursor: GraphqlChannelTimelineCursor",
+        "cursor: GraphqlChannelTimelineCursorInput",
+        "removed: [ID!]!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    // Messages and timeline facts are normalized by id; what a message
+    // embeds has none, so it is replaced whole with its message.
+    for (name, has_id) in [
+        ("GraphqlChannelMessages", true),
+        ("GraphqlChannelTimelineCursor", false),
+        ("GraphqlChannelMessage", true),
+        ("GraphqlChannelTimelineActivity", true),
+        ("GraphqlChannelMessageAttachment", false),
+        ("GraphqlChannelMessageReaction", false),
+        ("GraphqlChannelThreadSummary", false),
+        ("GraphqlChannelTimelinePage", false),
+        ("GraphqlChannelThreadPage", false),
+        ("GraphqlChannelChanges", false),
+    ] {
+        let ExtendedType::Object(object) = schema.types.get(name).expect(name) else {
+            panic!("{name} must be an object");
+        };
+        assert_eq!(object.fields.contains_key("id"), has_id, "{name}");
+    }
+}

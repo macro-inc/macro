@@ -955,6 +955,12 @@ where
         GraphqlCalendarQuery::new(self.user_id.clone())
     }
 
+    /// Channel message reads supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channel_messages(&self) -> graphql_channel::messages::GraphqlChannelMessagesQuery {
+        graphql_channel::messages::GraphqlChannelMessagesQuery::new(self.user_id.clone())
+    }
+
     /// A page of the authenticated user's work feed, newest first: items
     /// with outstanding attention (notifications, inbox Signal email,
     /// reminders) and, in `WORK` mode, work the user recently did. Each
