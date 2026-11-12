@@ -62,6 +62,13 @@ per-entity-type search plus a unified search across them — mounted into
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial
   queries; run new term handling through it.
+- The one exception to the AND is document content under
+  `term_matching: dynamic` on the unified request (see `opensearch_client`'s
+  `DocumentTermMatching`). It applies only when the request asks for it and
+  the `enable-dynamic-search-term-matching` flag is on for the caller
+  (`TermMatchingRollout`; local stacks have it on). The SDK and AI tools
+  never send it, so their documented AND holds. Names, emails, channels,
+  chats and call records are always a strict AND.
 - Calendar events have two scopes (`calendar_event_scope` on the unified
   request): `own` matches the caller's own and delegated calendars by
   owner and inbox link; `shared_with_you` resolves the events shared with the

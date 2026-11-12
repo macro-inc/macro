@@ -133,7 +133,9 @@ fn compute_next_cursor(
     }
 }
 
-use crate::api::search::terms::{drop_wordless_terms, record_term_counts, split_search_terms};
+use crate::api::search::terms::{
+    drop_wordless_terms, record_term_counts, resolve_document_term_matching, split_search_terms,
+};
 
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
@@ -214,6 +216,7 @@ fn unified_search_span(
         search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
+        search.term_matching = tracing::field::Empty,
     )
 }
 
@@ -320,6 +323,17 @@ async fn search_unified_sources(
         &tracing::Span::current(),
         search_terms.len(),
         split_count - search_terms.len(),
+    );
+    let document_term_matching = resolve_document_term_matching(
+        ctx.term_matching_rollout.as_ref(),
+        &user_context.user_id,
+        req.term_matching,
+        search_terms.len(),
+    )
+    .await;
+    tracing::Span::current().record(
+        "search.term_matching",
+        tracing::field::debug(document_term_matching),
     );
 
     // Property filters live at the top level of the request and only apply to
@@ -461,6 +475,7 @@ async fn search_unified_sources(
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_document_response.match_all_tags = match_all_tags;
+    filter_document_response.term_matching = document_term_matching;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
     filter_chat_response.tag_option_ids = tag_option_ids.clone();

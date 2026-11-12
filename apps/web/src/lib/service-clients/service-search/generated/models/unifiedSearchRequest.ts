@@ -8,6 +8,7 @@ import type { CalendarEventSearchScope } from './calendarEventSearchScope';
 import type { EntityFilters } from './entityFilters';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
+import type { TermMatching } from './termMatching';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 
 export interface UnifiedSearchRequest {
@@ -30,4 +31,8 @@ index, so it is searched only under Name / NameContent. */
   query: string;
   /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
+  /** How a query of several terms matches document content. Defaults to
+`all`, the strict AND that AI tools and the SDK rely on; interactive
+search surfaces ask for `dynamic`. */
+  term_matching?: TermMatching;
 }

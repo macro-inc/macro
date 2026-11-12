@@ -18266,6 +18266,7 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "anyhow",
+ "async-trait",
  "axum",
  "calendar_events",
  "channels",
@@ -18275,6 +18276,7 @@ dependencies = [
  "document_sub_type",
  "email_db_client",
  "entity_access",
+ "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
  "macro_authorization",
