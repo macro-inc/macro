@@ -59,10 +59,14 @@ agrees with grades given by hand.
 
 ## Run it
 
-The stack must save event routines (`EVENT_ROUTINES_ENABLED`): with them off
-every event-triggered draft's check fails, so `run` stops before drafting.
-A debug-build document storage service needs `RUST_MIN_STACK=8388608` or it
-dies on database queries.
+Any local stack works: `--instance` names it (default `drafting`), and
+`seed` adds the eval's people on their own domain without touching anything
+else. The stack's database must have every migration of the builds it runs: a
+harness newer than its schema answers 500 on routine save and list, so the run
+checks and the `bare` arm fail. It must save event routines
+(`EVENT_ROUTINES_ENABLED`): with them off every event-triggered draft's check
+fails, so `run` stops before drafting. A debug-build document storage service
+needs `RUST_MIN_STACK=8388608` or it dies on database queries.
 
 ```bash
 B=crates/scheduled_action/bench
@@ -90,7 +94,7 @@ are compared on interleaved rounds. `ab` swaps the stack's harness between two
 builds (A then B, then B then A, ...), holding the stack for each segment:
 
 ```bash
-cp -l target/debug/agent_harness_service ~/.cache/routines-eval/bin/mine/   # keep the build still
+mkdir -p ~/.cache/routines-eval/bin/mine && cp -l target/debug/agent_harness_service ~/.cache/routines-eval/bin/mine/   # keep the build still
 nix develop --command bun $B/drafts.ts ab --arm draft --rounds 4 --dir /tmp/eval \
   --a main --a-bin ~/.cache/routines-eval/bin/main-<sha> --b mine --b-bin ~/.cache/routines-eval/bin/mine
 nix develop --command bun $B/drafts.ts compare /tmp/eval/main.draft.json /tmp/eval/mine.draft.json
