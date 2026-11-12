@@ -240,11 +240,12 @@ with user-visible text through `t()`.
   active call, so nothing else on the wire needs it.
 - `ChannelCallTab` and the meeting route hand `CallOverlay` a `discussion` slot, which supplies the
   panel content, the tab label and the default open state. `CallDiscussionContent` is the one place
-  a signed-in call chooses between `ChannelCallPanel` and `CallChat`.
-- Guests have no discussion slot and keep `GuestCallChat`. A new meeting has no channel and keeps
-  `CallChat`.
-- The meeting page renders without the app's providers, so it mounts `MeetingDiscussionHost` around
-  either discussion, only when the panel opens: the call's own chat renders app messages too.
+  every host chooses between `ChannelCallPanel` and `CallChat`.
+- Signed-out guests supply a `call_chat` discussion from the active call ID and guest access from
+  their call credentials. They do not read the call record. New meetings use `callDiscussionOf` on
+  the record and supply member access.
+- The meeting page renders without the app's providers. It mounts `MeetingDiscussionHost` only
+  around `ChannelCallPanel`; `CallChat` renders without those providers.
 - `CallDiscussionHistory` is the one place a call record chooses between `CallChatHistory` and the
   read-only channel thread section.
 
@@ -312,8 +313,8 @@ that reads `discussion` has reached people.
 2. Merge and deploy. All calls are still `call_chat` while the flag is at 0%.
 3. Wait for the web bundle to reach clients.
 4. Enable `enable-call-channel-thread` in dev, then by team.
-5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`,
-   `GuestCallChat` and `CallChatHistory` remain for calls with no channel and past calls.
+5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`
+   and `CallChatHistory` remain for calls with no channel and past calls.
 
 ## Tests
 

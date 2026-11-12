@@ -1,6 +1,5 @@
 #![recursion_limit = "256"]
 
-use activity::inbound::toolset::activity_toolset;
 use agent_session::inbound::toolset::{ReadAgentSession, coding_agent_toolset};
 use ai_toolset::AsyncToolCollection;
 mod frontend_compat;
@@ -79,7 +78,7 @@ pub use tool_context::{
     ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
     NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
     NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
-    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
+    TaskPropertiesAdapter, ToolActivityReadService, ToolBookingLinkService,
     ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
     ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
@@ -101,7 +100,7 @@ pub use tool_context::{
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
     ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
+    ToolViewOnlyDatabasesSqlToolContext, build_activity_read_service,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
     build_calendar_tool_context, build_channel_media_upload_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
@@ -172,7 +171,6 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_toolset(search_toolset())
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
-        .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolImageGenerationToolContext>(
             image_generation::inbound::toolset::image_generation_toolset(),
@@ -492,6 +490,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         >())
         .merge(&read::read_thread())
         .merge(&schemas::subagent::subagent())
+        .merge(&schemas::read_activity::read_activity())
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }

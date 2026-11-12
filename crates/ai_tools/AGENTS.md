@@ -53,13 +53,15 @@ execution, display) that don't belong to a single domain.
   domain owner (search, deferred, self-knowledge, display).
 - `Subagent` was removed: it was a one-shot completion with no tools. Its
   schema survives only as `schemas::subagent`, so saved chats still render.
+  `ReadActivity` was removed the same way (`macro.activity.mine()` covers it);
+  its schema survives as `schemas::read_activity`.
 - Not here: a domain's own tools — those live in that domain crate's
-  `inbound::toolset` (e.g. `forms`, `activity`, `agent_session`) and are
+  `inbound::toolset` (e.g. `forms`, `agent_session`) and are
   only wired in here.
 
 ## Boundaries
 
-- Depends on: nearly every domain crate with tools (`forms`, `activity`,
+- Depends on: nearly every domain crate with tools (`forms`,
   `agent_session`, `anthropic` (code execution), `web_search` (`WebSearch`,
   `WebFetch` via Tavily), `initiative`, `collab_surface`, `favorites`,
   `messages`, `routines`, `ai_billing`, `ai_usage`, `ai_toolset`, `agent`),
