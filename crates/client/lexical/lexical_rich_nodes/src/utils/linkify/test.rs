@@ -218,3 +218,42 @@ fn ordinary_prose_with_sentence_periods_has_no_links() {
         vec![]
     );
 }
+
+/// Linkify-it sources `compile` and `defaults` read; generate.mjs emits exactly these (each with its
+/// `_dashes` twin, except the TLD lists), so no unread expanded source is embedded or parsed.
+const READ_SOURCES: [&str; 17] = [
+    "schema_search",
+    "schema_at_start",
+    "schema_test",
+    "tpl_host_fuzzy_test",
+    "tpl_link_fuzzy",
+    "tpl_link_no_ip_fuzzy",
+    "tpl_email_fuzzy",
+    "src_xn",
+    "src_auth",
+    "src_path",
+    "src_host_port_strict",
+    "src_domain",
+    "src_domain_root",
+    "src_port",
+    "src_host_terminator",
+    "src_email_name",
+    "src_host_strict",
+];
+
+#[test]
+fn pattern_data_holds_only_the_sources_compile_reads() {
+    let mut expected: Vec<String> = vec!["__tlds_2ch".into(), "__tlds_default".into()];
+    for name in READ_SOURCES {
+        expected.push(name.into());
+        expected.push(format!("{name}_dashes"));
+    }
+    expected.sort();
+    let actual: Vec<String> = PATTERNS.keys().cloned().collect();
+    assert_eq!(actual, expected);
+    for replaced in [false, true] {
+        for dashes in [false, true] {
+            assert!(compile(&defaults(), replaced, dashes).is_ok());
+        }
+    }
+}

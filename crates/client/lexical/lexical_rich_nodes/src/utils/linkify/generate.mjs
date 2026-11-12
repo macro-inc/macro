@@ -14,12 +14,19 @@ const patterns = {};
 const source = fs.readFileSync(moduleUrl, 'utf8');
 patterns.__tlds_2ch = source.match(/const tlds_2ch_src_re = '([^']+)'/)[1];
 patterns.__tlds_default = 'biz|com|edu|gov|net|org|pro|web|xxx|aero|asia|coop|info|museum|name|shop|рф';
-for (const [key, value] of Object.entries(new LinkifyIt().re)) {
-  patterns[key] = value instanceof RegExp ? value.source : value;
-}
-const dashes = new LinkifyIt({}, {'---': true});
-for (const [key, value] of Object.entries(dashes.re)) {
-  patterns[key + '_dashes'] = value instanceof RegExp ? value.source : value;
+// Only the sources linkify.rs reads (READ_SOURCES in test.rs pins the same set).
+const read = ['schema_search', 'schema_at_start', 'schema_test', 'tpl_host_fuzzy_test',
+  'tpl_link_fuzzy', 'tpl_link_no_ip_fuzzy', 'tpl_email_fuzzy', 'src_xn', 'src_auth', 'src_path',
+  'src_host_port_strict', 'src_domain', 'src_domain_root', 'src_port', 'src_host_terminator',
+  'src_email_name', 'src_host_strict'];
+const plain = new LinkifyIt().re;
+const dashes = new LinkifyIt({}, {'---': true}).re;
+for (const key of read) {
+  for (const [suffix, re] of [['', plain], ['_dashes', dashes]]) {
+    const value = re[key];
+    if (value === undefined) throw new Error(`missing linkify-it source ${key}`);
+    patterns[key + suffix] = value instanceof RegExp ? value.source : value;
+  }
 }
 fs.writeFileSync(new URL('patterns.json', import.meta.url), JSON.stringify(patterns, null, 2) + '\n');
 const inputs = ['', '😀 example.com', '😀https://example.com/a', 'http://user@example.com',
