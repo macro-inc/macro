@@ -871,6 +871,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A typed search held across an engine restart reaches the new engine first, and
+  one already sent is not refused when the read budget expires; it has no
+  network fallback.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
