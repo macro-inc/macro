@@ -138,10 +138,11 @@ async fn rejected_crm_domain_omits_email_threads() {
 
 #[tokio::test]
 async fn other_email_failures_stay_server_errors() {
-    let (status, body, calls) = post_crm_scoped_ast(json!({ "eca": ["contact@example.com"] }), || {
-        EmailErr::RepoErr(anyhow::anyhow!("database unavailable"))
-    })
-    .await;
+    let (status, body, calls) =
+        post_crm_scoped_ast(json!({ "eca": ["contact@example.com"] }), || {
+            EmailErr::RepoErr(anyhow::anyhow!("database unavailable"))
+        })
+        .await;
 
     assert_eq!(calls, 1);
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
