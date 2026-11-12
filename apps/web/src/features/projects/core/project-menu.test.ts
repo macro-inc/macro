@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { projectMenuGroups } from './project-menu';
 
-const surface = { splits: true, share: true, status: true, priority: true };
+const surface = {
+  splits: true,
+  tabs: false,
+  share: true,
+  status: true,
+  priority: true,
+};
 
 describe('projectMenuGroups', () => {
   it('offers every action to a single owned project', () => {
@@ -43,9 +49,21 @@ describe('projectMenuGroups', () => {
     ).toEqual([]);
   });
 
+  it('offers a new tab beside a new split for one project', () => {
+    const tabs = { ...surface, tabs: true };
+    expect(projectMenuGroups([{ access: 'view' }], tabs)).toEqual([
+      ['open-in-split', 'open-in-tab'],
+      ['copy-link', 'copy-id', 'share'],
+    ]);
+    expect(
+      projectMenuGroups([{ access: 'view' }, { access: 'view' }], tabs)
+    ).toEqual([]);
+  });
+
   it('omits entries the surface cannot offer without leaving empty groups', () => {
     const limited = {
       splits: false,
+      tabs: false,
       share: false,
       status: false,
       priority: false,

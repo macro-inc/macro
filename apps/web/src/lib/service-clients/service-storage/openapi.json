@@ -4871,6 +4871,518 @@
         }
       }
     },
+    "/channel-sections": {
+      "get": {
+        "tags": ["channel_sections"],
+        "summary": "List the caller's shared or private labels.",
+        "operationId": "list_channel_sections",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabelsList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channel_sections"],
+        "summary": "Create a label for the caller's authorized scope.",
+        "operationId": "create_channel_section",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/channels/{channel_id}": {
+      "put": {
+        "tags": ["channel_sections"],
+        "summary": "Move a channel into a label of the caller's authorized scope, or out of any label.",
+        "operationId": "set_channel_section",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/preview": {
+      "post": {
+        "tags": ["channel_sections"],
+        "summary": "Preview visible channels matched by a smart tag, without creating it.",
+        "operationId": "preview_channel_section",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelLabelRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartTagPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/{label_id}": {
+      "delete": {
+        "tags": ["channel_sections"],
+        "summary": "Delete a label of the caller's authorized scope. Its channels return to the plain list.",
+        "operationId": "delete_channel_section",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channel_sections"],
+        "summary": "Update a label, optionally moving it to another authorized scope.",
+        "operationId": "update_channel_section",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels": {
       "post": {
         "tags": ["channels"],
@@ -31028,7 +31540,7 @@
       },
       "ChannelLabel": {
         "type": "object",
-        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.",
+        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.",
         "required": [
           "id",
           "name",
@@ -31042,7 +31554,7 @@
           "channelCount": {
             "type": "integer",
             "format": "int64",
-            "description": "All assignments for a manual label; visible matches for a smart tag."
+            "description": "Legacy assignments or smart matches; visible effective channels for sections."
           },
           "channelIds": {
             "type": "array",
@@ -31050,12 +31562,20 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Channels in this label that the requesting user participates in."
+            "description": "Effective channels visible to the viewer in this label or section."
           },
           "createdAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the label was created."
+          },
+          "explicitChannelIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Explicit picks visible to the viewer (section responses only)."
           },
           "id": {
             "type": "string",
@@ -53767,6 +54287,10 @@
             "format": "uuid",
             "description": "Channel id."
           },
+          "isParticipant": {
+            "type": ["boolean", "null"],
+            "description": "Whether the viewer actively participates in this channel (section previews only)."
+          },
           "name": {
             "type": "string",
             "description": "Channel display name."
@@ -53788,7 +54312,7 @@
           "totalCount": {
             "type": "integer",
             "format": "int64",
-            "description": "Number of matching channels the caller participates in, including overflow."
+            "description": "Number of visible matches, including overflow; legacy previews count participants."
           }
         }
       },
@@ -60113,6 +60637,25 @@
           }
         }
       },
+      "UserPictureChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`UserTopicEvent::PictureChanged`].",
+        "required": ["user_id"],
+        "properties": {
+          "file_id": {
+            "type": ["string", "null"],
+            "description": "Static file id of the new picture; `None` when it is not a static file\n(set by URL) or the picture was removed."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "URL of the new picture; `None` when the picture was removed."
+          },
+          "user_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User whose profile picture changed."
+          }
+        }
+      },
       "UserPinsResponse": {
         "type": "object",
         "required": ["recent"],
@@ -60125,6 +60668,26 @@
             "description": "The pins returned from the query"
           }
         }
+      },
+      "UserTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A user's profile picture changed or was removed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["user.picture_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/UserPictureChangedMetadata",
+                "description": "A user's profile picture changed or was removed."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroUsersTopic`]."
       },
       "UserViewsResponse": {
         "type": "object",
@@ -60765,6 +61328,10 @@
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
             "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
+          },
+          {
+            "$ref": "#/components/schemas/UserTopicEvent",
+            "description": "User profile events from the `macro.users` topic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `message.posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."

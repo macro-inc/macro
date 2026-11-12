@@ -1,0 +1,11 @@
+[[permission]]
+identifier = "allow-audio-output"
+description = "Read, select and watch audio output for the active call."
+
+[permission.commands]
+allow = [
+    "get_audio_output",
+    "select_audio_output",
+    "watch_audio_output",
+]
+deny = []
