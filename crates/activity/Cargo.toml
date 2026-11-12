@@ -6,9 +6,9 @@ version = "0.1.0"
 
 [features]
 schema = ["dep:utoipa"]
-axum = ["reads", "schema", "dep:axum", "dep:macro_authorization"]
+axum = ["reads", "schema", "dep:axum", "dep:macro_authorization", "dep:tracing"]
 # The read service: ranges and feeds with display metadata resolved.
-reads = ["dep:async-trait", "dep:tracing"]
+reads = ["dep:async-trait"]
 # JSON schemas of the range types, for saved transcripts of the removed
 # ReadActivity tool.
 json_schema = ["dep:schemars", "reads"]

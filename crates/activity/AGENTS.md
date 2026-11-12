@@ -58,7 +58,8 @@ distribution.
 
 ## Checks
 
-- `cargo test -p activity` (`SQLX_OFFLINE` unset).
+- `cargo test -p activity --features reads` (`SQLX_OFFLINE` unset); without
+  `reads` the range tests in `domain/activity_range/test.rs` don't compile in.
 
 - External chats have their own unread state and are excluded from activity ranking/Soup until that integration is added.
 
