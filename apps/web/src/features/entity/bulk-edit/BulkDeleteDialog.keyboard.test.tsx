@@ -106,6 +106,7 @@ describe('delete item dialog keyboard', () => {
     const deleteButton = screen.getByRole('button', { name: 'Delete item' });
     await vi.waitFor(() => expect(document.activeElement).toBe(deleteButton));
     expect(mutateAsync).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
   });
 
   it('cancels on Escape without deleting, and focuses Delete again on reopen', async () => {
@@ -118,5 +119,6 @@ describe('delete item dialog keyboard', () => {
     expect(onFinish).not.toHaveBeenCalled();
 
     await reopen(onFinish, onCancel);
+    await userEvent.keyboard('{Escape}');
   });
 });
