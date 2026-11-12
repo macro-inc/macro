@@ -876,6 +876,14 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
         )
     };
     let entries = vec![
+        // A setting changed ahead of the prompt and the stop after it are
+        // user messages that run no turn.
+        log_frame(
+            "to_runtime",
+            serde_json::json!({"id": "effort", "method": "session/set_config_option", "params": {
+                "sessionId": "s", "configId": "reasoning_effort", "value": "none"
+            }}),
+        ),
         log_frame(
             "to_runtime",
             serde_json::json!({"id": action, "method": "session/prompt", "params": {
@@ -888,6 +896,10 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
         log_frame(
             "to_server",
             serde_json::json!({"id": action, "result": {"stopReason": "end_turn"}}),
+        ),
+        log_frame(
+            "to_runtime",
+            serde_json::json!({"method": "session/cancel", "params": {"sessionId": "s"}}),
         ),
     ];
 

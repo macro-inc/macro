@@ -1,5 +1,5 @@
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::model::Author;
+use agent_fold::domain::model::{Author, MessagePart};
 use agent_runtime_protocol::domain::action::{
     AgentAction, AgentActionId, AgentSetConfigOptionAction, REASONING_EFFORT_CONFIG_ID,
 };
@@ -259,7 +259,9 @@ where
             return Err(RoutineSessionError::Conflict);
         }
         if let Some(value) = command.reasoning_effort {
-            // Ahead of the prompt on the same queue, so its turn runs at it.
+            // Delivered ahead of the prompt on the session's command queue,
+            // so its turn runs at it. Best effort: a refusal is the
+            // runtime's answer, and the prompt runs at the default.
             self.controls
                 .control_event(
                     action.session_id,
@@ -381,15 +383,22 @@ fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> Routin
                 .iter()
                 .filter(|message| matches!(message.author, Author::Agent))
                 .flat_map(|message| message.parts.iter())
-                .filter(|part| {
-                    matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. })
-                })
+                .filter(|part| matches!(part, MessagePart::ToolUse { .. }))
                 .count(),
         ),
+        // A prompt opens a turn. A control (a setting changed ahead of the
+        // prompt, the stop that ends a draft) is a user message too, but
+        // runs no turn.
         turns: count(
             messages
                 .iter()
-                .filter(|message| matches!(message.author, Author::User { .. }))
+                .filter(|message| {
+                    matches!(message.author, Author::User { .. })
+                        && !message
+                            .parts
+                            .iter()
+                            .any(|part| matches!(part, MessagePart::Control { .. }))
+                })
                 .count(),
         ),
     }
