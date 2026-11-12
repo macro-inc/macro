@@ -498,9 +498,11 @@ function noise(args: string[]) {
   const [a, b] = positionals.map((path) => JSON.parse(readFileSync(path, 'utf8')) as Results);
   if (!a || !b) throw new Error('noise needs two results files of the same build');
   const v = verdict(a.attempts, b.attempts, 0);
-  const bound = Math.max(Math.abs(v.qualityInterval[0]), Math.abs(v.qualityInterval[1]));
+  // Half the interval's width: how far the share moves either way by chance.
+  // The observed move is one draw of that chance, so it isn't added on.
+  const half = (v.qualityInterval[1] - v.qualityInterval[0]) / 2;
   console.log(verdictLines(v).slice(2).join('\n'));
-  console.log(`quality moves by up to ${Math.round(bound * 100)}% with nothing changed (95%, ${v.pairs} pairs)`);
+  console.log(`quality moves by ±${Math.round(half * 100)}% with nothing changed (95%, ${v.pairs} pairs): the margin`);
   console.log(`time: B/A within ×${v.timeInterval[0].toFixed(2)}–×${v.timeInterval[1].toFixed(2)}`);
 }
 
