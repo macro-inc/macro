@@ -694,8 +694,8 @@ export default function RustMarkdownEditor(props: {
               ready={ready}
             />
           </Suspense>
-          )}
-        </Show>
+        )}
+      </Show>
       <Show when={codeAccessories()}>
         {(accessories) => (
           <Show when={root?.parentElement}>
