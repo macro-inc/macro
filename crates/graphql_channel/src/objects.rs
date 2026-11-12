@@ -383,7 +383,8 @@ pub struct GraphqlChannelChanges {
     pub removed_ids: Vec<ID>,
 }
 
-/// Format timestamps without discarding persisted microseconds.
+/// Format timestamps as the REST message API does, so a value compares equal
+/// whichever API delivered it; persisted microseconds are kept.
 pub(crate) fn timestamp(value: DateTime<Utc>) -> String {
-    value.to_rfc3339_opts(SecondsFormat::Micros, true)
+    value.to_rfc3339_opts(SecondsFormat::AutoSi, true)
 }
