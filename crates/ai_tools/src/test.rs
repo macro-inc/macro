@@ -249,6 +249,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "CreateContact",
         "ImportCompaniesCsv",
         "ListPipelines",
+        "CreatePipeline",
         "FindPipelineEntries",
         "AddToPipeline",
         "UpdatePipelineEntries",
@@ -868,11 +869,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
-    // The SDK cannot show the model a render or create a pipeline with its
-    // stages and fields.
+    // The SDK cannot show the model a render.
     for name in [
         "RenderCanvas",
-        "CreatePipeline",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",

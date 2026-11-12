@@ -6,6 +6,11 @@ Opening **Reviews** from the mobile dock or its **More** drawer starts on **Pull
 requests** (the **All** scope). Explicit review-tab links keep their selected
 scope; desktop's default scope remains **Involves me**.
 
+The sidebar **Labels** section lists GitHub labels, not Macro tags. Keep this
+section separate from Macro tag lists. GitHub labels are also available in
+**Filter pull requests → Label** on desktop and **Open pull request filters →
+Label** on phones.
+
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
 side panel below the top bar. An open PR has a split button in the top bar
