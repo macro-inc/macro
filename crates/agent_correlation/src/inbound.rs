@@ -168,8 +168,8 @@ async fn propagate_request(
     // The routine claim needs no lookup: the token's signature is its authority.
     let attribution = Attribution {
         correlation_id,
-        routine_id: token.and_then(|token| token.routine_id),
-        channel_mention_id: token.and_then(|token| token.channel_mention_id),
+        routine_id: token.as_ref().and_then(|token| token.routine_id),
+        channel_mention_id: token.as_ref().and_then(|token| token.channel_mention_id),
         verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
     crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))
