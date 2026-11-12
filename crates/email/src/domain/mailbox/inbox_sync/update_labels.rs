@@ -1,27 +1,13 @@
+use super::label_writes::{add_message_labels, remove_message_labels};
 use super::pending_labels;
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
-use crate::pubsub::util::{
-    cg_refresh_email, complete_transaction_with_processing_error, publish_email_event,
+use super::*;
+use crate::domain::events::{
+    EmailEventOrigin, LabelRef, ThreadArchivedMetadata, ThreadLabelsUpdatedMetadata,
+    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
 };
-use email::domain::events::{
-    EmailEventOrigin, EmailMacroEvent, LabelRef, ThreadArchivedMetadata,
-    ThreadLabelsUpdatedMetadata, ThreadReadMetadata, ThreadSpamChangedMetadata,
-    ThreadStarredMetadata, ThreadTrashedMetadata,
-};
-use email_db_client::labels::delete::delete_db_message_labels;
-use email_db_client::labels::insert;
-use email_db_client::threads::update::update_thread_metadata;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::email::service::link;
-use models_email::gmail::inbox_sync::{
-    InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
-};
-use models_email::service;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqlx::PgPool;
-use std::result;
+use models_email::gmail::inbox_sync::{UpdateLabelsPayload, UpsertMessagePayload};
+use models_email::service::{self, link};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -29,25 +15,31 @@ mod test;
 
 /// Compares a db message's labels to the gmail message's labels, adding/removing as necessary
 #[tracing::instrument(skip(ctx))]
-pub async fn update_labels(
-    ctx: &PubSubContext,
+pub(super) async fn update_labels<L, R, G, Q, E>(
+    ctx: &InboxSyncService<L, R, G, Q, E>,
     link: &link::Link,
     payload: &UpdateLabelsPayload,
-) -> result::Result<(), ProcessingError> {
+) -> result::Result<(), ProcessingError>
+where
+    L: GmailOpsLinks,
+    R: InboxSyncRepository,
+    G: InboxSyncGmail,
+    Q: InboxSyncQueue,
+    E: MacroEventBroker + InboxSyncRefresher,
+{
     let provider_message_id = &payload.provider_message_id;
 
     // fetch simple message to get db_id from provider_id
-    let db_message_opt =
-        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-            &ctx.db,
-            provider_message_id,
-            &link.id,
-        )
+    let db_message_opt = ctx
+        .repository
+        .message(link.id, provider_message_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to get simple message from db".to_string()),
+                source: e
+                    .into_original()
+                    .context("Failed to get simple message from db".to_string()),
             })
         })?;
 
@@ -55,8 +47,8 @@ pub async fn update_labels(
         Some(m) => m,
         None => {
             // if message exists in gmail but not in db, we should try to upsert it
-            ctx.sqs_client
-                .enqueue_gmail_inbox_sync_notification(InboxSyncPubsubMessage {
+            ctx.queue
+                .enqueue(InboxSyncPubsubMessage {
                     link_id: link.id,
                     operation: InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
                         provider_message_id: provider_message_id.clone(),
@@ -66,7 +58,7 @@ pub async fn update_labels(
                 .map_err(|e| {
                     ProcessingError::NonRetryable(DetailedError {
                         reason: FailureReason::SqsEnqueueFailed,
-                        source: e.context(format!(
+                        source: e.into_original().context(format!(
                             "Failed to enqueue upsert message {:?} for missing message on label update",
                             provider_message_id
                         )),
@@ -83,31 +75,30 @@ pub async fn update_labels(
         }
     };
 
-    let db_message_labels =
-        email_db_client::labels::get::fetch_message_labels(&ctx.db, db_message.db_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to get message labels from db".to_string()),
-                })
-            })?;
+    let db_message_labels = ctx.repository.labels(db_message.db_id).await.map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e
+                .into_original()
+                .context("Failed to get message labels from db".to_string()),
+        })
+    })?;
 
     // After the database labels: a write accepted in between has its marker
     // in place with its label change.
     let provider_labels = pending_labels::read_around(
-        &ctx.db,
+        &ctx.repository,
         db_message.db_id,
-        Box::pin(
-            ctx.email_api
-                .get_message_label_ids(link.id, &payload.provider_message_id),
-        ),
+        ctx.gmail
+            .message_labels(link.id, &payload.provider_message_id),
     )
     .await
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to get pending label writes from db"),
+            source: e
+                .into_original()
+                .context("Failed to get pending label writes from db"),
         })
     })?;
     let pending_label_ids = provider_labels.untrusted_labels();
@@ -115,7 +106,8 @@ pub async fn update_labels(
         Ok(Some(labels)) => labels,
         Err(error) => {
             return Err(handle_operation_error(
-                ctx,
+                &ctx.queue,
+                ctx.retry_worker,
                 link.id,
                 InboxSyncOperation::UpdateLabels(payload.clone()),
                 error,
@@ -152,7 +144,7 @@ pub async fn update_labels(
 
     if !labels_to_add.is_empty() {
         add_message_labels(
-            &ctx.db,
+            &ctx.repository,
             link,
             db_message.db_id,
             db_message.thread_db_id,
@@ -163,7 +155,7 @@ pub async fn update_labels(
 
     if !labels_to_delete.is_empty() {
         remove_message_labels(
-            &ctx.db,
+            &ctx.repository,
             link,
             db_message.db_id,
             db_message.thread_db_id,
@@ -184,12 +176,12 @@ pub async fn update_labels(
         .await;
 
         // tell FE to refresh user's inbox
-        cg_refresh_email(
-            &ctx.connection_gateway_client,
-            link.macro_id.as_ref(),
-            RefreshEmailEvent::UpdateLabels { link_id: link.id },
-        )
-        .await;
+        ctx.effects
+            .refresh(
+                link.macro_id.as_ref(),
+                InboxSyncRefresh::UpdateLabels(link.id),
+            )
+            .await;
     }
 
     Ok(())
@@ -283,14 +275,20 @@ fn is_user_label(label: &str) -> bool {
 /// For the read/archived states the payload carries the *thread row* state
 /// (recomputed by `update_thread_metadata` inside the label ops), so the
 /// repeated events are accurate and idempotent rather than message-inferred.
-async fn publish_label_diff_events(
-    ctx: &PubSubContext,
+async fn publish_label_diff_events<L, R, G, Q, E>(
+    ctx: &InboxSyncService<L, R, G, Q, E>,
     link: &link::Link,
     thread_db_id: Uuid,
     labels_to_add: &[String],
     labels_to_delete: &[String],
     db_message_labels: &[models_email::db::label::Label],
-) {
+) where
+    L: GmailOpsLinks,
+    R: InboxSyncRepository,
+    G: InboxSyncGmail,
+    Q: InboxSyncQueue,
+    E: MacroEventBroker + InboxSyncRefresher,
+{
     let added = |label: &str| labels_to_add.iter().any(|l| l == label);
     let removed = |label: &str| labels_to_delete.iter().any(|l| l == label);
 
@@ -299,7 +297,7 @@ async fn publish_label_diff_events(
         || added(service::label::system_labels::UNREAD)
         || removed(service::label::system_labels::UNREAD);
     let thread_row = if needs_thread_state {
-        email_db_client::threads::get::get_thread_by_id_and_link_id(&ctx.db, thread_db_id, link.id)
+        ctx.repository.thread(link.id, thread_db_id)
             .await
             .inspect_err(
                 |e| tracing::warn!(error=?e, thread_id=%thread_db_id, "failed to fetch thread row for macro.email event state"),
@@ -415,138 +413,6 @@ async fn publish_label_diff_events(
     }
 
     for event in &events {
-        publish_email_event(&ctx.macro_event_broker, event);
+        publish_email_event(&ctx.effects, event);
     }
-}
-
-#[tracing::instrument(skip(db, link))]
-pub async fn add_message_labels(
-    db: &PgPool,
-    link: &link::Link,
-    message_db_id: Uuid,
-    thread_db_id: Uuid,
-    provider_label_ids: &[String],
-) -> result::Result<(), ProcessingError> {
-    // transaction as we might be making multiple changes
-    let mut tx = db.begin().await.map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to begin transaction"),
-        })
-    })?;
-
-    let result = async {
-        // `label_diff` already left pending labels out of `provider_label_ids`.
-        insert::insert_message_labels(
-            &mut tx,
-            link.id,
-            message_db_id,
-            provider_label_ids,
-            false,
-            &[],
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to insert message labels".to_string()),
-            })
-        })?;
-
-        // if we are adding unread label, mark message as not read
-        if provider_label_ids
-            .iter()
-            .any(|provider_id| provider_id == service::label::system_labels::UNREAD)
-        {
-            email_db_client::messages::update::update_message_read_status(
-                &mut tx,
-                message_db_id,
-                link.id,
-                false,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update message read status".to_string()),
-                })
-            })?;
-        }
-
-        update_thread_metadata(&mut tx, thread_db_id, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread metadata".to_string()),
-                })
-            })?;
-
-        Ok::<(), ProcessingError>(())
-    }
-    .await;
-
-    complete_transaction_with_processing_error(tx, result).await
-}
-
-#[tracing::instrument(skip(db, link))]
-pub async fn remove_message_labels(
-    db: &PgPool,
-    link: &link::Link,
-    message_db_id: Uuid,
-    thread_db_id: Uuid,
-    provider_label_ids: &[String],
-) -> result::Result<(), ProcessingError> {
-    // transaction as we might be making multiple db changes
-    let mut tx = db.begin().await.map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to begin transaction"),
-        })
-    })?;
-
-    let result = async {
-        delete_db_message_labels(&mut tx, message_db_id, provider_label_ids, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to delete message labels"),
-                })
-            })?;
-
-        // if we are removing unread label, mark message as read
-        if provider_label_ids
-            .iter()
-            .any(|provider_id| provider_id == service::label::system_labels::UNREAD)
-        {
-            email_db_client::messages::update::update_message_read_status(
-                &mut tx,
-                message_db_id,
-                link.id,
-                true,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update message read status"),
-                })
-            })?;
-        }
-
-        update_thread_metadata(&mut tx, thread_db_id, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread metadata"),
-                })
-            })?;
-
-        Ok::<(), ProcessingError>(())
-    }
-    .await;
-
-    complete_transaction_with_processing_error(tx, result).await
 }

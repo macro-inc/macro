@@ -24,6 +24,8 @@ pub mod drafts;
 pub mod gmail_history;
 pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
 pub mod progress;

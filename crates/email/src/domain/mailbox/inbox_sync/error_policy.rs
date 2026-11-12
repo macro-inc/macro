@@ -2,7 +2,8 @@ use email_api_client::domain::models::EmailApiError;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-use crate::pubsub::context::PubSubContext;
+use super::InboxSyncQueue;
+use crate::domain::mailbox::connection::ConnectionSourceError;
 
 #[cfg(test)]
 mod test;
@@ -21,8 +22,10 @@ fn rate_limit_route(retry_worker: bool) -> RateLimitRoute {
     }
 }
 
-pub(crate) async fn handle_operation_error(
-    ctx: &PubSubContext,
+/// Classify a provider refusal and publish the original operation only when required.
+pub async fn handle_operation_error<Q: InboxSyncQueue>(
+    queue: &Q,
+    retry_worker: bool,
     link_id: uuid::Uuid,
     operation: InboxSyncOperation,
     error: EmailApiError,
@@ -31,19 +34,17 @@ pub(crate) async fn handle_operation_error(
         return processing_error(error);
     }
 
-    if rate_limit_route(ctx.retry_worker) == RateLimitRoute::RetryAfterVisibilityTimeout {
+    if rate_limit_route(retry_worker) == RateLimitRoute::RetryAfterVisibilityTimeout {
         return processing_error(error);
     }
 
     let message = InboxSyncPubsubMessage { link_id, operation };
-    if let Err(enqueue_error) = ctx
-        .sqs_client
-        .enqueue_gmail_retry_inbox_sync_notification(message)
-        .await
-    {
+    if let Err(enqueue_error) = queue.enqueue_retry(message).await {
         return ProcessingError::Retryable(DetailedError {
             reason: FailureReason::SqsEnqueueFailed,
-            source: enqueue_error.context("Failed to enqueue inbox sync retry message"),
+            source: enqueue_error
+                .into_original()
+                .context("Failed to enqueue inbox sync retry message"),
         });
     }
 

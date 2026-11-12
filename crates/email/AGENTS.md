@@ -28,6 +28,11 @@ tools — hexagonal, heavily feature-gated.
   Reuses mailbox initialization and backfill-job services.
 - `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
   cancellation, active-job reuse, and initialization publication.
+- `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
+  disposition, provider-error routing, message deletion, and label reconciliation.
+  It also owns history/catalog reconciliation, recovery backfills, provider-message
+  imports, attachment claim release, contact fan-out and notification selection.
+  Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
