@@ -256,6 +256,7 @@ async fn run_server() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -796,6 +797,7 @@ async fn run_server() -> anyhow::Result<()> {
             environment: config.environment,
             signup_policy,
             rate_limit_service: rate_limit,
+            event_broker: macro_event_broker.clone(),
             calendar_scope_enabled: config.calendar_scope_enabled,
             account_link_state_key,
             jwt_args,

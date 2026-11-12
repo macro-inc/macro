@@ -25,7 +25,6 @@ export const NavGlyph = (props: {
   class: string;
 }) => (
   <div
-    data-icon-motion-target
     class={cn(
       'pointer-events-none relative flex shrink-0 items-center justify-center',
       props.class

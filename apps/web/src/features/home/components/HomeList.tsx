@@ -130,8 +130,13 @@ export function HomeList(props: HomeListProps) {
     entity.type === 'channel_thread'
       ? getChannelThreadName(entity, channels.channelsById())
       : undefined;
-  const { state, startedSessionToHighlight, clearStartedSessionToHighlight } =
-    useHomeView();
+  const {
+    state,
+    composerFocusRequest,
+    registerListFocus,
+    startedSessionToHighlight,
+    clearStartedSessionToHighlight,
+  } = useHomeView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -207,8 +212,10 @@ export function HomeList(props: HomeListProps) {
       }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
-      // Home keeps the keyboard only when the item opened in Home itself.
-      if (panel.isPanelActive()) listRoot()?.focus({ preventScroll: true });
+      // Home keeps the keyboard only when the item opened in Home itself,
+      // and gives it to a conversation's composer.
+      if (panel.isPanelActive() && !composerFocusRequest())
+        listRoot()?.focus({ preventScroll: true });
       return;
     }
 
@@ -233,7 +240,11 @@ export function HomeList(props: HomeListProps) {
     options?: { activate?: boolean }
   ) {
     if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
-    props.onPreviewEntityChange(entity, options);
+    // A runtime opens in Settings → Machines; it has no preview.
+    props.onPreviewEntityChange(
+      entity?.type === 'harness' ? undefined : entity,
+      options
+    );
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -338,6 +349,14 @@ export function HomeList(props: HomeListProps) {
   };
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
+  // Esc from a previewed conversation returns to its row, which stays the
+  // list's focused row while the preview shows it.
+  registerListFocus(() => {
+    const root = listRoot();
+    if (!root?.isConnected) return false;
+    root.focus({ preventScroll: true });
+    return true;
+  });
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
 

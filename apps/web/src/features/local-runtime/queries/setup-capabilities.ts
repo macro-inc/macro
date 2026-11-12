@@ -38,7 +38,7 @@ async function waitForRunning(
       resolveRunning(status);
     } else if (status.phase === 'error') {
       rejectRunning(
-        new Error(status.lastError ?? 'The local runtime stopped.')
+        new Error(status.lastError ?? 'This computer stopped running agents.')
       );
     }
   };

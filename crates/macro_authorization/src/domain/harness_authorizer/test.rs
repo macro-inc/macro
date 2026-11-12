@@ -11,14 +11,13 @@ const RAW_TOKEN: &str = "mhns_test_secret";
 const OWNER_ID: &str = "macro|owner@example.com";
 const MEMBER_ID: &str = "macro|member@example.com";
 const FUSION_USER_ID: &str = "fusion-owner";
-const TEAM_ID: Uuid = Uuid::from_u128(3);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Failure {
     FindToken,
     MarkTokenUsed,
     FindUser,
-    UserHasTeam,
+    UserMayUseHarness,
 }
 
 #[derive(Debug, Default)]
@@ -26,14 +25,14 @@ struct Calls {
     tokens: Vec<String>,
     marked_token_ids: Vec<Uuid>,
     user_lookups: Vec<String>,
-    team_lookups: Vec<(String, Uuid)>,
+    access_lookups: Vec<(HarnessId, String)>,
 }
 
 #[derive(Clone)]
 struct FakeRepo {
     token: Option<HarnessTokenAuthorization>,
     user: Option<ResolvedBotActingUser>,
-    user_has_team: bool,
+    user_may_use_harness: bool,
     failure: Option<Failure>,
     calls: Arc<Mutex<Calls>>,
 }
@@ -50,16 +49,16 @@ impl FakeRepo {
                 created_by: OWNER_ID.to_string(),
             }),
             user: Some(resolved_user(OWNER_ID)),
-            user_has_team: true,
+            user_may_use_harness: true,
             failure: None,
             calls: Arc::new(Mutex::new(Calls::default())),
         }
     }
 
-    fn owned_by_team() -> Self {
+    /// Owned by someone else, with the acting user reaching it through a grant.
+    fn granted_to_member() -> Self {
         let mut repo = Self::owned_by_user();
-        let token = repo.token.as_mut().unwrap();
-        token.owner = HarnessAuthorizationOwner::Team { team_id: TEAM_ID };
+        repo.user = Some(resolved_user(MEMBER_ID));
         repo
     }
 
@@ -109,16 +108,20 @@ impl HarnessAuthorizationRepo for FakeRepo {
             .filter(|user| user.macro_user_id.as_ref() == macro_user_id))
     }
 
-    async fn user_has_team(&self, fusion_user_id: &str, team_id: Uuid) -> Result<bool, Self::Err> {
+    async fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        macro_user_id: &str,
+    ) -> Result<bool, Self::Err> {
         self.calls
             .lock()
             .unwrap()
-            .team_lookups
-            .push((fusion_user_id.to_string(), team_id));
-        if self.failure == Some(Failure::UserHasTeam) {
-            return Err("team lookup failed");
+            .access_lookups
+            .push((harness_id, macro_user_id.to_string()));
+        if self.failure == Some(Failure::UserMayUseHarness) {
+            return Err("access lookup failed");
         }
-        Ok(self.user_has_team)
+        Ok(self.user_may_use_harness)
     }
 }
 
@@ -154,28 +157,24 @@ async fn authorizes_private_harness_with_owner_as_default_acting_user() {
     assert_eq!(calls.tokens, [RAW_TOKEN]);
     assert_eq!(calls.marked_token_ids, [token.token_id]);
     assert_eq!(calls.user_lookups, [OWNER_ID]);
-    assert!(calls.team_lookups.is_empty());
+    assert!(calls.access_lookups.is_empty());
 }
 
 #[tokio::test]
-async fn team_harness_defaults_to_its_creator_and_checks_membership() {
-    let repo = FakeRepo::owned_by_team();
+async fn default_acting_user_is_the_owner_without_a_grant_lookup() {
+    let repo = FakeRepo::owned_by_user();
     let authentication = HarnessAuthorizerService::new(repo.clone())
         .authorize_harness(RAW_TOKEN, None)
         .await
         .unwrap();
 
     assert_eq!(authentication.acting_user.macro_user_id.as_ref(), OWNER_ID);
-    assert_eq!(
-        repo.calls.lock().unwrap().team_lookups,
-        [(FUSION_USER_ID.to_string(), TEAM_ID)]
-    );
+    assert!(repo.calls.lock().unwrap().access_lookups.is_empty());
 }
 
 #[tokio::test]
-async fn verified_claim_becomes_the_acting_user_for_team_members() {
-    let mut repo = FakeRepo::owned_by_team();
-    repo.user = Some(resolved_user(MEMBER_ID));
+async fn verified_claim_becomes_the_acting_user_for_grant_holders() {
+    let repo = FakeRepo::granted_to_member();
 
     let authentication = HarnessAuthorizerService::new(repo.clone())
         .authorize_harness(RAW_TOKEN, Some(MEMBER_ID.to_string()))
@@ -183,26 +182,18 @@ async fn verified_claim_becomes_the_acting_user_for_team_members() {
         .unwrap();
 
     assert_eq!(authentication.acting_user.macro_user_id.as_ref(), MEMBER_ID);
-    assert_eq!(repo.calls.lock().unwrap().user_lookups, [MEMBER_ID]);
+    let calls = repo.calls.lock().unwrap();
+    assert_eq!(calls.user_lookups, [MEMBER_ID]);
+    assert_eq!(
+        calls.access_lookups,
+        [(HarnessId::TEST_A, MEMBER_ID.to_string())]
+    );
 }
 
 #[tokio::test]
-async fn rejects_claims_for_users_outside_the_owning_team() {
-    let mut repo = FakeRepo::owned_by_team();
-    repo.user = Some(resolved_user(MEMBER_ID));
-    repo.user_has_team = false;
-
-    let result = HarnessAuthorizerService::new(repo)
-        .authorize_harness(RAW_TOKEN, Some(MEMBER_ID.to_string()))
-        .await;
-
-    assert_error(result, MacroAuthorizationError::ActingUserNotAuthorized);
-}
-
-#[tokio::test]
-async fn private_harness_rejects_claims_for_anyone_but_the_owner() {
-    let mut repo = FakeRepo::owned_by_user();
-    repo.user = Some(resolved_user(MEMBER_ID));
+async fn rejects_claims_for_users_without_access() {
+    let mut repo = FakeRepo::granted_to_member();
+    repo.user_may_use_harness = false;
 
     let result = HarnessAuthorizerService::new(repo)
         .authorize_harness(RAW_TOKEN, Some(MEMBER_ID.to_string()))
@@ -250,9 +241,10 @@ async fn maps_repository_failures_to_unavailable() {
         assert_error(result, MacroAuthorizationError::Unavailable);
     }
 
-    let result =
-        HarnessAuthorizerService::new(FakeRepo::owned_by_team().fail_at(Failure::UserHasTeam))
-            .authorize_harness(RAW_TOKEN, None)
-            .await;
+    let result = HarnessAuthorizerService::new(
+        FakeRepo::granted_to_member().fail_at(Failure::UserMayUseHarness),
+    )
+    .authorize_harness(RAW_TOKEN, Some(MEMBER_ID.to_string()))
+    .await;
     assert_error(result, MacroAuthorizationError::Unavailable);
 }
