@@ -253,6 +253,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // Message.context().
                 | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
                 // macro.channels.dm() and macro.channels.private().
                 | "OpenDirectMessage"
@@ -313,9 +315,12 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.coding() and macro.agentSessions.createManaged.
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                | "CreateAgentSession"
                 // macro.connectedApps.discover and .addServer.
                 | "DiscoverConnectors"
                 | "ConnectMcpServer"
@@ -351,7 +356,6 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateMemory"
                 // User.activity(), macro.activity.mine() and Initiative.activity().
                 | "GetUserActivity"
-                | "ReadActivity"
                 | "ReadInitiativeActivity"
                 // Document.readPresentation, editPresentation and copyPresentation.
                 | "ReadPresentation"
@@ -368,7 +372,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateDocument"
                 // Document.updateSharePermissions() and Project.updateSharePermissions().
                 | "UpdateSharing"
-                // Database.saveQuery() and DatabaseTable.saveQuery().
+                // macro.databases.saveQuery(), Database.saveQuery() and
+                // DatabaseTable.saveQuery().
                 | "SaveDatabaseQuery"
                 // macro.crm: companyById(), createCompany(), createContact()
                 // and importCompaniesCsv().
@@ -376,9 +381,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateCompany"
                 | "CreateContact"
                 | "ImportCompaniesCsv"
-                // macro.crm.pipelines and CrmPipeline. CreatePipeline stays:
-                // the SDK's create() takes no stages or fields.
+                // macro.crm.pipelines and CrmPipeline.
                 | "ListPipelines"
+                | "CreatePipeline"
                 | "FindPipelineEntries"
                 | "AddToPipeline"
                 | "UpdatePipelineEntries"
@@ -395,10 +400,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
                 | "DeleteInitiative"
+                // macro.imports: list(), track(), recordImported(),
+                // importNotionPage() and ImportEntry.decline().
+                | "ListImportEntities"
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ImportNotionPage"
                 // macro.agents.list() and Agent.update(). ListAgentUpdates
                 // stays: its result renders the cards the user answers on.
-                // CreateAgentSession stays: createManaged refuses a prompt for
-                // an agent that runs on its operator's machine.
                 | "ListAgents"
                 | "ConfigureAgent"
         )

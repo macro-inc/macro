@@ -34,6 +34,11 @@ pub(super) async fn by_ids(
     rows.into_iter()
         .map(|row| {
             Ok(SoupItem::Initiative(SoupInitiative {
+                appearance: row
+                    .appearance
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(super::type_err)?,
                 id: row.id,
                 name: row.name,
                 owner_id: Owner::from_principal_str(&row.owner_user_id).map_err(super::type_err)?,

@@ -50,6 +50,13 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
 
+    /// Atomically replace presentation and record attributed history, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: InitiativeId,
+        update: &activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
+
     /// Persist a new initiative, its members, and initial share state in one transaction.
     fn create(
         &self,
@@ -111,6 +118,12 @@ pub trait InitiativeRepo: Send + Sync + 'static {
 
 /// Inbound service port: the initiative API used by drivers (HTTP).
 pub trait InitiativeService: Send + Sync + 'static {
+    /// Replace icon and color under the existing edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, InitiativeError>> + Send;
     /// Read canonical properties and visible task progress for one authorized initiative.
     fn summary(
         &self,
