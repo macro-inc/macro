@@ -66,8 +66,8 @@ impl CodeModeService {
 
     /// Load the images a successful result returned, so the model sees them.
     /// Saved receipts load them again on a retry; records keep only the ids.
-    #[tracing::instrument(name = "code_mode.result_images", skip_all, fields(images = tracing::field::Empty, failed_image = tracing::field::Empty))]
-    async fn attach_images(&self, receipt: &mut ExecutionReceipt) {
+    #[tracing::instrument(name = "code_mode.result_images", skip_all, fields(agent_session_id = %session, execution_id = %receipt.execution_id, images = tracing::field::Empty, failed_image = tracing::field::Empty))]
+    async fn attach_images(&self, session: AgentSessionId, receipt: &mut ExecutionReceipt) {
         let images = returned_images(receipt);
         tracing::Span::current().record("images", images.len());
         for image in images {
@@ -500,7 +500,7 @@ impl SessionCodeMode for CodeModeService {
         )
         .await
         .map_err(CodeModeError::Task)??;
-        self.attach_images(&mut receipt).await;
+        self.attach_images(session.id, &mut receipt).await;
         Ok(receipt)
     }
 
@@ -590,7 +590,13 @@ pub(super) fn settle(
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
-                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references; optional images must be an array of at most 2 SDK images, such as await canvas.render().".into()))
+                (
+                    ExecutionStatus::Failed,
+                    Some(value),
+                    Some(format!(
+                        "main must return {{data: JSON}}; optional reviews must be an array of {{kind, id}} references; optional images must be an array of at most {MAX_RESULT_IMAGES} SDK images, such as await canvas.render()."
+                    )),
+                )
             }
         }
         Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),

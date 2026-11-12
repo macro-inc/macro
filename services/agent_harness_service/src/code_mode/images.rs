@@ -20,6 +20,13 @@ pub struct StaticFileModelImages(pub StaticFileServiceClient);
 impl ModelImages for StaticFileModelImages {
     #[tracing::instrument(name = "code_mode.load_image", skip_all, err, fields(file_id = file.as_ref(), size = tracing::field::Empty))]
     async fn load_png(&self, file: &StaticFileId) -> anyhow::Result<ModelImage> {
+        // Refuse other uploads before downloading them.
+        let metadata = self
+            .0
+            .get_file_metadata(file.as_ref())
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("no such file"))?;
+        anyhow::ensure!(metadata.content_type == "image/png", "not a PNG");
         let bytes = self.0.read_file(file.as_ref()).await?;
         tracing::Span::current().record("size", bytes.len());
         png_image(&bytes)

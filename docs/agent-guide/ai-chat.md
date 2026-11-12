@@ -1290,8 +1290,9 @@ SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
-`render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image; a program's
+`render`; `ReadCanvas`, `ApplyCanvasEdits`, `EditCanvas` and `RenderCanvas`
+are hidden, and the model sees a render a program returns in
+`images: [await canvas.render()]` as an image block; a program's
 render or generated image shows in the reply through the image's
 `toMarkdown()` `<m-image>` line, since a document mention of a static file id
 reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
