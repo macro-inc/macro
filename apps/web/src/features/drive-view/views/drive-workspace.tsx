@@ -23,7 +23,7 @@ import {
 } from './drive-folder-hierarchy';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
-import { DriveMobileTabs } from './drive-mobile-tabs';
+import { DriveMobileControls } from './drive-mobile-controls';
 import { DriveSidebar } from './drive-sidebar';
 
 export function DriveLoading() {
@@ -94,7 +94,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
                 <MobileListLayout
                   header={
                     <div class="flex min-w-0 flex-col gap-1">
-                      <DriveMobileTabs />
+                      <DriveMobileControls />
                       <DriveFolderPath />
                     </div>
                   }

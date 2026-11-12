@@ -1,48 +1,20 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { Show } from 'solid-js';
-import { useDriveView } from '../context/drive-context';
-import {
-  DRIVE_MOBILE_TABS,
-  type DriveMobileTab,
-  driveMobileTabLocation,
-} from '../core/types';
 import { DriveFilterDrawer } from './drive-filter-drawer';
 import { useDriveFolderHierarchyVisible } from './drive-folder-hierarchy';
 
-export function DriveMobileTabs() {
-  const { state } = useDriveView();
+/** Touch list controls; Drive's tabs and folders live in the sidebar sheet. */
+export function DriveMobileControls() {
   const folderHierarchy = useDriveFolderHierarchyVisible();
 
-  const items = (): PillTabItem<DriveMobileTab>[] =>
-    DRIVE_MOBILE_TABS.map((tab) => ({ value: tab.id, label: tab.label }));
-
-  // Folders covers the folder overview and any folder inside it; tapping the
-  // pill from inside a folder returns to the overview.
-  const activeTab = (): DriveMobileTab => {
-    const location = state.value().location;
-
-    return location.kind === 'folder' ? 'folders' : location.tab;
-  };
-
   return (
-    <div class="h-10 min-w-0 flex-1">
-      <PillTabs
-        scrollable
-        class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-        contentClass="px-(--mobile-chrome-gutter)"
-        leading={
-          <>
-            <ViewSidebar.Toggle action="expand" presentation="pill" />
-            <Show when={!folderHierarchy()}>
-              <DriveFilterDrawer />
-            </Show>
-          </>
-        }
-        items={items()}
-        value={activeTab()}
-        onChange={(tab) => state.navigate(driveMobileTabLocation(tab))}
-      />
+    <div class="flex h-10 min-w-0 flex-1 items-center">
+      <div class="pointer-events-auto flex items-center gap-2">
+        <ViewSidebar.Toggle action="expand" presentation="pill" />
+        <Show when={!folderHierarchy()}>
+          <DriveFilterDrawer />
+        </Show>
+      </div>
     </div>
   );
 }

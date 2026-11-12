@@ -30,7 +30,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
-import { TasksMobileTabs } from './components/TasksMobileTabs';
+import { TasksMobileControls } from './components/TasksMobileControls';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TASK_TABS } from './constants';
 import { isProjectTab } from './core/task-navigation';
@@ -120,7 +120,7 @@ function TasksViewRoot() {
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   const taskList = () => (
-    <MobileListLayout header={<TasksMobileTabs />}>
+    <MobileListLayout header={<TasksMobileControls />}>
       <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
@@ -187,7 +187,7 @@ function TasksViewRoot() {
                         : 'all'
                   }
                   title={TASK_TABS.find((tab) => tab.id === state.tab)?.label}
-                  mobileNavigation={<TasksMobileTabs />}
+                  mobileNavigation={<TasksMobileControls />}
                   search={{
                     value: () => state.search,
                     onChange: (search) => setState('search', search),

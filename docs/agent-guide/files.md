@@ -78,25 +78,22 @@ At narrow touch widths, selecting a file opens its standalone view. Router middl
 preserves explicit Drive detail routes so folding an open preview can keep its
 editor mounted.
 
-On touch devices (phones and tablets), the Drive header is a scrollable pill
-strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
-leading filter-drawer button, like Tasks. Opening Files from the mobile dock
-starts on **Recent**; explicit tab and folder links keep their destination. The
-first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
+On touch devices (phones and tablets), the Drive header holds only **Show
+sidebar** and the filter-drawer button, like Tasks; tabs and folders are picked
+from the sidebar sheet. Opening Files from the mobile dock starts on **Recent**;
+explicit tab and folder links keep their destination. The drawer holds Sort (hidden on Recent, where the viewer's own
 edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
 expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
 controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
-The **Folders** pill opens the folder overview and stays highlighted inside
-any folder; tapping it from inside a folder returns to the overview, and
-selecting another pill leaves the folder tree. On a touch device whose Drive
+On a touch device whose Drive
 sidebar is off screen, that overview is the nested folder tree — name order,
 with a folder search field — rather than a date-sorted list of every folder.
 Tap a folder name to open its contents; the expand control reveals child
-folders without leaving the overview. Inside a folder, a path under the pills
-lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
+folders without leaving the overview. Inside a folder, a path under the header
+controls lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
 the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
@@ -240,7 +237,7 @@ row toggles selection; Shift-clicking a checkbox selects a range, and Shift+Ente
 opens the focused row in a new split. Cmd/Ctrl-clicking a row's folder link or
 search hit opens a new tab. Short filtered pages load more results automatically;
 a failed page shows a retry action instead of silently stopping. On touch, tabs
-switch via the header pills; on narrow desktop layouts the header keeps a plain
+switch from the sidebar sheet; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
