@@ -232,13 +232,18 @@ conversation (a new pane at the end when no pane shows it) and slides in from
 that side while the other panes glide aside; with reduced motion it only fades
 in. Your pane stays active and a composer you were typing in keeps its caret.
 A toast reads **Opened by <agent>** with **Undo**, which slides the pane back
-out and restores the layout. On the phone apps the pane pushes onto the stack.
-When there is no room for another split (a narrow window, a phone browser),
-nothing is replaced: the toast says the agent wants to open something and
-offers **Open**. An item an agent opened is not marked read until you click or
-type in its pane.
+out and restores the layout; if the pane has unsaved changes and you keep
+them, it stays on screen and **Undo** is offered again. On the phone apps the
+pane pushes onto the stack. An item already on screen, including a list view
+such as Tasks, is left as it is. When there is no room for another split (a
+narrow window, a phone browser), nothing is replaced: the toast says the agent
+wants to open something and offers **Open**. An item an agent opened is not
+marked read until you click or type in its pane, and Undo doesn't mark it
+read either.
 
-Only prompts typed in the agent composer carry the tab: channel and DM
+Only the tab you typed in opens the item, not a tab duplicated or opened from
+it. Only prompts typed in the agent composer carry the tab, including the first
+prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
 item in its reply instead. Routes are closed to agents unless they opt in
 (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
@@ -1093,8 +1098,9 @@ Session creation and prompt delivery use the shared pending-session flow.
 
 A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
 the desktop header; the same **Share** action is on entity list menus and the
-entity sharing shortcut. It opens the same Share dialog (mobile: drawer) as
-documents:
+entity sharing shortcut. With several list rows selected, **Share** opens the
+bulk dialog in [Entity action dialogs](navigation.md#entity-action-dialogs).
+For one chat it opens the same Share dialog (mobile: drawer) as documents:
 
 - People/channels: pick recipients and an access level and send the chat with
   an optional message.
@@ -1930,7 +1936,9 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Like other Share composers, it supports pasted images without a paperclip button.
 Sessions also support **Share** from entity list menus and the entity sharing
-shortcut. **People with access** lists the owner and shared conversations;
+shortcut; with several list rows selected, list **Share** opens the bulk dialog
+in [Entity action dialogs](navigation.md#entity-action-dialogs) instead.
+**People with access** lists the owner and shared conversations;
 the owner can change or remove a conversation's access. When that list holds
 nobody but the owner — what a participant who cannot read the other grants
 sees — the section is titled **Owner** instead. **Link sharing** offers

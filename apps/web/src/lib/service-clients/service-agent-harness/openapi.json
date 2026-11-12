@@ -6161,6 +6161,11 @@
             },
             "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
           },
+          "promptClientId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The app tab the person typed `prompt` in, as `clientId` on a control\nrequest, so what the first turn opens in the app reaches that tab\nonly. Requires `prompt`. Only a person's own request may send it; a\nruntime's is refused, and a program using a person's credential has\nit dropped."
+          },
           "repoBranch": {
             "type": ["string", "null"],
             "description": "Starting branch for a managed coding session's selected repository.\nOmitted, the session starts on the repository's default branch."

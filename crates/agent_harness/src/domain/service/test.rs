@@ -4587,11 +4587,14 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
 
 /// A surface that already shows its first prompt names the id it shows it
 /// under, and the logged prompt carries that id, so the row confirms the
-/// bubble in place rather than adding a second one.
+/// bubble in place rather than adding a second one. The tab it was typed in
+/// is recorded on the first turn, so that turn can show the person things
+/// there.
 #[tokio::test]
 async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
     let (service, repo, containers, _, _) = harness();
     let action_id = AgentActionId::mint();
+    let tab = agent_session::domain::model::UiClientId::from_uuid(Uuid::from_u128(0xc1));
     let open = service.open_managed_session(OpenManagedSession {
         billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
@@ -4605,6 +4608,7 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
             action_id: Some(action_id),
             prompt: "inspect".to_owned(),
             attachments: Vec::new(),
+            client: Some(tab),
         }),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -4635,6 +4639,12 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
         })
         .collect();
     assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
+    let prompter = repo
+        .turn_prompter(session.id)
+        .await
+        .expect("the prompter is readable")
+        .expect("the first turn recorded its prompter");
+    assert_eq!(prompter.client, Some(tab));
 }
 
 #[tokio::test]

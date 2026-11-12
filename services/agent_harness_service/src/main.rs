@@ -552,6 +552,7 @@ async fn run() -> anyhow::Result<()> {
     if let Some(rollout) = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         connectors = connectors.with_rollout(rollout);
     }
@@ -764,6 +765,7 @@ async fn run() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
@@ -1847,6 +1849,7 @@ async fn run() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()

@@ -11,6 +11,7 @@
  */
 
 import type { PaneId } from '@app/lib/split-router';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 const ARRIVE_MS = 260;
 const LEAVE_MS = 200;
@@ -121,13 +122,41 @@ export function playArrival(arrived: PaneId, before: PaneRects) {
   );
 }
 
+/** A departure under way. */
+export type Departure = {
+  /** Resolves once the pane is out of sight (at once when nobody watches). */
+  finished: Promise<void>;
+  /** Brings the pane back, for when its removal didn't happen after all. */
+  revert: () => void;
+};
+
+const NO_DEPARTURE: Departure = {
+  finished: Promise.resolve(),
+  revert: () => {},
+};
+
+async function settled(animation: Animation): Promise<void> {
+  try {
+    await animation.finished;
+  } catch {
+    // Cancelled because the pane went away first; nothing left to show.
+  }
+}
+
+/** Plays the departure backwards, then lets go of its held end state. */
+async function playBack(animation: Animation): Promise<void> {
+  animation.reverse();
+  await settled(animation);
+  animation.cancel();
+}
+
 /**
- * Send `pane` back the way it came, from wherever it is mid-arrival, and
- * resolve when it has gone (at once when nobody is watching).
+ * Send `pane` back the way it came, from wherever it is mid-arrival. It stays
+ * out of sight until removed, or until `revert` brings it back.
  */
-export async function playDeparture(pane: PaneId): Promise<void> {
+export function playDeparture(pane: PaneId): Departure {
   const element = paneElement(pane);
-  if (!element || !watched()) return;
+  if (!element || !watched()) return NO_DEPARTURE;
 
   // Start from what is on screen, so an Undo during the arrival reverses it
   // instead of jumping to the end first.
@@ -149,11 +178,10 @@ export async function playDeparture(pane: PaneId): Promise<void> {
     fill: 'forwards',
   });
 
-  try {
-    await animation.finished;
-  } catch {
-    // Cancelled because the pane went away first; nothing left to show.
-  }
+  return {
+    finished: settled(animation),
+    revert: () => fireAndForget(playBack(animation), 'agent-navigation'),
+  };
 }
 
 /** After Undo, glide the remaining panes back to their old places. */
