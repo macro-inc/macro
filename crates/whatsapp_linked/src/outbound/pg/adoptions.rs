@@ -94,10 +94,9 @@ impl AdoptionRepository for PgWhatsAppRepository {
             remote_member = true,can_post = excluded.can_post,observed_at = excluded.observed_at,reconciled = true"#,
             adopted.chat.id,account.id,account.authorization_generation,adoption.can_post,adoption.observed_at)
             .execute(&mut *tx).await.map_err(failure)?;
-        if adopted.created {
-            super::pictures::track_pictures_in(&mut tx, user, std::slice::from_ref(&adoption.jid))
-                .await?;
-        }
+        // Idempotent: re-adding a chat tracks its picture again if it was dropped.
+        super::pictures::track_pictures_in(&mut tx, user, std::slice::from_ref(&adoption.jid))
+            .await?;
         notify(&mut tx, signals::ACCOUNT_CHANGED, account.id).await?;
         tx.commit().await.map_err(failure)?;
         Ok(adopted)

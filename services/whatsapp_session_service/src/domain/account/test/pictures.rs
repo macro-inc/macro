@@ -65,16 +65,14 @@ async fn checks_are_spaced_and_pause_after_a_rate_limit(pool: PgPool) {
         .unwrap();
 
     // The group refresh on connect runs alongside; only picture queries
-    // matter here.
+    // matter here. Checks run one at a time, so each query proves the one
+    // before it was recorded.
     let mut queried = vec![];
     while queried.len() < 3 {
         if let Some(Call::ProfilePicture(jid)) = calls.recv().await {
             queried.push((jid, tokio::time::Instant::now()));
         }
     }
-    started.release.cancel();
-    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
-
     assert_eq!(
         queried
             .iter()
@@ -85,24 +83,39 @@ async fn checks_are_spaced_and_pause_after_a_rate_limit(pool: PgPool) {
     );
     assert!(queried[1].1 - queried[0].1 >= pacing.backoff);
     assert!(queried[2].1 - queried[1].1 >= pacing.spacing);
-
-    let stored = sqlx::query!(
-        "SELECT jid, state FROM whatsapp_profile_picture WHERE account_id = $1 ORDER BY jid",
-        account
+    let second = sqlx::query_scalar!(
+        "SELECT state FROM whatsapp_profile_picture WHERE account_id = $1 AND jid = $2",
+        account,
+        SECOND
     )
-    .fetch_all(&pool)
+    .fetch_one(&pool)
     .await
-    .unwrap()
-    .into_iter()
-    .map(|row| (row.jid, row.state))
-    .collect::<Vec<_>>();
-    assert_eq!(
-        stored,
-        [
-            (FIRST.to_owned(), "hidden".to_owned()),
-            (SECOND.to_owned(), "staged".to_owned()),
-        ]
-    );
+    .unwrap();
+    assert_eq!(second, "staged");
+
+    // A change notification wakes the loop for one more check, which
+    // proves the third answer was recorded.
+    event_sender(&whatsapp)
+        .send(SessionEvent::PictureChanged {
+            jids: vec![SECOND.to_owned()],
+            picture_id: Some("1700000002".to_owned()),
+        })
+        .unwrap();
+    loop {
+        if let Some(Call::ProfilePicture(jid)) = calls.recv().await {
+            assert_eq!(jid, SECOND);
+            break;
+        }
+    }
+    let first = sqlx::query_scalar!(
+        "SELECT state FROM whatsapp_profile_picture WHERE account_id = $1 AND jid = $2",
+        account,
+        FIRST
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(first, "hidden");
     let counted = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM whatsapp_picture_query WHERE account_id = $1"#,
         account
@@ -111,7 +124,9 @@ async fn checks_are_spaced_and_pause_after_a_rate_limit(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        counted, 3,
+        counted, 4,
         "a rate-limited query still counts against the budget"
     );
+    started.release.cancel();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
 }

@@ -540,8 +540,7 @@ impl SessionRepository for PgWhatsAppRepository {
         limit: i64,
     ) -> ExternalChatResult<Vec<PictureCheck>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
-        // Exclusive, so concurrent claims can't both spend the same budget.
-        let account = fence_exclusive_in(&mut tx, scope).await?;
+        let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
             return Ok(vec![]);
         }

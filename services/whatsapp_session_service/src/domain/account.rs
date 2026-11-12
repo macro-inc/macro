@@ -226,9 +226,11 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         };
         let exit = running.serve(events, control).await;
         media_stop.cancel();
+        // A check holds nothing that needs finishing (an interrupted claim
+        // is due again after its hold), so the account never waits on one.
+        picture_checks.abort();
         if exit == AccountExit::Stopped {
             imports.abort();
-            picture_checks.abort();
         }
         if let Err(error) = picture_checks.await
             && error.is_panic()

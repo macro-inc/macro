@@ -436,6 +436,10 @@ pub const PICTURE_QUERIES_PER_HOUR: i64 = 60;
 pub const PICTURE_QUERIES_PER_DAY: i64 = 100;
 /// Largest preview picture staged for DSS.
 pub const PICTURE_LIMIT_BYTES: usize = 1024 * 1024;
+/// Longest WhatsApp picture id stored.
+pub const PICTURE_ID_LIMIT_BYTES: usize = 64;
+/// Longest picture content type stored.
+pub const PICTURE_MIME_LIMIT_BYTES: usize = 64;
 
 /// A downloaded profile picture waiting for DSS to store it as a static file
 /// owned by the account's owner.

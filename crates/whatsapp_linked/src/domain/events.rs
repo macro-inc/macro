@@ -531,7 +531,8 @@ pub enum PictureAnswer {
     Hidden,
     /// They have no picture.
     NotSet,
-    /// WhatsApp throttled the account; the check is retried, uncounted.
+    /// WhatsApp throttled the account; the check is due again at once, and
+    /// the query still counts against the budget.
     RateLimited,
     /// The question could not be asked or the download failed.
     Failed,

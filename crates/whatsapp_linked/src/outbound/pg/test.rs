@@ -23,9 +23,9 @@ mod changes;
 mod concurrency;
 mod deletion;
 mod media;
-mod pictures;
 mod names;
 mod pairing;
+mod pictures;
 mod rich;
 mod timeline;
 

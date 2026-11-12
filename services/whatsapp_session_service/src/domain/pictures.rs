@@ -80,6 +80,7 @@ impl<Session: WhatsAppSession> PictureChecks<Session> {
             if !warm {
                 tokio::select! {
                     () = stop.cancelled() => return,
+                    () = self.fenced.cancelled() => return,
                     () = tokio::time::sleep(self.pacing.warmup) => {}
                 }
                 warm = true;
@@ -108,6 +109,7 @@ impl<Session: WhatsAppSession> PictureChecks<Session> {
             match wait {
                 Some(wait) => tokio::select! {
                     () = stop.cancelled() => return,
+                    () = self.fenced.cancelled() => return,
                     () = tokio::time::sleep(wait) => {}
                 },
                 None => tokio::select! {
