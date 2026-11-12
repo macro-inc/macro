@@ -20,8 +20,8 @@ use crate::domain::lifecycle::{
     SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration,
-    NewReservation, Quote, Reservation, Reserved, SubscriptionItem, HostAllocation,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
+    HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 

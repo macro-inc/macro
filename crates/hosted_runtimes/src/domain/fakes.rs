@@ -16,8 +16,8 @@ use crate::domain::lifecycle::{
     Billing, BillingPolicy, Context, Effect, EffectWorker, Event, HostId, provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration, NewReservation,
-    PurchaseKey, Reservation, Reserved, SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
+    NewReservation, PurchaseKey, Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
@@ -686,7 +686,11 @@ impl ComputerRepo for FakeRepo {
             .values()
             .filter(|computer| computer.state.is_live())
             .map(|computer| computer.resources)
-            .chain(reservations.values().map(|reservation| reservation.resources))
+            .chain(
+                reservations
+                    .values()
+                    .map(|reservation| reservation.resources),
+            )
             .collect();
         Ok(vec![HostAllocation {
             host: Host {
@@ -697,7 +701,10 @@ impl ComputerRepo for FakeRepo {
             },
             sold_units: held.iter().map(|resources| resources.units()).sum(),
             vcpus: held.iter().map(|resources| resources.vcpus.get()).sum(),
-            memory_gib: held.iter().map(|resources| resources.memory_gib.get()).sum(),
+            memory_gib: held
+                .iter()
+                .map(|resources| resources.memory_gib.get())
+                .sum(),
             disk_gib: held.iter().map(|resources| resources.disk_gib.get()).sum(),
         }])
     }

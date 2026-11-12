@@ -15,8 +15,8 @@ use crate::domain::lifecycle::{
     provision, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerRecord, Funding, Host, HostAllocation, HostRegistration, NewReservation, Reservation,
-    Reserved, SanitizedReason,
+    Computer, ComputerRecord, Funding, Host, HostAllocation, HostRegistration, NewReservation,
+    Reservation, Reserved, SanitizedReason,
 };
 use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
