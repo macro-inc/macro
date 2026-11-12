@@ -106,7 +106,7 @@ impl PgMessageRepository {
         .map_err(database_error)?;
         self.hydrate_root_rows(rows).await
     }
-    async fn hydrate_root_rows(
+    pub(super) async fn hydrate_root_rows(
         &self,
         rows: Vec<Json<StoredMessage>>,
     ) -> Result<Vec<MessageListItem>, MessageError> {
@@ -162,6 +162,9 @@ impl PgMessageRepository {
             .collect();
         Ok(items)
     }
+    // COALESCE preserves the keyset Index Cond for generic prepared plans.
+    // OFFSET 0 keeps live-reply existence checks as indexed per-root probes;
+    // PostgreSQL can otherwise hash every live message when it sees a tombstone.
     async fn older(
         &self,
         parent: &MessageParent,
@@ -174,14 +177,14 @@ impl PgMessageRepository {
             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
                 AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS (
-                    SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
+                    SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0))
                 AND ($6::uuid[] IS NULL OR m.id = ANY($6))
                 AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7)
                 AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) < ($3, $4::uuid))
+                AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'::timestamptz), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
             ORDER BY m.created_at DESC, m.id DESC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
@@ -199,14 +202,14 @@ impl PgMessageRepository {
             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
                 AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS (
-                    SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
+                    SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0))
                 AND ($6::uuid[] IS NULL OR m.id = ANY($6))
                 AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7)
                 AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                     OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))
                     OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                         AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))
-                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))
+                AND (m.created_at, m.id) > (COALESCE($3::timestamptz, '-infinity'::timestamptz), COALESCE($4::uuid, '00000000-0000-0000-0000-000000000000'::uuid))
             ORDER BY m.created_at ASC, m.id ASC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)

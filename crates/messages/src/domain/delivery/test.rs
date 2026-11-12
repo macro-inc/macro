@@ -75,6 +75,7 @@ fn event() -> MessageEvent {
         id: Uuid::from_u128(3),
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),
+        import_order: None,
         sender_id: actor.clone().try_into().unwrap(),
         bot_profile: None,
         mentions: vec![],

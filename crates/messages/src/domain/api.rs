@@ -29,6 +29,19 @@ pub trait MessageReader: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageView>,
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
+    /// Read a root with its bounded preview and call state under parent access.
+    async fn get_root(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+    ) -> Result<MessageTimelineEntry, MessageError>;
+    /// Read a bounded page of live replies under the same policy as a full thread.
+    async fn thread_page(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError>;
     /// Read a page of discussions on an authorized parent.
     async fn timeline(
         &self,
@@ -172,6 +185,21 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
         root: Uuid,
     ) -> Result<MessageThread, MessageError> {
         MessageService::get_thread(self, access, root).await
+    }
+    async fn get_root(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+    ) -> Result<MessageTimelineEntry, MessageError> {
+        MessageService::get_root(self, access, root).await
+    }
+    async fn thread_page(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        MessageService::thread_page(self, access, root, query).await
     }
     async fn timeline(
         &self,
@@ -331,6 +359,19 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageView>,
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
+    /// Read a root with its bounded preview and call state under parent access.
+    async fn get_root(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+    ) -> Result<MessageTimelineEntry, MessageError>;
+    /// Read a bounded page of live replies under the same policy as a full thread.
+    async fn thread_page(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError>;
     /// Read a page of discussions on an authorized parent.
     async fn timeline(
         &self,
