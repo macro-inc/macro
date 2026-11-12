@@ -28,8 +28,9 @@ export function AgentUpdates(props: AgentUpdatesProps) {
   const sessions = () => {
     const viewer = userId();
     const owned = new Map(
+      // Read data only once loaded: a pending read suspends the whole view.
       loaded.flatMap((query) =>
-        query.data && query.data.ownerId === viewer
+        query.isSuccess && query.data.ownerId === viewer
           ? [[query.data.id, query.data] as const]
           : []
       )
