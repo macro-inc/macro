@@ -16,7 +16,7 @@ how WhatsApp accounts are linked and their messages reach Macro is in
 | Chat | `external_chat`: `provider`, `remote_id` (the provider's id; WhatsApp: a JID), `kind`, name, owner, `state`, history import (`backfill_*`) |
 | People | `external_chat_person` (the provider's display name, verified Macro user); the provider names them for reads (`ChatProvider::people`) |
 | Messages | `external_chat_message`: one row per `(chat, person, source id)`; `origin` is `remote`, `macro` or `history`; `kind` `message` or `system`; structured `rich` content and `mentions` (provider ids); a thread reply names its root in `thread_root` (`thread_broadcast` when also sent to the chat) |
-| Reactions | `external_chat_reaction`, keyed by message, person and emoji: a provider may let a person hold several (WhatsApp keeps one, replacing it) |
+| Reactions | `external_chat_reaction`, keyed by message, person and emoji: a provider that lists `remove_reaction` in its `limits.mutations` lets a person hold several (a `reaction` adds one, `remove_reaction` removes one); WhatsApp lists none and keeps one, replaced by a new `reaction` and removed by an empty one. The service refuses operations a provider doesn't list. |
 | Poll votes | `external_chat_poll_vote` (per person, latest revision wins) |
 | Attachments | `external_chat_attachment` (one per source ordinal, a static file once `ready`); staged bytes in `external_chat_media_blob`; released files in `external_chat_file_deletion` |
 | Read state | `external_chat_read_state` (monotone, per viewer) and `external_chat_thread_read_state` (per viewer and thread) |

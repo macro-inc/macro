@@ -36802,7 +36802,7 @@ export const externalChatResponse = zod
           mutations: zod
             .array(
               zod
-                .enum(['reaction', 'edit', 'delete'])
+                .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                 .describe('Deliberate operations on an existing message.')
             )
             .describe('Supported message operations.'),
@@ -37016,7 +37016,7 @@ export const externalChatDeliveryResponseItem = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()
@@ -38258,7 +38258,7 @@ export const externalChatSendsResponseItem = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()
@@ -38349,7 +38349,7 @@ export const externalChatSendBody = zod
                 'Existing message, resolved to its provider source by the server.'
               ),
             operation: zod
-              .enum(['reaction', 'edit', 'delete'])
+              .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
               .describe('Deliberate operations on an existing message.'),
             text: zod
               .string()
@@ -38432,7 +38432,7 @@ export const externalChatSendResponse = zod
                     'Existing message, resolved to its provider source by the server.'
                   ),
                 operation: zod
-                  .enum(['reaction', 'edit', 'delete'])
+                  .enum(['reaction', 'remove_reaction', 'edit', 'delete'])
                   .describe('Deliberate operations on an existing message.'),
                 text: zod
                   .string()

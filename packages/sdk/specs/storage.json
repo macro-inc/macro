@@ -43251,7 +43251,7 @@
       "ExternalChatMutation": {
         "type": "string",
         "description": "Deliberate operations on an existing message.",
-        "enum": ["reaction", "edit", "delete"]
+        "enum": ["reaction", "remove_reaction", "edit", "delete"]
       },
       "ExternalChatParticipant": {
         "type": "object",

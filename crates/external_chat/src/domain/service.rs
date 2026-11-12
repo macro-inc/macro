@@ -191,6 +191,11 @@ impl ExternalChatService {
         } = &request.message
         {
             span.record("kind", tracing::field::debug(operation));
+            if !provider.capabilities(&chat).mutations.contains(operation) {
+                return Err(
+                    ExternalChatError::Invalid("this chat doesn't support that change").into(),
+                );
+            }
             let target = provider
                 .mutation_target(&chat, *message_id)
                 .await?
@@ -421,6 +426,16 @@ pub(crate) fn validate_request(
             ..
         } if emoji.chars().count() <= 32 && !emoji.chars().any(char::is_control) => Ok(()),
         ReplyContent::Mutation {
+            operation: Mutation::RemoveReaction,
+            text: Some(emoji),
+            ..
+        } if !emoji.is_empty()
+            && emoji.chars().count() <= 32
+            && !emoji.chars().any(char::is_control) =>
+        {
+            Ok(())
+        }
+        ReplyContent::Mutation {
             operation: Mutation::Delete,
             text: None,
             ..
@@ -438,7 +453,7 @@ pub(crate) fn authorize_mutation(
     identity: &str,
     now: DateTime<Utc>,
 ) -> ExternalChatResult<()> {
-    if operation == Mutation::Reaction {
+    if matches!(operation, Mutation::Reaction | Mutation::RemoveReaction) {
         return Ok(());
     }
     if !target.sent_by.iter().any(|id| id == identity) {
