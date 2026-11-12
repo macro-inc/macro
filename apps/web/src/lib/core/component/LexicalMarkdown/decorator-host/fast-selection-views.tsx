@@ -1,7 +1,6 @@
 import {
   type ConnectAppDecoratorProps,
   ConnectAppNode,
-  type GroupMentionDecoratorProps,
   GroupMentionNode,
   type ThemeMentionDecoratorProps,
   ThemeMentionNode,
@@ -13,6 +12,7 @@ import type {
   JsonObject,
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
+import type { GroupMentionUIProps } from '../component/decorator/GroupMention';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
   createNativeDecoratorAdapter,
@@ -38,18 +38,25 @@ export function createNativeFastSelectionDecoratorViews<
 > {
   const bind = createNativeDecoratorAdapter(context);
   return {
-    'group-mention': bind<
-      GroupMentionDecoratorProps & DecoratorSelectionHostProp
-    >(GroupMentionNode, (node, context) => {
-      const value = node.props().groupAlias;
-      if (typeof value !== 'string') throw new Error('Invalid group alias');
-      return {
-        groupAlias: value,
-        key: String(node.key),
-        theme: context.theme,
-        host: context.host,
-      };
-    }),
+    'group-mention': bind<GroupMentionUIProps>(
+      GroupMentionNode,
+      (node, context) => {
+        const groupAlias = node.props().groupAlias;
+        // Source keeps a stored null or omitted alias and renders a bare `@`.
+        if (
+          groupAlias !== undefined &&
+          groupAlias !== null &&
+          typeof groupAlias !== 'string'
+        )
+          throw new Error('Invalid group alias');
+        return {
+          groupAlias,
+          key: String(node.key),
+          theme: context.theme,
+          host: context.host,
+        };
+      }
+    ),
     'unknown-mention': bind<
       UnknownMentionDecoratorProps & DecoratorSelectionHostProp
     >(UnknownMentionNode, (node, context) => {

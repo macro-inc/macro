@@ -4,9 +4,13 @@ import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function GroupMention(
-  props: GroupMentionDecoratorProps & DecoratorSelectionHostProp
-) {
+/** Source `importJSON` keeps a stored null or omitted alias; it renders as a bare `@`. */
+export type GroupMentionUIProps = Omit<
+  GroupMentionDecoratorProps,
+  'groupAlias'
+> & { groupAlias?: string | null } & DecoratorSelectionHostProp;
+
+export function GroupMention(props: GroupMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
