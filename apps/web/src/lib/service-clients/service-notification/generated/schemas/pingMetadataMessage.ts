@@ -4,8 +4,6 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PingMessage } from './pingMessage';
 
-/**
- * The agent's avatar.
- */
-export type ManualNotificationAgentAvatarUrl = string | null;
+export type PingMetadataMessage = null | PingMessage;

@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ManualNotificationAgentAvatarUrl } from './manualNotificationAgentAvatarUrl';
+import type { PingAgentAvatarUrl } from './pingAgentAvatarUrl';
 
 /**
- * The agent a manual notification reads as being from, as it was when sent.
+ * The agent a ping reads as being from, as it was when sent.
  */
-export interface ManualNotificationAgent {
+export interface PingAgent {
   /** The agent's avatar. */
-  avatarUrl?: ManualNotificationAgentAvatarUrl;
+  avatarUrl?: PingAgentAvatarUrl;
   /** A string on the wire: system bots have fixed ids that are not RFC 4122
 uuids. */
   id: string;

@@ -194,15 +194,15 @@ describe('maybeHandlePlatformNotification', () => {
     expect(resolveDocumentName).not.toHaveBeenCalled();
   });
 
-  it('shows a manual notification as written, from the agent that sent it', async () => {
+  it('shows a ping as written, from the agent that sent it', async () => {
     const result = await toPlatformNotificationData(
       baseNotification({
         entity_id: 'task-1',
         entity_type: 'document',
         sender_id: 'macro|sender@macro.com',
-        notification_event_type: 'manual',
+        notification_event_type: 'ping',
         notification_metadata: {
-          tag: 'manual',
+          tag: 'ping',
           content: {
             title: 'Deploy finished',
             body: 'All 3 services are live.',

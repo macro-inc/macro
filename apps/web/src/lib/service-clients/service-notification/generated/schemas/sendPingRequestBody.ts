@@ -6,6 +6,6 @@
  */
 
 /**
- * More detail, as the sender wrote it.
+ * More detail, at most 1000 characters.
  */
-export type ManualMetadataBody = string | null;
+export type SendPingRequestBody = string | null;

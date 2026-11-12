@@ -2,7 +2,7 @@ import { providerIdentity } from '@app/features/external-chat/providers/identity
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
 import {
-  manualText,
+  pingText,
   stoppedAgentsText,
 } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
@@ -331,7 +331,7 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'ready';
     })
-    .with('manual', () => 'notified')
+    .with('ping', () => 'pinged')
     .exhaustive(() => 'notified');
 }
 
@@ -427,7 +427,7 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'computer_setup' },
       (m) => m.content.agent?.name ?? m.content.computerName
     )
-    .with({ tag: 'manual' }, (m) => manualText(m.content))
+    .with({ tag: 'ping' }, (m) => pingText(m.content))
     .exhaustive(() => '');
 }
 

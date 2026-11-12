@@ -45,7 +45,7 @@ it.each(['view', 'comment', 'edit'] as const)(
   }
 );
 
-it('shows what a manual notification says, not the linked channel message', () => {
+it('shows what a ping says, not the linked channel message', () => {
   const entity = {
     type: 'channel',
     id: 'channel',
@@ -61,9 +61,9 @@ it('shows what a manual notification says, not the linked channel message', () =
     updated_at: '2026-11-09T00:00:00Z',
     sent: true,
     state: 'unseen',
-    notification_event_type: 'manual',
+    notification_event_type: 'ping',
     notification_metadata: {
-      tag: 'manual',
+      tag: 'ping',
       content: { title: 'Deploy finished', body: 'All 3 services are live.' },
     },
   };

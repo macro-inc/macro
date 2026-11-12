@@ -6,6 +6,6 @@
  */
 
 /**
- * More detail, at most 1000 characters.
+ * More detail, as the sender wrote it.
  */
-export type SendManualNotificationRequestBody = string | null;
+export type PingMetadataBody = string | null;
