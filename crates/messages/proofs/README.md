@@ -28,12 +28,16 @@ create them; `--suffix` and `--output` make the database names and output locati
 explicit. Keep the databases until the plans have been reviewed, then remove
 them through the normal local database workflow.
 
-Each fixture contains one million log rows (100,000 in the selected channel),
-1.99 million messages, one million thread states, one million each of activity,
-attachments, reactions and mentions, 100,010 counters, and 100,000 bot records.
-The selected 200 roots each have 99 replies; hydration also covers 800 reference
-and bot identities. This meets the upper end of the documented thread-table
-size tier and assumes large volume for the per-message tables.
+The recorded fixtures each contain one million log rows (100,000 in the
+selected channel), one million rows each of activity, attachments, reactions
+and mentions, and 100,010 counters. Actual message totals range from 1,990,000
+to 2,036,322; thread totals range from 999,996 to 1,000,000. The saved size files
+include pre-existing scratch-template rows; the
+[recorded matrix](channel_change_plan_results.md) lists each fixture separately.
+A supplemental seed adds 100,000 bot identities. The selected 200 roots each
+have 99 replies; hydration also covers 800 reference and bot identities. These
+thread fixtures are approximately at the top of the documented size tier, and
+the per-message tables are treated as large.
 
 The first fixture is analyzed after seeding. The second is analyzed with a tiny
 fixture, has autovacuum disabled, and is then grown without refreshing its
@@ -58,14 +62,13 @@ psql <another-local-scratch-url> -v stale=true \
 ```
 
 The SQL check reads `crates/channel_change_db_utils/src/append.rs` and compares
-all three prepared statements byte for byte with their source literals. After an
+both prepared statements byte for byte with their source literals. After an
 append change, run the same script without `--check` to refresh them; it performs
-no database work. The preflight sets a 50 ms deadline for the next append
-statement unless the inherited statement timeout is stricter. The append
-restores that setting before it returns and never changes `lock_timeout`.
-The proof measures the preflight separately, rolling its setting back after
-each sample. Before each scalar/batch sample it sets the effective deadline
-to 50 ms and passes `15s` as the prior setting to restore.
+no database work. Both append statements retain a 5-second per-lock guard,
+preserve stricter inherited lock timeouts, and restore the prior value after all
+log rows are inserted. They do not change `statement_timeout` and have no
+preflight query. Admission occurs in the caller before its write connection is
+acquired; the lock timeout only guards against a stalled counter holder.
 
 The call metadata proof seeds 1.1 million `call_entities` rows (100,000 in the
 selected channel and ten times that across other channels). It covers a channel
@@ -79,6 +82,35 @@ psql <new-local-call-scratch-url> -v stale=false \
   -f crates/messages/proofs/channel_call_metadata_plans.sql
 psql <another-new-local-call-scratch-url> -v stale=true \
   -f crates/messages/proofs/channel_call_metadata_plans.sql
+```
+
+The reference-admission proof covers the bounded keyset discovery, fixed-job
+eligibility/fence check, and existing per-job work lookup. It seeds one million
+reference rows and 100,000 jobs/conversations, including an ineligible pending
+prefix. Each discovery reads at most one pending identity; the worker-owned
+cursor preserves progress across capped passes. See
+[admission discovery results](channel_admission_discovery_plan_results.md) for
+all reference and repeated call metadata measurements.
+
+```sh
+psql <new-local-reference-scratch-url> -v stale=false \
+  -f crates/messages/proofs/channel_reference_admission_plans.sql
+psql <another-new-local-reference-scratch-url> -v stale=true \
+  -f crates/messages/proofs/channel_reference_admission_plans.sql
+```
+
+The agent reply admission lookup reuses `PgExternalReplyStore::get` before the
+reply lease, then retains the existing lookup under that lease. Its proof seeds
+100,000 actions in one session and one million background actions; present and
+missing composite keys each run with custom/generic plans twice. The exact
+source SQL and [48 results](channel_agent_admission_plan_runs.csv) accompany the
+[admission discovery report](channel_admission_discovery_plan_results.md).
+
+```sh
+psql <new-local-agent-scratch-url> -v stale=false \
+  -f crates/messages/proofs/channel_agent_admission_plans.sql
+psql <another-new-local-agent-scratch-url> -v stale=true \
+  -f crates/messages/proofs/channel_agent_admission_plans.sql
 ```
 
 The SQL scripts allow 300 seconds for their synthetic seed, then set a 15-second
@@ -108,6 +140,12 @@ create or reset databases. These measurements are separate from the 288-query
 main matrix and the changed-query proof.
 
 ## Repository write latency
+
+The current candidate uses process-local admission before pool acquisition.
+Its commands and separate output files are in **Admission proof** below. All
+pre-timeout, per-lock-timeout and total-deadline results in this directory are
+retained as evidence for their explicitly identified source revisions; they
+must not be presented as measurements of the admission implementation.
 
 The existing `channel_write_latency_results.md` and its CSV are historical:
 `before` is pinned to `354da677b5`, and `after` is the pre-timeout implementation
@@ -218,7 +256,7 @@ The 108 existing fixed-arrival and delayed-commit rows are a pre-timeout
 snapshot: old methods at `354da677b5` versus `5743b47a10`. Reproducing those
 historical results requires a separate checkout of that original source and
 benchmark harness. The commands in this section and the next describe that
-snapshot; they do not establish behavior of the current deadline implementation.
+snapshot; they do not establish behavior of the historical deadline implementation, or the later admission implementation.
 For current below-ceiling and saturation evidence, use the result-recording
 bounded-write and shared-pool tests documented below.
 
@@ -426,9 +464,10 @@ This validates the exact three-old/two-new case set and writes
 report. It deliberately emits no three-run aggregate. The normal parser mode
 continues to require all twelve rows per label.
 
-## Final deadline repository matrix
+## Historical deadline repository matrix
 
-Run the normal release matrix on the current deadline implementation after
+To reproduce the historical deadline candidate, run the normal release matrix
+from its original source after
 its source is fixed, compilation is complete, and other work on the dedicated
 database is idle:
 
@@ -448,10 +487,10 @@ percentiles and throughput against measured wall time, then writes
 pre-timeout artifacts. The report shows old/current latency and throughput,
 all per-run p50/p95/p99 and throughput values, and single-writer absolute and
 percentage changes.
-The current implementation includes one deadline-configuration round trip
+That historical implementation includes one deadline-configuration round trip
 before counter acquisition; this is part of the measured repository write.
 
-## Final deadline fixed-arrival comparison
+## Historical deadline fixed-arrival comparison
 
 On the same fixed deadline source used for the final repository matrix, rerun
 the no-hold old/current fixed-arrival comparison separately:
@@ -490,3 +529,70 @@ The [combined report](channel_pool_isolation_results.md) records the final
 source revision and the dedicated server-log cross-check for those three
 final deadline runs. Its failed-request latency includes pool acquisition
 before the statement deadline begins.
+
+
+## Admission proof
+
+Run the new fixed-arrival shared-pool proof on the fixed admission source,
+after compilation and other database work are idle:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_ADMISSION_LABEL=admission4 cargo test -p messages --all-features --release repository_admission_pool_isolation -- --ignored --nocapture' > /tmp/admission-pool.log 2>&1
+python3 crates/messages/proofs/summarize_admission_pool.py \
+  /tmp/admission-pool.log --source-revision '<exact tested admission head>'
+```
+
+Each of three repetitions compares the old and current repository on one
+shared production-sized pool (minimum 10, maximum 50, default 30-second acquire
+timeout, all 50 connections opened first). The current repository permits four
+writes per parent in this process and waits at most two seconds for admission
+before acquiring a pool connection; idle gate entries are cleaned up. The
+append has a five-second database lock-wait guard. The old repository retains
+its original SQL and has no admission gate.
+
+Each case offers exactly 1,000 or 3,000 flood edits/s to one channel, plus 20
+neighbor edits/s to a second channel, for ten seconds. There are no synthetic
+holds, or a requested 2 / 5 ms pre-commit hold. Both variants use the same
+requested hold. Each request edits a distinct preseeded root to avoid row-lock
+contention between edits. Fixture setup and cleanup are outside timing.
+
+Both schedulers preserve every original arrival and spawn requests without an
+external semaphore. All in-flight requests drain before cleanup. The 72 lane
+rows retain attempted writes, successful commits, admission-accepted/rejected
+counts, database and pool errors, neighbor p50/p95/p99, rejection timing and
+actual hold distributions. An admission-accepted attempt may still fail later
+in the database; those failures remain separate. Rejection service timing
+starts at the repository call, while rejection arrival timing includes any
+scheduler lateness. Each lane's achieved rate includes its own drain time.
+
+The parser writes `channel_admission_pool_runs.csv` and
+`channel_admission_pool_results.md`, validating all 36 cases and 200 scheduled
+neighbor requests per case. It does not overwrite any prior pool result.
+The source-equivalence audit also checks that the delayed current copies
+acquire the same permit at the same point as production:
+
+```sh
+python3 crates/messages/proofs/check_delayed_writers.py
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features twenty_simultaneous_channel_posts_succeed_with_commit_holds'
+```
+
+The non-ignored posting regression releases twenty create requests together,
+first normally and then with a requested 5 ms pre-commit hold. All twenty must
+succeed in each case, return gap-free sequences, and persist readable messages.
+It uses the real repository admission path without retries or an outer semaphore.
+
+Run the regular headline and no-hold fixed-arrival matrices on the same tested
+admission revision, then select the separate admission output mode:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_write_latency -- --ignored --nocapture' > /tmp/admission-writes.log 2>&1
+python3 crates/messages/proofs/summarize_deadline_write_latency.py \
+  /tmp/admission-writes.log --implementation admission --source-revision '<exact tested admission head>'
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture' > /tmp/admission-arrival.log 2>&1
+python3 crates/messages/proofs/summarize_deadline_arrival_latency.py \
+  /tmp/admission-arrival.log --implementation admission --source-revision '<exact tested admission head>'
+```
+
+These produce `channel_admission_write_latency_*` and
+`channel_admission_arrival_latency_*`. Without `--implementation admission`,
+the parsers retain their historical deadline output names and context.
