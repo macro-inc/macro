@@ -100,10 +100,11 @@ Pulumi stacks; they do not host extra agent processes.
   request per `Fleet::exec(computer, ["harnessd"])` (request on stdin, one
   answer line on stdout) and writes the computer's Claude login rows from
   harnessd's status, under a per-computer Postgres advisory lock held from the
-  command through the status read to the write; the cancel goes straight
-  through so it can interrupt a completion holding the lock. The lock lives on
-  a dedicated pool of 4 connections (5 s acquire timeout) with a 30 s
-  `lock_timeout`; a request past either wait gets 409 Busy. The
+  command through the status read to the write. The lock is a session
+  advisory lock, like the agent-session lock, taken with
+  `pg_try_advisory_lock` on a dedicated pool of 4 connections (5 s acquire
+  timeout): a computer another request holds answers 409 Busy at once, and
+  the status pass skips it. The
   `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
   same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
