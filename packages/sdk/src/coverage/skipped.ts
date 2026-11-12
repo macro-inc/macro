@@ -115,7 +115,6 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'pollCodexLogin',
-  'postProfilePictures',
   'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
@@ -172,7 +171,6 @@ export const cognitionExcluded = [
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
-  'getChatPermissions',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
@@ -224,6 +222,7 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
@@ -258,11 +257,9 @@ export const notificationExcluded = [
   'getUnsubscribes',
   'healthHandler',
   'removeUnsubscribeAll',
-  'removeUnsubscribeItem',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
-  'unsubscribeItem',
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
@@ -270,7 +267,6 @@ export const notificationBacklog =
   [] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
-  'ensureTagSet',
   'mergeTag',
   'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
@@ -281,7 +277,10 @@ export const propertiesBacklog =
 export const scheduledActionExcluded = [
   'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
-  'routineCodeStarters', // The new-routine flow's starter code steps.
+  'routineCatalog', // The new-routine flow's templates.
+  'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
+  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -306,6 +305,16 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Chat sidebar section editing and discovery remain app-only navigation.
+  'createChannelSection',
+  'deleteChannelSection',
+  'listChannelSections',
+  'previewChannelSection',
+  'setChannelSection',
+  'updateChannelSection',
+  // Opening a host to a team takes its owner's own session: an agent can ask for
+  // access but never grant it.
+  'setHarnessTeamAccess',
   // Asking to join a channel-shared event, and its sharer's request list,
   // are web-app actions.
   'listJoinRequests',
@@ -346,8 +355,6 @@ export const storageExcluded = [
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'getDatabaseQuery',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
   'getDatabaseTableChanges',
   'getDocumentListHandler',
@@ -388,8 +395,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
@@ -414,8 +419,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

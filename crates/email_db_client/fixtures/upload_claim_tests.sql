@@ -158,3 +158,52 @@ VALUES ('00000000-0000-0000-0000-00000c4a0401',
         'image/jpeg',
         NOW(),
         NOW());
+
+------------------------------------------------------------
+-- Thread whose draft reply has no sender (from_contact_id NULL)
+------------------------------------------------------------
+
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-00000000c501',
+        '00000000-0000-0000-0000-000000000c01',
+        false, false, NOW(), NOW());
+
+-- Sent message, so the thread meets condition 1
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000ec501',
+        '00000000-0000-0000-0000-00000000c501',
+        '00000000-0000-0000-0000-000000000c01',
+        'claim-test-senderless-sent-msg',
+        TRUE,
+        '00000000-0000-0000-0000-00000c0c0001',
+        '2025-01-01 14:00:00 +00:00',
+        false, false, false, false, NOW(), NOW());
+
+-- Draft reply that the provider reports without a sender
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000ec502',
+        '00000000-0000-0000-0000-00000000c501',
+        '00000000-0000-0000-0000-000000000c01',
+        'claim-test-senderless-draft-msg',
+        FALSE,
+        NULL,
+        '2025-01-01 14:05:00 +00:00',
+        true, false, false, true, NOW(), NOW());
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-00000c5a0501',
+        '00000000-0000-0000-0000-0000000ec502',
+        'claim-test-senderless-doc-att',
+        'senderless_doc.pdf',
+        'application/pdf',
+        NOW());
+
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-00000c5a0502',
+        '00000000-0000-0000-0000-0000000ec502',
+        'claim-test-senderless-media-att',
+        'senderless_image.jpg',
+        'image/jpeg',
+        NOW());

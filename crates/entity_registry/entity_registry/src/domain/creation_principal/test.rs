@@ -44,7 +44,9 @@ fn harness() -> MacroAuthorization {
     MacroAuthorization::Harness(HarnessAuthentication {
         harness_id: HarnessId::new_from_uuid(Uuid::from_u128(2)),
         token_id: Uuid::from_u128(3),
-        owner: HarnessAuthorizationOwner::Team { team_id: TEAM },
+        owner: HarnessAuthorizationOwner::User {
+            user_id: user().macro_user_id.to_string(),
+        },
         acting_user: user(),
     })
 }

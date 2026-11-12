@@ -2,7 +2,15 @@ import type { DataValidation, DropdownColor } from './sheet-rules';
 import type { TableColumnType } from './sheet-tables';
 import type { SpreadsheetCellStyle } from './spreadsheet-document';
 
-export type SpreadsheetCellInput = { address: string; value: string };
+/**
+ * A cell's new input: text or a formula starting with =, a number, TRUE or
+ * FALSE, or null to empty the cell.
+ */
+export type SpreadsheetCellValue = string | number | boolean | null;
+export type SpreadsheetCellInput = {
+  address: string;
+  value: SpreadsheetCellValue;
+};
 export type SpreadsheetOverride = {
   sheetId: string;
   cells: SpreadsheetCellInput[];

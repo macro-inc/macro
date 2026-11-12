@@ -1,4 +1,4 @@
-import ArrowDown from '@phosphor/arrow-down.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
 import { onCleanup, onMount } from 'solid-js';
 import './homepage-scroll-cue.css';
 
@@ -34,11 +34,10 @@ export function HomepageScrollCue() {
       aria-label="Explore features"
       onClick={() => {
         const section = button
-          .closest('.onboarding-flow')
-          ?.querySelector('.homepage-unification');
-        const scroller = section?.parentElement;
-        scroller?.scrollBy({
-          top: scroller.clientHeight * 0.8,
+          .closest('.macro-homepage, .onboarding-flow')
+          ?.querySelector('.macro-letter-intro, .homepage-unification');
+        section?.scrollIntoView({
+          block: 'start',
           behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
             .matches
             ? 'instant'
@@ -46,6 +45,7 @@ export function HomepageScrollCue() {
         });
       }}
     >
+      <span>Explore</span>
       <ArrowDown aria-hidden="true" />
     </button>
   );

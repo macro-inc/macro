@@ -9,6 +9,7 @@ import {
   persistLocalEmailSend,
   readLocalDraft,
   readLocalEmailSends,
+  readRemovedEmailSendCopy,
   removeLocalEmailSend,
   watchLocalEmailSends,
 } from './local-drafts';
@@ -25,15 +26,14 @@ import {
 } from './send-telemetry';
 
 export type { EmailSendIntent } from './send-intent';
+export { emailSendMatchesDraft, settledSendAttempt } from './send-intent';
 
-import { type EmailSendIntent, usableEmailSendIntents } from './send-intent';
-
-export function settledSendAttempt(intent: EmailSendIntent) {
-  return (
-    intent.response?.cancelEmailSend?.attempt ??
-    intent.response?.sendEmailMessage?.attempt
-  );
-}
+import {
+  type EmailSendIntent,
+  emailSendMatchesDraft,
+  settledSendAttempt,
+  usableEmailSendIntents,
+} from './send-intent';
 
 /** A pending cancellation never unlocks an attempted send without confirmation. */
 export function emailSendLocked(intent: EmailSendIntent): boolean {
@@ -42,20 +42,25 @@ export function emailSendLocked(intent: EmailSendIntent): boolean {
   return settledSendAttempt(intent)?.status !== 'CANCELLED';
 }
 
-export function emailSendMatchesDraft(
-  intent: EmailSendIntent,
-  draftId: string
-): boolean {
-  return (
-    intent.resolvedDraftId === draftId ||
-    intent.metadata.payload.input.message.draftId === draftId ||
-    settledSendAttempt(intent)?.message?.id === draftId
-  );
-}
-
 export async function readEmailSendIntents(): Promise<EmailSendIntent[]> {
   const rows = await readLocalEmailSends();
   return usableEmailSendIntents(rows);
+}
+
+/**
+ * The working-copy version a send from this browser carried for a draft, or
+ * undefined when no send here took it (it was sent from another device). The
+ * live intent is read first: removal records its copy before deleting it.
+ */
+export async function readSentWorkingCopy(
+  draftId: string
+): Promise<Pick<SendWorkingCopy, 'generation' | 'revision'> | undefined> {
+  const intent = (await readEmailSendIntents()).find(
+    (row) => emailSendMatchesDraft(row, draftId) && emailSendLocked(row)
+  );
+  const copy = intent?.metadata.payload.workingCopy;
+  if (copy) return { generation: copy.generation, revision: copy.revision };
+  return await readRemovedEmailSendCopy(draftId);
 }
 
 export const watchEmailSends = watchLocalEmailSends;

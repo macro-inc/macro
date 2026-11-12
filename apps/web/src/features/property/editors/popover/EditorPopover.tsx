@@ -48,6 +48,11 @@ export function EditorPopover(props: EditorPopoverProps) {
 
   const handleEscapeCapture = (event: KeyboardEvent) => {
     if (event.key !== 'Escape') return;
+    // Escape belongs to the IME, not this or an enclosing menu.
+    if (event.isComposing || event.keyCode === 229) {
+      event.stopImmediatePropagation();
+      return;
+    }
 
     event.preventDefault();
     event.stopPropagation();

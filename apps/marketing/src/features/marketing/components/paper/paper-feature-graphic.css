@@ -1,0 +1,113 @@
+.paper-feature-graphic {
+  --feature-glow: var(--color-ink);
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Match the accepted Tasks illustration treatment. */
+.paper-feature-graphic .feature-demo-backdrop {
+  --workspace-dots-opacity: 0.06;
+  --workspace-grain-opacity: 0.11;
+}
+
+.paper-feature-graphic .feature-demo-backdrop::before {
+  opacity: 0.5;
+}
+
+.paper-feature-graphic .paper-feature-viewport.paper-feature-art {
+  --color-ui-canvas: var(--b0, #000);
+}
+
+.paper-feature-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.paper-feature-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.paper-feature-canvas > div,
+.paper-feature-canvas > div > div {
+  background-color: transparent;
+  background-image: none;
+  border-radius: 0;
+}
+
+.paper-feature-graphic .paper-feature-glass {
+  background-color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-ui-content-primary) 9%, transparent),
+    color-mix(in srgb, var(--color-ui-content-primary) 5%, transparent)
+  );
+  box-shadow: inset 0 1px 0 var(--color-ui-glass-highlight),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-ui-glass-edge) 50%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+/* Phone layouts keep Paper's controls and annotation anchors together at a
+   readable scale. Database fields use Rahul's separate phone artboard. */
+.paper-feature-art[data-compact=true] { --text-sm: 13px; --leading-sm: 19px; }
+.paper-feature-art[data-compact=true] .paper-feature-node-2,
+.paper-feature-art[data-compact=true] .paper-feature-node-40,
+.paper-feature-art[data-compact=true] .paper-feature-node-41 { width: 374px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-95 { left: 8px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-96 { width: 224px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-104 { left: 8px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-105 { width: 358px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-110,
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-113 { left: 238px; width: 12px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-111,
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-114 { left: 234px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-112,
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-115 { left: 250px; }
+.paper-feature-art[data-compact=true] .paper-chat-create .paper-feature-node-108 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-216,
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-223 { left: 8px; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-217,
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-224 { width: 358px; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-227,
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-232 { width: 88px; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-236 { left: 186.5px; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-237 { left: 183px; }
+.paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-238 { left: 111px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-181,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-191,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-195 { left: 8px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-182,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-196 { width: 246px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-190,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-194,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-200 { font-size: 13px; line-height: 20px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-204,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-207,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-210,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-213 { left: 260px; width: 8px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-205,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-208,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-211,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-214 { left: 256px; }
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-206,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-209,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-212,
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-215 { left: 268px; width: 102px; }
+
+.paper-feature-graphic .paper-feature-node-1,
+.paper-feature-graphic .paper-feature-node-2 { background-color: transparent; border-radius: 0; }
+
+.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-203 {
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+html[data-theme-light='true'] .paper-feature-graphic .paper-feature-viewport.paper-feature-art {
+  --color-ui-canvas: var(--color-page, var(--b0));
+}

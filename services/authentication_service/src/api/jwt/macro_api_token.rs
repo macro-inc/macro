@@ -91,6 +91,9 @@ pub async fn handler(
         macro_auth::macro_api_token::encode_macro_api_token(EncodeMacroApiTokenArgs {
             agent_correlation_id: None,
             agent_session_id: None,
+            // Re-minting keeps the signed routine `propagate` accepted, so a
+            // routine run cannot shed it; callers can never supply one.
+            routine_id: agent_correlation::context::current_routine(),
             agent_id: authorization
                 .authorization
                 .user

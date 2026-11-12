@@ -27,6 +27,9 @@ vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
   useFeatureFlag: () => () => ({ enabled: sidebarState.agentUpdates }),
 }));
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => sidebarState.touch,
 }));
@@ -65,12 +68,19 @@ vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
 }));
 
+let motionStyles: HTMLStyleElement;
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  // Menu actions run once the menu has closed, after its exit animation.
+  motionStyles = document.createElement('style');
+  motionStyles.textContent =
+    '[role="menu"] { animation-name: none; transition-duration: 0s; }';
+  document.head.append(motionStyles);
 });
 
 afterEach(() => {
   cleanup();
+  motionStyles.remove();
   localStorage.clear();
   unreadFilter.mockReturnValue(false);
   sidebarState.agentUpdates = false;
@@ -355,7 +365,10 @@ describe('mixed Agents sidebar', () => {
     const filterMenu = screen.getByRole('button', {
       name: 'Filter conversations',
     });
-    const badge = () => filterMenu.parentElement?.querySelector('span');
+    // Tooltip portals also leave an empty hidden span beside the trigger.
+    const badge = () =>
+      filterMenu.parentElement &&
+      within(filterMenu.parentElement).queryByText(/^\d+$/);
     const openOption = async (name: string, role = 'menuitem') => {
       fireEvent.keyDown(filterMenu, { key: 'ArrowDown' });
       return screen.findByRole(role, { name });

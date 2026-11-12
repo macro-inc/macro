@@ -761,7 +761,7 @@ export default {
     tabMobileApp: 'Mobilapp',
     tabTags: 'Taggar',
     tabIntegrations: 'Integrationer',
-    tabRuntimes: 'Körmiljöer',
+    tabRuntimes: 'Maskiner',
     tabMcpServer: 'MCP-server',
     tabApiKeys: 'API-nycklar',
     tabBots: 'Botar',

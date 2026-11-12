@@ -1,20 +1,20 @@
 import Logo from '@icon/macro-logo.svg';
-import Sheet from '@icon/wide-spreadsheet.svg';
-import CRM from '@phosphor/buildings.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import Chat from '@phosphor/chats-circle.svg';
-import Check from '@phosphor/check.svg';
-import Database from '@phosphor/database.svg';
-import Mail from '@phosphor/envelope.svg';
-import Doc from '@phosphor/file.svg';
-import Folder from '@phosphor/folder.svg';
-import Booking from '@phosphor/link.svg';
-import Task from '@phosphor/list-checks.svg';
-import Call from '@phosphor/phone-call.svg';
-import Recording from '@phosphor/record.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import Coding from '@phosphor/terminal-window.svg';
-import Diagram from '@phosphor/tree-structure.svg';
+import CRM from '@icon/system/regular/buildings.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Chat from '@icon/system/regular/chats-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import Database from '@icon/system/regular/database.svg';
+import Mail from '@icon/system/regular/envelope.svg';
+import Doc from '@icon/system/regular/file.svg';
+import Folder from '@icon/system/regular/folder.svg';
+import Booking from '@icon/system/regular/link.svg';
+import Task from '@icon/system/regular/list-checks.svg';
+import Call from '@icon/system/regular/phone-call.svg';
+import Recording from '@icon/system/regular/record.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import Sheet from '@icon/system/regular/table.svg';
+import Coding from '@icon/system/regular/terminal-window.svg';
+import Diagram from '@icon/system/regular/tree-structure.svg';
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -27,6 +27,7 @@ import './feature-overview.css';
 const features = [
   {
     label: 'Email',
+    href: '/email',
     color: 'var(--color-write)',
     source: 'Google',
     icon: Mail,
@@ -35,6 +36,7 @@ const features = [
   },
   {
     label: 'Chat',
+    href: '/channels',
     color: 'var(--color-chat)',
     source: 'Slack',
     icon: Chat,
@@ -43,6 +45,7 @@ const features = [
   },
   {
     label: 'Sheets',
+    href: '/spreadsheets',
     color: 'var(--color-success)',
     source: 'Sheets',
     icon: Sheet,
@@ -51,6 +54,7 @@ const features = [
   },
   {
     label: 'Docs',
+    href: '/documents',
     color: 'var(--color-note)',
     source: 'Notion',
     icon: Doc,
@@ -59,6 +63,7 @@ const features = [
   },
   {
     label: 'Tasks',
+    href: '/tasks',
     color: 'var(--color-task)',
     source: 'Linear',
     icon: Task,
@@ -67,6 +72,7 @@ const features = [
   },
   {
     label: 'CRM',
+    href: '/crm',
     color: 'var(--color-contact)',
     source: 'HubSpot',
     icon: CRM,
@@ -75,6 +81,7 @@ const features = [
   },
   {
     label: 'Agents',
+    href: '/agents',
     color: 'var(--color-snippet)',
     source: 'GitHub',
     icon: Sparkle,
@@ -83,6 +90,7 @@ const features = [
   },
   {
     label: 'Calls',
+    href: '/calls',
     color: 'var(--color-note)',
     source: 'Zoom',
     icon: Call,
@@ -110,6 +118,7 @@ const expandedFeatures = [
   })),
   {
     label: 'Calendar',
+    href: '/calendar',
     source: 'Calendar',
     icon: Calendar,
     color: 'var(--color-note)',
@@ -118,6 +127,7 @@ const expandedFeatures = [
   },
   {
     label: 'Booking links',
+    href: '/booking-links',
     source: 'Booking',
     icon: Booking,
     color: 'var(--color-chat)',
@@ -126,6 +136,7 @@ const expandedFeatures = [
   },
   {
     label: 'Recordings',
+    href: '/calls#call-default',
     source: 'Recordings',
     icon: Recording,
     color: 'var(--color-write)',
@@ -134,6 +145,7 @@ const expandedFeatures = [
   },
   {
     label: 'File storage',
+    href: '/drive',
     source: 'Storage',
     icon: Folder,
     color: 'var(--color-note)',
@@ -142,6 +154,7 @@ const expandedFeatures = [
   },
   {
     label: 'Databases',
+    href: '/databases',
     source: 'Databases',
     icon: Database,
     color: 'var(--color-success)',
@@ -150,6 +163,7 @@ const expandedFeatures = [
   },
   {
     label: 'Diagrams',
+    href: '/canvas',
     source: 'Diagrams',
     icon: Diagram,
     color: 'var(--color-contact)',
@@ -158,6 +172,7 @@ const expandedFeatures = [
   },
   {
     label: 'Coding agents',
+    href: '/docs/AI/bring-your-own',
     source: 'Coding',
     icon: Coding,
     color: 'var(--color-task)',
@@ -171,6 +186,7 @@ export function FeatureConstellation(
   props: {
     expanded?: boolean;
     textured?: boolean;
+    linked?: boolean;
     accent?: string;
     selected?: readonly string[];
     onSelect?: (label: string) => void;
@@ -182,13 +198,15 @@ export function FeatureConstellation(
     <div
       class="feature-flow"
       classList={{ 'feature-flow-expanded': props.expanded }}
-      role={props.onSelect ? 'group' : 'img'}
+      role={props.linked ? 'navigation' : props.onSelect ? 'group' : 'img'}
       aria-label={
-        props.onSelect
-          ? 'Features to try first'
-          : `${items()
-              .map((feature) => feature.label)
-              .join(', ')}, connected in Macro`
+        props.linked
+          ? 'Explore Macro features'
+          : props.onSelect
+            ? 'Features to try first'
+            : `${items()
+                .map((feature) => feature.label)
+                .join(', ')}, connected in Macro`
       }
     >
       <div class="feature-flow-light" aria-hidden="true">
@@ -199,6 +217,10 @@ export function FeatureConstellation(
               style={{
                 left: `${feature.x}%`,
                 top: `${feature.y}%`,
+                // The same coordinates as numbers, for layouts that grow the
+                // light layer and have to place halos against its old box.
+                '--halo-x': feature.x,
+                '--halo-y': feature.y,
                 '--halo-color': props.accent ?? feature.color,
               }}
             />
@@ -219,9 +241,12 @@ export function FeatureConstellation(
       <For each={items()}>
         {(feature) => (
           <Dynamic
-            component={props.onSelect ? 'button' : 'div'}
+            component={props.linked ? 'a' : props.onSelect ? 'button' : 'div'}
+            href={props.linked ? feature.href : undefined}
             type={props.onSelect ? 'button' : undefined}
-            aria-label={props.onSelect ? feature.label : undefined}
+            aria-label={
+              props.linked || props.onSelect ? feature.label : undefined
+            }
             aria-pressed={
               props.onSelect
                 ? (props.selected?.includes(feature.label) ?? false)
@@ -234,7 +259,7 @@ export function FeatureConstellation(
               left: `${feature.x}%`,
               top: `${feature.y}%`,
             }}
-            aria-hidden={props.onSelect ? undefined : true}
+            aria-hidden={props.linked || props.onSelect ? undefined : true}
           >
             <div class="feature-flow-icon glass" data-tool-surface>
               <Dynamic component={feature.icon} />
