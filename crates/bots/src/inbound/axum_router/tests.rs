@@ -38,6 +38,10 @@ use tower::ServiceExt;
 
 const DEFAULT_BEARER_TOKEN: &str = "macro|bot-admin@example.com";
 const INVALID_BEARER_TOKEN: &str = "invalid";
+/// [`DEFAULT_BEARER_TOKEN`]'s user, signed for an agent's program.
+const AGENT_BEARER_TOKEN: &str = "agent";
+/// What the fake answers a token mint that reaches it.
+const MINT_REACHED_SERVICE: &str = "mint reached the service";
 
 #[derive(Clone, Copy)]
 enum TestBotMode {
@@ -254,7 +258,7 @@ impl BotService for TestBotService {
         _bot_id: BotId,
         _req: CreateBotTokenRequest,
     ) -> Result<CreateBotTokenResponse, BotError> {
-        unimplemented!()
+        Err(BotError::NotFound(MINT_REACHED_SERVICE.to_string()))
     }
 
     async fn list_tokens(
@@ -426,13 +430,22 @@ impl JwtValidator for FakeJwtValidator {
         if jwt == INVALID_BEARER_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
+        let (origin, agent_id, user_id) = if jwt == AGENT_BEARER_TOKEN {
+            (
+                macro_authorization::CredentialOrigin::MacroApiJwt,
+                Some(bot_id::MACRO_AI_BOT_ID),
+                DEFAULT_BEARER_TOKEN,
+            )
+        } else {
+            (macro_authorization::CredentialOrigin::Session, None, jwt)
+        };
 
         Ok(macro_authorization::ValidatedCredential {
-            origin: macro_authorization::CredentialOrigin::Session,
+            origin,
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id,
                 agent_via: None,
-                user_id: jwt.to_string(),
+                user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
                 permissions: None,
@@ -1307,4 +1320,56 @@ async fn patching_an_agent_changes_only_the_fields_sent(pool: PgPool) -> anyhow:
     assert_eq!(flat_channels.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn an_agents_program_cannot_mint_bot_tokens() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let mint = |bearer: &str, code_mode: bool| {
+        let request = Request::builder()
+            .method("POST")
+            .uri(format!("/bots/{bot_id}/tokens"))
+            .header(header::AUTHORIZATION, format!("Bearer {bearer}"))
+            .header(header::CONTENT_TYPE, "application/json");
+        let request = if code_mode {
+            request.header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        } else {
+            request
+        };
+        request.body(Body::from("{}")).unwrap()
+    };
+
+    for request in [
+        mint(AGENT_BEARER_TOKEN, false),
+        mint(DEFAULT_BEARER_TOKEN, true),
+    ] {
+        let response = router_without_credentials(
+            TestBotService::new(TestBotMode::Ok),
+            EntityParticipantRole::Member,
+        )
+        .oneshot(request)
+        .await
+        .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["message"], PROGRAM_BOT_TOKEN_REFUSAL);
+    }
+
+    // The user's own session (the credential card in the app) still mints.
+    let response = router_without_credentials(
+        TestBotService::new(TestBotMode::Ok),
+        EntityParticipantRole::Member,
+    )
+    .oneshot(mint(DEFAULT_BEARER_TOKEN, false))
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["message"], MINT_REACHED_SERVICE);
 }

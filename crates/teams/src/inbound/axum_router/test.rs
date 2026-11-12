@@ -698,6 +698,16 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        // "agent" is the user's credential signed for an agent's program.
+        if jwt == "agent" {
+            let mut credential = self
+                .authorize("valid")
+                .await
+                .map(macro_authorization::ValidatedCredential::session)?;
+            credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+            credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
+            return Ok(credential);
+        }
         self.authorize(jwt)
             .await
             .map(macro_authorization::ValidatedCredential::session)
@@ -968,4 +978,39 @@ async fn get_team_invites_reads_the_named_current_team() {
             role: TeamRole::Admin,
         }]
     );
+}
+
+#[tokio::test]
+async fn invite_to_team_refuses_an_agents_program() {
+    let body = json!({ "invites": [{ "email": "new@example.com" }] }).to_string();
+    let agent_token = Request::post("/invite")
+        .header(header::AUTHORIZATION, "Bearer agent")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.clone()))
+        .expect("request should be valid");
+    let code_mode_run = Request::post("/invite")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body))
+        .expect("request should be valid");
+
+    for request in [agent_token, code_mode_run] {
+        let service = FakeTeamService::default();
+        let response = router(
+            service.clone(),
+            FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+        )
+        .oneshot(request)
+        .await
+        .expect("router should respond");
+        let (status, _, body) = response_parts(response).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(
+            body["message"],
+            super::invite_to_team::PROGRAM_TEAM_INVITE_REFUSAL
+        );
+        assert!(service.invite_calls().is_empty());
+    }
 }

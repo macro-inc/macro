@@ -10,7 +10,7 @@ use axum::extract::Query;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, FromRef, Multipart, Path, State},
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -20,7 +20,7 @@ use entity_access::{
 };
 use macro_authorization::{
     CredentialOrigin, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, MacroUserAuthentication, UserOnly,
+    MacroAuthorizationState, MacroUserAuthentication, UserOnly, refuse_agent_run,
 };
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
@@ -394,14 +394,26 @@ pub async fn open_sends<
     ))
 }
 
-/// Send to the chat from the caller's own provider account (one request per second per user).
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
+/// Why an agent's program may not send to an external chat: the message
+/// reaches people outside Macro, from the user's own account.
+pub const PROGRAM_EXTERNAL_SEND_REFUSAL: &str = "An agent's program cannot send messages to external chats. Write the message out and ask the user to send it from the chat in Macro.";
+
+/// Send to the chat from the caller's own provider account (one request per
+/// second per user). An agent's program is refused (403).
+#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 403, description = "An agent's program"), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
 pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(body): Json<SendReply>,
-) -> Result<Json<SendProgress>, ApiError> {
+) -> Result<Json<SendProgress>, Response> {
+    refuse_agent_run(
+        auth.authorization.agent_id.is_some(),
+        &headers,
+        PROGRAM_EXTERNAL_SEND_REFUSAL,
+    )
+    .map_err(IntoResponse::into_response)?;
     Ok(Json(
         state
             .service
@@ -410,7 +422,8 @@ pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthoriz
                 &body,
                 authority(&auth.authorization),
             )
-            .await?,
+            .await
+            .map_err(|error| ApiError::from(error).into_response())?,
     ))
 }
 

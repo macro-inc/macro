@@ -51,6 +51,8 @@ const CUSTOMER_JID: &str = "15558880001@s.whatsapp.net";
 const ALICE_SESSION: &str = "alice-session";
 const BOB_SESSION: &str = "bob-session";
 const ALICE_API_JWT: &str = "alice-api-jwt";
+/// Alice's API token signed for an agent's program.
+const ALICE_AGENT_JWT: &str = "alice-agent-jwt";
 const ALICE_API_KEY: &str = "alice-api-key";
 const BOT_TOKEN: &str = "bot-token";
 const HARNESS_TOKEN: &str = "harness-token";
@@ -93,15 +95,20 @@ impl MacroAuthorizationService for Credentials {
         &self,
         jwt: &str,
     ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
-        let (user, origin) = match jwt {
-            ALICE_SESSION => (ALICE, CredentialOrigin::Session),
-            BOB_SESSION => (BOB, CredentialOrigin::Session),
-            ALICE_API_JWT => (ALICE, CredentialOrigin::MacroApiJwt),
+        let (user, origin, agent_id) = match jwt {
+            ALICE_SESSION => (ALICE, CredentialOrigin::Session, None),
+            BOB_SESSION => (BOB, CredentialOrigin::Session, None),
+            ALICE_API_JWT => (ALICE, CredentialOrigin::MacroApiJwt, None),
+            ALICE_AGENT_JWT => (
+                ALICE,
+                CredentialOrigin::MacroApiJwt,
+                Some(serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap()),
+            ),
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
         Ok(ValidatedCredential {
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id,
                 agent_via: None,
                 user_id: user.to_owned(),
                 fusion_user_id: "fusion-user-id".to_owned(),
@@ -208,7 +215,10 @@ async fn user(pool: &PgPool, id: &str) {
 #[derive(Clone, Copy, Debug)]
 enum Principal {
     Session,
+    /// Alice's session, from a code-mode program.
+    CodeModeRun,
     ApiJwt,
+    AgentJwt,
     ApiKey,
     Bot,
     Harness,
@@ -223,8 +233,14 @@ fn request(principal: Principal, method: Method, path: &str, body: Body) -> Requ
         Principal::Session => {
             builder.header(header::AUTHORIZATION, format!("Bearer {ALICE_SESSION}"))
         }
+        Principal::CodeModeRun => builder
+            .header(header::AUTHORIZATION, format!("Bearer {ALICE_SESSION}"))
+            .header(macro_authorization::CODE_EXECUTION_HEADER, "1"),
         Principal::ApiJwt => {
             builder.header(header::AUTHORIZATION, format!("Bearer {ALICE_API_JWT}"))
+        }
+        Principal::AgentJwt => {
+            builder.header(header::AUTHORIZATION, format!("Bearer {ALICE_AGENT_JWT}"))
         }
         Principal::ApiKey => {
             builder.header(macro_authorization::USER_API_KEY_HEADER, ALICE_API_KEY)
@@ -451,6 +467,9 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         (Session, Method::POST, sends.as_str(), S::OK),
         (ApiJwt, Method::POST, &sends, S::OK),
         (ApiKey, Method::POST, &sends, S::OK),
+        // An agent's program never sends to people outside Macro.
+        (AgentJwt, Method::POST, &sends, S::FORBIDDEN),
+        (CodeModeRun, Method::POST, &sends, S::FORBIDDEN),
         (Bot, Method::POST, &sends, S::FORBIDDEN),
         (Harness, Method::POST, &sends, S::FORBIDDEN),
         (Session, Method::POST, &attachments, S::OK),

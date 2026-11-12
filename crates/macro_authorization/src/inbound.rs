@@ -17,5 +17,5 @@ pub use axum::{
     USER_API_KEY_HEADER, UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity,
     UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
     UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization, is_agent_run,
+    UserOrInternalServiceAuthorization, is_agent_run, refuse_agent_run,
 };

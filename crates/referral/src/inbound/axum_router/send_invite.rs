@@ -2,13 +2,14 @@
 
 use axum::RequestPartsExt;
 use axum::extract::{FromRef, FromRequestParts};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::{Json, extract::State};
 use axum_extra::extract::Cached;
 use ip_extractor::ClientIp;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal,
+    MacroAuthorizationState, UserOrInternal, refuse_agent_run,
 };
 use macro_user_id::email::EmailStr;
 use rate_limit::inbound::RateLimitExtractable;
@@ -28,9 +29,14 @@ pub struct SendInviteBody {
     recipient: EmailStr<'static>,
 }
 
+/// Why an agent's program may not send a referral invite: the email reaches
+/// an address outside the workspace.
+pub const PROGRAM_REFERRAL_REFUSAL: &str = "An agent's program cannot send referral invites. Ask the user to invite them from Macro.";
+
 /// Handler for `POST /referral/send`.
 ///
-/// Sends a referral code via email to a user
+/// Sends a referral code via email to a user. An agent's program is refused
+/// (403).
 #[utoipa::path(
     tag = "referral",
     post,
@@ -39,10 +45,11 @@ pub struct SendInviteBody {
     responses(
         (status = StatusCode::NO_CONTENT),
         (status = 401, body = model_error_response::ErrorResponse),
+        (status = 403, body = model_error_response::ErrorResponse),
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, authorization), err)]
+#[tracing::instrument(skip(state, authorization, headers))]
 pub async fn post_referral_invite_handler<
     T: ReferralService,
     R,
@@ -50,13 +57,21 @@ pub async fn post_referral_invite_handler<
 >(
     State(state): State<ReferralRouterState<T, R, Auth>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    headers: HeaderMap,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
-) -> Result<StatusCode, ReferralError> {
+) -> Result<StatusCode, Response> {
     let user = authorization.authorization.user;
+    refuse_agent_run(
+        user.agent_id.is_some(),
+        &headers,
+        PROGRAM_REFERRAL_REFUSAL,
+    )
+    .map_err(IntoResponse::into_response)?;
     let () = state
         .service
         .send_referral_invite(user.macro_user_id.clone(), recipient)
-        .await?;
+        .await
+        .map_err(|error: ReferralError| error.into_response())?;
 
     Ok(StatusCode::NO_CONTENT)
 }

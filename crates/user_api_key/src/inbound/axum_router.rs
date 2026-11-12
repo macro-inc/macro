@@ -5,13 +5,13 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
 use macro_authorization::{
     AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState,
+    MacroAuthorizationState, refuse_agent_run,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,9 @@ use crate::domain::{
     models::{CreatedUserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo},
     ports::UserApiKeyService,
 };
+
+#[cfg(test)]
+mod test;
 
 /// Router state for user API key endpoints.
 pub struct UserApiKeyRouterState<S, Auth> {
@@ -98,7 +101,11 @@ pub struct DeleteUserApiKeyParams {
     pub id: UserApiKeyId,
 }
 
-/// Mint a new API key for the caller.
+/// Why an agent's program may not mint an API key: the key outlives the run
+/// and its secret would be in the program's hands.
+pub const PROGRAM_API_KEY_REFUSAL: &str = "An agent's program cannot create API keys. Ask the user to create one in Macro's settings.";
+
+/// Mint a new API key for the caller. An agent's program is refused (403).
 #[utoipa::path(
     post,
     tag = "user-api-keys",
@@ -109,23 +116,32 @@ pub struct DeleteUserApiKeyParams {
         (status = 201, body = CreatedUserApiKey),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(skip_all)]
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Json(body): Json<CreateUserApiKeyRequest>,
-) -> Result<(StatusCode, Json<CreatedUserApiKey>), UserApiKeyError>
+) -> Result<(StatusCode, Json<CreatedUserApiKey>), Response>
 where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
 {
+    refuse_agent_run(
+        user.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_API_KEY_REFUSAL,
+    )
+    .map_err(IntoResponse::into_response)?;
     let created = state
         .service
         .create_key(&user.authorization.user.macro_user_id, &body.name)
-        .await?;
+        .await
+        .map_err(IntoResponse::into_response)?;
     Ok((StatusCode::CREATED, Json(created)))
 }
 
