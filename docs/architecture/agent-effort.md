@@ -60,6 +60,10 @@ Sources checked September 21, 2026:
   HTTP queue acceptance alone is insufficient. Rejection or timeout stops startup.
 - New/resumed sessions and setting changes return the complete configuration.
   Clients replace their previous options, including removing unsupported controls.
+- A routine session's prompt may carry an effort (drafts send `none`). It is
+  sent ahead of the prompt on the session's command queue and not confirmed:
+  a model that doesn't offer the value refuses it and the turn runs at its
+  default. In-memory sessions only.
 - In-memory rejects unsupported models and effort values. A model change resets
   an incompatible effort to Default. Replay restores confirmed snapshots only;
   failed or unanswered requests do not become session settings.

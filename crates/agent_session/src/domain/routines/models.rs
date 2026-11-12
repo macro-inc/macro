@@ -88,9 +88,13 @@ pub struct PromptRoutineSession {
     /// What made the routine fire, rendered ahead of the prompt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
-    /// A value of the session's `reasoning_effort` option, set ahead of the
-    /// prompt, such as `none` for no thinking. A model that doesn't offer it
-    /// refuses it and keeps its default. Omitted keeps the default.
+    /// A value of the session's `reasoning_effort` option, such as `none`
+    /// for no thinking, sent ahead of the prompt on the session's command
+    /// queue without waiting for the runtime to confirm it. A model that
+    /// doesn't offer it refuses it, and the prompt runs at its default.
+    /// Omitted keeps the default. For the in-process agent only: the change
+    /// takes the session's first turn, so a runtime that is given the
+    /// session's instructions with its first prompt would not get them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 }
