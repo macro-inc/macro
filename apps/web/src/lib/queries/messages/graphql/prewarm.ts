@@ -14,7 +14,7 @@ import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { getMessageTimelineQueryKeyPrefix } from '../timeline';
 import { applyChangesToLatestPage, trimLatestPage } from './apply';
-import { CURSOR_PAGE_LIMIT } from './channel-sync';
+import { CURSOR_PAGE_LIMIT, noteCachedPage } from './channel-sync';
 import { activityFromGraphql, entryFromGraphql } from './convert';
 import {
   channelCacheHost,
@@ -306,6 +306,7 @@ async function readWarmPage(
       const latest = await span.run(() => fetchLatestChannelPage(channelId));
       return { outcome: 'fetched', latest };
     }
+    noteCachedPage(host, channelId, cached.page.entries.length > 0);
     const caughtUp = await catchUpCachedPage(channelId, cached, span);
     if (caughtUp) {
       return caughtUp.seq === cached.seq
@@ -341,6 +342,8 @@ async function warm(
     span.error(error);
     return 'failed';
   }
+  // The open then waits on the cache instead of racing the server.
+  noteCachedPage(current.host, channelId, read.latest.page.entries.length > 0);
   return read.outcome;
 }
 
