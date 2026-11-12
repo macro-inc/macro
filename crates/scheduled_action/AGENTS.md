@@ -85,7 +85,11 @@ each run.
   job. The body carries a client-made `clientId`; a start sent again with
   it (the client resends when its connection drops) answers with the live
   job that start began and creates no session (`client_id` and a unique
-  index per owner on the row, checked before the limit). `GET` lists
+  index per owner on the row). `DraftJobStore::begin_job` checks the
+  repeat, counts and inserts in one transaction under a per-owner advisory
+  lock, so starts sent together never pass the limit, and a repeat answers
+  before the limit; it counts jobs drafting that started within
+  `INTERRUPTED_AFTER`, through the owner's jobs index. `GET` lists
   drafting and unopened finished ones, `GET .../{id}` reads one (its
   `Draft` when ready), `DELETE .../{id}` cancels or discards one (404 when
   not the caller's). The job id is its hidden session's. Its
@@ -93,9 +97,15 @@ each run.
   starting `traceparent` live on its `scheduled_action_draft` row
   (`DraftJobStore`, `state` NULL for a blocking draft, which keeps its old
   lifecycle). It runs on the receiving replica's `TaskTracker` under the
-  shutdown token: shutdown fails it as interrupted. A cancel from any
-  replica marks the row `cancelled`; the drafter sees it on its next row
-  read (`HandedBack::cancelled`) and deletes the session and the row. A
+  shutdown token: shutdown fails it as interrupted. The start's own body,
+  from the insert to admission, runs on the tracker too, so a dropped
+  request can't leave a row without its drafter. The drafter is cut off at
+  `JOB_LIMIT` (`DRAFT_TIMEOUT` + 60 s) and fails its job as timed out; its
+  result write is tried three times. `INTERRUPTED_AFTER` is 60 s past
+  `JOB_LIMIT`. A cancel from any replica marks the row `cancelled`; the
+  drafter sees it on its next row read (`HandedBack::cancelled`) and
+  deletes the session and the row, and its last update to the owner is
+  `removed`, as is that of a job whose admission was refused. A
   finished job's session is only stopped; it is deleted with its row, on
   discard or after `FINISHED_RETENTION` (7 days). `DraftJobs::sweep` fails
   rows still drafting past `INTERRUPTED_AFTER` (their drafter died) and
