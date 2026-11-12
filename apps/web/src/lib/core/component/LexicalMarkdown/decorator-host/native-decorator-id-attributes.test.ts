@@ -142,10 +142,14 @@ function source(state: string, attribute: string) {
   });
   const root = document.createElement('div');
   editor.setRootElement(root);
-  editor.setEditorState(editor.parseEditorState(state));
-  const element = root.querySelector(`[${attribute}]`);
-  if (!element) throw new Error('Missing Source decorator element');
-  return element.getAttribute(attribute);
+  try {
+    editor.setEditorState(editor.parseEditorState(state));
+    const element = root.querySelector(`[${attribute}]`);
+    if (!element) throw new Error('Missing Source decorator element');
+    return element.getAttribute(attribute);
+  } finally {
+    editor.setRootElement(null);
+  }
 }
 
 /** The attribute native writes for the same stored node. */
