@@ -20,7 +20,7 @@ export const exitCodes = {
   stopped: 0,
   /** A land asked for a restart: not a failure. */
   restart: 75,
-  /** Configuration or credentials are missing or invalid: retry later, never roll back. */
+  /** Configuration or credentials are missing or invalid: retried; rolled back only on a head that isn't last-good. */
   configuration: 78,
 } as const;
 
