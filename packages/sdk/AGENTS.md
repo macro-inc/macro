@@ -159,6 +159,7 @@ enforced by the ordinary backend APIs.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
+- `appearance()` / `setAppearance()` live on supported entity handles; writes replace icon/color together, carry the `edited` SDK verb and idempotent `@write` hint, and invalidate cached detail only after success.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
   Consumer application bundles belong to their consumer. The calls entry points
   are built separately from core, with LiveKit and OpenTelemetry external.
