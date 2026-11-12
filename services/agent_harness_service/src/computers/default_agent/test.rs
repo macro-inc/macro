@@ -155,6 +155,7 @@ async fn a_ready_computer_gets_one_team_coding_agent(pool: PgPool) {
                 mcp: AgentMcpServers::OwnerConnections,
                 auto_accept_permissions: None,
                 is_coding: false,
+                is_ephemeral: false,
             },
         )
         .await
@@ -235,6 +236,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
                 mcp: AgentMcpServers::OwnerConnections,
                 auto_accept_permissions: None,
                 is_coding: true,
+                is_ephemeral: false,
             },
         )
         .await
@@ -258,6 +260,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
                 mcp: AgentMcpServers::OwnerConnections,
                 auto_accept_permissions: None,
                 is_coding: false,
+                is_ephemeral: false,
             },
         )
         .await
@@ -368,6 +371,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: true,
+        is_ephemeral: false,
     };
     let refused = PgBotsRepo::new(pool.clone())
         .create_agent(
@@ -419,6 +423,7 @@ async fn any_teammate_can_run_agents_on_a_team_computer(pool: PgPool) {
                     mcp: AgentMcpServers::OwnerConnections,
                     auto_accept_permissions: Some(true),
                     is_coding: true,
+                    is_ephemeral: false,
                 },
             )
             .await
@@ -455,6 +460,7 @@ async fn agents_on_a_computer_default_to_bypassing_permissions(pool: PgPool) {
                     mcp: AgentMcpServers::OwnerConnections,
                     auto_accept_permissions: requested,
                     is_coding: true,
+                    is_ephemeral: false,
                 },
             )
             .await
