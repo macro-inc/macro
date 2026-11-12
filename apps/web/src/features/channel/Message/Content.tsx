@@ -21,6 +21,7 @@ import {
   useSearchHighlightTermsLookup,
 } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
+import { LinkPreviews } from './LinkPreviews';
 import { MentionedImages } from './MentionedImages';
 import { MentionedRoutineTemplates } from './MentionedRoutineTemplates';
 
@@ -69,6 +70,8 @@ function pressKeepsExpandedComment(
 
 type ContentProps = {
   class?: string;
+  /** Show cards previewing the web pages the message links to. */
+  linkPreviews?: boolean;
 };
 
 export function Content(props: ContentProps) {
@@ -85,6 +88,8 @@ export function Content(props: ContentProps) {
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
+  const linkPreviews = () =>
+    props.linkPreviews ? (message().link_previews ?? []) : [];
 
   createSearchHighlightOverlay({ root: markdownRoot, content, terms });
 
@@ -98,6 +103,7 @@ export function Content(props: ContentProps) {
       />
       <MentionedImages content={content()} />
       <MentionedRoutineTemplates content={content()} />
+      <LinkPreviews previews={linkPreviews()} />
     </>
   );
 

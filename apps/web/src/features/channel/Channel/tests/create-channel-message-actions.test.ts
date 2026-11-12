@@ -38,6 +38,7 @@ function buildHarness(input?: {
   effects?: Parameters<typeof createChannelMessageActions>[0]['effects'];
 }) {
   const deleteMessage = vi.fn();
+  const removeLinkPreviews = vi.fn();
   const addReaction = vi.fn();
   const removeReaction = vi.fn();
 
@@ -49,6 +50,7 @@ function buildHarness(input?: {
     userId: () => input?.userId,
     canModerate: () => input?.canModerate ?? false,
     deleteMessage,
+    removeLinkPreviews,
     addReaction,
     removeReaction,
     onReply: input?.onReply,
@@ -58,6 +60,7 @@ function buildHarness(input?: {
 
   return {
     deleteMessage,
+    removeLinkPreviews,
     addReaction,
     removeReaction,
     getMessageActions,
@@ -139,5 +142,73 @@ describe('createChannelMessageActions', () => {
     await actions.onReply?.({ message: reply });
 
     expect(onReply).toHaveBeenCalledWith({ message: reply });
+  });
+
+  it("lets only the sender remove a message's link previews", () => {
+    const sender = buildHarness({ userId: 'user-1' });
+    const moderator = buildHarness({ userId: 'user-2', canModerate: true });
+    const message = buildMessage({ sender_id: 'user-1' });
+
+    expect(sender.getMessageActions(message).onRemoveLinkPreviews).toBeTypeOf(
+      'function'
+    );
+    expect(
+      moderator.getMessageActions(message).onRemoveLinkPreviews
+    ).toBeUndefined();
+    expect(
+      sender.getMessageActions(
+        buildMessage({ sender_id: 'user-1', deleted_at: '2026-02-26' })
+      ).onRemoveLinkPreviews
+    ).toBeUndefined();
+  });
+
+  it('removes link previews once the sender confirms, and not when they cancel', async () => {
+    const confirmRemoveLinkPreviews = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const harness = buildHarness({
+      userId: 'user-1',
+      effects: { confirmRemoveLinkPreviews },
+    });
+    const reply = buildMessage({ id: 'reply-1', thread_id: 'parent-1' });
+    const actions = harness.getMessageActions(reply);
+
+    await actions.onRemoveLinkPreviews?.({
+      message: reply,
+      event: new MouseEvent('click'),
+    });
+    expect(harness.removeLinkPreviews).not.toHaveBeenCalled();
+
+    await actions.onRemoveLinkPreviews?.({
+      message: reply,
+      event: new MouseEvent('click'),
+    });
+    expect(harness.removeLinkPreviews).toHaveBeenCalledExactlyOnceWith({
+      parent: { type: 'channel', id: 'channel-1' },
+      messageID: 'reply-1',
+      threadID: 'parent-1',
+    });
+  });
+
+  it('removes link previews without asking when Shift is held', async () => {
+    const confirmRemoveLinkPreviews = vi.fn();
+    const harness = buildHarness({
+      userId: 'user-1',
+      effects: { confirmRemoveLinkPreviews },
+    });
+    const message = buildMessage();
+
+    await harness.getMessageActions(message).onRemoveLinkPreviews?.({
+      message,
+      event: new MouseEvent('click', { shiftKey: true }),
+    });
+
+    expect(confirmRemoveLinkPreviews).not.toHaveBeenCalled();
+    expect(harness.removeLinkPreviews).toHaveBeenCalledExactlyOnceWith({
+      parent: { type: 'channel', id: 'channel-1' },
+      messageID: 'message-1',
+      threadID: undefined,
+    });
   });
 });

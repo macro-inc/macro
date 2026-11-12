@@ -23673,6 +23673,35 @@ export const commentOnDocumentTextResponse = zod
           .describe(
             'What a persisted message is. Set by the server, never by a client.'
           ),
+        link_previews: zod
+          .array(
+            zod
+              .object({
+                description: zod
+                  .string()
+                  .nullish()
+                  .describe('The page description, if any.'),
+                favicon_url: zod
+                  .string()
+                  .nullish()
+                  .describe("The page's favicon URL, if any."),
+                image_url: zod
+                  .string()
+                  .nullish()
+                  .describe("The page's preview image URL, if any."),
+                title: zod.string().describe('The page title.'),
+                url: zod
+                  .string()
+                  .describe('The linked URL, as the message text links it.'),
+              })
+              .describe(
+                'A preview of a web page a message links to: what its card shows.'
+              )
+          )
+          .optional()
+          .describe(
+            'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+          ),
         mentions: zod
           .array(
             zod
@@ -68556,6 +68585,37 @@ export const messageTimelineResponse = zod
               .describe(
                 'What a persisted message is. Set by the server, never by a client.'
               ),
+            link_previews: zod
+              .array(
+                zod
+                  .object({
+                    description: zod
+                      .string()
+                      .nullish()
+                      .describe('The page description, if any.'),
+                    favicon_url: zod
+                      .string()
+                      .nullish()
+                      .describe("The page's favicon URL, if any."),
+                    image_url: zod
+                      .string()
+                      .nullish()
+                      .describe("The page's preview image URL, if any."),
+                    title: zod.string().describe('The page title.'),
+                    url: zod
+                      .string()
+                      .describe(
+                        'The linked URL, as the message text links it.'
+                      ),
+                  })
+                  .describe(
+                    'A preview of a web page a message links to: what its card shows.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -68896,6 +68956,43 @@ export const messageTimelineResponse = zod
                             .optional()
                             .describe(
                               'What a persisted message is. Set by the server, never by a client.'
+                            ),
+                          link_previews: zod
+                            .array(
+                              zod
+                                .object({
+                                  description: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('The page description, if any.'),
+                                  favicon_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      "The page's favicon URL, if any."
+                                    ),
+                                  image_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      "The page's preview image URL, if any."
+                                    ),
+                                  title: zod
+                                    .string()
+                                    .describe('The page title.'),
+                                  url: zod
+                                    .string()
+                                    .describe(
+                                      'The linked URL, as the message text links it.'
+                                    ),
+                                })
+                                .describe(
+                                  'A preview of a web page a message links to: what its card shows.'
+                                )
+                            )
+                            .optional()
+                            .describe(
+                              'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
                             ),
                           mentions: zod
                             .array(
@@ -69298,6 +69395,35 @@ export const entityMessageCreateResponse = zod
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
       ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+      ),
     mentions: zod
       .array(
         zod
@@ -69471,6 +69597,35 @@ export const entityMessageGetMessageResponse = zod
       .optional()
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
+      ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
       ),
     mentions: zod
       .array(
@@ -69649,6 +69804,35 @@ export const entityMessageDeleteMessageResponse = zod
       .optional()
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
+      ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
       ),
     mentions: zod
       .array(
@@ -69924,6 +70108,240 @@ export const entityMessageEditResponse = zod
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
       ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Remove the caller's own message's link previews for everyone. The message
+gets none again, whatever links a later edit adds. Not found while link
+previews are off for the caller.
+ */
+export const entityMessageRemoveLinkPreviewsParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+  id: zod.uuid(),
+});
+
+export const entityMessageRemoveLinkPreviewsResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+      ),
     mentions: zod
       .array(
         zod
@@ -70106,6 +70524,35 @@ export const entityMessageReactResponse = zod
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
       ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+      ),
     mentions: zod
       .array(
         zod
@@ -70286,6 +70733,35 @@ export const entityMessageLegacyResponse = zod
       .optional()
       .describe(
         'What a persisted message is. Set by the server, never by a client.'
+      ),
+    link_previews: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('The page description, if any.'),
+            favicon_url: zod
+              .string()
+              .nullish()
+              .describe("The page's favicon URL, if any."),
+            image_url: zod
+              .string()
+              .nullish()
+              .describe("The page's preview image URL, if any."),
+            title: zod.string().describe('The page title.'),
+            url: zod
+              .string()
+              .describe('The linked URL, as the message text links it.'),
+          })
+          .describe(
+            'A preview of a web page a message links to: what its card shows.'
+          )
+      )
+      .optional()
+      .describe(
+        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
       ),
     mentions: zod
       .array(
@@ -70478,6 +70954,37 @@ export const entityMessageGetThreadResponse = zod
               .describe(
                 'What a persisted message is. Set by the server, never by a client.'
               ),
+            link_previews: zod
+              .array(
+                zod
+                  .object({
+                    description: zod
+                      .string()
+                      .nullish()
+                      .describe('The page description, if any.'),
+                    favicon_url: zod
+                      .string()
+                      .nullish()
+                      .describe("The page's favicon URL, if any."),
+                    image_url: zod
+                      .string()
+                      .nullish()
+                      .describe("The page's preview image URL, if any."),
+                    title: zod.string().describe('The page title.'),
+                    url: zod
+                      .string()
+                      .describe(
+                        'The linked URL, as the message text links it.'
+                      ),
+                  })
+                  .describe(
+                    'A preview of a web page a message links to: what its card shows.'
+                  )
+              )
+              .optional()
+              .describe(
+                'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -70658,6 +71165,35 @@ export const entityMessageGetThreadResponse = zod
           .optional()
           .describe(
             'What a persisted message is. Set by the server, never by a client.'
+          ),
+        link_previews: zod
+          .array(
+            zod
+              .object({
+                description: zod
+                  .string()
+                  .nullish()
+                  .describe('The page description, if any.'),
+                favicon_url: zod
+                  .string()
+                  .nullish()
+                  .describe("The page's favicon URL, if any."),
+                image_url: zod
+                  .string()
+                  .nullish()
+                  .describe("The page's preview image URL, if any."),
+                title: zod.string().describe('The page title.'),
+                url: zod
+                  .string()
+                  .describe('The linked URL, as the message text links it.'),
+              })
+              .describe(
+                'A preview of a web page a message links to: what its card shows.'
+              )
+          )
+          .optional()
+          .describe(
+            'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
           ),
         mentions: zod
           .array(
@@ -71253,6 +71789,39 @@ export const messageTimelineEntriesResponse = zod
                       .describe(
                         'What a persisted message is. Set by the server, never by a client.'
                       ),
+                    link_previews: zod
+                      .array(
+                        zod
+                          .object({
+                            description: zod
+                              .string()
+                              .nullish()
+                              .describe('The page description, if any.'),
+                            favicon_url: zod
+                              .string()
+                              .nullish()
+                              .describe("The page's favicon URL, if any."),
+                            image_url: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The page's preview image URL, if any."
+                              ),
+                            title: zod.string().describe('The page title.'),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The linked URL, as the message text links it.'
+                              ),
+                          })
+                          .describe(
+                            'A preview of a web page a message links to: what its card shows.'
+                          )
+                      )
+                      .optional()
+                      .describe(
+                        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+                      ),
                     mentions: zod
                       .array(
                         zod
@@ -71623,6 +72192,45 @@ export const messageTimelineEntriesResponse = zod
                                     .optional()
                                     .describe(
                                       'What a persisted message is. Set by the server, never by a client.'
+                                    ),
+                                  link_previews: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          description: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'The page description, if any.'
+                                            ),
+                                          favicon_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              "The page's favicon URL, if any."
+                                            ),
+                                          image_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              "The page's preview image URL, if any."
+                                            ),
+                                          title: zod
+                                            .string()
+                                            .describe('The page title.'),
+                                          url: zod
+                                            .string()
+                                            .describe(
+                                              'The linked URL, as the message text links it.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'A preview of a web page a message links to: what its card shows.'
+                                        )
+                                    )
+                                    .optional()
+                                    .describe(
+                                      'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
                                     ),
                                   mentions: zod
                                     .array(
@@ -71901,6 +72509,39 @@ export const messageTimelineEntriesResponse = zod
                       .describe(
                         'What a persisted message is. Set by the server, never by a client.'
                       ),
+                    link_previews: zod
+                      .array(
+                        zod
+                          .object({
+                            description: zod
+                              .string()
+                              .nullish()
+                              .describe('The page description, if any.'),
+                            favicon_url: zod
+                              .string()
+                              .nullish()
+                              .describe("The page's favicon URL, if any."),
+                            image_url: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The page's preview image URL, if any."
+                              ),
+                            title: zod.string().describe('The page title.'),
+                            url: zod
+                              .string()
+                              .describe(
+                                'The linked URL, as the message text links it.'
+                              ),
+                          })
+                          .describe(
+                            'A preview of a web page a message links to: what its card shows.'
+                          )
+                      )
+                      .optional()
+                      .describe(
+                        'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
+                      ),
                     mentions: zod
                       .array(
                         zod
@@ -72271,6 +72912,45 @@ export const messageTimelineEntriesResponse = zod
                                     .optional()
                                     .describe(
                                       'What a persisted message is. Set by the server, never by a client.'
+                                    ),
+                                  link_previews: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          description: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              'The page description, if any.'
+                                            ),
+                                          favicon_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              "The page's favicon URL, if any."
+                                            ),
+                                          image_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe(
+                                              "The page's preview image URL, if any."
+                                            ),
+                                          title: zod
+                                            .string()
+                                            .describe('The page title.'),
+                                          url: zod
+                                            .string()
+                                            .describe(
+                                              'The linked URL, as the message text links it.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'A preview of a web page a message links to: what its card shows.'
+                                        )
+                                    )
+                                    .optional()
+                                    .describe(
+                                      'Previews of the pages a channel message links to, in text order.\nFilled in shortly after a post or edit; empty until then.'
                                     ),
                                   mentions: zod
                                     .array(

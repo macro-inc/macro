@@ -8,6 +8,26 @@ use url::Url;
 
 use super::url_parsers::{EmbedInfo, EmbedType, parse_custom_title, parse_embed_info};
 
+#[cfg(test)]
+mod test;
+
+/// Key of the page's first paragraph of body text among the fetched tags.
+pub const FIRST_PARAGRAPH_KEY: &str = "paragraph";
+
+/// Where a page says what it is about, most specific first. A page that says
+/// so nowhere in its head, as encyclopedia articles do, is described by its
+/// first paragraph.
+const DESCRIPTION_KEYS: [&str; 5] = [
+    "property:og:description",
+    "name:twitter:description",
+    "property:twitter:description",
+    "name:description",
+    FIRST_PARAGRAPH_KEY,
+];
+
+/// Longest description kept, in characters: more than a preview shows.
+const MAX_DESCRIPTION_CHARS: usize = 500;
+
 /// The type of embeddable content for services that support iframe embedding.
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -37,7 +57,9 @@ pub struct GetUnfurlResponse {
     pub url: String,
     /// The page title (from custom URL parser, Open Graph, or `<title>`).
     pub title: String,
-    /// The page description (from `og:description`), if any.
+    /// What the page says it is about: its Open Graph, Twitter card, or
+    /// `<meta>` description, else its first paragraph. On one line, cut to a
+    /// length a preview can show.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// The page's preview image URL (from `og:image`), if any.
@@ -79,12 +101,27 @@ impl GetUnfurlResponse {
         }
     }
 
+    /// Resolve the description from previously-extracted `metatags`: the
+    /// first of [`DESCRIPTION_KEYS`] that has text.
+    pub fn get_description(metatags: &HashMap<String, String>) -> Option<String> {
+        let description = DESCRIPTION_KEYS
+            .iter()
+            .filter_map(|key| metatags.get(*key))
+            .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "))
+            .find(|text| !text.is_empty())?;
+
+        if description.chars().count() <= MAX_DESCRIPTION_CHARS {
+            return Some(description);
+        }
+
+        let cut: String = description.chars().take(MAX_DESCRIPTION_CHARS).collect();
+        Some(format!("{}…", cut.trim_end()))
+    }
+
     /// Build a response by combining the URL and extracted meta tags.
     pub fn new(url: &str, metatags: &HashMap<String, String>) -> Self {
         let title = Self::get_title(url, metatags);
-        let description = metatags
-            .get("property:og:description")
-            .map(|s| s.to_string());
+        let description = Self::get_description(metatags);
         let image_url = metatags.get("property:og:image").map(|s| s.to_string());
 
         let mut favicon_url = metatags.get("favicon").map(|s| s.to_string());
@@ -128,77 +165,4 @@ pub enum UnfurlErr {
     /// The underlying fetcher failed to retrieve or parse the page.
     #[error(transparent)]
     Fetch(#[from] anyhow::Error),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_opengraph() {
-        let mut tags: HashMap<String, String> = HashMap::new();
-        tags.insert("property:og:title".to_string(), "hello".to_string());
-        tags.insert(
-            "property:og:description".to_string(),
-            "this is a description".to_string(),
-        );
-        tags.insert("property:og:image".to_string(), "foo.jpg".to_string());
-
-        let link = GetUnfurlResponse::new("localhost", &tags);
-
-        assert_eq!(link.url, "localhost");
-        assert_eq!(link.title, "hello");
-        assert_eq!(link.description.as_deref(), Some("this is a description"));
-        assert_eq!(link.image_url.as_deref(), Some("foo.jpg"));
-    }
-
-    #[test]
-    fn test_og_title_before_sitename() {
-        let mut tags = HashMap::new();
-        tags.insert(
-            "property:og:site_name".to_string(),
-            "website title".to_string(),
-        );
-        tags.insert("property:og:title".to_string(), "hello".to_string());
-
-        let response = GetUnfurlResponse::new("localhost", &tags);
-        assert_eq!(response.title, "hello");
-    }
-
-    #[test]
-    fn test_fallback_to_title_tag() {
-        let mut tags = HashMap::new();
-        tags.insert("title".to_string(), "Website Title".to_string());
-
-        let response = GetUnfurlResponse::new("localhost", &tags);
-        assert_eq!(response.title, "Website Title");
-    }
-
-    #[test]
-    fn test_custom_url_title_parsing_notion() {
-        let empty_tags = HashMap::new();
-
-        let notion_url = "https://www.notion.so/macrocom/Enterprise-Product-Bottlenecks-5acb869109a747c1a1a92bbf1891ff2d";
-        assert_eq!(
-            GetUnfurlResponse::get_title(notion_url, &empty_tags),
-            "Enterprise Product Bottlenecks"
-        );
-
-        assert_eq!(
-            GetUnfurlResponse::get_title("https://www.notion.so", &empty_tags),
-            "Notion"
-        );
-    }
-
-    #[test]
-    fn test_custom_url_falls_back_to_metadata() {
-        let mut tags = HashMap::new();
-        tags.insert(
-            "property:og:title".to_string(),
-            "Regular Website Title".to_string(),
-        );
-
-        let title = GetUnfurlResponse::get_title("https://example.com/some/page", &tags);
-        assert_eq!(title, "Regular Website Title");
-    }
 }

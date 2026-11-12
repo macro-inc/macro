@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_message_link_previews\n                   (message_id, position, url, title, description, image_url, favicon_url)\n               SELECT $1, * FROM UNNEST(\n                   $2::smallint[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[]\n               )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2Array",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ef875469f2ab777d3f2f25266f4beeb3b8eb555a0897441210d42b9a22c43d9"
+}

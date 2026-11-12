@@ -6,6 +6,7 @@ import agentWork from './en/agent-work';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
+import channelLinkPreviews from './en/channel-link-previews';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
@@ -46,6 +47,7 @@ export default {
   calls,
   channelComposer,
   channelLabels,
+  channelLinkPreviews,
   channelSections,
   commandMenu,
   commands,

@@ -317,6 +317,79 @@ describe.each([
       )[0].thread.reply_count
     ).toBe(1);
   });
+  it('keeps link previews through a late copy of the same text and applies only previews from their event', () => {
+    seed();
+    const replies = () =>
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies;
+    const reply = message(parent, 'reply', 'root');
+    applyMessage(reply, 'posted');
+
+    const previews = [{ url: 'https://example.com/post', title: 'Post' }];
+    applyMessage(
+      { ...reply, content: 'an older snapshot', link_previews: previews },
+      'link_previews_updated'
+    );
+    expect(replies()).toEqual([
+      expect.objectContaining({ content: 'reply', link_previews: previews }),
+    ]);
+
+    // The send response lands after the previews it predates.
+    applyMessage({ ...reply, link_previews: [] }, 'posted');
+    expect(replies()[0].link_previews).toEqual(previews);
+
+    // An edit to other text is computed afresh.
+    applyMessage(
+      { ...reply, content: 'no links now', link_previews: [] },
+      'edited'
+    );
+    expect(replies()[0]).toEqual(
+      expect.objectContaining({ content: 'no links now', link_previews: [] })
+    );
+  });
+  it('keeps the previews of an edited text when the edit arrives after them', () => {
+    seed();
+    const replies = () =>
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies;
+    const kept = { url: 'https://example.com/kept', title: 'Kept' };
+    const removed = { url: 'https://example.com/removed', title: 'Removed' };
+    const reply = {
+      ...message(parent, 'reply', 'root'),
+      link_previews: [kept, removed],
+    };
+    applyMessage(reply, 'posted');
+
+    // The edit was read before its previews were stored, and is delivered
+    // after them: to a viewer still showing the old text, then again as the
+    // author's own response.
+    const edited = { ...reply, content: 'only the kept link' };
+    applyMessage({ ...edited, link_previews: [kept] }, 'link_previews_updated');
+    applyMessage(edited, 'edited');
+    expect(replies()[0]).toEqual(
+      expect.objectContaining({
+        content: 'only the kept link',
+        link_previews: [kept],
+      })
+    );
+    applyMessage(edited, 'edited');
+    expect(replies()[0].link_previews).toEqual([kept]);
+
+    // Once other text has shown, those previews no longer outrank a copy of
+    // the text they were computed from.
+    applyMessage(
+      { ...edited, content: 'both links again', link_previews: [kept] },
+      'edited'
+    );
+    applyMessage(
+      { ...edited, content: 'only the kept link', link_previews: [] },
+      'edited'
+    );
+    expect(replies()[0]).toEqual(
+      expect.objectContaining({
+        content: 'only the kept link',
+        link_previews: [],
+      })
+    );
+  });
   it('updates the canonical root when only a linked thread is cached', () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {
       state,

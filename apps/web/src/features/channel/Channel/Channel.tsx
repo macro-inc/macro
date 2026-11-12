@@ -71,6 +71,7 @@ import {
   newMessageId,
   useDeleteMessageMutation,
   usePatchMessageMutation,
+  useRemoveLinkPreviewsMutation,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import {
@@ -232,6 +233,7 @@ export function Channel(props: ChannelProps) {
   const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
   const deleteMessageMutation = useDeleteMessageMutation();
+  const removeLinkPreviewsMutation = useRemoveLinkPreviewsMutation();
   const typingMutation = usePostTypingUpdateMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
@@ -587,6 +589,7 @@ export function Channel(props: ChannelProps) {
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
+    removeLinkPreviews: removeLinkPreviewsMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {

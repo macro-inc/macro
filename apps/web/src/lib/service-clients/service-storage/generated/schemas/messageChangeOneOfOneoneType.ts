@@ -10,5 +10,5 @@ export type MessageChangeOneOfOneoneType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MessageChangeOneOfOneoneType = {
-  thread_updated: 'thread_updated',
+  link_previews_updated: 'link_previews_updated',
 } as const;

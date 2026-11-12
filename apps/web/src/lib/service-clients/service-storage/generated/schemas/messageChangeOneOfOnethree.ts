@@ -4,18 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MessageChangeOneOfOnethreeAgent } from './messageChangeOneOfOnethreeAgent';
-import type { MessageChangeOneOfOnethreeThreadId } from './messageChangeOneOfOnethreeThreadId';
+
 import type { MessageChangeOneOfOnethreeType } from './messageChangeOneOfOnethreeType';
+import type { ThreadState } from './threadState';
 
 /**
- * Transient typing indication.
+ * Thread resolution, placement, or deletion changed.
  */
 export type MessageChangeOneOfOnethree = {
-  /** Whether the user is currently typing. */
-  active: boolean;
-  agent?: MessageChangeOneOfOnethreeAgent;
-  /** Root being replied to, or no root for the parent composer. */
-  thread_id?: MessageChangeOneOfOnethreeThreadId;
+  /** Persisted thread state. */
+  state: ThreadState;
   type: MessageChangeOneOfOnethreeType;
 };

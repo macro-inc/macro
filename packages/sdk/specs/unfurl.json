@@ -177,7 +177,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "The page description (from `og:description`), if any."
+            "description": "What the page says it is about: its Open Graph, Twitter card, or\n`<meta>` description, else its first paragraph. On one line, cut to a\nlength a preview can show."
           },
           "embed_type": {
             "$ref": "#/components/schemas/UnfurlEmbedType",
@@ -233,7 +233,7 @@
               "properties": {
                 "description": {
                   "type": ["string", "null"],
-                  "description": "The page description (from `og:description`), if any."
+                  "description": "What the page says it is about: its Open Graph, Twitter card, or\n`<meta>` description, else its first paragraph. On one line, cut to a\nlength a preview can show."
                 },
                 "embed_type": {
                   "$ref": "#/components/schemas/UnfurlEmbedType",

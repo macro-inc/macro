@@ -206,6 +206,7 @@ const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
 const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
 
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+const LINK_PREVIEW_FLAG_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
     let exponent = consecutive_failures.saturating_sub(1).min(6);
@@ -1410,6 +1411,29 @@ async fn run_server() -> anyhow::Result<()> {
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
             lexical_client.clone(),
         ))
+        // Channel messages keep previews of the pages they link to, read with
+        // the SSRF-safe unfurl fetcher by the link preview consumer below, for
+        // the people the `enable-link-previews` flag is on for.
+        .with_link_previews(
+            lexical_mention_extractor::LexicalLinkExtractor::new(lexical_client.clone()),
+            messages::outbound::unfurl_link_previews::UnfurlLinkPreviews::new(Arc::new(
+                unfurl::domain::service::UnfurlServiceImpl::new(
+                    unfurl::outbound::ReqwestUnfurlFetcher::new()
+                        .context("failed to build ReqwestUnfurlFetcher")?,
+                ),
+            )),
+            messages::outbound::flagged_link_previews::FlaggedLinkPreviews(
+                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                    config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                    config.posthog_api_key.as_ref().to_owned(),
+                    // Mostly read by the background refresh, so it can wait
+                    // longer than the call-start path before counting as off.
+                    LINK_PREVIEW_FLAG_TIMEOUT,
+                    config.environment,
+                )
+                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?,
+            ),
+        )
         .with_references(
             messages::outbound::entity_access_audience::EntityAccessMessageReferences(
                 (*entity_access_service).clone(),
@@ -1510,6 +1534,44 @@ async fn run_server() -> anyhow::Result<()> {
                             error = ?error,
                             "user picture fan-out consumer exited unexpectedly"
                         );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    let link_preview_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let message_service = message_service.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting link preview consumer");
+                let result = messages::inbound::link_preview_consumer::run_link_preview_consumer(
+                    &link_preview_brokers,
+                    message_service.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("link preview consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "link preview consumer exited unexpectedly");
                     }
                 }
 

@@ -29,7 +29,9 @@ export type GetUnfurlQueryParams = {
  */
 export type GetUnfurlResponse = {
     /**
-     * The page description (from `og:description`), if any.
+     * What the page says it is about: its Open Graph, Twitter card, or
+     * `<meta>` description, else its first paragraph. On one line, cut to a
+     * length a preview can show.
      */
     description?: string | null;
     /**
@@ -69,7 +71,9 @@ export type UnfurlEmbedType = 'None' | 'Video';
 
 export type Vec = Array<null | {
     /**
-     * The page description (from `og:description`), if any.
+     * What the page says it is about: its Open Graph, Twitter card, or
+     * `<meta>` description, else its first paragraph. On one line, cut to a
+     * length a preview can show.
      */
     description?: string | null;
     /**

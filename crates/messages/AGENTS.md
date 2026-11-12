@@ -29,6 +29,11 @@ they need.
   adapters (feature `outbound`).
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
   realtime/notification delivery adapters (features `outbound`/`broker`).
+- `src/domain/service/link_previews.rs`: channel message link previews, stored
+  in `comms_message_link_previews`. `src/inbound/link_preview_consumer.rs`
+  (feature `kafka_consumer`) runs them from `macro.messages`;
+  `src/outbound/unfurl_link_previews.rs` (feature `link_previews`) reads pages,
+  and `src/outbound/flagged_link_previews.rs` decides who has them.
 
 ## Scope
 
@@ -42,7 +47,8 @@ they need.
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
   `properties`/`models_properties`/`model_notifications`/`notification`
   (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
-  (broker).
+  (broker), `kafka_util` (kafka_consumer), `unfurl` and `feature_flags`
+  (link_previews).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
   `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
@@ -78,8 +84,32 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
+
+- Link previews are recomputed for every channel post and patch, wherever it
+  was posted: the `message-link-previews` consumer in DSS calls
+  `refresh_link_previews`, which picks links through the lexical service's
+  `/link-previews` (deploy it before DSS), keeps stored previews of links
+  still present, writes only while the message text is unchanged, and
+  publishes `link_previews_updated` to the channel alone. Refreshes are
+  best-effort: a failed or interrupted one leaves the message without cards.
+  A message's sender, and nobody else, can remove its previews
+  (`remove_link_previews`, `DELETE …/items/{id}/link_previews`): that deletes
+  them, sets `comms_messages.link_previews_suppressed`, and publishes the same
+  `link_previews_updated`. A suppressed message is skipped by every later
+  refresh, and the guarded write refuses one already under way.
+
+- Link previews follow the `enable-link-previews` flag (`LinkPreviewGate`,
+  `outbound/flagged_link_previews.rs`), read for the message's author: its
+  sender, or the person who triggered a bot's reply. Unprompted bot posts and
+  call guests get none (a refresh clears cards stored while the author had
+  them), and a flag that can't be read counts as off. A message linking
+  nothing never reads the flag. Removal
+  checks the caller's flag and answers 404 while it is off. The web app reads
+  the same key to show the cards and the remove button.
+
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
-  `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
+  `delivery`, `inbound`, `kafka_consumer`, `link_previews`, `outbound`, `ports`,
+  `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
 

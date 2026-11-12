@@ -101,6 +101,7 @@ impl RecordingMessages {
             deleted_at: None,
             attachments: vec![],
             reactions,
+            link_previews: vec![],
         }
     }
 
@@ -170,6 +171,7 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
             deleted_at: None,
             attachments: vec![],
             reactions: vec![],
+            link_previews: vec![],
         };
         self.posts.lock().unwrap().push((access, input));
         Ok(message)
@@ -213,6 +215,13 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
         let result = self.mutation_result(&access, id, reactions);
         self.reacts.lock().unwrap().push((access, id, emoji, add));
         result
+    }
+    async fn remove_link_previews(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
     }
     async fn typing(
         &self,

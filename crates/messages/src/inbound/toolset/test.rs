@@ -77,6 +77,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        link_previews: vec![],
     }
 }
 
@@ -293,6 +294,13 @@ impl MessageCommands for FakeMessages {
         _nonce: Option<String>,
     ) -> Result<Message, MessageError> {
         panic!("unexpected react call")
+    }
+    async fn remove_link_previews(
+        &self,
+        _access: EntityAccessReceipt<MessageWrite>,
+        _id: Uuid,
+    ) -> Result<Message, MessageError> {
+        panic!("unexpected remove_link_previews call")
     }
     async fn typing(
         &self,

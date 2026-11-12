@@ -111,6 +111,36 @@ export function onThreadStateUpdated(listener: ThreadStateListener) {
   return () => threadStateListeners.delete(listener);
 }
 
+/**
+ * Previews change only through their own event, which carries the text they
+ * were computed from. A copy of the message read at its send or edit holds
+ * the previews stored before that write and can land after the event it
+ * predates, so the previews already shown win over the copy's when they were
+ * computed from the copy's text, or when a copy of the same text has none.
+ */
+function withShownLinkPreviews<T extends Message>(
+  message: T,
+  existing: Message | undefined
+): T {
+  const fromCopy = { ...message, link_previews_content: undefined };
+  if (!existing) return fromCopy;
+
+  const shown = {
+    ...message,
+    link_previews: existing.link_previews,
+    link_previews_content: existing.link_previews_content,
+  };
+  if (existing.link_previews_content === message.content) return shown;
+
+  const copyHasPreviews = Boolean(message.link_previews?.length);
+  const sameText = message.content === existing.content;
+  if (existing.link_previews?.length && !copyHasPreviews && sameText) {
+    return shown;
+  }
+
+  return fromCopy;
+}
+
 /** Preserve the event kind: only posts insert messages, and only deletes remove them. */
 export function applyMessage(
   message: Message,
@@ -128,6 +158,12 @@ export function applyMessage(
     patchTargetMessage(parent, target, {
       reactions: message.reactions,
       updated_at: message.updated_at,
+    });
+  } else if (change === 'link_previews_updated') {
+    // Only the previews: a newer edit's text may already be showing.
+    patchTargetMessage(parent, target, {
+      link_previews: message.link_previews,
+      link_previews_content: message.content,
     });
   } else if (change === 'message_deleted') {
     patchTargetMessage(parent, target, normalized);
@@ -167,7 +203,11 @@ export function applyMessage(
       insertMessageIntoTargetCaches(parent, target, item);
     }
   } else {
-    patchTargetMessage(parent, target, normalized);
+    patchTargetMessage(
+      parent,
+      target,
+      withShownLinkPreviews(normalized, existing)
+    );
   }
   softInvalidateTargetCaches(parent, target);
   fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');

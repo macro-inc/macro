@@ -587,6 +587,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
                 deleted_at: None,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
+                link_previews: vec![],
             }),
         }
     }
@@ -613,6 +614,13 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
         _: String,
         _: bool,
         _: Option<String>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn remove_link_previews(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
         unimplemented!()
     }

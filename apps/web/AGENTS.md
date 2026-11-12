@@ -261,6 +261,24 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Link preview cards in channel messages render from the previews stored with
+each message, never from a fetch after mount, so a row has its height when the
+channel list measures it. Cards and the remove button show only while
+`enableLinkPreviews` (`enable-link-previews`) is on; the fixture turns it on with
+`VITE_ENABLE_LINK_PREVIEWS=true`. The backend-free desktop/phone regression (the real
+`ChannelMessage` and channel actions over stored previews) checks the cards are
+there on first render, their content and order, the three-line description,
+their fit in the message column, opening from the title, and removal by the
+sender alone (after confirming, or at once with Shift):
+`bunx playwright test --config src/features/channel/Message/browser-test/playwright.config.ts`.
+The card is not itself a link, so it can hold the sender's remove button; keep
+the title as its one link.
+A send or edit response, and its realtime event, carry the previews stored
+before that write and can arrive after the `link_previews_updated` computed
+from the new text. `applyMessage` therefore keeps previews over those of a
+copy of the text they were computed from (`link_previews_content`); never
+overwrite `link_previews` from an `edited` or `posted` copy without that check.
+
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body

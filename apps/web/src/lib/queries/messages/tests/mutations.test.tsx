@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   patchThread: vi.fn(),
   post: vi.fn(),
+  removeLinkPreviews: vi.fn(),
   refreshCrmLists: vi.fn(async () => {}),
 }));
 vi.mock('../../client', () => ({
@@ -50,9 +51,14 @@ import {
   newMessageId,
   useDeleteMessageMutation,
   usePatchThreadMutation,
+  useRemoveLinkPreviewsMutation,
   useSendMessageMutation,
 } from '../mutations';
-import { handleMessageEvent, onThreadStateUpdated } from '../sync';
+import {
+  applyMessage,
+  handleMessageEvent,
+  onThreadStateUpdated,
+} from '../sync';
 import { getThreadRepliesQueryKey } from '../thread-replies';
 import {
   getMessageTimelineQueryKey,
@@ -86,6 +92,7 @@ beforeEach(() => {
   mocks.get.mockReset();
   mocks.patchThread.mockReset();
   mocks.post.mockReset();
+  mocks.removeLinkPreviews.mockReset();
   vi.mocked(toast.failure).mockClear();
   mocks.refreshCrmLists.mockClear();
   testQueryClient = new QueryClient({
@@ -935,5 +942,118 @@ describe('sending', () => {
       })
     ).rejects.toThrow();
     expect(toast.failure).toHaveBeenCalledWith('Failed to send message');
+  });
+});
+
+describe('removing link previews', () => {
+  const parent: MessageParent = { type: 'channel', id: 'channel' };
+  const previews = [{ url: 'https://example.com/post', title: 'Post' }];
+  const sent: Message = { ...message(parent, 'root'), link_previews: previews };
+
+  function seed() {
+    const root: MessageListItem = {
+      ...sent,
+      state: {
+        root_id: 'root',
+        user_id: 'macro|a@example.com',
+        resolved: false,
+        anchor: null,
+        created_at: time,
+        updated_at: time,
+      },
+      thread: { reply_count: 0, preview: [] },
+    };
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(parent),
+      {
+        pageParams: [null],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
+      }
+    );
+  }
+
+  function mount() {
+    let mutation!: ReturnType<typeof useRemoveLinkPreviewsMutation>;
+    function Harness() {
+      mutation = useRemoveLinkPreviewsMutation();
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={testQueryClient}>
+        <Harness />
+      </QueryClientProvider>
+    ));
+    return mutation;
+  }
+
+  const shown = () =>
+    testQueryClient
+      .getQueryData<MessageTimelineData>(getMessageTimelineQueryKey(parent))!
+      .pages.flatMap(timelineMessages)[0].link_previews;
+
+  it('takes the cards at once and keeps them off through an older copy of the message', async () => {
+    seed();
+    let respond!: (message: Message) => void;
+    mocks.removeLinkPreviews.mockReturnValue(
+      new Promise<Message>((resolve) => {
+        respond = resolve;
+      })
+    );
+
+    const removal = mount().mutateAsync({ parent, messageID: 'root' });
+    await waitFor(() => expect(shown()).toEqual([]));
+
+    // An edit response read before the removal still carries the previews.
+    applyMessage(sent, 'edited');
+    expect(shown()).toEqual([]);
+
+    respond({ ...sent, link_previews: [] });
+    await removal;
+    expect(mocks.removeLinkPreviews).toHaveBeenCalledExactlyOnceWith(
+      parent,
+      'root'
+    );
+    expect(shown()).toEqual([]);
+  });
+
+  it('puts the cards back when the server refuses', async () => {
+    seed();
+    mocks.removeLinkPreviews.mockRejectedValue(new Error('forbidden'));
+
+    await expect(
+      mount().mutateAsync({ parent, messageID: 'root' })
+    ).rejects.toThrow('forbidden');
+
+    expect(shown()).toEqual(previews);
+  });
+
+  it('keeps newer previews when a refused removal is undone', async () => {
+    seed();
+    let refuse!: (error: Error) => void;
+    mocks.removeLinkPreviews.mockReturnValue(
+      new Promise<Message>((_, reject) => {
+        refuse = reject;
+      })
+    );
+
+    const removal = mount().mutateAsync({ parent, messageID: 'root' });
+    await waitFor(() => expect(shown()).toEqual([]));
+
+    // The message is edited meanwhile, and its new text gets its own card.
+    const newer = [{ url: 'https://example.com/other', title: 'Other' }];
+    applyMessage(
+      { ...sent, content: 'edited text', link_previews: newer },
+      'link_previews_updated'
+    );
+    refuse(new Error('forbidden'));
+
+    await expect(removal).rejects.toThrow('forbidden');
+    expect(shown()).toEqual(newer);
   });
 });

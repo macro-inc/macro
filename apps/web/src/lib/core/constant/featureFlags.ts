@@ -1144,3 +1144,14 @@ export const enablePasswords = defineFlag({
   env: 'ENABLE_PASSWORDS',
   default: LOCAL_ONLY || undefined,
 });
+
+/**
+ * Link preview cards under channel messages, and the sender's control to
+ * remove them. The backend evaluates the same key: it computes cards for the
+ * messages of the people it is on for, and refuses removal otherwise. Follows
+ * PostHog everywhere; override locally with VITE_ENABLE_LINK_PREVIEWS=true.
+ */
+export const enableLinkPreviews = defineFlag({
+  key: 'enable-link-previews',
+  env: 'ENABLE_LINK_PREVIEWS',
+});

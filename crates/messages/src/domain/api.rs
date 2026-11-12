@@ -94,6 +94,12 @@ pub trait MessageCommands: Send + Sync + 'static {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError>;
+    /// Remove the sender's own message's link previews for everyone, for good.
+    async fn remove_link_previews(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+    ) -> Result<Message, MessageError>;
     /// Publish ephemeral typing to the authorized conversation.
     async fn typing(
         &self,
@@ -130,6 +136,29 @@ pub trait MessageCommands: Send + Sync + 'static {
         root_id: Uuid,
         nonce: Option<String>,
     ) -> Result<ThreadState, MessageError>;
+}
+
+/// Enrichment of committed messages, for trusted event consumers.
+#[async_trait::async_trait]
+pub trait MessageLinkPreviews: Send + Sync + 'static {
+    /// Recompute a message's link previews from its current content and tell
+    /// its viewers when they changed. Safe to repeat.
+    async fn refresh_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(), MessageError>;
+}
+
+#[async_trait::async_trait]
+impl<R: MessageRepository, E: MessageEventPublisher> MessageLinkPreviews for MessageService<R, E> {
+    async fn refresh_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(), MessageError> {
+        MessageService::refresh_link_previews(self, parent, id).await
+    }
 }
 
 /// Combined application boundary for adapters that need both reads and commands.
@@ -248,6 +277,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     ) -> Result<Message, MessageError> {
         MessageService::react(self, access, id, emoji, add, nonce).await
     }
+    async fn remove_link_previews(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        MessageService::remove_link_previews(self, access, id).await
+    }
     async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -360,6 +396,8 @@ mockall::mock! {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError>;
+    /// Remove the sender's own message's link previews for everyone, for good.
+    async fn remove_link_previews(&self, access: EntityAccessReceipt<MessageWrite>, id: Uuid) -> Result<Message, MessageError>;
     /// Publish ephemeral typing to the authorized conversation.
     async fn typing(
         &self,

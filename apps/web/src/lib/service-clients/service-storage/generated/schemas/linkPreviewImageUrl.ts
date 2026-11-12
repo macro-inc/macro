@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentTyping } from './agentTyping';
 
-export type MessageChangeOneOfOnethreeAgent = null | AgentTyping;
+/**
+ * The page's preview image URL, if any.
+ */
+export type LinkPreviewImageUrl = string | null;

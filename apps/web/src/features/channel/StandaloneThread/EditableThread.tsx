@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { useDeleteMessageMutation } from '@queries/messages/mutations';
+import {
+  useDeleteMessageMutation,
+  useRemoveLinkPreviewsMutation,
+} from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
@@ -31,6 +34,7 @@ function EditableThreadInner() {
     InputHandle | undefined
   >();
   const deleteMessageMutation = useDeleteMessageMutation();
+  const removeLinkPreviewsMutation = useRemoveLinkPreviewsMutation();
   const addReactionMutation = useAddReactionMutation();
   const removeReactionMutation = useRemoveReactionMutation();
   const deleteConfirmation = createDeleteMessageConfirmation(
@@ -41,6 +45,7 @@ function EditableThreadInner() {
     parent: () => ({ type: 'channel', id: ctx.channelId() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
+    removeLinkPreviews: removeLinkPreviewsMutation.mutate,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
     onReply: ({ message, selectedText, renderedText }) => {

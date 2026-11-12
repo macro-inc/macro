@@ -9,6 +9,7 @@ import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
 export type { CountedReaction } from './generated/schemas/countedReaction';
+export type { LinkPreview } from './generated/schemas/linkPreview';
 export type { MessageAttachment } from './generated/schemas/messageAttachment';
 export type { MessageParent, PostMessage, ThreadPatch };
 
@@ -30,7 +31,14 @@ export type MessageSender = {
   triggered_via?: string | null;
 };
 
-export type Message = StoredMessage & { sender?: MessageSender };
+export type Message = StoredMessage & {
+  sender?: MessageSender;
+  /**
+   * Set on the client when `link_previews` arrive on their own event: the
+   * message text they were computed from, which may be newer than `content`.
+   */
+  link_previews_content?: string;
+};
 export type MessageThread = Omit<StoredMessageThread, 'root' | 'replies'> & {
   root: Message;
   replies: Message[];
@@ -153,6 +161,12 @@ export const entityMessagesClient = {
       `${path(parent)}/items/${encodeURIComponent(id)}/reactions`,
       'POST',
       { emoji, add, nonce }
+    );
+  },
+  removeLinkPreviews(parent: MessageParent, id: string) {
+    return request<Message>(
+      `${path(parent)}/items/${encodeURIComponent(id)}/link_previews`,
+      'DELETE'
     );
   },
   patchThread(parent: MessageParent, rootId: string, patch: ThreadPatch) {

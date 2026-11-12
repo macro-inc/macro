@@ -1,5 +1,6 @@
 import type {
   CountedReaction,
+  LinkPreview,
   MessageAttachment,
   MessageParent,
   MessageSender,
@@ -31,6 +32,8 @@ export type MessageData = {
   thread_id?: string | null;
   attachments: MessageAttachment[];
   reactions: MessageReaction[];
+  /** Previews of the pages a channel message links to, filled in shortly after it is sent. */
+  link_previews?: LinkPreview[];
 };
 
 export type MessageActionEvent = MouseEvent | KeyboardEvent;
@@ -56,6 +59,8 @@ export type MessageActions = {
   onCopyMessageText?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
+  /** Remove the message's link previews for everyone; its sender's alone. */
+  onRemoveLinkPreviews?: MessageActionHandler;
   onCreateTask?: MessageActionHandler;
   onChat?: MessageActionHandler;
 };

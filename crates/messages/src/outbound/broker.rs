@@ -248,8 +248,10 @@ pub fn topic_events(event: &crate::domain::ports::MessageEvent) -> Vec<MessageMa
                 deleted_at: message.deleted_at,
             })]
         }
+        // Previews are display enrichment of a change already published.
         MessageChange::CallRootPosted { .. }
         | MessageChange::ReactionChanged { .. }
+        | MessageChange::LinkPreviewsUpdated { .. }
         | MessageChange::ThreadUpdated { .. }
         | MessageChange::Typing { .. } => Vec::new(),
     }

@@ -290,7 +290,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler
-      removeCrmPipelineEntries
+      removeCrmPipelineEntries entityMessageRemoveLinkPreviews
     `,
     added: `
       addChannelBot addParticipants addFavorite addPinHandler

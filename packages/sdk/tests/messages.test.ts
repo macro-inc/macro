@@ -201,6 +201,9 @@ describe('shared message API contracts', () => {
       if (url.pathname === `${path}/items/${rootId}/reactions`) {
         return Response.json(record);
       }
+      if (url.pathname === `${path}/items/${rootId}/link_previews`) {
+        return Response.json(record);
+      }
       return new Response(null, { status: 404 });
     });
     const client = macro();
@@ -213,16 +216,23 @@ describe('shared message API contracts', () => {
     await expect(posted.content()).resolves.toBe('Edited');
     await posted.react('👍');
     await posted.unreact('👍');
+    await posted.removeLinkPreviews();
     await posted.delete();
 
-    expect(requests.map((request) => request.method)).toEqual([
-      'POST',
-      'GET',
-      'PATCH',
-      'GET',
-      'POST',
-      'POST',
-      'DELETE',
+    expect(
+      requests.map((request) => [
+        request.method,
+        new URL(request.url).pathname.replace(path, ''),
+      ]),
+    ).toEqual([
+      ['POST', ''],
+      ['GET', `/items/${rootId}`],
+      ['PATCH', `/items/${rootId}`],
+      ['GET', `/items/${rootId}`],
+      ['POST', `/items/${rootId}/reactions`],
+      ['POST', `/items/${rootId}/reactions`],
+      ['DELETE', `/items/${rootId}/link_previews`],
+      ['DELETE', `/items/${rootId}`],
     ]);
     expect(
       requests.every(
