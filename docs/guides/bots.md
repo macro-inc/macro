@@ -77,8 +77,9 @@ const [webhook] = await bot.webhooks();
 `secret` is shown only once. POST `{ "content": "..." }` to `webhook.url` with
 the token in `x-macro-bot-token` and `x-macro-bot-scope: user`.
 
-When concurrent channel writes briefly contend, the webhook and channel message
-API return HTTP `503`, header `Retry-After: 1`, and this JSON body:
+If a channel change cannot finish its sequence append within its short database
+deadline, the webhook and channel message API return HTTP `503`, header
+`Retry-After: 1`, and this JSON body:
 
 ```json
 { "message": "channel is busy; retry the request" }
