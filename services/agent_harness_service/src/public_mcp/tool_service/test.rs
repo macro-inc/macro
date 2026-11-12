@@ -402,13 +402,13 @@ mod code_mode {
     }
 
     #[derive(Deserialize, schemars::JsonSchema)]
-    #[schemars(title = "Subagent", description = "Delegate a task.")]
-    struct Subagent {}
-    impl ToolAnnotated for Subagent {
-        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delegate a task");
+    #[schemars(title = "ManageAgentSession", description = "Manage a session.")]
+    struct ManageAgentSession {}
+    impl ToolAnnotated for ManageAgentSession {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Manage a session");
     }
     #[async_trait::async_trait]
-    impl ai_toolset::AsyncTool<()> for Subagent {
+    impl ai_toolset::AsyncTool<()> for ManageAgentSession {
         type Output = serde_json::Value;
         async fn call(
             &self,
@@ -422,9 +422,9 @@ mod code_mode {
     const DIRECT_TOOLS: [&str; 5] = [
         "EditDocument",
         "ListCalendarEvents",
+        "ManageAgentSession",
         "NameSearch",
         "ReadContent",
-        "Subagent",
     ];
     const CHATGPT_TOOLS: [&str; 4] = [
         "EditDocument",
@@ -440,7 +440,7 @@ mod code_mode {
                 .add_tool::<ReadContent, ()>()
                 .add_tool::<EditDocument, ()>()
                 .add_tool::<ListCalendarEvents, ()>()
-                .add_tool::<Subagent, ()>(),
+                .add_tool::<ManageAgentSession, ()>(),
         )
     }
 
@@ -577,7 +577,7 @@ mod code_mode {
             USER,
             mcp_client("ChatGPT"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "ManageAgentSession", "arguments": {}}),
         )
         .await;
         assert!(
@@ -592,7 +592,7 @@ mod code_mode {
             USER,
             mcp_client("Claude"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "ManageAgentSession", "arguments": {}}),
         )
         .await;
         assert!(other.get("error").is_none(), "{other}");
