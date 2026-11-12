@@ -1,0 +1,34 @@
+.agents/skills/run-ci/SKILL.md
+  s_17d61e2f251d32::t_3cb6f96770f258 66
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/ci_gate.ts
+  s_17d61e2f251d32::t_84b6f0bb37ac49 51,59-62,269-271,276-289,522,544,574-579,591-597,605-615,621-631
+.github/workflows/ci-gate-reminder.yml
+  s_17d61e2f251d32::t_3cb6f96770f258 74,82-85,292-294,299-312,545,567,597-602,614-620,628-638,644-654
+.github/workflows/ci-gate-fork.yml
+  s_17d61e2f251d32::t_3cb6f96770f258 80,88-91,298-300,305-318,551,573,603-608,620-626,634-644,650-660,777,785-788,995-997,1002-1015,1248,1270,1300-1305,1317-1323,1331-1341,1347-1357
+.github/workflows/ci-gate-sweep.yml
+  s_17d61e2f251d32::t_3cb6f96770f258 73,81-84,291-293,298-311,544,566,596-601,613-619,627-637,643-653
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/ci_gate.test.ts
+  s_17d61e2f251d32::t_84b6f0bb37ac49 18,22-23,238-243,267,270,274-280,343-344,346,353-382
+  s_17d61e2f251d32::t_fe13bc748a3fd7 383
+.github/workflows/ci-gate-label.yml
+  s_17d61e2f251d32::t_3cb6f96770f258 75,83-86,293-295,300-313,546,568,598-603,615-621,629-639,645-655
+.github/workflows/pr-ci.yml
+  s_17d61e2f251d32::t_3cb6f96770f258 84,92-95,302-304,309-322,555,577,607-612,624-630,638-648,654-664,938,946-949,1156-1158,1163-1176,1409,1431,1461-1466,1478-1484,1492-1502,1508-1518
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3596d04217f5d9e3d57ef3200f5a55588f4a8a33",
+  "prompts": {},
+  "sessions": {
+    "s_17d61e2f251d32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d9bf6d10-a996-4fd0-93a1-a23330860332",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
