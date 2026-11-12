@@ -3,18 +3,23 @@
 ## What it is
 
 Part of AI: assembles every domain crate's AI tool implementations into
-the one `AsyncToolCollection` every AI surface (chat, agent sessions, MCP)
-calls through, plus the cross-cutting tools (search, deferred
-execution, display) that don't belong to a single domain.
+the `AsyncToolCollection`s the AI surfaces call through, plus the
+cross-cutting tools (search, deferred execution, display) that don't belong
+to a single domain. The direct hosts (`AiHost`: chat, the channel bot, MCP)
+get `tools_for`; agent sessions run code mode and get
+`tools_for_agent_code_mode`, only the native tools a program cannot replace
+through the Macro SDK, each justified on that function. `code_mode_tools` is
+the `SendEmail`/`CreateCalendarEvent` user tools a code-mode review runs by
+name once approved; no model sees it.
 
 ## Start here
 
 - `src/lib.rs`: the composition point — imports each domain crate's
   `inbound::toolset` module and builds the combined `AsyncToolCollection`
   and frontend schema set.
-- `ReadAgentSession` is eager across chat, agent sessions, and MCP, and is also
-  in the base toolset every host and memory research share; keep its
-  registration covered by the host tests.
+- `ReadAgentSession` is eager on chat and the channel bot, registered on MCP,
+  and is also in the base toolset every direct host and memory research
+  share; keep its registration covered by the host tests.
 - `src/search.rs` / `src/search_tools.rs`: cross-entity search tools.
 - `src/deferred.rs`: tools whose result arrives after the turn (long-running
   work).
@@ -48,7 +53,10 @@ execution, display) that don't belong to a single domain.
 - `Subagent` was removed: it was a one-shot completion with no tools. Its
   schema survives only as `schemas::subagent`, so saved chats still render.
   `ReadActivity` was removed the same way (`macro.activity.mine()` covers it);
-  its schema survives as `schemas::read_activity`.
+  its schema survives as `schemas::read_activity`. `DiscoverConnectors`, which
+  only agent sessions had, went when they moved to code mode
+  (`macro.connectedApps.discover`); its schema survives as
+  `schemas::discover_connectors`.
 - Not here: a domain's own tools — those live in that domain crate's
   `inbound::toolset` (e.g. `forms`, `agent_session`) and are
   only wired in here.

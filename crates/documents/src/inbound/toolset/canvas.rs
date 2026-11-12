@@ -103,7 +103,7 @@ where
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "RenderCanvas",
-    description = "See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas for exact geometry."
+    description = "See a read-only PNG photo of a Macro canvas using the actual Canvas shape/text renderer. Returns a native image plus an immutable revision, source clock, world crop bounds and object IDs. Use for visual/layout understanding and to review edits. Optional item_ids fit a selection; crop requests precise world bounds. No UI, cursors or ghosts are included. Referenced media not accessible to this scoped renderer is explicitly marked unavailable; this tool never fetches arbitrary URLs or expands reference permissions. Image pixels map linearly across crop bounds; use ReadCanvas (canvas().scene() in ExecuteCode) for exact geometry."
 )]
 pub struct RenderCanvas {
     /// Canvas document ID from the attachment or search.

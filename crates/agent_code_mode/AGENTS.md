@@ -52,8 +52,8 @@ stacks. Process isolation belongs to
   reach the sandbox. In a turn someone other than the owner prompted, each
   call spending the owner's access is held for the owner's approval
   (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
-  and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
-  the native tool gate, so both tools are in `covered_by_code_sdk`.
+  and `servers` do what `DiscoverConnectors` and `ConnectMcpServer` did, and
+  pass the native tool gate under those names.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab

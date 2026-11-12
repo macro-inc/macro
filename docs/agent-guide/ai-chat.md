@@ -63,9 +63,11 @@ load, and a turn stopped before the agent said anything show no time.
 
 ## Connecting an app from an agent session
 
-When existing tools cannot handle a request, agent sessions can use
-`DiscoverConnectors` to search Pipedream by app name and inspect an app's actual
-tool list. Expand the discovery row to see the results. An app name alone does
+When existing tools cannot handle a request, agent sessions search Pipedream by
+app name and inspect an app's actual tool list through code
+(`macro.connectedApps.discover` in an `ExecuteCode` step). Expand the step to
+see the results. Sessions from before code mode show a `DiscoverConnectors`
+row instead. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking

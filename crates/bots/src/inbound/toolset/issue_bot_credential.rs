@@ -35,7 +35,7 @@ pub struct IssueBotCredentialResponse {
 )]
 pub struct IssueBotCredential {
     /// Bot to issue a credential for.
-    #[schemars(description = "Bot id from CreateBot or ListBots.")]
+    #[schemars(description = "Bot id from CreateBot or ListBots (macro.bots.list() in ExecuteCode).")]
     pub bot_id: Uuid,
     /// Optional identifying label.
     #[schemars(

@@ -100,8 +100,8 @@ enforced by the ordinary backend APIs.
   agent was given; `app.tools()` and `tool.call(args)` go through the harness,
   which stamps the credential and holds each owner-account call in a turn
   someone else prompted for the owner's approval. `discover(execution, name)`
-  and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
-  `ConnectMcpServer`. Only works inside a running execution.
+  and `Connector.inspect()` do what the removed `DiscoverConnectors` tool did;
+  `addServer` mirrors `ConnectMcpServer`. Only works inside a running execution.
 - `src/entities/ui/`: `macro.ui.open(execution, item)` opens an item (a handle
   with `webUrl()`, or `macro.ui.link(url)`, which refuses non-Macro links) in a
   new pane of the tab the user prompted from, through the harness's

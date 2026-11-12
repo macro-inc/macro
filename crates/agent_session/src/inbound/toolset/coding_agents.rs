@@ -50,7 +50,7 @@ pub struct ListCodingAgentsResponse {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ListAgentUpdates",
-    description = "List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt. To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession."
+    description = "List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt (macro.agentSessions.byId(id).prompt() in ExecuteCode). To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession (macro.search and the session's log() in ExecuteCode)."
 )]
 pub struct ListAgentUpdates {}
 
