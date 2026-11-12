@@ -52,6 +52,13 @@ Pulumi stacks; they do not host extra agent processes.
   (more are dropped) and each user's team is cached for 10 minutes.
 - `src/cognition/`: existing chat, completions, integrations, and projection
   workers; the library also exports their OpenAPI document.
+  The database assistant (`toolset: databases`) runs code mode for users
+  with the `ai-db-assistant-code-mode` PostHog flag
+  (`src/cognition/api/tool_selection.rs`): the user code-mode tools on the
+  public MCP's execution budget, attributed to the Macro bot; a flagged
+  request where the harness cannot run code fails. Document answers
+  (`databases_read_only`) stay on the direct tools, whose access is capped
+  at view.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.

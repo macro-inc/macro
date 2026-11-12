@@ -648,16 +648,6 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
-    let cognition_runtime = agent_harness_service::cognition::build(
-        agent_harness_service::cognition::config::Config::from_env()?,
-        pool.clone(),
-        event_broker_tracker.clone(),
-        import_jobs.clone(),
-        mcp_http,
-    )
-    .await
-    .context("failed to compose cognition APIs")?;
-    let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -793,6 +783,29 @@ async fn run() -> anyhow::Result<()> {
         }),
         None => None,
     };
+    // `ai-db-assistant-code-mode` decides, per user, whether the database
+    // assistant runs code mode, on the public MCP's user code execution.
+    let cognition_runtime = agent_harness_service::cognition::build(
+        agent_harness_service::cognition::config::Config::from_env()?,
+        pool.clone(),
+        event_broker_tracker.clone(),
+        import_jobs.clone(),
+        mcp_http,
+        agent_harness_service::cognition::DatabaseAssistantCodeMode {
+            policy: match &feature_flags {
+                Some(flags) => Arc::new(
+                    agent_harness_service::cognition::FlaggedDatabaseCodeMode::new(flags.clone()),
+                ),
+                None => Arc::new(agent_harness_service::cognition::DirectDatabaseTools),
+            },
+            service: public_code_mode
+                .as_ref()
+                .map(|code_mode| Arc::clone(&code_mode.service)),
+        },
+    )
+    .await
+    .context("failed to compose cognition APIs")?;
+    let cognition_router = cognition_runtime.router.clone();
     let public_mcp_router = public_mcp::router(
         &config,
         &secrets,

@@ -1,6 +1,6 @@
 //! Small execution receipts from the agent stream, never inferred from model text.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use agent::types::AssistantMessagePart;
@@ -115,8 +115,14 @@ enum ReceiptStatement {
     Schema,
 }
 
+/// The code-mode database assistant's program runner.
+const EXECUTE_CODE: &str = "ExecuteCode";
+
 fn database_change(name: &str, response: &serde_json::Value) -> DatabaseChange {
     let tools = database_tools();
+    if name == EXECUTE_CODE {
+        return program_change(response);
+    }
     if name == tools.query_database {
         return query_database_change(response);
     }
@@ -127,6 +133,37 @@ fn database_change(name: &str, response: &serde_json::Value) -> DatabaseChange {
     match tools.kinds.get(name) {
         None | Some(ToolKind::ReadOnly) => DatabaseChange::None,
         Some(ToolKind::Additive | ToolKind::Destructive) => DatabaseChange::Schema,
+    }
+}
+
+/// Labels of the SDK operations that can write.
+static WRITE_LABELS: LazyLock<BTreeSet<&'static str>> = LazyLock::new(|| {
+    code_execution::domain::operations()
+        .values()
+        .filter(|operation| operation.write)
+        .map(|operation| operation.label.as_str())
+        .collect()
+});
+
+/// A program's receipt names its SDK operations but not what they changed,
+/// so a write that may have run counts as a schema change, the broadest one.
+fn program_change(response: &serde_json::Value) -> DatabaseChange {
+    let receipt = match agent_code_mode::domain::UserExecutionReceipt::deserialize(response) {
+        Ok(receipt) => receipt,
+        Err(error) => {
+            tracing::error!(error = ?error, "ExecuteCode response is not a receipt");
+            return DatabaseChange::Schema;
+        }
+    };
+    let wrote = receipt.activity_truncated
+        || receipt.activity.iter().any(|call| {
+            call.status != agent_code_mode::domain::RecordedCallStatus::Failed
+                && WRITE_LABELS.contains(call.label.as_str())
+        });
+    if wrote {
+        DatabaseChange::Schema
+    } else {
+        DatabaseChange::None
     }
 }
 

@@ -1,5 +1,7 @@
 use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
-use crate::cognition::api::tool_selection::{service_tools, structured_completion_prompt};
+use crate::cognition::api::tool_selection::{
+    ResolvedTools, service_tools, structured_completion_prompt,
+};
 use crate::cognition::model::stream::ToolSet;
 use crate::cognition::service::structured_completion::{ToolFreeCompletionError, ToolFreeRequest};
 use agent::structured_output::{CompletionThinking, DynamicSchema};
@@ -129,9 +131,19 @@ pub async fn structured_completion(
             code: Some(error.code().to_string()),
         })?;
 
-    if matches!(request.toolset, ToolSet::None) {
+    let selection = ctx
+        .database_code_mode
+        .resolve(&request.toolset, &user_id)
+        .await
+        .map_err(|error| StructuredCompletionError {
+            error: error.to_string(),
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            code: None,
+        })?;
+
+    if matches!(selection, ResolvedTools::None) {
         let system_prompt = structured_completion_prompt(
-            &request.toolset,
+            &selection,
             &*ctx.all_tools_prompt,
             request.additional_instructions.as_deref(),
             &[],
@@ -166,7 +178,7 @@ pub async fn structured_completion(
 
     // Tool-enabled requests retain their discovery and final formatting phases.
     let toolset = service_tools(
-        &request.toolset,
+        &selection,
         ctx.all_tools.clone(),
         &ctx.mcp_selector,
         &user_id,
@@ -176,7 +188,7 @@ pub async fn structured_completion(
     // Both phases need the registered tools' reference, including SQL syntax.
     // The formatter has no executable tools of its own.
     let system_prompt = structured_completion_prompt(
-        &request.toolset,
+        &selection,
         &*ctx.all_tools_prompt,
         request.additional_instructions.as_deref(),
         &toolset.request_schemas().unwrap_or_default(),

@@ -188,6 +188,8 @@ pub struct ApiContext {
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
     pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
+    /// Whether the database assistant runs code mode, and on what.
+    pub database_code_mode: Arc<crate::cognition::api::tool_selection::DatabaseCodeMode>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.

@@ -198,3 +198,47 @@ fn sql_schema_receipts_are_decoded_and_report_schema_activity() {
     assert!(matches!(receipt.statement, ReceiptStatement::Schema));
     assert_eq!(query_database_change(&json), DatabaseChange::Schema);
 }
+
+#[test]
+fn a_program_that_may_have_written_reports_a_change() {
+    let operations = code_execution::domain::operations();
+    let write = &operations.values().find(|op| op.write).unwrap().label;
+    let read = &operations
+        .values()
+        .find(|op| !op.write && !WRITE_LABELS.contains(op.label.as_str()))
+        .unwrap()
+        .label;
+    let receipt = |label: &str, status: &str, truncated: bool| {
+        json!({
+            "status": "succeeded",
+            "activity": [{"id": 1, "label": label, "status": status}],
+            "activityTruncated": truncated,
+            "result": null,
+            "error": null,
+        })
+    };
+    assert_eq!(
+        database_change(EXECUTE_CODE, &receipt(write, "completed", false)),
+        DatabaseChange::Schema
+    );
+    assert_eq!(
+        database_change(EXECUTE_CODE, &receipt(write, "unknown", false)),
+        DatabaseChange::Schema
+    );
+    assert_eq!(
+        database_change(EXECUTE_CODE, &receipt(write, "failed", false)),
+        DatabaseChange::None
+    );
+    assert_eq!(
+        database_change(EXECUTE_CODE, &receipt(read, "completed", false)),
+        DatabaseChange::None
+    );
+    assert_eq!(
+        database_change(EXECUTE_CODE, &receipt(read, "completed", true)),
+        DatabaseChange::Schema
+    );
+    assert_eq!(
+        database_change(EXECUTE_CODE, &json!({"unexpected": true})),
+        DatabaseChange::Schema
+    );
+}

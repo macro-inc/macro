@@ -1,6 +1,9 @@
 //! The service's composition root: reads config and wires every adapter and
 //! domain service into the HTTP server.
 
+use crate::cognition::api::tool_selection::{
+    DatabaseCodeMode, DatabaseCodeModePolicy, DatabaseCodeSurface,
+};
 use crate::cognition::{
     api::{self, context::ApiContext},
     config::{Config, Environment},
@@ -92,18 +95,28 @@ impl CognitionRuntime {
     }
 }
 
+/// The database assistant's code-mode flag and the execution it runs on.
+pub struct DatabaseAssistantCodeMode {
+    /// Whether a user's database assistant runs code mode.
+    pub policy: Arc<dyn DatabaseCodeModePolicy>,
+    /// User-scoped code execution; absent where the harness cannot run code.
+    pub service: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>>,
+}
+
 /// Compose chat, completions, integrations, and workers in the harness process.
 ///
 /// `import_jobs` are the harness's import jobs: this runtime's Notion imports
 /// and the stalled-import sweeper run on them, and the harness hands them
 /// over on shutdown. `mcp_http` is the harness's guarded client for users'
-/// own MCP servers.
+/// own MCP servers. `database_assistant` decides, per user, whether the
+/// database assistant runs code mode, on the harness's user code execution.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
     mcp_http: mcp_client::outbound::guarded_http::McpHttp,
+    database_assistant: DatabaseAssistantCodeMode,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -1131,6 +1144,15 @@ pub async fn build(
             cancellation.clone(),
         )?;
     }
+    let database_code_mode = DatabaseCodeMode::new(
+        database_assistant.policy,
+        database_assistant.service.map(|service| {
+            DatabaseCodeSurface::new(
+                service,
+                tool_service_context.cognition_tool_context.service.clone(),
+            )
+        }),
+    );
     let router = api::build_router(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -1176,6 +1198,7 @@ pub async fn build(
         pipedream_state,
         granola_sync,
         mcp_selector,
+        database_code_mode: Arc::new(database_code_mode),
         import_service,
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),

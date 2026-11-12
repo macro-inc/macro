@@ -833,6 +833,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             authorization_state.clone(),
         ),
         mcp_selector,
+        database_code_mode: Arc::new(
+            crate::cognition::api::tool_selection::DatabaseCodeMode::direct(),
+        ),
         mcp_state: {
             let redis_client =
                 Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));

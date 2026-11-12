@@ -3,7 +3,7 @@ use super::util::chat_message::ai_request::build_chat_messages;
 use super::util::chat_message::{store_conversation_messages, store_incoming_message};
 use super::util::chat_permissions;
 use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
-use crate::cognition::api::tool_selection::choose_tools_prompt;
+use crate::cognition::api::tool_selection::{ResolvedTools, choose_tools_prompt};
 use crate::cognition::api::utils::log;
 use crate::cognition::core::constants::DEFAULT_CHAT_NAME;
 use crate::cognition::model::stream::{
@@ -256,6 +256,16 @@ async fn send_chat_message_inner(
             status: Some(admission_status(error)),
             code: Some(error.code().to_string()),
         })?;
+    let selection = ctx
+        .database_code_mode
+        .resolve(&request.toolset, &user_id)
+        .await
+        .map_err(|error| ChatMessageError {
+            error: error.to_string(),
+            stream_id: Some(stream_id.clone()),
+            status: Some(StatusCode::SERVICE_UNAVAILABLE),
+            code: None,
+        })?;
 
     let (chat, actual_chat_id, created_new_chat) = match existing_chat {
         Some(chat) => (chat, requested_chat_id, false),
@@ -325,7 +335,7 @@ async fn send_chat_message_inner(
         .flatten();
 
     // Build the chat messages
-    let tools_prompt = choose_tools_prompt(&payload.toolset, &*ctx.all_tools_prompt);
+    let tools_prompt = choose_tools_prompt(&selection, &*ctx.all_tools_prompt);
     let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
         tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {
@@ -370,7 +380,7 @@ async fn send_chat_message_inner(
         ctx.clone(),
         ai_request,
         system_prompt,
-        request.toolset.clone(),
+        selection,
         (*user_id).clone(),
         jwt_token,
         actual_chat_id.clone(),
@@ -522,12 +532,12 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
 /// Creates a payload stream, publishes it via `from_async_stream`, and stores
 /// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
-#[tracing::instrument(skip(ctx, request, user_message_content, cancellation_sub))]
+#[tracing::instrument(skip(ctx, request, tool_selection, user_message_content, cancellation_sub))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: Vec<ChatMessage>,
     system_prompt: String,
-    tool_selection: ToolSet,
+    tool_selection: ResolvedTools,
     user_id: MacroUserIdStr<'static>,
     jwt_token: String,
     chat_id: String,
