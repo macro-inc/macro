@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import calls from './en/calls';
@@ -12,11 +13,13 @@ import common from './en/common';
 import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
+import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
@@ -33,6 +36,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentNavigation,
   accountManager,
   agentSetup,
   agentWork,
@@ -46,11 +50,13 @@ export default {
   computers,
   create,
   crm,
+  emailViews,
   entityActions,
   localRuntime,
   mobile,
   nav,
   notificationsInbox,
+  routineSuggestions,
   settingsBilling,
   runtimeSharing,
   settingsLanguage,

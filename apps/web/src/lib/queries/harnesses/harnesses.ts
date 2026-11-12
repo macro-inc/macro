@@ -60,11 +60,6 @@ const harnessDirectoryQueryOptions = queryOptions({
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnessDirectory()),
   staleTime: 15_000,
-  refetchInterval: (query) =>
-    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
-      ? false
-      : 15_000,
-  refetchIntervalInBackground: false,
   reconcile: 'id',
   throwOnError: false,
 });

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemProration, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
-    SubscriptionTerms,
+    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
+    ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionItemView, SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -147,6 +147,62 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         proration: ItemProration,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Create a price of its own for one computer, a copy of `base` (same
+    /// product, amount, currency and interval) carrying `computer_id` in its
+    /// metadata. A subscription cannot hold two items of one price, so each
+    /// computer's item bills its own price. Idempotent by `idempotency_key`.
+    fn create_computer_price(
+        &self,
+        base: &stripe::PriceId,
+        computer_id: &str,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<stripe::PriceId, CustomerError>> + Send;
+
+    /// Add one item of `computer_price` carrying `computer_id` in its
+    /// metadata, plus `extra` quantity changes, in ONE update billed as
+    /// `proration` says, like [`Self::change_item_quantities`].
+    fn add_computer_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        computer_price: &stripe::PriceId,
+        computer_id: &str,
+        extra: Vec<ItemQuantityChange>,
+        proration: ItemProration,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Remove one item without proration. An item already gone is
+    /// [`ItemRemoval::AlreadyGone`].
+    fn remove_subscription_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        item_id: &stripe::SubscriptionItemId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<ItemRemoval, CustomerError>> + Send;
+
+    /// Every item on the subscription, all pages.
+    fn subscription_items(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<Vec<SubscriptionItemView>, CustomerError>> + Send;
+
+    /// End an item change whose outcome stayed unknown: if it reached the
+    /// subscription it is [`ItemChangeSettlement::Applied`]; otherwise its
+    /// receipt is abandoned so no later replay can send it. With no receipt
+    /// yet, an abandoned one is written on `fence` (under its guard), so a
+    /// send still on its way can never charge later.
+    fn settle_item_change(
+        &self,
+        idempotency_key: &str,
+        fence: Option<&stripe::SubscriptionId>,
+    ) -> impl Future<Output = Result<ItemChangeSettlement, CustomerError>> + Send;
+
+    /// Where the change keyed `idempotency_key` stands; `None` when it was never sent.
+    fn item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ItemChangeStatus>, CustomerError>> + Send;
 
     /// The subscription's current period end, interval and currency.
     fn subscription_terms(

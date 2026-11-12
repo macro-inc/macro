@@ -44,13 +44,18 @@ function createDialogLifetime(props: Scope, ownerId?: string) {
 export function SavedViewDialog(
   props: Scope & {
     summary?: JSX.Element;
+    hint?: JSX.Element;
+    fields?: JSX.Element;
+    invalid?: boolean;
     team?: { id: string; name: string };
     title?: string;
     submitLabel?: string;
     onSaved: (record: SavedView) => void;
   } & (
       | { mode: 'create'; id: string; name: string; config: unknown }
-      | { mode: 'edit'; record: SavedView }
+      // Edit renames and shares; a consumer that edits filters too passes
+      // the replacement configuration, read when the form submits.
+      | { mode: 'edit'; record: SavedView; config?: unknown }
     )
 ) {
   const lifetime = createDialogLifetime(
@@ -67,7 +72,7 @@ export function SavedViewDialog(
       const result = await update.mutateAsync({
         id: props.record.id,
         name,
-        config: props.record.config,
+        config: props.config ?? props.record.config,
         expectedRevision: props.record.revision,
         sharedTeamId:
           sharedTeamId === props.record.sharedTeamId ? undefined : sharedTeamId,
@@ -121,6 +126,8 @@ export function SavedViewDialog(
 export function DeleteSavedViewDialog(
   props: Scope & {
     record: SavedView;
+    /** What deleting affects, in the consumer's terms. */
+    description?: string;
     onDeleted: (record: SavedView, viewer: string) => void;
   }
 ) {

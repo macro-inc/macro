@@ -75,6 +75,7 @@ impl Modify for SecurityAddon {
         agent_session::inbound::axum_router::activity::get_agent_session_activity,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::present_view,
+        agent_code_mode::inbound::axum_router::open_in_app,
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
@@ -135,7 +136,6 @@ impl Modify for SecurityAddon {
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
         crate::computers::claude::claude_sign_in_complete_handler,
-        crate::computers::claude::claude_sign_in_cancel_handler,
         crate::computers::claude::claude_sign_out_handler,
         crate::computers::claude::claude_mode_handler,
     ),
@@ -220,6 +220,7 @@ impl Modify for SecurityAddon {
         crate::computers::claude::ClaudeSignInComplete,
         crate::computers::claude::ClaudeSignedIn,
         crate::computers::claude::ClaudeModeResponse,
+        crate::computers::claude::ClaudeAccountStatus,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

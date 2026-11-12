@@ -569,7 +569,10 @@ async fn a_dialed_runtime_is_initialized_once_and_lists_every_page_of_its_sessio
         listing
             .await
             .expect("list task")
-            .expect("the runtime listed"),
+            .expect("the runtime listed")
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
     // Sessions binding afterwards reuse this handshake instead of sending
@@ -661,7 +664,9 @@ async fn a_handshake_a_session_runs_is_reused_for_listing() {
         .tx
         .send(answer(
             &list,
-            serde_json::json!({"sessions": [{"sessionId": "acp-1", "cwd": "/srv"}]}),
+            serde_json::json!({"sessions": [
+                {"sessionId": "acp-1", "cwd": "/srv", "updatedAt": "2026-11-10T17:05:00Z"},
+            ]}),
         ))
         .expect("list answer should send");
     assert_eq!(
@@ -669,7 +674,14 @@ async fn a_handshake_a_session_runs_is_reused_for_listing() {
             .await
             .expect("list task")
             .expect("the runtime listed"),
-        [SessionId::from("acp-1")]
+        [ListedSession {
+            id: SessionId::from("acp-1"),
+            updated_at: Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-10T17:05:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            ),
+        }]
     );
 }
 
@@ -717,39 +729,4 @@ async fn a_closed_connection_ends_the_listing() {
         listing.await.expect("list task"),
         Err(ListSessionsError::Closed)
     ));
-}
-
-#[tokio::test]
-async fn computer_commands_are_correlated_outside_session_traffic() {
-    let (carrier, mut runtime) = Channel::duplex();
-    let connection = RuntimeConnection::connect(carrier);
-    let command = connection.computer_control(ComputerCommand::ClaudeSignOut);
-    tokio::pin!(command);
-    tokio::select! {
-        result = &mut command => panic!("answered before sending: {result:?}"),
-        request = runtime.rx.recv() => {
-            let ToRuntimeMessage::ComputerControl { request_id, command, .. } = request.unwrap() else {
-                panic!("expected computer control");
-            };
-            assert_eq!(command, ComputerCommand::ClaudeSignOut);
-            runtime.tx.send(ToServerMessage::ComputerControlResponse {
-                request_id,
-                result: ComputerControlResult::SignedOut,
-            }).unwrap();
-        }
-    }
-    assert_eq!(command.await.unwrap(), ComputerControlResult::SignedOut);
-    assert!(connection.computer_answers.is_empty());
-}
-
-#[tokio::test(start_paused = true)]
-async fn timed_out_computer_commands_remove_their_waiters() {
-    let connection = RuntimeConnection::connect(SilentSocket);
-    let result = tokio::time::timeout(
-        Duration::from_secs(1),
-        connection.computer_control(ComputerCommand::ClaudeSignInStart),
-    )
-    .await;
-    assert!(result.is_err());
-    assert!(connection.computer_answers.is_empty());
 }

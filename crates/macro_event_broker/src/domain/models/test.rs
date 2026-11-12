@@ -293,19 +293,36 @@ fn rejects_an_unsupported_schema_version() {
 #[tokio::test]
 async fn envelope_round_trip_preserves_correlation_and_legacy_events_default_to_none() {
     let id = Uuid::now_v7();
-    let event = agent_correlation::context::scope(Some(id), async { example_event() }).await;
+    let event = agent_correlation::context::scope_with_verb(
+        Some(id),
+        Some(agent_correlation::AgentVerb::Edited),
+        async { example_event() },
+    )
+    .await;
     let decoded: Event<ExampleTopicEvent> =
         serde_json::from_slice(&serde_json::to_vec(&event).unwrap()).unwrap();
     assert_eq!(decoded.agent_correlation_id, Some(id));
+    assert_eq!(decoded.agent_verb.as_deref(), Some("edited"));
+    let mut future = serde_json::to_value(&decoded).unwrap();
+    future["agent_verb"] = serde_json::json!("future_verb");
+    let future: Event<ExampleTopicEvent> = serde_json::from_value(future).unwrap();
+    assert_eq!(future.agent_verb.as_deref(), Some("future_verb"));
     let mut legacy = serde_json::to_value(event).unwrap();
     legacy
         .as_object_mut()
         .unwrap()
         .remove("agent_correlation_id");
+    legacy.as_object_mut().unwrap().remove("agent_verb");
+    assert_eq!(
+        serde_json::from_value::<Event<ExampleTopicEvent>>(legacy.clone())
+            .unwrap()
+            .agent_correlation_id,
+        None
+    );
     assert_eq!(
         serde_json::from_value::<Event<ExampleTopicEvent>>(legacy)
             .unwrap()
-            .agent_correlation_id,
+            .agent_verb,
         None
     );
 }
@@ -316,6 +333,7 @@ async fn event_built_for_a_routine_run_carries_its_routine() {
     let attribution = agent_correlation::context::Attribution {
         correlation_id: None,
         routine_id: Some(routine_id),
+        verb: None,
     };
 
     let event =

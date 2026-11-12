@@ -52,33 +52,47 @@ key issuance, and account merge/link flows.
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
 - Signup-policy changes specifically:
-  `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
-  and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+  `cargo test -p authentication_service --lib config::test` (the lib's
+  test-only queries need a live `DATABASE_URL`) and
+  `cargo run -p authentication_service --bin authentication_service_doppler_config`.
 
 ## Macro computers billing
 
-Team computer purchase, quote and offers use the shared fail-closed
+Team computer purchase and offers use the shared fail-closed
 `enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
-it from the existing PostHog provider. Existing management and internal APIs keep
-their authorization policy. Every computer HTTP use case also requires a fresh
+it from the existing PostHog provider. Existing management keeps its authorization
+policy. Every computer HTTP use case also requires a fresh
 host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
 effects when detached. The five-minute freshness policy belongs to hosted runtimes;
 authentication has no fleet selector or startup availability latch. Pure catalog
 access, webhook reconciliation and billing workers remain independent of attachment.
 
 - `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
-  `hosted_runtimes` `Billing` port on the team subscription (one item per
-  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
-  subscription's interval). Prices are `ComputerPrices`
-  (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
-  receipts before applying changes. Purchase snapshots the quoted price id;
-  retries and removal use that saved id rather than resolving current prices.
-- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
-- Every team subscription webhook re-reads the complete subscription and reports
-  item quantities by price id to `ComputerBillingObserver` (`ComputerService`).
-  Reconcile against each row's saved price id, including prices no longer in
-  configuration; cancel newest excess computers per price. Ignore partial
-  subscription snapshots. Observer failures are logged, never fail the webhook.
+  `hosted_runtimes` `Billing` port on the team subscription. Each computer
+  bills ONE item at a price of its own, copied from
+  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` (chosen by
+  the subscription's interval) and tagged with `computer_id` metadata; the
+  purchase's Stripe idempotency key is `computer-add:{reservation id}`.
+  Prices are `ComputerPrices` (`src/domain/computer_billing.rs`), not seat
+  plans. Replay durable item-change receipts before applying changes;
+  `settle_computer_add` ends an unknown outcome for good (fencing a charge
+  never sent); `charge_status` reads a key's receipt. Removing an item already
+  gone, or from a deleted team, succeeds.
+- With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- Every team subscription webhook re-reads the complete subscription (all item
+  pages) and only reports a `SubscriptionObserved` (status, items with their
+  `computer_id`, period end, read time) to `ComputerBillingObserver`
+  (`ComputerService::observe_subscription`), which decides per computer by
+  computer id, never by price or count. A failed read or observer call fails
+  the webhook (after the subscription work), so Stripe redelivers it.
+- Computer billing work (effects and purchase confirmation) runs on its own
+  `TaskTracker` (`computer_billing`), drained at shutdown.
+- Team deletion releases the team's computers first through
+  `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
+  `hosted_runtimes`' `TeamComputerRelease` (needs only the repository).
+- `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` default to 14
+  and 7 (`Config::computer_billing_policy`, zero refused); agent_harness_service
+  reads the same keys with the same defaults.
 
 ## Subscription billing status
 
@@ -90,7 +104,7 @@ Computer billing facts retain canonical `ComputerId` and `ComputerName` until
 the response renderer emits their UUID and string wire values.
 Match provider items to recorded computer IDs or price IDs and label them from
 the stored catalog entry and resources. Never infer an existing computer size
-from the current price table; unlinked legacy charges remain generic Computer rows.
+from the current price table.
 Every member seat is a human seat row. Comped computers appear as
 zero rows, and unmatched or ambiguous provider quantities remain `other` rather
 than invented per-account charges. Unsupported interval/price shapes have no
@@ -98,6 +112,19 @@ breakdown. Amounts preserve Stripe wire currency units, including its currency
 exceptions; clients must use provider currency scaling. The recurring subtotal
 excludes invoice adjustments; `nextInvoice.amount` is the actual provider amount
 due and its date is absent when the provider supplies no payment/due date.
+
+## Profile pictures
+
+- `PUT /user/profile_picture` and `PUT /user/profile_picture/file` share
+  `src/api/user/profile_picture_change.rs`: throttle to 1/sec/user (key
+  `profile-picture-set`, 429), then publish `user.picture_changed`
+  (`user_events`, topic `macro.users`) through `ApiContext::event_broker`
+  after the DB write. `file_id` is set only on the file route; an empty url
+  means removed (both `None`). A publish failure logs a warn and never fails
+  the request. The 20/hour upload reservation limit is separate.
+- `POST /user/profile_pictures` accepts API keys (`UserOrInternal`) and
+  returns each picture's `url`; the SDK derives the file id from
+  `<static>/file/<id>`.
 
 ## Subscription checkout
 
@@ -171,6 +198,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `FusionAuthClientError` whose `upstream()` is set with that error's
   `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
   route's `utoipa::path`.
+- Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
+
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
@@ -188,9 +217,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.
-- The signup allowlist has a temporary Develop-only bypass
-  (`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST`) that overrides the allowlist even
-  when present; see `README.md` before changing signup behavior.
+- Develop admits new accounts only for `@macro.com` and allowlisted addresses;
+  `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST=true` opens it to everyone. See
+  `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
 - New Outlook connections need the deployment switch
@@ -218,11 +247,30 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   works (`needs_reauth` false); the refusal stands either way. Mirrors
   Outlook's required-scope check in `src/domain/microsoft.rs`; Macro has no
   mailbox-less link for either provider.
-- `/oauth/redirect` without a code answers "Sign-in failed" and logs
-  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+- `/oauth/redirect` without a code logs `auth_handoff_failure=missing_code`
+  with FusionAuth's error. When the state names an allowed `original_url`, it
+  sends the browser back there with `sso_error` (`admin_consent_required`,
+  `cancelled`, `failed`), and the sign-in page opens on email-code sign-up;
+  otherwise it answers "Sign-in failed". `invalid_origin`
   ("Invalid origin uri <origin>") means the page that sent the browser to
   FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
-  these failures carry no user id.
+  these failures carry no user id. When the identity provider itself returns
+  an error (a declined consent) or a reconcile lambda refuses the sign-in,
+  FusionAuth 1.62 shows its own error page instead and never comes back here.
+- `/login/sso?idp_name=microsoft` adds `prompt=select_account` to FusionAuth's
+  authorize URL, which FusionAuth passes on to Microsoft: the `microsoft` IdP
+  discovers its endpoints from its issuer, so its own authorize URL can't
+  carry the prompt. That IdP's reconcile lambda
+  (`infra/stacks/fusionauth-instance/templates/reconcile_microsoft_signin.js`)
+  refuses any sign-in whose verified id_token lacks `xms_edov: true` (the
+  email's domain verified by Microsoft), so FusionAuth creates or links no
+  user on an unverified address.
+- A session code (`/session/login/{session_code}`, the native and dev-proxy
+  SSO handoff) redeems once: `take_mobile_login_session` reads and deletes it
+  in one Redis script, so concurrent redemptions yield one success. A failed
+  token refresh puts it back for the rest of its 5 minutes, so client retries
+  of a 500 work. Never record the code, the redirect URL carrying `token=`, or
+  a refresh token in spans, logs, or `Debug`; the span records `outcome`.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`

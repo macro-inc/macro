@@ -20,6 +20,7 @@ KEPT_OPERATIONS = {
     ("/1.0/instances/{name}", "patch"): "/1.0/instances/{name}",
     ("/1.0/instances/{name}", "delete"): "/1.0/instances/{name}",
     ("/1.0/instances/{name}/exec", "post"): "/1.0/instances/{name}/exec",
+    ("/1.0/instances/{name}/rebuild", "post"): "/1.0/instances/{name}/rebuild",
     ("/1.0/instances/{name}/state", "get"): "/1.0/instances/{name}/state",
     ("/1.0/instances/{name}/state", "put"): "/1.0/instances/{name}/state",
     ("/1.0/operations/{id}", "get"): "/1.0/operations/{id}",
@@ -27,6 +28,23 @@ KEPT_OPERATIONS = {
     ("/1.0/images?recursion=1", "get"): "/1.0/images",
     ("/1.0/images/aliases/{name}", "get"): "/1.0/images/aliases/{name}",
     ("/1.0/resources", "get"): "/1.0/resources",
+    (
+        "/1.0/storage-pools/{poolName}/volumes/{type}",
+        "post",
+    ): "/1.0/storage-pools/{poolName}/volumes/{type}",
+    (
+        "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
+        "delete",
+    ): "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
+}
+
+# Progenitor takes one success type. These operations document both a sync
+# and an async success; keep the one Incus returns for how we call them.
+SUCCESS_STATUS = {
+    # Rebuilding from an image always runs as an operation.
+    "instance_rebuild_post": "202",
+    # Creating an empty volume (no copy or migration) is synchronous.
+    "storage_pool_volumes_type_post": "200",
 }
 
 RECURSION_PARAMETER = {
@@ -96,6 +114,10 @@ def patch_operation(source_path, operation, document):
     if request_body is not None:
         operation["requestBody"].pop("x-s2o-overloaded", None)
         operation["requestBody"]["required"] = True
+        # Rebuild declares application/octet-stream but takes a JSON body.
+        content = operation["requestBody"]["content"]
+        if "application/json" not in content:
+            content["application/json"] = content.pop("application/octet-stream")
 
     operation.pop("x-s2o-warning", None)
 
@@ -103,8 +125,11 @@ def patch_operation(source_path, operation, document):
         operation["parameters"].append(RECURSION_PARAMETER)
 
     responses = {}
+    kept_status = SUCCESS_STATUS.get(operation["operationId"])
     for status, response in operation["responses"].items():
         if not status.startswith("2"):
+            continue
+        if kept_status is not None and status != kept_status:
             continue
 
         reference = response.get("$ref", "")

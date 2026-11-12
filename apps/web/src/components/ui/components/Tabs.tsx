@@ -1,6 +1,13 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { SegmentedControl as KSegmentedControl } from '@kobalte/core/segmented-control';
-import { type Component, For, Match, Show, Switch } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import {
@@ -16,11 +23,16 @@ export type TabOption<T extends string> = {
   value: T;
   /** Accessible name, and the tooltip when the group is icon-only. */
   label: string;
+  /** Accessible description on all inputs, also shown as a desktop pill tooltip. */
+  tooltip?: string;
   icon?: Component<{ class?: string }>;
   /** Shown after the label in muted figures; strings retain caller formatting. */
   count?: number | string;
-  /** A small attention dot after the label. */
-  dot?: boolean;
+  /**
+   * A small attention dot after the label; `violet` where what is new was
+   * picked by AI, as the app's violet means.
+   */
+  dot?: boolean | 'violet';
   disabled?: boolean;
 };
 
@@ -220,7 +232,10 @@ function OptionContent<T extends string>(props: {
       <Show when={props.option.dot && !props.iconOnly}>
         <span
           aria-hidden="true"
-          class="size-1.5 shrink-0 rounded-full bg-accent"
+          class={cn(
+            'size-1.5 shrink-0 rounded-full',
+            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
+          )}
         />
       </Show>
     </>
@@ -234,6 +249,7 @@ function PillOption<T extends string>(props: {
   fullWidth: boolean;
   joined?: boolean;
 }) {
+  const [tooltipOpen, setTooltipOpen] = createSignal(false);
   const square = () => props.iconOnly && props.option.icon !== undefined;
   const item = () => (
     <KSegmentedControl.Item
@@ -258,7 +274,10 @@ function PillOption<T extends string>(props: {
         props.fullWidth && !square() && 'flex-1'
       )}
     >
-      <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
+      <KSegmentedControl.ItemInput
+        class="pointer-events-none absolute inset-0"
+        aria-description={props.option.tooltip}
+      />
       <KSegmentedControl.ItemLabel
         class={cn(
           'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
@@ -277,10 +296,28 @@ function PillOption<T extends string>(props: {
   );
 
   return (
-    <Show when={square()} fallback={item()}>
-      <Tooltip label={props.option.label} class="shrink-0">
-        {item()}
-      </Tooltip>
+    <Show
+      when={square() || (!isTouchDevice() && props.option.tooltip)}
+      fallback={item()}
+    >
+      <Tooltip.Root open={tooltipOpen()} onOpenChange={setTooltipOpen}>
+        <Tooltip.Trigger
+          as="div"
+          onFocusIn={() => setTooltipOpen(true)}
+          onFocusOut={() => setTooltipOpen(false)}
+          class={cn(
+            'inline-flex min-w-0 shrink-0 self-stretch items-center',
+            props.fullWidth && !square() && 'flex-1'
+          )}
+        >
+          {item()}
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>
+            {props.option.tooltip ?? props.option.label}
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
     </Show>
   );
 }
@@ -305,7 +342,10 @@ function Track<T extends string>(props: TabsProps<T>) {
               props.fullWidth && 'flex-1'
             )}
           >
-            <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
+            <KSegmentedControl.ItemInput
+              class="pointer-events-none absolute inset-0"
+              aria-description={option.tooltip}
+            />
             <KSegmentedControl.ItemLabel
               class={cn(
                 'flex h-full items-center gap-1.5 rounded-full px-4 text-sm font-medium whitespace-nowrap select-none text-ink-extra-muted hover:text-ink data-checked:text-ink transition-colors duration-120 motion-reduce:transition-none touch:px-2.5',
@@ -359,7 +399,10 @@ function TouchPill<T extends string>(props: TabsProps<T>) {
                 'flex-1'
             )}
           >
-            <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
+            <KSegmentedControl.ItemInput
+              class="pointer-events-none absolute inset-0"
+              aria-description={option.tooltip}
+            />
             <KSegmentedControl.ItemLabel
               class={cn(
                 'flex min-w-0 flex-1 self-stretch items-center gap-1.5 rounded-full font-medium whitespace-nowrap select-none text-ink-extra-muted hover:text-ink data-checked:text-ink transition-colors duration-120 motion-reduce:transition-none',
@@ -418,7 +461,10 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                     'flex-1'
                 )}
               >
-                <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
+                <KSegmentedControl.ItemInput
+                  class="pointer-events-none absolute inset-0"
+                  aria-description={option.tooltip}
+                />
                 <KSegmentedControl.ItemLabel
                   class={cn(
                     'flex min-w-0 flex-1 self-stretch items-center gap-1.5 rounded-full font-medium whitespace-nowrap text-ink-extra-muted ring-inset hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:ring data-checked:ring-edge-muted',
@@ -481,7 +527,10 @@ function TouchSegmented<T extends string>(props: TabsProps<T>) {
                 'flex-1'
             )}
           >
-            <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
+            <KSegmentedControl.ItemInput
+              class="pointer-events-none absolute inset-0"
+              aria-description={option.tooltip}
+            />
             <KSegmentedControl.ItemLabel
               class={cn(
                 'flex min-w-0 flex-1 self-stretch items-center justify-center gap-1.5',

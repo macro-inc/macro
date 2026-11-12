@@ -2054,135 +2054,6 @@
         }
       }
     },
-    "/internal/computers": {
-      "post": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Buy a computer for a team; one subscription update covers the computer\nand `extraItems`.",
-        "operationId": "internal_purchase_computer",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InternalPurchaseBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Purchased"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/computers/quote": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Quote a computer for an authenticated internal caller.",
-        "operationId": "internal_quote_computer",
-        "parameters": [
-          {
-            "name": "teamId",
-            "in": "query",
-            "description": "Team that owns the computer.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "size",
-            "in": "query",
-            "description": "Purchased catalog size.",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ComputerSize"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Quote"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/computers/{computer_id}": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Read computer status for an authenticated internal caller.",
-        "operationId": "internal_get_computer",
-        "parameters": [
-          {
-            "name": "computer_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "teamId",
-            "in": "query",
-            "description": "Team that owns the computer.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComputerStatus"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/jwt/macro_api_token": {
       "get": {
         "tags": ["jwt::macro_api_token"],
@@ -4075,6 +3946,16 @@
               }
             }
           },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -4300,7 +4181,7 @@
       },
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Buy a computer for the team, billed on the team subscription.",
+        "summary": "Buy a computer for the team, billed on the team subscription. An error\nmeans nothing was charged; 202 means the charge is still being confirmed.",
         "operationId": "purchase_team_computer",
         "requestBody": {
           "content": {
@@ -4314,6 +4195,16 @@
         },
         "responses": {
           "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchased"
+                }
+              }
+            }
+          },
+          "202": {
             "description": "",
             "content": {
               "application/json": {
@@ -4356,28 +4247,6 @@
         }
       }
     },
-    "/team/computers/notify": {
-      "post": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Ask to hear when a sold-out size is back.",
-        "operationId": "notify_team_computer_available",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotifyBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/team/computers/offers": {
       "get": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
@@ -4398,86 +4267,6 @@
             }
           },
           "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/computers/quote": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "The price of one computer of a size for the team.",
-        "operationId": "quote_team_computer",
-        "parameters": [
-          {
-            "name": "size",
-            "in": "query",
-            "description": "Purchased catalog size.",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ComputerSize"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Quote"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/team/computers/{computer_id}": {
-      "get": {
-        "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "One computer, with setup progress until it first connects.",
-        "operationId": "get_team_computer",
-        "parameters": [
-          {
-            "name": "computer_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComputerStatus"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -4638,6 +4427,56 @@
         }
       }
     },
+    "/team/computers/{computer_id}/restore": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Keep a computer whose billing ended, during retention: re-adds its\nbilling item (the rest of the period is invoiced now) and keeps the\nstopped computer and its disk.",
+        "operationId": "restore_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/computers/{computer_id}/retry": {
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
@@ -4676,6 +4515,56 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/setup-complete": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the team's owner and admins, like Claude sign-in.",
+        "operationId": "complete_team_computer_setup",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -6451,6 +6340,16 @@
               }
             }
           },
+          "429": {
+            "description": "Picture changed less than a second ago",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6512,6 +6411,16 @@
           },
           "404": {
             "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Picture changed less than a second ago",
             "content": {
               "application/json": {
                 "schema": {
@@ -7224,6 +7133,18 @@
         "description": "How often the team subscription bills.",
         "enum": ["month", "year"]
       },
+      "BillingStatus": {
+        "type": "string",
+        "description": "Where a computer's billing stands, as its team sees it.",
+        "enum": [
+          "purchasing",
+          "active",
+          "past_due",
+          "ending",
+          "ended",
+          "comped"
+        ]
+      },
       "ChangePlanRequest": {
         "type": "object",
         "description": "Request body for switching plans",
@@ -7428,9 +7349,38 @@
           "catalogEntry",
           "status",
           "poweredOn",
-          "createdAt"
+          "canUndoCancel",
+          "canRestore",
+          "createdAt",
+          "purchasedBy",
+          "agentCount"
         ],
         "properties": {
+          "agentCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Agents bound to the computer's live harness, teammates' private ones\nincluded: the ones releasing it deletes.",
+            "minimum": 0
+          },
+          "billing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BillingStatus",
+                "description": "Where billing stands; unknown for quarantined records."
+              }
+            ]
+          },
+          "canRestore": {
+            "type": "boolean",
+            "description": "Whether the computer can be restored (`POST .../restore`): billing\nended and the disk is still retained."
+          },
+          "canUndoCancel": {
+            "type": "boolean",
+            "description": "Whether a cancel at period end can still be undone (until `cancelsAt`)."
+          },
           "cancelsAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -7448,6 +7398,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Time the computer was reserved."
+          },
+          "defaultAgentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Bot id of the coding agent the computer came with; null until macrod\nfirst connects. It can name an agent the team since deleted."
           },
           "diskGib": {
             "type": "integer",
@@ -7473,25 +7428,23 @@
             "type": "string",
             "description": "Display name."
           },
-          "payment": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PaymentOutcome",
-                "description": "Latched purchase outcome; unknown for quarantined records."
-              }
-            ]
+          "pastDueSince": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Since when the team subscription is past due."
           },
           "poweredOn": {
             "type": "boolean",
             "description": "Whether validated state requests power on; false for quarantined records."
           },
+          "purchasedBy": {
+            "type": "string",
+            "description": "The Macro user who bought it. The team's owner and admins, not the\nbuyer, finish its setup and manage its Claude account."
+          },
           "retainedUntil": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "When the disk is destroyed, for a canceled computer."
+            "description": "When the disk is destroyed, for a computer whose billing ended."
           },
           "setup": {
             "oneOf": [
@@ -7504,8 +7457,13 @@
               }
             ]
           },
+          "setupCompletedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the team finished the guided setup; null while it is unfinished."
+          },
           "size": {
-            "type": "string",
+            "$ref": "#/components/schemas/ComputerSize",
             "description": "Purchased catalog size."
           },
           "status": {
@@ -7531,7 +7489,7 @@
           "stopping",
           "stopped",
           "failed",
-          "payment_failed",
+          "purchasing",
           "released"
         ]
       },
@@ -7780,6 +7738,11 @@
           {
             "type": "object",
             "properties": {
+              "id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The id of the update that set it; absent when no status was ever set.\nClients remember dismissed banners by this id."
+              },
               "updatedAt": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -8747,41 +8710,6 @@
           }
         }
       },
-      "InternalPurchaseBody": {
-        "type": "object",
-        "description": "Body of an internal purchase.",
-        "required": ["billing", "teamId", "createdBy", "size"],
-        "properties": {
-          "billing": {
-            "$ref": "#/components/schemas/PurchaseBilling",
-            "description": "Purchase funding or billing state."
-          },
-          "createdBy": {
-            "type": "string",
-            "description": "The team admin or owner the caller authorized."
-          },
-          "extraItems": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SubscriptionItem"
-            },
-            "description": "Joined into the same subscription update, e.g. an agent seat."
-          },
-          "name": {
-            "type": ["string", "null"],
-            "description": "Display name."
-          },
-          "size": {
-            "$ref": "#/components/schemas/ComputerSize",
-            "description": "Purchased catalog size."
-          },
-          "teamId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Team that owns the computer."
-          }
-        }
-      },
       "InviteEntry": {
         "type": "object",
         "description": "A single invite entry with email and tier",
@@ -8929,17 +8857,6 @@
           "sha": {
             "type": "string",
             "description": "The merge commit's SHA."
-          }
-        }
-      },
-      "NotifyBody": {
-        "type": "object",
-        "description": "Body of a notify-me request.",
-        "required": ["size"],
-        "properties": {
-          "size": {
-            "$ref": "#/components/schemas/ComputerSize",
-            "description": "Purchased catalog size."
           }
         }
       },
@@ -9144,11 +9061,6 @@
           }
         }
       },
-      "PaymentOutcome": {
-        "type": "string",
-        "description": "The purchase outcome, latched after payment or comp confirmation.",
-        "enum": ["pending", "paid", "unbilled", "comped"]
-      },
       "Permission": {
         "type": "object",
         "required": ["id", "description"],
@@ -9331,45 +9243,18 @@
           }
         }
       },
-      "PurchaseBilling": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "Charge the team subscription.",
-            "required": ["kind"],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["stripe"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Provide the computer without a charge.",
-            "required": ["reason", "kind"],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["comped"]
-              },
-              "reason": {
-                "type": "string",
-                "description": "Reason for this decision or failure."
-              }
-            }
-          }
-        ],
-        "description": "Server-selected purchase funding. Team clients cannot select this value."
-      },
       "PurchaseBody": {
         "type": "object",
         "description": "Body of a team purchase.",
-        "required": ["size"],
+        "required": ["purchaseKey", "size"],
         "properties": {
           "name": {
             "type": ["string", "null"],
             "description": "Display name."
+          },
+          "purchaseKey": {
+            "type": "string",
+            "description": "The client's key for this purchase: one per Buy dialog, sent again\nwhen the purchase is retried, so a retry never charges twice."
           },
           "size": {
             "$ref": "#/components/schemas/ComputerSize",
@@ -9378,15 +9263,24 @@
         },
         "additionalProperties": false
       },
+      "PurchaseState": {
+        "type": "string",
+        "description": "Where a purchase stands when its request returns.",
+        "enum": ["ready", "confirming"]
+      },
       "Purchased": {
         "type": "object",
         "description": "Answer of a purchase.",
-        "required": ["computerId"],
+        "required": ["computerId", "state"],
         "properties": {
           "computerId": {
             "type": "string",
             "format": "uuid",
             "description": "Computer this operation addresses."
+          },
+          "state": {
+            "$ref": "#/components/schemas/PurchaseState",
+            "description": "Whether the computer exists yet."
           }
         }
       },
@@ -9715,15 +9609,7 @@
       "SizeOffer": {
         "type": "object",
         "description": "A size with its resources, price and whether it can be bought now.",
-        "required": [
-          "size",
-          "vcpus",
-          "memoryGb",
-          "diskGb",
-          "quote",
-          "soldOut",
-          "notifyRequested"
-        ],
+        "required": ["size", "vcpus", "memoryGb", "diskGb", "quote", "soldOut"],
         "properties": {
           "diskGb": {
             "type": "integer",
@@ -9736,10 +9622,6 @@
             "format": "int32",
             "description": "Memory in GiB.",
             "minimum": 0
-          },
-          "notifyRequested": {
-            "type": "boolean",
-            "description": "The caller asked to hear when this size is back."
           },
           "quote": {
             "$ref": "#/components/schemas/Quote",
@@ -9915,8 +9797,15 @@
             ]
           },
           "status": {
-            "type": ["string", "null"],
-            "description": "Computer status supplied by its owning service."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerStatusKind",
+                "description": "Computer status supplied by its owning service."
+              }
+            ]
           },
           "unitAmount": {
             "type": ["integer", "null"],

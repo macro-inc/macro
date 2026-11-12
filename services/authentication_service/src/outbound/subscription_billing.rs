@@ -1,24 +1,18 @@
 //! Provider prices and owning-domain billing facts for subscription status.
-use crate::{
-    domain::computer_billing::ComputerPrices,
-    service::{
-        subscription_plan::PlanChangeError,
-        subscription_status::{
-            SubscriptionNextInvoice,
-            billing_facts::{
-                BillingAccess, BillingComputer, BillingSeat, RecurringItem, RecurringItemKind,
-                SubscriptionBillingFacts,
-            },
+use crate::service::{
+    subscription_plan::PlanChangeError,
+    subscription_status::{
+        SubscriptionNextInvoice,
+        billing_facts::{
+            BillingAccess, BillingComputer, BillingSeat, RecurringItem, RecurringItemKind,
+            SubscriptionBillingFacts,
         },
     },
 };
 use ai_billing::domain::SubscriptionScope;
 use hosted_runtimes::domain::{
-    ids::ComputerId,
-    lifecycle::{PaymentOutcome, Phase},
-    models::BillingInterval,
-    ports::ComputerRepo,
-    size::CatalogEntry,
+    ids::ComputerId, lifecycle::Billing as ComputerBilling, models::BillingInterval,
+    ports::ComputerRepo, size::CatalogEntry,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -32,21 +26,14 @@ pub struct StripeBillingReader<Teams, Computers> {
     teams: Teams,
     computers: Computers,
     seat_prices: SeatPrices,
-    computer_prices: ComputerPrices,
 }
 
 impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, Computers> {
-    pub fn new(
-        teams: Teams,
-        computers: Computers,
-        seat_prices: SeatPrices,
-        computer_prices: ComputerPrices,
-    ) -> Self {
+    pub fn new(teams: Teams, computers: Computers, seat_prices: SeatPrices) -> Self {
         Self {
             teams,
             computers,
             seat_prices,
-            computer_prices,
         }
     }
 
@@ -91,32 +78,27 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
         user: &MacroUserIdStr<'_>,
     ) -> Result<Option<SubscriptionBillingFacts>, PlanChangeError> {
         let (access, seats, computers) = self.directory(scope, user).await?;
-        let mut provider_items = subscription.items.data.clone();
-        if subscription.items.has_more {
-            let mut params = stripe::ListSubscriptionItems::new(subscription.id.clone());
-            params.limit = Some(100);
-            params.starting_after = provider_items.last().map(|item| item.id.clone());
-            loop {
-                let page = stripe::SubscriptionItem::list(stripe, &params)
-                    .await
-                    .map_err(anyhow::Error::from)?;
-                let last = page.data.last().map(|item| item.id.clone());
-                provider_items.extend(page.data);
-                if !page.has_more {
-                    break;
-                }
-                params.starting_after =
-                    Some(last.ok_or_else(|| anyhow::anyhow!("missing subscription item cursor"))?);
-            }
-        }
+        let provider_items = if subscription.items.has_more {
+            teams::outbound::customer_repo::list_subscription_items(stripe, &subscription.id)
+                .await
+                .map_err(anyhow::Error::from)?
+        } else {
+            subscription.items.data.clone()
+        };
         let mut currency = None;
         let mut interval = None;
         let mut items = Vec::new();
         for item in provider_items {
+            // A computer's own price carries its id too (schedule phases drop item metadata).
+            let computer_id = teams::outbound::customer_repo::item_computer_uuid(&item)
+                .map(ComputerId::new_from_uuid);
+            // Any of these hides the whole breakdown; say which item did.
             let Some(price) = item.price else {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: item has no price");
                 return Ok(None);
             };
             let Some(fixed) = fixed_price(&price) else {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: item price is not fixed");
                 return Ok(None);
             };
             if currency
@@ -124,20 +106,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                 .is_some_and(|value| value != &fixed.currency)
                 || interval.is_some_and(|value| value != fixed.interval)
             {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: items mix currencies or intervals");
                 return Ok(None);
             }
             currency = Some(fixed.currency);
             interval = Some(fixed.interval);
             let unit_amount = fixed.unit_amount;
             let price_id = price.id.clone();
-            let computer_id = item
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("computer_id"))
-                .and_then(|id| ComputerId::parse_uuid_str(id).ok());
             let kind = RecurringItemKind::for_provider_price(
                 &self.seat_prices,
-                &self.computer_prices,
                 &computers,
                 &price_id,
                 computer_id,
@@ -218,20 +195,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                     let Ok(computer) = record.into_healthy() else {
                         continue;
                     };
-                    if computer.state.phase == Phase::Destroyed
-                        || (computer.state.payment == PaymentOutcome::Paid
-                            && matches!(
-                                computer.state.billing,
-                                hosted_runtimes::domain::lifecycle::Billing::Canceled { .. }
-                            ))
-                        || !matches!(
-                            computer.state.payment,
-                            PaymentOutcome::Paid | PaymentOutcome::Comped
-                        )
+                    // A computer whose billing ended is no longer on the bill.
+                    if !computer.state.is_live()
+                        || matches!(computer.state.billing, ComputerBilling::EndsAt { .. })
                     {
                         continue;
                     }
-                    let status = computer.status().status;
+                    let status = computer
+                        .status(0, chrono::Utc::now(), self.computers.policy())
+                        .status;
                     computers.push(BillingComputer {
                         id: computer.id,
                         catalog_entry: CatalogEntry {
@@ -239,10 +211,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                             size: computer.size,
                             resources: computer.resources,
                         },
-                        price_id: computer.price_id,
+                        price_id: match &computer.funding {
+                            hosted_runtimes::domain::models::Funding::Stripe { price_id } => {
+                                Some(price_id.clone())
+                            }
+                            hosted_runtimes::domain::models::Funding::Comped { .. } => None,
+                        },
                         name: computer.name,
                         status,
-                        included: computer.state.payment == PaymentOutcome::Comped,
+                        included: matches!(computer.state.billing, ComputerBilling::Comped { .. }),
                     });
                 }
                 Ok((BillingAccess::Team(role), seats, computers))

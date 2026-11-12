@@ -5,7 +5,6 @@ import {
   computerSpecs,
   computerStatusLabel,
   formatComputerDate,
-  sizeLabel,
 } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 
@@ -30,10 +29,9 @@ export function BillingComputers() {
                     {computer.name}
                   </p>
                   <p class="text-xs text-ink-extra-muted">
-                    {sizeLabel(computer.size)} ·{' '}
-                    {computerStatusLabel(computer).label}
-                    {' · '}
                     {computerSpecs(computer)}
+                    {' · '}
+                    {computerStatusLabel(computer).label}
                     <Show when={computer.cancelsAt}>
                       {(at) => (
                         <>

@@ -18,14 +18,22 @@ export class PipelineNamespace {
     return CrmPipeline.byId(this.client, id);
   }
 
-  /** List accessible pipelines. */
+  /**
+   * List accessible pipelines.
+   *
+   * @readonly
+   */
   async list(): Promise<CrmPipeline[]> {
     return unwrap(await this.client.storage.listCrmPipelines()).map((p) =>
       CrmPipeline.from(this.client, p),
     );
   }
 
-  /** Create a pipeline and its backing storage. */
+  /**
+   * Create a pipeline and its backing storage.
+   *
+   * @write
+   */
   async create(options: CreatePipeline): Promise<CrmPipeline> {
     return CrmPipeline.from(
       this.client,
@@ -36,6 +44,8 @@ export class PipelineNamespace {
   /**
    * Every entry (deal) tracking one of these companies or contacts, across
    * the caller's pipelines; pipelines without one are left out.
+   *
+   * @readonly
    */
   async entriesFor(
     records: (Company | Contact)[],
@@ -54,6 +64,8 @@ export class PipelineNamespace {
    * left out.
    *
    * @param opts.limit Most entries per pipeline, 1 to 5000 (default 50).
+   *
+   * @readonly
    */
   async searchEntries(
     search: string,

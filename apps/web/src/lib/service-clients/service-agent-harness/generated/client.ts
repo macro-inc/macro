@@ -59,6 +59,7 @@ import type {
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
+  OpenInApp,
   PresentView,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
@@ -77,6 +78,7 @@ import type {
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
+  UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
@@ -4049,6 +4051,66 @@ export const answerAgentSessionToolApproval = async (
 };
 
 /**
+ * @summary Open an item in a new pane of the app tab the person who prompted the
+running turn typed in. Only a running execution of the session's current
+turn may send, as the account it acts as.
+ */
+export type openInAppResponse200 = {
+  data: UiCommandOutcome;
+  status: 200;
+};
+
+export type openInAppResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type openInAppResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type openInAppResponseSuccess = openInAppResponse200 & {
+  headers: Headers;
+};
+export type openInAppResponseError = (
+  | openInAppResponse400
+  | openInAppResponse403
+) & {
+  headers: Headers;
+};
+
+export type openInAppResponse =
+  | openInAppResponseSuccess
+  | openInAppResponseError;
+
+export const getOpenInAppUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/ui-commands`;
+};
+
+export const openInApp = async (
+  sessionId: string,
+  openInApp: OpenInApp,
+  options?: RequestInit
+): Promise<openInAppResponse> => {
+  const res = await fetch(getOpenInAppUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(openInApp),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: openInAppResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as openInAppResponse;
+};
+
+/**
  * @summary Present a view in the session: a review with nothing saved.
  */
 export type presentSessionViewResponse204 = {
@@ -4498,87 +4560,6 @@ export const startClaudeSignIn = async (
 };
 
 /**
- * @summary Cancel the pending setup-token process. Its terminal completion releases
-the original request's account lease, including on another replica.
- */
-export type cancelClaudeSignInResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type cancelClaudeSignInResponse403 = {
-  data: void;
-  status: 403;
-};
-
-export type cancelClaudeSignInResponse404 = {
-  data: void;
-  status: 404;
-};
-
-export type cancelClaudeSignInResponse409 = {
-  data: void;
-  status: 409;
-};
-
-export type cancelClaudeSignInResponse422 = {
-  data: void;
-  status: 422;
-};
-
-export type cancelClaudeSignInResponse503 = {
-  data: void;
-  status: 503;
-};
-
-export type cancelClaudeSignInResponse504 = {
-  data: void;
-  status: 504;
-};
-
-export type cancelClaudeSignInResponseSuccess =
-  cancelClaudeSignInResponse204 & {
-    headers: Headers;
-  };
-export type cancelClaudeSignInResponseError = (
-  | cancelClaudeSignInResponse403
-  | cancelClaudeSignInResponse404
-  | cancelClaudeSignInResponse409
-  | cancelClaudeSignInResponse422
-  | cancelClaudeSignInResponse503
-  | cancelClaudeSignInResponse504
-) & {
-  headers: Headers;
-};
-
-export type cancelClaudeSignInResponse =
-  | cancelClaudeSignInResponseSuccess
-  | cancelClaudeSignInResponseError;
-
-export const getCancelClaudeSignInUrl = (harnessId: string) => {
-  return `/harnesses/${harnessId}/claude-sign-in/cancel`;
-};
-
-export const cancelClaudeSignIn = async (
-  harnessId: string,
-  options?: RequestInit
-): Promise<cancelClaudeSignInResponse> => {
-  const res = await fetch(getCancelClaudeSignInUrl(harnessId), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: cancelClaudeSignInResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as cancelClaudeSignInResponse;
-};
-
-/**
  * @summary Finish the Claude sign-in with what the user pasted.
  */
 export type completeClaudeSignInResponse200 = {
@@ -4670,7 +4651,7 @@ export const completeClaudeSignIn = async (
 };
 
 /**
- * @summary Forget the computer's Claude account and return it to Macro credits.
+ * @summary Forget the computer's Claude credential and return it to Macro credits.
  */
 export type claudeSignOutResponse200 = {
   data: ClaudeModeResponse;

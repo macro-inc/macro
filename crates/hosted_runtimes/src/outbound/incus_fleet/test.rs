@@ -60,7 +60,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         shutdown_grace: Duration::from_secs(60),
         image: ImageSource {
             reference: ImageReference::Alias(
-                incus_client::ImageAlias::try_new("macro-box").unwrap(),
+                incus_client::ImageAlias::try_new("macro-box/2026-11-10").unwrap(),
             ),
             remote: None,
         },
@@ -93,23 +93,28 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         resources: purchased,
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-10".to_owned())
             .unwrap(),
-        price_id: Some(stripe::PriceId::from_str("price_saved").unwrap()),
-        state: crate::domain::lifecycle::ComputerState::reserved(
-            crate::domain::ids::HostId::new(Uuid::nil()),
-            "2026-11-05T10:00:00Z".parse().unwrap(),
-        ),
+        funding: crate::domain::models::Funding::Stripe {
+            price_id: stripe::PriceId::from_str("price_saved").unwrap(),
+        },
+        host: crate::domain::ids::HostId::new(Uuid::nil()),
+        state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Stopped),
         harness_id: None,
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
+        image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
         &config,
+        &GuestImage::try_new("macro-box/2026-11-10").unwrap(),
         &computer,
         r#"{"x":1}"#,
         "2026-11-05T10:00:00Z".parse().unwrap(),
-    );
+    )
+    .unwrap();
 
     let mut observed = instance("mc-test", incus_client::InstanceStatus::Stopped, &[]);
     observed.config = body.config.as_ref().unwrap().0.clone();
@@ -120,7 +125,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         .devices
         .get_mut("root")
         .unwrap()
-        .insert("size".to_owned(), "100GiB".to_owned());
+        .insert("size".to_owned(), "200GiB".to_owned());
     assert!(!limits_match(&observed, purchased));
 
     assert_eq!(
@@ -136,18 +141,24 @@ fn recorded_limits_and_units_survive_catalog_changes() {
                 "user.macro.enrollment": "{\"x\":1}",
                 "user.macro.control_plane": "test-a",
                 "user.macro.created_at": "2026-11-05T10:00:00+00:00",
+                "user.macro.image": "macro-box/2026-11-10",
             },
             "devices": {
                 "root": {
                     "type": "disk",
                     "path": "/",
                     "pool": "default",
-                    "size": "200GiB",
+                    "size": "32GiB",
+                },
+                "data": {
+                    "type": "disk",
+                    "pool": "default",
+                    "source": "mc-01900000000070008000000000000001-data",
                 },
             },
             "source": {
                 "type": "image",
-                "alias": "macro-box",
+                "alias": "macro-box/2026-11-10",
             },
         })
     );
@@ -187,23 +198,28 @@ fn a_remote_image_names_its_server_and_protocol() {
         },
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-10".to_owned())
             .unwrap(),
-        price_id: Some(stripe::PriceId::from_str("price_saved").unwrap()),
-        state: crate::domain::lifecycle::ComputerState::reserved(
-            crate::domain::ids::HostId::new(Uuid::nil()),
-            "2026-11-05T10:00:00Z".parse().unwrap(),
-        ),
+        funding: crate::domain::models::Funding::Stripe {
+            price_id: stripe::PriceId::from_str("price_saved").unwrap(),
+        },
+        host: crate::domain::ids::HostId::new(Uuid::nil()),
+        state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Stopped),
         harness_id: None,
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
+        image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
         &config,
+        &GuestImage::try_new("ubuntu/24.04").unwrap(),
         &computer,
         "{}",
         "2026-11-05T10:00:00Z".parse().unwrap(),
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         serde_json::to_value(body.source).unwrap(),
@@ -294,6 +310,32 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
     );
 }
 
+/// Orphan cleanup destroys by computer id, so an instance not named for the
+/// id it carries is never taken for that computer.
+#[test]
+fn listing_leaves_out_an_instance_not_named_for_its_computer() {
+    let instances = [instance(
+        "operator-copy",
+        incus_client::InstanceStatus::Running,
+        &[
+            ("user.macro.control_plane", "test-a"),
+            (
+                "user.macro.computer_id",
+                "01900000-0000-7000-8000-000000000001",
+            ),
+        ],
+    )];
+
+    assert_eq!(
+        computer_instances(
+            &instances,
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap()
+        )
+        .unwrap(),
+        []
+    );
+}
+
 #[test]
 fn listing_rejects_a_computer_id_that_is_not_a_uuid() {
     let instances = [instance(
@@ -370,7 +412,7 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
         },
         InstanceInfo {
             devices: BTreeMap::new(),
-            name: "mc-own".to_owned(),
+            name: "mc-01900000000070008000000000000001".to_owned(),
             status: incus_client::InstanceStatus::Running,
             kind: InstanceKind::VirtualMachine,
             config: BTreeMap::from([
@@ -398,5 +440,40 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
             control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
             created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
         }]
+    );
+}
+
+#[test]
+fn only_a_conflict_means_the_data_volume_already_exists() {
+    assert!(volume_exists(&IncusError::Rejected {
+        status: 409,
+        message: "Volume by that name already exists".to_owned(),
+    }));
+    assert!(!volume_exists(&IncusError::Rejected {
+        status: 400,
+        message: "Invalid size".to_owned(),
+    }));
+    assert!(!volume_exists(&IncusError::NotFound {
+        message: "Storage pool not found".to_owned(),
+    }));
+}
+
+#[test]
+fn exec_runs_as_the_macro_user_from_its_home() {
+    assert_eq!(
+        exec_command(&["harnessd"]),
+        ExecCommand {
+            command: vec!["harnessd".to_owned()],
+            environment: BTreeMap::from([
+                ("HOME".to_owned(), "/home/macro".to_owned()),
+                (
+                    "PATH".to_owned(),
+                    "/run/wrappers/bin:/run/current-system/sw/bin".to_owned()
+                ),
+            ]),
+            user: 1000,
+            group: 1000,
+            cwd: "/home/macro".to_owned(),
+        }
     );
 }

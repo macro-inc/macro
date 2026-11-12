@@ -5,6 +5,8 @@ name: CI Gate for Forks
   pull_request_target:
     types:
     - labeled
+    branches:
+    - main
   workflow_run:
     types:
     - completed
@@ -36,7 +38,7 @@ jobs:
         //   label   the label goes on a PR: fail when it can't start PR CI, because the
         //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
-        //                 token, from the trusted base branch's workflow
+        //                 token, from a trusted run of `main`'s workflow
         //   fork    after a fork PR's run, whose read-only token could not set the status
         //
         // Statuses go on the PR head commit, so a later push starts without one.
@@ -487,7 +489,7 @@ jobs:
         //   label   the label goes on a PR: fail when it can't start PR CI, because the
         //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
-        //                 token, from the trusted base branch's workflow
+        //                 token, from a trusted run of `main`'s workflow
         //   fork    after a fork PR's run, whose read-only token could not set the status
         //
         // Statuses go on the PR head commit, so a later push starts without one.

@@ -4,8 +4,9 @@
 
 use crate::domain::enrollment::EnrollmentGeneration;
 use crate::domain::ids::ComputerId;
+use crate::domain::image::GuestImage;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance};
+use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, GuestProcess};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::incus_fleet::{IncusFleet, IncusFleetError};
 
@@ -53,7 +54,7 @@ impl Fleet for ConfiguredFleet {
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
         start: bool,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<GuestImage, Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet
                 .create(computer, generation, enrollment, start)
@@ -124,6 +125,23 @@ impl Fleet for ConfiguredFleet {
         match self {
             Self::Incus(fleet) => Ok(fleet.host().await?),
             Self::Docker(fleet) => Ok(fleet.host().await?),
+        }
+    }
+
+    async fn exec(
+        &self,
+        computer_id: ComputerId,
+        argv: &[&str],
+    ) -> Result<GuestProcess<Self::Err>, Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet
+                .exec(computer_id, argv)
+                .await?
+                .map_err(ConfiguredFleetError::Incus)),
+            Self::Docker(fleet) => Ok(fleet
+                .exec(computer_id, argv)
+                .await?
+                .map_err(ConfiguredFleetError::Docker)),
         }
     }
 }

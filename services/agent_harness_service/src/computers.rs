@@ -16,6 +16,7 @@ use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
+use harnesses::domain::service::HarnessServiceImpl;
 use hosted_runtimes::domain::enrollment::{Deployment, DeploymentSource, DeploymentUnavailable};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::operator::ComputerOperator;
@@ -35,9 +36,10 @@ use crate::config::{ComputerFleetConfig, Config};
 
 pub(crate) mod claude;
 pub(crate) mod claude_expiry;
-pub(crate) mod control;
 pub(crate) mod default_agent;
+pub mod harnessd;
 mod presence;
+pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -46,9 +48,11 @@ use presence::PresenceGuard;
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
-/// macrod reports a rejected sign-in within about a minute; checking as often
-/// keeps that notice prompt.
+/// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
+/// How often every awake computer's harnessd status is read, catching a
+/// sign-in or sign-out made on the computer itself.
+const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
 pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
 
@@ -109,7 +113,9 @@ pub(crate) async fn operator(
                     control_plane_id: ControlPlaneId::parse(
                         settings.computers_control_plane_id.clone(),
                     )?,
-                    image: settings.computers_image.clone(),
+                    image: hosted_runtimes::domain::image::GuestImage::try_new(
+                        &settings.computers_image,
+                    )?,
                     network: settings.computers_docker_network.clone(),
                     enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
                     host_name: settings.computers_host_name.clone(),
@@ -127,7 +133,7 @@ pub(crate) async fn operator(
     ServiceDeployment.deployment()?;
 
     let operator = ComputerOperator::start(
-        PgComputerRepo::new(pool.clone()),
+        PgComputerRepo::new(pool.clone(), config.computer_billing_policy()?),
         fleet,
         HostedHarnesses {
             service: harnesses,
@@ -175,6 +181,7 @@ enum Pass {
     Timers,
     Reconcile,
     ClaudeSignIns,
+    ClaudeStatus,
 }
 
 impl Pass {
@@ -184,6 +191,7 @@ impl Pass {
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
+            Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
     }
 }
@@ -191,10 +199,16 @@ impl Pass {
 /// The Claude sign-in watch's ports.
 pub struct ClaudeSignInWatch<Ingress> {
     /// Computers signed in to Claude through Macro.
-    pub sign_ins: claude_expiry::PgClaudeSignIns,
+    pub sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns,
     /// Their notices.
     pub notices: claude_expiry::IngressClaudeSignInNotices<Ingress>,
+    /// harnessd on every computer, whose status the watch refreshes.
+    pub harnessd: HostedHarnessd,
 }
+
+/// [`harnessd::Harnessd`] over the harness table.
+pub type HostedHarnessd =
+    harnessd::Harnessd<HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
 
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
@@ -209,6 +223,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Timers,
         Pass::Reconcile,
         Pass::ClaudeSignIns,
+        Pass::ClaudeStatus,
     ] {
         tracker.spawn(run_pass(
             pass,
@@ -233,22 +248,25 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
-        let outcome =
+        let outcome: anyhow::Result<()> =
             match pass {
                 Pass::Effects => operator
                     .run_fleet_effects_until(shutdown.cancelled())
                     .await
-                    .map(|_| ()),
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
                 Pass::Timers => shutdown
                     .run_until_cancelled(operator.fire_timers())
                     .await
                     .transpose()
-                    .map(|_| ()),
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
                 Pass::Reconcile => shutdown
                     .run_until_cancelled(operator.reconcile())
                     .await
                     .transpose()
-                    .map(|_| ()),
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
                 Pass::ClaudeSignIns => shutdown
                     .run_until_cancelled(operator.notify_claude_sign_ins(
                         &claude_sign_ins.sign_ins,
@@ -256,7 +274,18 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     ))
                     .await
                     .transpose()
-                    .map(|_| ()),
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::ClaudeStatus => shutdown
+                    .run_until_cancelled(async {
+                        let computers = operator.awake_computers().await?;
+                        claude_sign_ins.harnessd.refresh_each(&computers).await;
+                        Ok::<_, hosted_runtimes::domain::service::ComputerError>(())
+                    })
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
             };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();
@@ -293,6 +322,11 @@ pub trait HostedHarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>>;
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>>;
 }
 
 impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for Service {
@@ -328,6 +362,13 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>> {
         Box::pin(HarnessService::harness_computer(self, harness_id))
+    }
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::computer_harnesses(self, computer_id))
     }
 }
 
@@ -376,8 +417,20 @@ impl Harnesses for HostedHarnesses {
         Ok(self.service.harness_computer(harness_id).await?)
     }
 
-    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer: &Computer) -> Result<(), Self::Err> {
+        // The harness goes first. Its delete locks the row that every agent
+        // bind holds while it writes, so once it commits no new agent can
+        // bind, and a computer's agents stay bound to a deleted harness: the
+        // deletion below finds every one, on a retried effect too.
+        self.service.revoke_hosted_harness(computer.id).await?;
+        for harness_id in self.service.computer_harnesses(computer.id).await? {
+            let deleted = self
+                .default_agents
+                .delete_bound(computer.created_by.clone(), harness_id)
+                .await?;
+            tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
+        }
+        Ok(())
     }
 
     async fn create_default_agent(
@@ -390,7 +443,6 @@ impl Harnesses for HostedHarnesses {
             .create(DefaultAgentRequest {
                 team_id: computer.team_id,
                 buyer: computer.created_by.clone(),
-                computer_name: computer.name.as_str().to_owned(),
                 harness_id,
             })
             .await?)
@@ -402,10 +454,27 @@ pub struct ComputerPresence<Inner> {
     inner: Arc<Inner>,
     presence_pool: PgPool,
     operator: Option<Arc<Operator>>,
+    /// Set once the command bus exists, which needs the runtime registry
+    /// this presence is part of.
+    sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+    tasks: TaskTracker,
 }
 
+/// [`sign_in_ahead::SignInAhead`] over the harness table.
+pub type SignInAheadHandle = Arc<
+    sign_in_ahead::SignInAhead<
+        HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>,
+    >,
+>;
+
 impl<Inner> ComputerPresence<Inner> {
-    pub fn new(inner: Arc<Inner>, operator: Option<Arc<Operator>>, pool: PgPool) -> Self {
+    pub fn new(
+        inner: Arc<Inner>,
+        operator: Option<Arc<Operator>>,
+        pool: PgPool,
+        sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+        tasks: TaskTracker,
+    ) -> Self {
         let presence_pool = PgPoolOptions::new()
             .max_connections(1)
             .connect_lazy_with(pool.connect_options().as_ref().clone());
@@ -413,6 +482,8 @@ impl<Inner> ComputerPresence<Inner> {
             inner,
             presence_pool,
             operator,
+            sign_in_ahead,
+            tasks,
         }
     }
 }
@@ -446,6 +517,13 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
                     .ok();
+            }
+            drop(guard);
+            // After the presence lock: the command execs harnessd on the computer.
+            if let Some(ahead) = self.sign_in_ahead.get() {
+                let ahead = Arc::clone(ahead);
+                self.tasks
+                    .spawn(async move { ahead.on_connected(harness).await });
             }
         })
     }
@@ -488,5 +566,50 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
         live: Vec<(HarnessId, RuntimeConnectionId)>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Arc::clone(&self.inner).renew(live)
+    }
+}
+
+/// [`harnessd::HarnessdTransport`] over the operator's fleet: one `harnessd` process
+/// per request, its request on stdin and its answer on stdout.
+pub struct FleetTransport {
+    operator: Arc<Operator>,
+}
+
+impl FleetTransport {
+    /// Exec through `operator`'s fleet.
+    pub fn new(operator: Arc<Operator>) -> Self {
+        Self { operator }
+    }
+}
+
+impl harnessd::HarnessdTransport for FleetTransport {
+    fn round_trip(
+        &self,
+        computer_id: ComputerId,
+        request: harnessd_protocol::Request,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<harnessd_protocol::Response, harnessd::HarnessdError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            use hosted_runtimes::domain::ports::Fleet as _;
+
+            let deadline = harnessd::answer_timeout(&request);
+            let exchange = async {
+                let process = self
+                    .operator
+                    .fleet()
+                    .exec(computer_id, &[harnessd::HARNESSD])
+                    .await
+                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
+                harnessd::exchange(process, &request).await
+            };
+            tokio::time::timeout(deadline, exchange)
+                .await
+                .map_err(|_| harnessd::HarnessdError::Timeout)?
+        })
     }
 }

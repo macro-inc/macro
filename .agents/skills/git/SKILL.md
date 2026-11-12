@@ -103,6 +103,18 @@ GitHub Actions workflows are generated from Rust: edit
 `tooling/xtask/crates/xtask_workflows`, never the YAML (see the
 [workflows rule](../../rules/infra/github-workflows.md)).
 
+Run the [`review`](../review/SKILL.md) skill on every PR pass, before the first
+push and again after changes that add or alter what it covers. It picks the
+reviews that apply to the diff; at least one always does. A diff that touches
+SQL, a query builder, a SQL function, or a migration always gets the database
+reviews (`query-review`, `migration-review`), and so does one that calls an
+existing query more often or over a wider scope. Fix every `block` finding
+before pushing; fix or justify the rest in the PR body.
+
+`query-review` checks the plan that the
+[`query-writing`](../query-writing/SKILL.md) skill had you record for each
+query before committing it. A changed query without one is not ready to push.
+
 Run the `audit` skill before handing off; it covers tests and area checks.
 
 ## PR description
@@ -127,6 +139,14 @@ machines, pipelines). Drop it for small or mechanical changes.
 - One bullet per meaningful change, in reading order. Name files or modules
   when it helps navigation. Call out decisions and alternatives rejected.
 
+## Database review
+
+Whenever a database review ran (changed SQL, migrations, or a caller that
+widens a query): the `review` skill's table. One row per changed query or
+migration statement, with the rows it touches at production size, the index
+or lock it relies on, and the measured plan from `query-writing`. Justify any
+finding left open.
+
 ## Follow-ups
 
 - Work deliberately left out, with the reason.
@@ -146,9 +166,6 @@ the [`run-ci` skill](../run-ci/SKILL.md) says when to request one. A PR whose
 wait on it and fix failures before handing off.
 
 ## Updating a PR
-
-Fetch the current base branch before diagnosing conflicts or checking ancestry;
-the PR API's base SHA can lag the branch ref.
 
 Push follow-up commits rather than force-pushing over review history, unless the
 user asks for a rebase. When the scope changes, update the title and the What

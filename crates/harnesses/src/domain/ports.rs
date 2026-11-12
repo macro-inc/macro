@@ -10,12 +10,15 @@ use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::account_logins::{
+    AccountLoginChange, AccountLoginNotice, AgentProvider, ComputerAccountLogin,
+    HarnessAccountLogin,
+};
 use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaudeModeChange,
-    CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
-    HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
-    HarnessSession, HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus,
-    PatchHarnessRequest, SetHarnessTeamAccessRequest,
+    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
+    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent, HarnessOwner,
+    HarnessPermission, HarnessResident, HarnessSession, HostedPairing, PairingClaimFacts,
+    PairingDetails, PairingStatus, PatchHarnessRequest, SetHarnessTeamAccessRequest,
 };
 
 /// A pairing row to persist.
@@ -151,6 +154,13 @@ pub trait HarnessRepo: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
 
+    /// Every harness a computer has had, deleted ones included, so cleanup
+    /// after its release can still find the agents bound to them.
+    fn computer_harness_ids(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Vec<HarnessId>, Self::Err>> + Send;
+
     /// The computer a live harness runs on; `None` for unknown harnesses and
     /// machines users paired themselves.
     fn harness_computer(
@@ -158,21 +168,37 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
-    /// Replace an active harness's reported capabilities. Returns `false`
-    /// when the harness is unknown or deleted.
-    fn set_capabilities(
+    /// Record what the machine reported about its login at a provider, in
+    /// one transaction: a sign-in on the active login's account moves its
+    /// expiry; any other sign-in upserts the provider account, signs out the
+    /// provider's active login and inserts a new one; a sign-out signs the
+    /// active login out. Returns `false` when the harness is unknown or
+    /// deleted.
+    fn record_account_login(
         &self,
         harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
+        change: AccountLoginChange,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Record how Claude Code on an active harness is paid for, and who
-    /// signed it in. Returns `false` when the harness is unknown or deleted.
-    fn set_claude_mode(
+    /// The harness's active login at `provider`, if any.
+    fn active_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, Self::Err>> + Send;
+
+    /// Every active login at `provider` on a live Macro computer's harness.
+    fn computer_account_logins(
+        &self,
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Vec<ComputerAccountLogin>, Self::Err>> + Send;
+
+    /// Record the expiry notice sent for a login.
+    fn record_login_notice(
+        &self,
+        login_id: Uuid,
+        notice: AccountLoginNotice,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(
@@ -374,13 +400,6 @@ pub trait HarnessService: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
 
-    /// Record what the authenticated harness's machine can do.
-    fn report_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
-
     /// Register a Macro computer's team harness, already approved, and return
     /// the claim material its macrod enrolls with.
     ///
@@ -411,6 +430,13 @@ pub trait HarnessService: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 
+    /// Every harness a Macro computer has had, deleted ones included.
+    /// Trusted in-process callers only, like [`Self::create_hosted_pairing`].
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send;
+
     /// The computer a live harness runs on, if it is a Macro computer's.
     fn harness_computer(
         &self,
@@ -428,14 +454,21 @@ pub trait HarnessService: Send + Sync + 'static {
         access: HarnessPermission,
     ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
-    /// Record how Claude Code on a harness is paid for, and who signed it
-    /// in, once its runtime confirmed the switch. Trusted in-process callers
-    /// only.
-    fn set_claude_mode(
+    /// Record a sign-in or sign-out at a provider on a harness once its
+    /// runtime confirmed it. Trusted in-process callers only.
+    fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// The harness's active login at `provider`, if any. Trusted in-process
+    /// callers only; they authorize the harness first.
+    fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, HarnessError>> + Send;
 }
 
 /// Harness service error.
@@ -456,6 +489,13 @@ pub enum HarnessError {
     /// Pairing creation is throttled.
     #[error("too many open pairing requests")]
     Throttled,
+    /// The harness belongs to a Macro computer, which belongs to its team:
+    /// only releasing the computer deletes it, and it is never shared with
+    /// another team.
+    #[error(
+        "This machine is a Macro computer, which belongs to its team. Manage it from Macro computers instead."
+    )]
+    ComputerHarness,
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

@@ -1,36 +1,34 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type {
-  ComputerSize,
+  ComputerStatusKind,
   SubscriptionBilling,
   SubscriptionBillingLineItem,
 } from '@service-auth/generated/schemas';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { computerSpecs, formatQuote } from '../computers/core/computer-display';
+import {
+  computerSpecs,
+  formatQuote,
+  sizeLabel,
+} from '../computers/core/computer-display';
 import { formatBillingAmount } from '../core/format-billing-amount';
 import { SettingsCard, SettingsRow, SettingsSection } from '../primitives';
 import { PriceBreakdown, type PriceBreakdownItem } from './price-breakdown';
 
-function sizeLabel(size: ComputerSize): string {
-  return match(size)
-    .with('standard', () => t('settingsBilling.standard'))
-    .with('large', () => t('settingsBilling.large'))
-    .with('xl', () => t('settingsBilling.xl'))
-    .exhaustive((unknown) => String(unknown));
-}
-
-function computerStatus(status: string | null | undefined): string {
+function computerStatus(status: ComputerStatusKind | null | undefined): string {
   return match(status)
-    .with('running', 'ready', () => t('settingsBilling.alive'))
-    .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
-    .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
-    .with('unhealthy', () => t('settingsBilling.dead'))
+    .with('ready', () => t('settingsBilling.alive'))
     .with('starting', () => t('settingsBilling.starting'))
+    .with('purchasing', 'setting_up', () => t('settingsBilling.settingUp'))
+    .with('waiting_for_capacity', () => t('computers.waitingForCapacity'))
+    .with('needs_attention', () => t('computers.needsAttention'))
+    .with('failed', () => t('settingsBilling.failed'))
     .with('stopping', () => t('settingsBilling.stopping'))
     .with('stopped', () => t('settingsBilling.stopped'))
     .with('released', () => t('settingsBilling.released'))
-    .otherwise(() => t('settingsBilling.statusUnavailable'));
+    .with(null, undefined, () => t('settingsBilling.statusUnavailable'))
+    .exhaustive(() => t('settingsBilling.statusUnavailable'));
 }
 
 /** Current subscription amounts, never an estimate from catalog prices. */
@@ -80,12 +78,14 @@ export function TeamBillingBreakdown(props: {
         offer.quote.interval === props.billing.interval &&
         offer.quote.amount !== line.unitAmount;
       return {
-        name: line.size
-          ? t('settingsBilling.computerName', {
-              name: line.name,
-              size: sizeLabel(line.size),
-            })
-          : line.name,
+        // The specs below already start with the size.
+        name:
+          line.size && !computer
+            ? t('settingsBilling.computerName', {
+                name: line.name,
+                size: sizeLabel(line.size),
+              })
+            : line.name,
         description: (
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>
@@ -100,14 +100,10 @@ export function TeamBillingBreakdown(props: {
             <span
               class="rounded-full bg-ink/6 px-2 py-1 text-xs"
               classList={{
-                'text-failure': [
-                  'failed',
-                  'unhealthy',
-                  'payment_failed',
-                ].includes(status(line) ?? ''),
-                'text-success': ['ready', 'running'].includes(
-                  status(line) ?? ''
-                ),
+                'text-failure':
+                  status(line) === 'failed' ||
+                  status(line) === 'needs_attention',
+                'text-success': status(line) === 'ready',
               }}
             >
               {computerStatus(status(line))}

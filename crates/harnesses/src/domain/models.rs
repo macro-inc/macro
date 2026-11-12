@@ -100,20 +100,18 @@ pub struct Harness {
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
-    /// What the harness's machine can do, as macrod last reported it.
-    #[serde(default)]
-    pub capabilities: HarnessCapabilities,
     /// The Macro computer (hosted VM) this harness runs on; absent for a
     /// machine the user paired themselves.
     #[serde(default)]
     pub computer_id: Option<ComputerId>,
-    /// How Claude Code on this machine is paid for. Only meaningful for
-    /// Macro computers.
+    /// How Claude Code on this machine is paid for, derived from whether
+    /// it has an active Claude login. Only meaningful for Macro computers.
     #[serde(default)]
     pub claude_mode: ClaudeMode,
 }
 
-/// How Claude Code on a Macro computer is paid for.
+/// How Claude Code on a Macro computer is paid for: its own Claude account
+/// when it has an active Claude login, otherwise Macro credits.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -147,28 +145,6 @@ impl std::str::FromStr for ClaudeMode {
     }
 }
 
-/// A confirmed change to how Claude Code on a Macro computer is paid for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClaudeModeChange {
-    /// `signed_in_by` signed a Claude account in through Macro.
-    SignedIn {
-        /// The person whose request completed the sign-in.
-        signed_in_by: MacroUserIdStr<'static>,
-    },
-    /// The account was signed out; Macro credits pay again.
-    SignedOut,
-}
-
-impl ClaudeModeChange {
-    /// The mode it leaves the harness in.
-    pub const fn mode(&self) -> ClaudeMode {
-        match self {
-            Self::SignedIn { .. } => ClaudeMode::OwnAccount,
-            Self::SignedOut => ClaudeMode::MacroCredits,
-        }
-    }
-}
-
 /// What a caller wants to do with a harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HarnessPermission {
@@ -180,43 +156,11 @@ pub enum HarnessPermission {
     Manage,
 }
 
-/// What a harness's machine can do beyond running agents.
-///
-/// macrod reports this after it connects; every field defaults to off, so
-/// harnesses that never report stay plain.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(default)]
-pub struct HarnessCapabilities {
-    /// A display Macro can stream (Xvnc on `127.0.0.1:5900`).
-    pub screen: bool,
-    /// The Claude account Claude Code on a Macro computer is signed in to;
-    /// absent where macrod does not manage Claude.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claude: Option<ClaudeAccount>,
-}
-
-/// Claude Code's sign-in on a Macro computer, as `claude auth status` reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum ClaudeAccount {
-    /// No Claude account; sessions run on Macro credits.
-    SignedOut,
-    /// Signed in to a Claude account.
-    SignedIn {
-        /// The account's email address, when Claude reports one.
-        account: Option<String>,
-        /// When the sign-in stops refreshing and must be repeated.
-        expires_at: Option<DateTime<Utc>>,
-    },
-}
-
 /// A pre-approved pairing for a Macro computer, minted by the control plane.
 #[derive(Debug, Clone)]
 pub struct CreateHostedPairing {
-    /// Team whose members may use the computer; ownership remains with the
-    /// buying administrator.
+    /// Team the computer belongs to: its owner and admins own the harness
+    /// and its members use it.
     pub team_id: Uuid,
     /// Harness display name.
     pub name: String,

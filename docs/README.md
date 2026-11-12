@@ -17,7 +17,15 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 
 Document sync: [DSS sync router](architecture/sync-router.md).
 
+Macro computers: [architecture](architecture/macro-computers.md) and the
+[setup trace runbook](runbooks/computer-setup-traces.md).
+
+Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
+[approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
+
 Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-guidance.md).
+
+MCP servers: [public MCP and the ChatGPT server](architecture/mcp-surfaces.md).
 
 Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).

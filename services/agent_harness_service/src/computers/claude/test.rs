@@ -112,7 +112,6 @@ async fn computer_route_access(
                 shared_team_ids: Vec::new(),
                 connected: false,
                 last_connected_at: None,
-                capabilities: Default::default(),
                 computer_id: Some(computer_id::ComputerId::new_from_uuid(
                     uuid::Uuid::from_u128(1),
                 )),
@@ -120,6 +119,34 @@ async fn computer_route_access(
             }))
         })
     });
+    repo.expect_active_account_login()
+        .returning(|harness_id, provider| {
+            Box::pin(async move {
+                Ok(Some(
+                    harnesses::domain::account_logins::HarnessAccountLogin {
+                        id: uuid::Uuid::from_u128(0x1001),
+                        harness_id,
+                        account: harnesses::domain::account_logins::ProviderAccount {
+                            id: uuid::Uuid::from_u128(0x2001),
+                            provider,
+                            identity: harnesses::domain::account_logins::ProviderAccountIdentity {
+                                external_account_id: "sha256:0123456789abcdef0123456789abcdef"
+                                    .to_owned(),
+                            },
+                        },
+                        signed_in_by: Some(
+                            macro_user_id::user_id::MacroUserIdStr::try_from(
+                                "macro|owner@example.com".to_owned(),
+                            )
+                            .unwrap(),
+                        ),
+                        signed_in_at: "2026-01-02T00:00:00Z".parse().unwrap(),
+                        expires_at: None,
+                        signed_out_at: None,
+                    },
+                ))
+            })
+        });
     repo.expect_harness_access().returning(|_, caller| {
         Box::pin(async move {
             Ok(match caller.as_ref() {
@@ -149,17 +176,21 @@ async fn computer_route_access(
             )])),
         );
     }
-    let redis = redis::Client::open("redis://127.0.0.1:1").unwrap();
-    let control = super::ComputerControl::start(
-        agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
-        redis.clone(),
-        &tasks,
-        shutdown.clone(),
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    // The repo mock expects no login write; harnessd records every request.
+    let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
+        harnessd_protocol::Response::SignedOut {
+            agent: harnessd_protocol::AgentProvider::Claude,
+        }
+    }));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        transport.clone(),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
     );
     let app = super::router(
-        control,
-        redis,
-        HarnessServiceImpl::new(repo),
+        harnessd,
+        harnesses,
         MacroAuthorizationState::new(Arc::new(authorization)),
         hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         fleet_attachment,
@@ -190,10 +221,17 @@ async fn computer_route_access(
     if enabled && fleet_attachment == FleetAttachment::Attached {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(
-                &to_bytes(response.into_body(), 1024).await.unwrap()
+                &to_bytes(response.into_body(), 4096).await.unwrap()
             )
             .unwrap(),
-            serde_json::json!({"mode": "own_account"})
+            serde_json::json!({
+                "mode": "own_account",
+                "account": {
+                    "signedInBy": "macro|owner@example.com",
+                    "signedInAt": "2026-01-02T00:00:00Z",
+                    "expiresAt": null,
+                },
+            })
         );
     }
 
@@ -214,7 +252,6 @@ async fn computer_route_access(
         ("POST", "claude-sign-in", ""),
         ("POST", "claude-sign-in/complete", r#"{"code":"test-code"}"#),
         ("POST", "claude-sign-out", ""),
-        ("POST", "claude-sign-in/cancel", ""),
     ] {
         if only_route.is_some_and(|route| route != suffix) {
             continue;
@@ -280,6 +317,8 @@ async fn computer_route_access(
         .await
         .unwrap();
     assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    // Every request above was refused before reaching the computer.
+    assert!(transport.requests.lock().unwrap().is_empty());
     shutdown.cancel();
     tasks.close();
     tasks.wait().await;
@@ -288,8 +327,11 @@ async fn computer_route_access(
 #[tokio::test]
 async fn computer_invalid_code_is_a_typed_retryable_response() {
     use axum::response::IntoResponse as _;
-    let result = serde_json::from_value(serde_json::json!({"status": "invalid_code"})).unwrap();
-    let response = super::ComputerRouteError::from_result(result).into_response();
+    let answer = serde_json::from_value(
+        serde_json::json!({"result": "error", "agent": "claude", "kind": "invalid_code"}),
+    )
+    .unwrap();
+    let response = super::ComputerRouteError::from_answer(answer).into_response();
     assert_eq!(
         response.status(),
         axum::http::StatusCode::UNPROCESSABLE_ENTITY
@@ -307,141 +349,235 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
 }
 
 #[tokio::test]
-async fn computer_claude_cancel_refuses_flag_off() {
-    computer_route_access(
-        false,
-        Some("claude-sign-in/cancel"),
-        FleetAttachment::Detached,
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn computer_dropped_submit_reconciles_a_committed_runtime_result() {
-    dropped_submit_reconciles(true).await;
-}
-
-#[tokio::test]
-async fn computer_dropped_submit_reconciles_even_if_cancellation_disconnects() {
-    dropped_submit_reconciles(false).await;
-}
-
-async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
-    use agent_runtime_protocol::domain::channel::Channel;
-    use agent_runtime_protocol::domain::schema::v0::{
-        ComputerCommand, ComputerControlResult, ToRuntimeMessage, ToServerMessage,
-    };
+async fn a_completion_whose_caller_left_still_records_its_signer() {
     use harness_id::HarnessId;
-    use harnesses::domain::{
-        models::ClaudeModeChange, ports::MockHarnessRepo, service::HarnessServiceImpl,
-    };
-    use std::sync::Arc;
+    use harnessd_protocol::{AgentProvider, ClaudeAccount, Request, Response};
+    use std::sync::{Arc, Mutex};
 
-    let redis = redis::Client::open(macro_env_var::read_env_var("REDIS_URI").unwrap()).unwrap();
-    let harness_id = HarnessId::new_from_uuid(uuid::Uuid::now_v7());
-    let runtimes = agent_harness::outbound::runtime_registry::RuntimeRegistry::new();
-    let (carrier, mut runtime) = Channel::duplex();
-    runtimes.attach(harness_id, carrier);
+    let changes = Arc::new(Mutex::new(Vec::new()));
+    let transport = Arc::new(
+        crate::computers::harnessd::fakes::FakeHarnessd::new(|_| Response::SignedIn {
+            agent: AgentProvider::Claude,
+            claude: Some(ClaudeAccount {
+                credential_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
+                expires_at: None,
+            }),
+        })
+        .holding_complete(),
+    );
+    let harnesses = Arc::new(crate::computers::harnessd::fakes::recording_harnesses(
+        Arc::clone(&changes),
+    ));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        transport.clone(),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
+    );
     let cleanup = tokio_util::task::TaskTracker::new();
-    let shutdown = tokio_util::sync::CancellationToken::new();
-    let control =
-        super::ComputerControl::start(runtimes, redis.clone(), &cleanup, shutdown.clone());
-    let (mode_saved, saved) = tokio::sync::oneshot::channel();
-    let mut repo = MockHarnessRepo::new();
-    repo.expect_set_claude_mode()
-        .times(1)
-        .return_once(move |id, change| {
-            assert_eq!(id, harness_id);
-            assert_eq!(
-                change,
-                ClaudeModeChange::SignedIn {
-                    signed_in_by: macro_user_id::user_id::MacroUserIdStr::try_from(
-                        "macro|owner@example.com".to_owned()
-                    )
-                    .unwrap(),
-                }
-            );
-            Box::pin(async move {
-                mode_saved.send(()).unwrap();
-                Ok(true)
-            })
-        });
     let state = super::ClaudeAccessState {
-        harnesses: Arc::new(HarnessServiceImpl::new(repo)),
+        harnesses,
+        harnessd: harnessd.clone(),
         rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
             feature_flags::outbound::fake::FakeFeatureFlags::default(),
         ),
         fleet_attachment: FleetAttachment::Attached,
-        control,
-        redis: redis.clone(),
         cleanup: cleanup.clone(),
         authorization_state: macro_authorization::MacroAuthorizationState::new(Arc::new(())),
     };
-    let request = tokio::spawn(async move {
-        state
-            .complete_sign_in(
-                harness_id,
-                "test-code".to_owned(),
-                macro_user_id::user_id::MacroUserIdStr::try_from(
-                    "macro|owner@example.com".to_owned(),
-                )
-                .unwrap(),
-            )
-            .await
-    });
-    let ToRuntimeMessage::ComputerControl {
-        request_id: completion_id,
-        command,
-        ..
-    } = runtime.rx.recv().await.unwrap()
-    else {
-        panic!("expected completion command");
-    };
-    assert!(matches!(
-        command,
-        ComputerCommand::ClaudeSignInComplete { .. }
-    ));
-    request.abort();
-    assert!(request.await.unwrap_err().is_cancelled());
-    let ToRuntimeMessage::ComputerControl {
-        request_id: cancel_id,
-        command,
-        ..
-    } = runtime.rx.recv().await.unwrap()
-    else {
-        panic!("expected cancel command");
-    };
-    assert_eq!(command, ComputerCommand::ClaudeSignInCancel);
-    // macrod committed just before cancellation; its result still owns the mode write.
-    runtime
-        .tx
-        .send(ToServerMessage::ComputerControlResponse {
-            request_id: completion_id,
-            result: ComputerControlResult::SignedIn { account: None },
-        })
-        .unwrap();
-    if acknowledge_cancel {
-        runtime
-            .tx
-            .send(ToServerMessage::ComputerControlResponse {
-                request_id: cancel_id,
-                result: ComputerControlResult::SignInCancelled,
-            })
+    let signer =
+        macro_user_id::user_id::MacroUserIdStr::try_from("macro|owner@example.com".to_owned())
             .unwrap();
-    } else {
-        drop(runtime);
-    }
-    tokio::time::timeout(std::time::Duration::from_secs(2), saved)
-        .await
-        .unwrap()
-        .unwrap();
-    shutdown.cancel();
+    let computer = computer_id::ComputerId::new_from_uuid(uuid::Uuid::from_u128(1));
+
+    let request = tokio::spawn({
+        let signer = signer.clone();
+        async move {
+            state
+                .run(
+                    HarnessId::TEST_A,
+                    computer,
+                    Request::SignInComplete {
+                        agent: AgentProvider::Claude,
+                        code: "abc#def".to_owned(),
+                    },
+                    Some(signer),
+                )
+                .await
+        }
+    });
+    transport.complete_started.notified().await;
+    request.abort();
+    // harnessd answers the completion only after the caller left.
+    transport.release_complete();
     cleanup.close();
     cleanup.wait().await;
-    super::bus::AccountChange::claim(&redis, harness_id, &cleanup)
-        .await
-        .unwrap()
-        .release()
-        .await
-        .unwrap();
+
+    assert_eq!(
+        *changes.lock().unwrap(),
+        vec![(
+            HarnessId::TEST_A,
+            harnesses::domain::account_logins::AccountLoginChange::SignedIn {
+                provider: AgentProvider::Claude,
+                account: harnesses::domain::account_logins::ProviderAccountIdentity {
+                    external_account_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
+                },
+                expires_at: None,
+                signed_in_by: Some(signer),
+            }
+        )]
+    );
+}
+
+#[test]
+fn only_claudes_own_https_sign_in_links_are_handed_out() {
+    let real = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&scope=user%3Ainference&state=abc";
+    assert_eq!(super::trusted_sign_in_url(real).unwrap(), real);
+    assert!(super::trusted_sign_in_url("https://claude.ai/oauth/authorize?state=abc").is_ok());
+
+    for untrusted in [
+        "javascript:alert(1)",
+        "http://claude.com/cai/oauth/authorize?state=abc",
+        "https://claude.com.evil.test/cai/oauth/authorize?state=abc",
+        "https://evil.test/cai/oauth/authorize?state=abc",
+        "https://claude.com/somewhere/else",
+        "https://claude.com/evil/oauth/authorize?state=abc",
+        "https://claude.ai/x/cai/oauth/authorize?state=abc",
+        "not a url",
+    ] {
+        assert!(
+            matches!(
+                super::trusted_sign_in_url(untrusted),
+                Err(super::ComputerRouteError::UntrustedSignInUrl)
+            ),
+            "{untrusted}"
+        );
+    }
+}
+
+/// Claude sign-in on a computer is for its team's admins: another admin may
+/// start it, and the buyer may not once they left the team.
+#[tokio::test]
+async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use harness_id::HarnessId;
+    use harnesses::domain::{
+        models::{ClaudeMode, Harness, HarnessAccess, HarnessOwner},
+        ports::MockHarnessRepo,
+        service::HarnessServiceImpl,
+    };
+    use macro_authorization::{
+        InternalAuthConfig, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+        NoBotAuthorizer, NoUserApiKeyAuthorizer,
+    };
+    use std::sync::Arc;
+    use tower::ServiceExt as _;
+
+    let mut repo = MockHarnessRepo::new();
+    repo.expect_get_harness().returning(|id| {
+        Box::pin(async move {
+            Ok(Some(Harness {
+                id,
+                kind: "macrod".to_owned(),
+                name: "Computer".to_owned(),
+                // "owner" bought it, then left the team.
+                owner: HarnessOwner::User {
+                    user_id: "macro|owner@example.com".to_owned(),
+                },
+                created_by: "macro|owner@example.com".to_owned(),
+                created_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                updated_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                allow_permission_bypass: true,
+                access: Default::default(),
+                shared_team_ids: vec![uuid::Uuid::from_u128(7)],
+                connected: true,
+                last_connected_at: None,
+                computer_id: Some(computer_id::ComputerId::new_from_uuid(
+                    uuid::Uuid::from_u128(1),
+                )),
+                claude_mode: ClaudeMode::MacroCredits,
+            }))
+        })
+    });
+    // "other" is an admin of the computer's team.
+    repo.expect_harness_access().returning(|_, caller| {
+        Box::pin(async move {
+            Ok(match caller.as_ref() {
+                "macro|other@example.com" => HarnessAccess::Owner,
+                _ => HarnessAccess::None,
+            })
+        })
+    });
+    repo.expect_user_owns_team()
+        .returning(|_, _| Box::pin(async { Ok(false) }));
+    let authorization = MacroAuthorizationServiceImpl::new(
+        TestIdentity,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_owned(),
+            default_user_id: None,
+        },
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in ["macro|owner@example.com", "macro|other@example.com"] {
+        flags.set(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+            Ok(feature_flags::FlagSnapshot::new([(
+                "enable-macro-computers".into(),
+                feature_flags::FlagValue::Boolean(true),
+            )])),
+        );
+    }
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
+        harnessd_protocol::Response::SignInStarted {
+            agent: harnessd_protocol::AgentProvider::Claude,
+            url: "https://claude.com/cai/oauth/authorize?code=true&client_id=test".to_owned(),
+        }
+    }));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        transport.clone(),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
+    );
+    let tasks = tokio_util::task::TaskTracker::new();
+    let app = super::router(
+        harnessd,
+        harnesses,
+        MacroAuthorizationState::new(Arc::new(authorization)),
+        hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
+        FleetAttachment::Attached,
+        &tasks,
+    );
+    let sign_in = |bearer: &str| {
+        Request::builder()
+            .method("POST")
+            .uri(format!("/harnesses/{}/claude-sign-in", HarnessId::TEST_A))
+            .header("authorization", format!("Bearer {bearer}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+
+    let admin = app.clone().oneshot(sign_in("other")).await.unwrap();
+    assert_eq!(admin.status(), StatusCode::OK);
+    let reached = transport.requests.lock().unwrap().len();
+    assert!(reached > 0);
+    let buyer = app.oneshot(sign_in("owner")).await.unwrap();
+    assert_eq!(buyer.status(), StatusCode::FORBIDDEN);
+    // The buyer's request never reached the computer.
+    assert_eq!(transport.requests.lock().unwrap().len(), reached);
+    tasks.close();
+    tasks.wait().await;
+}
+
+#[test]
+fn the_pasted_code_never_reaches_debug_output() {
+    let body = super::ClaudeSignInComplete {
+        code: "abc#def".to_owned(),
+    };
+    let shown = format!("{body:?}");
+    assert!(!shown.contains("abc#def"), "{shown}");
 }

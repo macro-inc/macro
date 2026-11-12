@@ -2300,6 +2300,11 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
                           computerName: zod
                             .string()
                             .describe(
@@ -2309,7 +2314,7 @@ export const listTypedNotificationsResponse = zod
                             .datetime({})
                             .nullish()
                             .describe(
-                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
                             ),
                           harnessId: zod
                             .uuid()
@@ -2319,16 +2324,16 @@ export const listTypedNotificationsResponse = zod
                           stage: zod
                             .enum(['expires_soon', 'expires_today', 'expired'])
                             .describe(
-                              "How close a computer's Claude sign-in is to no longer working."
+                              "How close a computer's agent sign-in is to no longer working."
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
-                      tag: zod.enum(['claude_sign_in_expiry']),
+                      tag: zod.enum(['agent_sign_in_expiry']),
                     })
                     .describe(
-                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
                     ),
                   zod
                     .object({
@@ -4512,6 +4517,11 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
                           computerName: zod
                             .string()
                             .describe(
@@ -4521,7 +4531,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .datetime({})
                             .nullish()
                             .describe(
-                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
                             ),
                           harnessId: zod
                             .uuid()
@@ -4531,16 +4541,16 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           stage: zod
                             .enum(['expires_soon', 'expires_today', 'expired'])
                             .describe(
-                              "How close a computer's Claude sign-in is to no longer working."
+                              "How close a computer's agent sign-in is to no longer working."
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
-                      tag: zod.enum(['claude_sign_in_expiry']),
+                      tag: zod.enum(['agent_sign_in_expiry']),
                     })
                     .describe(
-                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
                     ),
                   zod
                     .object({
@@ -6674,6 +6684,11 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .enum(['claude'])
+                            .describe(
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                            ),
                           computerName: zod
                             .string()
                             .describe(
@@ -6683,7 +6698,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .datetime({})
                             .nullish()
                             .describe(
-                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                              'When the sign-in expires or expired; absent when the agent rejected it.'
                             ),
                           harnessId: zod
                             .uuid()
@@ -6693,16 +6708,16 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           stage: zod
                             .enum(['expires_soon', 'expires_today', 'expired'])
                             .describe(
-                              "How close a computer's Claude sign-in is to no longer working."
+                              "How close a computer's agent sign-in is to no longer working."
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                          "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
-                      tag: zod.enum(['claude_sign_in_expiry']),
+                      tag: zod.enum(['agent_sign_in_expiry']),
                     })
                     .describe(
-                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                      "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
                     ),
                   zod
                     .object({
@@ -8678,6 +8693,11 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  agent: zod
+                    .enum(['claude'])
+                    .describe(
+                      'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
+                    ),
                   computerName: zod
                     .string()
                     .describe("The computer's name when the notice was sent."),
@@ -8685,7 +8705,7 @@ export const getTypedNotificationByIdResponse = zod
                     .datetime({})
                     .nullish()
                     .describe(
-                      'When the sign-in expires or expired; absent when Claude rejected it.'
+                      'When the sign-in expires or expired; absent when the agent rejected it.'
                     ),
                   harnessId: zod
                     .uuid()
@@ -8695,16 +8715,16 @@ export const getTypedNotificationByIdResponse = zod
                   stage: zod
                     .enum(['expires_soon', 'expires_today', 'expired'])
                     .describe(
-                      "How close a computer's Claude sign-in is to no longer working."
+                      "How close a computer's agent sign-in is to no longer working."
                     ),
                 })
                 .describe(
-                  "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                  "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                 ),
-              tag: zod.enum(['claude_sign_in_expiry']),
+              tag: zod.enum(['agent_sign_in_expiry']),
             })
             .describe(
-              "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+              "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
             ),
           zod
             .object({

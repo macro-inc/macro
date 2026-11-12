@@ -86,16 +86,10 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
             .timestamp_opt(1_800_000_000 + seconds, 0)
             .unwrap()
     };
-    let host = crate::domain::ids::HostId::new(uuid::Uuid::from_u128(3));
     let mut setup = SetupTimeline::started(at(0));
-    let mut finished = setup.advance(
-        &Phase::Provisioning { host, start: true },
-        false,
-        false,
-        at(5),
-    );
-    finished.extend(setup.advance(&Phase::Booting { host }, false, false, at(20)));
-    finished.extend(setup.advance(&Phase::Running { host }, true, false, at(80)));
+    let mut finished = setup.advance(&Phase::Provisioning { start: true }, false, false, at(5));
+    finished.extend(setup.advance(&Phase::Booting, false, false, at(20)));
+    finished.extend(setup.advance(&Phase::Running, true, false, at(80)));
 
     setup_waits(
         &provider.tracer("test"),
@@ -141,7 +135,7 @@ fn setup_waits_export_recorded_times_under_the_purchase_trace() {
 #[test]
 fn work_joins_the_purchase_trace_only_while_setup_runs() {
     use crate::domain::ids::HostId;
-    use crate::domain::lifecycle::{ComputerState, Phase};
+    use crate::domain::lifecycle::{Billing, BillingPolicy, Context, Phase, provision};
 
     global::set_text_map_propagator(opentelemetry_sdk::propagation::TraceContextPropagator::new());
     let exporter = InMemorySpanExporter::default();
@@ -152,15 +146,31 @@ fn work_joins_the_purchase_trace_only_while_setup_runs() {
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
     let host = HostId::new(uuid::Uuid::from_u128(3));
     let now = chrono::Utc::now();
-    let mut state = ComputerState::reserved(host, now);
+    let (mut state, _) = provision(
+        Billing::Comped {
+            reason: "telemetry".to_owned(),
+        },
+        crate::domain::setup::SetupTimeline::started(now),
+        None,
+        Context {
+            host,
+            enrollment_generation: Default::default(),
+            now,
+            host_has_room: true,
+            policy: BillingPolicy::from_days(14, 7).unwrap(),
+        },
+    );
     state.provision_traceparent =
         Some("00-11111111111111111111111111111111-2222222222222222-01".to_owned());
     tracing::subscriber::with_default(subscriber, || {
         let during = tracing::info_span!("during");
         adopt(&during, &state);
         drop(during.enter());
-        let setup = state.setup.as_mut().expect("reserved rows time setup");
-        setup.advance(&Phase::Running { host }, true, false, now);
+        let setup = state
+            .setup
+            .as_mut()
+            .expect("provisioned computers time setup");
+        setup.advance(&Phase::Running, true, false, now);
         let after = tracing::info_span!("after");
         adopt(&after, &state);
         drop(after.enter());

@@ -26,8 +26,6 @@ label disappears as the run starts. The result is the `CI gate` commit status on
 that commit. `main` requires `CI gate` to pass on the PR's latest commit, so
 every push needs a new run before the PR can merge.
 
-Request CI on a stacked PR's actual base; the gate accepts feature branches too.
-
 ## Run it
 
 Push first, then ask for the run:

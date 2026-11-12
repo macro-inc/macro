@@ -549,6 +549,16 @@
         "type": "object",
         "x-go-package": "github.com/lxc/incus/v7/shared/api"
       },
+      "InstanceRebuildPost": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/InstanceSource"
+          }
+        },
+        "title": "InstanceRebuildPost indicates how to rebuild an instance.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
       "InstanceSource": {
         "properties": {
           "alias": {
@@ -1590,6 +1600,134 @@
         "title": "StatusCode represents a valid operation and container status.",
         "type": "integer",
         "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "StorageVolumeSource": {
+        "description": "StorageVolumeSource represents the creation source for a new storage volume",
+        "properties": {
+          "certificate": {
+            "description": "Certificate (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "X509 PEM certificate",
+            "type": "string",
+            "x-go-name": "Certificate"
+          },
+          "location": {
+            "description": "What cluster member this record was found on\n\nAPI extension: cluster_internal_custom_volume_copy",
+            "example": "server01",
+            "type": "string",
+            "x-go-name": "Location"
+          },
+          "mode": {
+            "description": "Whether to use pull or push mode (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "pull",
+            "type": "string",
+            "x-go-name": "Mode"
+          },
+          "name": {
+            "description": "Source volume name (for copy)",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "operation": {
+            "description": "Remote operation URL (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": "https://1.2.3.4:8443/1.0/operations/1721ae08-b6a8-416a-9614-3f89302466e1",
+            "type": "string",
+            "x-go-name": "Operation"
+          },
+          "pool": {
+            "description": "Source storage pool (for copy)",
+            "example": "local",
+            "type": "string",
+            "x-go-name": "Pool"
+          },
+          "project": {
+            "description": "Source project name\n\nAPI extension: storage_api_project",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "refresh": {
+            "description": "Whether existing destination volume should be refreshed\n\nAPI extension: custom_volume_refresh",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "Refresh"
+          },
+          "refresh_exclude_older": {
+            "description": "Whether to exclude source snapshots earlier than latest target snapshot\n\nAPI extension: custom_volume_refresh_exclude_older_snapshots",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "RefreshExcludeOlder"
+          },
+          "secrets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Map of migration websockets (for migration)\n\nAPI extension: storage_api_remote_volume_handling",
+            "example": {
+              "rsync": "RANDOM-STRING"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Websockets"
+          },
+          "type": {
+            "description": "Source type (copy or migration)",
+            "example": "copy",
+            "type": "string",
+            "x-go-name": "Type"
+          },
+          "volume_only": {
+            "description": "Whether snapshots should be discarded (for migration)\n\nAPI extension: storage_api_volume_snapshots",
+            "example": false,
+            "type": "boolean",
+            "x-go-name": "VolumeOnly"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
+      "StorageVolumesPost": {
+        "description": "StorageVolumesPost represents the fields of a new storage pool volume",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "content_type": {
+            "description": "Volume content type (filesystem or block)\n\nAPI extension: custom_block_volumes",
+            "example": "filesystem",
+            "type": "string",
+            "x-go-name": "ContentType"
+          },
+          "description": {
+            "description": "Description of the storage volume\n\nAPI extension: entity_description",
+            "example": "My custom volume",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "name": {
+            "description": "Volume name",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "restore": {
+            "description": "Name of a snapshot to restore\n\nAPI extension: storage_api_volume_snapshots",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "source": {
+            "$ref": "#/components/schemas/StorageVolumeSource"
+          },
+          "type": {
+            "description": "Volume type (container, custom, image or virtual-machine)",
+            "example": "custom",
+            "type": "string",
+            "x-go-name": "Type"
+          }
+        },
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
       }
     }
   },
@@ -2417,6 +2555,79 @@
         ]
       }
     },
+    "/1.0/instances/{name}/rebuild": {
+      "post": {
+        "description": "Rebuild an instance using an alternate image or as empty.",
+        "operationId": "instance_rebuild_post",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceRebuildPost"
+              }
+            }
+          },
+          "description": "InstanceRebuild request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Rebuild an instance",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
     "/1.0/instances/{name}/state": {
       "get": {
         "description": "Gets the runtime state of the instance.\n\nThis is a reasonably expensive call as it causes code to be run\ninside of the instance to retrieve the resource usage and network\ninformation.",
@@ -2798,6 +3009,186 @@
         "summary": "Get system resources information",
         "tags": [
           "server"
+        ]
+      }
+    },
+    "/1.0/storage-pools/{poolName}/volumes/{type}": {
+      "post": {
+        "description": "Creates a new storage volume (type specific endpoint).\nWill return an empty sync response on simple volume creation but an operation on copy or migration.",
+        "operationId": "storage_pool_volumes_type_post",
+        "parameters": [
+          {
+            "description": "Storage pool name",
+            "in": "path",
+            "name": "poolName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume type",
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageVolumesPost"
+              }
+            }
+          },
+          "description": "Storage volume",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptySyncResponse"
+                }
+              }
+            },
+            "description": "Empty sync response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a storage volume",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}": {
+      "delete": {
+        "description": "Removes the storage volume.",
+        "operationId": "storage_pool_volume_type_delete",
+        "parameters": [
+          {
+            "description": "Storage pool name",
+            "in": "path",
+            "name": "poolName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume type",
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume name",
+            "in": "path",
+            "name": "volumeName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptySyncResponse"
+                }
+              }
+            },
+            "description": "Empty sync response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete the storage volume",
+        "tags": [
+          "storage"
         ]
       }
     }

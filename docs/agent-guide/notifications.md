@@ -53,7 +53,9 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment. The shown row and stacked
+notification's message, thread, or comment. A conversation's composer takes
+focus, and Esc returns to the row; see
+[composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
@@ -365,18 +367,19 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
-### Macro computer Claude sign-ins
+### Macro computer agent sign-ins
 
-`claude_sign_in_expiry` notifications (inbox, browser, and phone push) warn the
-person who signed a team computer in to Claude, plus the team's owner and
+`agent_sign_in_expiry` notifications (inbox, browser, and phone push) carry the
+agent (`claude` for now) and warn the person who signed a team computer in to
+it, plus the team's owner and
 admins, that the sign-in expires soon (three days out), expires today (its last
-day), or expired (passed, or Claude rejected it). They name the computer and
+day), or expired (passed). They name the computer and
 open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
 the paste-the-code flow; see the
 [Macro computers walkthrough](settings.md#macro-computers). To check one
-without waiting days, set the computer's `harnesses.capabilities` report to
-`{"claude": {"status": "signed_out"}}` with a fresh `capabilities_reported_at`
-on a local stack: the notice arrives within a minute.
+without waiting days, set the computer's active `harness_account_logins` row's
+`expires_at` to within three days on a local stack: the notice arrives within a
+minute.
 
 ## Notification sounds
 

@@ -161,6 +161,7 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialogFrame, ShareDialogTitle } from './ShareDialogFrame';
+import { getShareDrawerRecipientInput } from './ShareDrawer';
 
 false && clickOutside;
 
@@ -310,19 +311,10 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
 const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
 export const refetchDocumentShareButtonResource = () => {
   invalidateSharePermissions();
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
+  refetchArray().forEach((refetch) => refetch());
 };
 
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
-}
+export { getShareDrawerRecipientInput };
 
 interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;

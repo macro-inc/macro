@@ -4,16 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ClaudeSignInExpiryMetadata } from './claudeSignInExpiryMetadata';
+import type { AgentSignInExpiryMetadata } from './agentSignInExpiryMetadata';
 import type { NotifEventOneOfSixnineTag } from './notifEventOneOfSixnineTag';
 
 /**
- * The Claude sign-in on one of the team's Macro computers is about
+ * An agent's sign-in on one of the team's Macro computers is about
 to expire, expired, or was rejected.
  */
 export type NotifEventOneOfSixnine = {
-  /** The Claude sign-in on one of the team's Macro computers is about
+  /** An agent's sign-in on one of the team's Macro computers is about
 to expire, expired, or was rejected. */
-  content: ClaudeSignInExpiryMetadata;
+  content: AgentSignInExpiryMetadata;
   tag: NotifEventOneOfSixnineTag;
 };

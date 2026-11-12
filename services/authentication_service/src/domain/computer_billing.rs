@@ -53,30 +53,38 @@ impl ComputerPrices {
     ) -> Option<&stripe::PriceId> {
         self.of(size).price_id(interval)
     }
-
-    /// Recognize an unlinked legacy computer charge without inferring its size.
-    pub fn contains_legacy_price(&self, price_id: &stripe::PriceId) -> bool {
-        ComputerSize::ALL.into_iter().any(|size| {
-            let prices = self.of(size);
-            [prices.monthly.as_ref(), prices.yearly.as_ref()]
-                .into_iter()
-                .flatten()
-                .any(|configured| configured == price_id)
-        })
-    }
 }
 
-/// Learns the complete subscription item snapshot after
-/// every team subscription webhook, so computers whose items were removed
-/// outside Macro (dashboard edits, cancellation) are cancelled too.
+/// Receives a complete team subscription snapshot after every team
+/// subscription webhook. It only reports; `hosted_runtimes` decides what the
+/// snapshot means for each computer (items matched by computer id).
 // Object-safe: `ApiContext` holds it as `Arc<dyn ComputerBillingObserver>`.
 #[async_trait::async_trait]
 pub trait ComputerBillingObserver: Send + Sync {
-    async fn billed_counts(
+    async fn subscription_observed(
         &self,
         team_id: uuid::Uuid,
-        items: Vec<hosted_runtimes::domain::models::SubscriptionItem>,
+        observed: hosted_runtimes::domain::service::SubscriptionObserved,
     ) -> Result<(), rootcause::Report>;
+}
+
+/// Releases a team's computers ahead of its deletion.
+#[async_trait::async_trait]
+pub trait TeamComputers: Send + Sync {
+    async fn release_team(&self, team_id: uuid::Uuid) -> Result<(), rootcause::Report>;
+}
+
+#[async_trait::async_trait]
+impl<Repo, Time> TeamComputers for hosted_runtimes::domain::service::TeamComputerRelease<Repo, Time>
+where
+    Repo: hosted_runtimes::domain::ports::ComputerRepo,
+    Time: hosted_runtimes::domain::service::Clock,
+{
+    async fn release_team(&self, team_id: uuid::Uuid) -> Result<(), rootcause::Report> {
+        hosted_runtimes::domain::service::TeamComputerRelease::release_team(self, team_id)
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())
+    }
 }
 
 #[cfg(test)]

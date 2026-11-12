@@ -227,3 +227,44 @@ fn quickstart_groups_herdr_agents_apart_from_headless_ones() {
     assert!(position("ACP") < headless);
     assert!(!rows.iter().any(|row| row.contains("in herdr")));
 }
+
+#[test]
+fn quickstart_wraps_a_long_install_error_instead_of_clipping_it() {
+    use ratatui::{Terminal, backend::TestBackend};
+    let mut setup = Quickstart::from_config_with_agents(
+        &config(Harness {
+            command: "hermes".to_owned(),
+            args: vec!["acp".to_owned()],
+            env: Default::default(),
+        }),
+        Vec::new(),
+    );
+    setup.status = Some((
+        "npm install @agentclientprotocol/codex-acp@1.8.0 failed: code EACCES; syscall mkdir; \
+         Error: EACCES: permission denied (npm log: /home/test/.npm/_logs/debug-0.log)"
+            .to_owned(),
+        true,
+    ));
+    for (width, height) in [(100, 40), (80, 24)] {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| {
+                crate::tui::ui::render_quickstart(
+                    frame,
+                    &setup,
+                    std::path::Path::new("macrod.toml"),
+                )
+            })
+            .unwrap();
+        let screen = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(screen.contains("permission denied"));
+        assert!(screen.contains("debug-0.log"));
+        assert!(screen.contains("Create and pair"));
+    }
+}

@@ -287,9 +287,9 @@ export function getNotificationActionText(n: Notification): string {
         ? 'failed'
         : 'finished';
     })
-    .with('claude_sign_in_expiry', () => {
+    .with('agent_sign_in_expiry', () => {
       const meta = n.notification_metadata;
-      return meta.tag === 'claude_sign_in_expiry' &&
+      return meta.tag === 'agent_sign_in_expiry' &&
         meta.content.stage === 'expired'
         ? 'expired'
         : 'expiring';
@@ -383,7 +383,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
-    .with({ tag: 'claude_sign_in_expiry' }, (m) => m.content.computerName)
+    .with({ tag: 'agent_sign_in_expiry' }, (m) => m.content.computerName)
     .exhaustive(() => '');
 }
 

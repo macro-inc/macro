@@ -13,11 +13,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::{
+    account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin},
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeModeChange,
+        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
-        HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
-        HarnessSession, HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
+        HarnessAgent, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
+        HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
         SetHarnessTeamAccessRequest,
     },
     ports::{
@@ -75,6 +76,21 @@ where
         caller: &MacroUserIdStr<'static>,
         harness: &Harness,
     ) -> Result<(), HarnessError> {
+        // A computer belongs to its team, whoever bought it: the access level
+        // makes the team's owner and admins its owners.
+        if harness.computer_id.is_some() {
+            let access = self
+                .repo
+                .harness_access(harness.id, caller.clone())
+                .await
+                .map_err(Into::into)?;
+            return match access {
+                HarnessAccess::Owner => Ok(()),
+                HarnessAccess::User | HarnessAccess::Read | HarnessAccess::None => {
+                    Err(HarnessError::Unauthorized)
+                }
+            };
+        }
         let HarnessOwner::User { user_id } = &harness.owner;
         if user_id == caller.as_ref() {
             return Ok(());
@@ -336,6 +352,16 @@ where
         if access != HarnessAccess::Owner {
             return Err(HarnessError::Unauthorized);
         }
+        // A computer's team access is its team, fixed at purchase.
+        if self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .is_some_and(|harness| harness.computer_id.is_some())
+        {
+            return Err(HarnessError::ComputerHarness);
+        }
         let is_member = self
             .repo
             .user_has_team(caller, req.team_id)
@@ -426,10 +452,7 @@ where
 
         self.ensure_may_manage(&caller, &harness).await?;
         if harness.computer_id.is_some() {
-            return Err(HarnessError::BadRequest(
-                "This machine is a Macro computer. Release it from Macro computers instead."
-                    .to_owned(),
-            ));
+            return Err(HarnessError::ComputerHarness);
         }
 
         if !self
@@ -467,7 +490,18 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_self(&self, harness_id: HarnessId) -> Result<(), HarnessError> {
         // The valid credential that authenticated this call is the whole
-        // authorization: a daemon may always retire itself.
+        // authorization: a daemon may retire itself, except a computer's,
+        // which only releasing the computer retires (agents stay bound to a
+        // computer harness until then).
+        if self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .is_some_and(|harness| harness.computer_id.is_some())
+        {
+            return Err(HarnessError::ComputerHarness);
+        }
         if !self
             .repo
             .delete_harness(harness_id)
@@ -489,27 +523,6 @@ where
             .list_sessions(harness_id)
             .await
             .map_err(Into::into)?)
-    }
-
-    #[tracing::instrument(
-        skip(self, capabilities),
-        fields(screen = capabilities.screen),
-        err
-    )]
-    async fn report_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> Result<(), HarnessError> {
-        if !self
-            .repo
-            .set_capabilities(harness_id, capabilities)
-            .await
-            .map_err(Into::into)?
-        {
-            return Err(HarnessError::NotFound("unknown harness".to_owned()));
-        }
-        Ok(())
     }
 
     #[tracing::instrument(
@@ -603,6 +616,18 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Vec<HarnessId>, HarnessError> {
+        Ok(self
+            .repo
+            .computer_harness_ids(computer_id)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn harness_computer(
         &self,
         harness_id: HarnessId,
@@ -642,20 +667,34 @@ where
         Ok(harness)
     }
 
-    #[tracing::instrument(skip(self, change), fields(mode = change.mode().as_str()), err)]
-    async fn set_claude_mode(
+    #[tracing::instrument(skip(self, change), fields(provider = change.provider().as_ref()), err)]
+    async fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> Result<(), HarnessError> {
         if !self
             .repo
-            .set_claude_mode(harness_id, change)
+            .record_account_login(harness_id, change)
             .await
             .map_err(Into::into)?
         {
             return Err(HarnessError::NotFound("unknown harness".to_owned()));
         }
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(provider = provider.as_ref()), err)]
+    async fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> Result<Option<HarnessAccountLogin>, HarnessError> {
+        let login = self
+            .repo
+            .active_account_login(harness_id, provider)
+            .await
+            .map_err(Into::<anyhow::Error>::into)?;
+        Ok(login)
     }
 }

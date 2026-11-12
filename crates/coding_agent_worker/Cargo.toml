@@ -30,7 +30,6 @@ clap = { workspace = true }
 crossterm = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
-genai_telemetry = { path = "../genai_telemetry" }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }
@@ -83,7 +82,9 @@ tar = { workspace = true }
 
 # Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
 # Linux, and a musl build has no system OpenSSL to link: compile it in.
+# mimalloc is the musl release's allocator (see `src/main.rs`).
 [target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { workspace = true }
 openssl-sys = { workspace = true, features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]

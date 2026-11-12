@@ -1,6 +1,11 @@
+import { ThrownResultError } from '@core/util/result';
 import type { ComputerStatus, SetupStep } from '@service-auth/computers';
 import { describe, expect, it } from 'vitest';
-import { canTogglePower, computerStatusLabel } from './computer-display';
+import {
+  canTogglePower,
+  computerFailureMessage,
+  computerStatusLabel,
+} from './computer-display';
 
 const waiting: ComputerStatus = {
   id: 'computer-capacity-test',
@@ -11,8 +16,12 @@ const waiting: ComputerStatus = {
   diskGib: 100,
   catalogEntry: 'standard@2026-11',
   status: 'waiting_for_capacity',
-  payment: 'paid',
+  billing: 'active',
   poweredOn: true,
+  agentCount: 0,
+  canUndoCancel: false,
+  canRestore: false,
+  purchasedBy: 'viewer',
   createdAt: '2026-11-01T00:00:00Z',
 };
 
@@ -49,20 +58,22 @@ it.each<{ step: SetupStep; label: string; position: number }>([
   { step: 'creating', label: 'Creating the computer', position: 1 },
   { step: 'booting', label: 'Starting up', position: 2 },
   { step: 'connecting', label: 'Connecting to Macro', position: 3 },
-  { step: 'ready', label: 'Ready', position: 4 },
-])('renders canonical $step progress', ({ step, label, position }) => {
-  const status = computerStatusLabel({
-    ...waiting,
-    status: 'setting_up',
-    setup: { step, position, total: 4 },
-  });
-  expect(status).toEqual({
-    label: 'Setting up',
-    detail: `${label} (step ${position} of 4)`,
-    tone: 'progress',
-  });
-  expect(`${status.label} ${status.detail}`).not.toMatch(/paying|payment/i);
-});
+])(
+  'renders $step as one of the three setup phases',
+  ({ step, label, position }) => {
+    const status = computerStatusLabel({
+      ...waiting,
+      status: 'setting_up',
+      setup: { step, position, total: 4 },
+    });
+    expect(status).toEqual({
+      label: 'Setting up',
+      detail: `${label} (${position} of 3)`,
+      tone: 'progress',
+    });
+    expect(`${status.label} ${status.detail}`).not.toMatch(/paying|payment/i);
+  }
+);
 
 it('keeps an unrecognized runtime step generic without exposing raw text', () => {
   const setup: NonNullable<ComputerStatus['setup']> = {
@@ -78,5 +89,25 @@ it('keeps an unrecognized runtime step generic without exposing raw text', () =>
     label: 'Setting up',
     detail: undefined,
     tone: 'progress',
+  });
+});
+
+describe('computerFailureMessage', () => {
+  it('shows a translated message for each known failure and the fallback otherwise', () => {
+    const failure = (code: string) =>
+      new ThrownResultError([{ code, message: 'server wording' }]);
+
+    expect(computerFailureMessage(failure('PAYMENT_FAILED'), 'Fallback')).toBe(
+      "Your team's payment method was declined."
+    );
+    expect(computerFailureMessage(failure('NAME_MISMATCH'), 'Fallback')).toBe(
+      "The name you typed doesn't match this computer."
+    );
+    expect(computerFailureMessage(failure('HTTP_500'), 'Fallback')).toBe(
+      'Fallback'
+    );
+    expect(computerFailureMessage(new Error('boom'), 'Fallback')).toBe(
+      'Fallback'
+    );
   });
 });

@@ -683,7 +683,7 @@ function getSupportedHandler(
       })
       // Signing in again happens on the computer's row in Settings → Runtimes.
       .with(
-        'claude_sign_in_expiry',
+        'agent_sign_in_expiry',
         () =>
           async (lm: SplitManager, newSplit: boolean = false) =>
             openContent(
@@ -714,7 +714,7 @@ function getSupportedHandler(
 }
 
 /** Settings → Runtimes, where a runtime's sharing and access live. */
-function openRuntimesSettings(
+export function openRuntimesSettings(
   layoutManager: SplitManager,
   options: OpenOptions
 ) {

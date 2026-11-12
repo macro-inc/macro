@@ -14,6 +14,9 @@ import type { PurchaseBodyName } from './purchaseBodyName';
 export interface PurchaseBody {
   /** Display name. */
   name?: PurchaseBodyName;
+  /** The client's key for this purchase: one per Buy dialog, sent again
+when the purchase is retried, so a retry never charges twice. */
+  purchaseKey: string;
   /** Purchased catalog size. */
   size: ComputerSize;
 }

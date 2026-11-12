@@ -6,13 +6,13 @@ import {
   invalidateHarnesses,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
+import { harnessKeys } from '@queries/harnesses/keys';
 import {
-  type ComputerSize,
   type ComputerStatus,
   type ComputerStatusKind,
   computersClient,
   type PurchaseComputerRequest,
-  type SizeOffer,
+  TEAM_ON_TRIAL,
 } from '@service-auth/computers';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { createEffect, on } from 'solid-js';
@@ -21,6 +21,7 @@ import { computerKeys } from './keys';
 const TRANSITION_POLL_MS = 3_000;
 
 const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
+  'purchasing',
   'setting_up',
   'waiting_for_capacity',
   'starting',
@@ -69,33 +70,71 @@ export function computerPresenceKey(
     .join(',');
 }
 
+/**
+ * Each computer's lifecycle status, as one comparable string. A change is the
+ * cue to refresh the runtime directory, which shows computers' power state
+ * elsewhere and does not poll on its own.
+ */
+export function computerStatusKey(
+  computers: readonly ComputerStatus[] | undefined
+): string {
+  return (computers ?? [])
+    .map((computer) => `${computer.id}:${computer.status}`)
+    .join(',');
+}
+
+/**
+ * The last presence and status keys acted on, shared by every
+ * `useComputersQuery` caller, so one change refreshes once however many
+ * callers are mounted. Module-level on purpose: two components (on Settings →
+ * Agents) each run the query, and keys kept per hook would invalidate twice.
+ */
+const handledKeys = { presence: '', status: '' };
+
+/** Runs `refresh` when `key` changes, once across every caller. */
+function refreshOnChange(
+  kind: keyof typeof handledKeys,
+  key: () => string,
+  refresh: () => void
+) {
+  createEffect(
+    on(
+      key,
+      (next) => {
+        if (next === handledKeys[kind]) return;
+        handledKeys[kind] = next;
+        refresh();
+      },
+      { defer: true }
+    )
+  );
+}
+
 /** The current team's Macro computers; any team member can read them. */
 export function useComputersQuery(enabled: () => boolean) {
   const computers = useQuery(() => computersQueryOptions(enabled()));
   const harnesses = useHarnessesQuery();
-  createEffect(
-    on(
-      () =>
-        computerPresenceKey(
-          computers.data,
-          new Set(
-            (harnesses.data ?? [])
-              .filter((harness) => harness.connected)
-              .map((harness) => harness.id)
-          )
-        ),
-      () => {
-        if (enabled()) {
-          fireAndForget(
-            queryClient.invalidateQueries({
-              queryKey: computerKeys.list.queryKey,
-            }),
-            'computers-presence'
-          );
-        }
-      },
-      { defer: true }
-    )
+  const invalidate = (queryKey: readonly unknown[], name: string) => {
+    if (!enabled()) return;
+    fireAndForget(queryClient.invalidateQueries({ queryKey }), name);
+  };
+  refreshOnChange(
+    'presence',
+    () =>
+      computerPresenceKey(
+        computers.data,
+        new Set(
+          (harnesses.data ?? [])
+            .filter((harness) => harness.connected)
+            .map((harness) => harness.id)
+        )
+      ),
+    () => invalidate(computerKeys.list.queryKey, 'computers-presence')
+  );
+  refreshOnChange(
+    'status',
+    () => computerStatusKey(computers.data),
+    () => invalidate(harnessKeys.directory.queryKey, 'computers-directory')
   );
   return computers;
 }
@@ -105,6 +144,9 @@ function computerOffersQueryOptions(enabled: boolean) {
     queryKey: computerKeys.offers.queryKey,
     enabled,
     queryFn: () => throwOnErr(computersClient.offers),
+    // A trial doesn't end by retrying; show why at once.
+    retry: (failures, error) =>
+      !thrownResultErrorHasCode(error, TEAM_ON_TRIAL) && failures < 3,
   });
 }
 
@@ -131,6 +173,7 @@ async function purchaseComputer(request: PurchaseComputerRequest) {
         computersClient.purchase(request)
       );
       span.setAttr('computer.id', purchased.computerId);
+      span.setAttr('computer.purchase_state', purchased.state);
       return purchased;
     } catch (error) {
       span.error('Computer purchase failed');
@@ -150,23 +193,6 @@ export function usePurchaseComputerMutation() {
           queryKey: computerKeys.offers.queryKey,
         }),
       ]);
-    },
-  }));
-}
-
-export function useNotifyComputerSizeMutation() {
-  return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: (size: ComputerSize) =>
-      throwOnErr(() => computersClient.notify(size)),
-    onSuccess: (_data, size) => {
-      queryClient.setQueryData<SizeOffer[]>(
-        computerKeys.offers.queryKey,
-        (current = []) =>
-          current.map((offer) =>
-            offer.size === size ? { ...offer, notifyRequested: true } : offer
-          )
-      );
     },
   }));
 }
@@ -198,6 +224,26 @@ export function useUndoCancelComputerMutation() {
   }));
 }
 
+/** Sets a failed computer up again; billing is untouched. */
+export function useRetryComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.retry(computerId)),
+    onSuccess: storeComputer,
+  }));
+}
+
+/** Bills a released computer again while its disk is still retained. */
+export function useRestoreComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.restore(computerId)),
+    onSuccess: storeComputer,
+  }));
+}
+
 export function useReleaseComputerMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -209,5 +255,15 @@ export function useReleaseComputerMutation() {
       storeComputer(released);
       await invalidateHarnesses();
     },
+  }));
+}
+
+/** Marks guided setup finished, so the card stops offering Finish setup. */
+export function useCompleteComputerSetupMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.completeSetup(computerId)),
+    onSuccess: storeComputer,
   }));
 }

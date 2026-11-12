@@ -2,7 +2,8 @@
 
 use ai_billing::domain::{EntitlementSource, PlanTier, SubscriptionScope};
 use chrono::{DateTime, Utc};
-use macro_user_id::user_id::MacroUserIdStr;
+use hosted_runtimes::domain::rollout::ComputerRollout;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use teams::domain::model::ScheduledSeatPlan;
 
 use super::subscription_plan::PlanChangeError;
@@ -63,14 +64,17 @@ pub struct SubscriptionStatus {
 pub struct SubscriptionStatusService<E, G> {
     entitlements: E,
     gateway: G,
+    /// The billing breakdown belongs to Macro computers; off, status reads as before them.
+    rollout: ComputerRollout,
 }
 
 impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusService<E, G> {
     /// Compose the owning entitlement port with the provider read capability.
-    pub fn new(entitlements: E, gateway: G) -> Self {
+    pub fn new(entitlements: E, gateway: G, rollout: ComputerRollout) -> Self {
         Self {
             entitlements,
             gateway,
+            rollout,
         }
     }
 
@@ -100,7 +104,8 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         if let SubscriptionScope::Team { team_id } = scope {
             tracing::Span::current().record("team_id", tracing::field::display(team_id));
         }
-        let read_billing = self.gateway.billing_access(scope, user).await?.can_view();
+        let read_billing = self.rollout.enabled(&user.clone().into_owned()).await
+            && self.gateway.billing_access(scope, user).await?.can_view();
         tracing::Span::current().record("billing_allowed", read_billing);
         let Some(facts) = self
             .gateway

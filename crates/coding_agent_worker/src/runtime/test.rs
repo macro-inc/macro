@@ -15,6 +15,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
+            pairing_id: None,
         },
         Harness {
             command: "cat".to_owned(),

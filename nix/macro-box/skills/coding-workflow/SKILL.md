@@ -7,6 +7,9 @@ description: How to take a coding task from prompt to pushed branch on this Macr
 
 1. Clone into `/home/macro/work/<repo>` (or reuse the existing checkout) and
    read its `AGENTS.md` / `CLAUDE.md` / README before changing anything.
+   This machine is NixOS without `apt`: get a missing toolchain with
+   `nix shell nixpkgs#<package>` (or the repo's own `flake.nix` /
+   `nix develop`), or run it in Docker.
 2. Work on a branch, never the default branch. Commit in small logical
    commits with clear messages.
 3. Run the project's own checks (tests, lint, type check) before saying the

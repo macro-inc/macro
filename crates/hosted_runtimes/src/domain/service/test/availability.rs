@@ -1,7 +1,6 @@
 use super::*;
 use crate::domain::models::FleetAttachment;
 use crate::domain::ports::StaticFleetAttachment;
-use std::str::FromStr;
 
 #[tokio::test]
 async fn detached_fleet_precedes_missing_rows_and_all_side_effects() {
@@ -21,6 +20,7 @@ async fn detached_fleet_precedes_missing_rows_and_all_side_effects() {
         service
             .purchase(PurchaseRequest {
                 billing: PurchaseBilling::Stripe,
+                purchase_key: key("buy-dialog-1"),
                 team_id: TEAM,
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 size: ComputerSize::Standard,
@@ -51,105 +51,6 @@ async fn detached_catalog_needs_no_prices() {
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }
 
-#[tokio::test]
-async fn maintenance_can_read_and_release_with_detached_fleet() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    struct RecordingAttachment(AtomicUsize);
-    impl crate::domain::ports::FleetAttachmentSource for RecordingAttachment {
-        type Err = std::convert::Infallible;
-        async fn attachment(
-            &self,
-            observed_now: DateTime<Utc>,
-        ) -> Result<FleetAttachment, Self::Err> {
-            assert_eq!(observed_now, now());
-            self.0.fetch_add(1, Ordering::SeqCst);
-            Ok(FleetAttachment::Detached)
-        }
-    }
-    let repo = FakeRepo {
-        sold_units: 9,
-        ..FakeRepo::default()
-    };
-    let id = ComputerId::new_from_uuid(Uuid::now_v7());
-    repo.reserve(
-        NewComputer {
-            id,
-            team_id: TEAM,
-            name: ComputerName::try_new("Build box").unwrap(),
-            billing: PurchaseBilling::Stripe,
-            extra_items: vec![],
-            size: ComputerSize::Standard,
-            resources: crate::domain::size::current_catalog()[0].resources,
-            catalog_entry: crate::domain::size::current_catalog()[0].id.clone(),
-            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-        },
-        now(),
-    )
-    .await
-    .unwrap();
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
-    let service = ComputerService::new(
-        repo,
-        FakeBilling::default(),
-        FixedClock,
-        RecordingAttachment(AtomicUsize::new(0)),
-    );
-    let roster = service
-        .maintenance()
-        .status_for_roster(TEAM, id)
-        .await
-        .unwrap();
-    assert_eq!(roster.status.id, id);
-    assert_eq!(roster.availability, FleetAttachment::Detached);
-    let calls = service.attachment.0.load(Ordering::SeqCst);
-    assert!(matches!(
-        service
-            .maintenance()
-            .request_release(Uuid::now_v7(), id)
-            .await,
-        Err(ComputerError::NotFound)
-    ));
-    let released = service
-        .maintenance()
-        .request_release(TEAM, id)
-        .await
-        .unwrap();
-    assert_eq!(
-        released.status,
-        crate::domain::models::ComputerStatusKind::Released
-    );
-    assert_eq!(service.attachment.0.load(Ordering::SeqCst), calls);
-    assert!(
-        service
-            .repo
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(event_id, event)| *event_id == id && matches!(event, Event::ReleaseNow))
-    );
-    assert!(service.billing.calls.lock().unwrap().is_empty());
-    let effects = service.repo.effects.lock().unwrap();
-    assert!(
-        effects
-            .iter()
-            .any(|pending| matches!(pending.effect, Effect::RemoveBillingItem))
-    );
-    assert!(
-        effects
-            .iter()
-            .any(|pending| matches!(pending.effect, Effect::Destroy { .. }))
-    );
-    assert!(
-        effects
-            .iter()
-            .any(|pending| matches!(pending.effect, Effect::RevokeHarness))
-    );
-}
-
 /// Comp policy for exercising the registered HTTP routes.
 pub(crate) struct RouterCompPolicy(pub bool);
 
@@ -177,27 +78,16 @@ pub(crate) async fn detached_router_service(
         ..FakeRepo::default()
     };
     let id = ComputerId::new_from_uuid(Uuid::now_v7());
-    let entry = crate::domain::size::current_catalog().remove(0);
-    repo.reserve(
-        NewComputer {
+    repo.computers.lock().unwrap().insert(
+        id,
+        super::computer(
             id,
-            team_id: TEAM,
-            name: ComputerName::try_new("Build box").unwrap(),
-            billing: PurchaseBilling::Stripe,
-            extra_items: vec![],
-            size: entry.size,
-            resources: entry.resources,
-            catalog_entry: entry.id,
-            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-        },
-        now(),
-    )
-    .await
-    .unwrap();
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
+            Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: super::item("si_1"),
+            },
+        ),
+    );
     repo.events.lock().unwrap().clear();
     repo.effects.lock().unwrap().clear();
     let mut service = ComputerService::new(
@@ -217,9 +107,8 @@ pub(crate) async fn detached_router_service(
 
 pub(crate) fn assert_no_http_work(service: &RouterService) {
     assert_eq!(service.repo.computers.lock().unwrap().len(), 1);
-    assert_eq!(*service.repo.reservations.lock().unwrap(), 1);
+    assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);
     assert_eq!(*service.billing.sales_checks.lock().unwrap(), 0);
-    assert_eq!(*service.repo.notify_writes.lock().unwrap(), 0);
     assert!(service.repo.events.lock().unwrap().is_empty());
     assert!(service.repo.effects.lock().unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());

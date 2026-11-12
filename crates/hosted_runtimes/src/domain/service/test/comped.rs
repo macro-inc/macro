@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::service::billing::{SubscriptionObserved, SubscriptionStatus};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::str::FromStr;
 
@@ -25,17 +26,16 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
     )
     .with_comp_policy(TeamCompPolicy)
     .with_rollout(super::rollout::enabled_rollout());
-    let id = service
+    let purchase = service
         .purchase_for_team(PurchaseRequest {
-            billing: PurchaseBilling::Stripe,
-            team_id: TEAM,
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
             name: Some("Build box".to_owned()),
-            extra_items: vec![],
+            ..standard_purchase("buy-dialog-1")
         })
         .await
         .unwrap();
+    let Purchase::Ready(id) = purchase else {
+        panic!("a comp converts at once, got {purchase:?}");
+    };
     let computer = service
         .repo
         .get(id)
@@ -44,17 +44,29 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(computer.state.payment, PaymentOutcome::Comped);
-    assert!(!computer.is_billed());
     assert_eq!(
-        computer.status().comp_reason.as_deref(),
-        Some("internal team")
+        computer.state.billing,
+        BillingState::Comped {
+            reason: "internal team".to_owned()
+        }
     );
+    let status = computer.status(0, now(), policy());
+    assert_eq!(status.comp_reason.as_deref(), Some("internal team"));
+    assert_eq!(status.billing, Some(BillingStatus::Comped));
     assert!(service.billing.calls.lock().unwrap().is_empty());
 
-    service.repo.effect_run_after.lock().unwrap().clear();
-    service.run_billing_effects().await.unwrap();
-    service.reconcile_billed_counts(TEAM, &[]).await.unwrap();
+    service
+        .observe_subscription(
+            TEAM,
+            SubscriptionObserved {
+                status: SubscriptionStatus::Canceled,
+                items: vec![],
+                current_period_end: now(),
+                observed_at: now(),
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(
         service
             .repo
@@ -66,98 +78,49 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
             .unwrap()
             .state
             .billing,
-        BillingState::Active
+        BillingState::Comped {
+            reason: "internal team".to_owned()
+        }
     );
     let canceled = service.cancel(TEAM, id).await.unwrap();
+    assert_eq!(canceled.billing, Some(BillingStatus::Ended));
     assert_eq!(
         canceled.retained_until,
-        Some(now() + crate::domain::lifecycle::RETENTION)
+        Some(now() + chrono::Duration::days(14))
     );
+    let restored = service.restore(TEAM, id).await.unwrap();
+    assert_eq!(restored.billing, Some(BillingStatus::Comped));
     service.release_now(TEAM, id, "Build box").await.unwrap();
     service.run_billing_effects().await.unwrap();
     assert!(service.billing.calls.lock().unwrap().is_empty());
 
-    let paid_id = service
+    let paid = service
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Comped {
                 reason: "untrusted override".to_owned(),
             },
             team_id: Uuid::from_u128(99),
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
-            name: None,
-            extra_items: vec![],
+            ..standard_purchase("buy-dialog-2")
         })
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         service
             .repo
-            .get(paid_id)
+            .get(paid.computer_id())
             .await
             .unwrap()
             .unwrap()
             .into_healthy()
             .unwrap()
             .state
-            .payment,
-        PaymentOutcome::Paid
-    );
+            .billing,
+        BillingState::Active { .. }
+    ));
     assert_eq!(
         *service.billing.calls.lock().unwrap(),
         vec!["quote", "add_computer"]
     );
-}
-
-#[tokio::test]
-async fn comped_reservation_recovers_without_charging_and_release_skips_billing() {
-    let service = ComputerService::new(
-        FakeRepo {
-            sold_units: 8,
-            ..FakeRepo::default()
-        },
-        FakeBilling::default(),
-        FixedClock,
-        StaticFleetAttachment(FleetAttachment::Attached),
-    );
-    let id = ComputerId::new_from_uuid(Uuid::from_u128(18));
-    service
-        .repo
-        .reserve(
-            NewComputer {
-                billing: PurchaseBilling::Comped {
-                    reason: "internal team".to_owned(),
-                },
-                id,
-                team_id: TEAM,
-                name: ComputerName::try_new("Build box").unwrap(),
-                size: ComputerSize::Standard,
-                resources: crate::domain::size::ComputerResources {
-                    vcpus: crate::domain::size::Vcpus::new(4),
-                    memory_gib: crate::domain::size::MemoryGib::new(8),
-                    disk_gib: crate::domain::size::DiskGib::new(100),
-                },
-                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
-                    "standard@2026-11".to_owned(),
-                )
-                .unwrap(),
-                price_id: None,
-                created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-                extra_items: vec![],
-            },
-            now(),
-        )
-        .await
-        .unwrap();
-    service.repo.effect_run_after.lock().unwrap().clear();
-    service.run_billing_effects().await.unwrap();
-    assert_eq!(
-        service.status(TEAM, id).await.unwrap().payment.unwrap(),
-        PaymentOutcome::Comped
-    );
-    service.release_now(TEAM, id, "Build box").await.unwrap();
-    service.run_billing_effects().await.unwrap();
-    assert!(service.billing.calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -176,12 +139,18 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
         .with_comp_policy(TeamCompPolicy)
         .with_rollout(super::rollout::enabled_rollout());
         let quote = service
-            .quote_for_team(
-                &MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            .offers(
                 TEAM,
-                ComputerSize::Standard,
+                MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             )
-            .await;
+            .await
+            .map(|offers| {
+                offers
+                    .into_iter()
+                    .find(|offer| offer.size == ComputerSize::Standard)
+                    .unwrap()
+                    .quote
+            });
         if no_subscription {
             assert!(matches!(
                 quote,
@@ -195,9 +164,9 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
         assert_eq!(
             quote.interval,
             if yearly {
-                BillingInterval::Year
+                crate::domain::models::BillingInterval::Year
             } else {
-                BillingInterval::Month
+                crate::domain::models::BillingInterval::Month
             }
         );
         assert_eq!(quote.price_id.as_str(), "price_standard");
@@ -217,17 +186,15 @@ async fn comped_purchase_rejects_subscription_items_before_reserving() {
             billing: PurchaseBilling::Comped {
                 reason: "internal team".to_owned(),
             },
-            team_id: TEAM,
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
-            name: None,
             extra_items: vec![SubscriptionItem {
                 price_id: stripe::PriceId::from_str("price_seat").unwrap(),
                 quantity: 1,
             }],
+            ..standard_purchase("buy-dialog-1")
         })
         .await;
-    assert!(matches!(result, Err(ComputerError::BadRequest(_))));
+    assert!(matches!(result, Err(ComputerError::CompedExtraItems)));
+    assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);
     assert!(service.repo.computers.lock().unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }
@@ -256,16 +223,58 @@ async fn policy_failure_cannot_reserve_or_charge_a_computer() {
     .with_comp_policy(UnavailablePolicy)
     .with_rollout(super::rollout::enabled_rollout());
     let result = service
-        .purchase_for_team(PurchaseRequest {
-            billing: PurchaseBilling::Stripe,
-            team_id: TEAM,
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
-            name: None,
-            extra_items: vec![],
-        })
+        .purchase_for_team(standard_purchase("buy-dialog-1"))
         .await;
     assert!(matches!(result, Err(ComputerError::Internal(_))));
     assert!(service.repo.computers.lock().unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
+}
+
+/// A comp the team can lose: its reason, or none once the team pays.
+struct ChangingCompPolicy(std::sync::Mutex<Option<String>>);
+
+impl CompPolicy for ChangingCompPolicy {
+    type Err = std::convert::Infallible;
+
+    async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+}
+
+#[tokio::test]
+async fn restore_comps_again_only_while_the_team_is_still_comped() {
+    let service = ComputerService::new(
+        FakeRepo {
+            sold_units: 8,
+            ..FakeRepo::default()
+        },
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    )
+    .with_comp_policy(ChangingCompPolicy(std::sync::Mutex::new(Some(
+        "internal team".to_owned(),
+    ))))
+    .with_rollout(super::rollout::enabled_rollout());
+    let id = service
+        .purchase_for_team(standard_purchase("buy-dialog-1"))
+        .await
+        .unwrap()
+        .computer_id();
+    service.cancel(TEAM, id).await.unwrap();
+
+    *service.comp_policy.0.lock().unwrap() = None;
+    let refused = service.restore(TEAM, id).await;
+    assert!(
+        matches!(
+            refused,
+            Err(ComputerError::Rejected(Rejected::InvalidRestore))
+        ),
+        "{refused:?}"
+    );
+
+    *service.comp_policy.0.lock().unwrap() = Some("internal team".to_owned());
+    let restored = service.restore(TEAM, id).await.unwrap();
+    assert_eq!(restored.billing, Some(BillingStatus::Comped));
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }

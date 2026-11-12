@@ -1,153 +1,143 @@
-import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
-import type { AgentWithHarnessId } from '@queries/agents/agents';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import type { ComputerStatus } from '@service-auth/computers';
-import { Button, cn, ToggleSwitch } from '@ui';
+import type { Harness as RegisteredHarness } from '@service-storage/client';
+import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
-import { HarnessIcon, StatusDot } from '../../integration-ui';
-import { IntegrationRow } from '../../primitives';
+import { MachineRow } from '../../components/connected-runtimes-section';
+import { StatusDot } from '../../integration-ui';
 import {
-  canTogglePower,
+  computerDotState,
   computerSpecs,
   computerStatusLabel,
   formatComputerDate,
-  type StatusTone,
-  sizeLabel,
+  isProvisioning,
 } from '../core/computer-display';
-import { ComputerAgents } from './computer-agents';
+import {
+  ComputerActionsMenu,
+  type ComputerMenuItem,
+} from './computer-actions-menu';
 
-/** The paired runtime a computer's macrod registered as. */
-export type ComputerRuntime = {
-  name: string;
-  connected: boolean;
-  claudeMode?: string;
+/** How Claude Code on the computer is paid for, as the row shows it. */
+export type ComputerClaudeState =
+  /** Not chosen yet: guided setup asks. */
+  | { kind: 'unset' }
+  | { kind: 'loading' }
+  | { kind: 'credits' }
+  /** The computer's own Claude sign-in; `expired` once it stopped working. */
+  | { kind: 'account'; expired: boolean };
+
+/** The row's one action, when it has one. */
+export type ComputerPrimaryAction = {
+  label: string;
+  onClick: () => void;
 };
 
-function toneClass(tone: StatusTone): string {
-  return match(tone)
-    .with('success', () => 'bg-success-bg text-success')
-    .with('progress', () => 'bg-accent-bg text-accent')
-    .with('failure', () => 'bg-failure-bg text-failure')
-    .with('muted', () => 'border border-edge-muted text-ink-extra-muted')
-    .exhaustive();
+function claudeText(claude: ComputerClaudeState): string | undefined {
+  if (claude.kind === 'credits') return t('computers.claudeCredits');
+  if (claude.kind === 'loading' || claude.kind === 'unset') return undefined;
+  return claude.expired
+    ? t('computers.claudeNotSignedIn')
+    : t('computers.claudeSignedIn');
 }
 
-export function ComputerRow(props: {
+/**
+ * The one line under a computer's name: its specs, then the single state
+ * that matters now (setup progress, powered off, a fault, or how Claude is
+ * paid for), then its billing: past due, a pending cancellation, or how
+ * long a released computer is kept.
+ */
+function ComputerSubtitle(props: {
   computer: ComputerStatus;
-  runtime?: ComputerRuntime;
-  /** Agents bound to the computer's harness. */
-  agents: readonly AgentWithHarnessId[];
-  claudeAccess?: JSX.Element;
-  /** Team admins and owners manage power and billing; members only read. */
-  canManage: boolean;
-  powerPending: boolean;
-  billingPending: boolean;
-  onPower: (on: boolean) => void;
-  onCancel: () => void;
-  onKeep: () => void;
-  onRelease: () => void;
+  claude: ComputerClaudeState;
 }) {
   const status = () => computerStatusLabel(props.computer);
-
+  const state = () => {
+    if (isProvisioning(props.computer))
+      return [status().label, status().detail].filter(Boolean).join(' · ');
+    if (status().tone !== 'success') return status().label;
+    return claudeText(props.claude);
+  };
+  // Past due, a pending cancellation, or how long a released computer's
+  // disk is kept.
+  const billing = () => {
+    const computer = props.computer;
+    if (computer.billing === 'past_due') return t('computers.pastDue');
+    if (computer.cancelsAt)
+      return t('computers.cancels', {
+        date: formatComputerDate(computer.cancelsAt),
+      });
+    if (computer.retainedUntil)
+      return t('computers.keptUntil', {
+        date: formatComputerDate(computer.retainedUntil),
+      });
+    return undefined;
+  };
   return (
-    <IntegrationRow
-      icon={
-        <HarnessIcon>
-          <HardDrivesIcon />
-        </HarnessIcon>
-      }
-      title={props.computer.name}
-      badge={
-        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-          {sizeLabel(props.computer.size)}
-        </span>
-      }
-      status={
-        <span
-          class={cn(
-            'inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-[11px]/none font-medium',
-            toneClass(status().tone)
-          )}
-        >
-          {status().label}
-        </span>
-      }
-      description={[computerSpecs(props.computer), status().detail]
+    <span>
+      {[computerSpecs(props.computer), state(), billing()]
         .filter(Boolean)
         .join(' · ')}
-      facts={
-        <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {props.claudeAccess}
-          <Show when={props.runtime}>
-            {(runtime) => (
-              <span class="inline-flex items-center gap-1.5">
-                <StatusDot
-                  state={runtime().connected ? 'connected' : 'disconnected'}
-                  label={runtime().connected ? 'Connected' : 'Offline'}
-                />
-                Runtime {runtime().name}
-              </span>
+      <Show when={!state() && props.claude.kind === 'loading'}>
+        {' · '}
+        <ListSkeleton.Bar class="inline-block h-2.5 w-28 rounded-full align-middle" />
+        <span class="sr-only">{t('common.loading')}</span>
+      </Show>
+    </span>
+  );
+}
+
+/**
+ * A Macro computer in Settings → Machines, laid out like every other machine
+ * row: status dot and name, one muted line, at most one action, and
+ * everything else in the ⋯ menu.
+ */
+export function ComputerRow(props: {
+  computer: ComputerStatus;
+  claude: ComputerClaudeState;
+  primary?: ComputerPrimaryAction;
+  menu: readonly ComputerMenuItem[];
+  /** Adds the runtime's Don't ask before acting to the menu. */
+  harness?: RegisteredHarness;
+}): JSX.Element {
+  return (
+    <MachineRow
+      target={
+        props.computer.harnessId
+          ? `runtime-${props.computer.harnessId}`
+          : undefined
+      }
+      name={props.computer.name}
+      dot={
+        <StatusDot
+          state={computerDotState(props.computer)}
+          label={computerStatusLabel(props.computer).label}
+        />
+      }
+      meta={
+        <ComputerSubtitle computer={props.computer} claude={props.claude} />
+      }
+      actions={
+        <>
+          <Show when={props.primary}>
+            {(primary) => (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={primary().onClick}
+              >
+                {primary().label}
+              </Button>
             )}
           </Show>
-          <ComputerAgents agents={props.agents} />
-          <Show when={props.computer.cancelsAt}>
-            {(at) => <span>Cancels {formatComputerDate(at())}</span>}
-          </Show>
-          <Show when={props.computer.retainedUntil}>
-            {(until) => <span>Disk deleted {formatComputerDate(until())}</span>}
-          </Show>
-        </span>
-      }
-    >
-      <Show when={props.canManage}>
-        <Show when={props.computer.status !== 'payment_failed'}>
-          <ToggleSwitch
-            size="md"
-            label="Power"
-            labelClass="text-sm text-ink-muted"
-            checked={props.computer.poweredOn}
-            disabled={props.powerPending || !canTogglePower(props.computer)}
-            onChange={(on) => props.onPower(on)}
+          <ComputerActionsMenu
+            name={props.computer.name}
+            items={props.menu}
+            harness={props.harness}
           />
-          <Show
-            when={props.computer.cancelsAt}
-            fallback={
-              <Show when={!props.computer.retainedUntil}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={props.billingPending}
-                  onClick={props.onCancel}
-                >
-                  Cancel at period end
-                </Button>
-              </Show>
-            }
-          >
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={props.billingPending}
-              onClick={props.onKeep}
-            >
-              Keep computer
-            </Button>
-          </Show>
-        </Show>
-        <Button
-          type="button"
-          variant="danger"
-          size="sm"
-          disabled={props.billingPending}
-          onClick={props.onRelease}
-        >
-          {props.computer.status === 'payment_failed'
-            ? 'Remove'
-            : 'Release now'}
-        </Button>
-      </Show>
-    </IntegrationRow>
+        </>
+      }
+    />
   );
 }

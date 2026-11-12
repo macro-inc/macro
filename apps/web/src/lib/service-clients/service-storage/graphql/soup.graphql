@@ -319,6 +319,12 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource
@@ -646,11 +652,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
 	}
-	... on GraphqlClaudeSignInExpiryMetadata {
-		claudeSignInExpiryHarnessId: harnessId
-		claudeSignInExpiryComputerName: computerName
-		claudeSignInExpiryStage: stage
-		claudeSignInExpiryExpiresAt: expiresAt
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

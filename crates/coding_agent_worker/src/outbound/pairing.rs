@@ -117,6 +117,7 @@ fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
     HarnessCredentials {
         harness_id: claimed.harness.id,
         token: claimed.token,
+        pairing_id: None,
     }
 }
 

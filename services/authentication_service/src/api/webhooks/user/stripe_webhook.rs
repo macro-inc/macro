@@ -853,63 +853,79 @@ async fn handle_team_subscription_event<'a>(
         },
     )
     .await;
-    reconcile_team_computers(ctx, subscription_id, team_id).await;
-    result
+    // Run even when the subscription work failed; either failure fails the
+    // webhook, so Stripe delivers it again.
+    let reconciled = reconcile_team_computers(ctx, subscription_id, team_id).await;
+    result?;
+    reconciled
 }
 
-/// Passes a complete subscription snapshot so computers whose items were
-/// removed outside Macro are cancelled. Reads the subscription fresh because webhook payloads
-/// arrive out of order. Never fails the webhook.
-#[tracing::instrument(skip(ctx))]
-async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
-    let subscription = match stripe::SubscriptionId::from_str(subscription_id) {
-        Ok(id) => stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await,
-        Err(error) => {
-            tracing::warn!(error = ?error, "invalid team subscription id; skipping computer reconcile");
-            return;
-        }
-    };
-    let subscription = match subscription {
-        Ok(subscription) => subscription,
-        Err(error) => {
-            tracing::warn!(error = ?error, "could not read the team subscription; skipping computer reconcile");
-            return;
-        }
-    };
-    let ended = matches!(
-        subscription.status,
-        stripe::SubscriptionStatus::Canceled | stripe::SubscriptionStatus::IncompleteExpired
-    );
-    if !ended && subscription.items.has_more {
-        // A partial item list would undercount and cancel paid computers.
-        tracing::warn!("team subscription items are paginated; skipping computer reconcile");
-        return;
-    }
-    let mut items = Vec::new();
-    if !ended {
-        for item in &subscription.items.data {
-            let Some(price) = &item.price else {
-                tracing::warn!("subscription item has no price; skipping computer reconcile");
-                return;
-            };
-            let price_id = price.id.clone();
-            let quantity = match u32::try_from(item.quantity.unwrap_or(1)) {
-                Ok(quantity) => quantity,
-                Err(error) => {
-                    tracing::warn!(error = ?error, "subscription quantity exceeds supported range; skipping computer reconcile");
-                    return;
-                }
-            };
-            items.push(hosted_runtimes::domain::models::SubscriptionItem { price_id, quantity });
-        }
-    }
-    if let Err(error) = ctx
-        .computer_billing_observer
-        .billed_counts(*team_id, items)
+/// Reports a complete subscription snapshot to the computer billing owner,
+/// which decides what it means for each computer. Reads the subscription
+/// fresh because webhook payloads arrive out of order, and stamps when it
+/// read, so a computer billed after the read is left alone. A failure fails
+/// the webhook, so Stripe redelivers it and the next delivery reconciles.
+#[tracing::instrument(skip(ctx), err)]
+async fn reconcile_team_computers(
+    ctx: &ApiContext,
+    subscription_id: &str,
+    team_id: &uuid::Uuid,
+) -> anyhow::Result<()> {
+    let observed_at = chrono::Utc::now();
+    let id = stripe::SubscriptionId::from_str(subscription_id)
+        .context("invalid team subscription id")?;
+    let subscription = stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[])
         .await
-    {
-        tracing::error!(error = ?error, "computer billing reconcile failed");
+        .context("could not read the team subscription for computer reconcile")?;
+    let items = subscription_items(ctx, &id)
+        .await
+        .context("could not list the team subscription items for computer reconcile")?;
+    let current_period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
+        .context("team subscription has an invalid period end")?;
+    let observed = hosted_runtimes::domain::service::SubscriptionObserved {
+        status: subscription_status(subscription.status),
+        items,
+        current_period_end,
+        observed_at,
+    };
+    ctx.computer_billing_observer
+        .subscription_observed(*team_id, observed)
+        .await
+        .map_err(|error| anyhow::anyhow!("computer billing reconcile failed: {error:?}"))
+}
+
+fn subscription_status(
+    status: stripe::SubscriptionStatus,
+) -> hosted_runtimes::domain::service::SubscriptionStatus {
+    use hosted_runtimes::domain::service::SubscriptionStatus;
+    match status {
+        stripe::SubscriptionStatus::Active => SubscriptionStatus::Active,
+        stripe::SubscriptionStatus::Trialing => SubscriptionStatus::Trialing,
+        stripe::SubscriptionStatus::PastDue => SubscriptionStatus::PastDue,
+        stripe::SubscriptionStatus::Unpaid => SubscriptionStatus::Unpaid,
+        stripe::SubscriptionStatus::Paused => SubscriptionStatus::Paused,
+        stripe::SubscriptionStatus::Incomplete => SubscriptionStatus::Incomplete,
+        stripe::SubscriptionStatus::IncompleteExpired => SubscriptionStatus::IncompleteExpired,
+        stripe::SubscriptionStatus::Canceled => SubscriptionStatus::Canceled,
     }
+}
+
+/// Every item on the subscription, with the computer id its (or its
+/// price's) metadata names.
+async fn subscription_items(
+    ctx: &ApiContext,
+    id: &stripe::SubscriptionId,
+) -> Result<Vec<hosted_runtimes::domain::service::ObservedItem>, stripe::StripeError> {
+    let items =
+        teams::outbound::customer_repo::list_subscription_items(&ctx.stripe_client, id).await?;
+    Ok(items
+        .iter()
+        .map(|item| hosted_runtimes::domain::service::ObservedItem {
+            subscription_item: item.id.clone(),
+            computer_id: teams::outbound::customer_repo::item_computer_uuid(item)
+                .map(hosted_runtimes::domain::ids::ComputerId::new_from_uuid),
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize)]

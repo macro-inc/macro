@@ -5,7 +5,7 @@ use crate::domain::ports::InstanceStatus;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool.clone());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     let host = repo
         .register_host(HostRegistration {
             name: "boot-test-host".to_owned(),
@@ -15,10 +15,7 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
         })
         .await
         .unwrap();
-    let id = repo.reserve(standard(1), now()).await.unwrap().id;
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
+    let id = bought(&repo, 1).await.id;
     repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
     let overdue = repo
         .due_timers(now() + Duration::hours(1), 10)
@@ -28,7 +25,7 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
     assert_eq!(overdue[0].fire_at, now() + MACROD_GRACE);
     drop(repo);
 
-    let restarted = PgComputerRepo::new(pool);
+    let restarted = PgComputerRepo::new(pool, policy());
     let startup = now() + Duration::hours(1);
     restarted
         .postpone_macrod_timers(host.id, startup + MACROD_GRACE)
@@ -57,7 +54,7 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(computer.state.phase, Phase::Booting { host: host.id });
+    assert_eq!(computer.state.phase, Phase::Booting);
     assert!(computer.state.recent_crashes.is_empty());
     let next = restarted
         .due_timers(startup + MACROD_GRACE * 2, 10)
@@ -78,6 +75,6 @@ async fn boot_timeout_uses_durable_timer_and_refreshes_grace_after_downtime(pool
             .unwrap()
             .state
             .phase,
-        Phase::Running { host: host.id }
+        Phase::Running
     );
 }

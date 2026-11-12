@@ -297,7 +297,10 @@ across instances) debugging containers:
   Prometheus behind it. Rust services export spans and `tracing` events over
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
-  `--traces jaeger|datadog`, or disable with `--traces off`.
+  `--traces jaeger|datadog`, or disable with `--traces off`. A running
+  collector is reused as-is and never recreated, so other stacks keep their
+  network attachments to it; to pick up a changed compose definition, run
+  `docker rm -f macro-lgtm-1` and start a stack again.
 - **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
   protocol on http://localhost:9222, for agents driving the app (the
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
@@ -531,11 +534,18 @@ document storage, app and egress URLs) that the harness resolves through
 `macro_service_urls` when it issues the enrollment; xtask sets the harness's
 `OVERRIDE_*` values to the addresses the fleet's guests reach.
 
+`COMPUTER_RETENTION_DAYS` (default `14`) and `COMPUTER_PAST_DUE_GRACE_DAYS`
+(default `7`) set Macro computers' retention and past-due grace in both
+authentication_service and agent_harness_service; set them only to override.
+
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
 Local orchestration supplies reserve `7` GB and oversell factor `3` for both
-fleets; images are `macro-box:latest` for Docker and `macro-box` for Incus.
+fleets. The Docker image is `macro-box:latest`; for Incus set
+`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
+(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when it is unset.
 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
@@ -601,8 +611,11 @@ harness, document storage, and auth in-network. The harness drives the daemon
 through the Docker socket it already mounts for sandboxes. Enrollments are
 written to `infra/local/generated/<instance>/computers/enrollments`, which is
 mounted into the harness at the same absolute path, because the daemon resolves
-bind sources on the host. The harness writes them as root. Starting the stack
-again removes the instance's computer containers along with its data.
+bind sources on the host. The harness writes them as root. Each computer's
+`/home` and `/var/lib/macrod` are named volumes (`macro-computer-<id>-home`,
+`-macrod`), like an Incus computer's data disk; releasing the computer
+deletes them. Starting the stack again removes the
+instance's computer containers and volumes along with its data.
 
 Computers use a separate local-only HTTP listener on the same Caddy proxy:
 `http://proxy:<ComputerGateway port>` inside Docker. Incus guests use the devbox's
@@ -616,7 +629,7 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 ### Incus on runtime-dev-1
 
 ```bash
-just run_local --instance computers --computers-incus
+COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
 ```
 
 Both the devbox and runtime must be logged into the same Tailscale tailnet.

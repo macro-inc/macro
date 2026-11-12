@@ -1,12 +1,13 @@
 use super::consts::MCP_CLIENT_NAME;
 use crate::domain::ports::{McpConnector, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
+use crate::outbound::guarded_http::McpHttp;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientConfig, Implementation};
 use rmcp::service::{RunningService, ServiceExt};
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::auth::{AuthClient, AuthorizationManager, StoredCredentials};
+use rmcp::transport::auth::{AuthClient, StoredCredentials};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -51,23 +52,29 @@ pub struct McpServerRecord {
 
 impl McpConnector for McpServerRecord {
     #[tracing::instrument(skip_all, err)]
-    async fn connect<S: McpServerStore>(&self, server_store: Arc<S>) -> anyhow::Result<McpServer> {
+    async fn connect<S: McpServerStore>(
+        &self,
+        http: &McpHttp,
+        server_store: Arc<S>,
+    ) -> anyhow::Result<McpServer> {
+        http.check_url(&url::Url::parse(&self.url)?)?;
+        let config = StreamableHttpClientTransportConfig::with_uri(&*self.url);
         match &self.credentials {
             Some(credentials) => {
-                let mut auth_manager = AuthorizationManager::new(&self.url).await?;
+                let mut auth_manager = http.authorization_manager(&self.url).await?;
                 let store = PersistingCredentialStore::new(self.clone(), server_store);
                 store.seed(credentials.clone()).await?;
                 auth_manager.set_credential_store(store);
                 auth_manager.initialize_from_store().await?;
 
-                let auth_client = AuthClient::new(reqwest::Client::new(), auth_manager);
-                let config = StreamableHttpClientTransportConfig::with_uri(&*self.url);
+                let auth_client = AuthClient::new(http.transport(), auth_manager);
                 let transport = StreamableHttpClientTransport::with_client(auth_client, config);
 
                 Ok(client_info().serve(transport).await?)
             }
             None => {
-                let transport = StreamableHttpClientTransport::from_uri(&*self.url);
+                let transport =
+                    StreamableHttpClientTransport::with_client(http.transport(), config);
                 Ok(client_info().serve(transport).await?)
             }
         }

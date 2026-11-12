@@ -25,8 +25,8 @@ impl DockerCommand for FakeDocker {
         Ok(match command {
             "ps" if self.exists => "running".to_owned(),
             "ps" => String::new(),
-            "inspect" => "test-a 1 00000000-0000-0000-0000-000000000001".to_owned(),
-            "create" | "start" | "restart" | "stop" | "exec" => String::new(),
+            "inspect" => "test-a\t1\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\tfixture-image\n".to_owned(),
+            "create" | "start" | "restart" | "stop" | "exec" | "volume" => String::new(),
             _ => panic!("unexpected Docker command"),
         })
     }
@@ -72,7 +72,7 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
         let mut fleet = DockerFleet::new(
             DockerFleetConfig {
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-                image: "fixture-image".to_owned(),
+                image: GuestImage::try_new("fixture-image").unwrap(),
                 network: "fixture-network".to_owned(),
                 enrollment_dir: root.path().to_owned(),
                 host_name: "fixture-host".to_owned(),
@@ -107,31 +107,31 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            price_id: None,
-            state: crate::domain::lifecycle::ComputerState {
-                phase: crate::domain::lifecycle::Phase::Provisioning {
-                    host: crate::domain::ids::HostId::new(Uuid::nil()),
-                    start: true,
-                },
-                ..crate::domain::lifecycle::ComputerState::reserved(
-                    crate::domain::ids::HostId::new(Uuid::nil()),
-                    Utc::now(),
-                )
+            funding: crate::domain::models::Funding::Comped {
+                reason: "fixture".to_owned(),
             },
+            host: crate::domain::ids::HostId::new(Uuid::nil()),
+            state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Provisioning {
+                start: true,
+            }),
             harness_id: None,
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),
             enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
+            image: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),
         };
         let source = TestEnrollment {
             claimed,
             calls: AtomicU32::new(0),
         };
-        fleet
+        let image = fleet
             .create(&computer, EnrollmentGeneration::new(1), &source, true)
             .await
             .unwrap();
+        assert_eq!(image.as_str(), "fixture-image");
         assert_eq!(source.calls.load(Ordering::SeqCst), expected_issue_calls);
         assert_eq!(*runner.calls.lock().unwrap(), expected_commands);
         let file = fleet.enrollment_dir(COMPUTER_ID).join(ENROLLMENT_FILE);
@@ -152,4 +152,46 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             );
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct RecordingDocker {
+    calls: Mutex<Vec<Vec<String>>>,
+}
+
+impl DockerCommand for RecordingDocker {
+    fn run(&self, _command: &str, args: &[String]) -> Result<String, DockerFleetError> {
+        self.calls.lock().unwrap().push(args.to_vec());
+        Ok(match args[0].as_str() {
+            "ps" => "running".to_owned(),
+            "inspect" => "test-a\t1\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\tmacro-box:2026-11-01\n".to_owned(),
+            _ => String::new(),
+        })
+    }
+}
+
+#[tokio::test]
+async fn docker_destroy_removes_the_container_then_its_volumes() {
+    let root = tempfile::tempdir().unwrap();
+    let runner = Arc::new(RecordingDocker::default());
+    let mut fleet = DockerFleet::new(
+        DockerFleetConfig {
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            image: GuestImage::try_new("macro-box:2026-11-01").unwrap(),
+            network: "fixture-network".to_owned(),
+            enrollment_dir: root.path().to_owned(),
+            host_name: "fixture-host".to_owned(),
+            memory_gb: 31,
+            reserve_gb: 7,
+            oversell_factor: 3,
+        },
+        Environment::Local,
+    )
+    .unwrap();
+    fleet.command = Some(runner.clone());
+    fleet.destroy(COMPUTER_ID).await.unwrap();
+    assert_eq!(
+        *runner.calls.lock().unwrap(),
+        [remove_args(COMPUTER_ID), remove_volumes_args(COMPUTER_ID)]
+    );
 }

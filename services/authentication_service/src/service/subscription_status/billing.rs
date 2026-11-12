@@ -68,7 +68,6 @@ pub struct SubscriptionBillingLineItem {
     /// Identified computer's catalog size.
     pub size: Option<ComputerSize>,
     /// Computer status supplied by its owning service.
-    #[schema(value_type = Option<String>)]
     pub status: Option<ComputerStatusKind>,
     /// Included without a subscription charge.
     pub included: bool,

@@ -57,7 +57,7 @@ pub enum InstanceKind {
 /// Which image an instance is created from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageReference {
-    /// An alias such as `ubuntu/24.04`.
+    /// An alias such as `macro-box/2026-11-10`.
     Alias(ImageAlias),
     /// A full image fingerprint.
     Fingerprint(String),

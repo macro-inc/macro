@@ -76,6 +76,7 @@ members = [
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
+  "crates/graphql_contacts",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_databases",
@@ -98,6 +99,8 @@ members = [
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
+  "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
   "crates/incus_client",
@@ -139,6 +142,7 @@ members = [
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",
+  "crates/subsequence_match",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
@@ -151,6 +155,7 @@ members = [
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
+  "crates/user_events",
   "crates/user_language",
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
@@ -218,7 +223,9 @@ members = [
 
 [workspace.dependencies]
 computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
+macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -350,6 +357,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
@@ -491,6 +499,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"

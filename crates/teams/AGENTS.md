@@ -29,16 +29,31 @@ event contract (schema, sanitization, delivery semantics).
   sender or `team_invite_link.created_by`). Billing implements it in
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
-  deletion side effects (owned-entity transfer, seat release).
+  deletion side effects (owned-entity transfer, seat release). Team deletion
+  calls `OwnedEntityCleanup::release_computers` after the purge and before
+  cancelling the subscription, so computers leave through their own lifecycle.
 - `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
-  (Macro computers) on the team subscription by price. One Stripe update per
+  (Macro computers) on the team subscription. Each computer bills ONE item at
+  a price of its own (`create_computer_price` copies the catalog price; Stripe
+  refuses two items of one price) carrying `computer_id` in item and price
+  metadata, so items are matched by computer, never by price or count.
+  `remove_team_subscription_item` treats an item or subscription already gone
+  as `ItemRemoval::AlreadyGone`; `settle_subscription_item_change` ends an
+  unknown outcome for good (`abandoned` receipts are never sent again). One Stripe update per
   change set, under the team billing lock, invoiced now with
   `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
   idempotent by key (`subscription_item_change` durable requests/receipts plus
   an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
-  Replay the receipt before resolving current subscription/prices. Pending item
-  changes block subsequent subscription mutations until resolved; retries send
-  the stored endpoint and exact request, including scheduled updates. Retain
+  Replay the receipt before resolving current subscription/prices. A change
+  left pending is settled by the next holder of the subscription guard (applied
+  iff its provider marker landed, else `abandoned`), so it never wedges seat,
+  plan or computer changes. One younger than `PENDING_SETTLE_AFTER` (5 min)
+  may still be in flight at Stripe, so the guard refuses with
+  `ItemChangeInFlight` instead of settling it. A trialing subscription never
+  gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact
+  request, including scheduled updates. Settling a key with no receipt writes
+  an `abandoned` one on the team's subscription, fencing a send still on its
+  way. Removing a computer's item archives its own price. Retain
   receipts after subscription/team deletion to prevent delayed duplicate charges.
   Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
@@ -75,6 +90,10 @@ event contract (schema, sanitization, delivery semantics).
 - Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.
 
+- A user is on at most one team, enforced only by the `team_owner_id_unique`
+  and `team_user_user_id_unique` constraints. `create_team` maps either
+  violation to `CreateTeamError::AlreadyOnTeam` (409); a new insert path into
+  `team` or `team_user` must map them too, or it answers 500.
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled

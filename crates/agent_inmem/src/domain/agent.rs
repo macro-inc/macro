@@ -77,7 +77,7 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// What a failed turn says to the person it answers, wherever its reply is
 /// read. The failure itself goes to the prompt's error, not to them.
-const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
@@ -90,7 +90,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// The one tool in the Macro toolset that delegates to another agent.
 const SUBAGENT_TOOL: &str = "Subagent";

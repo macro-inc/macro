@@ -17,13 +17,13 @@ and operation waiting.
 
 ## Start here
 
-- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, and `run_operation`.
+- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, `exec_attached` (stdio over websockets, see `src/attached_exec.rs`), custom block volumes for computer data disks (create, attach, delete), `rebuild` from a new image, and `run_operation`.
 - `src/error.rs`: `IncusError`; `NotFound` is how callers detect drift.
 - `spec/patch.py`: the endpoint allowlist and the reshaping progenitor needs.
 
 ## Names
 
-- Pass validated `InstanceName`, `ImageAlias`, `ProfileName`, and `StoragePoolName` through the hand-written API. Computer instance names use `mc-<simple UUID>`.
+- Pass validated `InstanceName`, `ImageAlias`, `ProfileName`, `StoragePoolName`, and `StorageVolumeName` through the hand-written API. Computer instance names use `mc-<simple UUID>`.
 - Keep inventory instance names as untrusted strings: listings include unrelated instances that the fleet must ignore by ownership metadata.
 - Validate string deserialization through `TryFrom<String>` while retaining transparent serialization.
 
@@ -76,3 +76,15 @@ and operation waiting.
   key); a concurrent edit fails with a 412 `Rejected`.
 - No trace headers are sent; Incus does not read them. Methods open
   `incus.*` spans instead.
+- Progenitor takes one success type per operation; `SUCCESS_STATUS` in
+  `spec/patch.py` picks it where Incus documents both a sync and an async
+  success (volume create is sync, rebuild is async).
+- Deleting an instance leaves attached custom volumes; `delete_volume` them
+  after the instance.
+- `exec_attached` connects all four operation websockets (`control`, `0`, `1`,
+  `2`) with the API's mTLS identity before Incus starts the program; the secret
+  rides in the URL, so never log it. Stdin ends with a close frame; output ends
+  with a close frame (older servers send a text barrier). Dropping the process
+  detaches it: its stdin ends and the control socket closes.
+  `exit` waits on the operation as `run_operation` does, so a program outliving
+  `operation_waits × operation_wait_secs` reports `OperationTimedOut`.

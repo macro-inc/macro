@@ -17,6 +17,11 @@ use serde::{Deserialize, Serialize};
     strum::EnumIter,
 )]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "computer_size", rename_all = "snake_case")
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerSize {
@@ -47,7 +52,8 @@ pub struct ComputerResources {
     pub vcpus: Vcpus,
     /// Memory limit saved at purchase.
     pub memory_gib: MemoryGib,
-    /// Root disk limit saved at purchase.
+    /// Disk quota saved at purchase, split between the root disk and the
+    /// data disk (see [`crate::domain::image::data_disk_gib`]).
     pub disk_gib: DiskGib,
 }
 

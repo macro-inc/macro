@@ -1,15 +1,20 @@
 //! Macro computers billed on the team subscription through `teams`, and the
-//! webhook observer that reconciles them through `hosted_runtimes`.
+//! webhook observer that reports subscription snapshots to `hosted_runtimes`.
 
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
+    ids::ComputerId,
+    lifecycle::SubscriptionItemId,
     models::{BillingInterval, Quote, SubscriptionItem},
-    ports::{Billing, BillingError, ComputerRepo},
-    service::{Clock, ComputerService},
+    ports::{Billing, BillingError, ChargeStatus, ComputerRepo, ItemCharge},
+    service::{Clock, ComputerService, SubscriptionObserved},
     size::ComputerSize,
 };
 use teams::domain::{
-    model::{BillingCadence, CustomerError, ItemProration, ItemQuantityChange},
+    model::{
+        BillingCadence, CustomerError, ItemChangeStatus, ItemProration, ItemQuantityChange,
+        ItemRemoval,
+    },
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
 };
 use uuid::Uuid;
@@ -19,8 +24,8 @@ use crate::domain::computer_billing::{ComputerBillingObserver, ComputerPrices};
 #[cfg(test)]
 mod test;
 
-/// [`Billing`] on the team subscription: one item per computer price, at
-/// the subscription's interval.
+/// [`Billing`] on the team subscription: one item per computer, at a price
+/// of its own copied from the size's price at the subscription's interval.
 #[derive(Clone)]
 pub struct TeamComputerBilling<Teams> {
     teams: Teams,
@@ -86,68 +91,150 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     async fn add_computer(
         &self,
         team_id: Uuid,
+        computer_id: ComputerId,
         price_id: &stripe::PriceId,
         extra_items: &[SubscriptionItem],
+        charge: ItemCharge,
         idempotency_key: &str,
-    ) -> Result<(), BillingError> {
-        if self
+    ) -> Result<SubscriptionItemId, BillingError> {
+        if !self
             .teams
             .replay_subscription_item_change(idempotency_key)
             .await
             .map_err(billing_error)?
         {
-            return Ok(());
+            // A price of its own: a subscription cannot bill two items of one price.
+            let computer_price = self
+                .teams
+                .create_computer_price(
+                    price_id,
+                    &computer_id.to_string(),
+                    &format!("{idempotency_key}:price"),
+                )
+                .await
+                .map_err(billing_error)?;
+            let extra = extra_items
+                .iter()
+                .map(|item| ItemQuantityChange {
+                    price_id: item.price_id.clone(),
+                    delta: i64::from(item.quantity),
+                })
+                .collect();
+            self.teams
+                .add_team_computer_item(
+                    &team_id,
+                    &computer_price,
+                    &computer_id.to_string(),
+                    extra,
+                    match charge {
+                        ItemCharge::Prorated => ItemProration::InvoiceNow,
+                        ItemCharge::NoProration => ItemProration::NoProration,
+                    },
+                    idempotency_key,
+                )
+                .await
+                .map_err(billing_error)?;
         }
-        let changes = std::iter::once(ItemQuantityChange {
-            price_id: price_id.clone(),
-            delta: 1,
-        })
-        .chain(extra_items.iter().map(|item| ItemQuantityChange {
-            price_id: item.price_id.clone(),
-            delta: i64::from(item.quantity),
-        }))
-        .collect();
-        self.teams
-            .change_team_subscription_items(
-                &team_id,
-                changes,
-                ItemProration::InvoiceNow,
-                idempotency_key,
-            )
+        // The update succeeded (now or before); its item carries the computer id.
+        self.computer_item(team_id, computer_id)
+            .await?
+            .ok_or_else(|| {
+                BillingError::Provider(rootcause::report!(
+                    "the computer's subscription item was added but is not on the subscription"
+                ))
+            })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn settle_computer_add(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<SubscriptionItemId>, BillingError> {
+        let settlement = self
+            .teams
+            .settle_subscription_item_change(&team_id, idempotency_key)
             .await
-            .map_err(billing_error)
+            .map_err(billing_error)?;
+        tracing::info!(?settlement, "computer charge settled");
+        // Either way, the subscription decides: an item carrying the computer
+        // id means it is billed.
+        match self.computer_item(team_id, computer_id).await {
+            Err(BillingError::NoSubscription) => Ok(None),
+            outcome => outcome,
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn charge_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ChargeStatus>, BillingError> {
+        Ok(self
+            .teams
+            .subscription_item_change_status(idempotency_key)
+            .await
+            .map_err(billing_error)?
+            .map(|status| match status {
+                ItemChangeStatus::Pending => ChargeStatus::Pending,
+                ItemChangeStatus::Applied => ChargeStatus::Applied,
+                ItemChangeStatus::NotApplied => ChargeStatus::NotApplied,
+            }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn computer_item(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<Option<SubscriptionItemId>, BillingError> {
+        let computer_id = computer_id.to_string();
+        Ok(self
+            .teams
+            .team_subscription_items(&team_id)
+            .await
+            .map_err(billing_error)?
+            .into_iter()
+            .find(|item| item.computer_id.as_deref() == Some(computer_id.as_str()))
+            .map(|item| item.id))
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn remove_computer(
         &self,
         team_id: Uuid,
-        price_id: &stripe::PriceId,
+        subscription_item: &SubscriptionItemId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
-        if self
+        // Releasing a computer refunds nothing: release stops billing at
+        // once, and cancel removes the item once the period is paid.
+        match self
             .teams
-            .replay_subscription_item_change(idempotency_key)
+            .remove_team_subscription_item(&team_id, subscription_item, idempotency_key)
             .await
             .map_err(billing_error)?
         {
-            return Ok(());
+            ItemRemoval::Removed => Ok(()),
+            ItemRemoval::AlreadyGone => {
+                tracing::info!(subscription_item = %subscription_item, "computer item was already gone");
+                Ok(())
+            }
         }
-        self.teams
-            .change_team_subscription_items(
-                &team_id,
-                vec![ItemQuantityChange {
-                    price_id: price_id.clone(),
-                    delta: -1,
-                }],
-                // Releasing a computer refunds nothing: Release now stops
-                // billing at once, and cancel-at-period-end removes it when
-                // the paid period is over.
-                ItemProration::NoProration,
-                idempotency_key,
-            )
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn require_paid_plan(&self, team_id: Uuid) -> Result<(), BillingError> {
+        if self
+            .teams
+            .team_subscription_terms(&team_id)
             .await
-            .map_err(billing_error)
+            .map_err(billing_error)?
+            .trialing
+        {
+            return Err(BillingError::TeamOnTrial);
+        }
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -167,9 +254,13 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         | TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionNotActive) => {
             BillingError::NoSubscription
         }
-        TeamSubscriptionItemsError::Customer(CustomerError::PaymentFailed) => {
-            BillingError::PaymentFailed
+        TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionTrialing) => {
+            BillingError::TeamOnTrial
         }
+        // An abandoned change is never sent again: nothing was charged.
+        TeamSubscriptionItemsError::Customer(
+            CustomerError::PaymentFailed | CustomerError::ItemChangeAbandoned,
+        ) => BillingError::PaymentFailed,
         error => BillingError::Provider(rootcause::Report::new(error).into_dynamic()),
     }
 }
@@ -184,12 +275,12 @@ where
     Attachment: hosted_runtimes::domain::ports::FleetAttachmentSource,
     Policy: hosted_runtimes::domain::ports::CompPolicy,
 {
-    async fn billed_counts(
+    async fn subscription_observed(
         &self,
         team_id: Uuid,
-        items: Vec<SubscriptionItem>,
+        observed: SubscriptionObserved,
     ) -> Result<(), rootcause::Report> {
-        self.reconcile_billed_counts(team_id, &items)
+        self.observe_subscription(team_id, observed)
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }

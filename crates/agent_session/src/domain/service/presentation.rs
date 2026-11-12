@@ -83,7 +83,8 @@ where
                 SessionUpdate::ToolCall(
                     ToolCall::new(presentation.tool_call_id.clone(), presentation.title)
                         .status(ToolCallStatus::InProgress)
-                        .raw_input(presentation.raw_input),
+                        .raw_input(presentation.raw_input)
+                        .meta(crate::domain::model::presented_meta()),
                 ),
             )?)
             .await?;

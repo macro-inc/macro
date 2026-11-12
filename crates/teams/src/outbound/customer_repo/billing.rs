@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// How long a pending item change may still be in flight at the provider
+/// (well past its client timeout) before another guard holder settles it.
+pub(super) const PENDING_SETTLE_AFTER: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
 impl CustomerRepositoryImpl {
     pub(super) async fn billing_guard(
         locks: &sqlx::PgPool,
@@ -18,6 +22,13 @@ impl CustomerRepositoryImpl {
         Ok(guard)
     }
 
+    /// Serialize a mutation of subscription `id` with every other one. A
+    /// change an earlier holder left pending (its outcome never learned) is
+    /// settled first, by the provider's marker, so it can never wedge the
+    /// subscription. Its sender's request may outlive the guard (a dropped
+    /// request future), so a change younger than [`PENDING_SETTLE_AFTER`] is
+    /// treated as still in flight and refused for now rather than settled.
+    /// `operation` is the caller's own change, which it replays.
     pub(super) async fn subscription_guard(
         &self,
         id: &stripe::SubscriptionId,
@@ -28,14 +39,22 @@ impl CustomerRepositoryImpl {
             &format!("subscription-billing:{id}"),
         )
         .await?;
-        let pending = sqlx::query_scalar!(
-            "SELECT idempotency_key FROM subscription_item_change WHERE subscription_id = $1 AND outcome = 'pending'",
+        let pending = sqlx::query!(
+            "SELECT idempotency_key, created_at > now() - make_interval(secs => $2) AS \"in_flight!\" FROM subscription_item_change WHERE subscription_id = $1 AND outcome = 'pending'",
             id.as_str(),
-        ).fetch_optional(&self.pool).await.map_err(|error| CustomerError::StorageLayerError(error.into()))?;
-        if let Some(pending) = pending
-            && Some(pending.as_str()) != operation
-        {
-            return Err(SubscriptionDataError::UnresolvedItemChange.into());
+            PENDING_SETTLE_AFTER.as_secs_f64(),
+        ).fetch_all(&self.pool).await.map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+        for row in pending {
+            let key = row.idempotency_key;
+            if Some(key.as_str()) == operation {
+                continue;
+            }
+            if row.in_flight {
+                return Err(CustomerError::ItemChangeInFlight);
+            }
+            if let Some(change) = self.item_change(&key).await? {
+                self.settle_pending_locked(&key, change).await?;
+            }
         }
         Ok(guard)
     }

@@ -1,78 +1,96 @@
 use super::*;
 
-#[test]
-fn comped_lifecycle_never_removes_subscription_items() {
-    let reason = "internal team".to_owned();
-    for host_has_room in [true, false] {
-        let context = Context {
-            enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(0),
-            now: now(),
-            host_has_room,
-        };
-        let (comped, effects) = transition(
-            &ComputerState::reserved(HOST, now()),
-            &Event::Comped {
-                reason: reason.clone(),
-            },
-            context,
-        );
-        assert_eq!(
-            comped.phase,
-            Phase::Provisioning {
-                host: HOST,
-                start: host_has_room,
-            }
-        );
-        assert_eq!(comped.payment, PaymentOutcome::Comped);
-        assert_eq!(comped.comp_reason.as_deref(), Some("internal team"));
-        assert_eq!(
-            effects,
-            vec![Effect::Create {
-                host: HOST,
-                start: host_has_room,
-                generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
-            }]
-        );
+fn comped(phase: Phase) -> ComputerState {
+    ComputerState {
+        provision_traceparent: None,
+        setup: None,
+        phase,
+        billing: Billing::Comped {
+            reason: "internal team".to_owned(),
+        },
+        billing_changed_at: now() - Duration::days(30),
+        power: Power::On,
+        macrod_connected: true,
+        macrod_misses: 0,
+        recent_crashes: vec![],
+        power_on_requested: false,
+        capacity_wait: None,
+        retried_by_team: false,
+    }
+}
 
-        for (event, destroyed, canceled) in [
-            (Event::ReleaseNow, true, false),
-            (
-                Event::CancelAtPeriodEnd {
-                    at: now() + Duration::days(20),
-                },
-                false,
-                true,
-            ),
-            (Event::SubscriptionCanceled, false, false),
-            (Event::PeriodEnded, false, false),
-            (Event::PaymentConfirmed, false, false),
-            (
-                Event::Comped {
-                    reason: "late change".to_owned(),
-                },
-                false,
-                false,
-            ),
-        ] {
-            let (next, effects) = transition(&comped, &event, context);
-            assert_eq!(next.payment, PaymentOutcome::Comped);
-            assert_eq!(next.comp_reason, comped.comp_reason);
-            assert_eq!(next.phase == Phase::Destroyed, destroyed);
-            assert!(!effects.contains(&Effect::RemoveBillingItem));
-            if canceled {
-                assert_eq!(
-                    next.billing,
-                    Billing::Canceled {
-                        retained_until: now() + RETENTION
-                    }
-                );
-                assert_eq!(next.power, Power::Off);
-                let (expired, effects) = transition(&next, &Event::RetentionExpired, context);
-                assert_eq!(expired.phase, Phase::Destroyed);
-                assert!(!effects.contains(&Effect::RemoveBillingItem));
-            } else if !destroyed {
-                assert_eq!(next, comped);
-            }
+#[test]
+fn comped_cancel_stops_at_once_and_starts_retention_without_billing() {
+    let (next, effects) = transition(
+        &comped(Phase::Running),
+        &Event::CancelAtPeriodEnd { at: now() },
+        context(true),
+    )
+    .unwrap();
+
+    assert_eq!(next.billing, Billing::EndsAt { at: now() });
+    assert_eq!(next.power, Power::Off);
+    assert_eq!(next.phase, Phase::Stopping);
+    assert_eq!(
+        effects,
+        vec![
+            Effect::Stop { host: HOST },
+            Effect::ScheduleTimer {
+                kind: TimerKind::RetentionExpired,
+                at: now() + Duration::days(14),
+            },
+        ]
+    );
+}
+
+#[test]
+fn comped_computers_never_remove_subscription_items() {
+    for event in [
+        Event::ReleaseNow,
+        Event::CancelAtPeriodEnd { at: now() },
+        Event::BillingItemMissing { observed_at: now() },
+        Event::PaymentLapsed { observed_at: now() },
+        Event::RetentionExpired,
+    ] {
+        let (next, effects) = transition(&comped(Phase::Running), &event, context(true)).unwrap();
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::RemoveBillingItem { .. })),
+            "{event:?}"
+        );
+        if !matches!(event, Event::ReleaseNow | Event::CancelAtPeriodEnd { .. }) {
+            assert_eq!(next, comped(Phase::Running), "{event:?}");
         }
     }
+}
+
+#[test]
+fn a_comped_computer_in_retention_is_restored_comped() {
+    let mut state = comped(Phase::Stopped);
+    state.billing = Billing::EndsAt {
+        at: now() - Duration::days(1),
+    };
+    state.power = Power::Off;
+
+    let (next, effects) = transition(
+        &state,
+        &Event::Restore {
+            billing: Billing::Comped {
+                reason: "internal team".to_owned(),
+            },
+        },
+        context(true),
+    )
+    .unwrap();
+
+    assert_eq!(
+        next.billing,
+        Billing::Comped {
+            reason: "internal team".to_owned()
+        }
+    );
+    assert_eq!(next.phase, Phase::Stopped);
+    assert_eq!(next.billing_changed_at, now());
+    assert!(effects.is_empty());
 }

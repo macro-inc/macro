@@ -15,6 +15,24 @@ async fn computers_not_sold_answers_service_unavailable() {
     );
 }
 
+/// The web app shows a trial team why it cannot buy, so the error carries a
+/// stable code beside its message.
+#[tokio::test]
+async fn a_trialing_team_gets_a_coded_forbidden() {
+    let response =
+        ComputersHttpError::from(ComputerError::Billing(BillingError::TeamOnTrial)).into_response();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "team_on_trial");
+    assert_eq!(
+        body["message"],
+        "Computers are available on paid plans. Your team is on a trial."
+    );
+}
+
 use crate::domain::fakes::TEAM;
 use crate::domain::service::test::availability::{assert_no_http_work, detached_router_service};
 use axum::{
@@ -61,8 +79,9 @@ impl MacroAuthorizationService for Authorization {
     }
 }
 
+/// The caller's role on the team.
 #[derive(Clone)]
-struct TeamAccess;
+struct TeamAccess(TeamRole);
 impl EntityAccessService for TeamAccess {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
@@ -159,7 +178,7 @@ impl EntityAccessService for TeamAccess {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(Some(UserTeamInfo {
             team_id: TEAM,
-            role: TeamRole::Admin,
+            role: self.0,
         }))
     }
 }
@@ -170,40 +189,20 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
         let (service, id) = detached_router_service(comped, true).await;
         let state = ComputerRouterState {
             service: service.clone(),
-            entity_access_service: Arc::new(TeamAccess),
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
             authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
-        let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
-        let internal_purchase = serde_json::json!({"billing": {"kind": "stripe"}, "teamId": TEAM,
-            "createdBy": "macro|admin@example.com", "size": "standard"})
-        .to_string();
+        let router: Router = team_router(state);
         for (method, path, body) in [
             (
                 Method::POST,
                 "/team/computers".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
-            ),
-            (
-                Method::GET,
-                "/team/computers/quote?size=standard".to_owned(),
-                String::new(),
+                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
             ),
             (
                 Method::GET,
                 "/team/computers/offers".to_owned(),
                 String::new(),
-            ),
-            (Method::GET, "/team/computers".to_owned(), String::new()),
-            (Method::GET, format!("/team/computers/{id}"), String::new()),
-            (
-                Method::GET,
-                format!("/team/computers/{}", Uuid::now_v7()),
-                String::new(),
-            ),
-            (
-                Method::POST,
-                "/team/computers/notify".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
             ),
             (
                 Method::POST,
@@ -230,34 +229,12 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 format!("/team/computers/{id}/release"),
                 r#"{"confirmName":"Build box"}"#.to_owned(),
             ),
-            (
-                Method::POST,
-                "/internal/computers".to_owned(),
-                internal_purchase,
-            ),
-            (
-                Method::GET,
-                format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
-                String::new(),
-            ),
-            (
-                Method::GET,
-                format!("/internal/computers/{id}?teamId={TEAM}"),
-                String::new(),
-            ),
         ] {
-            let mut request = Request::builder()
+            let request = Request::builder()
                 .method(method)
                 .uri(&path)
-                .header("content-type", "application/json");
-            if path.starts_with("/internal") {
-                request = request.header(
-                    macro_authorization::INTERNAL_API_KEY_HEADER,
-                    "test-internal-key",
-                );
-            } else {
-                request = request.header("authorization", "Bearer test-user");
-            }
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer test-user");
             let response = router
                 .clone()
                 .oneshot(request.body(Body::from(body)).unwrap())
@@ -284,17 +261,20 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
 }
 
 #[tokio::test]
-async fn registered_routes_preserve_rollout_and_internal_authentication_denials() {
-    let (service, id) = detached_router_service(false, false).await;
+async fn registered_routes_preserve_rollout_denials() {
+    let (service, _) = detached_router_service(false, false).await;
     let state = ComputerRouterState {
         service: service.clone(),
-        entity_access_service: Arc::new(TeamAccess),
+        entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
         authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
     };
-    let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
+    let router: Router = team_router(state);
     for (method, path, body) in [
-        (Method::POST, "/team/computers", r#"{"size":"standard"}"#),
-        (Method::GET, "/team/computers/quote?size=standard", ""),
+        (
+            Method::POST,
+            "/team/computers",
+            r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
+        ),
         (Method::GET, "/team/computers/offers", ""),
     ] {
         let response = router
@@ -312,30 +292,123 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
-    for path in [
-        "/internal/computers".to_owned(),
-        format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
-        format!("/internal/computers/{id}?teamId={TEAM}"),
-    ] {
-        let method = if path == "/internal/computers" {
-            Method::POST
-        } else {
-            Method::GET
+    assert_no_http_work(&service);
+}
+
+#[tokio::test]
+async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
+    // A team that never bought a computer, and one with a computer.
+    let (with_computer, id) = detached_router_service(false, false).await;
+    let without = std::sync::Arc::new(
+        crate::domain::service::ComputerService::new(
+            crate::domain::fakes::FakeRepo::default(),
+            crate::domain::service::test::FakeBilling::default(),
+            crate::domain::fakes::FixedClock,
+            crate::domain::ports::StaticFleetAttachment(
+                crate::domain::models::FleetAttachment::Detached,
+            ),
+        )
+        .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false)),
+    );
+    for (service, expected) in [(without, vec![]), (with_computer, vec![id.to_string()])] {
+        let state = ComputerRouterState {
+            service,
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
+        let router: Router = team_router(state);
         let response = router
-            .clone()
             .oneshot(
                 Request::builder()
-                    .method(method)
-                    .uri(path)
+                    .method(Method::GET)
+                    .uri("/team/computers")
                     .header("authorization", "Bearer test-user")
-                    .header("content-type", "application/json")
-                    .body(Body::from("{}"))
+                    .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let ids: Vec<String> = body
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|computer| computer["id"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(ids, expected);
     }
-    assert_no_http_work(&service);
+}
+
+/// Finishing setup is for the team's owner and admins, like Claude sign-in:
+/// an admin who did not buy the computer may, and its buyer may not once only
+/// a member.
+#[tokio::test]
+async fn finishing_setup_follows_the_team_admin_role_not_the_buyer() {
+    for (role, buyer, expected) in [
+        (
+            TeamRole::Admin,
+            "macro|someone-else@example.com",
+            StatusCode::OK,
+        ),
+        // The admin-only extractor refuses as every admin route does.
+        (
+            TeamRole::Member,
+            "macro|admin@example.com",
+            StatusCode::UNAUTHORIZED,
+        ),
+    ] {
+        let repo = crate::domain::fakes::FakeRepo {
+            sold_units: 9,
+            ..crate::domain::fakes::FakeRepo::default()
+        };
+        let id = crate::domain::ids::ComputerId::new_from_uuid(Uuid::now_v7());
+        repo.computers.lock().unwrap().insert(
+            id,
+            crate::domain::models::Computer {
+                created_by: macro_user_id::user_id::MacroUserIdStr::try_from(buyer.to_owned())
+                    .unwrap(),
+                ..crate::domain::service::test::computer(
+                    id,
+                    crate::domain::lifecycle::Phase::Running,
+                    crate::domain::lifecycle::Billing::Active {
+                        subscription_item: crate::domain::service::test::item("si_1"),
+                    },
+                )
+            },
+        );
+        let service = Arc::new(
+            ComputerService::new(
+                repo,
+                crate::domain::service::test::FakeBilling::default(),
+                crate::domain::fakes::FixedClock,
+                crate::domain::ports::StaticFleetAttachment(
+                    crate::domain::models::FleetAttachment::Attached,
+                ),
+            )
+            .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false)),
+        );
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(role)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri(format!("/team/computers/{id}/setup-complete"))
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{role:?}");
+    }
 }

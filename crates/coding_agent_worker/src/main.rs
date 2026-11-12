@@ -15,7 +15,6 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
-mod capabilities;
 mod computer;
 mod config;
 mod daemon;
@@ -41,6 +40,15 @@ mod update;
 
 use clap::Parser;
 use std::process::ExitCode;
+
+/// The musl release is linked by zig, whose libc `malloc` keeps freed memory on
+/// the freeing thread's list and maps fresh memory rather than look past the
+/// allocating thread's. Tokio drops a value on whichever worker held it last,
+/// so resident memory grew without bound while the live heap stayed flat
+/// (`e2e/memory_soak.py` measures it).
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Serve a harness's agent sessions inside the control panel: registration,
 /// bound agents, live sessions, config editing, pairing, removal, and logs -

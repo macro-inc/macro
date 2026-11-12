@@ -5,10 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { ClaudeMode } from './claudeMode';
+import type { ClaudeModeResponseAccount } from './claudeModeResponseAccount';
+
 /**
- * How Claude Code on a computer is paid for.
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+uses its own.
  */
 export interface ClaudeModeResponse {
-  /** `macro_credits` or `own_account`. */
-  mode: string;
+  account?: ClaudeModeResponseAccount;
+  /** How Claude Code is paid for. */
+  mode: ClaudeMode;
 }

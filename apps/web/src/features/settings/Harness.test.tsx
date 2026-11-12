@@ -1,4 +1,5 @@
 const codexAccess = vi.hoisted(() => ({ enabled: true }));
+const teamComputers = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => codexAccess.enabled,
 }));
@@ -41,13 +42,18 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('./components/pending-requests-section', () => ({
+  PendingRequestsSection: () => null,
+}));
+
 vi.mock('./computers/views/MacroComputers', () => ({
   MacroComputers: () => null,
 }));
 
 vi.mock('./computers/primitives/team-computers', () => ({
   useTeamComputers: () => ({
-    enabled: () => false,
+    // With computers on, a computer's harness is listed only under them.
+    enabled: () => teamComputers.enabled,
     computers: () => [],
     failed: () => false,
   }),
@@ -222,6 +228,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  teamComputers.enabled = true;
   codexAccess.enabled = true;
   vi.clearAllMocks();
   mocks.status.data = {
@@ -484,19 +491,22 @@ describe('Harness', () => {
     expect(names).toEqual(['Dev box', 'Old laptop']);
   });
 
-  it('hides the section when every runtime is offline', () => {
+  it('lists a machine that is offline, so its owner can still manage it', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
         connected: false,
-        last_connected_at: null,
+        last_connected_at: '2026-10-24T00:47:21Z',
       },
     ];
 
     render(() => <Harness />);
 
-    expect(screen.queryByRole('heading', { name: 'Your machines' })).toBeNull();
-    expect(screen.queryByText('Dev box')).toBeNull();
+    const row = document.querySelector('[data-runtime-row="Dev box"]');
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLElement).getByRole('button', { name: 'Remove' })
+    ).toBeTruthy();
   });
 
   it("leaves teammates' runtimes out of Your runtimes", () => {
@@ -620,15 +630,27 @@ describe('Harness', () => {
     expect(invalidateHarnesses).toHaveBeenCalled();
   });
 
-  it('offers no plain Remove or Rename for a Macro computer', () => {
+  it('lists a Macro computer only under Macro computers, without Remove or Rename', () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, access: 'owner', computer_id: 'computer-1' },
+    ];
+
+    render(() => <Harness />);
+    expect(screen.queryByText('Dev box')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+  });
+
+  it('never offers Share or Remove on a Macro computer, even with computers off', () => {
+    teamComputers.enabled = false;
     harnessMocks.query.data = [
       { ...REGISTERED_HARNESS, access: 'owner', computer_id: 'computer-1' },
     ];
 
     render(() => <Harness />);
     expect(screen.getByText('Dev box')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
   });
 
   it('renames a paired runtime', async () => {

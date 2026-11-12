@@ -1,6 +1,6 @@
 import type { ComputerStatus } from '@service-auth/computers';
 import { describe, expect, it } from 'vitest';
-import { computerPresenceKey } from './computers';
+import { computerPresenceKey, computerStatusKey } from './computers';
 
 function computer(id: string, harnessId?: string): ComputerStatus {
   return {
@@ -28,5 +28,15 @@ describe('computerPresenceKey', () => {
     expect(before).toBe('a:off,b:off');
     expect(after).toBe('a:on,b:off');
     expect(computerPresenceKey(computers, new Set(['other']))).toBe(before);
+  });
+});
+
+describe('computerStatusKey', () => {
+  it('changes when a computer moves between states', () => {
+    const starting = { ...computer('a'), status: 'starting' } as ComputerStatus;
+
+    expect(computerStatusKey([computer('a')])).toBe('a:ready');
+    expect(computerStatusKey([starting])).toBe('a:starting');
+    expect(computerStatusKey(undefined)).toBe('');
   });
 });

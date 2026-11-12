@@ -2,6 +2,7 @@ use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::account_logins::{AccountLoginChange, AgentProvider, ProviderAccountIdentity};
 use crate::domain::models::ClaudeMode;
 use crate::domain::tokens;
 
@@ -705,13 +706,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     );
     assert_eq!(row.computer_id, Some(computer_id));
     assert_eq!(
-        row.capabilities,
-        HarnessCapabilities {
-            screen: false,
-            claude: None
-        }
-    );
-    assert_eq!(
         repo.computer_harness(computer_id).await.unwrap(),
         Some(harness_id)
     );
@@ -720,20 +714,9 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         Some(computer_id)
     );
 
-    repo.set_capabilities(
+    repo.record_account_login(
         harness_id,
-        HarnessCapabilities {
-            screen: true,
-            claude: None,
-        },
-    )
-    .await
-    .unwrap();
-    repo.set_claude_mode(
-        harness_id,
-        ClaudeModeChange::SignedIn {
-            signed_in_by: caller(),
-        },
+        claude_sign_in("sha256:computer", "2027-01-01T00:00:00Z", Some(caller())),
     )
     .await
     .unwrap();
@@ -757,13 +740,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         }
     );
     assert_eq!(renamed.computer_id, Some(computer_id));
-    assert_eq!(
-        renamed.capabilities,
-        HarnessCapabilities {
-            screen: true,
-            claude: None
-        }
-    );
     assert_eq!(renamed.claude_mode, ClaudeMode::OwnAccount);
 
     // A retry keeps the pairing and harness and takes the new secret.
@@ -977,78 +953,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         .await
         .unwrap(),
         HostedPairingUpsert::Created
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn capabilities_replace_the_previous_report(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool.clone());
-    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, owner_user_id, created_by)
-        VALUES ($1, 'mine', $2, $2)
-        "#,
-        harness_id.as_uuid(),
-        OWNER_ID,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let fresh = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(
-        fresh.capabilities,
-        HarnessCapabilities {
-            screen: false,
-            claude: None
-        }
-    );
-    assert_eq!(fresh.computer_id, None);
-
-    let capabilities = HarnessCapabilities {
-        screen: true,
-        claude: Some(harnesses_claude_account()),
-    };
-    assert!(
-        repo.set_capabilities(harness_id, capabilities.clone())
-            .await
-            .unwrap()
-    );
-    let reported = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(reported.capabilities, capabilities);
-    assert_eq!(reported.claude_mode, ClaudeMode::MacroCredits);
-    assert!(
-        repo.set_claude_mode(
-            harness_id,
-            ClaudeModeChange::SignedIn {
-                signed_in_by: caller(),
-            },
-        )
-        .await
-        .unwrap()
-    );
-    assert_eq!(
-        repo.get_harness(harness_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .claude_mode,
-        ClaudeMode::OwnAccount
-    );
-
-    assert!(repo.delete_harness(harness_id).await.unwrap());
-    assert!(
-        !repo
-            .set_capabilities(
-                harness_id,
-                HarnessCapabilities {
-                    screen: false,
-                    claude: None
-                }
-            )
-            .await
-            .unwrap()
     );
 }
 
@@ -1290,111 +1194,166 @@ async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
     );
 }
 
-fn harnesses_claude_account() -> crate::domain::models::ClaudeAccount {
-    crate::domain::models::ClaudeAccount::SignedIn {
-        account: Some("team@example.com".to_owned()),
-        expires_at: Some("2027-01-01T00:00:00Z".parse().unwrap()),
+fn claude_sign_in(
+    credential_id: &str,
+    expires_at: &str,
+    signed_in_by: Option<MacroUserIdStr<'static>>,
+) -> AccountLoginChange {
+    AccountLoginChange::SignedIn {
+        provider: AgentProvider::Claude,
+        account: ProviderAccountIdentity {
+            external_account_id: credential_id.to_owned(),
+        },
+        expires_at: Some(expires_at.parse().unwrap()),
+        signed_in_by,
     }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_claude_sign_in_keeps_its_signer_until_sign_out(pool: PgPool) {
+async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgPool) {
     let repo = PgHarnessRepo::new(pool.clone());
-    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, owner_user_id, created_by)
-        VALUES ($1, 'mine', $2, $2)
-        "#,
-        harness_id.as_uuid(),
-        OWNER_ID,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    insert_user(&pool, OWNER_ID).await;
+    insert_user(&pool, TEAMMATE_ID).await;
+    let mine = HarnessId::new_from_uuid(Uuid::new_v4());
+    let spare = HarnessId::new_from_uuid(Uuid::new_v4());
+    for harness_id in [mine, spare] {
+        sqlx::query!(
+            r#"
+            INSERT INTO harnesses (id, name, owner_user_id, created_by)
+            VALUES ($1, 'mine', $2, $2)
+            "#,
+            harness_id.as_uuid(),
+            OWNER_ID,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let teammate = MacroUserIdStr::try_from(TEAMMATE_ID.to_owned()).unwrap();
 
     assert!(
-        repo.set_claude_mode(
-            harness_id,
-            ClaudeModeChange::SignedIn {
-                signed_in_by: MacroUserIdStr::try_from(TEAMMATE_ID.to_owned()).unwrap(),
-            },
+        repo.record_account_login(
+            mine,
+            claude_sign_in(
+                "sha256:first",
+                "2027-01-01T00:00:00Z",
+                Some(teammate.clone())
+            )
         )
         .await
         .unwrap()
     );
-    let signed_in = sqlx::query!(
-        r#"
-        SELECT claude_mode, claude_signed_in_by, claude_signed_in_at
-        FROM harnesses WHERE id = $1
-        "#,
-        harness_id.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(signed_in.claude_mode, "own_account");
-    assert_eq!(signed_in.claude_signed_in_by.as_deref(), Some(TEAMMATE_ID));
-    assert!(signed_in.claude_signed_in_at.is_some());
-
-    assert!(
-        repo.set_claude_mode(harness_id, ClaudeModeChange::SignedOut)
-            .await
-            .unwrap()
+    let first = repo
+        .active_account_login(mine, AgentProvider::Claude)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.signed_in_by, Some(teammate.clone()));
+    assert_eq!(first.account.identity.external_account_id, "sha256:first");
+    assert_eq!(
+        first.expires_at,
+        Some("2027-01-01T00:00:00Z".parse().unwrap())
     );
-    let signed_out = sqlx::query!(
-        r#"
-        SELECT claude_mode, claude_signed_in_by, claude_signed_in_at
-        FROM harnesses WHERE id = $1
-        "#,
-        harness_id.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(signed_out.claude_mode, "macro_credits");
-    assert_eq!(signed_out.claude_signed_in_by, None);
-    assert_eq!(signed_out.claude_signed_in_at, None);
-}
+    assert_eq!(
+        repo.get_harness(mine).await.unwrap().unwrap().claude_mode,
+        ClaudeMode::OwnAccount
+    );
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn capabilities_record_when_they_were_reported(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool.clone());
-    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, owner_user_id, created_by)
-        VALUES ($1, 'mine', $2, $2)
-        "#,
-        harness_id.as_uuid(),
-        OWNER_ID,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let before = Utc::now();
+    // The machine reporting the same credential again moves only its expiry.
+    assert!(
+        repo.record_account_login(
+            mine,
+            claude_sign_in("sha256:first", "2027-06-01T00:00:00Z", None)
+        )
+        .await
+        .unwrap()
+    );
+    let reported = repo
+        .active_account_login(mine, AgentProvider::Claude)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(reported.id, first.id);
+    assert_eq!(reported.signed_in_by, Some(teammate.clone()));
+    assert_eq!(
+        reported.expires_at,
+        Some("2027-06-01T00:00:00Z".parse().unwrap())
+    );
+
+    // A new credential starts a new login; the old one stays as history.
+    assert!(
+        repo.record_account_login(
+            mine,
+            claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
+        )
+        .await
+        .unwrap()
+    );
+    let second = repo
+        .active_account_login(mine, AgentProvider::Claude)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(second.id, first.id);
+    assert_eq!(second.signed_in_by, Some(caller()));
+    assert_eq!(
+        second.expires_at,
+        Some("2027-02-01T00:00:00Z".parse().unwrap())
+    );
+    // The same account on another machine is the same provider account.
+    assert!(
+        repo.record_account_login(
+            spare,
+            claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
+        )
+        .await
+        .unwrap()
+    );
+    let elsewhere = repo
+        .active_account_login(spare, AgentProvider::Claude)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(elsewhere.account.id, second.account.id);
 
     assert!(
-        repo.set_capabilities(
-            harness_id,
-            HarnessCapabilities {
-                screen: true,
-                claude: None
+        repo.record_account_login(
+            mine,
+            AccountLoginChange::SignedOut {
+                provider: AgentProvider::Claude
             }
         )
         .await
         .unwrap()
     );
-
-    let reported_at = sqlx::query_scalar!(
-        "SELECT capabilities_reported_at FROM harnesses WHERE id = $1",
-        harness_id.as_uuid(),
+    assert_eq!(
+        repo.active_account_login(mine, AgentProvider::Claude)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.get_harness(mine).await.unwrap().unwrap().claude_mode,
+        ClaudeMode::MacroCredits
+    );
+    let history = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM harness_account_logins WHERE harness_id = $1 AND signed_out_at IS NOT NULL"#,
+        mine.as_uuid(),
     )
     .fetch_one(&pool)
     .await
-    .unwrap()
     .unwrap();
-    assert!(reported_at >= before);
+    assert_eq!(history, 2);
+    assert!(
+        !repo
+            .record_account_login(
+                HarnessId::new_from_uuid(Uuid::new_v4()),
+                claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
+            )
+            .await
+            .unwrap(),
+        "an unknown harness records nothing"
+    );
 }
 
 /// Binds a new agent owned by `owner` to `harness`, returning its id.
@@ -1465,4 +1424,198 @@ async fn bound_agents_leave_out_residents_whose_owner_lost_access(pool: PgPool) 
         listed(repo.list_bound_agents(harness).await.unwrap()),
         [own_resident, teammate_coder]
     );
+}
+
+/// A computer's harness follows its team: admins own it, members use it,
+/// and its buyer keeps nothing once they leave.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_computer_harness_belongs_to_its_team_not_its_buyer(pool: PgPool) {
+    const ADMIN_ID: &str = "macro|admin@example.com";
+    const MEMBER_ID: &str = "macro|member@example.com";
+    let repo = PgHarnessRepo::new(pool.clone());
+    // OWNER_ID is the team's owner and buys the computer.
+    let team_id = team_of(&pool, &[OWNER_ID, ADMIN_ID, MEMBER_ID]).await;
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'admin'::team_role WHERE user_id = $1",
+        ADMIN_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
+    let harness = hosted_harness(team_id, computer_id);
+    let harness_id = harness.id;
+    repo.upsert_hosted_pairing(
+        hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "secret"),
+        harness,
+    )
+    .await
+    .unwrap();
+    let host_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
+        VALUES ($1, 'host-1', 8, 8)
+        "#,
+        host_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime (
+            id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry,
+            purchase_key, host_id, state, harness_id, created_by
+        )
+        VALUES ($1, $2, 'Computer', 'standard', 2, 8, 40, 'standard-v1', 'buy-1', $3, '{}', $4, $5)
+        "#,
+        computer_id.as_uuid(),
+        team_id,
+        host_id,
+        harness_id.as_uuid(),
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness_id, user(OWNER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(ADMIN_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(MEMBER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::User
+    );
+
+    // The team changes hands and the buyer leaves.
+    sqlx::query!(
+        "UPDATE team SET owner_id = $1 WHERE id = $2",
+        ADMIN_ID,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        OWNER_ID,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness_id, user(OWNER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::None
+    );
+    assert!(
+        repo.list_usable_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.list_directory_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a former member does not see the team's computer"
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(ADMIN_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+}
+
+/// The Anthropic gateway serves a session only through this lookup: a bot
+/// on a live computer harness has its computer; a paired machine, a deleted
+/// computer harness or no harness at all has none.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_bot_has_a_computer_only_on_a_live_computer_harness(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let team_id = team_of(&pool, &[OWNER_ID]).await;
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
+    let harness = hosted_harness(team_id, computer_id);
+    let harness_id = harness.id;
+    repo.upsert_hosted_pairing(
+        hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "secret"),
+        harness,
+    )
+    .await
+    .unwrap();
+    let paired_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'laptop', $2, $2)
+        "#,
+        paired_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let on_computer = Uuid::new_v4();
+    let on_laptop = Uuid::new_v4();
+    let unbound = Uuid::new_v4();
+    for (bot, handle, harness) in [
+        (on_computer, "on-computer", Some(harness_id.as_uuid())),
+        (on_laptop, "on-laptop", Some(paired_id)),
+        (unbound, "unbound", None),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+            VALUES ($1, 'owned', $2, 'Agent', $3, true)
+            "#,
+            bot,
+            OWNER_ID,
+            handle,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+            VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
+            "#,
+            bot,
+            harness,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let computer_for = |bot: Uuid| repo.computer_for_bot(bot_id::BotId::new_from_uuid(bot));
+
+    assert_eq!(computer_for(on_computer).await.unwrap(), Some(computer_id));
+    assert_eq!(computer_for(on_laptop).await.unwrap(), None);
+    assert_eq!(computer_for(unbound).await.unwrap(), None);
+
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        harness_id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(computer_for(on_computer).await.unwrap(), None);
 }

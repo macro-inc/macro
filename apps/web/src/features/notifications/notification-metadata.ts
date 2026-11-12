@@ -1,4 +1,5 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
+import type { AgentProvider } from '@service-notification/generated/schemas';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -110,12 +111,16 @@ export function getNotificationAction(n: UnifiedNotification): string {
         routineRunFailed(n) ? 'failed' : 'finished'
       )
       // The computer is the actor: "<computer> Claude sign-in expired".
-      .with('claude_sign_in_expiry', () =>
-        match(claudeSignInStage(n))
-          .with('expires_today', () => 'Claude sign-in expires today')
-          .with('expired', () => 'Claude sign-in expired')
-          .otherwise(() => 'Claude sign-in expires soon')
-      )
+      .with('agent_sign_in_expiry', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'agent_sign_in_expiry') return 'sign-in expires soon';
+        const agent = agentDisplayName(meta.content.agent);
+        return match(meta.content.stage)
+          .with('expires_soon', () => `${agent} sign-in expires soon`)
+          .with('expires_today', () => `${agent} sign-in expires today`)
+          .with('expired', () => `${agent} sign-in expired`)
+          .exhaustive(() => `${agent} sign-in expires soon`);
+      })
       .with('runtime_access_removed', () => 'removed your access to')
       .exhaustive(() => 'notified you about')
   );
@@ -180,7 +185,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
-      .with({ tag: 'claude_sign_in_expiry' }, () => undefined)
+      .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -274,25 +279,15 @@ export function getNotificationContent(
       .with({ tag: 'routine_run_finished' }, (m) =>
         m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
       )
-      .with({ tag: 'claude_sign_in_expiry' }, (m) =>
-        match(m.content.stage)
-          .with(
-            'expires_soon',
-            () =>
-              'Its Claude sign-in expires soon. Sign in again in Settings → Machines.'
-          )
-          .with(
-            'expires_today',
-            () =>
-              'Its Claude sign-in expires today. Sign in again in Settings → Machines.'
-          )
-          .with(
-            'expired',
-            () =>
-              'Its Claude sign-in expired. Sign in again in Settings → Machines.'
-          )
-          .exhaustive()
-      )
+      .with({ tag: 'agent_sign_in_expiry' }, (m) => {
+        const agent = agentDisplayName(m.content.agent);
+        const when = match(m.content.stage)
+          .with('expires_soon', () => 'expires soon')
+          .with('expires_today', () => 'expires today')
+          .with('expired', () => 'expired')
+          .exhaustive();
+        return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
+      })
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -364,7 +359,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
-      .with({ tag: 'claude_sign_in_expiry' }, () => false)
+      .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -380,9 +375,11 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
   );
 }
 
-function claudeSignInStage(n: UnifiedNotification) {
-  const meta = n.notification_metadata;
-  return meta.tag === 'claude_sign_in_expiry' ? meta.content.stage : undefined;
+/** The agent's name as people see it, e.g. "Claude". */
+function agentDisplayName(agent: AgentProvider): string {
+  return match(agent)
+    .with('claude', () => 'Claude')
+    .exhaustive();
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

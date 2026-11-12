@@ -273,7 +273,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('routine_run_finished', () => () => (
       <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('claude_sign_in_expiry', () => () => (
+    .with('agent_sign_in_expiry', () => () => (
       <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
@@ -537,6 +537,7 @@ function BaseCard(props: {
   title: JSX.Element;
   /** Adornment before the title text (e.g. draft badge, block-type icon). */
   titleLeading?: JSX.Element;
+  trailing?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
@@ -568,10 +569,19 @@ function BaseCard(props: {
           {props.children}
         </div>
       </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
+      <Show
+        when={props.trailing}
+        fallback={
+          <InboxTimestamp
+            timestamp={props.item.timestamp}
+            class="col-start-3 row-start-1 self-start justify-self-end"
+          />
+        }
+      >
+        <div class="col-start-3 row-start-1 self-center justify-self-end">
+          {props.trailing}
+        </div>
+      </Show>
     </InboxCard.Root>
   );
 }
@@ -630,7 +640,13 @@ const attachmentSummary = (count: number): string | undefined =>
     ? undefined
     : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
 
-export function ChannelCardLayout(props: InboxCardLayoutProps) {
+export function ChannelCardLayout(
+  props: InboxCardLayoutProps & {
+    icon?: JSX.Element;
+    trailing?: JSX.Element;
+    preview?: JSX.Element;
+  }
+) {
   const entity = createMemo(() => props.item.entity);
 
   const messageSenderId = createMemo(() => {
@@ -708,34 +724,43 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     <BaseCard
       {...props}
       icon={
-        <Show
-          when={!isDM()}
-          fallback={<InboxAvatar senderId={senderAvatarId()} />}
-        >
-          <EntityIcon
-            class={AVATAR_GLYPH_CLASS}
-            targetType={getEntityIconType(entity())}
-            size="fill"
-            theme="monochrome"
-          />
-        </Show>
+        props.icon ?? (
+          <Show
+            when={!isDM()}
+            fallback={<InboxAvatar senderId={senderAvatarId()} />}
+          >
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(entity())}
+              size="fill"
+              theme="monochrome"
+            />
+          </Show>
+        )
       }
       title={text().title}
     >
-      <CardClampedMarkdown
-        inert
-        text={text().content}
-        prefix={
-          <>
-            <Show when={senderLabel()}>
-              <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
-            </Show>
-            <Show when={text().contentIsAttachmentSummary}>
-              <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
-            </Show>
-          </>
+      <Show
+        when={props.preview}
+        fallback={
+          <CardClampedMarkdown
+            inert
+            text={text().content}
+            prefix={
+              <>
+                <Show when={senderLabel()}>
+                  <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
+                </Show>
+                <Show when={text().contentIsAttachmentSummary}>
+                  <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                </Show>
+              </>
+            }
+          />
         }
-      />
+      >
+        {props.preview}
+      </Show>
     </BaseCard>
   );
 }

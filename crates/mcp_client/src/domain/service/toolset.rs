@@ -1,5 +1,6 @@
 use crate::domain::models::{CallToolResultExt, Error, MacroUserIdStr, McpServer, McpServerRecord};
 use crate::domain::ports::{McpConnector, McpServerStore};
+use crate::outbound::guarded_http::McpHttp;
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
     ToolResult, ToolSet, ToolSetError,
@@ -174,14 +175,18 @@ impl McpToolSet {
     ///
     /// Servers that fail to connect or list tools are silently skipped.
     #[tracing::instrument(skip_all)]
-    pub async fn new<S: McpServerStore>(records: &[McpServerRecord], server_store: Arc<S>) -> Self {
+    pub async fn new<S: McpServerStore>(
+        records: &[McpServerRecord],
+        http: &McpHttp,
+        server_store: Arc<S>,
+    ) -> Self {
         let user_id = records.first().map(|r| r.user_id.clone());
 
         let futs = records.iter().filter(|r| r.enabled).map(|record| {
             let server_store = server_store.clone();
             async move {
                 let client = record
-                    .connect(server_store)
+                    .connect(http, server_store)
                     .await
                     .inspect_err(|e| {
                         tracing::warn!(
@@ -440,9 +445,10 @@ impl<T> CombinedToolSet<T> {
     pub async fn new<S: McpServerStore>(
         static_tools: Arc<AsyncToolCollection<T>>,
         records: &[McpServerRecord],
+        http: &McpHttp,
         server_store: Arc<S>,
     ) -> Self {
-        let mcp_tools = McpToolSet::new(records, server_store).await;
+        let mcp_tools = McpToolSet::new(records, http, server_store).await;
         Self {
             static_tools,
             mcp_tools,

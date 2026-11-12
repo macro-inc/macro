@@ -325,6 +325,12 @@ impl ConfigForm {
             &credentials.harness_id.to_string(),
         );
         self.set_string("credentials", "token", &credentials.token);
+        match credentials.pairing_id {
+            Some(pairing_id) => {
+                self.set_string("credentials", "pairing_id", &pairing_id.to_string())
+            }
+            None => self.remove("credentials", "pairing_id"),
+        }
         self.save()
     }
 

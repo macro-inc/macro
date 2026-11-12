@@ -20,6 +20,11 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
+- `src/runtime_gauges.rs`: one task recording, every minute, what the process
+  holds per session as OTel gauges (`ahs.harness.workers`,
+  `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
+  `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
+  `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -34,14 +39,20 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
   `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
   its `Authorization: Bearer` header (re-minted on every attach, so restart
-  the runtime with the latest one). Requests pass through unchanged with
+  the runtime with the latest one). Only sessions whose bot runs on a live Macro
+  computer harness (`harnesses.computer_id`) are served; anything else, a
+  failed lookup included, is a 403 with nothing forwarded. The
+  `enable-macro-computers` rollout is not checked: it limits selling
+  computers, not using them. Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
   defaults). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
-  only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+  only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
+  not stop the read: the rest is drained (up to ten minutes) so its usage is
+  still recorded. Span: `anthropic_gateway.messages`.
 - `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects
@@ -51,15 +62,22 @@ Pulumi stacks; they do not host extra agent processes.
   on their TaskTracker; fleet effects drain for up to thirty seconds and release
   unfinished leases. See hosted_runtimes' AGENTS.md for redeploy grace,
   bounded effect execution, and hard-kill recovery.
-  `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
-  an Incus override must not silently use the shared `macro-box` alias.
-  HostedHarnesses pairing retains the buying admin as the harness owner and
-  grants the computer's team User access, so every teammate can run agents on it.
-  `src/computers/default_agent.rs` creates the team's `Claude Code · <computer>`
-  coding agent through `BotService::create_agent` as the buyer (macrod harness,
-  `default` model, all channels, owner connections, prompts for permissions),
-  skipping a harness `HarnessAssignments::bots_on_harness` already lists; the
-  handle is the settings editor's slug, suffixed past handles the buyer sees.
+  `COMPUTERS_IMAGE` names the versioned image new computers are created
+  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
+  computer records its own image; updates go through hosted_runtimes' image
+  update routes, never by changing this value for existing computers.
+  HostedHarnesses pairing records the buyer as the harness owner, but the
+  harness belongs to the computer's team: its owner and admins manage it
+  (Claude sign-in included) and every member can run agents on it.
+  `src/computers/default_agent.rs` creates the team's `<buyer first name>'s Agent`
+  (`Agent` without one, read from `macro_user_info`) coding agent through
+  `BotService::create_agent` as the buyer (macrod harness, `default` model, all
+  channels, owner connections, the bots default of bypassing permissions on a
+  computer), skipping a harness `HarnessAssignments::bots_on_harness` already
+  lists; the handle is the settings editor's slug, suffixed past handles the
+  buyer sees. `HostedHarnesses::revoke` revokes the harness, then deletes every
+  agent bound to any harness the computer had (`HarnessAgentDeletion`); computer
+  harnesses keep their agents bound when deleted, so a retry still finds them.
 - Computer lifecycle and gateway adapters carry canonical `ComputerId` and
   `HarnessId`; unwrap only at the harness/storage boundary.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes
@@ -69,37 +87,45 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a rejected code returns 422 with `code: "invalid_code"`),
-  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (same manage rights
-  and rollout gate; interrupts an active start or completion and waits for
-  its account-mode reconciliation and lease release before answering),
-  `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
-  written to the harness row on macrod's confirmation; a shared 180-second
-  account-change lease covers the command and mode write, preventing opposing
-  requests from persisting out of order; concurrent requests get 409; terminal
-  responses release the lease after the mode write, and failed or dropped
-  requests schedule owner-checked cleanup instead of waiting for expiry;
-  abandoned sign-in requests cancel macrod before releasing their lease;
-  completion and its mode write run in a tracked task so a dropped HTTP waiter
-  still reconciles any token macrod already committed),
-  and `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights).
-  A completed sign-in records its caller as the signer; sign-out clears it.
-- `src/computers/claude_expiry.rs`: the ports of the operator's
-  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers on
-  `own_account` (harness signer, capabilities and report time joined with the
-  computer's team and last `claude_notice_*`) and records sent notices on
-  `hosted_runtime`; `IngressClaudeSignInNotices` addresses the team's owner and
-  admins (`teams`) and sends `claude_sign_in_expiry` (inbox, gateway, push)
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
+  `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
+  The sign-in link must be `https://claude.com` or `claude.ai` at exactly
+  `/cai/oauth/authorize` or `/oauth/authorize`. A reported login needs a
+  credential id of at most 100 `[A-Za-z0-9:._-]` bytes and an expiry no more
+  than 400 days out (past expiries are real and allowed).
+  The account has a signer, sign-in time and expiry, never an email or plan:
+  Claude's setup-token credential names no account. Each route runs in a
+  tracked task, so a completion whose caller left still records its signer.
+- `src/computers/harnessd.rs`: `Harnessd` runs one `harnessd_protocol`
+  request per `Fleet::exec(computer, ["harnessd"])` (request on stdin, one
+  answer line on stdout) and writes the computer's Claude login rows from
+  harnessd's status, under a per-computer Postgres advisory lock held from the
+  command through the status read to the write. The lock is a session
+  advisory lock, like the agent-session lock, taken with
+  `pg_try_advisory_lock` on a dedicated pool of 4 connections (5 s acquire
+  timeout): a computer another request holds answers 409 Busy at once, and
+  the status pass skips it. The
+  `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
+  same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
+  sign-in when setup is unfinished or the credential expired. Spans:
+  `computer.harnessd.command`/`.refresh`/`.refresh_all`.
+- `src/computers/claude_expiry.rs`: the notices of the operator's
+  `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
+  `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
+  logins with signer, `expires_at` and last notice, through harnesses'
+  repository; the status pass lists awake computers with
+  `ComputerOperator::awake_computers`); `IngressClaudeSignInNotices` addresses the team's owner and
+  admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
-- `src/computers/control.rs`: commands reach macrod as `computerControl`
-  runtime messages; when the runtime is on another replica they cross Redis
-  (`agent-harness.computer-control`: claim with `SET NX`, ack within 3 s or
-  409, then the answer). Spans: `computer_control.request`/`.execute`.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever the harness can run code, every client but ChatGPT
   gets only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
   (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
+  `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
+  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
@@ -211,8 +237,7 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer
-  account-lease tests require `REDIS_URI` pointing at isolated local Redis). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
@@ -264,9 +289,23 @@ feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
 owner unsharing and already activated routines remain available.
+`AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
+scheduling configs regardless of billing flags. It is a Secrets Manager name
+in deployed configs and a direct key locally. Resolve it for the harness, cognition, and
+scheduling configs before building authentication service clients; the task
+role must allow reading its ARN.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
+
+The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
+glibc malloc kept freed memory resident as fragmentation under this
+workload. Tests and the library keep the system allocator.
+
+`AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
+a session's command worker waits before it releases a quiet session from
+memory and exits; lower it only to exercise the release end to end. Values
+below 30 fail startup.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Computer lifecycle observations use one additional dedicated lock connection per
@@ -302,7 +341,10 @@ listener failure shuts down the process so ECS can replace the task.
   (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
   builds its context per call from the caller and signs the same attribution
   into its SDK token: the agent, or the Macro bot plus the client name as
-  `agent_via`. Never read a bot id or client name from the request itself.
+  `agent_via`. The OAuth broker signs the same Macro bot attribution into the
+  tokens it issues for the ChatGPT MCP Worker's resource
+  (`McpChatgptServiceUrl`; `public_mcp/macro_api_tokens.rs`). Never read a bot
+  id or client name from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
@@ -321,7 +363,8 @@ bridge hostname, preserving Host validation for other origins.
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
 
 Hosted computer Claude account requests require the operator-derived
-`FleetAttachment` after the existing rollout and Manage authorization; no
+`FleetAttachment` after the existing rollout and Manage authorization (on a
+computer, the team's owner and admins); no
 attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its

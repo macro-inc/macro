@@ -1,4 +1,6 @@
 use super::*;
+
+mod seat_requests;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -28,7 +30,7 @@ pub(super) fn subscription() -> stripe::Subscription {
         ..Default::default()
     }
 }
-fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
+pub(super) fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
     stripe::SubscriptionItem {
         id: id.parse().unwrap(),
         price: Some(stripe::Price {
@@ -336,7 +338,7 @@ fn fill_missing(value: &mut Value, field: &str) {
         _ => {}
     }
 }
-fn form(request: &wiremock::Request) -> HashMap<String, String> {
+pub(super) fn form(request: &wiremock::Request) -> HashMap<String, String> {
     url::form_urlencoded::parse(&request.body)
         .into_owned()
         .collect()
@@ -972,7 +974,7 @@ async fn a_failed_subscription_listing_is_an_error_not_a_free_customer(pool: sql
     assert!(matches!(found, Err(CustomerError::StorageLayerError(_))));
 }
 
-fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request> {
+pub(super) fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request> {
     requests
         .iter()
         .filter(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
@@ -1227,6 +1229,7 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
             current_period_end: chrono::DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
             interval: BillingCadence::Year,
             currency: "usd".into(),
+            trialing: false,
         }
     );
     assert_eq!(

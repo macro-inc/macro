@@ -14,22 +14,22 @@ fn at(day: u32, hour: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 11, day, hour, 0, 0).unwrap()
 }
 
-/// Signed in on the 1st at noon, expiring on the 20th at noon, with macrod's
-/// report from a minute after the sign-in and no notice sent yet.
+/// Signed in on the 1st at noon, expiring on the 20th at noon, with no
+/// notice sent yet.
 fn signed_in_on_the_first() -> ClaudeSignIn {
     ClaudeSignIn {
+        login_id: Uuid::from_u128(0x101),
         computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
         harness_id: HarnessId::new_from_uuid(Uuid::from_u128(
             0x0000_0000_0000_7000_8000_0000_0000_0c0c,
         )),
         team_id: TEAM,
         computer_name: "Build box".to_owned(),
-        signed_in_by: MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
+        signed_in_by: Some(
+            MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
+        ),
         signed_in_at: at(1, 12),
-        report: Some(ClaudeReport::SignedIn {
-            expires_at: Some(at(20, 12)),
-        }),
-        reported_at: Some(at(1, 12) + Duration::minutes(1)),
+        expires_at: Some(at(20, 12)),
         last_notice: None,
     }
 }
@@ -99,29 +99,8 @@ fn a_passed_expiry_is_due_as_expired_without_the_warnings_it_overtook() {
 }
 
 #[test]
-fn a_rejected_sign_in_is_due_as_expired_at_once() {
-    let sign_in = ClaudeSignIn {
-        report: Some(ClaudeReport::SignedOut),
-        reported_at: Some(at(5, 9)),
-        ..signed_in_on_the_first()
-    };
-
-    assert_eq!(
-        due_notice(at(5, 9), &sign_in),
-        Some(ClaudeSignInNotice {
-            signed_in_at: at(1, 12),
-            stage: ClaudeSignInStage::Expired,
-            expires_at: None,
-        })
-    );
-}
-
-#[test]
 fn nothing_follows_expired_for_the_same_sign_in() {
-    // It expired by time, then macrod saw Claude signed out.
     let sign_in = ClaudeSignIn {
-        report: Some(ClaudeReport::SignedOut),
-        reported_at: Some(at(20, 13)),
         last_notice: Some(ClaudeSignInNotice {
             signed_in_at: at(1, 12),
             stage: ClaudeSignInStage::Expired,
@@ -134,22 +113,9 @@ fn nothing_follows_expired_for_the_same_sign_in() {
 }
 
 #[test]
-fn a_report_from_before_the_sign_in_is_not_its_outcome() {
-    // macrod still reported the account it had before the new sign-in.
-    let sign_in = ClaudeSignIn {
-        report: Some(ClaudeReport::SignedOut),
-        reported_at: Some(at(1, 11)),
-        ..signed_in_on_the_first()
-    };
-
-    assert_eq!(due_notice(at(1, 12), &sign_in), None);
-}
-
-#[test]
 fn a_new_sign_in_starts_its_notices_over() {
     let sign_in = ClaudeSignIn {
         signed_in_at: at(10, 12),
-        reported_at: Some(at(10, 12) + Duration::minutes(1)),
         last_notice: Some(ClaudeSignInNotice {
             signed_in_at: at(1, 12),
             stage: ClaudeSignInStage::Expired,
@@ -170,11 +136,9 @@ fn a_new_sign_in_starts_its_notices_over() {
 
 #[test]
 fn a_renewed_expiry_warns_again() {
-    // Claude was signed in again on the computer itself, moving the expiry.
+    // harnessd reported a later expiry for the same credential.
     let sign_in = ClaudeSignIn {
-        report: Some(ClaudeReport::SignedIn {
-            expires_at: Some(at(28, 12)),
-        }),
+        expires_at: Some(at(28, 12)),
         last_notice: Some(ClaudeSignInNotice {
             signed_in_at: at(1, 12),
             stage: ClaudeSignInStage::ExpiresToday,
@@ -196,18 +160,7 @@ fn a_renewed_expiry_warns_again() {
 #[test]
 fn an_unknown_expiry_is_never_warned_about() {
     let sign_in = ClaudeSignIn {
-        report: Some(ClaudeReport::SignedIn { expires_at: None }),
-        ..signed_in_on_the_first()
-    };
-
-    assert_eq!(due_notice(at(25, 12), &sign_in), None);
-}
-
-#[test]
-fn nothing_is_due_before_macrod_reports() {
-    let sign_in = ClaudeSignIn {
-        report: None,
-        reported_at: None,
+        expires_at: None,
         ..signed_in_on_the_first()
     };
 
@@ -220,7 +173,7 @@ struct FakeError;
 
 struct FakeSignIns {
     signed_in: Vec<ClaudeSignIn>,
-    recorded: Mutex<Vec<(ComputerId, ClaudeSignInNotice)>>,
+    recorded: Mutex<Vec<(Uuid, ClaudeSignInNotice)>>,
 }
 
 impl ClaudeSignIns for FakeSignIns {
@@ -232,17 +185,17 @@ impl ClaudeSignIns for FakeSignIns {
 
     async fn record_notice(
         &self,
-        computer_id: ComputerId,
+        login_id: Uuid,
         notice: ClaudeSignInNotice,
     ) -> Result<(), FakeError> {
-        self.recorded.lock().unwrap().push((computer_id, notice));
+        self.recorded.lock().unwrap().push((login_id, notice));
         Ok(())
     }
 }
 
 struct FakeNotices {
     failing_computer: ComputerId,
-    sent: Mutex<Vec<(ClaudeSignInExpiry, HashSet<MacroUserIdStr<'static>>)>>,
+    sent: Mutex<Vec<(SignInExpiry, HashSet<MacroUserIdStr<'static>>)>>,
 }
 
 impl ClaudeSignInNotices for FakeNotices {
@@ -258,7 +211,7 @@ impl ClaudeSignInNotices for FakeNotices {
 
     async fn send(
         &self,
-        expiry: ClaudeSignInExpiry,
+        expiry: SignInExpiry,
         recipients: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), FakeError> {
         if expiry.computer_id == self.failing_computer {
@@ -277,14 +230,14 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
         signed_in: vec![
             signed_in_on_the_first(),
             ClaudeSignIn {
+                login_id: Uuid::from_u128(0x102),
                 computer_id: failing,
                 ..signed_in_on_the_first()
             },
             ClaudeSignIn {
+                login_id: Uuid::from_u128(0x103),
                 computer_id: quiet,
-                report: Some(ClaudeReport::SignedIn {
-                    expires_at: Some(at(30, 12)),
-                }),
+                expires_at: Some(at(30, 12)),
                 ..signed_in_on_the_first()
             },
         ],
@@ -313,7 +266,7 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
     assert_eq!(
         *notices.sent.lock().unwrap(),
         vec![(
-            ClaudeSignInExpiry {
+            SignInExpiry {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 harness_id: HarnessId::new_from_uuid(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0c0c
@@ -330,6 +283,6 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
     // The failed computer is not recorded, so the next pass retries it.
     assert_eq!(
         *sign_ins.recorded.lock().unwrap(),
-        vec![(ComputerId::new_from_uuid(Uuid::from_u128(1)), notice)]
+        vec![(Uuid::from_u128(0x101), notice)]
     );
 }

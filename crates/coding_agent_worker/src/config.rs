@@ -98,6 +98,10 @@ pub struct HarnessCredentials {
     pub harness_id: HarnessId,
     /// The bearer token (`mhns_...`).
     pub token: String,
+    /// The Macro computer enrollment pairing this credential was claimed
+    /// from; a newer enrollment's pairing must be claimed again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairing_id: Option<pairing_id::PairingId>,
 }
 
 impl HarnessCredentials {

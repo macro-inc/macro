@@ -14,6 +14,7 @@ pub fn ci_gate_reminder() -> Workflow {
     Workflow::new("CI Gate Reminder")
         .on(Event::default().pull_request(
             PullRequest::default()
+                .add_branch("main")
                 .add_type(PullRequestType::Opened)
                 .add_type(PullRequestType::Synchronize)
                 .add_type(PullRequestType::Reopened),

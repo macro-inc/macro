@@ -9,7 +9,12 @@ mod billing;
 mod item_changes;
 mod subscription_items;
 use subscription_items::{cadence, item_quantity_updates, update_error};
+mod computer_items;
+pub use computer_items::{
+    COMPUTER_ID_KEY, item_computer_id, item_computer_uuid, list_subscription_items,
+};
 mod subscription_error;
+use computer_items::ComputerItem;
 use subscription_error::SubscriptionDataError;
 
 use anyhow::Context;
@@ -19,8 +24,9 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, CustomerError, ItemProration, ItemQuantityChange, PriceInfo,
-        ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionTerms,
+        BillingCadence, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+        ItemQuantityChange, ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SeatPrices,
+        SubscriptionItemView, SubscriptionTerms,
     },
 };
 
@@ -340,51 +346,90 @@ impl CustomerRepository for CustomerRepositoryImpl {
         proration: ItemProration,
         idempotency_key: &str,
     ) -> Result<(), CustomerError> {
-        let _billing = self
-            .subscription_guard(subscription_id, Some(idempotency_key))
-            .await?;
-        if let Some(change) = self.item_change(idempotency_key).await? {
-            return self
-                .replay_item_change_locked(idempotency_key, change)
-                .await;
-        }
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
+        self.apply_item_changes(subscription_id, changes, None, proration, idempotency_key)
             .await
-            .map_err(storage)?;
-        if subscription
-            .metadata
-            .get(ITEM_CHANGE_KEY)
-            .map(String::as_str)
-            == Some(idempotency_key)
-        {
-            tracing::info!("item change already applied");
-            return Ok(());
-        }
-        let items = item_quantity_updates(&subscription, &changes)?;
-        if items.is_empty() {
-            return Ok(());
-        }
-        let adds = changes.iter().any(|change| change.delta > 0);
-        let billable = match subscription.status {
-            stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing => true,
-            // Removing items from a subscription behind on payment still
-            // stops what it bills; adding to one is refused.
-            stripe::SubscriptionStatus::PastDue | stripe::SubscriptionStatus::Unpaid => !adds,
-            _ => false,
-        };
-        if !billable {
-            return Err(CustomerError::SubscriptionNotActive);
-        }
-        self.update_retrieved_items(
-            subscription,
-            items,
-            ItemUpdateOptions {
-                idempotency_key: Some(idempotency_key),
-                error_if_incomplete: true,
-                proration,
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_computer_price(
+        &self,
+        base: &stripe::PriceId,
+        computer_id: &str,
+        idempotency_key: &str,
+    ) -> Result<stripe::PriceId, CustomerError> {
+        CustomerRepositoryImpl::create_computer_price(self, base, computer_id, idempotency_key)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, extra), fields(extra = extra.len()), err)]
+    async fn add_computer_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        computer_price: &stripe::PriceId,
+        computer_id: &str,
+        mut extra: Vec<ItemQuantityChange>,
+        proration: ItemProration,
+        idempotency_key: &str,
+    ) -> Result<(), CustomerError> {
+        extra.insert(
+            0,
+            ItemQuantityChange {
+                price_id: computer_price.clone(),
+                delta: 1,
             },
+        );
+        self.apply_item_changes(
+            subscription_id,
+            extra,
+            Some(ComputerItem {
+                price_id: computer_price,
+                computer_id,
+            }),
+            proration,
+            idempotency_key,
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_subscription_item(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        item_id: &stripe::SubscriptionItemId,
+        idempotency_key: &str,
+    ) -> Result<ItemRemoval, CustomerError> {
+        CustomerRepositoryImpl::remove_subscription_item(
+            self,
+            subscription_id,
+            item_id,
+            idempotency_key,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn subscription_items(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<Vec<SubscriptionItemView>, CustomerError> {
+        CustomerRepositoryImpl::subscription_items(self, subscription_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn settle_item_change(
+        &self,
+        idempotency_key: &str,
+        fence: Option<&stripe::SubscriptionId>,
+    ) -> Result<ItemChangeSettlement, CustomerError> {
+        CustomerRepositoryImpl::settle_item_change(self, idempotency_key, fence).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ItemChangeStatus>, CustomerError> {
+        CustomerRepositoryImpl::item_change_status(self, idempotency_key).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -409,6 +454,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             current_period_end,
             interval,
             currency: subscription.currency.to_string(),
+            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
         })
     }
 

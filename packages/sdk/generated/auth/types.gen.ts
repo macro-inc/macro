@@ -121,6 +121,11 @@ export type AutoReloadSnapshot = {
 export type BillingInterval = 'month' | 'year';
 
 /**
+ * Where a computer's billing stands, as its team sees it.
+ */
+export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -291,6 +296,21 @@ export type ComputerSize = 'standard' | 'large' | 'xl';
  */
 export type ComputerStatus = {
     /**
+     * Agents bound to the computer's live harness, teammates' private ones
+     * included: the ones releasing it deletes.
+     */
+    agentCount: number;
+    billing?: null | BillingStatus;
+    /**
+     * Whether the computer can be restored (`POST .../restore`): billing
+     * ended and the disk is still retained.
+     */
+    canRestore: boolean;
+    /**
+     * Whether a cancel at period end can still be undone (until `cancelsAt`).
+     */
+    canUndoCancel: boolean;
+    /**
      * When billing stops, for a computer canceled at period end.
      */
     cancelsAt?: string | null;
@@ -306,6 +326,11 @@ export type ComputerStatus = {
      * Time the computer was reserved.
      */
     createdAt: string;
+    /**
+     * Bot id of the coding agent the computer came with; null until macrod
+     * first connects. It can name an agent the team since deleted.
+     */
+    defaultAgentId?: string | null;
     /**
      * Root disk limit saved at purchase.
      */
@@ -326,20 +351,32 @@ export type ComputerStatus = {
      * Display name.
      */
     name: string;
-    payment?: null | PaymentOutcome;
+    /**
+     * Since when the team subscription is past due.
+     */
+    pastDueSince?: string | null;
     /**
      * Whether validated state requests power on; false for quarantined records.
      */
     poweredOn: boolean;
     /**
-     * When the disk is destroyed, for a canceled computer.
+     * The Macro user who bought it. The team's owner and admins, not the
+     * buyer, finish its setup and manage its Claude account.
+     */
+    purchasedBy: string;
+    /**
+     * When the disk is destroyed, for a computer whose billing ended.
      */
     retainedUntil?: string | null;
     setup?: null | SetupProgress;
     /**
+     * When the team finished the guided setup; null while it is unfinished.
+     */
+    setupCompletedAt?: string | null;
+    /**
      * Purchased catalog size.
      */
-    size: string;
+    size: ComputerSize;
     /**
      * Observed guest status.
      */
@@ -353,7 +390,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -548,6 +585,11 @@ export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_require
  * The status every user sees, without who set it.
  */
 export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
     /**
      * When it was set; absent when no status was ever set. Clients keep the
      * newest status they have seen, whether fetched or pushed.
@@ -1310,36 +1352,6 @@ export type InitOutlookLinkResponse = {
 };
 
 /**
- * Body of an internal purchase.
- */
-export type InternalPurchaseBody = {
-    /**
-     * Purchase funding or billing state.
-     */
-    billing: PurchaseBilling;
-    /**
-     * The team admin or owner the caller authorized.
-     */
-    createdBy: string;
-    /**
-     * Joined into the same subscription update, e.g. an agent seat.
-     */
-    extraItems?: Array<SubscriptionItem>;
-    /**
-     * Display name.
-     */
-    name?: string | null;
-    /**
-     * Purchased catalog size.
-     */
-    size: ComputerSize;
-    /**
-     * Team that owns the computer.
-     */
-    teamId: string;
-};
-
-/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -1433,16 +1445,6 @@ export type MergeGithubPullRequestResponse = {
      * The merge commit's SHA.
      */
     sha: string;
-};
-
-/**
- * Body of a notify-me request.
- */
-export type NotifyBody = {
-    /**
-     * Purchased catalog size.
-     */
-    size: ComputerSize;
 };
 
 export type PasswordRequest = {
@@ -1597,11 +1599,6 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
-/**
- * The purchase outcome, latched after payment or comp confirmation.
- */
-export type PaymentOutcome = 'pending' | 'paid' | 'unbilled' | 'comped';
-
 export type Permission = {
     /**
      * The description of the permission
@@ -1732,19 +1729,6 @@ export type PublicGtmInviteLink = {
 };
 
 /**
- * Server-selected purchase funding. Team clients cannot select this value.
- */
-export type PurchaseBilling = {
-    kind: 'stripe';
-} | {
-    kind: 'comped';
-    /**
-     * Reason for this decision or failure.
-     */
-    reason: string;
-};
-
-/**
  * Body of a team purchase.
  */
 export type PurchaseBody = {
@@ -1753,10 +1737,20 @@ export type PurchaseBody = {
      */
     name?: string | null;
     /**
+     * The client's key for this purchase: one per Buy dialog, sent again
+     * when the purchase is retried, so a retry never charges twice.
+     */
+    purchaseKey: string;
+    /**
      * Purchased catalog size.
      */
     size: ComputerSize;
 };
+
+/**
+ * Where a purchase stands when its request returns.
+ */
+export type PurchaseState = 'ready' | 'confirming';
 
 /**
  * Answer of a purchase.
@@ -1766,6 +1760,10 @@ export type Purchased = {
      * Computer this operation addresses.
      */
     computerId: string;
+    /**
+     * Whether the computer exists yet.
+     */
+    state: PurchaseState;
 };
 
 /**
@@ -2048,10 +2046,6 @@ export type SizeOffer = {
      */
     memoryGb: number;
     /**
-     * The caller asked to hear when this size is back.
-     */
-    notifyRequested: boolean;
-    /**
      * Price for one computer.
      */
     quote: Quote;
@@ -2161,10 +2155,7 @@ export type SubscriptionBillingLineItem = {
      */
     quantity: number;
     size?: null | ComputerSize;
-    /**
-     * Computer status supplied by its owning service.
-     */
-    status?: string | null;
+    status?: null | ComputerStatusKind;
     /**
      * Provider price per unit in minor units, when fixed.
      */
@@ -3587,73 +3578,6 @@ export type HealthHandlerResponses = {
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
 
-export type InternalPurchaseComputerData = {
-    body: InternalPurchaseBody;
-    path?: never;
-    query?: never;
-    url: '/internal/computers';
-};
-
-export type InternalPurchaseComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type InternalPurchaseComputerError = InternalPurchaseComputerErrors[keyof InternalPurchaseComputerErrors];
-
-export type InternalPurchaseComputerResponses = {
-    200: Purchased;
-};
-
-export type InternalPurchaseComputerResponse = InternalPurchaseComputerResponses[keyof InternalPurchaseComputerResponses];
-
-export type InternalQuoteComputerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Team that owns the computer.
-         */
-        teamId: string;
-        /**
-         * Purchased catalog size.
-         */
-        size: ComputerSize;
-    };
-    url: '/internal/computers/quote';
-};
-
-export type InternalQuoteComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type InternalQuoteComputerError = InternalQuoteComputerErrors[keyof InternalQuoteComputerErrors];
-
-export type InternalQuoteComputerResponses = {
-    200: Quote;
-};
-
-export type InternalQuoteComputerResponse = InternalQuoteComputerResponses[keyof InternalQuoteComputerResponses];
-
-export type InternalGetComputerData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query: {
-        /**
-         * Team that owns the computer.
-         */
-        teamId: string;
-    };
-    url: '/internal/computers/{computer_id}';
-};
-
-export type InternalGetComputerResponses = {
-    200: ComputerStatus;
-};
-
-export type InternalGetComputerResponse = InternalGetComputerResponses[keyof InternalGetComputerResponses];
-
 export type MacroApiTokenData = {
     body?: never;
     path?: never;
@@ -4451,6 +4375,7 @@ export type CreateTeamData = {
 export type CreateTeamErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4522,22 +4447,10 @@ export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof Purchas
 
 export type PurchaseTeamComputerResponses = {
     200: Purchased;
+    202: Purchased;
 };
 
 export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
-
-export type NotifyTeamComputerAvailableData = {
-    body: NotifyBody;
-    path?: never;
-    query?: never;
-    url: '/team/computers/notify';
-};
-
-export type NotifyTeamComputerAvailableResponses = {
-    204: void;
-};
-
-export type NotifyTeamComputerAvailableResponse = NotifyTeamComputerAvailableResponses[keyof NotifyTeamComputerAvailableResponses];
 
 export type ListTeamComputerOffersData = {
     body?: never;
@@ -4557,51 +4470,6 @@ export type ListTeamComputerOffersResponses = {
 };
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
-
-export type QuoteTeamComputerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Purchased catalog size.
-         */
-        size: ComputerSize;
-    };
-    url: '/team/computers/quote';
-};
-
-export type QuoteTeamComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type QuoteTeamComputerError = QuoteTeamComputerErrors[keyof QuoteTeamComputerErrors];
-
-export type QuoteTeamComputerResponses = {
-    200: Quote;
-};
-
-export type QuoteTeamComputerResponse = QuoteTeamComputerResponses[keyof QuoteTeamComputerResponses];
-
-export type GetTeamComputerData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query?: never;
-    url: '/team/computers/{computer_id}';
-};
-
-export type GetTeamComputerErrors = {
-    404: ErrorResponse;
-};
-
-export type GetTeamComputerError = GetTeamComputerErrors[keyof GetTeamComputerErrors];
-
-export type GetTeamComputerResponses = {
-    200: ComputerStatus;
-};
-
-export type GetTeamComputerResponse = GetTeamComputerResponses[keyof GetTeamComputerResponses];
 
 export type UndoCancelTeamComputerData = {
     body?: never;
@@ -4669,6 +4537,28 @@ export type ReleaseTeamComputerResponses = {
 
 export type ReleaseTeamComputerResponse = ReleaseTeamComputerResponses[keyof ReleaseTeamComputerResponses];
 
+export type RestoreTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/restore';
+};
+
+export type RestoreTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RestoreTeamComputerError = RestoreTeamComputerErrors[keyof RestoreTeamComputerErrors];
+
+export type RestoreTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RestoreTeamComputerResponse = RestoreTeamComputerResponses[keyof RestoreTeamComputerResponses];
+
 export type RetryTeamComputerData = {
     body?: never;
     path: {
@@ -4690,6 +4580,28 @@ export type RetryTeamComputerResponses = {
 };
 
 export type RetryTeamComputerResponse = RetryTeamComputerResponses[keyof RetryTeamComputerResponses];
+
+export type CompleteTeamComputerSetupData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/setup-complete';
+};
+
+export type CompleteTeamComputerSetupErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type CompleteTeamComputerSetupError = CompleteTeamComputerSetupErrors[keyof CompleteTeamComputerSetupErrors];
+
+export type CompleteTeamComputerSetupResponses = {
+    200: ComputerStatus;
+};
+
+export type CompleteTeamComputerSetupResponse = CompleteTeamComputerSetupResponses[keyof CompleteTeamComputerSetupResponses];
 
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;
@@ -5420,6 +5332,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -5480,6 +5396,10 @@ export type PutProfilePictureFileErrors = {
      * The caller has no such file
      */
     404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

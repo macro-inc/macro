@@ -35,39 +35,26 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
   retries are safe; a failed claim retries every 250 ms for up to five
-  minutes. `--root` (hidden) prefixes system paths for tests.
-- `src/capabilities.rs`: on an enrolled Macro computer only (the marker
-  exists), reports `HarnessCapabilities` (`screen` = Xvnc on
-  `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a
-  minute) to `PUT /harnesses/me/capabilities` when they change. Open a fresh connection for each report so recurring polls
-  cannot pin a reassigned service IP after backend restarts. The reporter is
-  cancellation-aware and tracked by the daemon's `TaskTracker`, including
-  across re-pair and shutdown.
-- `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
-  the `computerControl` runtime messages and each Claude Code session's env.
-  Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's
-  `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+  minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
+  writes only the config, the credential and its markers: no systemd units,
+  users or anything under `/etc`, which is read-only on the NixOS guest (the
+  image declares every unit). The marker (`<computer id>\n<generation>`)
+  lives on the data disk, so a new root disk (reboot onto a new image) finds it and macrod reconnects
+  with its stored credential. A newer generation (a guest recreated on the
+  old disk) or a marker-less disk enrolls again; the credential records the
+  pairing it was claimed from (`credentials.pairing_id`), so only a new
+  pairing is claimed, and nothing else on the disk is touched. No enrollment
+  in the source (removed after macrod connects) with a marker means enrolled.
+- `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
+  computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
+  session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
   `ANTHROPIC_AUTH_TOKEN` (its bearer) and
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
-  as `_meta.claudeCode.options.env`; once Claude Code is signed in to a
-  Claude account those variables are removed and sessions use Claude Code's
-  own stored credential, for sessions opened after the switch.
-  `claude_sign_in.rs` runs Claude Code's own login in a "Claude sign-in"
-  herdr workspace (`herdr_pane.rs` starts the user's headless `herdr server`
-  when none runs): it answers the first-run text-style and login-method
-  questions or types `/login`, reads the hard-wrapped OAuth URL off the
-  screen, types the pasted code, and treats `OAuth error` as typed
-  `InvalidCode` (start again for a fresh URL). Screen recognition is pure
-  (`Screen::read`) and tested against captured Claude Code 2.1.280 screens;
-  update those fixtures when the pinned Claude Code changes its wording.
-  `claude_auth.rs` reads `claude auth status --json` (only `claude.ai` logins
-  count) for the account and `loginExpiresAt`; sign-out runs
-  `claude auth logout`. `claude_sign_in_cancel` interrupts URL/code waits
-  before taking the sign-in mutex and closes the workspace. The capability
-  reporter re-reads the sign-in every minute and reports at once when it
-  changes. ACP trace logs contain only direction and byte counts. Spans:
-  `macrod.computer.control`, `macrod.claude.sign_in.start`/`.complete`,
-  `macrod.claude.sign_out`.
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` go to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`, always. It calls nothing in Claude and
+  reads no Claude files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
+  image's `claude` wrapper swaps the gateway env for the computer's own
+  credential when harnessd holds one. ACP trace logs contain only direction
+  and byte counts.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -115,7 +102,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   layout, `windows_update_test.ps1` for a running macrod updating itself,
   `windows_claude_code_test.ps1` for npm-installed Claude Code served over
   ACP), run
-  by the `test_macrod_update` workflow on Linux, macOS and Windows.
+  by the `test_macrod_update` workflow on Linux, macOS and Windows; and
+  `memory_soak.py`, the panel's resident-memory check, run by hand (Checks).
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
   switching, MCP) — read before changing anything under `src/herdr/`.
 
@@ -156,6 +144,11 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - `OPENSSL_NO_VENDOR=0 just build-static` to build and smoke-test the release `macrod` the way
   the tag workflow does (needs the Nix devshell: cargo-zigbuild, zig, cmake).
   The override enables bundled OpenSSL for the musl target in the devshell.
+- Resident memory (Linux, after changing the panel, the relay, or the allocator):
+  `python3 e2e/memory_soak.py --binary <repo root>/target/x86_64-unknown-linux-musl/release/macrod`
+  runs the panel against a fake storage service for 10 minutes and fails if it
+  is still growing after warm-up. Use the `just build-static` binary; a glibc
+  build allocates differently.
 - Windows is built natively on a Namespace Windows runner by
   `build_agent_daemon_on_tag` (MSVC, static CRT). Run that workflow with
   `workflow_dispatch` on your branch to check a Windows-affecting change.
@@ -173,6 +166,13 @@ external chat replies depend on it. Direct session controls still mint IDs.
   `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- The musl release allocates with mimalloc (`src/main.rs`). zig's libc
+  `malloc`, which cargo-zigbuild links otherwise, keeps memory freed on another
+  thread, and tokio frees on any worker: resident memory grew by gigabytes over
+  days with a flat live heap. Other targets use the system allocator.
+- The panel keeps one HTTP client for its lifetime (`tui/api.rs`
+  `dashboard_client`). It uses the system resolver (`no_hickory_dns`), because
+  hickory reads DNS servers once at build and would miss a VPN or network change.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
@@ -204,10 +204,7 @@ stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
 Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment (`run_enroll`, `macrod.enroll.claim`) and capability
-report spans export, with the marker's computer UUID as a resource attribute.
-Enrollment joins the setup trace from `Enrollment.traceparent` and retains only
-that W3C context in `/var/lib/macrod/provision.traceparent`.
-A daemon started within an hour of enrollment is part of setup: its claim and
-first successful capability report send the setup `traceparent` (the raw parent
-when this daemon exports nothing). stdout remains the daemon protocol.
+(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
+with the marker's computer UUID as a resource attribute. Enrollment joins the
+setup trace from `Enrollment.traceparent`; its claim sends the setup
+`traceparent`. stdout remains the daemon protocol.

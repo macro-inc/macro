@@ -24,6 +24,8 @@ export type NotificationEventDefinition = {
   type: string;
   label: string;
   description: string;
+  /** Shown only with `enable-macro-computers` on. */
+  macroComputers?: true;
 };
 
 export type NotificationEventGroup = {
@@ -199,10 +201,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         description: 'When one of your routines finishes or fails a run',
       },
       {
-        type: 'claude_sign_in_expiry',
-        label: 'Computer Claude sign-ins',
+        type: 'agent_sign_in_expiry',
+        label: 'Computer agent sign-ins',
         description:
-          "When a Claude sign-in on your team's computer is about to expire",
+          "When an agent sign-in on your team's computer is about to expire",
+        macroComputers: true,
       },
     ],
   },

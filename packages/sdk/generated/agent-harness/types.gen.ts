@@ -31,6 +31,10 @@ export type ActivityWireRow = {
      */
     agent_correlation_id?: string | null;
     /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
      * The entity acted on.
      */
     entity_id: string;
@@ -1166,13 +1170,41 @@ export type ClassifyInputResponse = {
 };
 
 /**
- * How Claude Code on a computer is paid for.
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
+ */
+export type ClaudeAccountStatus = {
+    /**
+     * When the credential stops working, as the computer last reported it.
+     */
+    expiresAt?: string | null;
+    /**
+     * When it was signed in.
+     */
+    signedInAt: string;
+    /**
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
+     */
+    signedInBy?: string | null;
+};
+
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
+/**
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
  */
 export type ClaudeModeResponse = {
+    account?: null | ClaudeAccountStatus;
     /**
-     * `macro_credits` or `own_account`.
+     * How Claude Code is paid for.
      */
-    mode: string;
+    mode: ClaudeMode;
 };
 
 /**
@@ -1199,10 +1231,6 @@ export type ClaudeSignInStarted = {
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
  */
 export type ClaudeSignedIn = {
-    /**
-     * The Claude account's email address, when Claude reports one.
-     */
-    account?: string | null;
     /**
      * Always `true`.
      */
@@ -1428,6 +1456,12 @@ export type ConnectorTool = {
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
     /**
+     * The app tab the person typed this in (a UUID the tab keeps for its
+     * lifetime), so what the turn opens in the app reaches that tab only.
+     * Only a person's own request may send it; a runtime's is refused.
+     */
+    clientId?: string | null;
+    /**
      * Why the agent is being asked. Only a runtime forwarding a triggered
      * prompt may send it; a user's request carrying it is refused.
      */
@@ -1539,6 +1573,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -2289,6 +2331,26 @@ export type NoteSuggestions = {
      * Suggested note, task, or event title.
      */
     title?: string | null;
+};
+
+/**
+ * Open an item in the prompting person's app tab.
+ */
+export type OpenInApp = {
+    /**
+     * The running execution asking; it must belong to the session's
+     * current turn.
+     */
+    executionId: ExecutionId;
+    /**
+     * An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:
+     * what follows `/app` in a Macro link. Never an origin.
+     */
+    path: string;
+    /**
+     * Where to put it; beside the agent by default.
+     */
+    placement?: UiPlacement;
 };
 
 /**
@@ -3059,6 +3121,35 @@ export type TriggerOrigin = {
 } | {
     origin: 'unknown';
 };
+
+/**
+ * What happened to a command.
+ */
+export type UiCommandOutcome = {
+    /**
+     * The command's id, as the tab sees it.
+     */
+    commandId: string;
+    status: 'sent';
+} | {
+    status: 'no_client';
+} | {
+    /**
+     * Why.
+     */
+    reason: UiDeclineReason;
+    status: 'declined';
+};
+
+/**
+ * Why a command was not sent.
+ */
+export type UiDeclineReason = 'turned_off' | 'not_allowed_route' | 'rate_limited';
+
+/**
+ * Where the opened item goes. Neither replaces what the person is reading.
+ */
+export type UiPlacement = 'beside-agent' | 'new';
 
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
@@ -4724,6 +4815,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
+export type OpenInAppData = {
+    body: OpenInApp;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/ui-commands';
+};
+
+export type OpenInAppErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type OpenInAppResponses = {
+    200: UiCommandOutcome;
+};
+
+export type OpenInAppResponse = OpenInAppResponses[keyof OpenInAppResponses];
+
 export type PresentSessionViewData = {
     body: PresentView;
     path: {
@@ -4897,33 +5008,6 @@ export type StartClaudeSignInResponses = {
 };
 
 export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
-
-export type CancelClaudeSignInData = {
-    body?: never;
-    path: {
-        /**
-         * Harness ID
-         */
-        harness_id: string;
-    };
-    query?: never;
-    url: '/harnesses/{harness_id}/claude-sign-in/cancel';
-};
-
-export type CancelClaudeSignInErrors = {
-    403: unknown;
-    404: unknown;
-    409: unknown;
-    422: unknown;
-    503: unknown;
-    504: unknown;
-};
-
-export type CancelClaudeSignInResponses = {
-    204: void;
-};
-
-export type CancelClaudeSignInResponse = CancelClaudeSignInResponses[keyof CancelClaudeSignInResponses];
 
 export type CompleteClaudeSignInData = {
     body: ClaudeSignInComplete;

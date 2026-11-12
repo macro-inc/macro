@@ -38,6 +38,11 @@ const agentsPageProps = {
 };
 
 // The real Lexical surface has its own Markdown round-trip suite.
+vi.mock('./computers/views/agent-computer-entry', () => ({
+  RunOnComputerRow: () => null,
+  ComputerWhereItRuns: () => null,
+}));
+
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
     markdown: string;

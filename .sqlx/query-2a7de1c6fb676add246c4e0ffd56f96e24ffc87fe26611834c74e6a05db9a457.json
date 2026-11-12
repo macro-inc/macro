@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at)\n                SELECT id, 'capacity_changed'::computer_timer_kind, $2 FROM hosted_runtime\n                WHERE host_id = $1 AND id <> $3\n                    AND state->>'power' = 'on' AND state->>'power_on_requested' = 'true'\n                    AND state->'phase'->>'phase' IN ('stopped', 'provisioning')\n                ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a7de1c6fb676add246c4e0ffd56f96e24ffc87fe26611834c74e6a05db9a457"
+}

@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,computers}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -61,6 +61,10 @@ From `infra/`:
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
+- `monitors/computers.ts` reads the error logs `computer billing item removal
+  abandoned` (authentication-service) and `computer needs an operator`
+  (agent-harness-service) that `crates/hosted_runtimes` writes; its header is
+  the message and field contract. Renaming either message silences its monitor.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
   `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
@@ -72,10 +76,17 @@ From `infra/`:
   events (`@event`) that `crates/scheduled_action` emits; its header is the
   field contract. Its failure monitor does not page while suggestions are
   behind their flag.
+- `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
+  in `crates/agent_harness/src/domain/service.rs` and matches the text of the
+  `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
+  its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
-- `monitors/computers.ts` reads the `computer.capacity.*` gauges that
+- Keep `monitors/oauth.ts` in sync with the linked-token, native MCP OAuth,
+  and Pipedream failure logs it names; preserve channel-only routing and
+  exclude normal authentication challenges and explicit consent cancellations.
+- `monitors/computer-capacity.ts` reads the `computer.capacity.*` gauges that
   `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns
   its monitors into missing data.
