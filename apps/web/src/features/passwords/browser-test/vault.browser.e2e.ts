@@ -433,6 +433,64 @@ test.describe('tablet device', () => {
   });
 });
 
+test.describe('desktop agent access', () => {
+  test('agent access: a notification opens the item, approve edit, revoke, stale decisions refetch', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const fixture = '/src/features/passwords/browser-test/vault.html';
+    const item = '019a0000-0000-7000-8000-0000000000bb';
+    const section = page.getByRole('region', { name: 'Agent access' });
+
+    // A notification for another team opens the vault without a selection.
+    await page.goto(`${fixture}?focus=${item}&focusTeam=other-team`, {
+      timeout: 240_000,
+    });
+    await expect(
+      page.getByRole('button', { name: /Agent requested login/ })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Agent requested login' })
+    ).toHaveCount(0);
+
+    // The current team's notification opens the item with its request.
+    await page.goto(`${fixture}?focus=${item}`, { timeout: 240_000 });
+    await expect(
+      page.getByRole('heading', { name: 'Agent requested login' })
+    ).toBeVisible();
+    await expect(section.getByText(/asked to edit this item/)).toBeVisible();
+    await section.getByRole('button', { name: 'Allow edit' }).click();
+    await expect(section.getByText(/can edit this item/)).toBeVisible();
+    await section.getByRole('button', { name: /^Revoke access for/ }).click();
+    await page.getByRole('menuitem', { name: 'Remove access' }).click();
+    await expect(section).toHaveCount(0);
+
+    // Someone else approved view first: the decision is stale and the pane
+    // shows what they decided.
+    await page.goto(`${fixture}?focus=${item}&agentStale=1`, {
+      timeout: 240_000,
+    });
+    await expect(section.getByText(/asked to edit this item/)).toBeVisible();
+    await section.getByRole('button', { name: 'Allow edit' }).click();
+    await expect(
+      section.getByText('This request changed. Showing the latest.')
+    ).toBeVisible();
+    await expect(section.getByText(/can view this item/)).toBeVisible();
+
+    // An item the viewer cannot manage has no agent controls.
+    await press(page, viewport, /View-only login/);
+    await expect(
+      page.getByRole('heading', { name: 'View-only login' })
+    ).toBeVisible();
+    await expect(section).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('desktop folders', () => {
   test('creates, nests, renames and deletes folders; items move to All items', async ({
     page,

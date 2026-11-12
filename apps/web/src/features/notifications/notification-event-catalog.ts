@@ -16,6 +16,7 @@ export type NotificationEventGroupId =
   | 'crm'
   | 'tasks'
   | 'calendar'
+  | 'passwords'
   | 'email'
   | 'ai'
   | 'github';
@@ -155,6 +156,17 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Requests to join',
         description:
           'When someone asks to be added to an event you shared in a channel',
+      },
+    ],
+  },
+  {
+    id: 'passwords',
+    label: 'Passwords',
+    events: [
+      {
+        type: 'password_access_requested',
+        label: 'Agent access requests',
+        description: 'When an agent asks to use a password item you manage',
       },
     ],
   },

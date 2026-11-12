@@ -1601,6 +1601,19 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'calendar_event_join_request'>
     )
     .with(
+      { __typename: 'GraphqlPasswordAccessRequestedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'password_access_requested',
+          content: {
+            requestId: metadata.passwordAccessRequestedRequestId,
+            teamId: metadata.passwordAccessRequestedTeamId,
+            itemId: metadata.passwordAccessRequestedItemId,
+            itemName: metadata.passwordAccessRequestedItemName,
+          },
+        }) satisfies NotifEventMember<'password_access_requested'>
+    )
+    .with(
       { __typename: 'GraphqlAiResponseMetadata' },
       (metadata) =>
         ({

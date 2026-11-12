@@ -59,6 +59,17 @@ reveals an explicitly selected version. The generator
 picks a length (12–128) and character classes; every selected class is always
 present, and characters are drawn uniformly with rejection sampling.
 
+When an agent asks to use an item, the item's human creator and the team's
+admins get an inbox row, "<agent> requested access to <item>". Opening it
+shows Passwords with that item selected when it belongs to the viewer's current
+team, and otherwise opens the vault without a selection. In the detail pane,
+people who can manage the item see Agent access: a pending request offers Allow
+view, Allow edit and Deny, and an agent that can use the item offers Remove
+access ("Remove approval" also appears for an approved shared grant). A request
+that changed meanwhile shows the latest state with a notice. The section is
+hidden when the agent vault is off or the viewer can't review, and ordinary
+sharing never lists agents.
+
 The backend-free desktop and phone interaction suite mounts the actual vault
 with an injected fake source:
 

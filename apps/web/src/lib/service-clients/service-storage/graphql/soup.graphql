@@ -687,6 +687,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventJoinRequestEventId: eventId
 		calendarEventJoinRequestTitle: title
 	}
+	... on GraphqlPasswordAccessRequestedMetadata {
+		passwordAccessRequestedRequestId: requestId
+		passwordAccessRequestedTeamId: teamId
+		passwordAccessRequestedItemId: itemId
+		passwordAccessRequestedItemName: itemName
+	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary
 		aiResponseMessageId: messageId

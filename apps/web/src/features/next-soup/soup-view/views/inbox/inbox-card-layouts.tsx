@@ -39,6 +39,7 @@ import ClockIcon from '@icon/system/regular/clock-clockwise.svg?component-solid'
 import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import KeyIcon from '@icon/system/regular/key.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
 import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
@@ -279,6 +280,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('calendar_event_join_request', () => () => (
       <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('password_access_requested', () => () => (
+      <KeyIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with(
       'github_pr_status_changed',

@@ -11,6 +11,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import QuestionIcon from '@icon/system/regular/question.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
@@ -78,6 +79,7 @@ export function getNotificationIcon(
     .with('reminder', () => BellIcon)
     .with('calendar_event_reminder', () => CalendarBlankIcon)
     .with('calendar_event_join_request', () => UserPlusIcon)
+    .with('password_access_requested', () => KeyIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)

@@ -84,6 +84,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
       .with('calendar_event_join_request', () => 'asked to join')
+      .with('password_access_requested', () => 'requested access to')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -171,6 +172,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.title || '(No title)'
       )
+      .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with(
@@ -253,6 +255,7 @@ export function getNotificationContent(
         formatCalendarReminderTime(m.content)
       )
       .with({ tag: 'calendar_event_join_request' }, () => undefined)
+      .with({ tag: 'password_access_requested' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -335,6 +338,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'calendar_event_join_request' }, () => true)
+      .with({ tag: 'password_access_requested' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)

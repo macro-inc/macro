@@ -21,6 +21,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
+  enablePasswords,
   enableProjects,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -629,6 +630,31 @@ function getSupportedHandler(
               openInNewSplit: newSplit,
               ...(onApplied ? { onApplied } : {}),
             }
+          );
+        };
+      })
+      .with('password_access_requested', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'password_access_requested') return null;
+        // The request is answered in the item's pane in Passwords.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enablePasswords)) {
+            onApplied?.();
+            return;
+          }
+          openContent(
+            lm,
+            {
+              type: 'component',
+              id: 'passwords',
+              params: {
+                teamId: meta.content.teamId,
+                itemId: meta.content.itemId,
+                requestId: meta.content.requestId,
+              },
+              entryMetadata: { route: paneRoute({ id: 'view-passwords' }) },
+            },
+            { newSplit, sourceHandle, onApplied }
           );
         };
       })
