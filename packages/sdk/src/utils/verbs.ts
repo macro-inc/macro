@@ -74,7 +74,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     deleted: 'deleteAgentSession',
     ran: `
       startFreshAgentConversation retryAgentConversationTurn refreshAgentSessionChanges
-      callConnectedAppTool controlAgentSession steerQueuedAction
+      callConnectedAppTool controlAgentSession steerQueuedAction openInApp
     `,
     linked: `
       linkAgentSessionPullRequest

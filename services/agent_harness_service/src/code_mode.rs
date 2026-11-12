@@ -30,7 +30,7 @@ pub trait SessionScopes: Send + Sync + 'static {
 
 /// Suggestion generation sessions read, and write only through their own
 /// tools and email drafts.
-pub struct GenerationScopes(pub Arc<dyn ideas::domain::ports::GenerationSessions>);
+pub struct GenerationScopes(pub Arc<dyn suggestions::domain::ports::GenerationSessions>);
 
 #[async_trait]
 impl SessionScopes for GenerationScopes {

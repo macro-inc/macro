@@ -3,7 +3,7 @@
 //!
 //! Hidden routines sessions of the person's generations (onboarding and
 //! nightly, run by the `suggestion_generation` crate, which also runs their
-//! ideas sessions) are told what [`RoutineSuggestionApi::brief`] says: the
+//! suggestions sessions) are told what [`RoutineSuggestionApi::brief`] says: the
 //! person's newest mail and connected apps as untrusted data, Macro's
 //! catalog, and what they dismissed. Each hands back suggestions through
 //! `macro.routines.suggest` ([`RoutineSuggestionApi::suggest`]), which only the
@@ -31,8 +31,8 @@ use anyhow::{Result, bail};
 use chrono::Utc;
 use chrono_tz::Tz;
 use feature_flags::FeatureFlags;
-use ideas::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use ideas::domain::ports::GenerationSessions;
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;

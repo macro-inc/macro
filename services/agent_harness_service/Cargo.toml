@@ -162,7 +162,7 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 rootcause = { workspace = true }
 routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
-ideas = { path = "../../crates/ideas" }
+suggestions = { path = "../../crates/suggestions" }
 suggestion_generation = { path = "../../crates/suggestion_generation" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }

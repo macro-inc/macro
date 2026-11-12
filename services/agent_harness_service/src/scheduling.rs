@@ -21,10 +21,6 @@ mod routine_analytics;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
-use ideas::domain::service::IdeaService;
-use ideas::inbound::router::{IdeaRouterState, idea_router};
-use ideas::outbound::idea_access::EntityIdeaAccess;
-use ideas::outbound::pg_idea_repo::PgIdeaRepo;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_runs::{
@@ -66,13 +62,17 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
-use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
 use suggestion_generation::domain::service::GenerationService;
 use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
 use suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo;
+use suggestions::domain::service::SuggestionService;
+use suggestions::inbound::router::{SuggestionRouterState, suggestion_router};
+use suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use suggestions::outbound::suggestion_access::EntitySuggestionAccess;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -167,7 +167,7 @@ impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
 }
 
 #[async_trait::async_trait]
-impl ideas::domain::ports::RequestSessions for CorrelationSessions {
+impl suggestions::domain::ports::RequestSessions for CorrelationSessions {
     async fn session_of(
         &self,
         correlation: uuid::Uuid,
@@ -453,7 +453,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
     let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
-    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -482,6 +482,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -489,7 +490,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
-    // recorded, never billed. Ideas sessions write through `macro.suggestions.*`;
+    // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
     // mail through email_service, which reads it from the provider.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
@@ -518,10 +519,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
-    let ideas = Arc::new(
-        IdeaService::new(
-            Arc::new(PgIdeaRepo::new(db.clone())),
-            Arc::new(EntityIdeaAccess {
+    let feed = Arc::new(
+        SuggestionService::new(
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(EntitySuggestionAccess {
                 access: access.as_ref().clone(),
                 pool: db.clone(),
             }),
@@ -532,8 +533,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             template_flags.clone(),
         )
         .with_sdk_reference(agent_code_mode::domain::index_digest(
-            ideas::domain::prompt::SYMBOLS,
-            ideas::domain::prompt::FIELDS_OF,
+            suggestions::domain::prompt::SYMBOLS,
+            suggestions::domain::prompt::FIELDS_OF,
         ))
         .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
     );
@@ -542,7 +543,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             generations,
             sessions,
             Arc::clone(&suggestions),
-            Arc::clone(&ideas),
+            Arc::clone(&feed),
             template_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
@@ -585,12 +586,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
-    // Ideas: written and managed by generation sessions through
+    // Suggestions: written and managed by generation sessions through
     // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generations with.
-    let idea_state = IdeaRouterState {
-        service: ideas,
+    let feed_state = SuggestionRouterState {
+        service: feed,
         authorization_state: authorization_state.clone(),
     };
     let generation_state = GenerationRouterState {
@@ -619,7 +620,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
-        .merge(idea_router::<_, _, ()>(idea_state))
+        .merge(suggestion_router::<_, _, ()>(feed_state))
         .merge(generation_router::<_, _, ()>(generation_state));
 
     let router = mount_router(authed_routes)
@@ -638,11 +639,11 @@ fn mount_router(routes: Router) -> Router {
     )
 }
 
-/// The scheduler's OpenAPI, with the ideas routes it also serves, as
+/// The scheduler's OpenAPI, with the suggestions routes it also serves, as
 /// `scheduling_openapi` prints it.
 fn openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = ApiDoc::openapi();
-    openapi.merge(ideas::swagger::IdeasApiDoc::openapi());
+    openapi.merge(suggestions::swagger::SuggestionsApiDoc::openapi());
     openapi.merge(suggestion_generation::swagger::GenerationApiDoc::openapi());
     openapi
 }
