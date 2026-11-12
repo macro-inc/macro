@@ -137,9 +137,16 @@ function commit(
   contacts = contacts.map((contact) => {
     if (contact.id !== contactId) return contact;
     const next = change(contact);
+    const full = identity(next.emails, next.companyId);
     return {
       ...contact,
-      ...identity(next.emails, next.companyId),
+      ...(params.has('legacy')
+        ? {
+            email: full.email,
+            companyId: full.companyId,
+            personalEmail: full.personalEmail,
+          }
+        : full),
       updatedAt: new Date().toISOString(),
     };
   });

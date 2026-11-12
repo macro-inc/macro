@@ -637,4 +637,8 @@ test('a server without the address list keeps addresses and company read-only', 
       () => window.archiveFixture.snapshot().contacts[0].email
     )
   ).toBe('first@example.org');
+  await expect(page.getByText('first@example.org').first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Email options for|Add email/ })
+  ).toHaveCount(0);
 });
