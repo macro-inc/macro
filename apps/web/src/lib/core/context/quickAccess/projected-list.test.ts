@@ -133,6 +133,123 @@ describe('Quick Access local projection', () => {
     ]);
   });
 
+  it('reports searching until the current query answers, but not while a loaded window replays', async () => {
+    const [query, setQuery] = createSignal('sea');
+    const [revision, setRevision] = createSignal(0);
+    const first = deferred<SearchCachePage>();
+    const replay = deferred<SearchCachePage>();
+    const next = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(replay.promise)
+      .mockReturnValueOnce(next.promise)
+      .mockRejectedValueOnce(new Error('Cache unavailable'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        searchTerm: query,
+        filterPreviousItems: (items, term) =>
+          items.filter((item) => item.id.includes(term)),
+        materialize,
+      })
+    );
+    expect(list.isSearching()).toBe(true);
+    first.resolve(page(['seamus', 'sean']));
+    await vi.waitFor(() => expect(list.isSearching()).toBe(false));
+
+    setRevision(1);
+    expect(list.isLoading()).toBe(true);
+    expect(list.isSearching()).toBe(false);
+    replay.resolve(page(['seamus', 'sean']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+
+    setQuery('seam');
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }]);
+    expect(list.isSearching()).toBe(true);
+    next.resolve(page(['seamus', 'seamless']));
+    await vi.waitFor(() => expect(list.isSearching()).toBe(false));
+    expect(list.items()).toHaveLength(2);
+
+    setQuery('seaml');
+    expect(list.isSearching()).toBe(true);
+    await vi.waitFor(() => expect(list.error()).toBeDefined());
+    expect(list.isSearching()).toBe(false);
+  });
+
+  it('replays a search refused while the cache changes owner once the replacement engine arrives', async () => {
+    const refused = Object.assign(new Error('cache reads unavailable'), {
+      errorCode: 'owner-handoff-blocked',
+    });
+    let engineReplaced = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(refused)
+      .mockResolvedValueOnce(page(['seamus']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onCacheGenerationChanged: (listener) => {
+            engineReplaced = () => listener({ storage: 'preserved' });
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBe(refused));
+    expect(list.isLoading()).toBe(false);
+    expect(list.isSearching()).toBe(true);
+    expect(search).toHaveBeenCalledTimes(1);
+
+    engineReplaced();
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }])
+    );
+    expect(list.isSearching()).toBe(false);
+    expect(list.error()).toBeUndefined();
+
+    engineReplaced();
+    await Promise.resolve();
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not replay other failed searches when the engine is replaced', async () => {
+    let engineReplaced = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(new Error('Cache unavailable'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onCacheGenerationChanged: (listener) => {
+            engineReplaced = () => listener({ storage: 'preserved' });
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBeDefined());
+    expect(list.isSearching()).toBe(false);
+    engineReplaced();
+    await Promise.resolve();
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['buckets', 'disable'] as const)(
     'does not retain matches when %s changes',
     async (change) => {
