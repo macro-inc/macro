@@ -1,7 +1,8 @@
 //! Activity-owned keyset reads for mixed timelines.
 use super::PgActivityRepo;
 use crate::domain::timeline::{
-    ActivityTimeline, ActivityTimelineQuery, TimelineActivity, TimelineReadError,
+    ActivityTimeline, ActivityTimelineLookup, ActivityTimelineQuery, TimelineActivity,
+    TimelineReadError,
 };
 
 impl ActivityTimeline for PgActivityRepo {
@@ -137,6 +138,50 @@ impl ActivityTimeline for PgActivityRepo {
                     .await?
                 }
             };
+            Ok(rows)
+        })
+    }
+
+    fn read_by_ids<'a>(
+        &'a self,
+        lookup: ActivityTimelineLookup,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let actions = lookup.selection.action_tags();
+            let properties = lookup.selection.property_ids();
+            // Each id is one primary-key probe. The `OFFSET 0` keeps the
+            // parent and selection out of the probe, so no plan can answer
+            // from the parent's range of the entity index instead; they only
+            // filter the rows found.
+            let rows = sqlx::query_as!(
+                TimelineActivity,
+                r#"
+                SELECT event.id AS "id!", event.actor_id AS "actor_id!", event.occurred_at AS "occurred_at!",
+                       event.action AS "action!", event.action_payload AS payload
+                FROM unnest($1::uuid[]) named(id)
+                CROSS JOIN LATERAL (
+                    SELECT found.id, found.actor_id, found.occurred_at, found.action,
+                           found.action_payload, found.entity_type, found.entity_id
+                    FROM activity_events found
+                    WHERE found.id = named.id
+                    OFFSET 0
+                ) event
+                WHERE event.entity_type = $2 AND event.entity_id = $3
+                  AND event.action = ANY($4::text[])
+                  AND (event.action <> 'property_changed' OR cardinality($5::text[]) = 0
+                       OR event.action_payload->>'property' = ANY($5::text[]))
+                ORDER BY event.occurred_at ASC, event.id ASC
+                "#,
+                &lookup.ids,
+                lookup.entity_type.as_ref(),
+                lookup.entity_id,
+                &actions as &[&str],
+                &properties,
+            )
+            .fetch_all(&self.pool)
+            .await?;
             Ok(rows)
         })
     }

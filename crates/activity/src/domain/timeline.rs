@@ -125,6 +125,20 @@ pub struct ActivityTimelineQuery {
     pub limit: u16,
 }
 
+/// Named records of one parent, authorized by the owning timeline's domain
+/// service.
+pub struct ActivityTimelineLookup {
+    /// Parent kind.
+    pub entity_type: EntityType,
+    /// Parent identity.
+    pub entity_id: String,
+    /// The activity the timeline owner chose to show.
+    pub selection: TimelineSelection,
+    /// The records to return. Ids of other parents, or outside the
+    /// selection, are left out.
+    pub ids: Vec<Uuid>,
+}
+
 /// Error returned by an activity timeline reader.
 pub type TimelineReadError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -134,5 +148,11 @@ pub trait ActivityTimeline: Send + Sync + 'static {
     fn read<'a>(
         &'a self,
         query: ActivityTimelineQuery,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>>;
+
+    /// Return the named records the timeline shows, oldest first.
+    fn read_by_ids<'a>(
+        &'a self,
+        lookup: ActivityTimelineLookup,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>>;
 }
