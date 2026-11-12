@@ -1,6 +1,8 @@
 use super::database_error::database_error;
 use super::*;
 use email::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCatalogRepository};
+use email::domain::message_labels::state as label_state;
+use email::outbound::label_state_pg::PgLabelCatalog;
 use email_db_client::backfill::job::update as jobs;
 use models_email::service::{attachment::AttachmentUploadMetadata, label::Label};
 
@@ -16,12 +18,12 @@ impl LabelCatalogRepository for PgBackfillWorker {
         link: Uuid,
         labels: Vec<String>,
     ) -> Result<u64, Self::CatalogError> {
-        email_db_client::labels::delete::delete_labels_by_provider_ids(&self.jobs.0, link, labels)
+        label_state::delete_labels_by_provider_ids(&mut PgLabelCatalog(&self.jobs.0), link, labels)
             .await
             .map_err(database_error)
     }
     async fn upsert_stored_catalog(&self, labels: Vec<Label>) -> Result<(), Self::CatalogError> {
-        email_db_client::labels::insert::insert_or_update_labels(&self.jobs.0, labels)
+        label_state::insert_or_update_labels(&mut PgLabelCatalog(&self.jobs.0), labels)
             .await
             .map_err(database_error)
     }

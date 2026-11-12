@@ -1,7 +1,9 @@
 use super::*;
+use email::domain::message_labels::state as label_state;
 use email::domain::models::{EmailThreadPreview, PreviewCursorQuery};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email::outbound::label_state_pg::PgLabelCatalog;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
 use models_email::service::attachment::AttachmentUploadMetadata;
@@ -31,12 +33,12 @@ impl InboxSyncCatalog for PgInboxSync {
             .map_err(Into::into)
     }
     async fn delete_catalog(&self, link: Uuid, labels: Vec<String>) -> Result<u64, Self::Err> {
-        email_db_client::labels::delete::delete_labels_by_provider_ids(&self.0, link, labels)
+        label_state::delete_labels_by_provider_ids(&mut PgLabelCatalog(&self.0), link, labels)
             .await
             .map_err(Into::into)
     }
     async fn upsert_catalog(&self, labels: Vec<service::label::Label>) -> Result<(), Self::Err> {
-        email_db_client::labels::insert::insert_or_update_labels(&self.0, labels)
+        label_state::insert_or_update_labels(&mut PgLabelCatalog(&self.0), labels)
             .await
             .map_err(Into::into)
     }

@@ -1,7 +1,7 @@
-use super::reconcile_message;
-use crate::messages::scheduled::delivery;
-use crate::messages::update::mark_message_as_sent;
-use crate::threads::provider_identity::{lock_provider_thread, reconcile_sent_thread};
+use super::support as delivery;
+use crate::domain::scheduled_delivery::identity::{reconcile_message, reconcile_sent_thread};
+use email_db_client::messages::update::mark_message_as_sent;
+use email_db_client::threads::provider_identity::lock_provider_thread;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{PgPool, types::Uuid};
 
@@ -75,8 +75,8 @@ async fn complete(pool: &PgPool, claim: &delivery::DeliveryClaim) -> anyhow::Res
     if !delivery::complete_delivery(&mut tx, claim).await? {
         return Ok(false);
     }
-    reconcile_message(&mut tx, LINK, MESSAGE, "sent-provider-message").await?;
-    let thread = reconcile_sent_thread(&mut tx, LINK, MESSAGE, "sent-provider-thread").await?;
+    reconcile_message(&mut *tx, LINK, MESSAGE, "sent-provider-message").await?;
+    let thread = reconcile_sent_thread(&mut *tx, LINK, MESSAGE, "sent-provider-thread").await?;
     mark_message_as_sent(
         &mut tx,
         "sent-provider-message",
@@ -85,15 +85,18 @@ async fn complete(pool: &PgPool, claim: &delivery::DeliveryClaim) -> anyhow::Res
         MESSAGE,
     )
     .await?;
-    crate::threads::update::update_thread_metadata(&mut tx, thread, LINK).await?;
-    crate::threads::update::sync_thread_attachment_flags(&mut tx, thread).await?;
+    email_db_client::threads::update::update_thread_metadata(&mut tx, thread, LINK).await?;
+    email_db_client::threads::update::sync_thread_attachment_flags(&mut tx, thread).await?;
     tx.commit().await?;
     Ok(true)
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn sync_before_completion_preserves_original_message_and_imported_dependents(
     pool: PgPool,
@@ -175,7 +178,10 @@ async fn sync_before_completion_preserves_original_message_and_imported_dependen
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn empty_original_thread_retains_row_and_redirects_all_its_aliases(
     pool: PgPool,
@@ -227,7 +233,10 @@ async fn empty_original_thread_retains_row_and_redirects_all_its_aliases(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn duplicate_attachment_references_survive_reconciliation(
     pool: PgPool,
@@ -312,7 +321,10 @@ async fn duplicate_attachment_references_survive_reconciliation(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn concurrent_reconciliation_completes_once(pool: PgPool) -> anyhow::Result<()> {
     let claim = imported_delivery(&pool).await?;
@@ -323,22 +335,27 @@ async fn concurrent_reconciliation_completes_once(pool: PgPool) -> anyhow::Resul
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn inbox_thread_sync_and_completion_converge_on_original_message(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let claim = imported_delivery(&pool).await?;
     let mut provider_thread =
-        crate::threads::get::get_thread_by_id_and_link_id(&pool, PROVIDER_THREAD, LINK)
+        email_db_client::threads::get::get_thread_by_id_and_link_id(&pool, PROVIDER_THREAD, LINK)
             .await?
             .unwrap();
-    provider_thread.messages =
-        crate::messages::get::fetch_messages_metadata(&mut *pool.acquire().await?, PROVIDER_THREAD)
-            .await?;
+    provider_thread.messages = email_db_client::messages::get::fetch_messages_metadata(
+        &mut *pool.acquire().await?,
+        PROVIDER_THREAD,
+    )
+    .await?;
     let (completed, synced_thread) = tokio::join!(
         complete(&pool, &claim),
-        crate::threads::insert::insert_thread_and_messages(&pool, provider_thread, LINK),
+        email_db_client::threads::insert::insert_thread_and_messages(&pool, provider_thread, LINK),
     );
     assert!(completed?);
     assert_eq!(synced_thread?, PROVIDER_THREAD);
@@ -353,14 +370,17 @@ async fn inbox_thread_sync_and_completion_converge_on_original_message(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("mark_message_as_sent"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("mark_message_as_sent")
+    )
 )]
 async fn failed_completion_rolls_back_adoption(pool: PgPool) -> anyhow::Result<()> {
     let claim = imported_delivery(&pool).await?;
     let mut tx = pool.begin().await?;
     lock_provider_thread(&mut tx, LINK, "sent-provider-thread").await?;
     assert!(delivery::complete_delivery(&mut tx, &claim).await?);
-    reconcile_message(&mut tx, LINK, MESSAGE, "sent-provider-message").await?;
+    reconcile_message(&mut *tx, LINK, MESSAGE, "sent-provider-message").await?;
     tx.rollback().await?;
     assert_eq!(
         sqlx::query_scalar!(

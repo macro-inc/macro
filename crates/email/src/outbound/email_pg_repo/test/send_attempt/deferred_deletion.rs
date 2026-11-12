@@ -1,8 +1,7 @@
 use super::*;
-use email_db_client::messages::{
-    delete::{delete_db_message, reconcile_deferred_deletion},
-    scheduled::delivery,
-};
+use crate::domain::scheduled_delivery::deletion::reconcile_deferred_deletion;
+use crate::domain::scheduled_delivery::state as delivery;
+use email_db_client::messages::delete::delete_db_message;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
