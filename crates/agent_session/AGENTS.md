@@ -94,7 +94,9 @@ without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
 `TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
-the turn's prompt in (`ControlRequest.clientId`, refused from runtimes). Every
+the turn's prompt in (`ControlRequest.clientId`, or `promptClientId` on a
+create carrying the first prompt). `ControlPrincipal::admit_client` admits it
+on both paths: refused from runtimes, dropped for programs. Every
 `set_turn_prompter` overwrites it, a system turn never stores one, and it only
 addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 

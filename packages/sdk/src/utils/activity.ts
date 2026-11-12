@@ -86,7 +86,8 @@ export function observeSdk<T extends object>(
           const verb = sdkVerbs[`${service}.${key}`];
           if (!verb)
             throw new Error(`SDK operation ${service}.${key} has no verb`);
-          const options = args[0] as Record<string, unknown>;
+          // A generated call made without options passes `undefined`.
+          const options = (args[0] ?? {}) as Record<string, unknown>;
           const headers = new Headers(
             options.headers as HeadersInit | undefined,
           );
