@@ -3,6 +3,19 @@
 use loro::VersionVector;
 use serde::{Deserialize, Serialize};
 
+mod delivery;
+mod pending;
+pub(crate) use delivery::{DeliveryPort, release, release_with_revision};
+pub(crate) use pending::{AppendPort, Imported, PendingOperations, StatePort, append};
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum Failure {
+    #[error(transparent)]
+    Invalid(#[from] FanoutError),
+    #[error("fanout base missing")]
+    MissingBase,
+}
+
 /// Invalid debt must fail restoration rather than silently discard history.
 #[derive(Debug, thiserror::Error)]
 #[error("invalid fanout version vectors")]
@@ -51,3 +64,6 @@ impl FanoutDebt {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod service_test;

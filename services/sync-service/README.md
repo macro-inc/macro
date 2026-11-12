@@ -272,6 +272,10 @@ after all sends succeed. Both this outside-prefix key and the earlier
 `o/~fanout` form are read conservatively; invalid metadata fails closed. Cold
 pending restoration reads the outside-prefix key once; ordinary non-pending
 updates add no fanout storage I/O. Alarms retry durable notification debt.
+The domain fanout service owns causal resolution, pending/applied transitions,
+base/required vectors and the send-success-before-debt-completion sequence.
+Worker ports only provide import facts, physical storage and socket sends; HTTP,
+WebSocket and alarm delivery share this same domain use case.
 
 Release the reader-capable build first, using the ordinary production build
 without any writer feature. Wait at least the existing 300-second Durable

@@ -6,7 +6,10 @@ use worker::Env;
 
 use super::{SyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors};
 use crate::{
-    domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
+    domain::{
+        document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
+        fanout::{self, DeliveryPort, FanoutDebt, PendingOperations, StatePort},
+    },
     dss_internal::{DssInternal, DssInternalClient, InteractionReason},
     state::DocumentState,
 };
@@ -51,31 +54,31 @@ pub(super) async fn report_interaction(session_key: &str, env: &Env, reason: Int
 }
 
 impl SyncSession {
-    /// One wire-compatible delta reaches every joined reader, including the
-    /// sender that may already have these operations. Import is idempotent.
+    /// Delegate delivery completion to the transport-independent use case.
     pub(crate) async fn release_resolved_pending(
         &self,
         document: &DocumentState,
         storage: &crate::storage::SessionStorage,
     ) -> worker::Result<()> {
-        let Some(update) = storage.resolved_pending(document)? else {
-            return Ok(());
-        };
-        let mut failure = None;
-        for socket in self.get_sockets() {
-            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
-                update: bebop::SliceWrapper::Raw(&update),
-            }) {
-                warn!(error = ?error, "failed to send resolved history; retaining debt");
-                if failure.is_none() {
-                    failure = Some(error);
-                }
-            }
-        }
-        if let Some(error) = failure {
-            return Err(error);
-        }
-        storage.complete_fanout(document).await
+        fanout::release(&WorkerFanoutDelivery {
+            session: self,
+            document,
+            storage,
+        })
+        .await
+    }
+
+    pub(crate) async fn release_resolved_pending_revision(
+        &self,
+        document: &DocumentState,
+        storage: &crate::storage::SessionStorage,
+    ) -> worker::Result<Option<Vec<u8>>> {
+        fanout::release_with_revision(&WorkerFanoutDelivery {
+            session: self,
+            document,
+            storage,
+        })
+        .await
     }
 
     /// A failed append may have imported operations before the storage await.
@@ -83,6 +86,46 @@ impl SyncSession {
     pub(crate) fn discard_failed_append(&self) {
         *self.document_state.lock("failed append document cache") = None;
         *self.session_storage.lock("failed append storage cache") = None;
+    }
+}
+
+struct WorkerFanoutDelivery<'a> {
+    session: &'a SyncSession,
+    document: &'a DocumentState,
+    storage: &'a crate::storage::SessionStorage,
+}
+impl StatePort for WorkerFanoutDelivery<'_> {
+    fn with_pending<T>(&self, apply: impl FnOnce(&mut PendingOperations) -> T) -> T {
+        self.storage.with_pending(apply)
+    }
+}
+impl DeliveryPort for WorkerFanoutDelivery<'_> {
+    type Error = worker::Error;
+    fn known(&self) -> loro::VersionVector {
+        self.document.loro_doc.oplog_vv()
+    }
+    fn export_since(&self, base: &loro::VersionVector) -> worker::Result<Vec<u8>> {
+        self.document.export_updates_since(base)
+    }
+    fn notify_all(&self, update: &[u8]) -> worker::Result<()> {
+        let mut failure = None;
+        for socket in self.session.get_sockets() {
+            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
+                update: bebop::SliceWrapper::Raw(update),
+            }) {
+                warn!(error = ?error, "failed to send resolved history; retaining debt");
+                if failure.is_none() {
+                    failure = Some(error);
+                }
+            }
+        }
+        match failure {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+    async fn persist_debt(&self, next: Option<&FanoutDebt>) -> worker::Result<()> {
+        self.storage.persist_fanout_debt(next).await
     }
 }
 

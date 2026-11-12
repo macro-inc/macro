@@ -29,8 +29,9 @@ updates over WebSocket.
   routing and worker proxy/copy orchestration.
 - `src/domain/permissions.rs` + `src/domain/document.rs`: session permission
   policy and content-agnostic atomic update use cases.
-- `src/domain/fanout.rs`: typed causal-notification debt and version-vector
-  validation, independent of the Worker storage/transport adapters.
+- `src/domain/fanout.rs` + `fanout/`: causal pending/applied state, durable-debt
+  transitions and append/delivery orchestration through thin storage/notification
+  ports; Worker adapters only import facts and execute ordered effects.
 
 ## Scope
 

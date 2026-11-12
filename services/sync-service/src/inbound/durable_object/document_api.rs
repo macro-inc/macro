@@ -165,10 +165,12 @@ impl SyncSession {
             };
         // Preflight's fork may not carry already-pending imports. Return the
         // revision actually applied and persisted, including the released suffix.
-        if storage.resolved_pending(&state)?.is_some() {
-            prepared.revision = state.loro_doc.oplog_vv().encode();
+        if let Some(revision) = self
+            .release_resolved_pending_revision(&state, &storage)
+            .await?
+        {
+            prepared.revision = revision;
         }
-        self.release_resolved_pending(&state, &storage).await?;
         // Taken from the request, so a retry of an applied update still maps them.
         let writers = match document::writing_peers(&update) {
             Ok(writers) => writers,

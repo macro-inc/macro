@@ -131,15 +131,11 @@ impl SessionStorage {
         self.oplog.apply_op(document_state, operation).await
     }
 
-    /// Resolved history is exported only after its required operations are durable.
-    pub(crate) fn resolved_pending(&self, document: &DocumentState) -> Result<Option<Vec<u8>>> {
-        self.oplog.resolved_pending(document)
-    }
-
-    pub(crate) async fn complete_fanout(&self, document: &DocumentState) -> Result<()> {
-        self.oplog
-            .complete_fanout(&document.loro_doc.oplog_vv())
-            .await
+    pub(crate) async fn persist_fanout_debt(
+        &self,
+        debt: Option<&crate::domain::fanout::FanoutDebt>,
+    ) -> Result<()> {
+        self.oplog.persist_fanout_debt(debt).await
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {
@@ -173,5 +169,14 @@ pub fn get_snapshot_storage(
             bucket,
             document_id,
         ))
+    }
+}
+
+impl crate::domain::fanout::StatePort for SessionStorage {
+    fn with_pending<T>(
+        &self,
+        read: impl FnOnce(&mut crate::domain::fanout::PendingOperations) -> T,
+    ) -> T {
+        self.oplog.with_pending(read)
     }
 }

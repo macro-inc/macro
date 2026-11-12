@@ -1,10 +1,12 @@
 use crate::domain::fanout::{
     FANOUT_DEBT_KEY, FanoutDebt, LEGACY_FANOUT_DEBT_KEY, is_fanout_debt_key,
 };
+use crate::domain::fanout::{PendingOperations, StatePort};
 use crate::storage::operation_chunks::{
     FORMAT_MARKER_KEY, FORMAT_MARKER_VALUE, INLINE_BYTES, INLINE_COMPLETE_TAG, Manifest, chunk_key,
 };
 use loro::{LoroDoc, VersionVector};
+mod fanout;
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -33,11 +35,9 @@ const LAST_VERSION_VECTOR_KEY: &str = "LAST_VERSION_VECTOR";
 pub struct DurableKVStorage {
     inner: Storage,
     ids: OrederedIds,
-    applied_keys: RwLock<BTreeSet<String>>,
+    pending: RwLock<PendingOperations>,
     archive_incomplete: RwLock<BTreeSet<String>>,
-    unresolved: RwLock<BTreeMap<String, VersionVector>>,
     physical_keys: RwLock<BTreeMap<String, BTreeSet<String>>>,
-    fanout_debt: RwLock<Option<crate::domain::fanout::FanoutDebt>>,
 }
 
 /// For a given op, if it has been applied but the snapshot has not be saved, it is considered
@@ -111,11 +111,9 @@ impl DurableKVStorage {
         Self {
             inner,
             ids: OrederedIds::default(),
-            applied_keys: Default::default(),
+            pending: Default::default(),
             archive_incomplete: Default::default(),
-            unresolved: Default::default(),
             physical_keys: Default::default(),
-            fanout_debt: Default::default(),
         }
     }
 
@@ -261,7 +259,7 @@ impl DurableKVStorage {
                 None => found,
             });
         }
-        *self.fanout_debt.write().unwrap_context("fanout debt lock") = debt;
+        self.with_pending(|state| state.restore_debt(debt));
         *self
             .archive_incomplete
             .write()
@@ -286,80 +284,15 @@ impl DurableKVStorage {
         op_update: &[u8],
         attribution: Option<&crate::domain::document::DocumentAttribution>,
     ) -> Result<ImportedUpdate> {
-        let op_key = loop {
-            let key = pending_op_key(&self.ids.id());
-            if !self
-                .applied_keys
-                .read()
-                .unwrap_context("applied keys lock")
-                .contains(&key)
-                && !self
-                    .unresolved
-                    .read()
-                    .unwrap_context("unresolved operations lock")
-                    .contains_key(&key)
-            {
-                break key;
-            }
-        };
-        let op_id = op_key
-            .strip_prefix(PENDING_OP_PREFIX)
-            .context("invalid pending key")?
-            .to_owned();
-        let before = document_state.loro_doc.oplog_vv();
-        let imported = document_state.import(op_update)?;
-        let required = LoroDoc::decode_import_blob_meta(op_update, false)
-            .context("failed to read operation metadata")?
-            .partial_end_vv;
-        let known = document_state.loro_doc.oplog_vv();
-        let resolved = self
-            .unresolved
-            .read()
-            .unwrap_context("unresolved operations lock")
-            .values()
-            .any(|required| known.includes_vv(required));
-        if resolved {
-            let previous = self
-                .fanout_debt
-                .read()
-                .unwrap_context("fanout debt lock")
-                .clone();
-            let mut required = known.clone();
-            let base = if let Some(debt) = previous {
-                let (base, prior_required) = debt.vectors().context("invalid fanout vectors")?;
-                required.merge(&prior_required);
-                base
-            } else {
-                before
-            };
-            let debt = FanoutDebt {
-                base: base.encode(),
-                required: required.encode(),
-            };
-            // Persist intent BEFORE the parent's pending write. Failed writes
-            // cannot erase delivery debt for an earlier acknowledged child.
-            self.inner
-                .put(
-                    FANOUT_DEBT_KEY,
-                    serde_json::to_vec(&debt).context("failed to encode fanout debt")?,
-                )
-                .await?;
-            *self.fanout_debt.write().unwrap_context("fanout debt lock") = Some(debt);
-        }
-        self.inner.put(&op_key, op_update).await?;
-        self.unresolved
-            .write()
-            .unwrap_context("unresolved operations lock")
-            .insert(op_key, required);
-        self.mark_resolved(&known);
-
-        self.inner.put(&all_op_key(&op_id), op_update).await?;
-        if let Some(attribution) = attribution {
-            let metadata = serde_json::to_vec(attribution)
-                .context("failed to serialize signed document attribution")?;
-            self.inner.put(&format!("actor/{op_id}"), metadata).await?;
-        }
-        Ok(imported)
+        crate::domain::fanout::append(
+            &fanout::Append {
+                storage: self,
+                document: document_state,
+                attribution,
+            },
+            op_update,
+        )
+        .await
     }
 
     pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {
@@ -387,105 +320,29 @@ impl DurableKVStorage {
                 .map(|(_, _, bytes)| bytes.clone())
                 .collect::<Vec<_>>(),
         )?;
-        self.unresolved
-            .write()
-            .unwrap_context("unresolved operations lock")
-            .extend(rows.into_iter().map(|(key, required, _)| (key, required)));
-        self.mark_resolved(&snapshot.loro_doc.oplog_vv());
-        Ok(())
-    }
-
-    fn mark_resolved(&self, known: &VersionVector) {
-        let mut unresolved = self
-            .unresolved
-            .write()
-            .unwrap_context("unresolved operations lock");
-        let resolved: Vec<_> = unresolved
-            .iter()
-            .filter(|(_, required)| known.includes_vv(required))
-            .map(|(key, _)| key.clone())
-            .collect();
-        let mut applied = self
-            .applied_keys
-            .write()
-            .unwrap_context("applied keys lock");
-        for key in resolved {
-            unresolved.remove(&key);
-            applied.insert(key);
-        }
-    }
-
-    pub(crate) fn resolved_pending(&self, document: &DocumentState) -> Result<Option<Vec<u8>>> {
-        let debt = self
-            .fanout_debt
-            .read()
-            .unwrap_context("fanout debt lock")
-            .clone();
-        let Some(debt) = debt else {
-            return Ok(None);
-        };
-        let (base, _) = debt.vectors().context("invalid fanout vectors")?;
-        let known = document.loro_doc.oplog_vv();
-        if known == base {
-            return Ok(None);
-        }
-        if !known.includes_vv(&base) {
-            return Err(worker::Error::from("fanout base missing"));
-        }
-        document.export_updates_since(&base).map(Some)
-    }
-
-    pub(crate) async fn complete_fanout(&self, known: &VersionVector) -> Result<()> {
-        let debt = self
-            .fanout_debt
-            .read()
-            .unwrap_context("fanout debt lock")
-            .clone();
-        let Some(debt) = debt else {
-            return Ok(());
-        };
-        let (base, mut required) = debt.vectors().context("invalid fanout vectors")?;
-        if !known.includes_vv(&base) {
-            return Err(worker::Error::from("fanout base missing"));
-        }
-        if known.includes_vv(&required) {
-            // Delete legacy first: interrupted migration retains the safe marker.
-            self.inner.delete(LEGACY_FANOUT_DEBT_KEY).await?;
-            self.inner.delete(FANOUT_DEBT_KEY).await?;
-            *self.fanout_debt.write().unwrap_context("fanout debt lock") = None;
-        } else {
-            // Publish independently durable progress without forgetting the
-            // earlier parent whose pending write may still be absent.
-            required.merge(known);
-            let advanced = FanoutDebt {
-                base: known.encode(),
-                required: required.encode(),
-            };
-            self.inner
-                .put(
-                    FANOUT_DEBT_KEY,
-                    serde_json::to_vec(&advanced).context("failed to encode fanout debt")?,
-                )
-                .await?;
-            *self.fanout_debt.write().unwrap_context("fanout debt lock") = Some(advanced);
-        }
+        self.with_pending(|state| {
+            state.restore_pending(
+                rows.into_iter().map(|(key, required, _)| (key, required)),
+                &snapshot.loro_doc.oplog_vv(),
+            )
+        });
         Ok(())
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {
         let keys: Vec<String> = {
             let keys = self
-                .applied_keys
+                .pending
                 .read()
                 .unwrap_context("applied_keys mutex poisoned");
-            if keys.is_empty() {
+            if keys.applied_keys().next().is_none() {
                 return Ok(());
             }
             let incomplete = self
                 .archive_incomplete
                 .read()
                 .unwrap_context("archive status lock");
-            keys.iter()
+            keys.applied_keys()
                 .filter(|key| !incomplete.contains(*key))
                 .cloned()
                 .collect()
@@ -520,7 +377,7 @@ TODO
             );
         }
         let mut app_keys = self
-            .applied_keys
+            .pending
             .write()
             .unwrap_context("applied_keys mutex poisoned");
         let mut physical_keys = self
@@ -528,7 +385,7 @@ TODO
             .write()
             .unwrap_context("physical operation keys lock");
         for k in keys {
-            app_keys.remove(&k);
+            app_keys.forget_applied(&k);
             physical_keys.remove(&k);
         }
         Ok(())
