@@ -153,7 +153,6 @@ pub async fn list_properties<
     tracing::info!(
         properties_count = response.len(),
         scope = ?query.scope,
-        user_id = %user,
         "successfully retrieved properties"
     );
 
