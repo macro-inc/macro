@@ -45,6 +45,12 @@ import {
   messageFromGraphql,
 } from './convert';
 import {
+  holdsQueuedChannelWrite,
+  queueHoldsChannelWrite,
+  reapplyQueuedChannelWrites,
+  restoreQueuedChannelWrites,
+} from './queued-writes';
+import {
   type ChannelChanges,
   channelCacheHost,
   fetchChannelChanges,
@@ -450,6 +456,8 @@ export async function loadChannelTimelinePage(
   loadAroundMessageId: string | null,
   signal?: AbortSignal
 ): Promise<LoadedTimelinePage> {
+  // Writes queued before this page loaded go back into what it shows.
+  fireAndForget(restoreQueuedChannelWrites(host), SURFACE);
   const cursor = pageParam?.next_cursor ?? pageParam?.previous_cursor;
   if (pageParam && cursor) {
     const read = await fetchChannelPage(
@@ -693,6 +701,8 @@ async function runCatchUp(
             return;
           }
           applyChannelChanges(parent, changes);
+          // The server's rows replace those its queued writes changed.
+          reapplyQueuedChannelWrites(parent);
           setTimelineSeq(parent, changes.seq);
           applied +=
             changes.entries.length +
@@ -755,7 +765,9 @@ export function catchUpChannel(
   return running;
 }
 
+/** A write to the channel is in flight or queued: its rows are not the server's yet. */
 function hasPendingWrite(channelId: string): boolean {
+  if (holdsQueuedChannelWrite(channelId)) return true;
   return queryClient
     .getMutationCache()
     .findAll({ status: 'pending' })
@@ -790,6 +802,22 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
     schedulePersist(host, parent);
     return;
   }
+  // A write queued in another tab, or before a reload, commits its response
+  // into the rows this page shows; written first, they could hold an older
+  // row under a newer number. The page is read before the queue, so a write
+  // the queue does not list yet commits after the page's number.
+  let queued: boolean;
+  try {
+    queued = await queueHoldsChannelWrite(host, parent.id);
+  } catch {
+    // A queue that cannot be read may hold one; the next change tries again.
+    return;
+  }
+  if (queued) {
+    schedulePersist(host, parent);
+    return;
+  }
+  if (channelCacheHost() !== host || !STATES.has(parent.id)) return;
   await writeCachedLatestPage(host, parent.id, {
     seq,
     userId: state.userId,

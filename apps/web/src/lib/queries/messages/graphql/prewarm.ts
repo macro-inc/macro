@@ -16,6 +16,7 @@ import { getMessageTimelineQueryKeyPrefix } from '../timeline';
 import { applyChangesToLatestPage, trimLatestPage } from './apply';
 import { CURSOR_PAGE_LIMIT, noteCachedPage } from './channel-sync';
 import { activityFromGraphql, entryFromGraphql } from './convert';
+import { queueHoldsChannelWrite } from './queued-writes';
 import {
   channelCacheHost,
   fetchChannelChanges,
@@ -83,7 +84,12 @@ export type PrewarmOutcome =
   /** A read or the write failed; the cached page is as it was. */
   | 'failed'
   /** The channel opened or the session changed before the write. */
-  | 'superseded';
+  | 'superseded'
+  /**
+   * The queue holds a write to the channel, whose response could land on the
+   * page under a newer number; the next run warms it.
+   */
+  | 'write_queued';
 
 type PrewarmSession = {
   host: CacheHost;
@@ -359,6 +365,9 @@ async function warm(
     return 'superseded';
   }
   try {
+    // Read after the page, so a write it does not list commits after it.
+    if (await queueHoldsChannelWrite(current.host, channelId))
+      return 'write_queued';
     await writeCachedLatestPage(current.host, channelId, {
       ...read.latest,
       page: trimLatestPage(read.latest.page, CURSOR_PAGE_LIMIT),
@@ -409,7 +418,8 @@ async function prewarmChannels(
         if (
           outcome !== 'loaded' &&
           outcome !== 'superseded' &&
-          outcome !== 'failed'
+          outcome !== 'failed' &&
+          outcome !== 'write_queued'
         ) {
           current.warmed.add(channelId);
         }
