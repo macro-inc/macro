@@ -66,8 +66,9 @@ globalThis.console = {
 // turn. A worker would bring fresh timers; imports of node timer modules are
 // remapped to timers.mjs.
 // A function, not an arrow, so `new Worker(...)` reaches the throw.
+let sleepRefusal = (name) => `${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`;
 const sleepBanned = (name) => function () {
-  throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
+  throw new Error(sleepRefusal(name));
 };
 for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
@@ -75,6 +76,9 @@ Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
   const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  // A page's program answers the page that called it, which has no session
+  // or routines to offer.
+  if (unattended?.output === "page") sleepRefusal = (name) => `${name} is unavailable in a page's program: it runs once per call and can't sleep or poll. Return what you have, and let the page call it again.`;
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -144,11 +148,16 @@ try {
     value = await main({...context, macro, session, execution});
   }
   if (unattended) {
-    // A step's output feeds later steps whole; one too large fails instead
-    // of being summarized.
+    // A step's output feeds later steps whole, and a page reads its
+    // program's value whole; one too large fails instead of being summarized.
     const bytes = encoder.encode(stringify(value ?? null) ?? "null").length;
     if (bytes > maxResultBytes) {
-      emit({type: "error", message: `The step's output is ${Math.ceil(bytes / 1024)} KB as JSON; a step's output can be at most ${Math.floor(maxResultBytes / 1024)} KB. Return only what later steps need.`});
+      const size = Math.ceil(bytes / 1024);
+      const limit = Math.floor(maxResultBytes / 1024);
+      const message = unattended.output === "page"
+        ? `The program returned ${size} KB as JSON; a page's program can return at most ${limit} KB. Return only what the page shows.`
+        : `The step's output is ${size} KB as JSON; a step's output can be at most ${limit} KB. Return only what later steps need.`;
+      emit({type: "error", message});
       exit(0);
     }
     emit({type: "result", value: value ?? null});

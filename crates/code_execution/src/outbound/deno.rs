@@ -392,7 +392,7 @@ async fn bridge(
                 if outcome.is_some() {
                     return Err(ExecutionFailure::new(FailureCode::Protocol, "output after terminal frame"));
                 }
-                let frame: ChildFrame = serde_json::from_str(&line).map_err(|_| ExecutionFailure::new(FailureCode::Protocol, "invalid child frame"))?;
+                let frame: ChildFrame = serde_json::from_str(&line).map_err(|error| ExecutionFailure::new(FailureCode::Protocol, child_frame_problem(&error)))?;
                 let budget = if matches!(&frame, ChildFrame::Progress { .. }) {
                     &mut remaining_progress
                 } else {
@@ -457,6 +457,17 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
 }
 
 pub mod check;
+
+/// Why a child's frame didn't parse. A result nested deeper than the parser
+/// reads is the program's own value, so it says so; anything else is the
+/// child breaking protocol.
+fn child_frame_problem(error: &serde_json::Error) -> &'static str {
+    if error.to_string().starts_with("recursion limit exceeded") {
+        "the program's result nests too deeply to read; return a flatter value"
+    } else {
+        "invalid child frame"
+    }
+}
 
 #[cfg(test)]
 mod test;
