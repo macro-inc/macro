@@ -722,6 +722,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "suggestion_generation",
+ "suggestions",
  "sync_service_client",
  "system_properties",
  "teams",
@@ -10645,38 +10646,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ideas"
-version = "0.1.0"
-dependencies = [
- "agent_correlation",
- "async-trait",
- "axum",
- "chrono",
- "chrono-tz",
- "entity_access",
- "entity_registry",
- "feature_flags",
- "futures",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "macro_uuid",
- "model-entity",
- "model_owner",
- "rootcause",
- "serde",
- "serde_json",
- "shown_text",
- "sqlx",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "utoipa",
- "workspace-hack",
-]
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17709,7 +17678,6 @@ dependencies = [
  "futures",
  "github",
  "glob",
- "ideas",
  "jev",
  "kafka_util",
  "lexical_client",
@@ -17735,6 +17703,7 @@ dependencies = [
  "shown_text",
  "sqlx",
  "strum 0.27.2",
+ "suggestions",
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
@@ -19851,7 +19820,6 @@ dependencies = [
  "feature_flags",
  "futures",
  "http-body-util",
- "ideas",
  "macro_authorization",
  "macro_db_migrator",
  "macro_tower_layers",
@@ -19865,6 +19833,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "suggestions",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -19873,6 +19842,38 @@ dependencies = [
  "trigger_context",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "suggestions"
+version = "0.1.0"
+dependencies = [
+ "agent_correlation",
+ "async-trait",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "entity_access",
+ "entity_registry",
+ "feature_flags",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model_owner",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "shown_text",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 
