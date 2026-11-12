@@ -61,6 +61,8 @@ pub struct SearchedPerson {
     pub name: Option<String>,
     /// Whether the person is on the viewer's current team.
     pub is_teammate: bool,
+    /// Whether the person is an agent rather than a human; false for non-Macro contacts.
+    pub is_agent: bool,
 }
 
 impl From<PersonMatch> for SearchedPerson {
@@ -69,6 +71,7 @@ impl From<PersonMatch> for SearchedPerson {
             user_id: person.contact.user_id,
             name: person.contact.name,
             is_teammate: person.is_teammate,
+            is_agent: person.is_agent,
         }
     }
 }

@@ -6,13 +6,14 @@ INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
 ('00000000-0000-4000-8000-000000000005', 'other', 'other@example.com', 'cus_people_other'),
 ('00000000-0000-4000-8000-000000000006', 'ossam', 'ossam@example.com', 'cus_people_ossam');
 
-INSERT INTO "User" (id, email, macro_user_id) VALUES
-('macro|viewer@example.com', 'viewer@example.com', '00000000-0000-4000-8000-000000000001'),
-('macro|teammate@example.com', 'teammate@example.com', '00000000-0000-4000-8000-000000000002'),
-('macro|contact@example.com', 'contact@example.com', '00000000-0000-4000-8000-000000000003'),
-('macro|stranger@example.com', 'stranger@example.com', '00000000-0000-4000-8000-000000000004'),
-('macro|other@example.com', 'other@example.com', '00000000-0000-4000-8000-000000000005'),
-('macro|ossam@example.com', 'ossam@example.com', '00000000-0000-4000-8000-000000000006');
+-- "ossam" is an agent principal; everyone else is a person.
+INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES
+('macro|viewer@example.com', 'viewer@example.com', '00000000-0000-4000-8000-000000000001', false),
+('macro|teammate@example.com', 'teammate@example.com', '00000000-0000-4000-8000-000000000002', false),
+('macro|contact@example.com', 'contact@example.com', '00000000-0000-4000-8000-000000000003', false),
+('macro|stranger@example.com', 'stranger@example.com', '00000000-0000-4000-8000-000000000004', false),
+('macro|other@example.com', 'other@example.com', '00000000-0000-4000-8000-000000000005', false),
+('macro|ossam@example.com', 'ossam@example.com', '00000000-0000-4000-8000-000000000006', true);
 
 INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
 ('00000000-0000-4000-8000-000000000001', 'Viewer', 'Person'),

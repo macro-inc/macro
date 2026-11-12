@@ -10,6 +10,8 @@ import type { SearchedPersonName } from './searchedPersonName';
  * One ranked person in a GET /contacts/search response.
  */
 export interface SearchedPerson {
+  /** Whether the person is an agent rather than a human; false for non-Macro contacts. */
+  isAgent: boolean;
   /** Whether the person is on the viewer's current team. */
   isTeammate: boolean;
   /** Resolved name, as the contact directory shows it; null when unknown. */

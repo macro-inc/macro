@@ -215,8 +215,12 @@
       "SearchedPerson": {
         "type": "object",
         "description": "One ranked person in a GET /contacts/search response.",
-        "required": ["userId", "isTeammate"],
+        "required": ["userId", "isTeammate", "isAgent"],
         "properties": {
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the person is an agent rather than a human; false for non-Macro contacts."
+          },
           "isTeammate": {
             "type": "boolean",
             "description": "Whether the person is on the viewer's current team."

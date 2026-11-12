@@ -75,6 +75,7 @@ impl PeopleSearchService for MockService {
                         name: (index == 0).then(|| "Person Zero".to_string()),
                     },
                     is_teammate: index == 0,
+                    is_agent: index == 1,
                 }
             })
             .collect())
@@ -330,6 +331,7 @@ async fn search_returns_ranked_people_with_the_default_limit() {
             "userId": "macro|person0@example.com",
             "name": "Person Zero",
             "isTeammate": true,
+            "isAgent": false,
         })
     );
     assert_eq!(
@@ -338,6 +340,7 @@ async fn search_returns_ranked_people_with_the_default_limit() {
             "userId": "macro|person1@example.com",
             "name": null,
             "isTeammate": false,
+            "isAgent": true,
         })
     );
 }

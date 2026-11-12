@@ -55,6 +55,7 @@ impl PeopleSearchRepository for DbContactsRepository {
                         name,
                     },
                     is_teammate: row.is_teammate,
+                    is_agent: row.is_agent,
                 })
             })
             .collect())

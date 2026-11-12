@@ -35,6 +35,7 @@ profiles AS (
     SELECT
         c.id,
         c.is_teammate,
+        COALESCE(u."isAgent", FALSE) AS is_agent,
         substr(c.id, length('macro|') + 1) AS email,
         NULLIF(mui.first_name, 'N/A') AS first_name,
         NULLIF(mui.last_name, 'N/A') AS last_name,
@@ -67,6 +68,7 @@ ranked AS (
 SELECT
     r.id AS "user_id!",
     r.is_teammate AS "is_teammate!",
+    r.is_agent AS "is_agent!",
     CASE
         WHEN r.first_name IS NOT NULL OR r.last_name IS NOT NULL THEN r.first_name
         ELSE split_part(book.name, ' ', 1)

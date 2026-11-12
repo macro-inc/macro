@@ -77,6 +77,33 @@ async fn teammates_rank_first_then_prefix_then_substring_matches(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("people_search"))
 )]
+async fn results_flag_agents_and_treat_non_macro_contacts_as_people(pool: PgPool) {
+    let flags: Vec<_> = service(pool)
+        .search_people(
+            MacroUserIdStr::try_from_email(VIEWER).unwrap(),
+            &PeopleSearchQuery::new("sam").unwrap(),
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|person| (person.contact.user_id.to_string(), person.is_agent))
+        .collect();
+    assert_eq!(
+        flags,
+        vec![
+            ("macro|teammate@example.com".to_string(), false),
+            ("macro|contact@example.com".to_string(), false),
+            ("macro|samantha.book@example.org".to_string(), false),
+            ("macro|ossam@example.com".to_string(), true),
+        ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("people_search"))
+)]
 async fn search_is_scoped_to_the_viewers_contacts_self_and_team(pool: PgPool) {
     // Another user's contacts and teammates never appear, whether matched by
     // name ("Sam Other", "Sam Stranger") or by email ("samuel.private").

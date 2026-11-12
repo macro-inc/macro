@@ -64,4 +64,6 @@ pub struct PersonMatch {
     pub contact: Contact,
     /// Whether the person is a member of the viewer's current team.
     pub is_teammate: bool,
+    /// Whether the person is an agent principal rather than a human; false for non-Macro contacts.
+    pub is_agent: bool,
 }
