@@ -1307,13 +1307,24 @@ where
             // list. Email authorizes only the team-wide widening, so its
             // threads are left out of the page and every other source keeps
             // its results.
-            Err(
-                err @ (EmailErr::CrmDomainNotFound(_)
-                | EmailErr::CrmDomainNotPermitted(_)
-                | EmailErr::CrmAddressNotFound(_)
-                | EmailErr::CrmAddressNotPermitted(_)),
-            ) => {
-                tracing::warn!(error = %err, "CRM email scope rejected; omitting email threads");
+            Err(err @ (EmailErr::CrmDomainNotFound(_) | EmailErr::CrmDomainNotPermitted(_))) => {
+                tracing::warn!(error = %err, "CRM domain scope rejected; omitting email threads");
+                return Ok(Either::Left(None.into_iter()));
+            }
+            // The error text carries the contact's email address, so only
+            // the rejection kind is logged.
+            Err(EmailErr::CrmAddressNotFound(_)) => {
+                tracing::warn!(
+                    reason = "not_found",
+                    "CRM address scope rejected; omitting email threads"
+                );
+                return Ok(Either::Left(None.into_iter()));
+            }
+            Err(EmailErr::CrmAddressNotPermitted(_)) => {
+                tracing::warn!(
+                    reason = "not_permitted",
+                    "CRM address scope rejected; omitting email threads"
+                );
                 return Ok(Either::Left(None.into_iter()));
             }
             Err(err) => return Err(err.into()),
