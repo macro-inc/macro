@@ -2,8 +2,7 @@
 use ai_toolset::telemetry::ToolCallSpan;
 use ai_toolset::tool_object::ToolSetCallable;
 use ai_toolset::{
-    AsyncToolCollection, RequestContext, RequestSchema, ToolResult, ToolSet as AiToolSet,
-    ToolSetError,
+    AsyncToolCollection, RequestContext, ToolResult, ToolSet as AiToolSet, ToolSetError,
 };
 use rig_agent::tool::{DynamicTool, ToolExecutionError};
 use std::sync::{Arc, RwLock};
@@ -200,11 +199,12 @@ impl ToolsetToolAdapter {
 pub struct DynToolSetAdapter;
 
 impl DynToolSetAdapter {
-    /// Create one [`DynamicTool`] per schema in `schemas`, which come from
-    /// `toolset`'s [`AiToolSet::request_schemas`]. Calls are dispatched
-    /// through the shared `toolset`.
-    pub fn from_schemas<Context>(
-        schemas: Vec<RequestSchema>,
+    /// Create one [`DynamicTool`] per provider definition in `definitions`,
+    /// built with [`provider_definition`] from `toolset`'s
+    /// [`AiToolSet::request_schemas`]. Calls are dispatched through the shared
+    /// `toolset`.
+    pub fn from_definitions<Context>(
+        definitions: Vec<rig_core::completion::ToolDefinition>,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
         request_context: Arc<RwLock<RequestContext>>,
@@ -212,25 +212,18 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        schemas
+        definitions
             .into_iter()
-            .map(
-                |RequestSchema {
-                     name,
-                     description,
-                     schema,
-                 }| {
-                    let definition = provider_definition(name, description, &schema);
-                    Self::build(
-                        definition.name,
-                        definition.description,
-                        definition.parameters,
-                        toolset.clone(),
-                        context.clone(),
-                        request_context.clone(),
-                    )
-                },
-            )
+            .map(|definition| {
+                Self::build(
+                    definition.name,
+                    definition.description,
+                    definition.parameters,
+                    toolset.clone(),
+                    context.clone(),
+                    request_context.clone(),
+                )
+            })
             .collect()
     }
 
@@ -239,7 +232,7 @@ impl DynToolSetAdapter {
     /// Used to register a `SearchTools`-discovered tool with the live tool
     /// server mid-session so it becomes advertised and callable on the next
     /// turn. Calls dispatch through the shared `toolset` by name, exactly like
-    /// [`Self::from_schemas`].
+    /// [`Self::from_definitions`].
     pub fn loaded<Context>(
         name: String,
         description: String,

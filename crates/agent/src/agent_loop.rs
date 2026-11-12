@@ -8,7 +8,7 @@ use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
-use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::tool_search::{ToolMatch, tools_loaded_by};
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
@@ -395,12 +395,19 @@ impl AgentLoop {
             catalog: catalog.clone(),
             loads: ToolLoads::default(),
         };
-        let schemas = toolset.request_schemas().unwrap_or_default();
-        let advertised = schemas
+        // Resolve each definition once, so `already_available` matches the
+        // description the provider shows the model.
+        let definitions: Vec<_> = toolset
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| provider_definition(schema.name, schema.description, &schema.schema))
+            .collect();
+        let advertised = definitions
             .iter()
-            .map(|schema| ToolMatch {
-                name: schema.name.clone(),
-                description: schema.description.clone(),
+            .map(|definition| ToolMatch {
+                name: definition.name.clone(),
+                description: definition.description.clone(),
             })
             .collect();
         let request_context = RequestContext::new(usage_ctx.user.clone())
@@ -417,8 +424,8 @@ impl AgentLoop {
         let routing: ToolRouter =
             Arc::new(move |name: &str| routing_toolset.routing_description(name));
 
-        let adapters = DynToolSetAdapter::from_schemas(
-            schemas,
+        let adapters = DynToolSetAdapter::from_definitions(
+            definitions,
             toolset.clone(),
             context.clone(),
             request_context_rw.clone(),
