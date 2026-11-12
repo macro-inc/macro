@@ -51,6 +51,7 @@ pub struct InnerHits<'a> {
     pub size: Option<u32>,
     /// Fields of each child's `_source` to return. Unset returns the whole
     /// document: the request-level `_source` does not reach inner hits.
+    #[serde(rename = "_source")]
     pub source: Option<Cow<'a, [Cow<'a, str>]>>,
 }
 

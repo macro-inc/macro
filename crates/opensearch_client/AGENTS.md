@@ -66,7 +66,8 @@ projects.
   across a large mailbox runs for minutes.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
-  `source_fields`. Name exactly the fields the hit's `_source` struct decodes.
+  `source_fields`. Agent sessions name the fields their hit's `_source` struct
+  decodes; the other join queries still fetch whole children.
 
 ## Related
 

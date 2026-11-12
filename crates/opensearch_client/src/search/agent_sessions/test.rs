@@ -61,13 +61,26 @@ fn each_term_fetches_only_the_navigation_fields_of_matching_messages() {
     for (index, term) in terms.iter().enumerate() {
         let inner_hits = &term["has_child"]["inner_hits"];
         assert_eq!(inner_hits["name"], format!("agent_term_{index}"));
-        assert_eq!(inner_hits["size"], 100);
+        assert_eq!(inner_hits["size"], INNER_HITS_PER_TERM);
         assert_eq!(
             inner_hits["_source"],
             serde_json::json!(["message_turn", "author"])
         );
         assert!(inner_hits["highlight"]["fields"]["content"].is_object());
     }
+}
+
+#[test]
+fn requested_message_fields_are_enough_to_decode_a_navigation_target() {
+    let source: serde_json::Map<String, serde_json::Value> = MESSAGE_SOURCE_FIELDS
+        .into_iter()
+        .zip([serde_json::json!(7), serde_json::json!("user")])
+        .map(|(field, value)| (field.to_owned(), value))
+        .collect();
+    let goto: SearchGotoAgentSession =
+        serde_json::from_value(serde_json::Value::Object(source)).unwrap();
+    assert_eq!(goto.message_turn, 7);
+    assert_eq!(goto.author, super::super::model::AgentSessionAuthor::User);
 }
 
 #[test]
