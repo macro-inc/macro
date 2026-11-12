@@ -188,3 +188,114 @@ async fn a_turn_that_ends_mid_summary_stops_waiting_for_the_model() {
 
     assert!(!task.await.unwrap());
 }
+
+struct CountingSummarizer(mpsc::UnboundedSender<()>);
+
+impl ActivitySummarizer for CountingSummarizer {
+    async fn summarize(
+        &self,
+        _usage: UsageContext,
+        _previous: Option<&str>,
+        _digest: &ActivityDigest,
+    ) -> Result<Option<String>, rootcause::Report> {
+        self.0.send(()).unwrap();
+        Ok(Some("Reading files…".into()))
+    }
+}
+
+fn working(rows: usize) -> TurnSignal {
+    TurnSignal::Progressed {
+        turn: TurnId(1),
+        action_id: None,
+        phase: Some(agent_fold::domain::model::TurnPhase::Working),
+        segments: vec![ProjectedSegment {
+            segment: Segment {
+                index: 0,
+                kind: SegmentKind::Activity,
+                start: 0,
+                end: rows,
+                sealed: false,
+                rows: (0..rows)
+                    .map(|id| ActivityRow {
+                        id: format!("call_{id}"),
+                        label: "Read".into(),
+                        detail: None,
+                        status: ActivityStatus::Running,
+                        card: None,
+                    })
+                    .collect(),
+            },
+            text: None,
+        }],
+    }
+}
+
+/// The owner's flags with the kill switch at `killed`.
+fn owner_flags(
+    session: &crate::domain::model::AgentSession,
+    killed: bool,
+) -> feature_flags::outbound::fake::FakeFeatureFlags {
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    flags.set(
+        session.owner_user().unwrap().clone(),
+        Ok(feature_flags::FlagSnapshot::new([(
+            KILL_SWITCH_FLAG.into(),
+            feature_flags::FlagValue::Boolean(killed),
+        )])),
+    );
+    flags
+}
+
+#[tokio::test]
+async fn the_kill_switch_stops_summaries_before_any_model_call() {
+    let id = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
+    let session = crate::testing::test_agent_session(id);
+    let flags = owner_flags(&session, true);
+    let repo = crate::testing::InMemoryAgentSessionRepo::new();
+    repo.insert_session(session);
+    let (calls, mut called) = mpsc::unbounded_channel();
+    let tasks = TaskTracker::new();
+    let summaries = ActivitySummaries::new(
+        repo,
+        crate::testing::RecordingRealtime::new(),
+        CountingSummarizer(calls),
+        Arc::new(ai_billing::DisabledAiAdmissionService),
+        Some(flags),
+        tasks.clone(),
+        CancellationToken::new(),
+    );
+
+    summaries.signal(id, working(3));
+    tasks.close();
+    tasks.wait().await;
+
+    drop(summaries);
+    assert_eq!(called.recv().await, None);
+}
+
+#[tokio::test]
+async fn summaries_run_while_the_kill_switch_is_off() {
+    let id = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
+    let session = crate::testing::test_agent_session(id);
+    let flags = owner_flags(&session, false);
+    let repo = crate::testing::InMemoryAgentSessionRepo::new();
+    repo.insert_session(session);
+    let (calls, mut called) = mpsc::unbounded_channel();
+    let tasks = TaskTracker::new();
+    let summaries = ActivitySummaries::new(
+        repo,
+        crate::testing::RecordingRealtime::new(),
+        CountingSummarizer(calls),
+        Arc::new(ai_billing::DisabledAiAdmissionService),
+        Some(flags),
+        tasks.clone(),
+        CancellationToken::new(),
+    );
+
+    summaries.signal(id, working(3));
+
+    assert_eq!(called.recv().await, Some(()));
+    summaries.session_stopped(id, StopReason::InitializationRefused);
+    tasks.close();
+    tasks.wait().await;
+}

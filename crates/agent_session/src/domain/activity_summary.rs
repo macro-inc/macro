@@ -7,7 +7,7 @@
 //! [`FAST_SUMMARIES`] summaries, [`SLOW_INTERVAL`] after, and none past
 //! [`MAX_SUMMARIES_PER_TURN`]. Calls made while it rests coalesce into the
 //! next summary. The line is ephemeral: it is published to live viewers and
-//! never stored.
+//! never stored. The [`KILL_SWITCH_FLAG`] turns it off per owner.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,6 +16,7 @@ use agent_fold::domain::model::{ProjectedSegment, SegmentKind, TurnId, TurnSigna
 use ai_billing::{AiAdmissionService, AiFeature};
 use ai_usage::UsageContext;
 use dashmap::DashMap;
+use feature_flags::FeatureFlags;
 use serde::Serialize;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -39,6 +40,9 @@ pub const SLOW_INTERVAL: Duration = Duration::from_secs(15);
 pub const MAX_SUMMARIES_PER_TURN: u8 = 120;
 /// Newest steps the model is shown.
 const MAX_DIGEST_STEPS: usize = 10;
+/// The PostHog flag that turns summaries off. Unset, unreadable or without a
+/// flag client, summaries stay on.
+pub const KILL_SWITCH_FLAG: &str = "disable-agent-activity-summary";
 
 /// What a turn's tool calls look like right now: the newest steps, worded as
 /// the session's own activity rows already show them to every reader.
@@ -175,25 +179,27 @@ struct RunningTurn {
 
 /// A [`SessionTurnObserver`] that keeps one summary task per running turn
 /// and publishes each line to the session's viewers.
-pub struct ActivitySummaries<R, Rt, S> {
+pub struct ActivitySummaries<R, Rt, S, Flags> {
     repo: R,
     realtime: Rt,
     summarizer: Arc<S>,
     admission: Arc<dyn AiAdmissionService>,
+    flags: Option<Arc<Flags>>,
     running: DashMap<AgentSessionId, RunningTurn>,
     tasks: TaskTracker,
     shutdown: CancellationToken,
 }
 
-impl<R, Rt, S> ActivitySummaries<R, Rt, S> {
+impl<R, Rt, S, Flags> ActivitySummaries<R, Rt, S, Flags> {
     /// Summarize with `summarizer`, admitted per turn against the session's
-    /// owner by `admission`. Tasks are tracked by `tasks` and stop on
-    /// `shutdown`.
+    /// owner by `admission` unless `flags` has the [`KILL_SWITCH_FLAG`] on
+    /// for them. Tasks are tracked by `tasks` and stop on `shutdown`.
     pub fn new(
         repo: R,
         realtime: Rt,
         summarizer: S,
         admission: Arc<dyn AiAdmissionService>,
+        flags: Option<Flags>,
         tasks: TaskTracker,
         shutdown: CancellationToken,
     ) -> Self {
@@ -202,6 +208,7 @@ impl<R, Rt, S> ActivitySummaries<R, Rt, S> {
             realtime,
             summarizer: Arc::new(summarizer),
             admission,
+            flags: flags.map(Arc::new),
             running: DashMap::new(),
             tasks,
             shutdown,
@@ -215,11 +222,12 @@ impl<R, Rt, S> ActivitySummaries<R, Rt, S> {
     }
 }
 
-impl<R, Rt, S> ActivitySummaries<R, Rt, S>
+impl<R, Rt, S, Flags> ActivitySummaries<R, Rt, S, Flags>
 where
     R: AgentSessionRepo + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
     S: ActivitySummarizer,
+    Flags: FeatureFlags + 'static,
 {
     fn progressed(&self, id: AgentSessionId, turn: TurnId, digest: ActivityDigest) {
         if let Some(running) = self.running.get(&id)
@@ -245,6 +253,7 @@ where
             self.realtime.clone(),
             Arc::clone(&self.summarizer),
             Arc::clone(&self.admission),
+            self.flags.clone(),
             id,
             turn,
             receiver,
@@ -257,11 +266,12 @@ where
     clippy::too_many_arguments,
     reason = "one detached task's inputs, passed once"
 )]
-async fn run_turn<R, Rt, S>(
+async fn run_turn<R, Rt, S, Flags>(
     repo: R,
     realtime: Rt,
     summarizer: Arc<S>,
     admission: Arc<dyn AiAdmissionService>,
+    flags: Option<Arc<Flags>>,
     id: AgentSessionId,
     turn: TurnId,
     digests: watch::Receiver<Option<ActivityDigest>>,
@@ -270,6 +280,7 @@ async fn run_turn<R, Rt, S>(
     R: AgentSessionRepo,
     Rt: AgentSessionRealtime,
     S: ActivitySummarizer,
+    Flags: FeatureFlags,
 {
     let usage = async {
         let session = repo
@@ -281,6 +292,18 @@ async fn run_turn<R, Rt, S>(
         let Ok(owner) = session.owner_user() else {
             return Ok::<_, rootcause::Report>(None);
         };
+        if let Some(flags) = &flags {
+            let killed = flags
+                .load(owner)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, %id, "could not read the agent activity summary flag");
+                })
+                .is_ok_and(|snapshot| snapshot.is_enabled(KILL_SWITCH_FLAG));
+            if killed {
+                return Ok(None);
+            }
+        }
         if let Err(error) = admission
             .admit(owner, AiFeature::AgentActivitySummary)
             .await
@@ -369,11 +392,12 @@ async fn run_turn<R, Rt, S>(
     }
 }
 
-impl<R, Rt, S> SessionTurnObserver for ActivitySummaries<R, Rt, S>
+impl<R, Rt, S, Flags> SessionTurnObserver for ActivitySummaries<R, Rt, S, Flags>
 where
     R: AgentSessionRepo + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
     S: ActivitySummarizer,
+    Flags: FeatureFlags + 'static,
 {
     fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         match signal {

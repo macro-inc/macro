@@ -1566,6 +1566,7 @@ async fn run() -> anyhow::Result<()> {
             recorder.clone(),
         ),
         admission.clone(),
+        feature_flags.clone(),
         activity_summary_tasks.clone(),
         service_shutdown.child_token(),
     );

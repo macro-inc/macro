@@ -155,7 +155,9 @@ and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines g
 to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
 (`agent_session_activity`), and a `null` line clears it when the turn ends.
 Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
-non-billable); a session with no person owner gets none.
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
 
 ## Checks
 
