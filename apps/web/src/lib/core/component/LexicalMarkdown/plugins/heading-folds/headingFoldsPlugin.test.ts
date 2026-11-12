@@ -160,8 +160,8 @@ describe('heading folds', () => {
     );
 
     m.folds.toggle(m.keys.B);
-    // The caret moves in an ordinary (batched) editor update.
-    await Promise.resolve();
+    // The caret moves after the fold, in an ordinary (batched) editor update.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(hidden(m)).toEqual(['p2']);
     const anchorTop = m.editor.getEditorState().read(() => {
       const selection = $getSelection();

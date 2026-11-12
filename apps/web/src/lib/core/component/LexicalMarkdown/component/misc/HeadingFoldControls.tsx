@@ -52,9 +52,14 @@ export function HeadingFoldControls(props: {
                   control.folded ||
                   touch ||
                   props.folds.hoveredKey() === control.key;
+                // Touch grows the button to a 36px target: center its glyph
+                // in the 24px phone gutter, letting the target reach 6px
+                // over the text instead of off the screen.
                 return (
                   <div
-                    class="absolute right-0.5 flex items-center"
+                    class="absolute right-0.5 flex items-center touch:-right-1.5"
+                    onPointerEnter={() => props.folds.hover(control.key)}
+                    onPointerLeave={() => props.folds.hover(null)}
                     style={{
                       top: `${control.top}px`,
                       height: `${Math.max(control.lineHeight, CONTROL_SIZE)}px`,

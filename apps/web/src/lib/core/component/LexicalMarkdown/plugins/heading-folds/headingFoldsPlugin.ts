@@ -64,6 +64,22 @@ export type HeadingFoldControl = {
 
 type FoldBlockWithId = FoldBlock & { id: string | null };
 
+/**
+ * The element to measure for something inside a document: itself, or, inside
+ * a folded section, the heading that folds it (hidden elements measure as
+ * zero, at the top of the page).
+ */
+export function visibleAnchor(element: HTMLElement): HTMLElement {
+  let block = element.closest<HTMLElement>(`.${FOLDED_BLOCK_CLASS}`);
+  if (!block) return element;
+  while (block?.classList.contains(FOLDED_BLOCK_CLASS)) {
+    const previous: Element | null = block.previousElementSibling;
+    if (!(previous instanceof HTMLElement)) return element;
+    block = previous;
+  }
+  return block ?? element;
+}
+
 function $readBlocks(): FoldBlockWithId[] {
   return $getRoot()
     .getChildren()
@@ -112,6 +128,8 @@ export function createHeadingFolds(props: {
   let plan: FoldPlan = { headings: [], hidden: [] };
   let hiddenKeys = new Set<NodeKey>();
   let measureFrame: number | undefined;
+  /** Heading element → key, for the controls on screen. */
+  let controlKeys = new Map<HTMLElement, NodeKey>();
 
   let idByKey = new Map<NodeKey, string | null>();
   let folded = new Set<string>();
@@ -169,11 +187,13 @@ export function createHeadingFolds(props: {
     const parentTop = parent.getBoundingClientRect().top;
 
     const next: HeadingFoldControl[] = [];
+    const keys = new Map<HTMLElement, NodeKey>();
     for (const heading of plan.headings) {
       if (heading.hidden || !idOf(heading.key)) continue;
       const element = editor.getElementByKey(heading.key);
       if (!element) continue;
       const rect = element.getBoundingClientRect();
+      keys.set(element, heading.key);
       next.push({
         key: heading.key,
         folded: heading.folded,
@@ -181,6 +201,7 @@ export function createHeadingFolds(props: {
         lineHeight: lineHeightOf(element, rect.height),
       });
     }
+    controlKeys = keys;
     setControls(reconcile(next, { key: 'key' }));
   };
 
@@ -194,10 +215,14 @@ export function createHeadingFolds(props: {
     const present = new Set(blocks.map((b) => b.id));
     setFoldedIds(ids.filter((id) => present.has(id)));
     apply();
-    if (!editor) return;
-    moveSelectionOutOfFolds(editor);
-    // Search, comment, and selection highlights re-measure on this.
-    dispatchInternalLayoutShift(editor);
+    // Folds change from command handlers and update listeners; touch the
+    // editor again only once that update has finished.
+    queueMicrotask(() => {
+      if (!editor) return;
+      moveSelectionOutOfFolds(editor);
+      // Search, comment, and selection highlights re-measure on this.
+      dispatchInternalLayoutShift(editor);
+    });
   };
 
   /**
@@ -242,10 +267,13 @@ export function createHeadingFolds(props: {
   };
 
   /** Unfold the sections around a node; true when something unfolded. */
-  const $reveal = (key: NodeKey) => {
-    const top = $getNodeByKey(key)?.getTopLevelElement();
-    if (!top || !hiddenKeys.has(top.getKey())) return false;
-    const index = blocks.findIndex((b) => b.key === top.getKey());
+  const reveal = (key: NodeKey) => {
+    if (!editor || hiddenKeys.size === 0) return false;
+    const topKey = editor
+      .getEditorState()
+      .read(() => $getNodeByKey(key)?.getTopLevelElement()?.getKey());
+    if (!topKey || !hiddenKeys.has(topKey)) return false;
+    const index = blocks.findIndex((b) => b.key === topKey);
     if (index === -1) return false;
 
     const unfold = new Set(
@@ -255,10 +283,10 @@ export function createHeadingFolds(props: {
     return true;
   };
 
-  const $revealId = (id: string | undefined) => {
-    if (!id) return;
-    const key = $findNodeKeyById(id);
-    if (key) $reveal(key);
+  const revealId = (id: string | undefined) => {
+    if (!id || !editor || hiddenKeys.size === 0) return;
+    const key = editor.getEditorState().read(() => $findNodeKeyById(id));
+    if (key) reveal(key);
   };
 
   /** The foldable heading holding a collapsed caret, if any. */
@@ -284,9 +312,7 @@ export function createHeadingFolds(props: {
         setHoveredKey(null);
         return;
       }
-      setHoveredKey(
-        controls.find((c) => ed.getElementByKey(c.key) === heading)?.key ?? null
-      );
+      setHoveredKey(controlKeys.get(heading) ?? null);
     };
     const onPointerLeave = () => setHoveredKey(null);
     let observedRoot: HTMLElement | null = null;
@@ -312,18 +338,18 @@ export function createHeadingFolds(props: {
         if (dirtyElements.size > 0 || dirtyLeaves.size > 0) apply();
 
         // A caret moved into a folded section (Enter after a folded
-        // heading, undo, a click through a stale view) unfolds it.
-        ed.getEditorState().read(() => {
+        // heading, undo, a click below the document) unfolds it.
+        const caretKey = ed.getEditorState().read(() => {
           const selection = $getSelection();
-          if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-            return;
-          }
-          $reveal(selection.anchor.key);
+          return $isRangeSelection(selection) && selection.isCollapsed()
+            ? selection.anchor.key
+            : null;
         });
+        if (caretKey) reveal(caretKey);
       }),
       ed.registerCommand(
         REVEAL_NODE_COMMAND,
-        (key) => $reveal(key),
+        (key) => reveal(key),
         COMMAND_PRIORITY_NORMAL
       ),
       // Links to a node or a text range: unfold first, then let the
@@ -331,7 +357,7 @@ export function createHeadingFolds(props: {
       ed.registerCommand(
         GO_TO_NODE_ID_COMMAND,
         (id) => {
-          $revealId(id);
+          revealId(id);
           return false;
         },
         COMMAND_PRIORITY_CRITICAL
@@ -339,8 +365,8 @@ export function createHeadingFolds(props: {
       ed.registerCommand(
         GO_TO_LOCATION_COMMAND,
         (location) => {
-          $revealId(location?.anchor.id);
-          $revealId(location?.focus.id);
+          revealId(location?.anchor.id);
+          revealId(location?.focus.id);
           return false;
         },
         COMMAND_PRIORITY_CRITICAL
@@ -363,7 +389,14 @@ export function createHeadingFolds(props: {
     );
   };
 
-  return { controls, hoveredKey, toggle, plugin };
+  return {
+    controls,
+    hoveredKey,
+    /** Keeps a control shown while the pointer is on it, off the heading. */
+    hover: setHoveredKey,
+    toggle,
+    plugin,
+  };
 }
 
 export type HeadingFolds = ReturnType<typeof createHeadingFolds>;
