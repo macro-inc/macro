@@ -1,6 +1,10 @@
 import { makeCopyLinkAction } from '@app/features/next-soup/actions';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -8,7 +12,9 @@ import type { GithubPullRequestEntity } from '@entity';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import BrowserTabIcon from '@icon/system/regular/tabs.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Show } from 'solid-js';
 
 const copyLink = makeCopyLinkAction();
 
@@ -29,6 +35,15 @@ export function ReviewContextMenuContent(props: {
               props.onOpen(props.review.id, true);
           }}
         />
+        <Show when={canOpenInNewTab()}>
+          <MenuItem
+            icon={BrowserTabIcon}
+            text={t('entityActions.openInNewTab')}
+            onClick={() =>
+              openInNewTab(() => props.onOpen(props.review.id, false))
+            }
+          />
+        </Show>
         <MenuItem
           icon={CopyIcon}
           text={t('entityActions.copyLinkCommand')}

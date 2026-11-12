@@ -356,6 +356,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
  "rootcause",
@@ -371,6 +372,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -4282,6 +4284,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -8251,6 +8254,7 @@ dependencies = [
 name = "feature_flags"
 version = "0.1.0"
 dependencies = [
+ "macro_env",
  "macro_user_id",
  "reqwest 0.13.4",
  "rootcause",

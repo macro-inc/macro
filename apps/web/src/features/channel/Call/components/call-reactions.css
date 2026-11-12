@@ -1,0 +1,19 @@
+.call-reaction {
+  animation: call-reaction-rise var(--call-reaction-duration) ease-out both;
+}
+@keyframes call-reaction-rise {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  5% { opacity: 1; transform: translate(-2px, calc(var(--call-reaction-rise, 96px) * -0.0625)) scale(1.15); }
+  8% { opacity: 1; transform: translate(0, calc(var(--call-reaction-rise, 96px) * -0.125)) scale(1); }
+  40% { opacity: 1; transform: translate(var(--call-reaction-sway, 6px), calc(var(--call-reaction-rise, 96px) * -0.542)) scale(1); }
+  70% { opacity: 1; transform: translate(calc(var(--call-reaction-sway, 6px) * -1), calc(var(--call-reaction-rise, 96px) * -0.8125)) scale(1); }
+  100% { opacity: 0; transform: translate(0, calc(var(--call-reaction-rise, 96px) * -1)) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-reaction { animation: call-reaction-fade 2650ms linear both; }
+}
+@keyframes call-reaction-fade {
+  0% { opacity: 0; }
+  9.4%, 84.9% { opacity: 1; }
+  100% { opacity: 0; }
+}

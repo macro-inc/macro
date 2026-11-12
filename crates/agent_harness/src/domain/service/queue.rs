@@ -439,6 +439,7 @@ where
                             action: open.origin.into_action(),
                             announce: Some(origin),
                             context,
+                            client: None,
                         })
                     }
                     Err(AgentSessionError::NotFound(_)) => HarnessCommand::Open(open),
@@ -1098,6 +1099,7 @@ where
             actor: command.actor,
             announce: command.announce,
             context: command.context,
+            client: command.client,
             announced: None,
             created_at: dm_record
                 .as_ref()
@@ -1235,6 +1237,7 @@ where
                         actor,
                         announce: None,
                         context: None,
+                        client: None,
                     },
                 )
                 .await
@@ -1277,6 +1280,7 @@ where
                     actor: actor.cloned(),
                     announce: None,
                     context: None,
+                    client: None,
                 },
             )
             .await
@@ -1711,6 +1715,7 @@ where
                             action_id: entry.action_id,
                             user: entry.actor.clone(),
                             kind: entry.prompter_kind(),
+                            client: entry.client,
                         },
                     )
                     .await?;
@@ -1744,6 +1749,7 @@ where
                 announce: entry.announce.clone(),
                 // Already composed into the action above.
                 context: None,
+                client: None,
             };
             flight.announcement_message_id = entry.announced;
             if let Some(store) = conversation_store

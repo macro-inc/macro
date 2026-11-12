@@ -385,6 +385,7 @@ async fn recovered_system_identity_overrides_a_legacy_wire_owner() {
             kind: agent_session::domain::model::PrompterKind::System,
             action_id: action,
             user: None,
+            client: None,
         },
     )
     .await

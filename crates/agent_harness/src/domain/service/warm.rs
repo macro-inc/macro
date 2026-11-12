@@ -216,6 +216,7 @@ where
                 )
                 .await;
             if let Some(prompt) = request.prompt {
+                let client = prompt.client;
                 let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
@@ -225,6 +226,7 @@ where
                         actor: Some(owner_user),
                         announce: None,
                         context: None,
+                        client,
                     }),
                 )
                 .await
@@ -393,6 +395,7 @@ where
         // prompt is composed, and the worker is what serializes this first
         // prompt against any control prompt racing the session's birth.
         if let Some(prompt) = request.prompt {
+            let client = prompt.client;
             let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
@@ -402,6 +405,7 @@ where
                     actor: Some(owner_user),
                     announce: None,
                     context: None,
+                    client,
                 }),
             )
             .await
