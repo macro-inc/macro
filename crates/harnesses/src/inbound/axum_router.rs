@@ -1,5 +1,6 @@
 //! Axum router for harness registration and device-code pairing.
 
+use pairing_id::PairingId;
 use std::sync::Arc;
 
 use axum::{
@@ -17,7 +18,6 @@ use macro_authorization::{
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::domain::{
     models::{
@@ -74,7 +74,7 @@ pub struct PairingCodePath {
 #[derive(Debug, serde::Deserialize)]
 pub struct PairingIdPath {
     /// Pairing id.
-    pub pairing_id: Uuid,
+    pub pairing_id: PairingId,
 }
 
 /// Harness path.
@@ -252,7 +252,7 @@ pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorization
     tag = "harnesses",
     operation_id = "claim_harness_pairing",
     path = "/harness-pairings/{pairing_id}/claim",
-    params(("pairing_id" = Uuid, Path, description = "Pairing ID")),
+    params(("pairing_id" = PairingId, Path, description = "Pairing ID")),
     request_body = ClaimPairingRequest,
     responses(
         (status = 200, body = ClaimedPairing),
@@ -298,6 +298,40 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
         state
             .service
             .list_harnesses(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PATCH /harnesses/{harness_id}`.
+#[utoipa::path(
+    patch,
+    tag = "harnesses",
+    operation_id = "patch_harness",
+    path = "/harnesses/{harness_id}",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    request_body = PatchHarnessRequest,
+    responses(
+        (status = 200, body = Harness),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+    Json(req): Json<PatchHarnessRequest>,
+) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_harness(
+                authorization.authorization.user.macro_user_id,
+                path.harness_id,
+                req,
+            )
             .await?,
     ))
 }
@@ -387,40 +421,6 @@ pub async fn list_residents_handler<S: HarnessService, Auth: MacroAuthorizationS
             .list_residents(
                 authorization.authorization.user.macro_user_id,
                 path.harness_id,
-            )
-            .await?,
-    ))
-}
-
-/// Handler for `PATCH /harnesses/{harness_id}`.
-#[utoipa::path(
-    patch,
-    tag = "harnesses",
-    operation_id = "patch_harness",
-    path = "/harnesses/{harness_id}",
-    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
-    request_body = PatchHarnessRequest,
-    responses(
-        (status = 200, body = Harness),
-        (status = 400, body = ErrorResponse),
-        (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
-        (status = 500, body = ErrorResponse),
-    )
-)]
-pub async fn patch_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
-    State(state): State<HarnessesRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(path): Path<HarnessPath>,
-    Json(req): Json<PatchHarnessRequest>,
-) -> Result<Json<Harness>, HarnessesHandlerErr> {
-    Ok(Json(
-        state
-            .service
-            .patch_harness(
-                authorization.authorization.user.macro_user_id,
-                path.harness_id,
-                req,
             )
             .await?,
     ))
@@ -593,6 +593,7 @@ impl IntoResponse for HarnessesHandlerErr {
             HarnessError::Gone(_) => StatusCode::GONE,
             HarnessError::Unauthorized => StatusCode::UNAUTHORIZED,
             HarnessError::Throttled => StatusCode::TOO_MANY_REQUESTS,
+            HarnessError::ComputerHarness => StatusCode::CONFLICT,
             HarnessError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
