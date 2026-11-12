@@ -26,6 +26,7 @@ import {
   beginCalendarUpdate,
   type CalendarUpdate,
   installCalendarUpdate,
+  isCalendarEventUpdating,
   prepareCalendarUpdate,
   settleCalendarUpdate,
 } from './event-updates';
@@ -720,6 +721,10 @@ export interface UpdateCalendarEventArgs {
     'calendarId' | 'scope' | 'recurrenceId'
   >;
 }
+
+/** Tracks a save through the provider write and confirming occurrence refresh. */
+export const calendarEventIsUpdating = (eventId: string) =>
+  isCalendarEventUpdating(queryClient, eventId);
 
 type UpdateCallbacks = MutationCallbacks<
   CalendarEventEntity | undefined,

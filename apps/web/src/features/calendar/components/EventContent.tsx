@@ -1,6 +1,6 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
-import { cn } from '@ui';
+import { cn, Spinner } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { calendarEventLocation } from '../utils/macro-call-link';
@@ -15,6 +15,7 @@ interface EventContentProps {
   isSelected: boolean;
   timeFormat: CalendarTimeFormat;
   isNarrow?: boolean;
+  isUpdating?: boolean;
 }
 
 const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
@@ -88,6 +89,7 @@ export function EventContent(props: EventContentProps) {
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
+      aria-busy={props.isUpdating || undefined}
     >
       <div
         class={cn(
@@ -102,6 +104,9 @@ export function EventContent(props: EventContentProps) {
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
+          <Show when={props.isUpdating}>
+            <Spinner size="sm" label="Saving event" class="size-3" />
+          </Show>
           <Show when={everyoneElseDeclined()}>
             <span
               role="img"

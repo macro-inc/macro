@@ -10,11 +10,12 @@ import {
   QueryObserver,
 } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import type { JSX } from 'solid-js';
+import { createMemo, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   calendarUpdateReadRevision,
+  isCalendarEventUpdating,
   reconcileCalendarUpdateRead,
 } from '../event-updates';
 import {
@@ -253,6 +254,73 @@ afterEach(() => {
   dispose = undefined;
   setActiveCalendarSyncController(undefined);
   testQueryClient.clear();
+});
+
+it('keeps only the updating event locked until a complete confirming read', async () => {
+  const response = deferredResult();
+  updateCalendarEventMock.mockReturnValueOnce(response.promise);
+  const { update, busy } = renderHook(() => ({
+    update: useUpdateCalendarEventMutation(),
+    busy: createMemo(() => isCalendarEventUpdating(testQueryClient, 'event-2')),
+  }));
+  expect(busy()).toBe(false);
+  const save = update.mutateAsync({
+    eventId: 'event-2',
+    patch: { title: 'Updated' },
+  });
+  await vi.waitFor(() =>
+    expect(updateCalendarEventMock).toHaveBeenCalledOnce()
+  );
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  expect(isCalendarEventUpdating(testQueryClient, 'event-1')).toBe(false);
+  response.resolve(ok({ id: 'event-2' }));
+  await save;
+  expect(busy()).toBe(true);
+
+  const key = calendarKeys.occurrences('user', viewportA).queryKey;
+  const revision = calendarUpdateReadRevision(testQueryClient);
+  const data = { items: [recurringItem()], syncStatus: 'ready' as const };
+  reconcileCalendarUpdateRead(testQueryClient, key, data, revision, viewportA);
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  data.items[0].event.title = 'Updated';
+  reconcileCalendarUpdateRead(
+    testQueryClient,
+    key,
+    { ...data, partial: true },
+    revision,
+    viewportA
+  );
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  reconcileCalendarUpdateRead(
+    testQueryClient,
+    key,
+    data,
+    revision - 1,
+    viewportA
+  );
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  reconcileCalendarUpdateRead(testQueryClient, key, data, revision, viewportA);
+  // Inactive cached ranges must not keep the event locked forever.
+  expect(busy()).toBe(false);
+});
+
+it('unlocks and rolls back an event after its save fails', async () => {
+  const response = deferredResult();
+  updateCalendarEventMock.mockReturnValueOnce(response.promise);
+  const update = renderHook(() => useUpdateCalendarEventMutation());
+  const save = update.mutateAsync({
+    eventId: 'event-2',
+    patch: { title: 'Updated' },
+  });
+  const settled = Promise.allSettled([save]);
+  await vi.waitFor(() =>
+    expect(updateCalendarEventMock).toHaveBeenCalledOnce()
+  );
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(true);
+  response.resolve(failure());
+  await settled;
+  expect(isCalendarEventUpdating(testQueryClient, 'event-2')).toBe(false);
+  expect(viewportData(viewportA)?.items[1].event.title).toBe('Recurring');
 });
 
 it('answers and deletes an imported point without rewriting its time', async () => {

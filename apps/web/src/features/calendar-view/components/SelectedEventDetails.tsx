@@ -37,7 +37,10 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  calendarEventIsUpdating,
+  useDeleteCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import {
@@ -46,6 +49,7 @@ import {
   Layer,
   type ManagedDialogProps,
   RadioGroup,
+  Spinner,
   useImperativeDialog,
 } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
@@ -192,7 +196,9 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
+  const isUpdating = () => calendarEventIsUpdating(props.event.eventId);
   const openEditor = () => {
+    if (isUpdating()) return;
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
@@ -238,6 +244,9 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               <CloseIcon class="size-5 shrink-0" />
             </MobileDrawer.Close>
             <div class="flex items-center gap-1">
+              <Show when={isUpdating()}>
+                <Spinner size="sm" label="Saving event" />
+              </Show>
               <Show when={!props.event.teamProjection}>
                 <Button
                   aria-label="Copy event"
@@ -277,6 +286,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   class="size-11 bg-ink/6 text-ink-muted"
+                  disabled={isUpdating()}
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon class="size-5 shrink-0" />
@@ -289,6 +299,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   class="size-11 bg-ink/6 text-ink-muted"
+                  disabled={isUpdating()}
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon class="size-5 shrink-0" />
@@ -299,7 +310,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
           <MobileDrawer.ScrollBody>
             <EveryoneElseDeclinedNotice
               event={props.event}
-              canEdit={canEdit()}
+              canEdit={canEdit() && !isUpdating()}
               onDelete={deleteDialog.open}
               onReschedule={openEditor}
             />
@@ -353,14 +364,16 @@ function useDeleteEventDialog(props: {
 }) {
   const dialog = useImperativeDialog(DeleteEventDialog);
 
-  const open = () =>
-    dialog.open({
+  const open = () => {
+    if (calendarEventIsUpdating(props.event().eventId)) return;
+    return dialog.open({
       event: props.event(),
       onDeleted: () => {
         dialog.close();
         props.onDeleted();
       },
     });
+  };
 
   return { open, isOpen: dialog.isOpen };
 }
@@ -396,6 +409,7 @@ function DeleteEventDialog(
     },
   });
   const confirm = () => {
+    if (calendarEventIsUpdating(props.event.eventId)) return;
     const effectiveScope = isRecurring() ? scope() : 'all';
     deleteEvent.mutate({
       eventId: props.event.eventId,
@@ -426,7 +440,9 @@ function DeleteEventDialog(
       open={props.open}
       onOpenChange={props.onOpenChange}
       title={deleteEventLabel(props.event)}
-      pending={deleteEvent.isPending}
+      pending={
+        deleteEvent.isPending || calendarEventIsUpdating(props.event.eventId)
+      }
       onDelete={confirm}
     >
       <Show when={isRecurring()} fallback={<p>{prompt()}</p>}>
@@ -471,7 +487,9 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
+  const isUpdating = () => calendarEventIsUpdating(props.event.eventId);
   const openEditor = () => {
+    if (isUpdating()) return;
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
   };
@@ -543,6 +561,9 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,var(--kb-popper-content-available-width,20rem))] max-w-[min(24rem,var(--kb-popper-content-available-width,24rem))] flex-col overflow-hidden menu-surface">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
+                <Show when={isUpdating()}>
+                  <Spinner size="sm" label="Saving event" />
+                </Show>
                 <Show when={!props.event.teamProjection}>
                   <Button
                     aria-label="Copy event"
@@ -582,6 +603,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     class="text-ink-muted"
+                    disabled={isUpdating()}
                     onClick={openEditor}
                   >
                     <PencilSimpleIcon class="size-4 shrink-0" />
@@ -594,6 +616,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     variant="ghost"
                     size="icon-sm"
                     class="text-ink-muted"
+                    disabled={isUpdating()}
                     onClick={deleteDialog.open}
                   >
                     <TrashIcon class="size-4 shrink-0" />
@@ -614,7 +637,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               <div class="min-h-0 flex-auto overflow-y-auto overscroll-contain">
                 <EveryoneElseDeclinedNotice
                   event={props.event}
-                  canEdit={canEdit()}
+                  canEdit={canEdit() && !isUpdating()}
                   onDelete={deleteDialog.open}
                   onReschedule={openEditor}
                 />

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   fetchMeeting: vi.fn(),
   quickCalls: true,
   quickCallsLoading: false,
+  eventUpdating: false,
 }));
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -37,6 +38,7 @@ vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@queries/calendar/mutations', () => ({
+  calendarEventIsUpdating: () => mocks.eventUpdating,
   useCreateCalendarEventMutation: () => ({
     mutateAsync: mocks.createEvent,
     isPending: false,
@@ -105,6 +107,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.quickCalls = true;
   mocks.quickCallsLoading = false;
+  mocks.eventUpdating = false;
   mocks.createEvent.mockResolvedValue({
     id: 'event-1',
     calendarId: 'calendar-1',
@@ -116,6 +119,28 @@ beforeEach(() => {
   });
   mocks.fetchMeeting.mockResolvedValue({ id: 'meeting-1' });
   mocks.updateMeeting.mockResolvedValue({ id: 'meeting-1' });
+});
+
+it('blocks form saves while the event is saving or reconciling elsewhere', async () => {
+  mocks.eventUpdating = true;
+  await createRoot(async (dispose) => {
+    try {
+      const editor = useEventEditor({
+        event: () => savedEvent,
+        onSaved: vi.fn(),
+        macroCallsEnabled: () => false,
+      });
+      expect(editor.pending()).toBe(true);
+      await editor.save(values);
+      expect(mocks.updateEvent).not.toHaveBeenCalled();
+      mocks.eventUpdating = false;
+      expect(editor.pending()).toBe(false);
+      await editor.save({ ...values, title: 'Updated' });
+      expect(mocks.updateEvent).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('editing event times', () => {
@@ -1203,9 +1228,7 @@ describe('guests of an event the viewer was invited to', () => {
         ...unchanged,
         guestEmails: ['host@example.com', 'dana@example.com'],
       });
-      expect(mocks.failure).toHaveBeenCalledWith('Update failed', {
-        subtext: 'Only the organizer can invite guests.',
-      });
+      expect(mocks.failure).toHaveBeenCalledWith('Update failed');
     } finally {
       dispose();
     }
@@ -1555,18 +1578,21 @@ describe('guest permissions', () => {
 });
 
 describe('optimistic grid saves', () => {
-  it('accepts another move while saving and never reverts the newer move on an older failure', async () => {
+  it('blocks another move of the same event until its save settles', async () => {
     const first = Promise.withResolvers<void>();
-    const second = Promise.withResolvers<void>();
+    let updatingEventId: string | undefined;
+    const blockedRevert = vi.fn();
     const reverted = vi.fn();
     const failed = vi.fn();
     const save = vi.fn((args: UpdateCalendarEventArgs) => {
+      updatingEventId = args.eventId;
       args.onOptimistic?.();
-      return save.mock.calls.length === 1 ? first.promise : second.promise;
+      return first.promise;
     });
     const { change, dispose } = createRoot((dispose) => ({
       change: createEventTimeChange({
         active: () => true,
+        isUpdating: (event) => event.eventId === updatingEventId,
         save,
         onError: failed,
       }),
@@ -1587,15 +1613,23 @@ describe('optimistic grid saves', () => {
       await change.handle({ event: moved, revert: reverted }, event);
       const savingFirst = change.confirm();
       expect(change.pending()).toBe(false);
-      await change.handle({ event: moved, revert: reverted }, event);
-      expect(change.choosing()).toBe(true);
-      const savingSecond = change.confirm();
+      await change.handle({ event: moved, revert: blockedRevert }, event);
+      expect(change.choosing()).toBe(false);
+      expect(blockedRevert).toHaveBeenCalledOnce();
+      expect(save).toHaveBeenCalledOnce();
       first.reject(new Error('Refused'));
       await savingFirst;
       expect(failed).toHaveBeenCalledOnce();
       expect(reverted).not.toHaveBeenCalled();
-      second.resolve();
-      await savingSecond;
+      updatingEventId = undefined;
+      await change.handle({ event: moved, revert: reverted }, event);
+      expect(change.choosing()).toBe(true);
+      // A save elsewhere can begin while the scope dialog is open.
+      updatingEventId = event.eventId;
+      await change.confirm();
+      expect(change.choosing()).toBe(false);
+      expect(reverted).toHaveBeenCalledOnce();
+      expect(save).toHaveBeenCalledOnce();
     } finally {
       dispose();
     }

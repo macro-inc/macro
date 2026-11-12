@@ -23,6 +23,7 @@ interface PendingTimeChange {
 /** Owns the grid preview until scope selection hands it to the shared cache. */
 export function createEventTimeChange(options: {
   active: Accessor<boolean>;
+  isUpdating?: (event: CalendarEvent) => boolean;
   save: (args: UpdateCalendarEventArgs) => Promise<unknown>;
   onError: (error: unknown) => void;
 }) {
@@ -58,6 +59,10 @@ export function createEventTimeChange(options: {
   async function confirm() {
     const change = state.change;
     if (!change || state.phase !== 'choosing') return;
+    if (options.isUpdating?.(change.event)) {
+      cancel();
+      return;
+    }
     if (!options.active()) {
       cancel();
       return;
@@ -78,8 +83,8 @@ export function createEventTimeChange(options: {
       });
       finish(change, 'success');
     } catch (error) {
-      // Once installed, the shared cache rolls back just this write. An old
-      // FullCalendar revert would also undo a newer drag on the same event.
+      // Once installed, the shared cache owns rollback. Reverting the old
+      // FullCalendar snapshot would also discard newer provider data.
       if (!installed && !disposed) change.revert();
       change.span.error('Calendar time change failed');
       finish(change, 'error');
@@ -95,7 +100,8 @@ export function createEventTimeChange(options: {
       !options.active() ||
       state.phase !== 'idle' ||
       !event ||
-      !canEditCalendarEventTime(event)
+      !canEditCalendarEventTime(event) ||
+      options.isUpdating?.(event)
     ) {
       change.revert();
       return;

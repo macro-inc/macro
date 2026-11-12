@@ -508,16 +508,14 @@ Editable recurring events can also be dragged and resized in the grid. The
 Cancel. Scope confirmations for time changes and RSVP share a wider, padded
 layout with wrapping descriptions, no header divider or close icon, and footer
 actions. On phones they use the standard bottom sheet. After Save, cached
-occurrences update immediately and the grid stays
-editable while the provider saves and refreshes, including timed/all-day moves.
-Newly opened ranges reuse known occurrence baselines without applying saved
-moves twice. Previously unseen occurrences keep provider times while the series
-is changing; time or single-occurrence edits need a refresh rather than a guessed
-address. Successive edits to one event save in order; other events remain
-independent. Account changes retire unsent edits, even without an open calendar.
-Failed saves remove only their own optimistic change without undoing newer
-edits. A failed or incomplete refresh retains the projected events and offers
-Retry without blocking the rest of the grid. `This event` changes only the
+occurrences update immediately. The affected event and its series show a spinner
+and cannot be dragged, resized, edited, or deleted until the provider save and a
+confirming occurrence read finish. Other events stay usable. A failed save rolls
+back the optimistic change and unlocks the event. A failed or incomplete refresh
+keeps the event locked and its projected position visible; use Retry to finish
+syncing. Navigating to another date does not bypass the lock. Account changes
+retire unsent edits. Generic save failures show only `Update failed`, without raw
+provider error details. `This event` changes only the
 selected occurrence and leaves
 the cached series master time untouched; Cancel and Escape restore the original
 position before saving.

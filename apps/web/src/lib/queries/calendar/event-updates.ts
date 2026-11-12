@@ -4,6 +4,7 @@ import type { CalendarEvent } from '@service-storage/generated/schemas/calendarE
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { hashKey, type Query, type QueryClient } from '@tanstack/solid-query';
+import { type Accessor, createSignal } from 'solid-js';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 import type { UpdateCalendarEventArgs } from './mutations';
 import type { CalendarOccurrencesData } from './occurrences';
@@ -23,6 +24,7 @@ interface EventUpdates {
   confirmedTime?: EventTime;
   timeBasis?: UpdateCalendarEventArgs['timeBasis'];
   revision: number;
+  awaitingRefresh: boolean;
   tail: Promise<void>;
   isCurrent: () => boolean;
   retired?: boolean;
@@ -40,6 +42,8 @@ export interface CalendarUpdate {
 interface UpdateRegistry {
   revision: number;
   events: Map<string, EventUpdates>;
+  changed: Accessor<undefined>;
+  notify: () => void;
 }
 
 // Query-client ownership prevents a retired account's writes from projecting
@@ -50,7 +54,13 @@ const SUBMISSIONS = new WeakMap<UpdateCalendarEventArgs, CalendarUpdate[]>();
 function registry(client: QueryClient): UpdateRegistry {
   let value = REGISTRIES.get(client);
   if (!value) {
-    const created: UpdateRegistry = { revision: 0, events: new Map() };
+    const [changed, notify] = createSignal(undefined, { equals: false });
+    const created: UpdateRegistry = {
+      revision: 0,
+      events: new Map(),
+      changed,
+      notify,
+    };
     value = created;
     REGISTRIES.set(client, created);
     client.getQueryCache().subscribe((event) => {
@@ -63,10 +73,24 @@ function registry(client: QueryClient): UpdateRegistry {
           state.retired = true;
           created.events.delete(id);
         }
+        created.notify();
       }
     });
   }
   return value;
+}
+
+/** Reactive status shared by every occurrence and editor of one event. */
+export function isCalendarEventUpdating(client: QueryClient, eventId: string) {
+  const owner = registry(client);
+  owner.changed();
+  const state = owner.events.get(eventId);
+  return Boolean(
+    state?.isCurrent() &&
+      !state.retired &&
+      (state.awaitingRefresh ||
+        state.entries.some((entry) => entry.status === 'pending'))
+  );
 }
 
 function copyPatch<
@@ -351,6 +375,7 @@ export function beginCalendarUpdate(
       viewports: new Map(),
       revision: 0,
       tail: Promise.resolve(),
+      awaitingRefresh: false,
     };
     owner.events.set(args.eventId, state);
   }
@@ -398,6 +423,7 @@ export function beginCalendarUpdate(
   };
   state.entries.push(entry);
   state.revision = ++owner.revision;
+  owner.notify();
   const submissions = SUBMISSIONS.get(args) ?? [];
   submissions.push(entry);
   SUBMISSIONS.set(args, submissions);
@@ -478,9 +504,11 @@ export function settleCalendarUpdate(
   if (saved && entry.args.scope !== 'this_event' && entry.args.patch.time) {
     entry.state.confirmedTime = entry.args.patch.time;
   }
+  if (saved) entry.state.awaitingRefresh = entry.state.viewports.size > 0;
   entry.state.revision = ++registry(client).revision;
   if (!entry.state.retired && entry.state.isCurrent())
     publish(client, entry.state);
+  registry(client).notify();
   entry.release();
 }
 
@@ -628,6 +656,7 @@ export function reconcileCalendarUpdateRead(
     if (!state.isCurrent()) {
       state.retired = true;
       owner.events.delete(eventId);
+      owner.notify();
       continue;
     }
     const pending = state.entries.some((entry) => entry.status === 'pending');
@@ -646,6 +675,8 @@ export function reconcileCalendarUpdateRead(
       revision >= state.revision &&
       readConfirmsUpdates(data, state, snapshot, range)
     ) {
+      state.awaitingRefresh = false;
+      owner.notify();
       state.viewports.delete(key);
       if (state.viewports.size === 0) owner.events.delete(eventId);
       continue;

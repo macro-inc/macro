@@ -2,6 +2,7 @@ import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
+  calendarEventIsUpdating,
   isGuestEditRefused,
   useCreateCalendarEventMutation,
   useInviteCalendarEventGuestsMutation,
@@ -258,6 +259,12 @@ export function useEventEditor(props: UseEventEditorProps) {
 
   const createMeeting = useCreateMeetingMutation();
   const [pending, setPending] = createSignal(false);
+  const isPending = () => {
+    const event = props.event();
+    return (
+      pending() || Boolean(event && calendarEventIsUpdating(event.eventId))
+    );
+  };
   const [saveError, setSaveError] = createSignal<string>();
   // If attaching the link to an existing event fails, retry the same meeting.
   const [createdMeeting, setCreatedMeeting] = createSignal<{
@@ -311,7 +318,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     values: EventEditorSubmitValues,
     scope?: CalendarUpdateScope
   ) => {
-    if (pending()) return;
+    if (isPending()) return;
     setPending(true);
     setSaveError(undefined);
 
@@ -497,9 +504,8 @@ export function useEventEditor(props: UseEventEditorProps) {
         setDetailEditsRefused(true);
         toast.failure(GUEST_EDITS_RESTRICTED);
       } else {
-        toast.failure(event ? 'Update failed' : 'Failed to create event', {
-          subtext,
-        });
+        if (event) toast.failure('Update failed');
+        else toast.failure('Failed to create event', { subtext });
       }
     } finally {
       setPending(false);
@@ -543,7 +549,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     calendarOptions,
     guestOptions,
     showRecurringEditNotice,
-    pending,
+    pending: isPending,
     saveError,
     save,
   };

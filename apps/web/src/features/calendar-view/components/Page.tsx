@@ -38,6 +38,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
+  calendarEventIsUpdating,
   isGuestEditRefused,
   useUpdateCalendarEventMutation,
 } from '@queries/calendar/mutations';
@@ -263,15 +264,14 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const timeChange = createEventTimeChange({
     active: isActive,
+    isUpdating: (event) => calendarEventIsUpdating(event.eventId),
     save: (args) => updateEventTime.mutateAsync(args),
     onError: (error) => {
       if (isGuestEditRefused(error)) {
         toast.failure(GUEST_EDITS_RESTRICTED);
         return;
       }
-      toast.failure('Update failed', {
-        subtext: error instanceof Error ? error.message : undefined,
-      });
+      toast.failure('Update failed');
     },
   });
   const handleSelect = (selection: DateSelectArg) => {
@@ -336,6 +336,7 @@ export function Page(props: {
         initialDate={props.initialDate}
         events={visibleEvents()}
         eventsById={eventsById()}
+        isEventUpdating={(event) => calendarEventIsUpdating(event.eventId)}
         settings={{
           initialView,
           showWeekends: calendarView.displaySettings.showWeekends,
