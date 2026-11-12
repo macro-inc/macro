@@ -4,6 +4,7 @@
  * sit for seconds on a loaded disk, and a call's only JS thread also feeds
  * the agent's voice.
  */
+import { Worker } from 'node:worker_threads';
 import {
   type CallDisk,
   type DiskLimits,
@@ -47,7 +48,8 @@ export type DiskWorker = CallDisk & {
 const workerFile = './disk-worker.ts';
 
 export const diskWorker = (limits: DiskLimits = diskLimits): DiskWorker => {
-  const worker = new Worker(new URL(workerFile, import.meta.url).href);
+  // node:worker_threads's Worker, not the web one: sharp's WebAssembly build overwrites the global.
+  const worker = new Worker(new URL(workerFile, import.meta.url));
   const state = new Int32Array(
     new SharedArrayBuffer(slots * Int32Array.BYTES_PER_ELEMENT)
   );
@@ -55,9 +57,9 @@ export const diskWorker = (limits: DiskLimits = diskLimits): DiskWorker => {
   let dead = false;
   // The thread never keeps the process alive: the exit flush is what waits for it.
   worker.unref();
-  worker.addEventListener('error', (event) => {
+  worker.on('error', (error) => {
     dead = true;
-    console.error(`disk worker died: ${event.message}`);
+    console.error(`disk worker died: ${error.message}`);
   });
   const send = (job: Job, transfer: ArrayBuffer[] = []) => {
     if (dead) return;
