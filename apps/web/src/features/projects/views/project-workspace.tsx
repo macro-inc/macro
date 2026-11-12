@@ -17,7 +17,6 @@ import {
   type ProjectDetail,
   type ProjectSection,
 } from '../core/project';
-import { AddProjectTasks } from './add-project-tasks';
 import {
   ProjectTasksList,
   type ProjectTasksListProps,
@@ -168,14 +167,9 @@ export function ProjectWorkspace(props: {
             <Match when={props.section === 'tasks'}>
               <ProjectTasksList
                 projectId={props.project.id}
-                projectName={props.project.name}
+                project={props.project}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
-                addTasksAction={
-                  <Show when={canEdit()}>
-                    <AddProjectTasks project={props.project} />
-                  </Show>
-                }
               />
             </Match>
           </Switch>
