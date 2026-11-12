@@ -302,6 +302,18 @@ impl ConfigForm {
         self.doc["herdr"].or_insert(toml_edit::table())["focus"] = value(!config.herdr.focus);
     }
 
+    /// Point the daemon at a deployment's agent-harness, storage, and web URLs.
+    pub fn set_deployment_urls(&mut self, api_url: &str, storage_url: &str, web_url: &str) {
+        self.set_string("macro", "api_url", api_url);
+        self.set_string("macro", "storage_url", storage_url);
+        self.set_string("macro", "web_url", web_url);
+    }
+
+    /// Set the computer-reachable egress base from enrollment.
+    pub fn set_egress_url(&mut self, url: &str) {
+        self.set_string("macro", "egress_url", url);
+    }
+
     /// Persist the credential minted by pairing in this config document.
     pub fn persist_credentials(
         &mut self,
@@ -313,6 +325,12 @@ impl ConfigForm {
             &credentials.harness_id.to_string(),
         );
         self.set_string("credentials", "token", &credentials.token);
+        match credentials.pairing_id {
+            Some(pairing_id) => {
+                self.set_string("credentials", "pairing_id", &pairing_id.to_string())
+            }
+            None => self.remove("credentials", "pairing_id"),
+        }
         self.save()
     }
 

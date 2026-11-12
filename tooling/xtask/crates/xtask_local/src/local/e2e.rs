@@ -9,6 +9,7 @@ use anyhow::{Context, Result, ensure};
 use clap::{Args, ValueEnum};
 
 use super::cli::{BuildArgs, EnvArgs, InstanceArgs, RunArgs, TracesBackend};
+use super::computers::ComputersArgs;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, proxy, repo_root, stack};
 
@@ -118,6 +119,11 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             },
             env: EnvArgs::default(),
             build: BuildArgs::default(),
+            // No computers: E2E suites do not exercise them.
+            computers: ComputersArgs {
+                no_computers: true,
+                ..ComputersArgs::default()
+            },
             no_frontend: true,
             // E2E stacks are ephemeral and throughput-sensitive; no collector,
             // and Playwright brings its own browsers.
