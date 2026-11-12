@@ -1,5 +1,7 @@
 # Document session WASM
 
+- Append listener metadata as the final editor effect (kind 6/code 11): keys are full command rows, style is JSON priority bits, and flag records an original packet. Refresh only its private tail from current listener authority inside takeOutput, preserving all preceding effects/IO/telemetry, failure ordinals and observation exposure.
+
 ## What it is
 
 The production cdylib for portable editor and generic document sessions.
@@ -59,6 +61,8 @@ Query kind 8 returns the selection's durable Loro cursors in `nodes` and its exa
 ## Boundaries
 
 Keep clipboardDom additive to headless clipboard: export plain, internal JSON and themed DOM in that order; the owner browser serializes the DOM tree while Rust retains selection and registry policy.
+
+- Install block Up/Down through the fixed LOW/Before role once per direction; bind one-shot plans to the actual callback, registry epoch, generation and mutation epoch. Consume plans through complete or cancel before validation exits; host keys identify DOM measurements only, never mutation targets. Retire/cancel on teardown or measurement failure without replacing the original thrown cause.
 
 - Keep application query kind 9 generation-fenced while forwarding to the surface controller query; ordinary query receivers remain unavailable inside native dispatcher callbacks.
 - Keep search wire-output tests aligned with the full Source controller registration order, including tags between mentions and snippets; preserve every callback and its literal snapshot assertions.
@@ -311,3 +315,5 @@ Reserve query kind 10 for the `dev-probes` stored comparison text reply with key
 Expose inputObserved/readInputCommitReceipt and primitive receipt classes only in the ordinary non-compatibility profile. Validate canonical decimal correlation IDs before slot replacement; preserve highest ID across ordinary invalidation and leave interrupted calls InFlight/unavailable. Never derive main publication from flags, Diff, versions or flattened commit carriers; receipts grant no attachment, persistence or editing authority.
 
 After matched ordinary and compatibility bindings are built, run `node crates/client/document_session_wasm/tests/input-commit-bindings.mjs <typescript.js> <ordinary-manifest.json> <compat-manifest.json>` to rehash both complete five-file packages and compare actual JS/DTS exports with the cfg-selected source policy. Source AST controls cover only the declared ordinary default/preview and compat-web profiles; they do not replace actual generated binding checks.
+
+Enable listener-metadata transport only through the explicit qualified owner binding after legacy output drains; raw owner queries and registrations retain default output behavior, and actual view retirement closes the protocol permanently.

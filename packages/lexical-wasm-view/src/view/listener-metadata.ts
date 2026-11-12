@@ -10,10 +10,14 @@ interface Snapshot {
   readonly only: ReadonlyMap<number, readonly string[]>;
 }
 
-function snapshot(table: IListenerTableMsg): Snapshot | undefined {
+type ParsedSnapshot = Omit<Snapshot, 'generation'> & {
+  readonly generation: bigint | undefined;
+};
+function snapshot(table: IListenerTableMsg): ParsedSnapshot | undefined {
   const rows = new Map<string, number>();
   const only = new Map<number, readonly string[]>();
   let generation: bigint | undefined;
+  let sawGeneration = false;
   for (const row of table.rows) {
     if (rows.has(row.command))
       throw new Error('Duplicate listener metadata row');
@@ -28,14 +32,17 @@ function snapshot(table: IListenerTableMsg): Snapshot | undefined {
       if (
         !row.command.startsWith(GENERATION) ||
         row.priority !== 0 ||
-        generation !== undefined
+        sawGeneration
       )
         return undefined;
+      sawGeneration = true;
       const value = row.command.slice(GENERATION.length);
-      if (!/^[1-9][0-9]{0,19}$/.test(value)) return undefined;
-      const parsed = BigInt(value);
-      if (parsed > 0xffffffffffffffffn) return undefined;
-      generation = parsed;
+      if (value !== 'unavailable') {
+        if (!/^[1-9][0-9]{0,19}$/.test(value)) return undefined;
+        const parsed = BigInt(value);
+        if (parsed > 0xffffffffffffffffn) return undefined;
+        generation = parsed;
+      }
     } else if (row.command.startsWith('KeyDownOnly')) {
       if (!row.command.startsWith(ONLY) || row.priority === 0) return undefined;
       const keys: unknown = JSON.parse(row.command.slice(ONLY.length));
@@ -54,7 +61,7 @@ function snapshot(table: IListenerTableMsg): Snapshot | undefined {
       return undefined;
     }
   }
-  if (generation === undefined) return undefined;
+  if (!sawGeneration) return undefined;
   const generic = rows.get('KeyDown') ?? 0;
   for (const priority of only.keys())
     if (!(generic & (1 << priority))) return undefined;
@@ -83,24 +90,31 @@ export class ListenerMetadataCache {
     table: IListenerTableMsg,
     _origin: 'cold' | 'output',
     token: bigint
-  ): void {
+  ): boolean {
     if (this.closed || !this.bound() || token !== this.readToken()) {
       this.invalidate();
-      return;
+      return false;
     }
-    let next: Snapshot | undefined;
+    let parsed: ParsedSnapshot | undefined;
     try {
-      next = snapshot(table);
+      parsed = snapshot(table);
     } catch (error) {
       this.invalidate();
       throw error;
     }
-    if (!next) {
+    if (!parsed) {
       this.invalidate();
-      return;
+      return false;
     }
+    // Valid v1 transport with exhausted generation cannot authorize Only, but
+    // still carries its original-packet fact without inventing a generation.
+    if (parsed.generation === undefined) {
+      this.invalidate();
+      return true;
+    }
+    const next: Snapshot = { ...parsed, generation: parsed.generation };
     const previous = this.current;
-    if (previous && next.generation < previous.generation) return;
+    if (previous && next.generation < previous.generation) return false;
     if (
       previous &&
       next.generation === previous.generation &&
@@ -112,16 +126,17 @@ export class ListenerMetadataCache {
     }
     if (this.faultAt !== undefined && next.generation <= this.faultAt) {
       this.invalidate();
-      return;
+      return false;
     }
     // B snapshots the table at actual transfer, so a same-generation output can
     // restore freshness after a no-op root operation without reusing a stale cut.
     if (token !== this.readToken() || !this.bound() || this.closed) {
       this.invalidate();
-      return;
+      return false;
     }
     this.current = next;
     this.token = token;
+    return true;
   }
 
   private fresh(): boolean {

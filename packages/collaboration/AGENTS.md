@@ -1,5 +1,7 @@
 # Collaboration
 
+- Treat metadataReadIdle as a pure scheduling fact only; registration metadata refresh uses the existing afterDrain hook and never invents flags, consumes output directly or grants admission.
+
 ## What it is
 
 Shared collaborative document models, transport and portable session host adapters.

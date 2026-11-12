@@ -86,6 +86,13 @@ impl EditorSession {
         self.reject_compat_view_commands().map_err(js)?;
         Ok(self.machine.view_commands().map_err(js)?.owner())
     }
+    /// Select listener-metadata transport for one actual ordinary Port binding.
+    /// Does not admit editing, commit, initialize a view, or transfer pending output.
+    #[wasm_bindgen(js_name=enableViewListenerMetadata)]
+    pub fn enable_view_listener_metadata(&mut self, owner: u64) -> Result<(), JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        self.machine.enable_listener_metadata(owner).map_err(js)
+    }
     /// Register Enter at the named native priority, after existing equal listeners.
     #[wasm_bindgen(js_name=registerViewEnter)]
     pub fn register_view_enter(&mut self, callback: u64, priority: u8) -> Result<u64, JsError> {
@@ -146,6 +153,22 @@ impl EditorSession {
             .register_key(session, KeyCommand::Escape, callback, priority)
             .map_err(|error| js(error.into()))
     }
+    /// Install the single block-navigation callback at fixed LOW/Before ordering.
+    #[wasm_bindgen(js_name=registerViewBlockNavigation)]
+    pub fn register_view_block_navigation(
+        &mut self,
+        down: bool,
+        callback: u64,
+    ) -> Result<u64, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        let registry = self.machine.view_commands().map_err(js)?;
+        let machine::Session::Editor(session) = &mut self.machine.session else {
+            return Err(js(BoundaryError::Invalid("editor required")));
+        };
+        registry
+            .register_block_navigation(session, down, callback)
+            .map_err(|error| js(error.into()))
+    }
     /// Remove a stable Escape registration; repeated cleanup is harmless.
     #[wasm_bindgen(js_name=unregisterViewEscape)]
     pub fn unregister_view_escape(&mut self, handle: u64) -> Result<(), JsError> {
@@ -185,7 +208,7 @@ impl EditorSession {
     /// Queued output and durable session state remain owned by the executor.
     #[wasm_bindgen(js_name=retireViewObservation)]
     pub fn retire_view_observation(&mut self) {
-        self.machine.decorator_observer.retire();
+        self.machine.retire_view_observation();
     }
     /// Earliest monotonic deadline, or -1.
     #[wasm_bindgen(js_name=wakeAt)]
@@ -754,19 +777,11 @@ impl EditorSession {
             .collect();
         bytes(&wire::TypeTableMsg { rows }).map_err(js)
     }
-    /// Command listener priorities read once at open.
+    /// Receipt-preserving metadata snapshot; root registrations may refresh it.
     #[wasm_bindgen(js_name=listenerTable)]
     pub fn listener_table(&self) -> Result<Vec<u8>, JsError> {
-        let rows = self
-            .surface()
-            .listener_table()
-            .iter()
-            .map(|(command, priority)| wire::ListenerRowMsg {
-                command: format!("{command:?}"),
-                priority: u32::from(priority.bits()),
-            })
-            .collect();
-        bytes(&wire::ListenerTableMsg { rows }).map_err(js)
+        let table = output::listener_table(self.surface().listener_table()).map_err(js)?;
+        bytes(&table).map_err(js)
     }
 }
 impl EditorSession {

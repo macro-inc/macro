@@ -379,3 +379,5 @@ mod control;
 mod retirement;
 
 mod escape;
+
+mod block_navigation;

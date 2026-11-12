@@ -117,6 +117,8 @@ impl Machine {
         Ok(Self {
             session,
             output: vec![],
+            listener_metadata: None,
+            listener_metadata_protocol: ListenerMetadataProtocol::Disabled,
             decorator_observer: Default::default(),
             wake: None,
             wall_origin: wall - mono,

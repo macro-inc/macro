@@ -7,6 +7,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex, Weak,
 };
+mod block_navigation;
 mod exports;
 mod failure;
 pub use failure::ViewCommandFailure;
@@ -69,7 +70,13 @@ struct RegistryState {
     issued: Vec<Weak<std::sync::atomic::AtomicBool>>,
     fault: Option<&'static str>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Role {
+    Ordinary,
+    BlockNavigation,
+}
 struct Entry {
+    role: Role,
     command: KeyCommand,
     handle: Id,
     callback: NonZeroU64,
@@ -78,12 +85,15 @@ struct Entry {
     actual: CommandListenerId,
 }
 struct Listener {
+    role: Role,
+    handle: Id,
     command: KeyCommand,
     registry: Weak<Registry>,
     callback: NonZeroU64,
 }
 struct Invocation {
     retire_view: Cell<bool>,
+    mutation_epoch: Cell<u64>,
     allow_callbacks: bool,
     registry: Arc<Registry>,
     id: Id,
@@ -114,7 +124,16 @@ impl CommandListener for Listener {
             if !Arc::ptr_eq(&registry, &invocation.registry) {
                 return Err(Error::Invariant("foreign view command invocation"));
             }
-            let scope = Scope::new(tx, invocation, Id::issue()?);
+            let mut scope = Scope::new(tx, invocation, Id::issue()?);
+            if self.role == Role::BlockNavigation {
+                let shift =
+                    matches!(command, Command::Key { event: Some(event), .. } if event.shift);
+                scope.navigation = Some(block_navigation::Binding {
+                    handle: self.handle,
+                    command: self.command,
+                    shift,
+                });
+            }
             let call = Call {
                 owner: registry.owner,
                 callback: self.callback,

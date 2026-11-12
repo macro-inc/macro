@@ -1,9 +1,13 @@
 use super::*;
-fn registration(command: KeyCommand, priority: CommandPriority) -> CommandRegistration {
+fn registration(command: KeyCommand, priority: CommandPriority, role: Role) -> CommandRegistration {
     CommandRegistration {
         command: CommandKind::Key(command),
         priority,
-        placement: Placement::After,
+        placement: if role == Role::BlockNavigation {
+            Placement::Before
+        } else {
+            Placement::After
+        },
     }
 }
 pub(super) fn priority(value: u8) -> Result<CommandPriority, Error> {
@@ -62,7 +66,7 @@ impl Registry {
         for entry in &mut state.entries {
             if !session.has_command_listener(&entry.actual) {
                 entry.actual = session.register_command_listener(
-                    registration(entry.command, entry.priority),
+                    registration(entry.command, entry.priority, entry.role),
                     entry.listener.clone(),
                 );
             }
@@ -122,22 +126,52 @@ impl Registry {
         priority: CommandPriority,
         register: impl FnOnce(CommandRegistration, Arc<dyn CommandListener>) -> CommandListenerId,
     ) -> Result<u64, Error> {
+        self.insert_role(command, callback, priority, Role::Ordinary, register)
+    }
+    pub(super) fn insert_role(
+        self: &Arc<Self>,
+        command: KeyCommand,
+        callback: u64,
+        priority: CommandPriority,
+        role: Role,
+        register: impl FnOnce(CommandRegistration, Arc<dyn CommandListener>) -> CommandListenerId,
+    ) -> Result<u64, Error> {
+        if role == Role::BlockNavigation
+            && (!matches!(command, KeyCommand::ArrowUp | KeyCommand::ArrowDown)
+                || priority != CommandPriority::Low)
+        {
+            return Err(Error::Invariant("invalid block navigation role"));
+        }
         let callback =
             NonZeroU64::new(callback).ok_or(Error::Invariant("view callback identity zero"))?;
         let mut state = self.lock()?;
         if let Some(entry) = state.entries.iter().find(|entry| {
-            entry.command == command && entry.callback == callback && entry.priority == priority
+            entry.role == role
+                && entry.command == command
+                && entry.callback == callback
+                && entry.priority == priority
         }) {
             return Ok(entry.handle.raw());
         }
+        if role == Role::BlockNavigation
+            && state
+                .entries
+                .iter()
+                .any(|entry| entry.role == role && entry.command == command)
+        {
+            return Err(Error::Invariant("block navigation role already installed"));
+        }
         let handle = Id::issue()?;
         let listener: Arc<dyn CommandListener> = Arc::new(Listener {
+            role,
+            handle,
             command,
             registry: Arc::downgrade(self),
             callback,
         });
-        let actual = register(registration(command, priority), listener.clone());
+        let actual = register(registration(command, priority, role), listener.clone());
         state.entries.push(Entry {
+            role,
             command,
             handle,
             callback,
@@ -213,6 +247,7 @@ impl Registry {
         };
         let invocation = Invocation {
             retire_view: Cell::new(false),
+            mutation_epoch: Cell::new(0),
             registry: self.clone(),
             id,
             epoch,

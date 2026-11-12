@@ -1061,7 +1061,7 @@ export class EditorView implements ViewSink {
         listener
       );
     }
-    if ((this.rustListeners.get(command.name) ?? 0) & (1 << priority))
+    if (this.listenerLevels(command.name) & (1 << priority))
       throw new Error(
         'View command priority ties a Rust listener: ' + command.name
       );
@@ -1082,12 +1082,26 @@ export class EditorView implements ViewSink {
       if (index !== -1) entries.splice(index, 1);
     };
   }
+  needsNativeKeyDown(key: string): boolean {
+    return this.port.needsKeyDown?.(key) ?? this.rustListeners.has('KeyDown');
+  }
+  listenerLevels(command: string, key?: string): number {
+    return (
+      this.port.listenerLevels?.(command, key) ??
+      this.rustListeners.get(command) ??
+      0
+    );
+  }
   runViewCommand(
     name: string,
     payload: unknown,
     phase: 'before' | 'after'
   ): boolean {
-    const levels = this.rustListeners.get(name) ?? 0;
+    const key =
+      name === 'KeyDown' && payload instanceof KeyboardEvent
+        ? payload.key
+        : undefined;
+    const levels = this.listenerLevels(name, key);
     const highest = levels ? Math.floor(Math.log2(levels)) : -1;
     for (const entry of this.viewCommands.get(name) ?? []) {
       if (
@@ -1207,6 +1221,7 @@ export class EditorView implements ViewSink {
     this.decorators.clear();
     cleanup(() => this.port.nativeEnter?.dispose());
     cleanup(() => this.port.nativeEscape?.dispose());
+    cleanup(() => this.port.nativeBlockNavigation?.dispose());
     for (const table of this.tables.values()) cleanup(() => table.dispose());
     this.tables.clear();
     roots.delete(this.root);

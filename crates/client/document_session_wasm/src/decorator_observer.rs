@@ -7,6 +7,8 @@ pub(crate) struct DecoratorObserver {
     pending: Option<PreparedObservation>,
     retired: bool,
     initializing: bool,
+    #[cfg(test)]
+    fail_expose: bool,
 }
 pub(crate) struct PreparedObservation {
     observation: DecoratorObservation,
@@ -39,6 +41,12 @@ impl DecoratorObserver {
         result
     }
     pub(crate) fn expose(&mut self) -> Result<(), BoundaryError> {
+        #[cfg(test)]
+        if std::mem::take(&mut self.fail_expose) {
+            return Err(BoundaryError::Invalid(
+                "injected observation exposure failure",
+            ));
+        }
         if let Some(observation) = &self.pending {
             self.view.validate(&observation.observation)?;
         }
@@ -54,6 +62,10 @@ impl DecoratorObserver {
         self.pending = None;
         self.view.retire();
         self.retired = true;
+    }
+    #[cfg(test)]
+    pub(crate) fn inject_expose_failure(&mut self) {
+        self.fail_expose = true;
     }
 }
 #[cfg(test)]

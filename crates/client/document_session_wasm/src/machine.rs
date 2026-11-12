@@ -10,11 +10,20 @@ pub(crate) enum Session {
     Editor(Box<DocumentSession<EditorSurface>>),
     Doc(Box<DocumentSession<GenericSurface>>),
 }
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum ListenerMetadataProtocol {
+    #[default]
+    Disabled,
+    Enabled,
+    Closed,
+}
 pub(crate) struct Machine {
     pub(crate) session: Session,
     pub(crate) output: Vec<u8>,
     pub(crate) pending_checklist_output:
         Vec<macro_document_model::plugins_group_b::checklist_updates::PlanUpdates>,
+    listener_metadata: Option<output::ListenerMetadataTail>,
+    listener_metadata_protocol: ListenerMetadataProtocol,
     pub(crate) decorator_observer: crate::decorator_observer::DecoratorObserver,
     pub(crate) wake: Option<Millis>,
     wall_origin: f64,
@@ -29,7 +38,23 @@ pub(crate) struct Machine {
 }
 impl Machine {
     pub(crate) fn take_output(&mut self) -> Result<Vec<u8>, BoundaryError> {
+        // Root/host callbacks may have changed membership since input encoded this
+        // packet. Snapshot CURRENT authority at the actual transfer boundary.
+        let replacement = if let Some(tail) = &self.listener_metadata {
+            let Session::Editor(session) = &self.session else {
+                return Err(BoundaryError::Invalid("editor listener metadata"));
+            };
+            Some(tail.replacement(session.surface().listener_table(), &self.output)?)
+        } else {
+            None
+        };
+        // Preserve the existing observer/lease failure boundary and destructive take.
         self.decorator_observer.expose()?;
+        if let Some(replacement) = replacement {
+            if let Some(tail) = self.listener_metadata.take() {
+                tail.replace(replacement, &mut self.output);
+            }
+        }
         let receipts = std::mem::take(&mut self.pending_checklist_output);
         match &mut self.session {
             Session::Editor(session) => session.acknowledge_application_output(&receipts),
@@ -64,6 +89,10 @@ impl Machine {
         self.decorator_observer.with_initialization(|observer| {
             output::encode_observed(&out, false, &mut bytes, None, None, observer)
         })?;
+        // initializeView itself transfers this local packet, with no host gap.
+        if self.listener_metadata_protocol == ListenerMetadataProtocol::Enabled {
+            output::append_listener_table(session.surface().listener_table(), &mut bytes)?;
+        }
         self.decorator_observer.expose()?;
         if let Session::Editor(session) = &mut self.session {
             session.expose_checklist_reset(reset);
@@ -162,6 +191,8 @@ impl Machine {
         Ok(Self {
             session,
             output: vec![],
+            listener_metadata: None,
+            listener_metadata_protocol: ListenerMetadataProtocol::Disabled,
             decorator_observer: Default::default(),
             pending_checklist_output: vec![],
             wake: None,
@@ -175,6 +206,32 @@ impl Machine {
             #[cfg(not(feature = "compatibility"))]
             input_commits: Default::default(),
         })
+    }
+    /// Explicit transport opt-in, never inferred from a registry/query/registration.
+    pub(crate) fn enable_listener_metadata(&mut self, owner: u64) -> Result<(), BoundaryError> {
+        let registry = self.view_commands.as_ref().ok_or(BoundaryError::Invalid(
+            "listener metadata requires a bound owner",
+        ))?;
+        registry.ensure_local()?;
+        if registry.owner() != owner {
+            return Err(BoundaryError::Invalid("listener metadata owner mismatch"));
+        }
+        if self.listener_metadata_protocol == ListenerMetadataProtocol::Closed {
+            return Err(BoundaryError::Invalid("listener metadata transport closed"));
+        }
+        if self.listener_metadata_protocol == ListenerMetadataProtocol::Disabled {
+            if !self.output.is_empty() {
+                return Err(BoundaryError::Invalid(
+                    "listener metadata requires drained legacy output",
+                ));
+            }
+            self.listener_metadata_protocol = ListenerMetadataProtocol::Enabled;
+        }
+        Ok(())
+    }
+    pub(crate) fn retire_view_observation(&mut self) {
+        self.decorator_observer.retire();
+        self.listener_metadata_protocol = ListenerMetadataProtocol::Closed;
     }
     pub(crate) fn generation(&self) -> u32 {
         match &self.session {
@@ -361,7 +418,7 @@ impl Machine {
             .as_ref()
             .is_some_and(|registry| registry.take_view_retirement())
         {
-            self.decorator_observer.retire();
+            self.retire_view_observation();
         }
         let mut messages = std::mem::take(&mut self.initial_telemetry);
         messages.extend(capture.finish());
@@ -497,7 +554,21 @@ impl Machine {
             &mut self.decorator_observer,
         )?;
         self.pending_checklist_output = out.checklist_deliveries();
+        // encode_observed only replaces/clears buffer on success. Preserve the
+        // old tail on every earlier failure, then retire it with the old packet.
+        self.listener_metadata = None;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
+        // This actual transition may change membership without a model commit.
+        // Metadata is last so transfer refresh can replace ONLY its private tail.
+        if let (ListenerMetadataProtocol::Enabled, Some(surface)) =
+            (self.listener_metadata_protocol, surface)
+        {
+            self.listener_metadata = Some(output::append_listener_table(
+                surface.listener_table(),
+                &mut self.output,
+            )?);
+            flags |= 1; // Existing View flag for a real metadata effect, not a commit.
+        }
         if let Some(registry) = &self.view_commands {
             registry.bind_output(&out.view);
         }
@@ -545,6 +616,7 @@ impl Machine {
             &mut self.decorator_observer,
         )?;
         self.pending_checklist_output.clear();
+        self.listener_metadata = None;
         Ok(flags)
     }
     pub(crate) fn editor(&mut self, input: Input, mono: f64) -> Result<u32, BoundaryError> {
@@ -633,3 +705,6 @@ fn cursor(data: &[u8]) -> Result<lexical_loro::NodeCursor, BoundaryError> {
 #[cfg(feature = "compatibility")]
 #[path = "compatibility/machine.rs"]
 mod compatibility;
+#[cfg(test)]
+#[path = "machine/listener_metadata_test.rs"]
+mod listener_metadata_test;

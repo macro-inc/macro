@@ -251,7 +251,6 @@ export function registerEvents(view: EditorView): {
     );
   }
 
-  const rustListeners = view.port.listeners();
   function listen<K extends keyof HTMLElementEventMap>(
     name: K,
     listener: (event: HTMLElementEventMap[K]) => void
@@ -518,14 +517,17 @@ export function registerEvents(view: EditorView): {
     }
     if (
       !routed &&
-      !rustListeners.has('KeyDown') &&
+      !view.needsNativeKeyDown(event.key) &&
       (!keyCommand ||
-        (!rustListeners.has(keyCommand) &&
+        (view.listenerLevels(keyCommand) === 0 &&
           !(
             (keyCommand === 'Key(Enter)' &&
               view.port.nativeEnter?.hasListeners()) ||
             (keyCommand === 'Key(Escape)' &&
-              view.port.nativeEscape?.hasListeners())
+              view.port.nativeEscape?.hasListeners()) ||
+            ((keyCommand === 'Key(ArrowUp)' ||
+              keyCommand === 'Key(ArrowDown)') &&
+              view.port.nativeBlockNavigation?.hasListeners())
           ))) &&
       (keepRange ||
         sameSelection(selection, published) ||

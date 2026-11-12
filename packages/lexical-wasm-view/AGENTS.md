@@ -4,6 +4,8 @@ For opt-in main-commit observation, claim one pure-JS observation per programmat
 
 Share canonical nonzero-u64 correlation numbering across the installed receiver guard and every Port for the same actual session; record valid guarded attempts after active/cleaning admission, mint only after materialization and clock callbacks, and never wrap exhausted IDs. Reject nonprimitive IDs before native delegation or completion-token advancement; retain native validation for invalid primitive strings.
 
+- Refresh listener eligibility only at qualified cold-registration or current-table output transfers; compare the existing receiver token before accepting and using Only, admit conservatively when unknown, and retain verified unfiltered bits for priority routing. Strip metadata-only packets before renderer notifications while preserving genuine IO-only and mixed outputs.
+
 ## What it is
 
 Production browser rendering and input over document_session_wasm. The dev shim
@@ -21,6 +23,8 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Reuse ListItem NodeView updates for dirty ancestors after descendant-only changes; keep mutation callbacks tied to actual Diff mutations so the checkbox guard preserves Source ordering.
 
+- Use the native fixed vertical role for application block stops, with pending native target authority and fresh DOM rectangles; cancel an issued plan after failed measurement or teardown, preserving the original cause. Keep Up/Down in the actual synchronous keyboard admission and dispose both registrations with the view.
+
 - Match ListItemNode's parent-check/first-child-list checkbox predicate; nested wrappers have no role/tabIndex/aria-checked, while nested theme classes depend on any list child. Verify literal item attributes against actual Source with `browser-test/list-item-wrapper.playwright.config.ts`.
 
 - Set the decorator marker before contentEditable, preserving Source DOM attribute order.
@@ -37,8 +41,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Attach one synchronous view before subscribing to authorization; never buffer pre-mount packets. Stop presentation delivery when its actual view retires, retain native I/O draining, and retire observation once before the next output transfer or terminal close; a teardown inside a native callback only schedules retirement until that receiver returns.
 - Admit renderer-derived normalization through inputIfSessionEdit so current native access is checked inside the queued turn; local editability and initial configuration never grant authority. Guard this ordinary entry before queue admission, including ports without an Enter binding.
 - Capture comment anchors with `SessionPort.commentSelection` (query kind 8 cursors plus exact model text) and publish or remove marks only through `SessionPort.comment`; never derive the expected text from the DOM.
-- A successful flags=0 TextFromView may acknowledge exactly the submitted edit
-  through that applier. Authoritative Rust corrections take precedence.
+- Preserve raw flags=0 view acknowledgements. Qualified Port bindings explicitly enable listener metadata; acknowledge a metadata-only View echo only with the exact one-use call/transfer ticket, and keep authoritative Rust corrections ahead of local acknowledgement. Never infer opt-in from registry creation.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
 - Read managed terminators through managedLineBreak and the dynamic slot.before getter; preserve BR identity and resolve deferred insertion anchors after cleanup.
 - Mark successful own DOM range writes with the module-wide pinned selection-change guard; consume only after anchor-owner routing, before point normalization, preserving boundary and post-delete processing.

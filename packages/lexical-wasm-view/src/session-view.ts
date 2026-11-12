@@ -103,8 +103,33 @@ export function mountSessionView(
   };
   const sink: ViewSink = {
     apply(words, strings, effects) {
-      const filtered = commands ? commands.output.filter(effects) : effects;
+      // No arbitrary output callback precedes this transfer-linked token capture.
+      const observed = commands
+        ? commands.output.observeListenerMetadata(words, strings, effects)
+        : {
+            effects: effects.filter(
+              (effect) => effect.kind !== 6 || effect.code !== 11
+            ),
+            metadataOnly:
+              effects.filter(
+                (effect) => effect.kind === 6 && effect.code === 11
+              ).length === 1 &&
+              effects.some(
+                (effect) =>
+                  effect.kind === 6 && effect.code === 11 && !effect.flag
+              ),
+          };
+      const filtered = commands
+        ? commands.output.filter(observed.effects)
+        : observed.effects;
       if (disposed) return;
+      if (
+        observed?.metadataOnly &&
+        words.length === 0 &&
+        strings.length === 0 &&
+        filtered.length === 0
+      )
+        return;
       if (!view) throw new Error('Native output before view mount');
       if (!view.isMounted) return;
       applyingOutput = true;
@@ -223,10 +248,14 @@ export function mountSessionView(
           running.session,
           dispatcher,
           owner,
-          options.onError
+          options.onError,
+          () => running.metadataReadIdle
         ),
       };
     }
+    // No view callbacks have run: actual module/session/owner and idle executor
+    // are established, while legacy registry creation alone selects no protocol.
+    commands?.output.enableListenerMetadata();
     const port = new SessionPort(running, sink, undefined, commands);
     view = EditorView.mount(
       root,

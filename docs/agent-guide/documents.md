@@ -174,6 +174,15 @@ space separates the code and following text, including after save and reopen;
 an existing leading space must be reused. Repeat from a text or element caret
 boundary immediately after the span.
 
+Check vertical block navigation in both engines: from the last line before an
+image, video, divider, database answer or document card, ArrowDown must select the
+block. ArrowUp from the first line after it must do the same. A second arrow
+moves to the neighboring paragraph, while adjacent stopping blocks are selected
+one at a time. A caret on an interior wrapped line must keep normal browser
+movement; Shift continues selection rather than selecting the whole block.
+Check root-boundary carets too, and verify the final model point after the actual
+DOM selectionchange rather than flattening text and element offsets.
+
 Check decorator selection with both engines: click an image and verify its node
 selection clears browser ranges, click an equation once without selecting it as
 a node, then click text after a node selection and verify a range caret returns.

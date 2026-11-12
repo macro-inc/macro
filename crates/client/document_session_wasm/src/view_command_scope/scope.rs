@@ -10,6 +10,10 @@ pub(super) enum Operation {
     Register(u64, u8),
     RegisterEscape(u64, u8),
     Unregister(u64),
+    NavigationPrepare,
+    NavigationBlock(u64),
+    NavigationCancel(u64),
+    NavigationComplete(u64, block_navigation::Geometry),
 }
 #[derive(Debug)]
 pub(super) enum Value {
@@ -18,6 +22,7 @@ pub(super) enum Value {
     Text(String),
     Handled(bool),
     Handle(u64),
+    Key(Option<u32>),
 }
 pub(super) trait Current {
     fn id(&self) -> Id;
@@ -28,9 +33,11 @@ pub(super) trait Current {
 scoped_tls_hkt::scoped_thread_local!(pub(super) static CURRENT: for<'a> &'a (dyn Current + 'a));
 pub(super) struct Scope<'a, 'editor> {
     tx: RefCell<Option<&'a mut Transaction<'editor>>>,
-    invocation: &'a Invocation,
+    pub(super) invocation: &'a Invocation,
     id: Id,
     generation: u32,
+    pub(super) navigation: Option<block_navigation::Binding>,
+    pub(super) plan: RefCell<Option<block_navigation::Issued>>,
 }
 impl<'a, 'editor> Scope<'a, 'editor> {
     pub(super) fn new(
@@ -44,6 +51,8 @@ impl<'a, 'editor> Scope<'a, 'editor> {
             invocation,
             id,
             generation,
+            navigation: None,
+            plan: RefCell::new(None),
         }
     }
 }
@@ -73,6 +82,12 @@ impl Current for Scope<'_, '_> {
     }
     fn execute(&self, operation: Operation) -> Result<Value, BoundaryError> {
         if self.invocation.registry.lock()?.epoch != self.invocation.epoch {
+            if matches!(
+                operation,
+                Operation::NavigationComplete(_, _) | Operation::NavigationCancel(_)
+            ) {
+                self.plan.borrow_mut().take();
+            }
             return Err(BoundaryError::Invalid("view command binding expired"));
         }
         let tx = self
@@ -84,7 +99,25 @@ impl Current for Scope<'_, '_> {
                 "view command scope already executing",
             ))?;
         // No RefCell or registry guard crosses a command dispatch or JS callout.
-        let result = execute(tx, self.invocation, operation);
+        let result = match operation {
+            Operation::NavigationPrepare => block_navigation::prepare(self, tx),
+            Operation::NavigationBlock(id) => block_navigation::block(self, tx, id),
+            Operation::NavigationCancel(id) => block_navigation::cancel(self, tx, id),
+            Operation::NavigationComplete(id, rects) => {
+                block_navigation::complete(self, tx, id, rects)
+            }
+            operation => {
+                if !matches!(
+                    operation,
+                    Operation::Selection | Operation::Text(_) | Operation::OwnJSON(_)
+                ) {
+                    block_navigation::advance(self.invocation)
+                        .and_then(|()| execute(tx, self.invocation, operation))
+                } else {
+                    execute(tx, self.invocation, operation)
+                }
+            }
+        };
         self.tx.replace(Some(tx));
         result
     }
@@ -124,6 +157,14 @@ fn execute(
 ) -> Result<Value, BoundaryError> {
     let generation = tx.view().snapshot().max_key().generation();
     Ok(match operation {
+        Operation::NavigationPrepare
+        | Operation::NavigationBlock(_)
+        | Operation::NavigationCancel(_)
+        | Operation::NavigationComplete(_, _) => {
+            return Err(BoundaryError::Invalid(
+                "navigation requires its issued scope",
+            ));
+        }
         Operation::Selection => {
             let selection = tx.view().snapshot().selection();
             let mut encoded =

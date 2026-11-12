@@ -2,6 +2,156 @@ use crate::*;
 use doc_sync_core::*;
 use document_session::{InitialView, SessionOutput, ViewEffect};
 use lexical_model::{DiffBuffer, Effect};
+#[cfg(test)]
+thread_local! {
+    static FAIL_ENCODE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+pub(crate) struct InjectEncodeFailure;
+#[cfg(test)]
+impl Drop for InjectEncodeFailure {
+    fn drop(&mut self) {
+        FAIL_ENCODE.set(false);
+    }
+}
+#[cfg(test)]
+pub(crate) fn inject_encode_failure() -> InjectEncodeFailure {
+    assert!(
+        !FAIL_ENCODE.replace(true),
+        "nested encode failure injection"
+    );
+    InjectEncodeFailure
+}
+/// Full listener metadata preserves all ordinary rows for older consumers.
+pub(crate) fn listener_table(
+    table: &lexical_model::ListenerTable,
+) -> Result<wire::ListenerTableMsg, BoundaryError> {
+    let mut rows: Vec<_> = table
+        .iter()
+        .map(|(command, priority)| wire::ListenerRowMsg {
+            command: format!("{command:?}"),
+            priority: u32::from(priority.bits()),
+        })
+        .collect();
+    for (priority, keys) in table.key_down_only() {
+        let command = format!("KeyDownOnly:{}", serde_json::to_string(keys)?);
+        let bits = 1u32 << priority as u8;
+        if let Some(row) = rows.iter_mut().find(|row| row.command == command) {
+            row.priority |= bits;
+        } else {
+            rows.push(wire::ListenerRowMsg {
+                command,
+                priority: bits,
+            });
+        }
+    }
+    let generation = match table.generation() {
+        Some(value) => value.to_string(),
+        None => "unavailable".into(),
+    };
+    rows.push(wire::ListenerRowMsg {
+        command: format!("ListenerTableGeneration:1:{generation}"),
+        priority: 0,
+    });
+    Ok(wire::ListenerTableMsg { rows })
+}
+fn listener_entry(
+    table: &lexical_model::ListenerTable,
+    original_packet: bool,
+) -> Result<Vec<u8>, BoundaryError> {
+    let table = listener_table(table)?;
+    let mut effect = view(6);
+    effect.code = 11;
+    effect.flag = original_packet;
+    effect.style = serde_json::to_string(
+        &table
+            .rows
+            .iter()
+            .map(|row| row.priority)
+            .collect::<Vec<_>>(),
+    )?;
+    effect.keys = table.rows.into_iter().map(|row| row.command).collect();
+    let payload = bytes(&effect)?;
+    let mut encoded = vec![];
+    entry(&mut encoded, 16, 6, 0, &payload);
+    Ok(encoded)
+}
+fn entry_count(buffer: &[u8]) -> Result<u32, BoundaryError> {
+    Ok(u32::from_le_bytes(
+        buffer
+            .get(20..24)
+            .ok_or(BoundaryError::Invalid("listener metadata envelope"))?
+            .try_into()
+            .map_err(|_| BoundaryError::Invalid("listener metadata envelope"))?,
+    ))
+}
+/// Private descriptor of our ONE final metadata entry, never a model snapshot.
+pub(crate) struct ListenerMetadataTail {
+    start: usize,
+    end: usize,
+    count: u32,
+    original_packet: bool,
+}
+impl ListenerMetadataTail {
+    /// Serialize replacement BEFORE observation exposure or packet mutation.
+    pub(crate) fn replacement(
+        &self,
+        table: &lexical_model::ListenerTable,
+        buffer: &[u8],
+    ) -> Result<Vec<u8>, BoundaryError> {
+        if self.start < 24
+            || self.start > self.end
+            || self.end != buffer.len()
+            || entry_count(buffer)? != self.count
+        {
+            return Err(BoundaryError::Invalid("listener metadata tail"));
+        }
+        listener_entry(table, self.original_packet)
+    }
+    /// Only our recorded suffix changes; header/count/IO/effect ordinals stay exact.
+    pub(crate) fn replace(self, replacement: Vec<u8>, buffer: &mut Vec<u8>) {
+        buffer.truncate(self.start);
+        buffer.extend(replacement);
+    }
+}
+/// Append real metadata last, after ALL original effects and telemetry.
+pub(crate) fn append_listener_table(
+    table: &lexical_model::ListenerTable,
+    buffer: &mut Vec<u8>,
+) -> Result<ListenerMetadataTail, BoundaryError> {
+    let original_packet = !buffer.is_empty();
+    let encoded = listener_entry(table, original_packet)?;
+    let count = if original_packet {
+        entry_count(buffer)?
+    } else {
+        0
+    };
+    let count = count
+        .checked_add(1)
+        .ok_or(BoundaryError::Invalid("listener metadata count"))?;
+    if !original_packet {
+        for word in [
+            0x4d534553,
+            generated::ABI_MAJOR,
+            generated::DIFF_FORMAT_VERSION,
+            0,
+            0,
+            0,
+        ] {
+            buffer.extend(word.to_le_bytes());
+        }
+    }
+    let start = buffer.len();
+    buffer.extend(encoded);
+    buffer[20..24].copy_from_slice(&count.to_le_bytes());
+    Ok(ListenerMetadataTail {
+        start,
+        end: buffer.len(),
+        count,
+        original_packet,
+    })
+}
+
 pub(crate) fn view(kind: u8) -> wire::ViewEffectMsg {
     wire::ViewEffectMsg {
         kind,
@@ -78,6 +228,10 @@ fn encode_inner(
     selection_feedback: Option<ViewEffect>,
     observer: Option<&mut crate::decorator_observer::DecoratorObserver>,
 ) -> Result<u32, BoundaryError> {
+    #[cfg(test)]
+    if FAIL_ENCODE.replace(false) {
+        return Err(BoundaryError::Invalid("injected output encode failure"));
+    }
     if output.view.is_empty()
         && output.io.is_empty()
         && !output.need_peer_ids

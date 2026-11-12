@@ -192,3 +192,36 @@ test.each([
     expect(cache.levels('KeyDown', 'x')).toBe(2);
   }
 );
+
+test('valid exhausted-generation transport never authorizes Only', () => {
+  const cache = new ListenerMetadataCache(
+    () => 1n,
+    () => true
+  );
+  expect(
+    cache.accept(
+      {
+        rows: [
+          { command: 'KeyDown', priority: 2 },
+          { command: 'KeyDownOnly:["ArrowUp"]', priority: 2 },
+          { command: 'ListenerTableGeneration:1:unavailable', priority: 0 },
+        ],
+      },
+      'output',
+      1n
+    )
+  ).toBe(true);
+  expect(cache.needsKeyDown('x')).toBe(true);
+  expect(cache.levels('KeyDown', 'x')).toBeUndefined();
+  expect(
+    cache.accept(
+      {
+        rows: [
+          { command: 'ListenerTableGeneration:2:unavailable', priority: 0 },
+        ],
+      },
+      'output',
+      1n
+    )
+  ).toBe(false);
+});

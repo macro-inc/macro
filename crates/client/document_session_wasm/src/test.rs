@@ -799,7 +799,7 @@ fn application_command_admission_rejects_stale_generations_and_applies_typed_pol
 }
 
 #[test]
-fn application_enter_clears_empty_typing_style_without_a_generic_keydown_listener() {
+fn application_enter_clears_empty_typing_style_without_a_generic_enter_keydown_listener() {
     let builder = macro_document_model::surface::preset_builder_with_mode(
         macro_document_model::EditorType::MarkdownSync,
         EditorMode::ViewAttached,
@@ -807,10 +807,15 @@ fn application_enter_clears_empty_typing_style_without_a_generic_keydown_listene
     let mut editor = document_session::with_session_plugins(builder, 1)
         .build()
         .expect("surface");
-    assert!(editor
-        .listener_table()
+    let table = editor.listener_table();
+    let mut unfiltered = table
         .levels(CommandKind::KeyDown)
-        .is_none());
+        .map_or(0, |levels| levels.bits());
+    for (priority, keys) in table.key_down_only() {
+        assert!(!keys.contains(&"Enter"));
+        unfiltered &= !(1 << priority as u8);
+    }
+    assert_eq!(unfiltered, 0, "no generic listener can handle Enter");
     let (key, _) = editor
         .update(|tx| {
             let p = tx.create(Paragraph::default())?;

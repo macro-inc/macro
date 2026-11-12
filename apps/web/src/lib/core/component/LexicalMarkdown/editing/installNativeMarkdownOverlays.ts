@@ -8,6 +8,7 @@ import {
   ErrorBoundary,
   Show,
 } from 'solid-js';
+import { registerNativeBlockNavigation } from '../plugins/block-decorator-navigation/native';
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
 import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/native';
@@ -76,6 +77,7 @@ export function installNativeMarkdownOverlays(
   };
   let comments: NativeComments | undefined;
   try {
+    listeners.add(registerNativeBlockNavigation(view));
     listeners.add(registerNativeChecklist(view));
     listeners.add(registerNativeListSwipeIndent(view, options.canEdit));
     if (options.comments) {

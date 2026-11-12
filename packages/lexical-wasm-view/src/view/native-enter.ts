@@ -35,9 +35,13 @@ export type NativeEnterModule = Pick<
       | 'viewCommandScopeUnregisterEscape'
       | 'InputCommitReceipt'
       | 'InputCommitKind'
+      | 'viewCommandScopePrepareBlockNavigation'
+      | 'viewCommandScopeBlockNavigationBlock'
+      | 'viewCommandScopeCompleteBlockNavigation'
+      | 'viewCommandScopeCancelBlockNavigation'
     >
   >;
-export type NativeCommandKey = 'Enter' | 'Escape';
+export type NativeCommandKey = 'Enter' | 'Escape' | 'ArrowUp' | 'ArrowDown';
 
 export interface NativeEnterScope {
   readonly owner: bigint;
@@ -68,6 +72,10 @@ interface Registration {
 interface Collection {
   readonly buckets: Map<ViewCommandPriority, Map<object, Registration>>;
 }
+interface ListenerMetadataOwner {
+  invalidate(): void;
+  refresh(): void;
+}
 interface OwnerListeners {
   readonly native: boolean;
   collection?: Collection;
@@ -91,6 +99,10 @@ const moduleFunctions: readonly (keyof NativeEnterModule)[] = [
   'viewCommandScopeUnregisterEscape',
   'InputCommitReceipt',
   'InputCommitKind',
+  'viewCommandScopePrepareBlockNavigation',
+  'viewCommandScopeBlockNavigationBlock',
+  'viewCommandScopeCompleteBlockNavigation',
+  'viewCommandScopeCancelBlockNavigation',
 ];
 
 /** Module-wide invocation state; output/lease consumption belongs to its owner. */
@@ -108,11 +120,13 @@ export class NativeEnterDispatcher {
     Map<NativeCommandKey, OwnerListeners>
   >();
   private pureObservationDepth = 0;
+  private readonly listenerMetadata = new Map<bigint, ListenerMetadataOwner>();
   private nextCallback = 1n;
   private teardowns: (() => void)[] = [];
   readonly guard;
   readonly supportsEscape: boolean;
   private readonly inputCommit: ReturnType<typeof captureNativeInputCommit>;
+  readonly supportsBlockNavigation: boolean;
 
   private readonly active = () =>
     this.scopes.length !== 0 || this.pureObservationDepth !== 0;
@@ -158,6 +172,24 @@ export class NativeEnterDispatcher {
     if (present !== 0 && present !== escapeFunctions.length)
       throw new Error('Native Escape capability is incomplete');
     this.supportsEscape = present === escapeFunctions.length;
+    const navigationFunctions = [
+      native.viewCommandScopePrepareBlockNavigation,
+      native.viewCommandScopeBlockNavigationBlock,
+      native.viewCommandScopeCompleteBlockNavigation,
+      native.viewCommandScopeCancelBlockNavigation,
+      native.EditorSession.prototype.registerViewBlockNavigation,
+      native.EditorSession.prototype.enableViewListenerMetadata,
+    ];
+    const navigationPresent = navigationFunctions.filter(
+      (value) => typeof value === 'function'
+    ).length;
+    if (
+      navigationPresent !== 0 &&
+      navigationPresent !== navigationFunctions.length
+    )
+      throw new Error('Native block navigation capability is incomplete');
+    this.supportsBlockNavigation =
+      navigationPresent === navigationFunctions.length;
     native.installViewCommandHost(this.dispatch, this.lookup);
     this.guard = installNativeSessionReceiverGuard(native.EditorSession, {
       active: this.active,
@@ -208,7 +240,12 @@ export class NativeEnterDispatcher {
     if (!this.listeners.has(owner)) {
       const table = ListenerTableMsg.decode(session.listenerTable());
       listeners = new Map();
-      for (const key of ['Enter', 'Escape'] satisfies NativeCommandKey[]) {
+      for (const key of [
+        'Enter',
+        'Escape',
+        'ArrowUp',
+        'ArrowDown',
+      ] satisfies NativeCommandKey[]) {
         listeners.set(key, {
           native: table.rows.some(
             (row) => row.command === 'Key(' + key + ')' && row.priority !== 0
@@ -220,6 +257,25 @@ export class NativeEnterDispatcher {
     this.owners.set(owner, session);
     if (listeners) this.listeners.set(owner, listeners);
     return owner;
+  }
+
+  isBoundSession(session: Native.EditorSession, owner: bigint): boolean {
+    return (
+      this.sessions.get(session) === owner && this.owners.get(owner) === session
+    );
+  }
+  bindListenerMetadata(
+    session: Native.EditorSession,
+    owner: bigint,
+    metadata: ListenerMetadataOwner
+  ): void {
+    this.assertRootAdmission();
+    if (
+      this.sessions.get(session) !== owner ||
+      this.listenerMetadata.has(owner)
+    )
+      throw new Error('Listener metadata requires one actual owner binding');
+    this.listenerMetadata.set(owner, metadata);
   }
 
   /** Ports call this before queueing any unsupported ordinary root operation. */
@@ -339,6 +395,39 @@ export class NativeEnterDispatcher {
     return invoke(this.requireScope(owner).scope);
   }
 
+  prepareBlockNavigation(owner: bigint): bigint {
+    const prepare = this.native.viewCommandScopePrepareBlockNavigation;
+    if (!prepare) throw new Error('Native block navigation is unavailable');
+    return prepare(this.requireScope(owner).scope);
+  }
+  blockNavigationBlock(owner: bigint, plan: bigint): number | undefined {
+    const block = this.native.viewCommandScopeBlockNavigationBlock;
+    if (!block) throw new Error('Native block navigation is unavailable');
+    return block(this.requireScope(owner).scope, plan);
+  }
+  cancelBlockNavigation(owner: bigint, plan: bigint): void {
+    const cancel = this.native.viewCommandScopeCancelBlockNavigation;
+    if (!cancel) throw new Error('Native block navigation is unavailable');
+    cancel(this.requireScope(owner).scope, plan);
+  }
+  completeBlockNavigation(
+    owner: bigint,
+    plan: bigint,
+    rects?: readonly [number, number, number, number, number]
+  ): boolean {
+    const complete = this.native.viewCommandScopeCompleteBlockNavigation;
+    if (!complete) throw new Error('Native block navigation is unavailable');
+    return complete(
+      this.requireScope(owner).scope,
+      plan,
+      rects?.[0],
+      rects?.[1],
+      rects?.[2],
+      rects?.[3],
+      rects?.[4]
+    );
+  }
+
   requestRetirement(owner: bigint): void {
     const current = this.requireScope(owner);
     this.native.requestRetireViewObservation(
@@ -384,25 +473,39 @@ export class NativeEnterDispatcher {
         throw new Error('Native Enter callback identity exhausted');
       const id = this.nextCallback++;
       this.callbacks.set(id, { owner, invoke, key });
+      const metadata = this.listenerMetadata.get(owner);
+      metadata?.invalidate();
       try {
         const scope = this.current(owner);
-        const scopedRegister =
-          key === 'Enter'
-            ? this.native.viewCommandScopeRegisterEnter
-            : this.native.viewCommandScopeRegisterEscape;
-        if (!scopedRegister)
-          throw new Error('Native key registration is unavailable');
-        const register =
-          key === 'Enter'
-            ? session.registerViewEnter
-            : session.registerViewEscape;
-        const handle = scope
-          ? scopedRegister(scope.scope, id, priority)
-          : register.call(session, id, priority);
+        let handle: bigint;
+        if (key === 'ArrowUp' || key === 'ArrowDown') {
+          if (!this.supportsBlockNavigation || scope || priority !== 1)
+            throw new Error(
+              'Block navigation requires its fixed root registration'
+            );
+          handle = session.registerViewBlockNavigation(key === 'ArrowDown', id);
+        } else {
+          const scopedRegister =
+            key === 'Enter'
+              ? this.native.viewCommandScopeRegisterEnter
+              : this.native.viewCommandScopeRegisterEscape;
+          if (!scopedRegister)
+            throw new Error('Native key registration is unavailable');
+          const register =
+            key === 'Enter'
+              ? session.registerViewEnter
+              : session.registerViewEscape;
+          handle = scope
+            ? scopedRegister(scope.scope, id, priority)
+            : register.call(session, id, priority);
+        }
         bucket.set(identity, { id, handle, key });
       } catch (error) {
         this.callbacks.delete(id);
         throw error;
+      } finally {
+        // Native handle and accepted JS bookkeeping precede this best-effort read.
+        metadata?.refresh();
       }
     }
     let queued: object | undefined;
@@ -412,19 +515,23 @@ export class NativeEnterDispatcher {
       if (!bound || this.retiringOwners.has(owner)) return;
       if (bound !== session)
         throw new Error('Native key cleanup owner does not match its session');
-      const entry = bucket.get(identity);
-      if (entry) {
-        this.remove(session, owner, entry);
-        bucket.delete(identity);
-      }
-      if (
-        !listeners.native &&
-        [...collection.buckets.values()].every((bucket) => bucket.size === 0)
-      ) {
-        // Source cleanup closes over its collection, then deletes the command map.
-        if (listeners.collection && listeners.collection !== collection)
-          this.removeCollection(session, owner, listeners.collection);
-        listeners.collection = undefined;
+      try {
+        const entry = bucket.get(identity);
+        if (entry) {
+          this.remove(session, owner, entry);
+          bucket.delete(identity);
+        }
+        if (
+          !listeners.native &&
+          [...collection.buckets.values()].every((bucket) => bucket.size === 0)
+        ) {
+          // Source cleanup closes over its collection, then deletes the command map.
+          if (listeners.collection && listeners.collection !== collection)
+            this.removeCollection(session, owner, listeners.collection);
+          listeners.collection = undefined;
+        }
+      } finally {
+        this.listenerMetadata.get(owner)?.refresh();
       }
     };
     return () => {
@@ -451,17 +558,18 @@ export class NativeEnterDispatcher {
     owner: bigint,
     entry: Registration
   ): void {
+    this.listenerMetadata.get(owner)?.invalidate();
     const scope = this.current(owner);
     if (scope) {
       const unregister =
-        entry.key === 'Enter'
+        entry.key !== 'Escape'
           ? this.native.viewCommandScopeUnregisterEnter
           : this.native.viewCommandScopeUnregisterEscape;
       if (!unregister) throw new Error('Native key cleanup is unavailable');
       unregister(scope.scope, entry.handle);
       this.retiredCallbacks.add(entry.id);
     } else {
-      if (entry.key === 'Enter') session.unregisterViewEnter(entry.handle);
+      if (entry.key !== 'Escape') session.unregisterViewEnter(entry.handle);
       else session.unregisterViewEscape(entry.handle);
       this.callbacks.delete(entry.id);
     }
@@ -496,10 +604,14 @@ export class NativeEnterDispatcher {
     if (this.owners.get(owner) !== session)
       throw new Error('Native key cleanup owner does not match its session');
     if (key === undefined) this.retiringOwners.add(owner);
-    for (const [command, entry] of listeners) {
-      if (key !== undefined && key !== command) continue;
-      if (entry.collection)
-        this.removeCollection(session, owner, entry.collection);
+    try {
+      for (const [command, entry] of listeners) {
+        if (key !== undefined && key !== command) continue;
+        if (entry.collection)
+          this.removeCollection(session, owner, entry.collection);
+      }
+    } finally {
+      this.listenerMetadata.get(owner)?.refresh();
     }
   }
 
@@ -516,6 +628,7 @@ export class NativeEnterDispatcher {
         this.retiredCallbacks.delete(id);
       }
     }
+    this.listenerMetadata.delete(owner);
     this.listeners.delete(owner);
     this.owners.delete(owner);
     this.retiringOwners.delete(owner);

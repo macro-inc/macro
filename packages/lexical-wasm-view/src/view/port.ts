@@ -59,6 +59,23 @@ export interface NativeEnterPort {
 
 export type NativeEscapePort = NativeEnterPort;
 
+/** Fixed model role; hosts measure only the native-issued block. */
+export interface NativeBlockNavigationPort {
+  register(
+    down: boolean,
+    listener: (event: KeyboardEvent | null) => boolean
+  ): () => void;
+  prepare(): bigint;
+  block(plan: bigint): number | undefined;
+  cancel(plan: bigint): void;
+  dispose(): void;
+  complete(
+    plan: bigint,
+    rects?: readonly [number, number, number, number, number]
+  ): boolean;
+  hasListeners(): boolean;
+}
+
 export interface TextFromView {
   readonly key: NodeKey;
   readonly text: string;
@@ -95,8 +112,12 @@ export type InputSettlement = (
 export interface EditorPort {
   readonly nativeEnter?: NativeEnterPort;
   readonly nativeEscape?: NativeEscapePort;
+  readonly nativeBlockNavigation?: NativeBlockNavigationPort;
   types(): readonly TypeRow[];
   listeners(): ReadonlyMap<string, number>;
+  /** Pure JS full-table lookup; unknown freshness admits every generic key. */
+  listenerLevels?(command: string, key?: string): number | undefined;
+  needsKeyDown?(key: string): boolean | undefined;
   textFromView(input: TextFromView): void;
   debugInsertion(
     selection: ViewSelection,

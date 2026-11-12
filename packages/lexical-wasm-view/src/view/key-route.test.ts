@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
-import { beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test } from 'vitest';
+import {
+  initializeNativeKeyboardSurface,
+  nativeKeyboardSurface as nativeSurface,
+} from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/editing/test/native-keyboard-surface';
 import { registerNativeNormalizeEnter } from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/normalize-enter/native';
 import { registerNativeTabIndentation } from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/native';
-import {
-  initializeNativeSurfaceTests,
-  nativeSurface,
-} from './test/native-surface';
+import { KEY_DOWN_COMMAND } from './commands';
 
-beforeAll(initializeNativeSurfaceTests);
+let restoreHost: (() => void) | undefined;
+beforeAll(() => {
+  restoreHost = initializeNativeKeyboardSurface();
+});
+afterAll(() => restoreHost?.());
 
-test('application Tab routes once through the real Macro session despite its critical table listener', () => {
+test('application Tab routes once through the real Macro session despite its critical table listener', async () => {
   const fixture = nativeSurface();
   const { session, port, root, view: mounted, counters } = fixture;
   const releaseTab = registerNativeTabIndentation(mounted);
@@ -99,13 +104,13 @@ test('application Tab routes once through the real Macro session despite its cri
   } finally {
     releaseTab();
     releaseEnter();
-    fixture.close();
+    await fixture.close();
   }
 });
 
 test.each(['code-highlight', 'text'])(
   'native %s code arrows run once while middle-line browser movement stays unclaimed',
-  (type) => {
+  async (type) => {
     const fixture = nativeSurface();
     const { port, view, root, session, counters } = fixture;
     try {
@@ -185,12 +190,12 @@ test.each(['code-highlight', 'text'])(
       );
       expect(counters.admissions).toBe(0);
     } finally {
-      fixture.close();
+      await fixture.close();
     }
   }
 );
 
-test('an unhandled native key route preserves consuming after-listener ordering', () => {
+test('an unhandled native key route preserves consuming after-listener ordering', async () => {
   const fixture = nativeSurface();
   const release = fixture.view.registerKeyRoute((event) =>
     event.key === 'ArrowRight'
@@ -234,6 +239,322 @@ test('an unhandled native key route preserves consuming after-listener ordering'
     expect(fixture.counters.admissions).toBe(1);
   } finally {
     release();
-    fixture.close();
+    await fixture.close();
+  }
+});
+
+test('a Critical JS key listener survives getter invalidation without an invented tie', async () => {
+  const fixture = nativeSurface();
+  let calls = 0;
+  const release = fixture.view.registerViewCommand(
+    KEY_DOWN_COMMAND,
+    () => {
+      calls++;
+      return true;
+    },
+    4
+  );
+  try {
+    fixture.session.listenerTable();
+    expect(() =>
+      fixture.view.registerViewCommand(KEY_DOWN_COMMAND, () => false, 1)
+    ).toThrow('ties a Rust listener');
+    const event = new KeyboardEvent('keydown', {
+      key: 'x',
+      keyCode: 88,
+      bubbles: true,
+      cancelable: true,
+    });
+    fixture.counters.admissions = 0;
+    fixture.root.dispatchEvent(event);
+    expect(calls).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(fixture.counters.admissions).toBe(0);
+  } finally {
+    release();
+    await fixture.close();
+  }
+});
+
+test('accepted Enter registration survives a failed metadata read and keeps its cleanup handle', async () => {
+  const fixture = nativeSurface();
+  const key = fixture.port.nativeEnter;
+  if (!key) throw new Error('Missing production native owner');
+  const table = fixture.session.listenerTable.bind(fixture.session);
+  const opaque = { stage: 'cold metadata read' };
+  let calls = 0;
+  fixture.session.listenerTable = () => {
+    throw opaque;
+  };
+  let release: (() => void) | undefined;
+  try {
+    expect(() => {
+      release = key.register(() => {
+        calls++;
+        return true;
+      }, 4);
+    }).not.toThrow();
+    expect(key.dispatch()).toBe(true);
+    expect(calls).toBe(1);
+    expect(() => release?.()).not.toThrow();
+    key.dispatch();
+    expect(calls).toBe(1);
+  } finally {
+    fixture.session.listenerTable = table;
+    release?.();
+    await fixture.close();
+  }
+});
+
+test('registration keeps the primary opaque error even when its metadata refresh fails', async () => {
+  const fixture = nativeSurface();
+  const register = fixture.session.registerViewEnter.bind(fixture.session);
+  const table = fixture.session.listenerTable.bind(fixture.session);
+  const original = { stage: 'native registration' };
+  fixture.session.registerViewEnter = () => {
+    throw original;
+  };
+  fixture.session.listenerTable = () => {
+    throw undefined;
+  };
+  try {
+    let thrown: unknown;
+    try {
+      fixture.port.nativeEnter?.register(() => true, 4);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(original);
+    expect(fixture.port.nativeEnter?.hasListeners()).toBe(false);
+  } finally {
+    fixture.session.registerViewEnter = register;
+    fixture.session.listenerTable = table;
+    await fixture.close();
+  }
+});
+
+test('busy onCommit registration refreshes only after drain and restores the no-op key fast path', async () => {
+  const fixture = nativeSurface();
+  const table = fixture.session.listenerTable.bind(fixture.session);
+  let reads = 0;
+  fixture.session.listenerTable = () => {
+    reads++;
+    return table();
+  };
+  let releaseKey: (() => void) | undefined;
+  const releaseCommit = fixture.view.onCommit(() => {
+    if (releaseKey) return;
+    const before = reads;
+    releaseKey = fixture.port.nativeEnter?.register(() => false, 4);
+    expect(reads).toBe(before);
+  });
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            { type: 'paragraph', children: [{ type: 'text', text: 'text' }] },
+          ],
+        },
+      })
+    );
+    expect(releaseKey).toBeDefined();
+    expect(reads).toBe(1);
+    releaseKey?.();
+    fixture.root.focus();
+    const text = fixture.root.querySelector('p')?.firstChild;
+    if (!text) throw new Error('Missing actual native text');
+    document.getSelection()?.setBaseAndExtent(text, 0, text, 0);
+    document.dispatchEvent(new Event('selectionchange'));
+    fixture.counters.admissions = 0;
+    fixture.root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'x',
+        keyCode: 88,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(fixture.counters.admissions).toBe(0);
+  } finally {
+    releaseCommit();
+    releaseKey?.();
+    fixture.session.listenerTable = table;
+    await fixture.close();
+  }
+});
+
+test.each([true, false])(
+  'metadata-only tick preserves commit count, DOM selection and mutation records (qualified=%s)',
+  async (qualified) => {
+    const fixture = nativeSurface(qualified);
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            { type: 'paragraph', children: [{ type: 'text', text: 'stable' }] },
+          ],
+        },
+      })
+    );
+    const before = fixture.view.selection();
+    const dom = document.getSelection();
+    const anchor = dom?.anchorNode;
+    const offset = dom?.anchorOffset;
+    let commits = 0;
+    const release = fixture.view.onCommit(() => {
+      commits++;
+    });
+    const observer = new MutationObserver(() => {});
+    observer.observe(fixture.root, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+    try {
+      fixture.executor.run(() =>
+        fixture.session.tick(fixture.executor.now(), Date.now())
+      );
+      expect(commits).toBe(0);
+      expect(fixture.view.selection()).toEqual(before);
+      expect(dom?.anchorNode).toBe(anchor);
+      expect(dom?.anchorOffset).toBe(offset);
+      expect(observer.takeRecords()).toEqual([]);
+    } finally {
+      observer.disconnect();
+      release();
+      await fixture.close();
+    }
+  }
+);
+
+test('direct Enter membership invalidates filtering and a verified cold refresh restores zero', async () => {
+  const fixture = nativeSurface();
+  const register = fixture.session.registerViewEnter.bind(fixture.session);
+  let callback: bigint | undefined;
+  fixture.session.registerViewEnter = (id, priority) => {
+    callback = id;
+    return register(id, priority);
+  };
+  const release = fixture.port.nativeEnter?.register(() => false, 4);
+  fixture.session.registerViewEnter = register;
+  if (callback === undefined)
+    throw new Error('Missing actual registered callback identity');
+  fixture.root.focus();
+  const bypass = fixture.session.registerViewEnter(callback, 3);
+  try {
+    const root = fixture.root;
+    fixture.counters.admissions = 0;
+    root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'x',
+        keyCode: 88,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(fixture.counters.admissions).toBe(1);
+    fixture.session.unregisterViewEnter(bypass);
+    fixture.port.listeners(); // Real, qualified rare root metadata read.
+    fixture.counters.admissions = 0;
+    root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'x',
+        keyCode: 88,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(fixture.counters.admissions).toBe(0);
+  } finally {
+    fixture.session.unregisterViewEnter(bypass);
+    release?.();
+    await fixture.close();
+  }
+});
+
+test('closing during onCommit cancels its pending after-drain metadata refresh', async () => {
+  const fixture = nativeSurface();
+  const table = fixture.session.listenerTable.bind(fixture.session);
+  let reads = 0;
+  let closing: Promise<void> | undefined;
+  fixture.session.listenerTable = () => {
+    reads++;
+    return table();
+  };
+  const release = fixture.view.onCommit(() => {
+    if (closing) return;
+    fixture.port.nativeEnter?.register(() => false, 4);
+    closing = fixture.close();
+  });
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'closing' }],
+            },
+          ],
+        },
+      })
+    );
+    expect(closing).toBeDefined();
+    await closing;
+    expect(reads).toBe(0);
+  } finally {
+    release();
+    await fixture.close();
+  }
+});
+
+test('direct registration during output callbacks cannot bless the earlier Only table', async () => {
+  const fixture = nativeSurface();
+  const register = fixture.session.registerViewEnter.bind(fixture.session);
+  let callback: bigint | undefined;
+  fixture.session.registerViewEnter = (id, priority) => {
+    callback = id;
+    return register(id, priority);
+  };
+  const releaseKey = fixture.port.nativeEnter?.register(() => false, 4);
+  fixture.session.registerViewEnter = register;
+  if (callback === undefined)
+    throw new Error('Missing actual registered callback');
+  const actualCallback = callback;
+  fixture.root.focus();
+  let bypass: bigint | undefined;
+  const releaseCommit = fixture.view.onCommit(() => {
+    if (bypass === undefined)
+      bypass = fixture.session.registerViewEnter(actualCallback, 3);
+  });
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'callback boundary' }],
+            },
+          ],
+        },
+      })
+    );
+    expect(bypass).toBeDefined();
+    expect(fixture.view.needsNativeKeyDown('x')).toBe(true);
+    expect(fixture.view.listenerLevels('KeyDown', 'x')).toBe(2);
+    fixture.port.listeners();
+    expect(fixture.view.needsNativeKeyDown('x')).toBe(false);
+  } finally {
+    releaseCommit();
+    if (bypass !== undefined) fixture.session.unregisterViewEnter(bypass);
+    releaseKey?.();
+    await fixture.close();
   }
 });

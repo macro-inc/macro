@@ -480,6 +480,12 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (failure) throw failure.error;
     if (drainFailure) throw drainFailure.error;
   }
+  /** Read-only scheduling fact; grants no native or output-consumption authority. */
+  get metadataReadIdle(): boolean {
+    return (
+      !this.busy && this.queue.length === 0 && !this.closed && !this.closing
+    );
+  }
   /** Admit a synchronous transaction without queueing rejected reentrant work. */
   runSync(call: () => number, after?: (flags: number) => void): void {
     if (this.closed || this.closing)

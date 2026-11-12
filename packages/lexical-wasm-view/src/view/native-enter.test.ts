@@ -65,6 +65,125 @@ function drain(session: native.EditorSession, flags: number) {
     return decodeOutput(session.takeOutput());
 }
 
+test('fixed vertical callbacks use actual pending plans for all five stopping block types', () => {
+  const dispatcher = NativeEnterDispatcher.forModule(native);
+  expect(dispatcher.supportsBlockNavigation).toBe(true);
+  for (const kind of [
+    'image',
+    'video',
+    'horizontalrule',
+    'database-query',
+    'document-card',
+  ]) {
+    const session = createSession();
+    const owner = dispatcher.owner(session);
+    drain(
+      session,
+      session.input(
+        SessionInputMsg.encode({
+          ...emptyInput(2),
+          editor: EditorInputMsg.fromEditorSetState({
+            json: JSON.stringify({
+              root: {
+                type: 'root',
+                $: { documentMetadata: { version: 10 } },
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [{ type: 'text', text: 'Before' }],
+                  },
+                  {
+                    type: kind,
+                    displayMode: 'table',
+                    queryId: 'query',
+                    prompt: 'Count entries',
+                  },
+                  {
+                    type: 'paragraph',
+                    children: [{ type: 'text', text: 'end' }],
+                  },
+                ],
+              },
+            }),
+          }),
+        }),
+        2,
+        2
+      )
+    );
+    const matches = QueryReplyMsg.decode(
+      session.query(
+        QueryMsg.encode({ kind: 2, key: 0, text: 'Before', flags: 0 })
+      )
+    );
+    const text = matches.points[0]?.key;
+    if (text === undefined) throw new Error('Missing actual text key');
+    const original = session.serializedState();
+    const remove = dispatcher.register(
+      session,
+      owner,
+      (event) => {
+        expect(event?.key).toBe('ArrowDown');
+        const plan = dispatcher.prepareBlockNavigation(owner);
+        if (plan === 0n) return false;
+        const block = dispatcher.blockNavigationBlock(owner, plan);
+        if (block === undefined)
+          throw new Error('Expected issued geometry block');
+        expect(dispatcher.pendingText(owner, block)).toBe('Before');
+        expect(() => session.serializedState()).toThrow();
+        const handled = dispatcher.completeBlockNavigation(
+          owner,
+          plan,
+          [0, 20, 0, 20, 20]
+        );
+        expect(handled).toBe(true);
+        const selected = dispatcher.pendingSelection(owner);
+        expect(selected.kind).toBe(3);
+        const target = selected.nodes[0];
+        if (target === undefined)
+          throw new Error('Missing actual selected block');
+        expect(JSON.parse(dispatcher.pendingOwnJSON(owner, target)).type).toBe(
+          kind
+        );
+        expect(() => dispatcher.completeBlockNavigation(owner, plan)).toThrow();
+        return handled;
+      },
+      1,
+      undefined,
+      'ArrowDown'
+    );
+    try {
+      const first = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+      drain(
+        session,
+        dispatcher.withKeyboardEvent(owner, first, () =>
+          session.keyDown(40, 0, 0, 'ArrowDown', text, 6, 0, text, 6, 0, 0, 3)
+        )
+      );
+      const second = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+      const output = drain(
+        session,
+        dispatcher.withKeyboardEvent(owner, second, () =>
+          session.keyDown(40, 0, 0, 'ArrowDown', 0, 0, 0, 0, 0, 0, 1, 4)
+        )
+      );
+      const selection = output?.viewEffects.findLast(
+        (effect) => effect.kind === 6 && effect.code === 0
+      )?.selection;
+      expect(selection?.kind).toBe(2);
+      expect(selection?.anchor.type).toBe(1);
+      expect(selection?.anchor.offset).toBe(0);
+      expect(selection?.focus).toEqual(selection?.anchor);
+      expect(session.serializedState()).toBe(original);
+      expect(dispatcher.hasFailures(owner)).toBe(false);
+    } finally {
+      remove();
+      dispatcher.releaseOwner(session, owner);
+      session.free();
+    }
+  }
+});
+
 test('same-bucket cleanup retains the real native snapshot callback lease', () => {
   const dispatcher = NativeEnterDispatcher.forModule(native);
   const session = createSession();
@@ -275,6 +394,90 @@ test.each([undefined, null, { reason: 'opaque' }])(
       expect(dispatcher.hasFailures(owner)).toBe(false);
     } finally {
       remove();
+      session.free();
+    }
+  }
+);
+
+test.each(['owner', 'registration'] as const)(
+  'raw %s keeps zero-output text and both selection ABIs without opt-in',
+  (mode) => {
+    const dispatcher = NativeEnterDispatcher.forModule(native);
+    const session = createSession();
+    let owner: bigint | undefined;
+    let cleanup: (() => void) | undefined;
+    try {
+      if (mode === 'owner')
+        expect(session.viewCommandOwner()).toBeGreaterThan(0n);
+      else {
+        owner = dispatcher.owner(session);
+        cleanup = dispatcher.register(session, owner, () => false, 4);
+      }
+      drain(
+        session,
+        session.input(
+          SessionInputMsg.encode({
+            ...emptyInput(2),
+            editor: EditorInputMsg.fromEditorSetState({
+              json: JSON.stringify({
+                root: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [{ type: 'text', text: 'a' }],
+                    },
+                  ],
+                },
+              }),
+            }),
+          }),
+          3,
+          3
+        )
+      );
+      const point = QueryReplyMsg.decode(
+        session.query(QueryMsg.encode({ kind: 2, key: 0, text: 'a', flags: 0 }))
+      ).points[0];
+      if (!point) throw new Error('Missing actual raw native text');
+      // Establish view ownership through its genuine first Diff, as legacy does.
+      drain(
+        session,
+        session.textFromView(point.key, 'aa', 2, 2, 0, 0, undefined, 4)
+      );
+
+      expect(
+        session.textFromView(point.key, 'ab', 2, 2, 0, 0, undefined, 4)
+      ).toBe(0);
+      expect(session.takeOutput().length).toBe(0);
+      expect(
+        session.selectionFromView(point.key, 1, 0, point.key, 1, 0, 5)
+      ).toBe(0);
+      expect(session.takeOutput().length).toBe(0);
+      expect(
+        session.input(
+          SessionInputMsg.encode({
+            ...emptyInput(2),
+            editor: EditorInputMsg.fromEditorSelection({
+              selection: {
+                kind: 2,
+                anchor: { key: point.key, offset: 2, type: 0 },
+                focus: { key: point.key, offset: 2, type: 0 },
+                nodes: [],
+                table: 0,
+                dirty: false,
+              },
+              change: {},
+            }),
+          }),
+          6,
+          6
+        )
+      ).toBe(0);
+      expect(session.takeOutput().length).toBe(0);
+    } finally {
+      cleanup?.();
+      if (owner !== undefined) dispatcher.releaseOwner(session, owner);
       session.free();
     }
   }

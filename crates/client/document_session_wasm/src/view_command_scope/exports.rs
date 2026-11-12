@@ -98,3 +98,69 @@ pub fn unregister_escape(scope: u64, handle: u64) -> Result<(), JsValue> {
 pub fn request_retire(owner: u64, invocation: u64, scope: u64) -> Result<(), JsValue> {
     request_retire_current(owner, invocation, scope).map_err(host::error)
 }
+
+/// Issue a one-shot plan from the current fixed vertical-navigation callback.
+#[wasm_bindgen(js_name=viewCommandScopePrepareBlockNavigation)]
+pub fn prepare_block_navigation(scope: u64) -> Result<u64, JsValue> {
+    match run(scope, Operation::NavigationPrepare)? {
+        Value::Handle(value) => Ok(value),
+        _ => unreachable!(),
+    }
+}
+/// Return only the issued DOM measurement key, never a mutable host target.
+#[wasm_bindgen(js_name=viewCommandScopeBlockNavigationBlock)]
+pub fn block_navigation_block(scope: u64, plan: u64) -> Result<Option<u32>, JsValue> {
+    match run(scope, Operation::NavigationBlock(plan))? {
+        Value::Key(value) => Ok(value),
+        _ => unreachable!(),
+    }
+}
+/// Consume the exact issued plan before validating optional fresh DOM geometry.
+#[wasm_bindgen(js_name=viewCommandScopeCompleteBlockNavigation)]
+pub fn complete_block_navigation(
+    scope: u64,
+    plan: u64,
+    block_top: Option<f64>,
+    block_bottom: Option<f64>,
+    caret_top: Option<f64>,
+    caret_bottom: Option<f64>,
+    caret_height: Option<f64>,
+) -> Result<bool, JsValue> {
+    // Missing geometry declines geometry plans; direct root/node plans still run.
+    let rects = match (
+        block_top,
+        block_bottom,
+        caret_top,
+        caret_bottom,
+        caret_height,
+    ) {
+        (
+            Some(block_top),
+            Some(block_bottom),
+            Some(caret_top),
+            Some(caret_bottom),
+            Some(caret_height),
+        ) => Ok(Some(
+            macro_document_model::plugins_group_b::block_navigation::EdgeRects {
+                block_top,
+                block_bottom,
+                caret_top,
+                caret_bottom,
+                caret_height,
+            },
+        )),
+        (None, None, None, None, None) => Ok(None),
+        _ => Err("partial block navigation geometry"),
+    };
+    match run(scope, Operation::NavigationComplete(plan, rects))? {
+        Value::Handled(value) => Ok(value),
+        _ => unreachable!(),
+    }
+}
+
+/// Consume an issued plan after host teardown or failed measurement, without selecting.
+#[wasm_bindgen(js_name=viewCommandScopeCancelBlockNavigation)]
+pub fn cancel_block_navigation(scope: u64, plan: u64) -> Result<(), JsValue> {
+    run(scope, Operation::NavigationCancel(plan))?;
+    Ok(())
+}

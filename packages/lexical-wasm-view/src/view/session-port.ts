@@ -43,6 +43,7 @@ import { assertNativeSessionReceiverAdmission } from './native-session-guard';
 import type {
   EditorPort,
   InputSettlement,
+  NativeBlockNavigationPort,
   NativeEnterPort,
   NativeEscapePort,
   ProgrammaticApplicationAdmissionOptions,
@@ -96,6 +97,7 @@ export function selectionMessage(selection: ViewSelection): ISelectionMsg {
 export class SessionPort implements EditorPort {
   readonly nativeEnter: NativeEnterPort | undefined;
   readonly nativeEscape: NativeEscapePort | undefined;
+  readonly nativeBlockNavigation: NativeBlockNavigationPort | undefined;
   constructor(
     private readonly executor: Pick<
       SessionExecutor<EditorSession>,
@@ -170,6 +172,33 @@ export class SessionPort implements EditorPort {
       this.nativeEnter = createKeyPort('Enter');
       if (dispatcher.supportsEscape)
         this.nativeEscape = createKeyPort('Escape');
+      if (dispatcher.supportsBlockNavigation) {
+        this.nativeBlockNavigation = {
+          register: (down, listener) => {
+            commands.output.assertAttached();
+            return dispatcher.register(
+              executor.session,
+              owner,
+              listener,
+              1,
+              listener,
+              down ? 'ArrowDown' : 'ArrowUp'
+            );
+          },
+          prepare: () => dispatcher.prepareBlockNavigation(owner),
+          block: (plan) => dispatcher.blockNavigationBlock(owner, plan),
+          cancel: (plan) => dispatcher.cancelBlockNavigation(owner, plan),
+          complete: (plan, rects) =>
+            dispatcher.completeBlockNavigation(owner, plan, rects),
+          dispose: () => {
+            dispatcher.unregisterOwner(executor.session, owner, 'ArrowUp');
+            dispatcher.unregisterOwner(executor.session, owner, 'ArrowDown');
+          },
+          hasListeners: () =>
+            dispatcher.hasListeners(owner, 'ArrowUp') ||
+            dispatcher.hasListeners(owner, 'ArrowDown'),
+        };
+      }
     }
   }
   private assertRootAdmission(): void {
@@ -212,11 +241,18 @@ export class SessionPort implements EditorPort {
   }
   listeners(): ReadonlyMap<string, number> {
     this.assertRootAdmission();
-    return new Map(
-      ListenerTableMsg.decode(this.executor.session.listenerTable()).rows.map(
-        (row) => [row.command, row.priority]
-      )
-    );
+    const bytes = this.executor.session.listenerTable();
+    const token = this.commands?.dispatcher.guard.completedEntryToken();
+    const table = ListenerTableMsg.decode(bytes);
+    if (token !== undefined)
+      this.commands?.output.acceptColdListenerTable(table, token);
+    return new Map(table.rows.map((row) => [row.command, row.priority]));
+  }
+  needsKeyDown(key: string): boolean | undefined {
+    return this.commands?.output.needsKeyDown(key);
+  }
+  listenerLevels(command: string, key?: string): number | undefined {
+    return this.commands?.output.listenerLevels(command, key);
   }
   debugInsertion(
     selection: ViewSelection,
@@ -238,9 +274,10 @@ export class SessionPort implements EditorPort {
   textFromView(input: TextFromView): void {
     this.assertRootAdmission();
     const session = this.executor.session;
+    let acknowledgement: object | undefined;
     this.executor.run(
-      () =>
-        session.textFromView(
+      () => {
+        const flags = session.textFromView(
           input.key,
           input.text,
           input.anchorOffset,
@@ -253,11 +290,18 @@ export class SessionPort implements EditorPort {
           input.compositionEnd ? 1 : 0,
           input.compositionData,
           this.executor.now()
-        ),
+        );
+        acknowledgement = this.commands?.output.captureAcknowledgement(flags);
+        return flags;
+      },
       (flags) => {
-        // Nonzero results have already applied authoritative ops through consume.
-        // Zero alone proves that Rust accepted exactly the submitted DOM text.
-        if (flags === 0) this.view.acknowledgeText(input);
+        const accepted =
+          this.commands?.output.consumeAcknowledgement(
+            acknowledgement,
+            flags
+          ) ?? false;
+        // Preserve legacy zero, or the exact current qualified metadata-only echo.
+        if (flags === 0 || accepted) this.view.acknowledgeText(input);
         if (this.debug) {
           const expected = session.nodeText(input.key);
           const actual = this.view.text(input.key) ?? '';
@@ -285,28 +329,35 @@ export class SessionPort implements EditorPort {
       return;
     }
     this.assertRootAdmission();
+    let acknowledgement: object | undefined;
     if (change || selection.kind !== 'range' || selection.dirty) {
       const editor = EditorInputMsg.fromEditorSelection({
         selection: selectionMessage(selection),
         change: change ?? {},
       });
       this.executor.run(
-        () =>
-          this.executor.session.input(
+        () => {
+          const flags = this.executor.session.input(
             SessionInputMsg.encode({ ...emptyInput(2), editor }),
             this.executor.now(),
             Date.now()
-          ),
+          );
+          acknowledgement = commands?.output.captureAcknowledgement(flags);
+          return flags;
+        },
         (flags) => {
-          if (flags === 0 && selection.kind !== 'keep')
+          const accepted =
+            commands?.output.consumeAcknowledgement(acknowledgement, flags) ??
+            false;
+          if ((flags === 0 || accepted) && selection.kind !== 'keep')
             this.view.acknowledgeSelection(selection);
         }
       );
     } else if (selection.kind === 'range') {
       const { anchor, focus } = selection;
       this.executor.run(
-        () =>
-          this.executor.session.selectionFromView(
+        () => {
+          const flags = this.executor.session.selectionFromView(
             anchor.key,
             anchor.offset,
             anchor.type === 'text' ? 0 : 1,
@@ -314,9 +365,16 @@ export class SessionPort implements EditorPort {
             focus.offset,
             focus.type === 'text' ? 0 : 1,
             this.executor.now()
-          ),
+          );
+          acknowledgement = commands?.output.captureAcknowledgement(flags);
+          return flags;
+        },
         (flags) => {
-          if (flags === 0) this.view.acknowledgeSelection(selection);
+          const accepted =
+            commands?.output.consumeAcknowledgement(acknowledgement, flags) ??
+            false;
+          if (flags === 0 || accepted)
+            this.view.acknowledgeSelection(selection);
         }
       );
     }
@@ -368,7 +426,10 @@ export class SessionPort implements EditorPort {
       handled = Boolean(flags & FLAG_HANDLED);
     };
     if (
-      (key === 'Enter' || (key === 'Escape' && this.nativeEscape)) &&
+      (key === 'Enter' ||
+        (key === 'Escape' && this.nativeEscape) ||
+        ((key === 'ArrowUp' || key === 'ArrowDown') &&
+          this.nativeBlockNavigation)) &&
       this.commands
     ) {
       if (!event)
@@ -394,7 +455,9 @@ export class SessionPort implements EditorPort {
       );
     if (
       (event?.key === 'Enter' ||
-        (event?.key === 'Escape' && this.nativeEscape)) &&
+        (event?.key === 'Escape' && this.nativeEscape) ||
+        ((event?.key === 'ArrowUp' || event?.key === 'ArrowDown') &&
+          this.nativeBlockNavigation)) &&
       this.commands
     ) {
       const { dispatcher, owner } = this.commands;
