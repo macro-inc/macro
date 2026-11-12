@@ -331,7 +331,9 @@ horizontal overflow.
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
 decoded. An optional project ID places the file in a folder the caller can edit.
-Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+Use `CreateDocument` (in code mode, `macro.documents.create`,
+`createSpreadsheet` and `upload`) for generated text and native Macro
+spreadsheets. Agents with
 code execution should construct the base64 argument from the original bytes;
 the tool cannot access an agent's local path or download a URL.
 
@@ -1300,7 +1302,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps, subagents,
+tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
@@ -1893,6 +1895,22 @@ at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
 in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
+While a turn runs tool calls, the server words them as one live status line
+("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+pushes it to every viewer (`agent_session_activity`). It replaces the
+**Calling N tools** label of the run the turn is in: one with a call in flight,
+or the newest run while the agent thinks between calls. The count stays beside it,
+and the caret still opens the raw calls. An `ExecuteCode` program the turn is
+in takes it the same way: on its SDK-operation peek, or in place of **Working
+in your workspace…** before any operation is observed. It also replaces the
+open activity line of an agent reply in a channel, and shows under a working
+session's row in the Agents list. It is
+throttled per turn (every 4s for the first 10 lines, then every 15s, at most
+120), never stored, and cleared when the turn ends; a surface opened mid-turn
+shows its usual label until the next line arrives. Sessions owned by no person
+get no line, and the PostHog flag `disable-agent-activity-summary` turns lines
+off for an owner.
+
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
@@ -2381,7 +2399,8 @@ The built-in **Configure Agent** skill walks an agent through changing another
 agent's instructions or settings on the user's behalf. `ListAgents` returns every
 agent the user can manage with its current instructions, runtime, model, channel
 scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
-patches only the fields it is given. A selected MCP app slug must be a real
+patches only the fields it is given. Code mode hides both; the skill there
+uses `macro.agents.list()` and `Agent.update()` in `ExecuteCode`. A selected MCP app slug must be a real
 Pipedream app; an invented slug is rejected and the agent is left unchanged.
 Instructions are replaced whole, so the skill
 has the agent edit the current text and send the complete result. Changes reach
@@ -2669,8 +2688,8 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` identifies available agents and
-`CreateAgentSession` starts a conversation with the chosen agent. Use
+`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
+mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain

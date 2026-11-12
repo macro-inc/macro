@@ -128,6 +128,7 @@ export type DatabaseRecordsViewProps = {
   onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
+  renderLinkValue?: GridCellProps['renderLinkValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
   /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
@@ -360,6 +361,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
             renderTextValue={props.renderTextValue}
+            renderLinkValue={props.renderLinkValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onOpenMention={
@@ -555,6 +557,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
               createPending={controller.createPending}

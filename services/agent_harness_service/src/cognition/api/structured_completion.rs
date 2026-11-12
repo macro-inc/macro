@@ -214,7 +214,7 @@ pub async fn structured_completion(
     let agent_loop = AgentLoop::new(ctx.tool_service_context.recorder.clone()).with_model(&model);
     let usage_ctx =
         ai_usage::UsageContext::new(ai_usage::AiFeature::DynamicCompletionsApi, user_id.clone());
-    // Carry the feature on the context so tool-spawned subagents attribute to it.
+    // Carry the feature on the context so AI calls made by tools are attributed to it.
     let mut tool_context = ctx.tool_service_context.clone();
     tool_context.usage_context = usage_ctx.clone();
     let mut session = agent_loop
