@@ -1534,7 +1534,8 @@ function mapGraphqlNotificationMetadata(
           content: {
             agent: match(metadata.agentSignInExpiryAgent)
               .with('CLAUDE', () => 'claude' as const)
-              .exhaustive(),
+              // Claude is the only agent this build signs in.
+              .exhaustive(() => 'claude' as const),
             harnessId: metadata.agentSignInExpiryHarnessId,
             computerName: metadata.agentSignInExpiryComputerName,
             stage: match(metadata.agentSignInExpiryStage)

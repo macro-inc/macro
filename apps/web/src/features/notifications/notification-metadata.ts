@@ -116,6 +116,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
         if (meta.tag !== 'agent_sign_in_expiry') return 'sign-in expires soon';
         const agent = agentDisplayName(meta.content.agent);
         return match(meta.content.stage)
+          .with('expires_soon', () => `${agent} sign-in expires soon`)
           .with('expires_today', () => `${agent} sign-in expires today`)
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
