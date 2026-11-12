@@ -53,10 +53,11 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
             "events",
             "cards",
             "tags",
+            "botCredential",
             "container"
         ]
     );
-    let children = &variants[7]["properties"]["children"]["items"]["$ref"];
+    let children = &variants[8]["properties"]["children"]["items"]["$ref"];
     assert!(
         children.is_string(),
         "a container's children refer back to the widget"
