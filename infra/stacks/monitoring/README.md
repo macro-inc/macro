@@ -44,7 +44,8 @@ Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
 GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
-connections, and the AI provider account monitor. `error-logs-overall` notifies without paging because it crosses
+connections, the AI provider account monitor, and the Stripe inbox's
+dead-lettered and late-apply monitors. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
