@@ -18,7 +18,11 @@ export function DeleteProjectsDialog(props: {
       title={t('entityActions.deleteProjectsTitle', { count: props.count })}
       body={
         <>
-          <p>{t('entityActions.deleteProjectsDescription', { count: props.count })}</p>
+          <p>
+            {t('entityActions.deleteProjectsDescription', {
+              count: props.count,
+            })}
+          </p>
           <Show when={props.error}>
             {(message) => (
               <p role="alert" class="mt-2 text-failure">
