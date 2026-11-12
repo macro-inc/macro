@@ -201,16 +201,19 @@ export async function exclusive<T>(instance: string, label: string, work: () => 
     }
     let raw = '';
     let holder: { pid?: number; label?: string } = {};
-    let age = 0;
+    let seen: { ino: number; mtimeMs: number } | undefined;
     try {
-      age = Date.now() - statSync(path).mtimeMs;
+      seen = statSync(path);
       raw = readFileSync(path, 'utf8');
       holder = JSON.parse(raw);
     } catch {}
+    const age = seen ? Date.now() - seen.mtimeMs : 0;
     if ((holder.pid && !alive(holder.pid)) || (!holder.pid && age > UNWRITTEN_MS)) {
-      // Only the dead holder's file: another waiter may have taken the lock since.
+      // Only the dead holder's file: another waiter may have taken the lock
+      // since, and a fresh lock not yet written reads the same as an old one.
       try {
-        if (readFileSync(path, 'utf8') === raw) unlinkSync(path);
+        const now = statSync(path);
+        if (now.ino === seen?.ino && now.mtimeMs === seen.mtimeMs && readFileSync(path, 'utf8') === raw) unlinkSync(path);
       } catch {}
       continue;
     }
