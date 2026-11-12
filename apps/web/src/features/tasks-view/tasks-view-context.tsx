@@ -143,6 +143,7 @@ export type TasksViewContext = {
   createTask?: TasksViewProviderProps['onCreateTask'];
   projectsEnabled: Accessor<boolean>;
   showTaskProject: Accessor<boolean>;
+  showProjectFilter: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
@@ -694,6 +695,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     calendar,
     projectsEnabled,
     showTaskProject,
+    showProjectFilter: () =>
+      !props.hideTaskProject &&
+      (projectsEnabled() || Boolean(state.facets.project?.length)),
     ganttEnabled,
     setState: setStateWithSearch,
     selectedTask,

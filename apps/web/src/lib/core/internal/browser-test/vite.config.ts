@@ -56,6 +56,15 @@ export default defineConfig({
           return `${directory}/task-filter-adapters.tsx`;
         if (importer?.includes('/tasks-view/')) {
           if (
+            importer.endsWith('/filters/task-project-options.tsx') &&
+            [
+              '@app/features/projects/queries/project-identity',
+              '@app/features/projects/queries/project-soup',
+              '@service-storage/graphql-soup',
+            ].includes(source)
+          )
+            return `${directory}/task-filter-adapters.tsx`;
+          if (
             source === '../tasks-view-context' ||
             source === '../views/task-saved-views'
           )

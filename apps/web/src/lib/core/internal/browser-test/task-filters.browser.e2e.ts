@@ -198,3 +198,140 @@ for (const change of ['Manual priority', 'Navigate away', 'Replace login']) {
     await expect(page.getByTestId('task-reference-requests')).toHaveText('[]');
   });
 }
+
+test('Project filters search, select alternatives and survive saved-view capture', async ({
+  page,
+}, info) => {
+  const phone = info.project.name === 'phone';
+  await page.goto('/?task-filters');
+  const openFilters = () =>
+    page
+      .getByRole('button', {
+        name: phone ? 'Open task filters' : 'Filter tasks',
+        exact: true,
+      })
+      .click();
+  await openFilters();
+  await page
+    .getByRole(phone ? 'button' : 'menuitem', {
+      name: phone ? 'Clear all' : 'Clear filters',
+      exact: true,
+    })
+    .click();
+  if (!phone) await openFilters();
+  await page
+    .getByRole(phone ? 'button' : 'menuitem', { name: /^Project/ })
+    .click();
+  const role = phone ? 'checkbox' : 'option';
+  const alpha = page.getByRole(role, { name: 'Alpha launch', exact: true });
+  await expect(alpha).toBeVisible();
+  if (phone) await alpha.click();
+  else await alpha.locator('[data-multiselect-checkbox]').click();
+  await expect(page.locator('ul[aria-label="Matching tasks"]')).toHaveText(
+    'Alpha task'
+  );
+  await page
+    .getByRole(phone ? 'button' : 'option', {
+      name: 'Next options',
+      exact: true,
+    })
+    .click();
+  const beta = page.getByRole(role, { name: 'Beta launch', exact: true });
+  await expect(beta).toBeVisible();
+  if (phone) await beta.click();
+  else await beta.locator('[data-multiselect-checkbox]').click();
+  await expect(page.locator('ul[aria-label="Matching tasks"]')).toHaveText(
+    'Alpha taskBeta task'
+  );
+  const search = page.getByPlaceholder('Search projects...');
+  await search.fill('Beta');
+  await expect(beta).toBeVisible();
+  await expect(alpha).toBeHidden();
+  await search.fill('');
+  await expect(alpha).toBeVisible();
+  if (phone)
+    await page
+      .getByRole('button', { name: 'Close filters', exact: true })
+      .click();
+  else {
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  }
+  await page
+    .getByRole('button', { name: 'Save filter view', exact: true })
+    .click();
+  await expect(page.locator('ul[aria-label="Matching tasks"]')).toHaveText(
+    'Alpha taskBeta taskUnlinked task'
+  );
+  await page
+    .getByRole('button', { name: 'Restore filter view', exact: true })
+    .click();
+  await expect(page.locator('ul[aria-label="Matching tasks"]')).toHaveText(
+    'Alpha taskBeta task'
+  );
+  await openFilters();
+  const projectGroup = page.getByRole(phone ? 'button' : 'menuitem', {
+    name: /^Project/,
+  });
+  if (!phone || (await projectGroup.getAttribute('aria-expanded')) !== 'true')
+    await projectGroup.click();
+  if (phone) {
+    await expect(alpha).toBeChecked();
+    await expect(beta).toBeChecked();
+  } else {
+    await expect(alpha).toHaveAttribute('aria-selected', 'true');
+    await expect(beta).toHaveAttribute('aria-selected', 'true');
+  }
+  if (phone) {
+    await beta.scrollIntoViewIfNeeded();
+    await expect(alpha).toBeInViewport();
+    await expect(beta).toBeInViewport();
+  }
+  await page.screenshot({
+    path: `/tmp/tasks-project-filter-${info.project.name}.png`,
+    fullPage: true,
+  });
+  if (phone)
+    await page
+      .getByRole('button', { name: 'Close filters', exact: true })
+      .click();
+  else {
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  }
+  await page
+    .getByRole('button', { name: 'Disable projects', exact: true })
+    .click();
+  await openFilters();
+  await expect(projectGroup).toBeVisible();
+  await page
+    .getByRole(phone ? 'button' : 'menuitem', {
+      name: phone ? 'Clear all' : 'Clear filters',
+      exact: true,
+    })
+    .click();
+  if (!phone) await openFilters();
+  await expect(projectGroup).toHaveCount(0);
+  await expect(page.locator('ul[aria-label="Matching tasks"]')).toHaveText(
+    'Alpha taskBeta taskUnlinked task'
+  );
+});
+
+test('Project facet is absent inside a single project task list', async ({
+  page,
+}, info) => {
+  const phone = info.project.name === 'phone';
+  await page.goto('/?task-filters');
+  await page
+    .getByRole('button', { name: 'Toggle project scope', exact: true })
+    .click();
+  await page
+    .getByRole('button', {
+      name: phone ? 'Open task filters' : 'Filter tasks',
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole(phone ? 'button' : 'menuitem', { name: /^Project/ })
+  ).toHaveCount(0);
+});

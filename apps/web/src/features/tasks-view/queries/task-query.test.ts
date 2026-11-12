@@ -714,3 +714,69 @@ describe('saved task filter execution', () => {
     ]);
   });
 });
+
+describe('Project task filters', () => {
+  const projectIds = [
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000002',
+  ];
+
+  it('keeps project alternatives in saved views, list queries and search', () => {
+    const saved = captureTaskSavedView({
+      tab: 'team-tasks',
+      facets: { project: [projectIds[1], projectIds[0], projectIds[0]] },
+      context: { tagPropertyDefinitionByOptionId: new Map() },
+    });
+    expect(saved.isOk()).toBe(true);
+    if (saved.isErr()) throw new Error(saved.error);
+    expect(saved.value.filters.projectIds).toEqual(projectIds);
+
+    const restored = materializeTaskSavedView(saved.value);
+    expect(restored.facets.project).toEqual(projectIds);
+    expect(
+      buildTaskQuery({ ...options, ...restored, dueDate: undefined }).body.propf
+    ).toEqual({
+      '|': projectIds.map((id) => ({
+        l: { pd: SYSTEM_PROPERTY_IDS.PROJECT, v: { er: id } },
+      })),
+    });
+    expect(
+      buildTaskSearchRequest({
+        ...restored,
+        dueDate: undefined,
+        userId: 'viewer',
+        query: 'launch',
+        matchType: 'partial',
+      }).body.filters?.property_filters
+    ).toContainEqual({
+      property_definition_id: SYSTEM_PROPERTY_IDS.PROJECT,
+      entity_type: 'TASK',
+      entity_ids: projectIds,
+    });
+  });
+
+  it('reads old definitions and retains valid projects beside malformed entries', () => {
+    const filters = {
+      statusOptionIds: [],
+      priorityOptionIds: [],
+      assignees: [],
+      creators: [],
+      tags: [],
+    };
+    const old = readTaskSavedView({ kind: 'tasks', version: 1, filters });
+    expect(old.issues).toEqual([]);
+    expect(materializeTaskSavedView(old.config).facets.project).toBeUndefined();
+
+    const partial = readTaskSavedView({
+      kind: 'tasks',
+      version: 1,
+      filters: { ...filters, projectIds: [projectIds[0], 'invalid'] },
+    });
+    expect(partial.issues.map(({ path }) => path.join('.'))).toContain(
+      'filters.projectIds.1'
+    );
+    expect(materializeTaskSavedView(partial.config).facets.project).toEqual([
+      projectIds[0],
+    ]);
+  });
+});

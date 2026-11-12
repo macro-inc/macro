@@ -34,6 +34,7 @@ const filtersSchema = z
   .object({
     statusOptionIds: idsSchema,
     priorityOptionIds: idsSchema,
+    projectIds: idsSchema.optional(),
     // Built-in tabs can add the viewer to 100 explicitly selected people.
     assignees: z.array(personSchema).max(101),
     creators: z.array(personSchema).max(101),
@@ -118,6 +119,7 @@ const SAVED_TASK_FACET_IDS: readonly string[] = [
   'priority',
   'assignees',
   'created-by',
+  'project',
   'tags',
 ];
 
@@ -141,6 +143,9 @@ function canonical(config: TaskSavedViewConfig): TaskSavedViewConfig {
     filters: {
       statusOptionIds: uniqueSorted(filters.statusOptionIds, String),
       priorityOptionIds: uniqueSorted(filters.priorityOptionIds, String),
+      ...(filters.projectIds?.length && {
+        projectIds: uniqueSorted(filters.projectIds, String),
+      }),
       assignees: uniqueSorted(filters.assignees, JSON.stringify),
       creators: uniqueSorted(filters.creators, JSON.stringify),
       tags: uniqueSorted(filters.tags, (tag) => tag.optionId),
@@ -291,6 +296,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
           identifierSchema,
           100
         ),
+        projectIds: readEntries(filters.projectIds, identifierSchema, 100),
         assignees: readEntries(filters.assignees, personSchema, 101),
         creators: readEntries(filters.creators, personSchema, 101),
         tags: tags
@@ -370,6 +376,7 @@ export function captureTaskSavedView(input: {
       ),
       assignees: people(facets.assignees ?? []),
       creators: people(facets['created-by'] ?? []),
+      projectIds: facets.project ?? [],
       tags,
     },
   });
@@ -405,6 +412,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
       assignees: people(filters.assignees),
       'created-by': people(filters.creators),
       tags: filters.tags.map((tag) => tag.optionId),
+      ...(filters.projectIds?.length && { project: [...filters.projectIds] }),
     },
     tagBindings: new Map(
       filters.tags.map((tag) => [tag.optionId, tag.propertyDefinitionId])

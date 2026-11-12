@@ -41,6 +41,7 @@ import {
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import { TASK_VIEWER } from '../filters/task-facets';
+import { useTaskProjectLabels } from '../filters/task-project-options';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -60,9 +61,13 @@ function TaskSavedViewSummary(props: {
   config: TaskSavedViewConfig;
   omittedFilters?: TaskSavedViewIssue[];
 }) {
-  const { state } = useTasksView();
+  const { state, projectsEnabled } = useTasksView();
   const filters = useTaskFilters();
   const selection = () => materializeTaskSavedView(props.config);
+  const projects = useTaskProjectLabels(
+    () => selection().facets.project ?? [],
+    projectsEnabled
+  );
   const dueDateLabel = () => {
     const filter = props.config.dueDate;
     if (!filter) return;
@@ -89,7 +94,7 @@ function TaskSavedViewSummary(props: {
           unchanged.
         </p>
       </Show>
-      <For each={filters.groups()}>
+      <For each={filters.groups().filter((group) => group.id !== 'project')}>
         {(group) => (
           <Show when={(selection().facets[group.id] ?? []).length}>
             <p>
@@ -110,6 +115,14 @@ function TaskSavedViewSummary(props: {
           </Show>
         )}
       </For>
+      <Show when={projects().length}>
+        <p>
+          Project:{' '}
+          {projects()
+            .map((option) => option.label)
+            .join(', ')}
+        </p>
+      </Show>
       <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
