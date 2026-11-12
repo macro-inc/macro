@@ -10,12 +10,14 @@ import type {
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { optimisticRows } from '../../database/core/table';
 import { DatabaseRecordsView } from '../../database/views/database-records-view';
+import { DatabaseLinkValue, DatabaseTextValue } from '../database-mentions';
 
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {
   const references = new URLSearchParams(location.search).has('references');
   const [opened, setOpened] = createSignal('');
   const rapid = new URLSearchParams(location.search).has('rapid');
+  const links = new URLSearchParams(location.search).has('links');
   const holdWrites = new URLSearchParams(location.search).has('holdWrites');
   let releaseWrites!: () => void;
   const writeGate = holdWrites
@@ -41,6 +43,11 @@ function RecordsFixture() {
       dataType: 'ENTITY',
       specificEntityType: 'DOCUMENT',
     });
+  if (links)
+    initialColumns.push(
+      { ...initialColumns[0], id: 'notes', name: 'Notes' },
+      { ...initialColumns[0], id: 'website', name: 'Website', dataType: 'LINK' }
+    );
   if (rapid)
     initialColumns.push(
       ...['notes', 'detail'].map((id) => ({
@@ -57,6 +64,12 @@ function RecordsFixture() {
         cells: {
           name: 'First record',
           ...(references ? { file: 'project-plan' } : {}),
+          ...(links
+            ? {
+                notes: 'Spec at https://example.com/spec',
+                website: 'example.com',
+              }
+            : {}),
         },
       },
     ],
@@ -146,6 +159,12 @@ function RecordsFixture() {
               </span>
             )}
             renderMentionPicker={(picker) => <ReferencePicker {...picker} />}
+            renderTextValue={
+              links ? (value) => <DatabaseTextValue value={value} /> : undefined
+            }
+            renderLinkValue={
+              links ? (url) => <DatabaseLinkValue url={url} /> : undefined
+            }
             renderTextEditor={
               rapid
                 ? (props) => (

@@ -54,6 +54,10 @@ vi.mock('@channel/Call/ChannelCallButton', () => ({
   ChannelCallButton: () => null,
 }));
 vi.mock('@channel/Call/ChannelCallTab', () => ({ ChannelCallTab: () => null }));
+vi.mock('../../Call/views/ActiveCallHeader', () => ({
+  ActiveCallHeader: () => null,
+  JoinableCallStatus: () => null,
+}));
 vi.mock('@channel/Call/use-call', () => ({
   useCall: () => ({ isInThisChannel: () => false }),
 }));

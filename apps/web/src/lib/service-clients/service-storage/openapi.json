@@ -4871,6 +4871,518 @@
         }
       }
     },
+    "/channel-sections": {
+      "get": {
+        "tags": ["channel_sections"],
+        "summary": "List the caller's shared or private labels.",
+        "operationId": "list_channel_sections",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabelsList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channel_sections"],
+        "summary": "Create a label for the caller's authorized scope.",
+        "operationId": "create_channel_section",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/channels/{channel_id}": {
+      "put": {
+        "tags": ["channel_sections"],
+        "summary": "Move a channel into a label of the caller's authorized scope, or out of any label.",
+        "operationId": "set_channel_section",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/preview": {
+      "post": {
+        "tags": ["channel_sections"],
+        "summary": "Preview visible channels matched by a smart tag, without creating it.",
+        "operationId": "preview_channel_section",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelLabelRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartTagPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-sections/{label_id}": {
+      "delete": {
+        "tags": ["channel_sections"],
+        "summary": "Delete a label of the caller's authorized scope. Its channels return to the plain list.",
+        "operationId": "delete_channel_section",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channel_sections"],
+        "summary": "Update a label, optionally moving it to another authorized scope.",
+        "operationId": "update_channel_section",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels": {
       "post": {
         "tags": ["channels"],
@@ -17891,6 +18403,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -18111,6 +18624,7 @@
                 "crm_contact",
                 "crm_pipeline",
                 "reminder",
+                "harness",
                 "skill",
                 "agent_session",
                 "scheduled_action",
@@ -20086,6 +20600,48 @@
         }
       }
     },
+    "/harnesses/directory": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/directory`.",
+        "operationId": "list_harness_directory",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Harness"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses/me": {
       "get": {
         "tags": ["harnesses"],
@@ -20369,6 +20925,113 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/residents": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/{harness_id}/residents`.",
+        "operationId": "list_harness_residents",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessResident"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/team-access": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/{harness_id}/team-access`.",
+        "description": "Requires the owner's own session: an agent can ask for access to a machine\nbut never open one, since that grants code execution on it.",
+        "operationId": "set_harness_team_access",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHarnessTeamAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -23693,6 +24356,471 @@
         }
       }
     },
+    "/saved_views/definitions": {
+      "get": {
+        "tags": ["saved_views"],
+        "operationId": "list_saved_view_definitions",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Only definitions of this consumer kind, such as `email`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "first",
+            "in": "query",
+            "description": "Page size, 1 to 50; defaults to 25.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` from the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinitionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["saved_views"],
+        "operationId": "create_saved_view_definition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedViewDefinitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_views/definitions/order": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "reorder_saved_view_definitions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderSavedViewDefinitionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedViewDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_views/definitions/{saved_view_id}": {
+      "get": {
+        "tags": ["saved_views"],
+        "operationId": "get_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to read",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["saved_views"],
+        "operationId": "delete_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "expectedRevision",
+            "in": "query",
+            "description": "Revision that must still be current when the deletion commits.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["saved_views"],
+        "operationId": "update_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedViewDefinitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views/exclude_default": {
       "post": {
         "tags": ["saved_views"],
@@ -25355,6 +26483,11 @@
             "format": "uuid",
             "description": "Stable request identity across revisions."
           },
+          "requestedByAgent": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent that asked on the requester's behalf, when one did."
+          },
           "requestedLevel": {
             "$ref": "#/components/schemas/AccessLevel",
             "description": "Requested upgrade."
@@ -25742,6 +26875,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -25851,6 +26985,17 @@
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
+          },
+          "stopped_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentStoppedReason",
+                "description": "Why the agent cannot run right now, or `None` while it can."
+              }
+            ]
           }
         }
       },
@@ -26188,6 +27333,11 @@
         "type": "string",
         "description": "Where an agent session is shown. The string form is the\n`agent_session.visibility` column's.",
         "enum": ["listed", "unlisted", "hidden"]
+      },
+      "AgentStoppedReason": {
+        "type": "string",
+        "description": "Why an agent cannot run right now.",
+        "enum": ["no_runtime_access"]
       },
       "AgentTyping": {
         "type": "object",
@@ -27341,7 +28491,7 @@
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Owning team. Omit for a private, user-owned harness."
+            "description": "Team to open the harness to. Omit to keep it to the approving user."
           }
         }
       },
@@ -30546,7 +31696,7 @@
       },
       "ChannelLabel": {
         "type": "object",
-        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.",
+        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.",
         "required": [
           "id",
           "name",
@@ -30560,7 +31710,7 @@
           "channelCount": {
             "type": "integer",
             "format": "int64",
-            "description": "All assignments for a manual label; visible matches for a smart tag."
+            "description": "Legacy assignments or smart matches; visible effective channels for sections."
           },
           "channelIds": {
             "type": "array",
@@ -30568,12 +31718,20 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Channels in this label that the requesting user participates in."
+            "description": "Effective channels visible to the viewer in this label or section."
           },
           "createdAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the label was created."
+          },
+          "explicitChannelIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Explicit picks visible to the viewer (section responses only)."
           },
           "id": {
             "type": "string",
@@ -31369,6 +32527,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -33384,6 +34543,30 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "CreateSavedViewDefinitionRequest": {
+        "type": "object",
+        "required": ["name", "config"],
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-chosen ID, reused to retry the same creation; generated when absent."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nonempty display name, at most 120 characters."
+          },
+          "sharedTeamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to share with, which the creator must belong to."
           }
         }
       },
@@ -39567,6 +40750,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -40903,13 +42087,8 @@
       "ExternalChatReaction": {
         "type": "object",
         "description": "Grouped reactions.",
-        "required": ["emoji", "count", "mine"],
+        "required": ["emoji", "reactors", "mine"],
         "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of reacting people."
-          },
           "emoji": {
             "type": "string",
             "description": "Emoji."
@@ -40917,6 +42096,13 @@
           "mine": {
             "type": "boolean",
             "description": "Caller has this reaction."
+          },
+          "reactors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "The people who reacted with it, earliest first."
           }
         }
       },
@@ -41429,6 +42615,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -41484,6 +42671,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -44776,6 +45964,10 @@
           "connected"
         ],
         "properties": {
+          "access": {
+            "$ref": "#/components/schemas/HarnessAccess",
+            "description": "What the caller may do with it. Reported as `none` where no caller is\nin question, such as to the daemon itself."
+          },
           "allow_permission_bypass": {
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
@@ -44814,12 +46006,25 @@
             "$ref": "#/components/schemas/HarnessOwner",
             "description": "Owner."
           },
+          "shared_team_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Teams it is a team machine for: their every member is a user of it."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
             "description": "Update timestamp."
           }
         }
+      },
+      "HarnessAccess": {
+        "type": "string",
+        "description": "What one caller may do with a machine.",
+        "enum": ["owner", "user", "read", "none"]
       },
       "HarnessAgent": {
         "type": "object",
@@ -44847,7 +46052,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-owned (private) harness.",
+            "description": "The person whose machine this is.",
             "required": ["user_id", "type"],
             "properties": {
               "type": {
@@ -44859,25 +46064,33 @@
                 "description": "Owner user id."
               }
             }
-          },
-          {
-            "type": "object",
-            "description": "Team-owned harness, usable by every team member.",
-            "required": ["team_id", "type"],
-            "properties": {
-              "team_id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "Owner team id."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["team"]
-              }
-            }
           }
         ],
-        "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+        "description": "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      },
+      "HarnessResident": {
+        "type": "object",
+        "description": "An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_user_id": {
+            "type": ["string", "null"],
+            "description": "The user owning the agent, when a person does."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The team owning the agent, when a team does."
+          }
+        }
       },
       "HarnessSession": {
         "type": "object",
@@ -51320,6 +52533,24 @@
           }
         }
       },
+      "ReorderSavedViewDefinitionsRequest": {
+        "type": "object",
+        "required": ["kind", "ids"],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Visible definitions of that kind in their new order, at most 200;\ndefinitions left out follow them by creation time."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Consumer kind whose order is replaced, such as `email`."
+          }
+        }
+      },
       "RepeatUntil": {
         "type": "string",
         "description": "The event that ends a repeating animation.",
@@ -51845,6 +53076,14 @@
             "description": "Append rows to the table, in order, each with the cells it starts\nwith.",
             "required": ["rows", "kind"],
             "properties": {
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+              },
               "kind": {
                 "type": "string",
                 "enum": ["insert"]
@@ -52198,6 +53437,84 @@
             "type": "string",
             "format": "uuid",
             "description": "Identifier."
+          }
+        }
+      },
+      "SavedViewDefinition": {
+        "type": "object",
+        "description": "A saved filter definition, not a snapshot of matching entities.",
+        "required": [
+          "id",
+          "ownerId",
+          "name",
+          "config",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity of this definition."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name chosen by the owner."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "User who owns and can edit this definition."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current revision, required by updates and deletion."
+          },
+          "sharedTeamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team with access, or absent when the definition is private."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SavedViewDefinitionPage": {
+        "type": "object",
+        "description": "A page in the viewer's own order, then by creation time and ID.",
+        "required": ["views"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor for the next page, absent when the listing is complete."
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedViewDefinition"
+            },
+            "description": "Definitions the viewer can currently access."
+          }
+        }
+      },
+      "SavedViewSharingRequest": {
+        "type": "object",
+        "description": "An explicit sharing change: a team, or `null` to make the definition private.",
+        "properties": {
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid"
           }
         }
       },
@@ -52614,6 +53931,22 @@
           }
         }
       },
+      "SetHarnessTeamAccessRequest": {
+        "type": "object",
+        "description": "Request to open or close a machine to one of the owner's teams.",
+        "required": ["team_id", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether every member of the team may use the machine."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team, which the owner must belong to."
+          }
+        }
+      },
       "SetOperator": {
         "type": "string",
         "description": "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several.",
@@ -52834,7 +54167,8 @@
           "call",
           "email_thread",
           "agent_session",
-          "external_chat"
+          "external_chat",
+          "harness"
         ]
       },
       "SharePermissionV2": {
@@ -53275,6 +54609,10 @@
             "format": "uuid",
             "description": "Channel id."
           },
+          "isParticipant": {
+            "type": ["boolean", "null"],
+            "description": "Whether the viewer actively participates in this channel (section previews only)."
+          },
           "name": {
             "type": "string",
             "description": "Channel display name."
@@ -53296,7 +54634,7 @@
           "totalCount": {
             "type": "integer",
             "format": "int64",
-            "description": "Number of matching channels the caller participates in, including overflow."
+            "description": "Number of visible matches, including overflow; legacy previews count participants."
           }
         }
       },
@@ -54719,6 +56057,36 @@
           }
         }
       },
+      "SoupHarness": {
+        "type": "object",
+        "description": "A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.",
+        "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was paired."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The harness uuid."
+          },
+          "name": {
+            "type": "string",
+            "description": "The machine's display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The person or team that owns the machine."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was last changed."
+          }
+        }
+      },
       "SoupInitiative_SoupPropertiesField": {
         "allOf": [
           {
@@ -54981,6 +56349,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["databaseRow"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Paired runtime, listed only by attention feeds.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupHarness",
+                "description": "Paired runtime, listed only by attention feeds."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["harness"]
               }
             }
           }
@@ -57728,6 +59111,22 @@
                 "enum": ["view"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A row's.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A row's."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["row"]
+              }
+            }
           }
         ],
         "description": "An id a request minted for something new that already names something,\nwhich refuses the request: a retried request whose first attempt\ncommitted, or an id minted twice."
@@ -59214,6 +60613,36 @@
         "type": "string",
         "enum": ["add", "remove", "replace"]
       },
+      "UpdateSavedViewDefinitionRequest": {
+        "type": "object",
+        "required": ["expectedRevision"],
+        "properties": {
+          "config": {
+            "type": ["object", "null"],
+            "description": "Complete replacement configuration; absent keeps the current one."
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision that must still be current when the update commits."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Replacement name; absent keeps the current one."
+          },
+          "sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SavedViewSharingRequest",
+                "description": "Sharing change; absent keeps the current share."
+              }
+            ]
+          }
+        }
+      },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
         "properties": {
@@ -59546,6 +60975,25 @@
           }
         }
       },
+      "UserPictureChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`UserTopicEvent::PictureChanged`].",
+        "required": ["user_id"],
+        "properties": {
+          "file_id": {
+            "type": ["string", "null"],
+            "description": "Static file id of the new picture; `None` when it is not a static file\n(set by URL) or the picture was removed."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "URL of the new picture; `None` when the picture was removed."
+          },
+          "user_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User whose profile picture changed."
+          }
+        }
+      },
       "UserPinsResponse": {
         "type": "object",
         "required": ["recent"],
@@ -59558,6 +61006,26 @@
             "description": "The pins returned from the query"
           }
         }
+      },
+      "UserTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A user's profile picture changed or was removed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["user.picture_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/UserPictureChangedMetadata",
+                "description": "A user's profile picture changed or was removed."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroUsersTopic`]."
       },
       "UserViewsResponse": {
         "type": "object",
@@ -60198,6 +61666,10 @@
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
             "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
+          },
+          {
+            "$ref": "#/components/schemas/UserTopicEvent",
+            "description": "User profile events from the `macro.users` topic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `message.posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."

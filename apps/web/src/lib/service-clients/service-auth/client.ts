@@ -379,8 +379,10 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
-    // The session code stays valid server-side for 5 minutes and is
-    // replayable, so retrying transient failures is safe.
+    // A session code redeems once. A server error leaves it redeemable (the
+    // server puts it back when its own token refresh fails), so retrying
+    // those is safe; a retry after a redemption that succeeded but never
+    // reached us gets 400.
     const result = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`,
       { retry: { maxTries: 3, delay: 'exponential' } }
@@ -530,9 +532,15 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
-  async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
+  async getUserNamesWithEmail(
+    args: PostGetNamesRequestBody,
+    init?: Pick<SafeFetchInit, 'headers' | 'trace' | 'signal'>
+  ) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
+        headers: init?.headers,
+        trace: init?.trace,
+        signal: init?.signal,
         method: 'POST',
         body: JSON.stringify(args),
       })

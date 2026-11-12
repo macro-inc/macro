@@ -41,6 +41,7 @@ import { queryReadyGate } from '@queries/gate';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
+import { ChatHeaderFixture } from './split-header-fixture';
 
 declare global {
   interface Window {
@@ -78,6 +79,7 @@ const noQuickAccess: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 function ChatHarness(props: { chatId: string }) {
@@ -101,29 +103,31 @@ function ChatHarness(props: { chatId: string }) {
   });
   return (
     <div class="relative h-dvh">
-      <ToastRegion />
-      {/* The app's bottom chrome host, where the composer floats on touch. */}
-      <Show when={isTouchDevice()}>
-        <FloatRegionHost />
-      </Show>
-      <ExternalChatContextProvider value={source}>
-        <SidePanel.Root floating defaultOpen={false}>
-          <ExternalChatView
-            userId={userId()}
-            share={
-              <ShareTrigger
-                onClick={share}
-                id={props.chatId}
-                blockType="external_chat"
-              />
-            }
-            onShare={share}
-            onConnect={() => {
-              location.search = '';
-            }}
-          />
-        </SidePanel.Root>
-      </ExternalChatContextProvider>
+      <ChatHeaderFixture>
+        <ToastRegion />
+        {/* The app's bottom chrome host, where the composer floats on touch. */}
+        <Show when={isTouchDevice()}>
+          <FloatRegionHost />
+        </Show>
+        <ExternalChatContextProvider value={source}>
+          <SidePanel.Root floating defaultOpen={false}>
+            <ExternalChatView
+              userId={userId()}
+              share={
+                <ShareTrigger
+                  onClick={share}
+                  id={props.chatId}
+                  blockType="external_chat"
+                />
+              }
+              onShare={share}
+              onConnect={() => {
+                location.search = '';
+              }}
+            />
+          </SidePanel.Root>
+        </ExternalChatContextProvider>
+      </ChatHeaderFixture>
     </div>
   );
 }

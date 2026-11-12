@@ -73,11 +73,15 @@ pub(crate) enum SessionMessage {
     ReplaceMcpServers(Vec<McpServer>),
     /// Answer the agent's permission requests this way from now on.
     SetPermissionPolicy(PermissionPolicy),
+    /// Stop without a trace if nothing is open; see
+    /// [`crate::domain::service::AgentSessionService::release_session`].
+    Release(oneshot::Sender<Result<crate::domain::model::SessionRelease>>),
 }
 
 /// An actor-owned operation or an input to the runtime protocol machine.
 pub(crate) enum ActorInput {
     Protocol(Input<SessionCompletion>),
+    Release(oneshot::Sender<Result<crate::domain::model::SessionRelease>>),
     PresentTool {
         presentation: crate::domain::model::SessionToolPresentation,
         completed: oneshot::Sender<Result<()>>,
@@ -135,6 +139,9 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     mcp_servers: Vec<McpServer>,
     /// Whether the listing has been started; it runs once per connection.
     tools_listed: bool,
+    /// Told once the ACP session opens (`true`) or the handshake fails
+    /// (`false`), for whoever is waiting to know the restore finished.
+    opened: watch::Sender<Option<bool>>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -203,7 +210,14 @@ where
             tool_catalog,
             mcp_servers,
             tools_listed: false,
+            opened: watch::Sender::new(None),
         }
+    }
+
+    /// Report the handshake's outcome to `opened` once it has one.
+    pub(crate) fn with_opened(mut self, opened: watch::Sender<Option<bool>>) -> Self {
+        self.opened = opened;
+        self
     }
 
     /// Apply an explicit starting model before a new session becomes live.
@@ -268,6 +282,7 @@ where
                 },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
                 Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
+                Some(SessionMessage::Release(completed)) => return ActorInput::Release(completed),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
@@ -312,6 +327,7 @@ where
     pub(crate) async fn dispatch_input(&mut self, input: ActorInput) -> Stepped {
         match input {
             ActorInput::Protocol(input) => self.dispatch(input).await,
+            ActorInput::Release(completed) => self.release(completed).await,
             ActorInput::PresentTool {
                 presentation,
                 completed,
@@ -633,6 +649,41 @@ where
         stepped
     }
 
+    /// Stop silently when nothing is open. Unlike every other stop, this one
+    /// leaves no `disconnected` frame and closes no telemetry: the session is
+    /// not over for anyone watching it, only for this process's memory.
+    /// Frames still buffered are written first, so none is lost.
+    async fn release(
+        &mut self,
+        completed: oneshot::Sender<Result<crate::domain::model::SessionRelease>>,
+    ) -> Stepped {
+        if !self.machine.is_idle() {
+            let _ = completed.send(Ok(crate::domain::model::SessionRelease::Busy));
+            return Stepped::Continue;
+        }
+        // Bounded like a delivery: a store that does not answer keeps the
+        // session's command worker waiting behind this.
+        let flushed = match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, self.logs.flush()).await
+        {
+            Ok(flushed) => flushed,
+            Err(_) => Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "timed out flushing buffered log frames before a release"
+            ))),
+        };
+        if let Err(error) = flushed {
+            tracing::error!(
+                error = ?error,
+                id = %self.machine.id(),
+                "agent session failed to flush buffered log frames before a release"
+            );
+            let _ = completed.send(Err(error));
+            return self.dispatch(Input::Closed(CloseReason::LogFailed)).await;
+        }
+        let _ = completed.send(Ok(crate::domain::model::SessionRelease::Released));
+        tracing::info!(id = %self.machine.id(), "agent session released while idle");
+        Stepped::Stopped(StopReason::Closed(CloseReason::Released))
+    }
+
     /// Log then send: the log entry is written first so the session's history
     /// never lacks a message its agent received.
     #[tracing::instrument(
@@ -756,9 +807,17 @@ where
         match self.machine.status() {
             RuntimeStatus::Live { .. } => {
                 self.handshake_span.take();
+                self.opened.send_replace(Some(true));
                 self.list_tools_once();
             }
             RuntimeStatus::Dead => {
+                self.opened.send_if_modified(|opened| {
+                    let first = opened.is_none();
+                    if first {
+                        *opened = Some(false);
+                    }
+                    first
+                });
                 if let Some(span) = self.handshake_span.take() {
                     span.record("otel.status_code", "ERROR");
                     span.record("otel.status_description", "ACP handshake failed");

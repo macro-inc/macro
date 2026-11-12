@@ -326,6 +326,7 @@ For a container's children, by id:
 | yes | yes | yes | merge recursively |
 | yes | yes | no | removed if `L = B`, else conflict (`changed`) |
 | yes | no | yes | stays removed if `W = B`, else conflict (`removed`) |
+| yes | no | no | stays removed: both sides removed it |
 | no | yes | no | kept: someone else inserted it |
 | no | no | yes | inserted |
 | no | yes | yes | kept if `L = W`, else conflict (`changed`) |
@@ -358,10 +359,18 @@ another.
   there, nothing applies. After that the commit lands whole or not at all.
 - **Validation** (422, nothing applied): unknown node types, malformed JSON,
   duplicate ids, a `node` whose id differs from its entry, more than 500
-  blocks.
+  blocks, an id both sent and removed, a removed id that is not a top-level
+  block of the revision, and an `after` that is not a block placed before it.
 - **Result**: `{ revision, webUrl }`. The handle adopts the merged live state
   and revision the worker returns as its new base, so a program can update and
-  commit again without reading.
+  commit again without reading. The adopted state replaces the editor's, so a
+  program awaits `commit()` before its next `update`; an update made while a
+  commit is pending is lost when the commit lands.
+- **After `EditOutcomeUnknownError`** the handle keeps its base, revision and
+  editor state. Calling `commit()` again re-diffs the editor against that
+  base: unchanged, it sends the same blocks, which apply nothing if the first
+  attempt landed; changed in a block that landed, it conflicts rather than
+  overwriting. Reading again with `doc.lexical()` is the simple path.
 
 #### What happens to the structured-operations layer
 
@@ -382,9 +391,10 @@ layer replaces it for markdown:
   inserts a `DatabaseQueryNode` itself). `DocumentEditor` stays in the worker,
   where models write ops through it.
 
-Canvases keep the structured layer: `CanvasEditor` code against
-`expectedRevision`, raising `RevisionConflictError` after rebasing unrelated
-concurrent edits, in the canvas PR.
+Canvases keep the structured layer: `canvas.apply(code, { expectedRevision })`
+sends `CanvasEditor` code to the worker's QuickJS sandbox, as `ApplyCanvasEdits`
+does. The engine validates, measures and commits it, with `RevisionConflictError`
+after rebasing unrelated concurrent edits. No builder is vendored for canvas.
 
 Typed handles for the other types refuse the wrong file type and each has
 `webUrl()`. Spreadsheets have one: `macro.documents.spreadsheet(document)`
@@ -423,16 +433,15 @@ Instruction edits need nothing in the sandbox. The Lexical layer needs
 `lexical`, the `@lexical/*` packages lexical-core uses, and
 `packages/lexical-core` itself, as ordinary JavaScript: no WASM.
 
-Canvas needs no vendored builder: `canvas.apply(code, { expectedRevision })`
-sends CanvasEditor code that the worker runs in its QuickJS sandbox, exactly as
-`ApplyCanvasEdits` does. The same engine validates, measures and commits it.
-
 ### Spike results
 
 Lexical core nodes, `NodeReplacements`, `nodeIdPlugin` and the markdown
-transformers, bundled as code mode bundles the SDK and run under the exact
-sandbox flags (`--deny-import --deny-net`, scratch-only reads, 128 MiB, the
-bootstrap's timer ban):
+transformers, bundled as code mode bundles the SDK and run under the sandbox's
+permissions with all network denied (`--deny-import --deny-net`, scratch-only
+reads, 128 MiB, the bootstrap's timer ban). Production allows the SDK's hosts
+(`sdk_endpoints()`) instead of denying the network; Lexical makes no requests,
+so that difference doesn't reach it. The Deno tests in the SDK PR run
+programs through the production runner and its exact flags:
 
 - Everything works. Discrete updates and the default microtask commit both
   run, since neither needs a timer.
@@ -484,7 +493,11 @@ rejects a commit whose node types or versions it doesn't know, naming them,
 rather than writing nodes the app can't render. Node JSON changes therefore
 follow the app's rule for persisted documents already: old JSON keeps loading.
 A program built against an older SDK keeps working while nodes only add
-optional fields.
+optional fields. A document holding a node type the older SDK doesn't
+register fails `doc.lexical()` with Lexical's parse error naming the type: the
+SDK can't round-trip a node it doesn't know, so it refuses the read instead
+of dropping the node on the next commit. Upgrading the SDK fixes it; code mode
+always runs the current bundle.
 
 ### Docs budget
 
