@@ -10,7 +10,7 @@ import {
   highlightFirstMenuItemOnOpen,
   Layer,
 } from '@ui';
-import { CopyFeedback } from '@ui/components/CopyFeedback';
+import { CopyFeedback } from '@ui/components/CopyButton';
 import { Hotkey } from '@ui/components/Hotkey';
 import { createCopyState } from '@ui/utils/create-copy-state';
 import {

@@ -50,9 +50,9 @@ export default defineDoc({
   name: 'CopyButton',
   category: 'Actions',
   description:
-    'A normal Button with an explicit icon slot that blurs and fades to a green check after its onClick handler succeeds. Return the copy promise; return false or reject on failure. Feedback resets after the last successful copy; text-only buttons keep their content unchanged.',
+    'A normal Button with an explicit icon slot that blurs and fades to a green check after its onClick handler succeeds. Return the copy promise; return false or reject on failure. Feedback resets after the last successful copy; text-only buttons keep their content unchanged. CopyFeedback is exported from the same module for custom copy controls.',
   status: 'stable',
-  exports: ['CopyButton'],
+  exports: ['CopyButton', 'CopyFeedback'],
   import: "import { CopyButton } from '@ui';",
   demos: [
     {

@@ -177,7 +177,10 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
           icon={<Dynamic component={action.icon ?? Copy} class="size-4" />}
           onCopy={async () => (await action.action?.()) !== false}
         >
-          <SplitMenuItemContent {...action} icon={undefined} />
+          <SplitMenuItemContent
+            label={action.label}
+            hotkeyToken={action.hotkeyToken}
+          />
         </Dropdown.CopyItem>
       );
 
@@ -286,11 +289,7 @@ function MobileRender(
           onClick={() => action.action?.()}
           icon={<Dynamic component={action.icon ?? Copy} class="size-4" />}
         >
-          <SplitMenuItemContent
-            {...action}
-            icon={undefined}
-            showHotkey={false}
-          />
+          <SplitMenuItemContent label={action.label} showHotkey={false} />
         </CopyButton>
       );
 

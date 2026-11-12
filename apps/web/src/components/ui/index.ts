@@ -83,7 +83,11 @@ export type {
   ConfirmDialogProps,
 } from './components/ConfirmDialog';
 export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
-export { CopyButton, type CopyButtonProps } from './components/CopyButton';
+export {
+  CopyButton,
+  type CopyButtonProps,
+  CopyFeedback,
+} from './components/CopyButton';
 export { DatePicker, type DatePickerProps } from './components/DatePicker';
 export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';

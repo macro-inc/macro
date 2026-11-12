@@ -27,7 +27,7 @@ import {
   type SelectionDismissal,
 } from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
-import { CopyFeedback } from './CopyFeedback';
+import { CopyFeedback } from './CopyButton';
 import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
 import { Tooltip } from './Tooltip';
