@@ -669,7 +669,10 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
 ```
 
-Both the devbox and runtime must be logged into the same Tailscale tailnet.
+This path is currently unavailable: `runtime-dev-1` no longer joins a tailnet
+(it serves the hosted dev control plane over WireGuard; see
+[`nix/hosts/README.md`](../../nix/hosts/README.md)). It needs the devbox and
+runtime logged into the same Tailscale tailnet.
 `tailscale ip -4 runtime-dev-1` must return an IPv4 address before startup;
 xtask fails loudly if it cannot resolve one. Set `COMPUTERS_INCUS_ADDRESS=<IPv4>`
 to override discovery. Compose receives the numeric
