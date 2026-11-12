@@ -3,7 +3,7 @@ import type {
   RoutineStep,
 } from '@service-scheduled-action/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateSteps } from '../core/routine-steps';
 import { composeRoutine, draftFromRoutine } from './compose-routine';
 import { draftToCreateBody } from './routine-draft';
@@ -54,6 +54,25 @@ const routine = (
 beforeEach(() => {
   draftRoutine.mockReset();
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+const DROPPED = { code: 'NETWORK_ERROR', message: 'Network error occurred' };
+/** How the desktop app's native transport reports a dropped connection. */
+const DROPPED_NATIVE = {
+  code: 'UNKNOWN_ERROR',
+  message: 'An unknown error occurred: error sending request for url',
+};
+
+/** Compose with the pause before a second attempt skipped. */
+async function composeWithoutWaiting(description: string) {
+  vi.useFakeTimers();
+  const composed = composeRoutine(description, context);
+  await vi.runAllTimersAsync();
+  return await composed;
+}
 
 describe('composeRoutine', () => {
   it('sends only the description and settings, never the workspace', async () => {
@@ -127,6 +146,40 @@ describe('composeRoutine', () => {
     expect(timedOut).toMatch(/took too long/);
     expect(new Set([tooLarge, timedOut, generic]).size).toBe(3);
     expect(limited).toBe('You’ve used this month’s free AI.');
+  });
+
+  it('sends the draft again when its connection drops, and opens that draft', async () => {
+    // The server stops a draft whose request it loses, 30 seconds in or so.
+    draftRoutine
+      .mockResolvedValueOnce(err([DROPPED]))
+      .mockResolvedValueOnce(ok(routine()));
+
+    const draft = await composeWithoutWaiting(BUG_REPORTS);
+
+    expect(draftRoutine).toHaveBeenCalledTimes(2);
+    expect(draftRoutine.mock.calls[1]).toEqual(draftRoutine.mock.calls[0]);
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.name).toBe('Inbox triage');
+  });
+
+  it('says the connection was lost when the second attempt gets no answer either', async () => {
+    draftRoutine
+      .mockResolvedValueOnce(err([DROPPED_NATIVE]))
+      .mockResolvedValueOnce(err([DROPPED]));
+
+    expect(await composeWithoutWaiting(BUG_REPORTS)).toBe(
+      'Lost the connection while drafting. Check your connection and try again.'
+    );
+    expect(draftRoutine).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends a draft the server answered only once', async () => {
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'TIMEOUT', message: 'Request timed out' }])
+    );
+
+    expect(await composeWithoutWaiting(BUG_REPORTS)).toMatch(/took too long/);
+    expect(draftRoutine).toHaveBeenCalledTimes(1);
   });
 });
 
