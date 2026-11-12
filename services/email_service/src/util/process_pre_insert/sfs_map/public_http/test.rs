@@ -46,6 +46,11 @@ fn blocks_every_non_public_address() {
         "64:ff9b:1::1",
         "2002:7f00:1::",
         "2001::1",
+        "2001:db8::1",
+        "3fff::1",
+        "3fff:fff::1",
+        "4000::1",
+        "100::1",
     ] {
         assert!(is_blocked_ip(IpAddr::from_str(ip).unwrap()), "{ip}");
     }
@@ -56,6 +61,7 @@ fn blocks_every_non_public_address() {
         "2606:4700::1111",
         "::ffff:8.8.8.8",
         "64:ff9b::808:808",
+        "3fff:1000::1",
     ] {
         assert!(!is_blocked_ip(IpAddr::from_str(ip).unwrap()), "{ip}");
     }
