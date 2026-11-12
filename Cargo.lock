@@ -6955,6 +6955,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bot_id",
+ "bytes",
  "channel_sender",
  "chrono",
  "clap",
@@ -6976,6 +6977,8 @@ dependencies = [
  "github_pull_requests",
  "hex",
  "http-body-util",
+ "hyper 1.9.0",
+ "hyper-util",
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
@@ -7029,6 +7032,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
+ "transport_failure",
  "unicode-segmentation",
  "utoipa",
  "uuid",
@@ -14774,14 +14778,12 @@ dependencies = [
  "anyhow",
  "bytes",
  "chrono",
- "h2 0.4.16",
  "hyper 1.9.0",
  "hyper-util",
  "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
- "reqwest 0.13.4",
  "rustls",
  "serde",
  "serde_json",
@@ -14791,6 +14793,7 @@ dependencies = [
  "tokio-retry",
  "tokio-rustls",
  "tracing",
+ "transport_failure",
  "uuid",
  "workspace-hack",
 ]
@@ -21118,6 +21121,20 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "transport_failure"
+version = "0.1.0"
+dependencies = [
+ "h2 0.4.16",
+ "hyper 1.9.0",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tokio",
+ "workspace-hack",
 ]
 
 [[package]]

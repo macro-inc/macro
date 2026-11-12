@@ -38,6 +38,8 @@ async fn spreadsheet_error(
     }
 }
 
+#[cfg(feature = "ai_tools")]
+mod resend;
 #[cfg(test)]
 mod test;
 
@@ -47,6 +49,8 @@ pub struct ReqwestEditingWorkerClient {
     worker_url: String,
     client: Arc<Client>,
     internal_auth_key: Option<String>,
+    #[cfg(feature = "ai_tools")]
+    markdown_resend: resend::MarkdownResend,
 }
 
 impl ReqwestEditingWorkerClient {
@@ -56,6 +60,8 @@ impl ReqwestEditingWorkerClient {
             worker_url,
             client,
             internal_auth_key: None,
+            #[cfg(feature = "ai_tools")]
+            markdown_resend: resend::MarkdownResend::default(),
         }
     }
 
@@ -77,7 +83,7 @@ impl ReqwestEditingWorkerClient {
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
-        request: serde_json::Value,
+        request: &serde_json::Value,
     ) -> anyhow::Result<reqwest::Response> {
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
@@ -358,30 +364,34 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     }
 
     #[cfg(feature = "ai_tools")]
-    #[tracing::instrument(skip_all, fields(document_id), err)]
+    #[tracing::instrument(skip_all, fields(document_id, resent = false), err)]
     async fn read_markdown(
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
     ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
-        let response = self
-            .markdown(
-                document_id,
-                document_token,
-                serde_json::json!({ "action": "read" }),
-            )
-            .await?;
-        let status = response.status();
-        anyhow::ensure!(
-            status.is_success(),
-            "{} (HTTP {status})",
-            worker_error(response).await
-        );
-        Ok(response.json().await?)
+        let request = serde_json::json!({ "action": "read" });
+        // A read changes nothing, so it is resent whether its connection was
+        // lost before the answer or partway through its body.
+        let read = || async {
+            let response = self.markdown(document_id, document_token, &request).await?;
+            let status = response.status();
+            anyhow::ensure!(
+                status.is_success(),
+                "{} (HTTP {status})",
+                worker_error(response).await
+            );
+            Ok(response.json().await?)
+        };
+        self.markdown_resend.first_attempt();
+        match read().await {
+            Err(error) if self.markdown_resend.permits(&error) => read().await,
+            result => result,
+        }
     }
 
     #[cfg(feature = "ai_tools")]
-    #[tracing::instrument(skip_all, fields(document_id), err)]
+    #[tracing::instrument(skip_all, fields(document_id, resent = false), err)]
     async fn write_markdown(
         &self,
         document_id: &str,
@@ -389,19 +399,27 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         expected_revision: &str,
         markdown: &str,
     ) -> anyhow::Result<MarkdownWrite> {
-        let response = self
-            .markdown(
-                document_id,
-                document_token,
-                serde_json::json!({
-                    "action": "write",
-                    "expectedRevision": expected_revision,
-                    "markdown": markdown,
-                }),
-            )
-            .await?;
+        let request = serde_json::json!({
+            "action": "write",
+            "expectedRevision": expected_revision,
+            "markdown": markdown,
+        });
+        let send = || self.markdown(document_id, document_token, &request);
+        // The worker commits only at `expectedRevision`, so of two attempts at
+        // most one applies. A write is resent only when no answer arrived; a
+        // body lost after an answer follows a commit.
+        self.markdown_resend.first_attempt();
+        let (response, resent) = match send().await {
+            Err(error) if self.markdown_resend.permits(&error) => (send().await?, true),
+            result => (result?, false),
+        };
         let status = response.status();
         if status == reqwest::StatusCode::CONFLICT {
+            // The lost first attempt may be what moved the revision.
+            anyhow::ensure!(
+                !resent,
+                "the document changed by the time a write was resent over a new connection; the lost first attempt may have applied (HTTP {status})"
+            );
             return Ok(MarkdownWrite::Conflict);
         }
         anyhow::ensure!(

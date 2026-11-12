@@ -72,6 +72,10 @@ word docs, Illustrator/Photoshop files).
   `contentWithRevision`/`setContent`. The worker's `POST /markdown` reads the
   body with sync-service's revision and commits a write only at the revision
   the caller read (409 `revision_conflict` otherwise). No model, no billing.
+  `src/outbound/editing_worker_client.rs` resends a call once when the edge
+  resets its HTTP/2 connection (`resend.rs`, budgeted across the client): a
+  read on any lost connection, a write only before its answer. A 409 on a
+  resent write is an unknown outcome (502), not a conflict.
 - `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
   by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
   `Document.commentOnText`). Markdown places the mark first and removes it if

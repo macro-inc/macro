@@ -1,6 +1,9 @@
 use super::*;
 use std::time::Duration;
 
+#[cfg(feature = "ai_tools")]
+mod markdown_resend;
+
 #[tokio::test]
 async fn connection_failure_has_monitorable_context_and_preserves_cause() {
     // Reserve a port without listening so connection attempts are refused.
