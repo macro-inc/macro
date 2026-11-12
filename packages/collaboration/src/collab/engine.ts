@@ -1,7 +1,7 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
 import type { Attributes, Span } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
-import type { VersionVector } from 'loro-crdt';
+import type { LoroDoc, VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -31,6 +31,21 @@ import type { LiveSyncSource, SyncError, SyncSourceEvent } from './source';
 import type { WALSyncer } from './wal';
 
 const SNAPSHOT_INTERVAL_MS = 5_000;
+
+/** Frontier order is not significant; compare the document's actual operation IDs. */
+function sameFrontiers(
+  left: ReturnType<LoroDoc['frontiers']>,
+  right: ReturnType<LoroDoc['frontiers']>
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((id) =>
+      right.some(
+        (other) => id.peer === other.peer && id.counter === other.counter
+      )
+    )
+  );
+}
 
 const REQUEST_UPDATES_MAX_ATTEMPTS = 3;
 const REQUEST_UPDATES_RETRY_DELAY_MS = 2_000;
@@ -85,6 +100,12 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private liveUnsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
   private readonly snapshotStore?: LoroSnapshotStore;
+  private snapshotInFlight = false;
+  private savedSnapshot?: {
+    doc: LoroDoc;
+    oplog: ReturnType<LoroDoc['oplogFrontiers']>;
+    state: ReturnType<LoroDoc['frontiers']>;
+  };
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
   private readonly makeChatter: (documentId: string) => Chatter;
@@ -316,10 +337,25 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private async persistSnapshot() {
     if (!this.snapshotStore) return;
 
-    void this.syncs.wal.flush(); // unawaited
+    void this.syncs.wal.flush(); // unawaited, including idle/in-flight intervals
+    if (this.snapshotInFlight) return;
+    this.snapshotInFlight = true;
 
     try {
       const doc = this.loroManager.doc;
+      const generation = this.lifecycleGeneration;
+      const saved = this.savedSnapshot;
+      if (
+        saved?.doc === doc &&
+        doc.getPendingTxnLength() === 0 &&
+        sameFrontiers(saved.oplog, doc.oplogFrontiers()) &&
+        sameFrontiers(saved.state, doc.frontiers())
+      ) {
+        // The saved snapshot already covers this version; delivery may still
+        // have completed since the last tick, so keep WAL cleanup running.
+        await this.syncs.wal.pruneDelivered();
+        return;
+      }
       this.log('debug', 'engine: persisting snapshot', {
         operations: doc.opCount(),
       });
@@ -327,16 +363,31 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         mode: 'shallow-snapshot',
         frontiers: doc.oplogFrontiers(),
       });
+      // export commits pending local operations. Capture its resulting version
+      // synchronously, never the document's newer version after awaiting storage.
+      const checkpoint = {
+        doc,
+        oplog: doc.oplogFrontiers(),
+        state: doc.frontiers(),
+      };
       await this.snapshotStore.save(snapshot);
       // now safe to drop WAL entries it captures. we prune only
       // after the save succeeds so that we can always recover fully.
       await this.syncs.wal.pruneDelivered();
+      if (
+        generation === this.lifecycleGeneration &&
+        doc === this.loroManager.doc
+      ) {
+        this.savedSnapshot = checkpoint;
+      }
       this.log('debug', 'engine: snapshot persisted ok');
     } catch (err) {
       this.log('error', 'engine: failed to persist snapshot', {
         errName: err instanceof Error ? err.name : undefined,
         errMessage: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      this.snapshotInFlight = false;
     }
   }
 

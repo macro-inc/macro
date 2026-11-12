@@ -22,3 +22,9 @@ Document load callers may pass `parentSpan` to the Loro manager and sync engine.
 Seed and catch-up phases then retain their caller's trace across asynchronous
 work. These components own their child phases and never end the supplied span.
 Omitting context preserves independent instrumentation for non-view callers.
+
+The sync engine checkpoints snapshots every five seconds only when the document
+identity, Loro operation-log frontier, current-state frontier, or pending local
+operations differ from the last successfully saved checkpoint. Idle ticks still
+flush and prune delivered WAL rows. Saves are serialized; failures retry on the
+next tick, and edits during a save remain eligible for the next checkpoint.
