@@ -23,7 +23,17 @@ import {
   verdict,
   verdictLines,
 } from './report';
-import { type SavedRoutine, type Tokens, channelsMade, onEvents, reset, runCheck, save, withReplies } from './runcheck';
+import {
+  type SavedRoutine,
+  type Tokens,
+  channelsMade,
+  onEvents,
+  reset,
+  runCheck,
+  save,
+  withMentionNames,
+  withReplies,
+} from './runcheck';
 import { SEEDED_IDS, index, savedDatabases, seed, setup } from './setup';
 import {
   type Stack,
@@ -539,6 +549,13 @@ async function reread(args: string[]) {
       if (item.run?.effects.runs.some((run) => run.reply === undefined && JSON.stringify(run.result).includes('"type":"agent"'))) {
         db ??= new SQL(stack(values.instance, values.tempo).postgres);
         item.run.effects.runs = await withReplies(db, item.run.effects.runs);
+      }
+      if (item.run?.effects.messages.some((message) => message.text.includes('<m-document-mention>'))) {
+        db ??= new SQL(stack(values.instance, values.tempo).postgres);
+        const texts = await withMentionNames(db, item.run.effects.messages.map((message) => message.text));
+        item.run.effects.messages.forEach((message, index) => {
+          message.text = texts[index];
+        });
       }
       if (item.run && found.run) item.run.holds = !item.run.error && found.run.holds(item.run.effects, context);
       if (session && values.traces) {

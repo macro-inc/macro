@@ -272,6 +272,37 @@ export async function runCheck(
   };
 }
 
+const DOCUMENT_MENTION = /<m-document-mention>(.*?)<\/m-document-mention>/gs;
+
+/**
+ * Messages as the person reads them: a mention of a document or task shows
+ * its name, which the mention itself may leave out. The name goes after the
+ * mention, once, so reading saved effects again doesn't add it twice.
+ */
+export async function withMentionNames(db: SQL, texts: string[]): Promise<string[]> {
+  const idOf = (json: string) => {
+    try {
+      return (JSON.parse(json) as { documentId?: unknown }).documentId;
+    } catch {
+      return undefined;
+    }
+  };
+  const ids = [
+    ...new Set(texts.flatMap((text) => [...text.matchAll(DOCUMENT_MENTION)].map((match) => idOf(match[1])))),
+  ].filter((id): id is string => typeof id === 'string');
+  if (!ids.length) return texts;
+  const rows = (await db`select id, name from "Document" where id in ${db(ids)}`) as { id: string; name: string }[];
+  const name = new Map(rows.map((row) => [row.id, row.name]));
+  return texts.map((text) =>
+    text.replace(DOCUMENT_MENTION, (whole: string, json: string, at: number, all: string) => {
+      const id = idOf(json);
+      if (typeof id !== 'string' || !name.has(id)) return whole;
+      const shown = ` ${name.get(id)}`;
+      return all.startsWith(shown, at + whole.length) ? whole : `${whole}${shown}`;
+    }),
+  );
+}
+
 /**
  * What changed in the owner's workspace since `since`, from the stack's
  * database: messages in channels they're in and tasks they own, so others
@@ -294,15 +325,15 @@ async function read(db: SQL, context: Context, since: Date, fired?: string): Pro
   const notifications = (await db`
     select n.metadata from user_notification u join notification n on n.id = u.notification_id
     where u.user_id = ${userId(OWNER)} and u.created_at >= ${since}`) as { metadata: unknown }[];
+  const posted = messages.filter((message) => message.id !== fired);
+  const texts = await withMentionNames(db, posted.map((message) => message.content));
   return {
     runs: [],
-    messages: messages
-      .filter((message) => message.id !== fired)
-      .map((message) => ({
-        channel: names.get(message.channel) ?? `new:${message.channel_name ?? message.channel}`,
-        from: personOf(message.sender_id),
-        text: message.content,
-      })),
+    messages: posted.map((message, index) => ({
+      channel: names.get(message.channel) ?? `new:${message.channel_name ?? message.channel}`,
+      from: personOf(message.sender_id),
+      text: texts[index],
+    })),
     tasks: tasks.map((task) => ({ id: task.id, name: task.name, text: '' })),
     notifications: notifications.map((row) => JSON.stringify(row.metadata)),
   };
