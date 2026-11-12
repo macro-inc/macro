@@ -311,7 +311,7 @@ export function SheetCrmGraphic(props: { compact?: boolean }) {
         />
       </div>
       <div
-        class="sheet-record"
+        class="sheet-record sheet-popover"
         aria-live="polite"
         style={{ '--sheet-record-row': index() + 1 }}
       >
@@ -407,7 +407,7 @@ export function SheetChartGraphic(props: { compact?: boolean }) {
               </For>
             </div>
           </figure>
-          <div class="sheet-comment">
+          <div class="sheet-comment sheet-popover">
             <div>
               <Avatar person="teo" />
               <strong>{homepagePeople.teo.shortName}</strong>

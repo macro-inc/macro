@@ -58,6 +58,13 @@
 /* A teammate's name sits over the empty end of the text cell above. */
 .sheet-grid-cursor[data-tone=person] b { right: -2px; left: auto; border-radius: 4px 4px 0 4px; }
 
+/* Floating cards use the app's elevated menu surface: a fill just above the
+   sheet, a fine outline, a lit top edge, and a soft cast shadow. */
+.sheet-story .sheet-popover {
+  border-radius: 12px; background-color: #0d0e0f;
+  box-shadow: 0 0 0 1px #0006, inset 0 1px 0 #ffffff21, inset 0 0 0 1px #ffffff12, 0 20px 44px -16px #000d, 0 4px 12px -6px #0009;
+}
+
 /* CRM: a company cell is the record, and its card opens under the row. */
 .sheet-record-link { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
 .sheet-record-link svg { color: #a8a8a8; }
@@ -65,7 +72,7 @@
 .sheet-record-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .sheet-story > .sheet-record {
   position: absolute; z-index: 3; top: calc(64px + (var(--sheet-record-row) + 1) * 30px + 7px); left: 204px; width: 306px; box-sizing: border-box;
-  padding: 12px 14px; border: 1px solid #ffffff1f; border-radius: 12px; background: #17181a; box-shadow: 0 18px 40px #000a;
+  padding: 12px 14px;
   transition: top 240ms cubic-bezier(.2, .8, .2, 1);
 }
 .sheet-record-head { display: flex; align-items: center; gap: 8px; }
@@ -88,7 +95,7 @@
 .sheet-chart-bars > div { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
 .sheet-chart-bars i { width: 100%; height: calc(var(--bar) * 112px); border-radius: 4px 4px 0 0; background: linear-gradient(#85b9e8, #85b9e84d); }
 .sheet-chart-bars span { max-width: 100%; overflow: hidden; color: #8f8f8f; font-size: 10px; text-overflow: ellipsis; }
-.sheet-comment { position: absolute; top: 206px; left: 270px; z-index: 3; width: 214px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #ffffff1f; border-radius: 12px; background: #17181a; box-shadow: 0 18px 40px #000a; }
+.sheet-comment { position: absolute; top: 206px; left: 270px; z-index: 3; width: 214px; box-sizing: border-box; padding: 10px 12px; }
 .sheet-comment > div { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .sheet-comment > div strong { font-weight: 600; }
 .sheet-comment > div span { color: #8f8f8f; }
