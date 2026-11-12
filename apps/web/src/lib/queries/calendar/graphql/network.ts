@@ -23,7 +23,7 @@ export async function fetchCached<Data, Variables extends AnyVariables>(
     })
     .toPromise();
   if (result.error) throw result.error;
-  if (!result.data) throw new Error('Query returned no data');
+  if (!result.data) throw new Error('Calendar query returned no data');
   const metadata = normalizedCacheResultMetadata(result);
   // Hydration writes before publishing and reports its revision; a foreground
   // response publishes first and acknowledges its write later.
@@ -34,7 +34,7 @@ export async function fetchCached<Data, Variables extends AnyVariables>(
         ? await metadata.persistence
         : metadata.revision;
   if (revision === undefined) {
-    throw new Error('Query response could not be cached');
+    throw new Error('Calendar query response could not be cached');
   }
   return result.data;
 }

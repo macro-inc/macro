@@ -49,9 +49,12 @@ import {
   writeCachedLatestPage,
 } from './source';
 
-/** How long a cache that has not answered yet may delay a channel's open. */
-const UNANSWERED_CACHE_HEAD_START_MS = 500;
-/** A cache that has answered before is slow only under load; it gets longer. */
+/**
+ * How long a cache that has answered before is waited on alone. It answers in
+ * milliseconds unless the engine is busy. A cache that has not answered yet
+ * is still starting, which takes about as long as the server's answer, so the
+ * server is asked at once.
+ */
 const ANSWERED_CACHE_HEAD_START_MS = 2_000;
 /** The page size the REST timeline reads behind a cursor, and the cached page's bound. */
 const CURSOR_PAGE_LIMIT = 100;
@@ -183,12 +186,9 @@ async function readLatestPage(
     return { source: 'network', read, raced: false };
   }
   const cache = readCache(host, parent.id);
-  const early = await withinCacheHeadStart(
-    cache,
-    ANSWERED_HOSTS.has(host)
-      ? ANSWERED_CACHE_HEAD_START_MS
-      : UNANSWERED_CACHE_HEAD_START_MS
-  );
+  const early = ANSWERED_HOSTS.has(host)
+    ? await withinCacheHeadStart(cache, ANSWERED_CACHE_HEAD_START_MS)
+    : 'not-ready';
   signal?.throwIfAborted();
   if (early === 'not-ready') {
     const winner = await raceCacheWithNetwork(cache, parent.id, signal);
@@ -214,6 +214,9 @@ async function loadLatestPage(
     track(parent.id, read.seq, read.userId);
     if (source === 'cache') {
       fireAndForget(catchUpChannel(host, parent), SURFACE);
+    } else {
+      // The server's page reaches the cache once it is on screen.
+      schedulePersist(host, parent);
     }
     return normalizeMessageTimelinePageSenders(read.page);
   });

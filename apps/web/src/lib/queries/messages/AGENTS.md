@@ -43,14 +43,15 @@ live events that keep them current.
   request was made with; a page read meanwhile moved it, and the catch-up asks
   again from there. Applying older changes over a newer page would put old
   rows back.
-- The page is written back about a second after a catch-up, and only when
+- The page is written back about a second after a server read or a catch-up,
+  never as part of the read that shows it, and only when
   the first loaded page is the live edge and no message write for the channel
   is pending, so an optimistic row is never stored.
 - A timeline already loaded is never replaced from the cache: a refetch reads
   the server.
-- A cache that has not answered within its head start (0.5 s before its first
-  answer, 2 s after) no longer delays the open: the server's page is asked for
-  and whichever answers first is shown. A cached page that wins cancels the
-  server read; one that arrives after a failed server read is shown too, so a
-  channel opens offline.
+- A cache that has not answered a read yet is still starting, so the open asks
+  the server at once and shows whichever answers first; a cache that has
+  answered before is waited on alone for 2 s first. A cached page that wins
+  cancels the server read; one that arrives after a failed server read is
+  shown too, so a channel opens offline.
 - Threads, `messagesByIds` and message resolution still read REST.

@@ -118,6 +118,22 @@ describe('opening a channel', () => {
     expect(mocks.fetchChannelChanges).not.toHaveBeenCalled();
   });
 
+  it('writes the server page to the cache once it is loaded', async () => {
+    vi.useFakeTimers();
+    mocks.readCachedLatestPage.mockResolvedValue(undefined);
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 7,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    await open();
+    expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_500);
+    const [, channelId, written] = mocks.writeCachedLatestPage.mock.calls[0];
+    expect(channelId).toBe(CHANNEL.id);
+    expect(written.seq).toBe(7);
+  });
+
   it('opens from the cached page and applies the changes after it', async () => {
     mocks.readCachedLatestPage.mockResolvedValue({
       seq: 7,
@@ -300,6 +316,17 @@ describe('opening a channel while the cache is still starting', () => {
     // The server read it no longer waits for is cancelled.
     const [, signal] = mocks.fetchLatestChannelPage.mock.calls[0];
     expect(signal.aborted).toBe(true);
+  });
+
+  it('asks the server at once when the cache has never answered', async () => {
+    vi.useFakeTimers();
+    mocks.channelCacheHost.mockReturnValue({} as CacheHost);
+    mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
+    mocks.fetchLatestChannelPage.mockResolvedValue(SERVER);
+    // No timer has to pass: the open does not wait on the starting cache.
+    await open();
+    expect(loadedIds()).toEqual([['m2', 'm1']]);
+    expect(channelSyncSeq(CHANNEL.id)).toBe(9);
   });
 
   it('opens from the cached page when the server cannot be reached', async () => {

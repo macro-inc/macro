@@ -22,7 +22,6 @@ import {
   type DocumentInput,
   stringifyDocument,
 } from '@urql/core';
-import { fetchCached } from '../../calendar/graphql/network';
 import {
   type ChannelTimelineRead,
   cursorToGraphql,
@@ -94,21 +93,20 @@ async function queryUncached<Data, Variables extends AnyVariables>(
   return result.data;
 }
 
-/** Reads the latest page from the server and leaves it in the cache. */
+/**
+ * Reads the latest page from the server. The caller writes it to the cache
+ * afterwards: a read that waited for the cache's own write would hold the
+ * channel's open behind a cache that is starting or busy.
+ */
 export async function fetchLatestChannelPage(
   channelId: string,
   signal?: AbortSignal
 ): Promise<LatestChannelPage> {
-  let data: ChannelTimelineQuery;
-  try {
-    data = await fetchCached(
-      ChannelTimelineDocument,
-      latestPageVariables(channelId),
-      { signal }
-    );
-  } catch (error) {
-    throw readError(error);
-  }
+  const data = await queryUncached(
+    ChannelTimelineDocument,
+    latestPageVariables(channelId),
+    signal
+  );
   return {
     ...timelinePageFromGraphql(data.user.channelMessages.timeline),
     userId: data.user.id,
