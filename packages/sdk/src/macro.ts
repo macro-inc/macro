@@ -48,6 +48,11 @@ import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
+export type {
+  AppearanceColor,
+  AppearanceIcon,
+  EntityAppearance,
+} from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
 export type {
   ActivityAction,

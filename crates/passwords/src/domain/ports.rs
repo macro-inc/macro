@@ -163,11 +163,11 @@ pub trait SecretProvider: Send + Sync {
 /// A scope-bound team-vault lock; releasing the guard releases its lease.
 pub trait ItemLock: Send + Sync {}
 
-/// Global service rollout is checked in the domain at every entry point.
+/// Human rollout and provider readiness are independent of maintenance.
 #[async_trait]
 pub trait Availability: Send + Sync {
-    /// Fail closed unless service authority, actor targeting and provider configuration permit access.
+    /// Fail closed unless this actor's rollout and provider configuration permit access.
     async fn require_enabled(&self, actor: &Actor) -> Result<(), Error>;
-    /// The same authoritative global decision for jobs and trusted lifecycle callers.
-    async fn require_service_enabled(&self) -> Result<(), Error>;
+    /// Require provider configuration before lifecycle side effects, without evaluating flags.
+    fn require_provider(&self) -> Result<(), Error>;
 }

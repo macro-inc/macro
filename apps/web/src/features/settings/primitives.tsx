@@ -200,13 +200,24 @@ export function SettingsSurface(props: {
   );
 }
 
-/** Rows share a raised surface; nested cards do not add another box. */
-export function SettingsCard(props: { class?: string; children: JSX.Element }) {
+/**
+ * Rows share a raised surface; nested cards do not add another box.
+ * `inset="wide"` is for cards whose rows use the wider `px-6` inset (Settings →
+ * Machines), so the dividers line up with their content.
+ */
+export function SettingsCard(props: {
+  class?: string;
+  inset?: 'standard' | 'wide';
+  children: JSX.Element;
+}) {
   const nested = useContext(SettingsSurfaceContext);
   return (
     <SettingsSurface
       class={cn(
-        'overflow-hidden settings-row-dividers [--color-edge-divider:color-mix(in_srgb,var(--color-ink)_5%,transparent)] [&>*:not(:last-child)]:after:inset-x-4',
+        'overflow-hidden settings-row-dividers [--color-edge-divider:color-mix(in_srgb,var(--color-ink)_5%,transparent)]',
+        props.inset === 'wide'
+          ? '[&>*:not(:last-child)]:after:inset-x-6'
+          : '[&>*:not(:last-child)]:after:inset-x-4',
         nested && '-mx-4',
         props.class
       )}

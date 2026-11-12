@@ -9,6 +9,7 @@ use chrono::Utc;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageDeletedMetadata, MessageSentMetadata,
 };
+use email::domain::scheduled_delivery::state::{self as delivery, DeliveryClaim};
 use email::domain::scheduled_delivery::{
     ClaimedDelivery, DELIVERY_LEASE_SECONDS, DeliveryMode, DeliveryPause,
     PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS,
@@ -17,7 +18,6 @@ use email::domain::scheduled_delivery::{
 };
 use email::domain::send_attempt::{PreparedSendContentUnavailable, SendSnapshot};
 use email_api_client::domain::models::{EmailApiError, PreparedSendMessage, SendRequest, SentIds};
-use email_db_client::messages::scheduled::delivery::{self, DeliveryClaim};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBroker, MacroEventBrokerService};
 use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -25,6 +25,8 @@ use models_email::service::{attachment::AttachmentDraft, link::Link, message::Me
 use std::time::Instant;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
+
+use email::domain::scheduled_delivery::identity::process_sent_message;
 
 mod content;
 
@@ -67,10 +69,11 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
         else {
             return Ok(());
         };
-        if let Some(deleted) = email_db_client::messages::delete::reconcile_deferred_deletion(
-            &self.db, link_id, message_id,
-        )
-        .await?
+        if let Some(deleted) =
+            email::domain::scheduled_delivery::deletion::reconcile_deferred_deletion(
+                &self.db, link_id, message_id,
+            )
+            .await?
         {
             let _ = self.macro_event_broker.send_event(&EmailMacroEvent::message_deleted(MessageDeletedMetadata {
                 link_id,
@@ -464,80 +467,6 @@ fn classify_submission_error(error: EmailApiError) -> SubmissionError {
 fn apply_sent_ids(message: &mut MessageToSend, sent_ids: SentIds) {
     message.provider_id = Some(sent_ids.provider_message_id);
     message.provider_thread_id = Some(sent_ids.provider_thread_id);
-}
-
-/// Mark both the scheduled message and the regular message as sent, and update thread metadata
-///
-/// This function handles all database updates in a single transaction
-#[expect(
-    clippy::useless_asref,
-    reason = "We actually need the as_mut so we don't transfer ownership of the transaction"
-)]
-#[tracing::instrument(
-    skip(tx, message),
-    fields(
-        message_db_id = message.db_id.unwrap().to_string(),
-        link_id = message.link_id.to_string()
-    ),
-    err
-)]
-async fn process_sent_message(
-    tx: &mut sqlx::PgConnection,
-    message: &mut MessageToSend,
-) -> anyhow::Result<()> {
-    email_db_client::messages::sent_identity::reconcile_message(
-        tx.as_mut(),
-        message.link_id,
-        message.db_id.context("sent message has no local ID")?,
-        message
-            .provider_id
-            .as_deref()
-            .context("sent message has no provider ID")?,
-    )
-    .await?;
-
-    let thread_db_id = email_db_client::threads::provider_identity::reconcile_sent_thread(
-        tx.as_mut(),
-        message.link_id,
-        message.db_id.context("sent message has no local ID")?,
-        message
-            .provider_thread_id
-            .as_deref()
-            .context("sent message has no provider thread ID")?,
-    )
-    .await?;
-    message.thread_db_id = Some(thread_db_id);
-    // mark message as non-draft
-    email_db_client::messages::update::mark_message_as_sent(
-        tx.as_mut(),
-        &message.provider_id.clone().unwrap_or_default(),
-        &message.provider_thread_id.clone().unwrap_or_default(),
-        message.link_id,
-        message.db_id.unwrap(),
-    )
-    .await?;
-
-    // set provider id of thread - needed in case it's a thread with no other messages, as it wouldn't
-    // have a provider id yet
-    email_db_client::threads::update::update_thread_provider_id(
-        tx.as_mut(),
-        thread_db_id,
-        message.link_id,
-        &message.provider_thread_id.clone().unwrap(),
-    )
-    .await?;
-
-    email_db_client::threads::update::update_thread_metadata(
-        tx.as_mut(),
-        thread_db_id,
-        message.link_id,
-    )
-    .await?;
-
-    email_db_client::threads::update::sync_thread_attachment_flags(tx.as_mut(), thread_db_id)
-        .await?;
-
-    Ok(())
 }
 
 #[cfg(test)]

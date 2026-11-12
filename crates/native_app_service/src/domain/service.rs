@@ -1,11 +1,15 @@
 use crate::domain::{
     models::{
-        BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction, BundleUpdate,
-        BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr,
+        AllTargets, BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction,
+        BundleUpdate, BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier,
+        UpdateErr,
     },
     ports::{GetJsBundleManifest, NativeAppService},
 };
 use rootcause::Report;
+
+/// Desktop updaters that send no `manifest_schema` read schema 2 only.
+const LEGACY_DESKTOP_MANIFEST_SCHEMA: u64 = 2;
 
 /// the concrete struct which implements [NativeAppService]
 pub struct NativeAppServiceImpl<T> {
@@ -31,6 +35,7 @@ where
             arch: _,
             current_bundle_build,
             native_build,
+            manifest_schema,
         } = req;
 
         let manifest = self.bundle_fetcher.get_app_bundle_manifest().await?;
@@ -48,6 +53,12 @@ where
         }
 
         if manifest.bundle_build <= current_bundle_build {
+            return Ok(None);
+        }
+
+        if matches!(target, AllTargets::Desktop(_))
+            && manifest.schema_version > manifest_schema.unwrap_or(LEGACY_DESKTOP_MANIFEST_SCHEMA)
+        {
             return Ok(None);
         }
 
