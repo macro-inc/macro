@@ -28,7 +28,9 @@ status in place. Without a linked GitHub account the toast points to Settings.
 Merged and closed PRs have no split button. PRs are not tasks and do not appear
 in the Tasks list. PRs cannot be favorited.
 The **Share** button has a **Copy Share Link** button beside it, like other
-items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
+items. Home's inline preview shows the same Share, pull request action,
+Changes, and details controls in the preview header's top right.
+ The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
 `/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
 with **Merge** only once its checks pass, plus **Reopen pull request** for a
 closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
