@@ -3,7 +3,8 @@ import type { SettingsSearchResult } from '../core/settings-search';
 
 /** Waits for a routed/lazy settings page, then reveals its matching control. */
 export function SettingsSearchTarget(props: {
-  result?: SettingsSearchResult;
+  /** A settings search hit, or any control to point out by its target. */
+  result?: Pick<SettingsSearchResult, 'target'>;
   children: JSX.Element;
 }) {
   let root!: HTMLDivElement;

@@ -21,3 +21,7 @@ tracing-subscriber.workspace = true
 uuid = { workspace = true, features = ["js"] }
 web-time.workspace = true
 worker.workspace = true
+
+[package.metadata.cargo-shear]
+# Enables getrandom's `wasm_js` backend for wasm32 builds; never named in code.
+ignored = ["getrandom"]

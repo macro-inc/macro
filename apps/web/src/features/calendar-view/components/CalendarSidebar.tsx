@@ -15,8 +15,11 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -377,6 +380,13 @@ export function CalendarSidebar() {
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
+        <SidebarRoutineSuggestions surface="calendar" />
+        <ViewSidebar.Nav
+          aria-label={t('tutorials.watchTutorial')}
+          class="empty:hidden"
+        >
+          <TutorialSidebarItem tutorial="calendar" />
+        </ViewSidebar.Nav>
         <CalendarMiniCalendar />
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />

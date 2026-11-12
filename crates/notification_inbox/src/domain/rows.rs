@@ -61,6 +61,8 @@ enum Slot {
     CalendarJoinRequest(Uuid),
     AccessRequested(Uuid),
     AccessGranted(Uuid),
+    /// One removal of runtime access, by its notification.
+    AccessRemoved(Uuid),
 }
 
 impl Slot {
@@ -77,6 +79,7 @@ impl Slot {
             Self::CalendarJoinRequest(id) => format!("calendar_join_request:{id}"),
             Self::AccessRequested(id) => format!("access_requested:{id}"),
             Self::AccessGranted(id) => format!("access_granted:{id}"),
+            Self::AccessRemoved(id) => format!("access_removed:{id}"),
         }
     }
 }
@@ -359,6 +362,41 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
     })
 }
 
+/// The message or comment a notification is about, when it is about one:
+/// the notifications sharing it present as one, by one-message-one-row.
+fn subject(notification: &FeedNotification, viewer: &MacroUserIdStr<'static>) -> Option<String> {
+    if let ChannelKind::Message { message_id, .. } = channel_view(notification, viewer).kind {
+        return Some(message_id.to_string());
+    }
+    discussion_view(notification).map(|view| view.comment_id)
+}
+
+/// The notifications a done of one shown notification acknowledges: it, and
+/// the hidden ones it speaks for. Other hidden notifications, the row's noise,
+/// stay with the row until its last shown notification is done.
+pub fn speaks_for(
+    row: &InboxRow,
+    notification: Uuid,
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<Uuid> {
+    let Some(shown) = row
+        .notifications
+        .iter()
+        .find(|shown| shown.notification_id == notification)
+    else {
+        return Vec::new();
+    };
+    let spoken = subject(shown, viewer);
+    std::iter::once(notification)
+        .chain(
+            row.hidden
+                .iter()
+                .filter(|hidden| spoken.is_some() && subject(hidden, viewer) == spoken)
+                .map(|hidden| hidden.notification_id),
+        )
+        .collect()
+}
+
 /// Place an entity's discussion notifications on its one row of comments.
 fn place_discussions(views: Vec<DiscussionView<'_>>) -> Vec<Placed> {
     let mut speakers: HashMap<&str, (MessageRole, Uuid)> = HashMap::new();
@@ -409,6 +447,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
             (Slot::AccessRequested(request.request_id), true)
         }
         NotifEvent::EntityAccessGranted(grant) => (Slot::AccessGranted(grant.request_id), true),
+        NotifEvent::RuntimeAccessRemoved(_) => {
+            (Slot::AccessRemoved(notification.notification_id), true)
+        }
         NotifEvent::NewEmail(_) | NotifEvent::Reminder(_) => (Slot::Email, true),
         NotifEvent::TaskAssigned(_) => (Slot::Task, true),
         NotifEvent::CalendarEventReminder(reminder) => {
@@ -433,6 +474,7 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         NotifEvent::InboxReauthRequired(_)
         | NotifEvent::InviteToTeam(_)
         | NotifEvent::ExternalChatMessage(_)
+        | NotifEvent::ChannelAccessRequested(_)
         | NotifEvent::RoutineRunFinished(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.
@@ -468,6 +510,7 @@ fn row_type(slot: &Slot, channel: bool, mention: bool) -> InboxRowType {
         (Slot::CalendarJoinRequest(_), ..) => InboxRowType::CalendarJoinRequest,
         (Slot::AccessRequested(_), ..) => InboxRowType::AccessRequested,
         (Slot::AccessGranted(_), ..) => InboxRowType::AccessGranted,
+        (Slot::AccessRemoved(_), ..) => InboxRowType::AccessRemoved,
     }
 }
 
@@ -512,7 +555,9 @@ fn actions(slot: &Slot, shown: &[FeedNotification]) -> Vec<InboxRowAction> {
             action(InboxRowActionKind::Accept, Some(request), None),
             action(InboxRowActionKind::Decline, Some(request), None),
         ],
-        Slot::AccessGranted(_) => vec![action(InboxRowActionKind::Open, None, None)],
+        Slot::AccessGranted(_) | Slot::AccessRemoved(_) => {
+            vec![action(InboxRowActionKind::Open, None, None)]
+        }
         Slot::Agent
             if matches!(
                 shown[0].notification_metadata,

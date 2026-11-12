@@ -96,12 +96,14 @@ impl CognitionRuntime {
 ///
 /// `import_jobs` are the harness's import jobs: this runtime's Notion imports
 /// and the stalled-import sweeper run on them, and the harness hands them
-/// over on shutdown.
+/// over on shutdown. `mcp_http` is the harness's guarded client for users'
+/// own MCP servers.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
+    mcp_http: mcp_client::outbound::guarded_http::McpHttp,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -385,6 +387,14 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+        config.environment,
+    )? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
 
     tracing::info!("initialized document tool context");
 
@@ -670,6 +680,7 @@ pub async fn build(
     let rollout = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )?;
     let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
         let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
@@ -714,6 +725,7 @@ pub async fn build(
     // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
+        mcp_http.clone(),
         Arc::new(pipedream_repo.clone()),
         Arc::new(connectors.clone()),
     ));
@@ -944,6 +956,7 @@ pub async fn build(
         ),
         schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        web_search_provider: ai_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -1037,6 +1050,7 @@ pub async fn build(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_client_metadata.clone(),
+        mcp_http,
         mcp_pre_registered,
     );
     // Record connector connects and disconnects for product analytics.
@@ -1153,6 +1167,11 @@ pub async fn build(
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: (*redis_client).clone(),
+            },
+        },
         mcp_state,
         pipedream_state,
         granola_sync,

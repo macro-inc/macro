@@ -13,6 +13,8 @@ import type {
 } from '@app/lib/split-router';
 import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
+import { globalTabManager } from '@app/signal/tabLayout';
+import { consumeOpenInNewTabIntent } from '@components/app/tab-layout/open-in-tab-intent';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -643,7 +645,12 @@ export function createSplitLayout(
     sessionKey: options.sessionKey,
   });
 
-  const contentInstances = createContentInstanceRegistry();
+  // A view in a parked split (a background desktop tab) keeps its selection
+  // but holds nothing, so another tab can open the same content.
+  const contentInstances = createContentInstanceRegistry(
+    ({ split }) =>
+      split === undefined || state.splits.some(({ id }) => id === split)
+  );
   const unregisterContentInstances = contentInstances.register(() => [
     ...state.splits.map((split) => ({
       owner: split.id,
@@ -1715,6 +1722,34 @@ export function createSplitLayout(
     return { ...open, beside: { split: source.id, side: 'below' } };
   }
 
+  /**
+   * Cmd+click and "Open in new tab" open `content` as a new desktop tab here,
+   * before reuse and the current split's leave guards: the current tab is
+   * not navigated, and a tab may show what this one already has open.
+   */
+  function openAsNewTab(
+    content: SplitContent,
+    options: OpenWithSplitOptions
+  ): boolean {
+    const tabManager = globalTabManager();
+    if (!tabManager) return false;
+    const intent = consumeOpenInNewTabIntent();
+    if (!intent) return false;
+
+    const { props, keepProps, meta } = entryOptionsOf(content, {
+      referredFrom: options.referredFrom ?? null,
+    });
+    const entry: Entry = {
+      id: `entry_${crypto.randomUUID()}`,
+      location: toLocation(content),
+      ...(props !== undefined && { props }),
+      ...(keepProps && { keepProps }),
+      ...(meta && { meta }),
+    };
+    tabManager.openEntryInNewTab(entry, intent);
+    return true;
+  }
+
   function openWithSplit(
     content: SplitContent,
     requested: OpenWithSplitOptions = {}
@@ -1739,6 +1774,9 @@ export function createSplitLayout(
     }
     if (options.search || options.routeState !== undefined) {
       openThroughRouter(content, options);
+      return { status: 'navigating', sourceOwner };
+    }
+    if (openAsNewTab(content, options)) {
       return { status: 'navigating', sourceOwner };
     }
     const existing = findOpenView(content);

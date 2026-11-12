@@ -6,8 +6,8 @@
 //! the task works from anywhere in the repo.
 
 use anyhow::{Context, Result};
-use guppy::MetadataCommand;
 use guppy::graph::PackageGraph;
+use guppy::{CargoMetadata, MetadataCommand};
 use std::path::Path;
 
 /// Build the workspace [`PackageGraph`] via `cargo metadata`.
@@ -34,4 +34,31 @@ pub fn build_graph_at(workspace_dir: &Path, locked: bool) -> Result<PackageGraph
             "running cargo metadata"
         }
     })
+}
+
+/// [`build_graph_at`] with `--locked`, reusing the `cargo metadata` output saved at
+/// `metadata_file`, or saving it there when that file is missing or unreadable.
+///
+/// The caller owns the file's identity: it must only name a file produced from the
+/// same manifests, lockfile and workspace path.
+pub fn build_graph_with_saved_metadata(
+    workspace_dir: &Path,
+    metadata_file: &Path,
+) -> Result<PackageGraph> {
+    if let Ok(json) = std::fs::read_to_string(metadata_file)
+        && let Ok(graph) = CargoMetadata::parse_json(&json).and_then(CargoMetadata::build_graph)
+    {
+        return Ok(graph);
+    }
+    let mut cmd = MetadataCommand::new();
+    cmd.current_dir(workspace_dir);
+    cmd.other_options(vec!["--locked".to_owned()]);
+    let metadata = cmd.exec().context("running cargo metadata --locked")?;
+    let mut json = Vec::new();
+    metadata
+        .serialize(&mut json)
+        .context("serializing cargo metadata")?;
+    std::fs::write(metadata_file, json)
+        .with_context(|| format!("saving cargo metadata to {}", metadata_file.display()))?;
+    metadata.build_graph().context("building the package graph")
 }

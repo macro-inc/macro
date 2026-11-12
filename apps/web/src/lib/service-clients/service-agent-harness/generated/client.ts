@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentActivityPage,
   AgentConversationsDto,
   AgentModeChoiceRequest,
   AgentModeChoiceResponse,
@@ -16,15 +17,25 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AgentUpdates,
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
   AppConnectedRequest,
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
+  CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
+  CodingAgentsResponse,
   CodingPreferencesBody,
+  ConnectedApp,
+  ConnectedAppKind,
+  ConnectedTool,
+  ConnectedToolResult,
+  ConnectedToolSearch,
+  ConnectMcpServer,
+  ConnectMcpServerResponse,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -32,13 +43,19 @@ import type {
   CreateReview,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  DiscoverConnectorsResponse,
+  DiscoveryRequest,
   EditQueuedActionRequest,
   ExecutionRecord,
   ExtractInputRequest,
   ExtractInputResponse,
+  GetAgentSessionActivityParams,
+  LinkedTaskResponse,
+  LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
+  OpenInApp,
   PresentView,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
@@ -51,15 +68,18 @@ import type {
   ReviewDecision,
   ReviewRecord,
   SandboxSizeBody,
+  SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
+  UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
+  WorkRegistrationResponse,
 } from './schemas';
 
 /**
@@ -1293,6 +1313,64 @@ export const previewAgentSessions = async (
 };
 
 /**
+ * @summary The caller's coding sessions waiting for their answer, or stalled for over 20 minutes,
+newest activity first.
+ */
+export type listAgentSessionUpdatesResponse200 = {
+  data: AgentUpdates;
+  status: 200;
+};
+
+export type listAgentSessionUpdatesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentSessionUpdatesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentSessionUpdatesResponseSuccess =
+  listAgentSessionUpdatesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentSessionUpdatesResponseError = (
+  | listAgentSessionUpdatesResponse401
+  | listAgentSessionUpdatesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentSessionUpdatesResponse =
+  | listAgentSessionUpdatesResponseSuccess
+  | listAgentSessionUpdatesResponseError;
+
+export const getListAgentSessionUpdatesUrl = () => {
+  return `/agent-sessions/updates`;
+};
+
+export const listAgentSessionUpdates = async (
+  options?: RequestInit
+): Promise<listAgentSessionUpdatesResponse> => {
+  const res = await fetch(getListAgentSessionUpdatesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentSessionUpdatesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentSessionUpdatesResponse;
+};
+
+/**
  * @summary Prepare MCP connections without sending a prompt or creating a visible list row.
  */
 export type warmAgentSessionHandlerResponse200 = {
@@ -1466,6 +1544,86 @@ export const deleteAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as deleteAgentSessionResponse;
+};
+
+/**
+ * @summary Read activity using the same visibility capability as the session transcript.
+ */
+export type getAgentSessionActivityResponse200 = {
+  data: AgentActivityPage;
+  status: 200;
+};
+
+export type getAgentSessionActivityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getAgentSessionActivityResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getAgentSessionActivityResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentSessionActivityResponseSuccess =
+  getAgentSessionActivityResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionActivityResponseError = (
+  | getAgentSessionActivityResponse400
+  | getAgentSessionActivityResponse401
+  | getAgentSessionActivityResponse403
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionActivityResponse =
+  | getAgentSessionActivityResponseSuccess
+  | getAgentSessionActivityResponseError;
+
+export const getGetAgentSessionActivityUrl = (
+  sessionId: string,
+  params?: GetAgentSessionActivityParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/activity?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/activity`;
+};
+
+export const getAgentSessionActivity = async (
+  sessionId: string,
+  params?: GetAgentSessionActivityParams,
+  options?: RequestInit
+): Promise<getAgentSessionActivityResponse> => {
+  const res = await fetch(getGetAgentSessionActivityUrl(sessionId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionActivityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionActivityResponse;
 };
 
 /**
@@ -2022,6 +2180,439 @@ export const getCodeExecution = async (
     status: res.status,
     headers: res.headers,
   } as getCodeExecutionResponse;
+};
+
+/**
+ * @summary List the connected apps and custom MCP servers the session's agent may use.
+ */
+export type listExecutionConnectedAppsResponse200 = {
+  data: ConnectedApp[];
+  status: 200;
+};
+
+export type listExecutionConnectedAppsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listExecutionConnectedAppsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listExecutionConnectedAppsResponseSuccess =
+  listExecutionConnectedAppsResponse200 & {
+    headers: Headers;
+  };
+export type listExecutionConnectedAppsResponseError = (
+  | listExecutionConnectedAppsResponse403
+  | listExecutionConnectedAppsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listExecutionConnectedAppsResponse =
+  | listExecutionConnectedAppsResponseSuccess
+  | listExecutionConnectedAppsResponseError;
+
+export const getListExecutionConnectedAppsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps`;
+};
+
+export const listExecutionConnectedApps = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<listExecutionConnectedAppsResponse> => {
+  const res = await fetch(
+    getListExecutionConnectedAppsUrl(sessionId, executionId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listExecutionConnectedAppsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listExecutionConnectedAppsResponse;
+};
+
+/**
+ * @summary Search the connectable app catalog, or inspect one app's tools and connection status.
+ */
+export type discoverConnectedAppsResponse200 = {
+  data: DiscoverConnectorsResponse;
+  status: 200;
+};
+
+export type discoverConnectedAppsResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type discoverConnectedAppsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type discoverConnectedAppsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type discoverConnectedAppsResponseSuccess =
+  discoverConnectedAppsResponse200 & {
+    headers: Headers;
+  };
+export type discoverConnectedAppsResponseError = (
+  | discoverConnectedAppsResponse400
+  | discoverConnectedAppsResponse403
+  | discoverConnectedAppsResponse404
+) & {
+  headers: Headers;
+};
+
+export type discoverConnectedAppsResponse =
+  | discoverConnectedAppsResponseSuccess
+  | discoverConnectedAppsResponseError;
+
+export const getDiscoverConnectedAppsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/discover`;
+};
+
+export const discoverConnectedApps = async (
+  sessionId: string,
+  executionId: string,
+  discoveryRequest: DiscoveryRequest,
+  options?: RequestInit
+): Promise<discoverConnectedAppsResponse> => {
+  const res = await fetch(getDiscoverConnectedAppsUrl(sessionId, executionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(discoveryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discoverConnectedAppsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discoverConnectedAppsResponse;
+};
+
+/**
+ * @summary Add a custom MCP server to the execution account's connections.
+ */
+export type addConnectedMcpServerResponse200 = {
+  data: ConnectMcpServerResponse;
+  status: 200;
+};
+
+export type addConnectedMcpServerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type addConnectedMcpServerResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type addConnectedMcpServerResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type addConnectedMcpServerResponseSuccess =
+  addConnectedMcpServerResponse200 & {
+    headers: Headers;
+  };
+export type addConnectedMcpServerResponseError = (
+  | addConnectedMcpServerResponse400
+  | addConnectedMcpServerResponse403
+  | addConnectedMcpServerResponse404
+) & {
+  headers: Headers;
+};
+
+export type addConnectedMcpServerResponse =
+  | addConnectedMcpServerResponseSuccess
+  | addConnectedMcpServerResponseError;
+
+export const getAddConnectedMcpServerUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/servers`;
+};
+
+export const addConnectedMcpServer = async (
+  sessionId: string,
+  executionId: string,
+  connectMcpServer: ConnectMcpServer,
+  options?: RequestInit
+): Promise<addConnectedMcpServerResponse> => {
+  const res = await fetch(getAddConnectedMcpServerUrl(sessionId, executionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(connectMcpServer),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addConnectedMcpServerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addConnectedMcpServerResponse;
+};
+
+/**
+ * @summary Find tools across the agent's connected apps by keywords.
+ */
+export type searchConnectedAppToolsResponse200 = {
+  data: ConnectedToolSearch;
+  status: 200;
+};
+
+export type searchConnectedAppToolsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type searchConnectedAppToolsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type searchConnectedAppToolsResponseSuccess =
+  searchConnectedAppToolsResponse200 & {
+    headers: Headers;
+  };
+export type searchConnectedAppToolsResponseError = (
+  | searchConnectedAppToolsResponse403
+  | searchConnectedAppToolsResponse404
+) & {
+  headers: Headers;
+};
+
+export type searchConnectedAppToolsResponse =
+  | searchConnectedAppToolsResponseSuccess
+  | searchConnectedAppToolsResponseError;
+
+export const getSearchConnectedAppToolsUrl = (
+  sessionId: string,
+  executionId: string,
+  params: SearchConnectedAppToolsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/tools?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/tools`;
+};
+
+export const searchConnectedAppTools = async (
+  sessionId: string,
+  executionId: string,
+  params: SearchConnectedAppToolsParams,
+  options?: RequestInit
+): Promise<searchConnectedAppToolsResponse> => {
+  const res = await fetch(
+    getSearchConnectedAppToolsUrl(sessionId, executionId, params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchConnectedAppToolsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchConnectedAppToolsResponse;
+};
+
+/**
+ * @summary Call one tool of a connected app as the execution's account.
+ */
+export type callConnectedAppToolResponse200 = {
+  data: ConnectedToolResult;
+  status: 200;
+};
+
+export type callConnectedAppToolResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type callConnectedAppToolResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type callConnectedAppToolResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type callConnectedAppToolResponseSuccess =
+  callConnectedAppToolResponse200 & {
+    headers: Headers;
+  };
+export type callConnectedAppToolResponseError = (
+  | callConnectedAppToolResponse400
+  | callConnectedAppToolResponse403
+  | callConnectedAppToolResponse404
+) & {
+  headers: Headers;
+};
+
+export type callConnectedAppToolResponse =
+  | callConnectedAppToolResponseSuccess
+  | callConnectedAppToolResponseError;
+
+export const getCallConnectedAppToolUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/calls`;
+};
+
+export const callConnectedAppTool = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  callConnectedTool: CallConnectedTool,
+  options?: RequestInit
+): Promise<callConnectedAppToolResponse> => {
+  const res = await fetch(
+    getCallConnectedAppToolUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(callConnectedTool),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: callConnectedAppToolResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as callConnectedAppToolResponse;
+};
+
+/**
+ * @summary List the tools one connected app serves.
+ */
+export type listConnectedAppToolsResponse200 = {
+  data: ConnectedTool[];
+  status: 200;
+};
+
+export type listConnectedAppToolsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listConnectedAppToolsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listConnectedAppToolsResponseSuccess =
+  listConnectedAppToolsResponse200 & {
+    headers: Headers;
+  };
+export type listConnectedAppToolsResponseError = (
+  | listConnectedAppToolsResponse403
+  | listConnectedAppToolsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listConnectedAppToolsResponse =
+  | listConnectedAppToolsResponseSuccess
+  | listConnectedAppToolsResponseError;
+
+export const getListConnectedAppToolsUrl = (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/connected-apps/${kind}/${key}/tools`;
+};
+
+export const listConnectedAppTools = async (
+  sessionId: string,
+  executionId: string,
+  kind: ConnectedAppKind,
+  key: string,
+  options?: RequestInit
+): Promise<listConnectedAppToolsResponse> => {
+  const res = await fetch(
+    getListConnectedAppToolsUrl(sessionId, executionId, kind, key),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listConnectedAppToolsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listConnectedAppToolsResponse;
 };
 
 /**
@@ -3282,6 +3873,86 @@ export const putAgentSessionSandboxSize = async (
 };
 
 /**
+ * @summary Link a session the caller owns to a task they can view, replacing any earlier link. The
+session's pull request, now or later, is linked to the task.
+ */
+export type linkAgentSessionTaskResponse200 = {
+  data: LinkedTaskResponse;
+  status: 200;
+};
+
+export type linkAgentSessionTaskResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type linkAgentSessionTaskResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type linkAgentSessionTaskResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type linkAgentSessionTaskResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type linkAgentSessionTaskResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type linkAgentSessionTaskResponseSuccess =
+  linkAgentSessionTaskResponse200 & {
+    headers: Headers;
+  };
+export type linkAgentSessionTaskResponseError = (
+  | linkAgentSessionTaskResponse400
+  | linkAgentSessionTaskResponse401
+  | linkAgentSessionTaskResponse403
+  | linkAgentSessionTaskResponse404
+  | linkAgentSessionTaskResponse500
+) & {
+  headers: Headers;
+};
+
+export type linkAgentSessionTaskResponse =
+  | linkAgentSessionTaskResponseSuccess
+  | linkAgentSessionTaskResponseError;
+
+export const getLinkAgentSessionTaskUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/task`;
+};
+
+export const linkAgentSessionTask = async (
+  sessionId: string,
+  linkTaskRequest: LinkTaskRequest,
+  options?: RequestInit
+): Promise<linkAgentSessionTaskResponse> => {
+  const res = await fetch(getLinkAgentSessionTaskUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkTaskRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: linkAgentSessionTaskResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as linkAgentSessionTaskResponse;
+};
+
+/**
  * @summary Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
 anyone's with edit access.
@@ -3376,6 +4047,66 @@ export const answerAgentSessionToolApproval = async (
 };
 
 /**
+ * @summary Open an item in a new pane of the app tab the person who prompted the
+running turn typed in. Only a running execution of the session's current
+turn may send, as the account it acts as.
+ */
+export type openInAppResponse200 = {
+  data: UiCommandOutcome;
+  status: 200;
+};
+
+export type openInAppResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type openInAppResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type openInAppResponseSuccess = openInAppResponse200 & {
+  headers: Headers;
+};
+export type openInAppResponseError = (
+  | openInAppResponse400
+  | openInAppResponse403
+) & {
+  headers: Headers;
+};
+
+export type openInAppResponse =
+  | openInAppResponseSuccess
+  | openInAppResponseError;
+
+export const getOpenInAppUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/ui-commands`;
+};
+
+export const openInApp = async (
+  sessionId: string,
+  openInApp: OpenInApp,
+  options?: RequestInit
+): Promise<openInAppResponse> => {
+  const res = await fetch(getOpenInAppUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(openInApp),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: openInAppResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as openInAppResponse;
+};
+
+/**
  * @summary Present a view in the session: a review with nothing saved.
  */
 export type presentSessionViewResponse204 = {
@@ -3432,6 +4163,250 @@ export const presentSessionView = async (
     status: res.status,
     headers: res.headers,
   } as presentSessionViewResponse;
+};
+
+/**
+ * @summary Register a session as the caller's work. Requires edit access. Repeating returns the active
+registration. Registering does not share the session: viewers who cannot open it do not see
+it, so share it too.
+ */
+export type registerAgentSessionWorkResponse200 = {
+  data: WorkRegistrationResponse;
+  status: 200;
+};
+
+export type registerAgentSessionWorkResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type registerAgentSessionWorkResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type registerAgentSessionWorkResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type registerAgentSessionWorkResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type registerAgentSessionWorkResponseSuccess =
+  registerAgentSessionWorkResponse200 & {
+    headers: Headers;
+  };
+export type registerAgentSessionWorkResponseError = (
+  | registerAgentSessionWorkResponse401
+  | registerAgentSessionWorkResponse403
+  | registerAgentSessionWorkResponse409
+  | registerAgentSessionWorkResponse500
+) & {
+  headers: Headers;
+};
+
+export type registerAgentSessionWorkResponse =
+  | registerAgentSessionWorkResponseSuccess
+  | registerAgentSessionWorkResponseError;
+
+export const getRegisterAgentSessionWorkUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/work-registration`;
+};
+
+export const registerAgentSessionWork = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<registerAgentSessionWorkResponse> => {
+  const res = await fetch(getRegisterAgentSessionWorkUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerAgentSessionWorkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as registerAgentSessionWorkResponse;
+};
+
+/**
+ * @summary End the caller's own registration of a session. Repeating does nothing. It touches only the
+caller's own row, so it needs no access to the session: losing access must not strand it.
+ */
+export type unregisterAgentSessionWorkResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type unregisterAgentSessionWorkResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type unregisterAgentSessionWorkResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type unregisterAgentSessionWorkResponseSuccess =
+  unregisterAgentSessionWorkResponse204 & {
+    headers: Headers;
+  };
+export type unregisterAgentSessionWorkResponseError = (
+  | unregisterAgentSessionWorkResponse401
+  | unregisterAgentSessionWorkResponse500
+) & {
+  headers: Headers;
+};
+
+export type unregisterAgentSessionWorkResponse =
+  | unregisterAgentSessionWorkResponseSuccess
+  | unregisterAgentSessionWorkResponseError;
+
+export const getUnregisterAgentSessionWorkUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/work-registration`;
+};
+
+export const unregisterAgentSessionWork = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<unregisterAgentSessionWorkResponse> => {
+  const res = await fetch(getUnregisterAgentSessionWorkUrl(sessionId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unregisterAgentSessionWorkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unregisterAgentSessionWorkResponse;
+};
+
+/**
+ * @summary List the caller's active registrations of sessions they can still view, newest first.
+ */
+export type listAgentWorkRegistrationsResponse200 = {
+  data: WorkRegistrationResponse[];
+  status: 200;
+};
+
+export type listAgentWorkRegistrationsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentWorkRegistrationsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentWorkRegistrationsResponseSuccess =
+  listAgentWorkRegistrationsResponse200 & {
+    headers: Headers;
+  };
+export type listAgentWorkRegistrationsResponseError = (
+  | listAgentWorkRegistrationsResponse401
+  | listAgentWorkRegistrationsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentWorkRegistrationsResponse =
+  | listAgentWorkRegistrationsResponseSuccess
+  | listAgentWorkRegistrationsResponseError;
+
+export const getListAgentWorkRegistrationsUrl = () => {
+  return `/agent-work-registrations`;
+};
+
+export const listAgentWorkRegistrations = async (
+  options?: RequestInit
+): Promise<listAgentWorkRegistrationsResponse> => {
+  const res = await fetch(getListAgentWorkRegistrationsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentWorkRegistrationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentWorkRegistrationsResponse;
+};
+
+/**
+ * @summary List the coding agents the caller can start a session as: the same
+personas the `ListCodingAgents` tool offers, including built-in ones whose
+runtime the caller has connected (Cursor once its key is saved).
+ */
+export type listCodingAgentsResponse200 = {
+  data: CodingAgentsResponse;
+  status: 200;
+};
+
+export type listCodingAgentsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCodingAgentsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listCodingAgentsResponseSuccess = listCodingAgentsResponse200 & {
+  headers: Headers;
+};
+export type listCodingAgentsResponseError = (
+  | listCodingAgentsResponse401
+  | listCodingAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listCodingAgentsResponse =
+  | listCodingAgentsResponseSuccess
+  | listCodingAgentsResponseError;
+
+export const getListCodingAgentsUrl = () => {
+  return `/coding-agents`;
+};
+
+export const listCodingAgents = async (
+  options?: RequestInit
+): Promise<listCodingAgentsResponse> => {
+  const res = await fetch(getListCodingAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodingAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodingAgentsResponse;
 };
 
 /**

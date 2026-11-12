@@ -1,3 +1,4 @@
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -20,7 +21,9 @@ export function CodeExecutionToolCall(props: {
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
-  const errorVisible = () =>
+  // The error text is written for the agent, which reads it and retries; the
+  // person watching only sees that the program ended badly.
+  const ended = () =>
     Boolean(
       props.error &&
         (props.record?.status !== 'running' ||
@@ -31,34 +34,36 @@ export function CodeExecutionToolCall(props: {
       ? activity().findIndex((item) => item.status === 'running')
       : -1;
   const active = () => activeIndex() !== -1;
+  const sessionLine = useSessionActivity(() => props.context.sessionId);
+  // As with a run of native tool calls, the program the turn is in takes the
+  // session's live line.
+  const summary = () => (props.context.current ? sessionLine() : undefined);
 
   return (
     <div class="min-w-0" data-code-execution={props.record?.executionId}>
-      <Show when={activity().length === 0 || errorVisible()}>
+      <Show when={activity().length === 0 || ended()}>
         <ToolCard
           title="Workspace activity"
           status={props.common.status}
           muted={props.common.muted}
+          // In the subtitle, which truncates on a narrow pane.
+          subtitle={isToolActive(props.common.status) ? summary() : undefined}
           trailing={
             props.common.trailing ??
             (calls().length > 0
               ? `${calls().length} tool calls`
-              : isToolActive(props.common.status)
+              : isToolActive(props.common.status) && !summary()
                 ? 'Working in your workspace…'
                 : undefined)
           }
-          hasContent={errorVisible()}
-        >
-          <Show when={errorVisible()}>
-            <p class="mt-2 text-ink-muted">{props.error}</p>
-          </Show>
-        </ToolCard>
+        />
       </Show>
       <Show when={activity().length > 0}>
         <LiveToolGroup
           count={activity().length}
           active={active()}
           activeIndex={active() ? activeIndex() : undefined}
+          summary={summary()}
         >
           <For each={activity()}>
             {(item) => (

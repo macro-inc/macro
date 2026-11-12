@@ -60,6 +60,7 @@ export const unsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -106,6 +107,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'crm_contact',
     'crm_pipeline',
     'reminder',
+    'harness',
     'skill',
     'agent_session',
     'scheduled_action',
@@ -149,6 +151,7 @@ export const unsubscribeItemsBody = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -198,6 +201,7 @@ export const removeUnsubscribeItemsBody = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -311,6 +315,7 @@ export const listTypedNotificationsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -1064,6 +1069,12 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -2285,6 +2296,40 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2321,6 +2366,50 @@ export const listTypedNotificationsResponse = zod
       .describe('The next page cursor if it exists.'),
   })
   .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Soft-delete multiple user notifications.
+ */
+export const bulkDeleteUserNotificationsV2Body = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as done.
+ */
+export const bulkMarkNotificationsDoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export const bulkMarkNotificationsSeenBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export const bulkMarkNotificationsUndoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -2404,6 +2493,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -3157,6 +3247,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -4378,6 +4474,40 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4491,6 +4621,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -5244,6 +5375,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -6465,6 +6602,40 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       "One of the user's routines finished a run, successfully or not."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -6583,6 +6754,7 @@ export const getTypedNotificationByIdResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -7270,6 +7442,12 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
                   isAgent: zod
                     .boolean()
                     .optional()
@@ -8394,6 +8572,36 @@ export const getTypedNotificationByIdResponse = zod
             .describe(
               "One of the user's routines finished a run, successfully or not."
             ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agents: zod
+                    .array(
+                      zod
+                        .object({
+                          botId: zod.uuid().describe("The agent's bot id."),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          "One of the recipient's agents that stopped with their runtime access."
+                        )
+                    )
+                    .describe(
+                      "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                    ),
+                  runtimeName: zod.string().describe("The runtime's name."),
+                })
+                .describe(
+                  "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                ),
+              tag: zod.enum(['runtime_access_removed']),
+            })
+            .describe(
+              "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -8418,50 +8626,6 @@ export const getTypedNotificationByIdResponse = zod
         .describe('When the notification was viewed\/seen.'),
     })
   );
-
-/**
- * @summary Soft-delete multiple user notifications.
- */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as done.
- */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as seen.
- */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as not done.
- */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
 
 /**
  * @summary Soft-delete a single user notification.

@@ -478,7 +478,7 @@ describe('messageTimelineQueryOptions', () => {
 
   it('revalidates channels even when their list advertises a newer root', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    testQueryClient.setQueryData(channelKeys.listChannels.queryKey, [
+    testQueryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, [
       {
         id: 'channel-1',
         latest_non_thread_message: {
@@ -755,6 +755,22 @@ describe('channel activity entries', () => {
     });
 
     expect(keys(result)).toEqual(['activity:a', 'msg-1']);
+  });
+
+  it('indexes a call row as a message people can reply to but not select', () => {
+    const call = createMessage('call', '2026-09-10T14:00:00Z');
+    const index = buildMessageIndex([
+      {
+        entries: [{ type: 'call', message: call, status: { state: 'live' } }],
+        next_cursor: null,
+        previous_cursor: null,
+      },
+    ]);
+
+    expect(index.entryKeys).toEqual(['call']);
+    expect(index.keys).toEqual([]);
+    expect(index.byId.get('call')).toBe(call);
+    expect(index.callStatusByKey.get('call')).toEqual({ state: 'live' });
   });
 
   it('indexes rows oldest first and keeps activity out of message keys', () => {

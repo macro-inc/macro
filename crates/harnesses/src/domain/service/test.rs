@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::{
-    models::{PairingClaimFacts, RequestedHarnessScope},
+    models::PairingClaimFacts,
     ports::{OpenPairingCounts, PairingRow},
 };
 
@@ -18,6 +18,12 @@ fn caller(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).unwrap()
 }
 
+fn user_owner(id: &str) -> HarnessOwner {
+    HarnessOwner::User {
+        user_id: id.to_owned(),
+    }
+}
+
 fn harness(owner: HarnessOwner) -> Harness {
     Harness {
         allow_permission_bypass: false,
@@ -25,6 +31,8 @@ fn harness(owner: HarnessOwner) -> Harness {
         kind: "macrod".to_owned(),
         name: "erics-macbook".to_owned(),
         owner,
+        access: HarnessAccess::None,
+        shared_team_ids: Vec::new(),
         created_by: OWNER_ID.to_owned(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -36,11 +44,9 @@ fn harness(owner: HarnessOwner) -> Harness {
 fn pending_pairing() -> PairingRow {
     PairingRow {
         details: PairingDetails {
-            requested_allow_permission_bypass: None,
             code: CODE.to_owned(),
             requested_name: "erics-macbook".to_owned(),
             host: Some("eric@macbook / darwin".to_owned()),
-            requested_scope: Some(RequestedHarnessScope::Team),
             created_at: Utc::now(),
             expires_at: Utc::now() + Duration::minutes(10),
         },
@@ -54,11 +60,14 @@ struct Calls {
     approved: Vec<(String, NewHarness)>,
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
+    updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
+    team_access: Vec<(Uuid, bool)>,
 }
 
 #[derive(Clone, Default)]
 struct FakeRepo {
+    access: HarnessAccess,
     open_counts: OpenPairingCountsConfig,
     insert_conflicts: usize,
     pairing: Option<PairingRow>,
@@ -132,15 +141,70 @@ impl HarnessRepo for FakeRepo {
         Ok(self.claim_result.clone())
     }
 
-    async fn list_visible_harnesses(
+    async fn list_usable_harnesses(
         &self,
         _caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, Self::Err> {
         Ok(self.harness.clone().into_iter().collect())
     }
 
+    async fn list_directory_harnesses(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Harness>, Self::Err> {
+        Ok(self.harness.clone().into_iter().collect())
+    }
+
+    async fn harness_access(
+        &self,
+        _harness_id: HarnessId,
+        _caller: MacroUserIdStr<'static>,
+    ) -> Result<HarnessAccess, Self::Err> {
+        Ok(self.access)
+    }
+
+    async fn set_team_access(
+        &self,
+        _harness_id: HarnessId,
+        team_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .team_access
+            .push((team_id, enabled));
+        Ok(())
+    }
+
+    async fn list_residents(
+        &self,
+        _harness_id: HarnessId,
+    ) -> Result<Vec<HarnessResident>, Self::Err> {
+        Ok(Vec::new())
+    }
+
     async fn get_harness(&self, _harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
         Ok(self.harness.clone())
+    }
+
+    async fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> Result<Option<Harness>, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .updated
+            .push((harness_id, changes.clone()));
+        Ok(self.harness.clone().map(|harness| Harness {
+            name: changes.name.unwrap_or(harness.name),
+            allow_permission_bypass: changes
+                .allow_permission_bypass
+                .unwrap_or(harness.allow_permission_bypass),
+            ..harness
+        }))
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
@@ -193,10 +257,8 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let repo = FakeRepo::default();
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "  erics-macbook  ".to_owned(),
             host: Some("eric@macbook".to_owned()),
-            scope: Some(RequestedHarnessScope::Team),
         })
         .await
         .unwrap();
@@ -208,7 +270,6 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let calls = repo.calls.lock().unwrap();
     let inserted = &calls.inserted_pairings[0];
     assert_eq!(inserted.requested_name, "erics-macbook");
-    assert_eq!(inserted.requested_scope, Some(RequestedHarnessScope::Team));
     assert_eq!(inserted.code, created.code);
     assert_eq!(
         inserted.device_secret_hash,
@@ -224,10 +285,8 @@ async fn pairing_creation_retries_code_collisions() {
     };
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
-            scope: None,
         })
         .await
         .unwrap();
@@ -248,20 +307,16 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
     };
     let result = service(throttled)
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
-            scope: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::Throttled)));
 
     let result = service(FakeRepo::default())
         .create_pairing(CreatePairingRequest {
-            allow_permission_bypass: None,
             name: "   ".to_owned(),
             host: None,
-            scope: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::BadRequest(_))));
@@ -349,7 +404,7 @@ async fn approval_registers_a_private_harness_for_the_caller() {
 async fn team_approval_requires_membership_and_honors_the_name_override() {
     let repo = FakeRepo {
         pairing: Some(pending_pairing()),
-        approve_result: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        approve_result: Some(harness(user_owner(MEMBER_ID))),
         user_has_team: true,
         ..FakeRepo::default()
     };
@@ -369,7 +424,8 @@ async fn team_approval_requires_membership_and_honors_the_name_override() {
     let calls = repo.calls.lock().unwrap();
     let (_, new_harness) = &calls.approved[0];
     assert_eq!(new_harness.name, "team box");
-    assert_eq!(new_harness.owner, HarnessOwner::Team { team_id: TEAM_ID });
+    assert_eq!(new_harness.owner, user_owner(MEMBER_ID));
+    assert_eq!(new_harness.team_grant, Some(TEAM_ID));
     assert_eq!(calls.team_lookups[0], (MEMBER_ID.to_owned(), TEAM_ID));
 
     let repo = FakeRepo {
@@ -551,11 +607,18 @@ async fn private_harnesses_are_deletable_only_by_their_owner() {
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
 }
 
+fn shared_with_team() -> Harness {
+    Harness {
+        shared_team_ids: vec![TEAM_ID],
+        ..harness(user_owner(OWNER_ID))
+    }
+}
+
 #[tokio::test]
-async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
-    // The registrant.
+async fn team_runtimes_are_deletable_by_their_owner_or_the_team_owner() {
+    // Its owner.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         delete_result: true,
         ..FakeRepo::default()
     };
@@ -566,7 +629,7 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
 
     // The team owner.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         delete_result: true,
         user_owns_team: true,
         ..FakeRepo::default()
@@ -576,9 +639,9 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
         .await
         .unwrap();
 
-    // A plain member who did not register it.
+    // A plain member.
     let repo = FakeRepo {
-        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        harness: Some(shared_with_team()),
         user_has_team: true,
         ..FakeRepo::default()
     };
@@ -591,6 +654,79 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
         .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn only_the_owner_opens_a_runtime_to_a_team_they_belong_to() {
+    let request = || SetHarnessTeamAccessRequest {
+        team_id: TEAM_ID,
+        enabled: true,
+    };
+
+    // The owner, on their own team.
+    let repo = FakeRepo {
+        access: HarnessAccess::Owner,
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .set_team_access(caller(OWNER_ID), HarnessId::TEST_A, request())
+        .await
+        .unwrap();
+    assert_eq!(repo.calls.lock().unwrap().team_access, [(TEAM_ID, true)]);
+
+    // Someone holding a grant cannot pass it on.
+    let repo = FakeRepo {
+        access: HarnessAccess::User,
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .set_team_access(caller(MEMBER_ID), HarnessId::TEST_A, request())
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+    assert!(repo.calls.lock().unwrap().team_access.is_empty());
+
+    // The owner, on a team they are not in.
+    let repo = FakeRepo {
+        access: HarnessAccess::Owner,
+        user_has_team: false,
+        ..FakeRepo::default()
+    };
+    let result = service(repo)
+        .set_team_access(caller(OWNER_ID), HarnessId::TEST_A, request())
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn residents_are_visible_to_readers_and_users_only() {
+    let repo = FakeRepo {
+        access: HarnessAccess::None,
+        ..FakeRepo::default()
+    };
+    let result = service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+
+    let repo = FakeRepo {
+        access: HarnessAccess::User,
+        ..FakeRepo::default()
+    };
+    service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await
+        .unwrap();
+
+    let repo = FakeRepo {
+        access: HarnessAccess::Read,
+        ..FakeRepo::default()
+    };
+    service(repo)
+        .list_residents(caller(MEMBER_ID), HarnessId::TEST_A)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -622,57 +758,129 @@ async fn approval_records_explicit_permission_bypass_consent() {
 }
 
 #[tokio::test]
-async fn pairing_creation_preserves_the_daemons_permission_ceiling() {
-    for allowed in [None, Some(false), Some(true)] {
-        let repo = FakeRepo::default();
-        service(repo.clone())
-            .create_pairing(CreatePairingRequest {
-                allow_permission_bypass: allowed,
-                name: "laptop".to_owned(),
-                host: None,
-                scope: None,
-            })
-            .await
-            .unwrap();
-        assert_eq!(
-            repo.calls.lock().unwrap().inserted_pairings[0].requested_allow_permission_bypass,
-            allowed
-        );
-    }
+async fn a_manager_changes_bypass_and_name_on_the_web() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("  studio  ".to_owned()),
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(updated.allow_permission_bypass);
+    assert_eq!(updated.name, "studio");
+    assert_eq!(
+        repo.calls.lock().unwrap().updated,
+        [(
+            HarnessId::TEST_A,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: Some(true),
+            }
+        )]
+    );
 }
 
 #[tokio::test]
-async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
-    for requested in [None, Some(false), Some(true)] {
-        for approved in [false, true] {
-            let mut pairing = pending_pairing();
-            pairing.details.requested_allow_permission_bypass = requested;
-            let repo = FakeRepo {
-                pairing: Some(pairing),
-                approve_result: Some(harness(HarnessOwner::User {
-                    user_id: OWNER_ID.to_owned(),
-                })),
-                ..FakeRepo::default()
-            };
-            let result = service(repo.clone())
-                .approve_pairing(
-                    caller(OWNER_ID),
-                    CODE,
-                    ApprovePairingRequest {
-                        allow_permission_bypass: approved,
-                        name: None,
-                        team_id: None,
-                    },
-                )
-                .await;
-            let calls = repo.calls.lock().unwrap();
-            if requested == Some(false) && approved {
-                assert!(matches!(result, Err(HarnessError::BadRequest(_))));
-                assert!(calls.approved.is_empty());
-            } else {
-                result.unwrap();
-                assert_eq!(calls.approved[0].1.allow_permission_bypass, approved);
-            }
+async fn an_empty_patch_writes_nothing() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let unchanged = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(unchanged.name, "erics-macbook");
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn a_patch_rejects_a_blank_name() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("   ".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::BadRequest(_))));
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn only_a_harness_manager_may_patch() {
+    // (harness, caller, caller owns the harness's team, allowed)
+    for (harness, caller_id, user_owns_team, allowed) in [
+        (harness(user_owner(OWNER_ID)), OWNER_ID, false, true),
+        (harness(user_owner(OWNER_ID)), MEMBER_ID, false, false),
+        (shared_with_team(), MEMBER_ID, false, false),
+        (shared_with_team(), MEMBER_ID, true, true),
+    ] {
+        let owner = harness.owner.clone();
+        let repo = FakeRepo {
+            harness: Some(harness),
+            user_owns_team,
+            ..FakeRepo::default()
+        };
+        let result = service(repo.clone())
+            .patch_harness(
+                caller(caller_id),
+                HarnessId::TEST_A,
+                PatchHarnessRequest {
+                    name: None,
+                    allow_permission_bypass: Some(true),
+                },
+            )
+            .await;
+
+        if allowed {
+            assert!(result.unwrap().allow_permission_bypass, "{owner:?}");
+        } else {
+            assert!(
+                matches!(result, Err(HarnessError::Unauthorized)),
+                "{owner:?} by {caller_id}"
+            );
+            assert!(repo.calls.lock().unwrap().updated.is_empty());
         }
     }
+
+    let result = service(FakeRepo::default())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: None,
+                allow_permission_bypass: Some(false),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }

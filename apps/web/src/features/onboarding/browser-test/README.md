@@ -5,8 +5,13 @@ fake backend from `tests/fake-onboarding-context.ts`. No module is aliased or
 mocked, and nothing touches the network: the only difference from production is
 the context the provider receives.
 
+The bounded teammate source has separate real-query/team-step composition coverage
+in `src/lib/core/internal/browser-test/onboarding-contacts.browser.e2e.ts`, including
+empty continuation pages, the six-email bound and manual edits during refreshes.
+That fixture replaces transport and auth/team services, not the query or form.
+
 The fake world is persisted in sessionStorage, so the full-page round-trips are
-real page loads. Google sign-up, inbox OAuth, and native GitHub account linking
+real page loads. Google or Microsoft sign-up, inbox OAuth, and native GitHub account linking
 reload into the flow, and
 checkout returns on Stripe's success or cancel leg. Leaving onboarding renders
 a `landed` marker showing where the app would have navigated.
@@ -26,14 +31,16 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
 
 - Add `&theme=cream` or `&theme=dark` to preview either palette. Without an override,
   the fixture follows the system color scheme. Overrides survive simulated redirects.
-- `/?view=signup` shows the signed-out slides; Google sign-up continues into the flow.
+- `/?view=signup` shows the signed-out slides; Google or Microsoft sign-up continues into the flow.
 - `/?view=flow&next=/channel/x` shows the signed-in flow with a deep link.
 - `/?view=flow&step=plan` opens that step. `step` must be a current step name.
   Progress is stored in localStorage, so a later load without the query stays
   on the saved step. Saved progress wins over `step`.
 
 Tests seed the world through `openFixture` in `fixture-page.ts`. They read the
-world and the recorded analytics through `window.onboardingFixture`.
+world and the recorded analytics through `window.onboardingFixture`, and change
+it in place with its `update` (the routines test streams suggestions in that
+way). Set `PROOF_DIR` to save that test's screenshots there.
 
 Connector logos under `public/connector-icons` are snapshots from Pipedream's
 public app directory. `../tests/connector-icons.json` records each original page

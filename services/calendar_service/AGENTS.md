@@ -39,9 +39,13 @@ gateway `/calendar` prefix.
 ## Checks
 
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
-- `curl http://localhost:8088/health` after `just run_local` or `just stack up`.
+- `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
+
+- The API's server spans come from `macro_tower_layers` (`api::traced`).
+  tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO
+  filter, so an API wrapped in it sends no server spans.
 
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
@@ -56,3 +60,5 @@ gateway `/calendar` prefix.
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service` ·
   Docs: `docs/guides/new-service.md` (uses this service as the model)
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

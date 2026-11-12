@@ -126,7 +126,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     "activity timelines cannot be combined with message filters",
                 ));
             }
-            self.activity_timeline(&parent, source, query).await
+            let page = self.activity_timeline(&parent, source, query).await?;
+            self.with_call_entries(page).await
         }
         .await
         .inspect_err(log_read_error)
@@ -378,11 +379,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                         "call messages belong to the call thread",
                     ));
                 }
+
+                // A stale client must not write to a chat nobody will see.
+                if self.repo.call_thread_facts(call_id).await?.is_some() {
+                    return Err(MessageError::Invalid(
+                        "this call's discussion is in its channel",
+                    ));
+                }
+
                 Some(call_id)
             }
             _ => {
                 if let Some(root) = input.thread_id {
-                    self.active_thread(&parent, root).await?;
+                    self.active_thread_or_call_root(&parent, root).await?;
                 }
                 None
             }
@@ -397,16 +406,25 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 parent: parent.clone(),
                 actor: actor.clone(),
                 guest_name: None,
-                triggered_by: access
-                    .acting_user_id()
-                    .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
-                    .map(ToString::to_string),
+                kind: MessageKind::Message,
+                triggered_by: match &input.attribution {
+                    MessageAttribution::AccountManager { manager_user_id } => {
+                        Some(manager_user_id.clone())
+                    }
+                    MessageAttribution::ActingUser
+                    | MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::Unprompted => access
+                        .acting_user_id()
+                        .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
+                        .map(ToString::to_string),
+                },
                 triggered_via: match &input.attribution {
                     MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
                         Some(client.clone())
                     }
                     MessageAttribution::ActingUserVia { .. }
                     | MessageAttribution::ActingUser
+                    | MessageAttribution::AccountManager { .. }
                     | MessageAttribution::Unprompted => None,
                 },
                 input,
@@ -426,6 +444,72 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(message)
     }
 
+    /// Create a channel call's thread root once, however often it is asked for.
+    ///
+    /// Takes no receipt because nothing here is the caller's to choose: the
+    /// channel, sender and text all come from the call's own record, which only
+    /// the call domain writes after checking channel access.
+    #[tracing::instrument(err, skip(self), name = "call.discussion.create_root")]
+    pub async fn ensure_call_root(&self, call_id: Uuid) -> Result<Message, MessageError> {
+        let facts = self
+            .repo
+            .call_thread_facts(call_id)
+            .await?
+            .ok_or(MessageError::NotFound)?;
+        let parent = MessageParent::Channel(facts.channel_id);
+        if let Some(root) = self.repo.get(&parent, call_id).await? {
+            return Ok(root);
+        }
+
+        let actor = ChannelSender::try_from(facts.created_by)
+            .map_err(|_| MessageError::Invalid("the call has an invalid creator"))?;
+        let created = self
+            .repo
+            .create(CreateMessage {
+                canonical_root_id: None,
+                parent: parent.clone(),
+                actor: actor.clone(),
+                guest_name: None,
+                kind: MessageKind::CallRoot,
+                triggered_by: None,
+                triggered_via: None,
+                input: PostMessage {
+                    attribution: MessageAttribution::default(),
+                    notification_policy: PostMessageNotificationPolicy::Silent,
+                    id: Some(call_id),
+                    content: CALL_ROOT_TEXT.to_owned(),
+                    thread_id: None,
+                    anchor: None,
+                    mentions: vec![],
+                    attachments: vec![],
+                    nonce: None,
+                },
+            })
+            .await;
+        let message = match created {
+            // The other request created it and delivers it.
+            Err(MessageError::Conflict) => {
+                return self
+                    .repo
+                    .get(&parent, call_id)
+                    .await?
+                    .ok_or(MessageError::Conflict);
+            }
+            result => result?,
+        };
+
+        self.publish(MessageEvent {
+            parent,
+            actor: actor.as_ref().to_owned(),
+            nonce: None,
+            change: MessageChange::CallRootPosted {
+                message: message.clone(),
+            },
+        })
+        .await;
+        Ok(message)
+    }
+
     /// Apply partial updates without requiring callers to reconstruct a message.
     #[tracing::instrument(err, skip(self, access, patch))]
     pub async fn patch(
@@ -438,6 +522,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         if current.sender_id != actor
             && !(matches!(parent, MessageParent::Channel(_))
                 && can_moderate(access.entity_permission()))
@@ -537,6 +622,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         // A comment's replies and its place in the document belong to the comment,
         // not to its first message, so the root carries the whole discussion with
         // it. Channel roots are one message in a conversation that continues
@@ -581,7 +667,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, false).await?;
+        let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
@@ -890,6 +977,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(thread)
     }
 
+    /// A reply's root, creating a call's root first if posting it failed when
+    /// the call started.
+    async fn active_thread_or_call_root(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<ThreadState, MessageError> {
+        match self.active_thread(parent, root).await {
+            Err(MessageError::NotFound) => {
+                let facts = self.repo.call_thread_facts(root).await?;
+                let in_this_channel =
+                    facts.is_some_and(|facts| MessageParent::Channel(facts.channel_id) == *parent);
+                if !in_this_channel {
+                    return Err(MessageError::NotFound);
+                }
+
+                self.ensure_call_root(root).await?;
+                self.active_thread(parent, root).await
+            }
+            result => result,
+        }
+    }
+
     async fn active_message(
         &self,
         parent: &MessageParent,
@@ -974,6 +1084,15 @@ fn parent_from_receipt<P: RequiredPermission>(
         .map_err(|_| MessageError::Invalid("invalid message parent"))
 }
 
+/// A call's root stands for the call, so nobody can change it, its author
+/// included. People talk about the call in its thread.
+fn reject_call_root(message: &Message) -> Result<(), MessageError> {
+    if message.kind == MessageKind::CallRoot {
+        return Err(MessageError::Forbidden);
+    }
+    Ok(())
+}
+
 fn actor_from_receipt<P: RequiredPermission>(
     access: &EntityAccessReceipt<P>,
     _parent: &MessageParent,
@@ -1041,6 +1160,10 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
 
 /// Longest page or layer id a design anchor may carry. Figma ids are short
 /// (`12:34`, or a `;`-joined path for a layer inside nested instances).
+/// What a call's root says to anything that reads it as a plain message: search
+/// results, notification previews, agents and the channel list.
+const CALL_ROOT_TEXT: &str = "started a call";
+
 const FIG_ANCHOR_ID_LIMIT: usize = 512;
 
 /// The document file type an anchor kind belongs to, with the error for any

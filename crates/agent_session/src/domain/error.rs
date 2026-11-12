@@ -8,8 +8,15 @@ use thiserror::Error;
 
 pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
+/// The `code` of a refusal of a prompt the agent may not run on its registered
+/// runtime: on the session API's 403 and on its `command_rejected` event.
+pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
+
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Invalid session activity paging input.
+    #[error("{0}")]
+    InvalidActivityQuery(&'static str),
     /// Speculative sessions cannot belong to a conversation or a message.
     #[error("a warm session cannot have conversation or message provenance")]
     InvalidSessionPurpose,
@@ -85,6 +92,11 @@ pub enum AgentSessionError {
     TooManyPullRequests(usize),
     #[error("the caller may not control this agent session")]
     Forbidden,
+    /// A prompt may not run on the agent's registered runtime: a resident's
+    /// owner, or a coding agent's prompter, has no User access to it. The
+    /// text says which, for the person prompting.
+    #[error("{0}")]
+    NoRuntimeAccess(String),
     #[error("no queued action with this id; it may already have been dispatched")]
     QueuedControlNotFound,
     #[error("only queued prompts can be edited")]

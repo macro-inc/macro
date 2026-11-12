@@ -6,12 +6,13 @@ import { pressHandlers } from '@ui';
 import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
+import { MachinesRequestBadge } from './machines-request-badge';
 import { SettingsSearchResults } from './settings-search-results';
 
 /**
  * Settings' inner navigation, laid out like every other view's sidebar: a
- * title bar, a search field, the grouped section pills, and an optional
- * footer action pinned to the bottom.
+ * title bar, a search field, an optional action (inviting your team) above
+ * the grouped section pills, and the pills themselves.
  */
 export function SettingsSidebar(props: {
   groups: SettingsTabGroup[];
@@ -22,9 +23,9 @@ export function SettingsSidebar(props: {
   onSearchQueryChange: (query: string) => void;
   isItemActive: (tab: SettingsTab) => boolean;
   onSelect: (tab: SettingsTab) => void;
-  footer?: JSX.Element;
+  action?: JSX.Element;
 }) {
-  const footer = children(() => props.footer);
+  const action = children(() => props.action);
   let root: HTMLDivElement | undefined;
   return (
     <ViewSidebar.Root
@@ -61,6 +62,12 @@ export function SettingsSidebar(props: {
       </ViewSidebar.Primary>
 
       <ViewSidebar.Content>
+        {/* Search results replace the pills, so they replace the action too. */}
+        <Show when={action() && !props.searchQuery.trim()}>
+          <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
+            {action()}
+          </ViewSidebar.Nav>
+        </Show>
         <Show
           when={!props.searchQuery.trim()}
           fallback={
@@ -97,6 +104,9 @@ export function SettingsSidebar(props: {
                             <Dynamic component={item.icon} class="size-4" />
                           </ViewSidebar.Icon>
                           <span class="truncate">{item.label}</span>
+                          <Show when={item.tab === 'Harness'}>
+                            <MachinesRequestBadge />
+                          </Show>
                         </ViewSidebar.Item>
                       )}
                     </For>
@@ -107,12 +117,6 @@ export function SettingsSidebar(props: {
           </Show>
         </Show>
       </ViewSidebar.Content>
-
-      <Show when={footer()}>
-        <ViewSidebar.Footer class="py-(--sidebar-gutter)">
-          {footer()}
-        </ViewSidebar.Footer>
-      </Show>
     </ViewSidebar.Root>
   );
 }
