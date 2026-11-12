@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
-# Patched third-party crates ([patch.crates-io]), not workspace members.
-exclude = ["vendor"]
+# Patched third-party crates ([patch.crates-io]) and nightly-only cargo-fuzz
+# crates, not workspace members.
+exclude = ["vendor", "crates/password_import/fuzz"]
 
 members = [
   "crates/passwords",
