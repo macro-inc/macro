@@ -112,7 +112,11 @@ disclosure by code that already holds the token. Direct SDK writes do not have p
 Timeout, cancellation, a dropped caller, and harness shutdown kill and reap the
 child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
-They are bounded diagnostics, not proof of a committed action. Console output
+They are bounded diagnostics, not proof of a committed action. Past 128
+operations, or at the first authenticated change sent to a service origin
+with `fetch` around the SDK (no `x-macro-sdk-verb` header), the bootstrap
+sends one `{truncated: true}` progress frame instead, so a reader knows the
+list isn't whole. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
 `x-macro-code-execution: 1` are sent to configured service origins on
 authenticated requests only.

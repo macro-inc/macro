@@ -203,6 +203,67 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_change_sent_around_the_sdk_marks_the_activity_incomplete_once() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut methods = Vec::new();
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            methods.push(request.split(' ').next().unwrap_or_default().to_owned());
+            respond(&mut stream, "{}").await;
+        }
+        methods
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+export async function main({token, hosts}) {
+  const headers = {authorization: `Bearer ${token}`};
+  await fetch(`${hosts.storage}/documents`, {headers});
+  for (let i = 0; i < 2; i++) await fetch(`${hosts.storage}/documents`, {method: "POST", headers, body: "{}"});
+  return {data: null, reviews: []};
+}
+"#;
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    let progress: Vec<_> = events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Progress { value } => Some(value.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(progress, [serde_json::json!({"truncated": true})]);
+    let methods = tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(methods, ["GET", "POST", "POST"]);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn a_program_presents_a_view_through_its_session() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

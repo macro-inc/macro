@@ -88,6 +88,7 @@ try {
   const originalFetch = globalThis.fetch.bind(globalThis);
   sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
+  let sentAroundSdk = false;
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
     if (request.headers.has("authorization") && origins.has(new URL(request.url).origin)) {
@@ -103,6 +104,12 @@ try {
         const path = new URL(request.url).pathname;
         const read = routes.some(route => route.method === request.method && route.pattern.test(path) && !route.write);
         if (!read) return Promise.reject(new Error("A dry run doesn't send changes."));
+      }
+      // A change sent around the SDK has no operation frame, so the activity
+      // no longer lists everything the program sent.
+      if (!sentAroundSdk && request.method !== "GET" && request.method !== "HEAD" && !request.headers.has("x-macro-sdk-verb")) {
+        sentAroundSdk = true;
+        emit({type: "progress", value: {truncated: true}});
       }
     }
     return originalFetch(request);

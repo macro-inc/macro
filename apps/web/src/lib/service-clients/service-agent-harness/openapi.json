@@ -6636,11 +6636,11 @@
             "items": {
               "$ref": "#/components/schemas/ExecutionActivity"
             },
-            "description": "Advisory SDK operation activity, without arguments or response contents."
+            "description": "SDK operation activity, without arguments or response contents."
           },
           "activityTruncated": {
             "type": "boolean",
-            "description": "Additional request activity was omitted at the bounded observation limit."
+            "description": "The activity may leave requests out: it reached its bound, a frame\ncouldn't be read, the program sent a change around the SDK, or it was\nstopped before its own end."
           },
           "calls": {
             "type": "array",

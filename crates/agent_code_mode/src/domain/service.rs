@@ -189,6 +189,9 @@ impl CodeModeService {
             super::activity::observe(&mut record.activity, &mut record.activity_truncated, value);
         }
         super::activity::finish(&mut record.activity);
+        if !super::activity::ran_to_end(&outcome) {
+            record.activity_truncated = true;
+        }
         let (status, result, error) = settle(outcome, Reviews::Allowed);
         record.status = status;
         record.result = result;

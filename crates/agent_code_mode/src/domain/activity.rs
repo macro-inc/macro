@@ -1,4 +1,8 @@
-//! Bounded, advisory activity derived from the generated SDK operation catalog.
+//! Bounded activity derived from the generated SDK operation catalog. It is
+//! advisory for people, but whole unless `activity_truncated` says otherwise:
+//! a routine draft skips waiting for its session's writes on the strength of
+//! it ([`ExecutionRecord::may_have_written`]). Anything that can lose a
+//! request's frame must set the flag.
 use super::{ExecutionActivity, ExecutionRecord, ExecutionStatus, RecordedCallStatus};
 use code_execution::domain::operations;
 use serde::Deserialize;
@@ -26,20 +30,29 @@ pub(super) fn observe(
         *truncated = true;
         return;
     }
+    // A frame that can't be read, or names an operation the catalog doesn't
+    // have, may be a request this can't label: the activity isn't whole.
     let Ok(event) = serde_json::from_value::<Activity>(value) else {
+        *truncated = true;
         return;
     };
     let Some(label) = operations()
         .get(&format!("{}.{}", event.service, event.operation))
         .map(|operation| &operation.label)
     else {
+        *truncated = true;
         return;
     };
     let status = match event.status.as_str() {
         "started" => RecordedCallStatus::Running,
         "completed" => RecordedCallStatus::Completed,
         "failed" => RecordedCallStatus::Failed,
-        _ => return,
+        // A dry run's gate answered it; nothing was sent.
+        "skipped" | "refused" => return,
+        _ => {
+            *truncated = true;
+            return;
+        }
     };
     if let Some(existing) = activity.iter_mut().find(|item| item.id == event.id) {
         if existing.label == *label && existing.status == RecordedCallStatus::Running {
@@ -55,6 +68,20 @@ pub(super) fn observe(
         } else {
             *truncated = true;
         }
+    }
+}
+
+/// Whether a program's frames were read to its own end. A deadline, a
+/// cancel or a supervisor failure stops reading early, and a request the
+/// program had sent may have lost its frame.
+pub(super) fn ran_to_end(outcome: &code_execution::domain::Outcome) -> bool {
+    use code_execution::domain::{FailureCode, Outcome};
+    match outcome {
+        Outcome::Succeeded { .. } => true,
+        Outcome::Failed { error } => {
+            matches!(error.code, FailureCode::Runtime | FailureCode::Compile)
+        }
+        Outcome::Cancelled | Outcome::TimedOut => false,
     }
 }
 
@@ -82,7 +109,8 @@ static READ_LABELS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 
 impl ExecutionRecord {
     /// Whether the program may have changed anything: false only once it has
-    /// finished, its activity is whole and every operation it called reads.
+    /// finished, its activity is whole (it ran to its own end, every frame
+    /// was read) and every operation it called reads.
     pub fn may_have_written(&self) -> bool {
         self.status == ExecutionStatus::Running
             || self.activity_truncated

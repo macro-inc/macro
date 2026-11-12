@@ -128,10 +128,12 @@ pub struct ExecutionRecord {
     pub error: Option<String>,
     /// Historical bridge calls. Direct HTTP executions leave this empty.
     pub calls: Vec<RecordedToolCall>,
-    /// Advisory SDK operation activity, without arguments or response contents.
+    /// SDK operation activity, without arguments or response contents.
     #[serde(default)]
     pub activity: Vec<ExecutionActivity>,
-    /// Additional request activity was omitted at the bounded observation limit.
+    /// The activity may leave requests out: it reached its bound, a frame
+    /// couldn't be read, the program sent a change around the SDK, or it was
+    /// stopped before its own end.
     #[serde(default)]
     pub activity_truncated: bool,
 }
