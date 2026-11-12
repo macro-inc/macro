@@ -26,12 +26,21 @@ fn the_daemon_logs_to_stderr_and_leaves_stdout_empty() {
     let mut line = String::new();
     while !line.contains("harnessd listening") {
         line.clear();
-        assert_ne!(stderr.read_line(&mut line).unwrap(), 0, "harnessd exited before listening");
+        assert_ne!(
+            stderr.read_line(&mut line).unwrap(),
+            0,
+            "harnessd exited before listening"
+        );
     }
     daemon.kill().unwrap();
     daemon.wait().unwrap();
 
     let mut stdout = String::new();
-    daemon.stdout.take().unwrap().read_to_string(&mut stdout).unwrap();
+    daemon
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut stdout)
+        .unwrap();
     assert_eq!(stdout, "");
 }

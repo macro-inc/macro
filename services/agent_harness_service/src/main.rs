@@ -1406,7 +1406,9 @@ async fn run() -> anyhow::Result<()> {
         computers::spawn_loops(
             Arc::clone(operator),
             computers::ClaudeSignInWatch {
-                sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns::new(pool.clone()),
+                sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns::new(
+                    pool.clone(),
+                ),
                 notices: computers::claude_expiry::IngressClaudeSignInNotices::new(
                     Arc::clone(&notifications),
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),

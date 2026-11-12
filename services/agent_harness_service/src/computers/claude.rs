@@ -541,9 +541,7 @@ impl From<HarnessdError> for ComputerRouteError {
             HarnessdError::Harness(error) => error.into(),
             error @ (HarnessdError::Unreadable(_)
             | HarnessdError::AnswerTooLarge
-            | HarnessdError::Lock(_)) => {
-                Self::Internal(rootcause::report!("{error}"))
-            }
+            | HarnessdError::Lock(_)) => Self::Internal(rootcause::report!("{error}")),
         }
     }
 }
@@ -573,9 +571,7 @@ impl IntoResponse for ComputerRouteError {
             Self::Failed(_)
             | Self::InvalidCode
             | Self::SignInCancelled
-            | Self::UntrustedSignInUrl => {
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
+            | Self::UntrustedSignInUrl => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
