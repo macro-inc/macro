@@ -64,7 +64,10 @@ def main():
         "# Fixed-arrival and delayed-commit write results",
         "",
         "Release build, one local PostgreSQL 18.4 database server, sixteen Tokio",
-        "workers and sixteen connections. Each row compares the pinned old",
+        "workers and sixteen connections. Database files were on local tmpfs;",
+        "fsync and synchronous_commit were enabled. The injected delay adds",
+        "lock occupancy but does not reproduce a particular production disk.",
+        "Each row compares the pinned old",
         "repository with the current repository on the same server: three runs",
         "of 2,000 mixed writes each (500 create, edit, react and delete). Each",
         "case has 128 unmeasured warmup writes. The four operations use distinct",
@@ -79,6 +82,8 @@ def main():
         "timestamps. No arrival is dropped. Achieved rate is completed writes",
         "divided by wall time from first scheduled arrival through final completion.",
         "This worktree's builds, tests and query-plan jobs were idle during timing.",
+        "The host was shared with other worktrees, so these local measurements",
+        "are not a guarantee of production capacity or an isolated-host result.",
         "",
         "## Fixed arrivals without an injected delay",
         "",
@@ -124,7 +129,37 @@ def main():
                 f"{value(old, 'achieved_ops_s'):.1f} | {value(new, 'achieved_ops_s'):.1f} | "
                 f"{old_hold} | {new_hold} |"
             )
+    lines += ["", "### Run variation near capacity", ""]
+    for hold in (2, 5):
+        base = ("open_loop", "1", "200", f"{hold:.3f}")
+        per_variant = []
+        for variant in ("before", "after"):
+            per_run = sorted(groups[(*base, variant)], key=lambda row: int(row["run"]))
+            per_variant.append(" / ".join(row["arrival_p95_ms"] for row in per_run))
+        lines.append(
+            f"At {hold} ms requested hold and 200 offered writes/s, arrival p95 in "
+            f"runs 1/2/3 was {per_variant[0]} ms before and "
+            f"{per_variant[1]} ms after."
+        )
+        lines.append("")
     lines += [
+        "Open-loop samples with p99 at least 100 ms are listed explicitly,",
+        "including tails below the measured saturation rate:",
+        "",
+        "| Hold ms | Offered writes/s | Run | Variant | p95 ms | p99 ms | Achieved writes/s |",
+        "| ---: | ---: | ---: | --- | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        if row["mode"] == "open_loop" and float(row["arrival_p99_ms"]) >= 100:
+            lines.append(
+                f"| {row['requested_hold_ms']} | {row['offered_ops_s']} | "
+                f"{row['run']} | {row['variant']} | {row['arrival_p95_ms']} | "
+                f"{row['arrival_p99_ms']} | {row['achieved_ops_s']} |"
+            )
+    lines += [
+        "",
+        "A median does not imply that every run stayed near that value. Use the",
+        "per-run values and actual hold distributions when assessing tail risk.",
         "",
         "The closed-loop cases have sixteen continuously active writers and",
         "measure saturation. The open-loop cases preserve offered work even",
