@@ -1,0 +1,140 @@
+packages/sdk/generated/storage/index.ts
+  s_72add11554f3a3::t_3270f0007efe47 4
+apps/web/src/features/meetings/browser/meeting-media.test.ts
+  s_72add11554f3a3::t_ffc58f35a08414 2,19-26
+  s_72add11554f3a3::t_ec0f2b9c45a57a 27
+packages/sdk/AGENTS.md
+  s_72add11554f3a3::t_ffc58f35a08414 84-86
+crates/calendar_events/src/domain/ports.rs
+  s_72add11554f3a3::t_ffc58f35a08414 19,442-454,1151,1153-1155,1157-1159,1168-1178
+nix-support/node_modules-hashes.json
+  s_72add11554f3a3::t_ffc58f35a08414 3-4
+apps/web/src/features/meetings/views/meeting-media-setup.tsx
+  s_72add11554f3a3::t_ffc58f35a08414 23,222-225
+packages/sdk/tests/pipeline-list-with-fields.test.ts
+  s_72add11554f3a3::t_ffc58f35a08414 1-72
+crates/crm/AGENTS.md
+  s_72add11554f3a3::t_ffc58f35a08414 26-28
+crates/crm/tests/pipeline_workflows/http.rs
+  s_72add11554f3a3::t_ffc58f35a08414 278-292
+crates/calendar_events/AGENTS.md
+  s_72add11554f3a3::t_ffc58f35a08414 223-231
+packages/sdk/generated/agent-reviews/index.ts
+  s_72add11554f3a3::t_ffc58f35a08414 813-814
+apps/web/patches/@tauri-apps%2Fplugin-http@2.5.9.patch
+  s_72add11554f3a3::t_ffc58f35a08414 1-15,17,20-123,139-143,145-224,226,229-332,348-352,354-433
+crates/complete_graph/src/schema/test/calendar.rs
+  s_72add11554f3a3::t_ffc58f35a08414 354-365
+crates/calendar_events/src/inbound/mutation_router.rs
+  s_72add11554f3a3::t_ffc58f35a08414 30-31,39-41,92,225-230,632-633,635-641,800,811,835,848-864
+crates/calendar_events/src/domain/mutations/details.rs
+  s_72add11554f3a3::t_ffc58f35a08414 7,53-83
+  s_72add11554f3a3::t_d978fc60d026c8 84-86
+packages/sdk/specs/storage.json
+  s_72add11554f3a3::t_ffc58f35a08414 9734-9765
+packages/sdk/src/entities/calendar/event.test.ts
+  s_72add11554f3a3::t_ffc58f35a08414 94-110
+packages/sdk/src/entities/calendar/event.ts
+  s_72add11554f3a3::t_ffc58f35a08414 49-53,224-227,443
+docs/agent-guide/calendar.md
+  s_72add11554f3a3::t_ffc58f35a08414 516-520
+apps/web/src/features/meetings/primitives/meeting-media.ts
+  s_72add11554f3a3::t_ffc58f35a08414 19-23,95,119,147-151,251,380-381
+packages/sdk/generated/storage/types.gen.ts
+  s_72add11554f3a3::t_ffc58f35a08414 27413-27431
+apps/web/src/features/meetings/components/microphone-level-meter.test.tsx
+  s_72add11554f3a3::t_ffc58f35a08414 1-19
+crates/calendar_events/src/outbound/calendar_service_mutations/test.rs
+  s_72add11554f3a3::t_ffc58f35a08414 98-99,123-124,142-159,172,323,330,338,344
+apps/web/src/features/meetings/primitives/meeting-media.test.ts
+  s_72add11554f3a3::t_ffc58f35a08414 73-107
+apps/web/src/lib/tauri/http-plugin.test.ts
+  s_72add11554f3a3::t_ffc58f35a08414 2,8-31,33-35,37,40,54-69,81-94,103-106,111,156-369
+crates/calendar_events/src/inbound/toolset/update_calendar_event.rs
+  s_72add11554f3a3::t_ffc58f35a08414 14-15,18,21-22,130-136,237-238,243-251,301,319,323-333,386,402-416,473-481
+crates/crm/src/inbound/pipeline_workflows.rs
+  s_72add11554f3a3::t_ffc58f35a08414 102-104,174-189
+  s_72add11554f3a3::t_5080c45794b760 101,190-191
+crates/graphql_calendar/src/writes.rs
+  s_72add11554f3a3::t_ffc58f35a08414 5,39,138
+crates/calendar_events/src/domain/mutations/test/details.rs
+  s_72add11554f3a3::t_ffc58f35a08414 2,397-471
+packages/sdk/generated/storage/sdk.gen.ts
+  s_72add11554f3a3::t_ffc58f35a08414 1729-1735
+  s_72add11554f3a3::t_3270f0007efe47 5
+  s_72add11554f3a3::t_90ab2013da0622 1736-1737
+packages/sdk/specs/calendar.json
+  s_72add11554f3a3::t_ffc58f35a08414 352,3656-3658
+  s_72add11554f3a3::t_85a6b5d8818cc6 3659
+services/document_storage_service/src/api/swagger.rs
+  s_72add11554f3a3::t_ffc58f35a08414 693
+apps/web/AGENTS.md
+  s_72add11554f3a3::t_ffc58f35a08414 1354-1362
+apps/web/src/features/meetings/browser/meeting-media.ts
+  s_72add11554f3a3::t_ffc58f35a08414 2,14-25,39-61
+crates/graphql_calendar/src/mutation/test.rs
+  s_72add11554f3a3::t_ffc58f35a08414 9,186,196-205
+  s_72add11554f3a3::t_c18ee0118de269 206
+apps/web/src/features/meetings/components/microphone-level-meter.tsx
+  s_72add11554f3a3::t_ffc58f35a08414 1-46
+crates/calendar_events/src/domain/meeting_links.rs
+  s_72add11554f3a3::t_ffc58f35a08414 7,13-17,37-44,46-47,50,89,91,194,232,238-354
+crates/calendar_events/src/outbound/calendar_service_mutations.rs
+  s_72add11554f3a3::t_ffc58f35a08414 23,195,201,203,239,262,365,382-411,462
+crates/calendar_events/src/inbound/toolset/test.rs
+  s_72add11554f3a3::t_ffc58f35a08414 168-169,177-211,973-1015,1022,1066,1107,1146,1177,1205,1253,1290,1328,1360,2030
+crates/calendar_events/src/inbound/mutation_router/test.rs
+  s_72add11554f3a3::t_ffc58f35a08414 151,163,175
+packages/sdk/generated/calendar/types.gen.ts
+  s_72add11554f3a3::t_ffc58f35a08414 1585-1591,1906
+docs/agent-guide/calls.md
+  s_72add11554f3a3::t_ffc58f35a08414 382-383
+crates/calendar_events/src/inbound/toolset/test/copies.rs
+  s_72add11554f3a3::t_ffc58f35a08414 236-252
+packages/sdk/src/entities/crm/pipelines.ts
+  s_72add11554f3a3::t_ffc58f35a08414 10,32-49
+  s_72add11554f3a3::t_db5166c1de4fa2 50-52
+crates/calendar_events/src/domain/meeting_links/test.rs
+  s_72add11554f3a3::t_ffc58f35a08414 8-9,77-78,83-85,122-125,127-134,197-212,365,395,420,452,475,479-793
+packages/sdk/src/utils/verbs.ts
+  s_72add11554f3a3::t_ffc58f35a08414 241
+crates/calendar_events/src/inbound/toolset.rs
+  s_72add11554f3a3::t_ffc58f35a08414 35,41-42,124,145,164,397-398,700,702,705,728-754,757
+  s_72add11554f3a3::t_820f0d8295d6ea 755-756,758-759
+crates/graphql_calendar/src/mutation.rs
+  s_72add11554f3a3::t_ffc58f35a08414 4,293,295-296,299
+apps/web/src/lib/service-clients/service-agent-reviews/generated/types.ts
+  s_72add11554f3a3::t_37ae835d23d110 858-859
+apps/web/src/lib/service-clients/service-calendar/generated/schemas/updateCalendarEventRequest.ts
+  s_72add11554f3a3::t_f247556b820282 44-48
+apps/web/src/lib/service-clients/service-calendar/openapi.json
+  s_72add11554f3a3::t_90618cea78d242 352,3656-3659
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_72add11554f3a3::t_f45456ff85f0d0 20148
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_72add11554f3a3::t_21357ccd525ae7 5131-5132,16082-16083,16129,16132-16135
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_72add11554f3a3::t_108ffd54e70442 8901-9009
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_72add11554f3a3::t_a67d6eb46de527 9734-9765
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_72add11554f3a3::t_aec9a63c511df3 19,32
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_72add11554f3a3::t_4984d6ceb6f765 119,283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "44d838892899beb8d9a3b352c4d0ed2bd83cf6d9",
+  "prompts": {},
+  "sessions": {
+    "s_72add11554f3a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c1c9036c-c305-4887-9a9f-464214fab70f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
