@@ -77,7 +77,10 @@ impl ToolSchemaGenerator for UserCodeModeSchemas {
             .subschema_for::<agent_code_mode::domain::UserExecutionReceipt>()
             .into();
         let definitions = generator.definitions_mut();
-        for (name, user) in [("ExecuteCode", user_input), ("ExecutionReceipt", user_output)] {
+        for (name, user) in [
+            ("ExecuteCode", user_input),
+            ("ExecutionReceipt", user_output),
+        ] {
             let session = definitions
                 .remove(name)
                 .expect("the session code tools are merged first");
