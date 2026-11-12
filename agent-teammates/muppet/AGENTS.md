@@ -22,6 +22,11 @@ fails isn't run.
   of typed functions, and how scripts run.
 - `packages/lib/utilities/scripts/index.ts`: the type checker and loader for
   scripts.
+- `packages/lib/runtimes/`: how a behavior's events are worked through.
+  `simple` wakes the agent once at a time; `parallel` handles one event at a
+  time per source, for teammates whose replies must come in order; `factory`
+  hands every event to a pool of `workers`, in no order, for factories that
+  only need the work done fast. `pieces.ts` is what they are composed from.
 - `packages/lib/examples/`: two small agents that run without credentials.
 
 ## Scope
