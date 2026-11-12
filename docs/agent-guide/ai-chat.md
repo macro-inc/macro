@@ -1900,8 +1900,11 @@ While a turn runs tool calls, the server words them as one live status line
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Calling N tools** label of the run the turn is in: one with a call in flight,
 or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls. It also replaces the open activity line of an agent reply in a
-channel, and shows under a working session's row in the Agents list. It is
+and the caret still opens the raw calls. An `ExecuteCode` program the turn is
+in takes it the same way: on its SDK-operation peek, or in place of **Working
+in your workspace…** before any operation is observed. It also replaces the
+open activity line of an agent reply in a channel, and shows under a working
+session's row in the Agents list. It is
 throttled per turn (every 4s for the first 10 lines, then every 15s, at most
 120), never stored, and cleared when the turn ends; a surface opened mid-turn
 shows its usual label until the next line arrives. Sessions owned by no person
