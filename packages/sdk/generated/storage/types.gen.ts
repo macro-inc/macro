@@ -3614,23 +3614,28 @@ export type ChannelJoinCodeResponse = {
 /**
  * A shared or account-private label grouping chat channels in the sidebar.
  *
- * `channel_ids` is viewer-relative: it lists only the labelled channels the
- * requesting user participates in. `channel_count` counts every channel in
- * the label so clients can warn accurately before a delete.
+ * `channel_ids` is viewer-relative: legacy labels include joined channels;
+ * sections also include viewable unjoined channels in the verified team.
+ * Legacy manual counts include every assignment; section counts reflect
+ * effective channels visible to the viewer.
  */
 export type ChannelLabel = {
     /**
-     * All assignments for a manual label; visible matches for a smart tag.
+     * Legacy assignments or smart matches; visible effective channels for sections.
      */
     channelCount: number;
     /**
-     * Channels in this label that the requesting user participates in.
+     * Effective channels visible to the viewer in this label or section.
      */
     channelIds: Array<string>;
     /**
      * When the label was created.
      */
     createdAt: string;
+    /**
+     * Explicit picks visible to the viewer (section responses only).
+     */
+    explicitChannelIds?: Array<string> | null;
     /**
      * Stable label id.
      */
@@ -17786,6 +17791,10 @@ export type SmartTagChannelMatch = {
      */
     id: string;
     /**
+     * Whether the viewer actively participates in this channel (section previews only).
+     */
+    isParticipant?: boolean | null;
+    /**
      * Channel display name.
      */
     name: string;
@@ -17800,7 +17809,7 @@ export type SmartTagPreview = {
      */
     channels: Array<SmartTagChannelMatch>;
     /**
-     * Number of matching channels the caller participates in, including overflow.
+     * Number of visible matches, including overflow; legacy previews count participants.
      */
     totalCount: number;
 };
@@ -25089,6 +25098,187 @@ export type RenameChannelLabelResponses = {
 };
 
 export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
+
+export type ListChannelSectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type ListChannelSectionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelSectionsError = ListChannelSectionsErrors[keyof ListChannelSectionsErrors];
+
+export type ListChannelSectionsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelSectionsResponse = ListChannelSectionsResponses[keyof ListChannelSectionsResponses];
+
+export type CreateChannelSectionData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type CreateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelSectionError = CreateChannelSectionErrors[keyof CreateChannelSectionErrors];
+
+export type CreateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelSectionResponse = CreateChannelSectionResponses[keyof CreateChannelSectionResponses];
+
+export type SetChannelSectionData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/channels/{channel_id}';
+};
+
+export type SetChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelSectionError = SetChannelSectionErrors[keyof SetChannelSectionErrors];
+
+export type SetChannelSectionResponses = {
+    204: void;
+};
+
+export type SetChannelSectionResponse = SetChannelSectionResponses[keyof SetChannelSectionResponses];
+
+export type PreviewChannelSectionData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/preview';
+};
+
+export type PreviewChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewChannelSectionError = PreviewChannelSectionErrors[keyof PreviewChannelSectionErrors];
+
+export type PreviewChannelSectionResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewChannelSectionResponse = PreviewChannelSectionResponses[keyof PreviewChannelSectionResponses];
+
+export type DeleteChannelSectionData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type DeleteChannelSectionErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelSectionError = DeleteChannelSectionErrors[keyof DeleteChannelSectionErrors];
+
+export type DeleteChannelSectionResponses = {
+    204: void;
+};
+
+export type DeleteChannelSectionResponse = DeleteChannelSectionResponses[keyof DeleteChannelSectionResponses];
+
+export type UpdateChannelSectionData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type UpdateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateChannelSectionError = UpdateChannelSectionErrors[keyof UpdateChannelSectionErrors];
+
+export type UpdateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type UpdateChannelSectionResponse = UpdateChannelSectionResponses[keyof UpdateChannelSectionResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;

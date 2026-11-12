@@ -1115,17 +1115,14 @@ back returns to the conversation. There is no separate skinny sidebar mode.
 
 ### Sidebar redesign rollout
 
-`enable-chat-sidebar-sections` gates the desktop layout, not channel or
-direct-message creation. It defaults on in development; deployed builds defer to
-PostHog. Set `VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false` to override it locally.
-Wait for the flag to resolve before mounting a desktop layout or loading its
-lists. An unavailable or disabled remote flag restores **All**, **Recent**, and
-**Threads** (the latter still requires `enable-channel-threads-preview`), the
-original independently scrolling groups, and separate creation actions. A saved
-Recent or Threads tab survives switching the redesign on and off. Personal-section
-queries and new section preferences do not affect the flag-off layout. Existing
-labels remain governed by `enable-channel-tags`. Mobile retains its recent feed
-regardless of the redesign flag, including while it is loading.
+`enable-chat-sidebar-sections` gates the desktop sidebar and phone section tabs,
+not channel or direct-message creation. It defaults on in development; deployed
+builds defer to PostHog. Set `VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false`
+locally. Both layouts wait for the flag result. When off, desktop restores
+**All**, **Recent**, and **Threads** (the latter still requires
+`enable-channel-threads-preview`); phone restores its original Recent feed and
+wrapping pins. Saved desktop tabs survive switching the flag on and off.
+`enable-channel-tags` separately controls section management and reads.
 
 ### Original sidebar (flag off)
 
@@ -1152,8 +1149,8 @@ sections. The team heading is **[Team name] channels**, with **Team channels** a
 the fallback while its name is unavailable. The team section always shows joined team channels,
 including channels assigned to manual or smart custom sections. Each custom
 section is a top-level heading, independent of the Team channels disclosure. Empty sections
-use padded, bordered cards like saved views, with a subtle background and secondary
-actions; empty Favorites explains how to add a favorite. Private conversations
+use padded, bordered cards with a short explanation, Add channels as the primary action,
+and Edit section beside it. Read-only sections omit editing actions. Empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
 conversations.
 All section headers use the shared collapsible-section styling without leading
@@ -1166,60 +1163,69 @@ and rows add their own item padding so headings align with the Chat title.
 Rows are indented by 8px under every section, including Favorites, custom
 sections, and DMs. Empty-state actions and search results avoid this extra indent. The
 caret stays hidden in expanded sections until hover and remains visible when
-collapsed. Team-shared sections show a neutral Shared
-badge next to the name, before the caret. Below 256px of section width, a users
-icon replaces the badge to leave more room for the name. Separate short tooltips
-explain the name and sharing, without overlapping native title hints. Personal
-sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
+collapsed. Shared sections show a people icon after the name; sections that
+match by name also show a funnel. Separate tooltips explain sharing and the rule.
+Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
 The sidebar uses TanStack Virtual for the section stack, each expanded channel
 list, and search results. Rows retain stable identities and measured positions
 through live refreshes and section reordering; focused and dragged rows remain
-mounted when they leave the visible range.
+mounted when they leave the visible range. Each section tracks its own measured
+position, including when other sections change height without changing the total
+stack height, so rows do not leave blank gaps behind. Creation and editing use
+the same separate dialog without replacing the section heading.
 Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
-Sections normally scroll independently. When All channels is last and has no
-manually saved height, it expands to its full content height and uses the sidebar's
-scroll area. Moving another section below it restores the usual height cap,
-without discarding a saved manual height. Lists with more than two items have a
-resize grip; drag it to choose a height between two rows (68px) and the end of the list,
-capped by the section's maximum. Shorter lists fit their content and have no
-resize grip. Favorites and Direct messages default to four visible rows;
-other sections default to their maximum height within the pane. Focus the grip
-and use Up/Down to resize by 20px (100px with Shift), or double-click to restore
-the default.
-Section heights persist as personal preferences alongside sorting and sidebar
-width. Heights adapt to filtered content and smaller panes without discarding
-the saved preference. Search covers channels and DMs regardless of section
-placement and restores the selected row in its section when closed. Mobile
-retains the recent-conversation feed below.
+Sections default to their natural content height and scroll together in the sidebar.
+There are no vertical resize handles or per-section scroll areas by default. Saved
+section heights remain stored but do not constrain the lists.
 
-Drag a section heading, its name, or the grip in the left gutter to reorder
-sections, or focus the grip and use Up/Down. Pointer dragging starts only after
-more than 8px of movement, never from holding still. A normal heading click still
-toggles the section; releasing a drag does not. Add and menu buttons never start
-a drag. The bare grip appears only on header hover or keyboard focus and stays
-fixed when pressed, without its own button background. The drag highlight includes
-both the grip and section name without shifting the header's text or controls.
+`enable-chat-sidebar-section-resize` opts into vertical resizing on desktop. It is
+off by default, including development; `VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE`
+overrides it locally. When enabled, sections scroll independently. All channels
+uses the sidebar scroll area when last and without a saved height. Lists with more
+than two items offer a resize grip, bounded by content and pane height. Favorites
+and Direct messages default to four rows. Focus a resize grip and use Up/Down to
+resize by 20px (100px with Shift), or double-click to restore the default. Heights
+remain personal and survive turning the flag off and back on.
+
+Search covers channels and DMs regardless of section
+placement. It lists **Not joined** channels first, then **Recent** when empty or
+**Channels** for a typed query. Join uses the existing channel join action.
+There is no separate Browse channels row. Closing search restores the sectioned
+list. Collapsed sections retain unread rows by default; **Display → Unread when
+collapsed** turns those rows off without changing expanded membership. Off-page
+unread rows supplement only collapsed groups with that setting enabled; expanded
+groups keep the source's page order.
+
+Drag a section heading or its name to reorder sections. There is no drag-handle
+icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
+without increasing its height; use Up/Down to move the section. Pointer dragging
+starts only after more than 8px of movement, never from holding still. A normal
+heading click toggles the section; releasing a drag does not. Add and menu buttons
+never start a drag. The drag highlight covers the section name without shifting
+its text or controls.
 An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
 motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
-mechanism as Gantt; wheel scrolling remains available during a drag. Resizing near
-the sidebar's top or bottom also scrolls the sidebar, including while the pointer
-stays still. Resize drags compensate for that movement, and the rounded resize
-grips retain pointer capture until release or cancellation.
+mechanism as Gantt; wheel scrolling remains available during a drag. With vertical
+resizing enabled, dragging a resize grip near the sidebar's top or bottom also
+scrolls the sidebar, including while the pointer stays still. Resize drags
+compensate for that movement and retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
 per batch supplies cached channel data and fetches only missing records using
 Soup's generic explicit-entity hydration. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
-and network queries.
+and network queries. Reading a channel notification retains already-resolved
+section members while their unread state refreshes. Only unresolved members show
+loading feedback, and changing membership or accounts starts a fresh lookup.
 Each expanded section appends skeleton rows while its remaining channels load,
 using the same row indentation and icon/text columns as loaded channels.
 A failed fetch keeps available rows and replaces that section's loading feedback
@@ -1257,114 +1263,106 @@ Turning the flag off hides section controls and stops label reads without
 deleting saved labels. Channel and direct-message creation remain independent of
 the label service and its feature flag.
 
-Use **New → New section** to create a section. The wider dialog has a name field
-and a **Smart section** switch in its body. **Shared with team** sits on the left
-of the footer, with the action buttons on the right. The question-mark tooltip
-beside sharing explains that team members can see and organize the section and
-only team channels can be added; clicking or tapping the help button also reveals
-the explanation below the footer controls. The form shows a warning-colored
-**Team channels only** hint when sharing is on and no scope hint when it is off.
-With both switches off, the section is personal and manual. Smart grouping reveals a separate input below
-**Name contains** and a matching-channel count. Hover or focus that count to preview
-matched channels; larger results show the remaining count. Switching sharing scope
-refreshes the preview without replacing the form. A zero shared count explains
-that only joined team channels match; public and private channels remain personal.
-Edit and delete through each section's sliders menu. Editing also exposes
-**Shared with team**. Turning it on or off preserves the section ID; turning it
-off requires confirmation and makes the section personal to the current account,
-removing it from teammates' sidebars. The toggle is disabled with an explanation
-while channel eligibility is loading or when any current member is unavailable
-or ineligible for the destination scope. No channels are silently dropped.
-Personal sections are private to the account, including for team members, and
-accept joined team, public, or private channels. Shared sections accept only
-channels from that team. Any current team member can create, edit, change sharing,
-or delete a shared section; these actions are not admin-only. Neither kind accepts DMs.
-Scope changes reject duplicate destination names and atomically move manual
-assignments into the destination scope, replacing other manual assignments there.
-Smart sections keep their rule and reevaluate matches in the new scope.
-Ordinary channel assignments stay isolated between personal and shared scopes.
-Names are unique within each scope, case-insensitively.
+Use **New → New section** to open the section dialog. **Add to section → New section**
+opens the same dialog with that channel selected. Create saves the section; Cancel
+or Escape discards the draft. New sections append before All channels without
+re-sorting existing sections, and the sidebar reveals the new heading. On phones,
+creation selects the new section tab. **Edit section** opens the same dialog for
+an existing section's name and name-matching rule. Failed saves retain the draft.
 
-Each heading has one sliders-icon menu, also available by right-clicking the header.
-**Sort** opens its independent single-select options with a checkmark on the right.
-**Filter** contains **Unread only**. The unread label sits on the left and its
-switch on the right; toggling it keeps the submenu open.
-Manual sections have a **+** header action and **Add channels** menu entry.
-The picker searches all eligible joined channels, not just rows loaded in the
-sidebar, and excludes channels already in the section. The wider, shorter picker
-keeps its actions visible while the channel list scrolls. Compact helper text
-explains the scope and assignment move. Adding a channel moves its
-manual assignment within the same scope without changing the other scope.
-Partial failures keep successful additions and retry only the failed selection.
-Empty manual sections offer **Add channels**, empty smart sections offer **Edit
-rule**, and unread-filtered empty sections offer **Show all channels**.
-Custom sections also include editing, Mark all as read, notification actions, and a
-destructive Delete action in the same menu. Click and right-click menus use the
-same standard context-menu rows, spacing, and selection indicators. Use the heading's caret
-to expand/collapse it; this is not repeated
-in the menu. There is no separate all-sections management menu.
-Sorting and unread filters are personal, even for a team-shared section. Date ordering
-follows each paginated source; Favorites and custom sections also offer A–Z.
-Filtered-out channels retain their membership and do not reappear ungrouped.
-Shared name and rule edits apply to the team; personal edits affect only the account.
-Deleting a section does not delete its conversations or change channel access.
+A manual section's header **+** and empty **Add channels** action open an anchored searchable
+checkbox picker. The desktop picker has a full-width top search, no visible title or
+description, and a height-bounded scrollable channel list above its fixed actions.
+Additions retain successful writes when part of a batch fails.
+In **Edit section**, enable **Match by name** to show **Name contains** and a live
+match count with a preview list. Existing rule sections show the current pattern
+for editing. Matching is literal and case-insensitive.
+Shared sections show a people icon; saved name rules show a funnel.
 
-Every desktop section menu, including **Favorites**, **[team name] channels**,
-and **Direct messages**, offers **Mute all channels**,
-**Unmute all channels**, and **Snooze all channels**. These update only your
-notifications, including for shared sections. Each action uses the section's
-complete current membership, including filtered-out and unloaded channels;
-channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action and never include unjoined channels. The team
-section includes its custom-section members.
-Favorites targets only channel favorites, not documents or other favorite types.
-Snooze uses the usual
-duration/date picker and resumes notifications at the chosen time. A partial
-failure keeps successful updates and reports the failures; snooze retries only
-failed channels. Mute, unmute, and snooze submit up to 500 item preferences in
-one atomic backend request, rather than one request per channel. Larger selections
-use sequential requests. The frontend applies confirmed changes in one cache
-update, preserving unrelated preferences and successful requests if another fails.
-Empty or unavailable custom sections and empty Favorites disable these actions.
-Mobile remains unchanged.
+A section uses either hand-picked channels or a name rule, never both. Enabling
+**Match by name** in a populated manual section warns that saving replaces the
+hand-picked list; **Replace channel list** confirms the change. Cancel or turning
+matching back off before saving leaves picks untouched. Saving clears the manual
+assignments without deleting channels.
+Rule-based sections hide Add channels and reject manual assignment or drag-and-drop;
+edit their rule to change membership. Shared sections can include viewable unjoined
+channels in their verified team; personal sections remain participant-only. The
+additive section API keeps unjoined visibility separate from legacy labels used
+when the flag is off.
 
-Use a channel's Add to section menu to change the personal or shared assignment.
-Each section uses a checkbox: checking moves the channel into that section,
-and unchecking removes it. Only one section per scope is assigned; the personal
-and shared assignments remain independent.
+Custom section menus contain Edit section, Add channels for manual sections,
+Visible to, Sort, Display, Mark all as read, notification controls, and Delete.
+Click and right-click menus share the same controls and isolate menu loading from
+the sidebar. Editing actions require verified access; unavailable scope transfers
+are hidden. **Visible to** uses a checkbox layout but permits only
+**Only me** or the current team. Checking one replaces the other. Multiple-team
+visibility needs a separate storage-model change. Scope transfers preserve the
+section ID, validate complete channel eligibility, and confirm removal from the
+team's sidebars. Personal sections accept joined team, public, and private
+channels; shared sections stay restricted to their own team. DMs are excluded.
 
-Choose smart grouping in the section dialog for automatic name matching.
-Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
-drop targets. Channels can appear in multiple matching smart sections.
-Loaded same-team channels join matching shared smart sections immediately,
-including after a rename; they do not wait for the next section refresh. If a
-channel's team metadata is missing, only an existing server-authorized match is
-retained. Channels from another team never become new local matches.
-Hovering an incompatible item over a section shows a not-allowed cursor and an
-explanation over the section, including automatic membership, shared-scope
-restrictions, and channels already in the section. Returning a channel to its
-matching built-in channel group removes only its existing manual assignment.
+**Sort** remains personal. **Display** contains **Unread only** and default-on
+**Unread when collapsed**. Toggling either leaves the submenu open. Filtering
+never changes assignments. Favorites retain Custom order and drag reordering.
+**Mark all as read** applies to the section's complete current membership, including
+unloaded and filtered channels, without touching notifications from other sections.
 
-Support is organized manually through a personal section. The app does not
-classify support channels by their names or silently create a Support section.
+**Mute all channels** opens the existing snooze durations with end times,
+**Until I turn it off**, and **Custom…**. Custom uses the existing natural-time
+snooze picker, rather than a separate calendar implementation. Muted sections
+offer **Unmute all channels**. These actions affect only the viewer's current
+complete membership, including unloaded and filtered rows, never later additions.
+Built-in lists include joined channels only; Favorites targets channel favorites.
+Bulk writes retain successful chunks on partial failures. Channel row menus use
+the same durations under **Mute notifications**, without leading mute or unmute icons. Preset
+end dates and times align with the menu's right content edge.
 
-Verify personal and shared creation, same-name sections in different scopes,
-private-channel assignment, and rejecting private-channel assignment to a shared
-section. Check collapse and reload, stale requests after an account change,
-empty sections, assignment failures, and one channel in both scopes. Check the
-New menu, both dialog switches, keyboard access, edit-dialog focus, destructive
-deletion, and per-section unread and sort preferences after reload. Confirm
-unread filtering does not change section
-membership or another section's rows. Scroll a long sidebar with many sections,
-reorder both custom and built-in sections, and confirm the order survives reload.
-Keyboard navigation and section shortcuts must follow the same order as the
-rendered rows.
-Drag a channel between sections and confirm the sidebar stays visible while
-lookups refetch, including with a slow or paused connection.
-When a channel belongs to both a personal and a shared section, drag its
-personal-section row into the ungrouped list. Only the personal assignment is
-removed; the shared assignment remains. Repeat from the shared-section row to
-verify the opposite scope.
+**Add to section** lists eligible sections with checked membership, then New
+section. Rule-only matches stay checked and read-only; edit the rule to remove
+them. Explicit assignments remain exclusive within each scope; personal and
+shared assignments stay independent. Deleting a section never deletes a
+conversation or changes channel access. Reordering, heights, sorting, and
+Display remain personal.
+
+### Phone sections (flag on)
+
+The phone list reuses Home rows and the existing large favorite circles with
+unread dots. Up to six loaded favorites retain their saved order in one sideways
+scrolling row. All is selected initially, followed by Direct messages and custom
+sections in personal display order. All excludes pins except incoming-call rows;
+the shared list renderer owns that exclusion so ringing pins retain their Join
+and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
+control sits below Favorites and above the conversation list, scrolls horizontally,
+and reveals the selected section. Favorites and pills scroll with the list. People
+and funnel icons match desktop.
+
+Search uses the existing dock Search; Chat has no separate search button or
+in-list search field. Opening conversations retains latest-message navigation,
+top-level read marking, incoming-call actions, and pull-to-refresh.
+
+Long-press a custom section pill to open its settings without changing the selected
+section. A short tap selects it; scrolling cancels the hold. There is no separate
+more button. A keyboard or pointer context menu opens the same settings.
+Visible to and Sort use the shared mobile filter drawer's expandable groups and
+choices. **Unread only** is an always-visible toggle outside those groups. Phone
+sections do not collapse, so the drawer has no Display group or Unread when
+collapsed setting. Mute opens the shared presets with Back, not a nested submenu.
+Editing, notification actions, and deletion use separate drawer groups.
+Sharing uses the verified current team, including when no other shared sections
+exist. **Edit section** closes the options sheet and opens
+the shared creation/editing dialog with the same replacement warning. Rule matches
+appear directly in a bounded list on touch devices rather than requiring hover. Add channels
+opens the shared full-height picker above the options sheet with Cancel and Done;
+choosing rows keeps search focused, and Cancel discards the draft without closing
+the options sheet. A deleted selected section falls back to All. Phone selection is transient, not a
+new persisted preference.
+
+Verify desktop and touch-phone widths in both themes, flag-off restoration,
+keyboard naming and cancel, checkbox scope replacement, anchored picker focus,
+collapsed unread rows, name-rule previews, join and search ordering, mute
+presets/custom times, and phone tab deletion. Check scope transfers and partial
+assignment failures with signed-in accounts; fixture data cannot establish
+server authorization or cross-account cache isolation.
 
 ### Creation actions
 
@@ -1684,7 +1682,7 @@ the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
-`Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute notifications`,
+`Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
 `Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
 given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,

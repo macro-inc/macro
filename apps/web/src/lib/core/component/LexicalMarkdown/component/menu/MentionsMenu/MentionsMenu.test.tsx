@@ -272,40 +272,6 @@ it('keeps matching category and row nodes mounted across typing and updated peop
   expect(menu.isOpen()).toBe(false);
 });
 
-it('selects a local person with Enter before the search debounce settles', () => {
-  vi.useFakeTimers();
-  Element.prototype.scrollIntoView = vi.fn();
-  const ana: IUser = {
-    id: 'external|ana',
-    name: 'Ana Ruiz',
-    email: 'ana@example.com',
-  };
-  const ben: IUser = {
-    id: 'external|ben',
-    name: 'Ben Ortiz',
-    email: 'ben@example.com',
-  };
-  const menu = createMenuOperations();
-  menu.openMenu();
-  const onPick = vi.fn();
-  render(() => (
-    <MentionsMenu
-      menu={menu}
-      entities={() => []}
-      users={() => [ana, ben]}
-      sources={['users']}
-      anchor={document.createElement('div')}
-      onPick={onPick}
-    />
-  ));
-
-  menu.setSearchTerm('Ana');
-  fireEvent.keyDown(document, { key: 'Enter' });
-
-  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
-  expect(menu.isOpen()).toBe(false);
-});
-
 it.each([false, true])(
   'leaves closed mention sources idle and refreshes them on reopen (mobile: %s)',
   async (mobile) => {
@@ -737,4 +703,46 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('picks the highlighted mention on Enter at once, even while typing continues', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ana: IUser = {
+    id: 'macro|ana@macro.com',
+    name: 'Ana Lima',
+    email: 'ana@macro.com',
+  };
+  const bo: IUser = {
+    id: 'macro|bo@macro.com',
+    name: 'Bo Chen',
+    email: 'bo@macro.com',
+  };
+  const menu = createMenuOperations();
+  menu.setSearchTerm('bo');
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ana, bo]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByTitle('Bo Chen bo@macro.com')).toBeTruthy();
+
+  // Typed past the listed term and pressed Enter within the debounce, then
+  // kept typing: the pick is for the typed text and is not lost.
+  menu.setSearchTerm('ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  menu.setSearchTerm('ana!');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(onPick).toHaveBeenCalledOnce();
 });

@@ -137,9 +137,7 @@ from their number without owning or re-adding the chat. Typing `@` in the
 composer offers only the group's WhatsApp participants (not the sender, agents,
 Macro items or `@here`); a picked person is sent as `@<digits>` with
 `mentions: [jid]`, and a mentioning text follows files instead of captioning
-them. Press Enter immediately after typing a participant's name, then keep
-typing: the matching person should be inserted before the following text.
-Text/media/replies,
+them. Text/media/replies,
 reactions, and edits/deletes of the caller's own recent messages use
 `POST /external-chats/<id>/sends`; files stage through `/attachments`.
 The detail's `limits` supplies allowed MIME types, bytes and the edit window.

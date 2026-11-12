@@ -1,4 +1,4 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { A } from '@solidjs/router';
 import { createRenderEffect, For, Show } from 'solid-js';
 import { setPageSeo } from '../../app/utils/utilSeo';
@@ -87,7 +87,7 @@ export default function PostsIndex() {
           </For>
         </ul>
       </main>
-      <PostsPageTail ctaButtonName="blog_index_cta" />
+      <PostsPageTail />
     </>
   );
 }

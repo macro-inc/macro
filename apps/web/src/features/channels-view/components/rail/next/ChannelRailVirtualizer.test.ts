@@ -1,5 +1,6 @@
 import { cleanup, render } from '@solidjs/testing-library';
-import { createComponent, createSignal } from 'solid-js';
+import { createComponent, createEffect, createSignal } from 'solid-js';
+import { insert } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ChannelRailVirtualizer,
@@ -35,7 +36,9 @@ function measure(height: number) {
   viewportHeight = height;
   for (const observer of [...observers]) {
     const entries = [...observer.targets].map((target) => {
-      const blockSize = target.hasAttribute('data-viewport') ? height : 32;
+      const blockSize = target.hasAttribute('data-viewport')
+        ? height
+        : Number(target.firstElementChild?.getAttribute('data-height') ?? 32);
       const size = [{ inlineSize: 300, blockSize }];
       return {
         target,
@@ -303,6 +306,77 @@ describe('channel rail virtualizer', () => {
     expect(long.parentElement?.style.top).toBe('0px');
     expect(short.parentElement?.style.top).toBe('260px');
     expect(view.getByText('last').parentElement?.style.top).toBe('300px');
+  });
+
+  it('repositions nested rows when section heights change but total height stays the same', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute('data-viewport')) return 200;
+        return Number(
+          this.firstElementChild?.getAttribute('data-height') ?? 32
+        );
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.setAttribute('data-viewport', '');
+    Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+    viewport.scrollTop = 128;
+    document.body.append(viewport);
+    const [counts, setCounts] = createSignal({ first: 2, middle: 20, last: 2 });
+    let handle: ChannelRailVirtualizerHandle | undefined;
+    const view = render(
+      () =>
+        createComponent(ChannelRailVirtualizer<'first' | 'middle' | 'last'>, {
+          keys: ['first', 'middle', 'last'],
+          scrollRoot: viewport,
+          estimateSize: 200,
+          keepMounted: [0, 1, 2],
+          ref: (current) => {
+            handle = current;
+          },
+          children: (key, start) => {
+            const container = document.createElement('div');
+            createEffect(() =>
+              container.setAttribute('data-height', String(counts()[key] * 32))
+            );
+            insert(
+              container,
+              createComponent(ChannelRailVirtualizer<string>, {
+                get keys() {
+                  return Array.from(
+                    { length: counts()[key] },
+                    (_, index) => `${key}-${index}`
+                  );
+                },
+                scrollRoot: viewport,
+                get scrollMargin() {
+                  return start();
+                },
+                estimateSize: 32,
+                overscan: 0,
+                children: (id) => {
+                  const button = document.createElement('button');
+                  button.textContent = id;
+                  return button;
+                },
+              })
+            );
+            return container;
+          },
+        }),
+      { container: viewport }
+    );
+    measure(200);
+    expect(handle?.scrollMetrics().size).toBe(768);
+    expect(view.queryByText('middle-1')).toBeNull();
+    expect(view.getByText('middle-2')).toBeTruthy();
+
+    setCounts({ first: 3, middle: 20, last: 1 });
+    measure(200);
+
+    expect(handle?.scrollMetrics().size).toBe(768);
+    expect(view.getByText('middle-1')).toBeTruthy();
+    expect(view.getByText('middle-2')).toBeTruthy();
   });
 
   it('retains focused or dragged rows outside the viewport', () => {

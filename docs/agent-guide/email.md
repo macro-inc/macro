@@ -714,6 +714,10 @@ filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
 commands in the command menu, appear only when the thread has a sender other
 than you. A thread you sent alone omits them.
+With an email row focused or selected, open Command-K and search **Block Sender**
+to block its sender. The success toast offers **Undo**. Multiple selected email
+rows apply the action to each sender in its linked inbox; mixed selections and
+emails without a sender omit the command. This command has no keybinding.
 **Download .eml** in the title menu saves the thread's newest sent or received
 message (drafts and sends still in flight are skipped) exactly as Gmail or
 Outlook holds it, named after its subject. Anyone who can view the thread can

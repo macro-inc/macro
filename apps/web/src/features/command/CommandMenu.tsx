@@ -29,10 +29,9 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -66,6 +65,7 @@ import {
 } from 'solid-js';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
+import { actOnCurrentSelection } from './act-on-current-selection';
 import { commandSearchResultKey } from './contact-items';
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
@@ -467,7 +467,10 @@ function CommandSearchMenu(
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
-  const query = debouncedDependent(CommandState.query, 60);
+  const [query, flushQuery] = flushableDebouncedDependent(
+    CommandState.query,
+    60
+  );
 
   useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
@@ -729,20 +732,11 @@ function CommandSearchMenu(
     hide: true,
   });
 
-  // The list trails the typed text by the query debounce. Enter pressed in
-  // that gap waits for the list of the text on screen.
-  const runWhenCurrent = createRunWhenCurrent(
-    () => query() !== CommandState.query(),
-    CommandState.isOpen
-  );
-  const actOnSelected = (openInNewSplit: boolean) => {
-    if (query() === CommandState.query() && !selectedItem()) return false;
-    runWhenCurrent(() => {
-      const item = selectedItem();
-      if (item) handleItemAction(item, openInNewSplit);
-    });
-    return true;
-  };
+  // The list trails the typed text by the query debounce. Enter brings it up
+  // to date first, then acts at once: a deferred action would be lost if the
+  // person kept typing.
+  const actOnSelected = (act: (item: CommandMenuItem) => void) =>
+    actOnCurrentSelection({ flushQuery, selectedItem, act });
 
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
@@ -750,7 +744,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.selectItem'),
     keyDownHandler: (event) => {
       if (event?.isComposing || event?.shiftKey) return false;
-      return actOnSelected(false);
+      return actOnSelected((item) => handleItemAction(item, false));
     },
     runWithInputFocused: true,
   });
@@ -763,7 +757,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.openInNewSplit'),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      return actOnSelected(true);
+      return actOnSelected((item) => handleItemAction(item, true));
     },
     runWithInputFocused: true,
   });
@@ -775,12 +769,9 @@ function CommandSearchMenu(
     condition: () => canOpenInNewTab() && selectedOpensInSplit(),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      if (query() === CommandState.query() && !selectedItem()) return false;
-      runWhenCurrent(() => {
-        const item = selectedItem();
-        if (item) openInNewTab(() => handleItemAction(item, false));
-      });
-      return true;
+      return actOnSelected((item) =>
+        openInNewTab(() => handleItemAction(item, false))
+      );
     },
     runWithInputFocused: true,
   });

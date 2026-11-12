@@ -27,9 +27,8 @@ import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
@@ -152,7 +151,10 @@ export function MentionsMenu(props: MentionsMenuProps) {
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
 
-  const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const [searchTerm, flushSearchTerm] = flushableDebouncedDependent(
+    props.menu.searchTerm,
+    60
+  );
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
@@ -676,11 +678,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
-  const runWhenCurrent = createRunWhenCurrent(
-    () => searchTerm() !== props.menu.searchTerm(),
-    menuOpen
-  );
-
   const closeMenu = () => {
     props.editor?.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
@@ -719,30 +716,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     },
     onSelect: () => {
-      // A local people list can catch up synchronously, so the next keypress
-      // cannot change the query before Enter selects the matching person.
-      if (props.sources?.length === 1 && props.sources[0] === 'users') {
-        searchTerm.flush();
+      // The list trails the typed term by the debounce. Bring it up to date
+      // and act at once: a deferred pick is lost if the person keeps typing.
+      flushSearchTerm();
+      const selectedItem = controller.selectedItem();
+      // Keep the menu open on an offline agent so Enter reads as "not that
+      // one" rather than silently dismissing with nothing inserted.
+      if (selectedItem && isOffline(selectedItem)) return;
+      if (selectedItem) {
+        itemAction(selectedItem).catch((error) =>
+          Telemetry.error(error, {
+            surface: 'mentions-menu',
+            itemKind: selectedItem.kind,
+          })
+        );
+      } else {
+        closeMenu();
       }
-      // Other lists may load asynchronously; wait for the typed term there.
-      runWhenCurrent(() => {
-        const selectedItem = controller.selectedItem();
-        // Keep the menu open on an offline agent so Enter reads as "not that
-        // one" rather than silently dismissing with nothing inserted.
-        if (selectedItem && isOffline(selectedItem)) return;
-        if (selectedItem) {
-          itemAction(selectedItem).catch((error) =>
-            Telemetry.error(error, {
-              surface: 'mentions-menu',
-              itemKind: selectedItem.kind,
-            })
-          );
-        } else {
-          closeMenu();
-        }
-        props.menu.setSearchTerm('');
-        setMenuOpen(false);
-      });
+      props.menu.setSearchTerm('');
+      setMenuOpen(false);
     },
     onClose: () => {
       if (canExitViewAll()) {

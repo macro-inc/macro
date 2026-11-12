@@ -3,7 +3,7 @@ import {
   debounce as solidDebounce,
   throttle as solidThrottle,
 } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
@@ -15,20 +15,32 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Create a debounced view of a signal.
  */
-export function debouncedDependent<T>(
-  source: () => T,
-  delay = 300
-): (() => T) & { flush: () => void } {
+export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
   const [debounced, setDebounced] = createSignal(source());
   const schedule = solidDebounce((v: T) => setDebounced(() => v), delay);
   createEffect(() => schedule(source()));
   onCleanup(() => schedule.clear());
-  return Object.assign(debounced, {
-    flush: () => {
-      schedule.clear();
-      setDebounced(() => source());
-    },
-  });
+  return debounced;
+}
+
+/**
+ * A debounced view of a signal that can be brought up to date at once. A key
+ * that acts on what the view lists (Enter) calls `flush` first, so it acts on
+ * the text on screen without waiting.
+ */
+export function flushableDebouncedDependent<T>(
+  source: () => T,
+  delay = 300
+): [debounced: () => T, flush: () => void] {
+  const [debounced, setDebounced] = createSignal(source());
+  const schedule = solidDebounce((v: T) => setDebounced(() => v), delay);
+  createEffect(() => schedule(source()));
+  onCleanup(() => schedule.clear());
+  const flush = () => {
+    schedule.clear();
+    setDebounced(() => untrack(source));
+  };
+  return [debounced, flush];
 }
 
 /**
