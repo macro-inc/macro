@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT gh.history_id\n        FROM email_links l\n        LEFT JOIN email_gmail_histories gh ON l.id = gh.link_id\n        WHERE l.email_address = $1 AND l.provider = $2\n        ",
+  "query": "\n        SELECT gh.history_id\n        FROM email_links l\n        JOIN email_gmail_histories gh ON l.id = gh.link_id\n        WHERE l.email_address = $1 AND l.provider = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -29,5 +29,5 @@
       false
     ]
   },
-  "hash": "2ba42e1b8b6e432c5cbe966076ca05523a4b1f4be0798ae362a325c172b19a43"
+  "hash": "3b66344bfc71683556a5277f7317d470e03e862d29efdf3c7dd14ee83f409522"
 }
