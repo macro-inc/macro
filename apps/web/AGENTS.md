@@ -2,7 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes
+- `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
 - `bun run lint`: lint with biome 
@@ -206,6 +206,7 @@ modules through the test's own routes, which limits how many tests can run at
 once. A fixture that depends on dev-only behavior won't work there. CI sets
 `FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
 one worker and no retries.
+Call `initializeLexical()` before mounting isolated editor fixtures so decorator nodes use the app's renderer registry.
 
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
@@ -312,6 +313,8 @@ verify wrapped-thread reading gaps, drafts, fullscreen navigation, and local-vol
 indicators across call surfaces. Verify call-panel changes in the full call host
 with screenshots; list signed-in call checks separately instead of blocking on
 authentication.
+Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; place avatar microphone-mute badges at bottom-right and personal-volume mute badges at bottom-left, with each bounded to half the avatar width so both stay visible. Verify these in the full call host.
+Keep participant-volume popovers limited to the slider and volume readout, and render inline mute statuses as bare icons so tile labels retain their height.
 New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
@@ -477,6 +480,8 @@ native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
+The desktop app's channel picker carries no `accept` filter
+(`channelFilePickerAccept`): in the macOS app a filtered picker attached nothing.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -542,6 +547,9 @@ new MutationObserver(() => {
 ```
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
+Keep each imperative dialog inside its own Suspense boundary in `ImperativeDialog`;
+lazy popup code and popup queries must never detach the surrounding app.
 
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
@@ -1462,6 +1470,7 @@ on mobile; retain power controls and polling while waiting.
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 
 ### Agent result task lists
 
@@ -1496,7 +1505,7 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 
 ### Sidebar tag dragging
 
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
 Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
@@ -1604,6 +1613,11 @@ sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
-rather than feature-local chrome. The responsive vault fixture is exercised with
+rather than feature-local chrome. Adapt Passwords metadata to the app's existing
+item drag provider and tree drop slots; never coerce vault items into Drive entities
+or install a nested provider. Scope drag cancellation and auto-scroll to the
+current vault's own drag. Register its desktop composable split layout
+and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
+legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
 See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

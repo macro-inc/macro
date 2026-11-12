@@ -5,9 +5,11 @@
 
 use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
+use model_entity::EntityAppearance;
 use model_owner::Owner;
 use rootcause::{Report, bail};
 use serde_json::{Value, json};
+use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::event_runs::{
@@ -298,7 +300,8 @@ impl EventRunRepository for PgEventRunRepo {
         }
         let action = sqlx::query!(
             r#"
-            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id, suggestion_id,
+            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id,
+                   appearance AS "appearance: Json<EntityAppearance>", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
@@ -367,6 +370,10 @@ impl EventRunRepository for PgEventRunRepo {
             next_run_at: None,
             claimed: Some(started_at),
             template_id: action.template_id,
+            appearance: action
+                .appearance
+                .map(|v: sqlx::types::Json<EntityAppearance>| v.0)
+                .unwrap_or_default(),
             suggestion_id: action.suggestion_id,
             description: action.description,
             sub_routine: match (action.parent_id, action.created_by_run_id) {

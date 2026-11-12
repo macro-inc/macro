@@ -43,7 +43,7 @@ and highlights.
   (`enable-chat-sidebar-sections`). Conversation features wait on the channel
   list until a conversation is open. No Slack action.
 - **Email:** Signal/Noise tabs beside the Inbox title (beacon on Inbox when
-  another mailbox is open), tags, then keyboard shortcuts.
+  another mailbox is open), then keyboard shortcuts.
 - **Customers:** Companies and People records, relationship details, then the
   **New** menu.
 - **Calendar:** calendar sources and copy availability (beacon on the sidebar

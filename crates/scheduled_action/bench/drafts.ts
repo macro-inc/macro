@@ -108,7 +108,7 @@ async function preflight(at: Stack, token: string, entries: CatalogEntry[]) {
   if (!response.ok) throw new Error(`preflight check ${response.status}: ${await response.text()}`);
   const { problems } = (await response.json()) as { problems: string[] };
   if (problems.some((problem) => /event-trigger management/.test(problem))) {
-    throw new Error('the stack has event routines off: restart it with EVENT_ROUTINES_ENABLED=true (see README)');
+    throw new Error('the stack has event routines off: the user needs the enable-event-routines PostHog flag (see README)');
   }
 }
 

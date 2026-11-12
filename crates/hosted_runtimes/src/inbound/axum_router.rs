@@ -581,7 +581,7 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::FleetUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             ComputerError::RolloutDisabled => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
-            ComputerError::SoldOut
+            ComputerError::SoldOut(_)
             | ComputerError::NotPurchased
             | ComputerError::PurchaseKeyConflict
             | ComputerError::NeedsAttention

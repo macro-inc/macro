@@ -141,7 +141,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Capacity**: free sold units are sold capacity minus the units of live
   computers (phase not `destroying`) and every reservation, expired or not
   (an expired one may still settle as charged), reserved under
-  the host lock. `GET /team/computers/offers` reports `soldOut` per size.
+  the host lock. `GET /team/computers/offers` reports `soldOut` per size; a
+  purchase no host can fit returns `ComputerError::SoldOut(size)` (409, "No
+  capacity for <size> right now") before billing. `ComputerRepo::allocation`
+  reads the same holdings per host; see Observability for its gauges.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { billing, purchase_key, team_id, created_by, size, name, extra_items })`
   → `Purchase::{Ready(id), Confirming(id)}`. The client's `purchase_key` (one
   per Buy dialog, reused on retry) makes `ComputerRepo::reserve` return what
@@ -406,3 +409,9 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   `computer.setup.duration` (reservation → first macrod connection),
   `computer.provisioning.duration` (the same total, unlabelled),
   `computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).
+- Capacity gauges, every reconcile pass: `computer.capacity.allocated` and
+  `computer.capacity.total` by `scope` (`host`/`fleet`), `host_id`, `host`
+  and `resource` (`sold_units`, `vcpus`, `memory_gib`, `disk_gib`). Only
+  units have a total; hosts record no disk capacity. Read by
+  `infra/stacks/monitoring/monitors/computer-capacity.ts`; see the
+  [capacity runbook](../runbooks/computer-capacity.md).

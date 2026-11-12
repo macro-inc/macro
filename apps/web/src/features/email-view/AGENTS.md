@@ -27,6 +27,8 @@ the Soup-backed thread list, and saved email views (flag
 
 ## Gotchas
 
+- Keep tags in the desktop Filters menu and mobile filter drawer, not in the
+  sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions
   (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
   menu edits like a view's. `emailTabRefinements` keeps the tab's own query

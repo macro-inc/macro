@@ -30,6 +30,13 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Replace presentation and its history atomically, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: DatabaseId,
+        update: activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+
     /// Create a database with its first table and that table's title
     /// column, granting the creator owner access, all or nothing.
     fn create_database(
@@ -402,6 +409,13 @@ pub trait DatabasesService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         name: String,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+
+    /// Replace icon and color overrides under an edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DatabaseError>> + Send;
 
     /// Move a database to the trash.
     fn trash_database(

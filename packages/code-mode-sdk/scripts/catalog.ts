@@ -21,6 +21,7 @@ export const entityDirectories: readonly string[] = [
   'activity',
   'ai',
   'images',
+  'imports',
   'bots',
   'calendar',
   'calls',
