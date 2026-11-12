@@ -1,7 +1,5 @@
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
-const STALL_CATCH_UP_MS = 50;
-
 /** A steadied view of a transient state, for status text that must not flash.
  * It turns on only after `source` has stayed on for `delay`, and once on it
  * stays on for at least `hold`, however briefly `source` goes off. A blocked
@@ -29,15 +27,10 @@ export function createSteadyFlag(
         return;
       }
 
-      const dueAt = Date.now() + delay;
-      schedule(() => {
-        // A timer this late means the thread was blocked, and whatever turns
-        // `source` off may be queued right behind it. Let that run first; the
-        // effect cancels this if it does.
-        if (Date.now() - dueAt > STALL_CATCH_UP_MS)
-          schedule(turnOn, STALL_CATCH_UP_MS);
-        else turnOn();
-      }, delay);
+      // If the thread was blocked while the delay ran out, whatever turns
+      // `source` off is queued behind this timer. Turning on from a second
+      // timer lets it run first; the effect cancels that timer if it does.
+      schedule(() => schedule(turnOn, 0), delay);
       return;
     }
     if (steady()) schedule(() => setSteady(false), shownAt + hold - Date.now());
