@@ -1,17 +1,14 @@
+//! The subject's own activity in a time range, newest first and capped, with
+//! property changes resolved for the subject as viewer. `GET /activity` serves
+//! it, for the SDK.
+
 use std::{collections::HashMap, num::NonZeroU32};
 
-use ai_toolset::{
-    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
-    ToolResult,
-};
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
-use super::ActivityToolContext;
-use crate::domain::{
+use super::{
     models::{Action, ActivityRecord, RecordedAction},
     ports::{ActivityPropertyMetadata, ActivityReads},
     service::ActivityReadService,
@@ -20,30 +17,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 const MAX_ACTIVITY_RESULTS: u32 = 100;
 
-/// Tool: read the authenticated user's own activity in a time range.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-#[schemars(
-    title = "ReadActivity",
-    description = "Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated."
-)]
-pub struct ReadActivity {
-    /// Inclusive start of the time range.
-    #[schemars(description = "Inclusive start of the range as an RFC 3339 timestamp.")]
-    pub from: DateTime<Utc>,
-    /// Exclusive end of the time range.
-    #[schemars(
-        description = "Exclusive end of the range as an RFC 3339 timestamp. Must be after from."
-    )]
-    pub to: DateTime<Utc>,
-}
-
-impl ToolAnnotated for ReadActivity {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read activity");
-}
-
 /// One activity action returned to the AI.
-#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(
     tag = "type",
@@ -190,7 +166,8 @@ fn option_labels(
 }
 
 /// One activity event returned by [`ReadActivity`].
-#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ToolActivityEvent {
@@ -222,7 +199,8 @@ impl ToolActivityEvent {
 }
 
 /// Response from [`ReadActivity`].
-#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "json_schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ReadActivityResponse {
@@ -230,37 +208,6 @@ pub struct ReadActivityResponse {
     pub activities: Vec<ToolActivityEvent>,
     /// Whether more than 100 events matched the requested range.
     pub truncated: bool,
-}
-
-#[async_trait]
-impl<R> AsyncTool<ActivityToolContext<R>> for ReadActivity
-where
-    R: ActivityReads + Send + Sync + 'static,
-{
-    type Output = ReadActivityResponse;
-
-    #[tracing::instrument(
-        skip_all,
-        fields(from = ?self.from, to = ?self.to),
-        err
-    )]
-    async fn call(
-        &self,
-        service_context: ServiceContext<ActivityToolContext<R>>,
-        request_context: RequestContext,
-    ) -> ToolResult<Self::Output> {
-        ReadActivityResponse::read(
-            &service_context.service,
-            &request_context.user_id,
-            self.from,
-            self.to,
-        )
-        .await
-        .map_err(|error| ToolCallError {
-            description: error.to_string(),
-            internal_error: error.into(),
-        })
-    }
 }
 
 /// Why a bounded activity range could not be read.
@@ -314,3 +261,6 @@ impl ReadActivityResponse {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

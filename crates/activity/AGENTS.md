@@ -18,9 +18,10 @@ distribution.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
-- `src/inbound/toolset/` (`ai_tools`) and `src/inbound/axum_router.rs`
-  (`axum`, mounted by cognition): `ReadActivity` and `GET /activity`, the
-  acting user's own activity through `ReadActivityResponse::read`.
+- `src/domain/activity_range.rs` (`reads`) and `src/inbound/axum_router.rs`
+  (`axum`, mounted by cognition): `GET /activity`, the acting user's own
+  activity through `ReadActivityResponse::read`, which the SDK's
+  `macro.activity.mine()` reads. There is no direct AI tool for it.
 
 ## Scope
 

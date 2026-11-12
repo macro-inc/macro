@@ -690,7 +690,7 @@ pub async fn build_tool_service_context_from_env(
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
-        activity_tool_context: crate::tool_context::build_activity_tool_context(
+        activity_service: crate::tool_context::build_activity_read_service(
             pool.clone(),
             properties_service,
             entity_access_service.clone(),
