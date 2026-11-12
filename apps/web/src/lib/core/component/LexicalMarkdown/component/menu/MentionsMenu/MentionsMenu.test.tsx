@@ -33,6 +33,7 @@ vi.mock('@app/features/crm/record-adapter', () => ({
     mocks.contactSourceEnabled = enabled;
     return {
       entities: () => mocks.contacts,
+      users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
       isLoadingMore: () => false,
@@ -126,6 +127,7 @@ vi.mock('@queries/external-chats', () => ({
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
+    interactionForUser: () => undefined,
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
@@ -184,6 +186,13 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  Button: (
+    props: ParentProps<{ onClick?: () => void; disabled?: boolean }>
+  ) => (
+    <button onClick={props.onClick} disabled={props.disabled}>
+      {props.children}
+    </button>
+  ),
   cn: (...classes: unknown[]) =>
     classes.filter((c) => typeof c === 'string').join(' '),
 }));
@@ -372,6 +381,44 @@ it('leaves a category list on the first desktop Escape and closes on the second'
   expect(screen.queryByText('Back to everything')).toBeNull();
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(menu.isOpen()).toBe(false);
+});
+
+it('opens an empty continuation and keeps the editor menu open while paging', async () => {
+  mocks.crmEnabled = true;
+  mocks.hasMoreContacts = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  const editor = createEditor();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={editor}
+      users={() => []}
+      sources={['crm']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(screen.queryByText('No results')).toBeNull();
+  fireEvent.click(screen.getByText('View all'));
+  const next = screen.getByText('Next options');
+  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
+  const pointer = new MouseEvent('pointerdown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(pointer);
+  expect(pointer.defaultPrevented).toBe(true);
+  const mouse = new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(mouse);
+  expect(mouse.defaultPrevented).toBe(true);
+  fireEvent.click(next);
+
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
+  expect(menu.isOpen()).toBe(true);
 });
 
 it('only paginates an open mobile menu and resumes on reopen', async () => {
@@ -656,4 +703,46 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('picks the highlighted mention on Enter at once, even while typing continues', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ana: IUser = {
+    id: 'macro|ana@macro.com',
+    name: 'Ana Lima',
+    email: 'ana@macro.com',
+  };
+  const bo: IUser = {
+    id: 'macro|bo@macro.com',
+    name: 'Bo Chen',
+    email: 'bo@macro.com',
+  };
+  const menu = createMenuOperations();
+  menu.setSearchTerm('bo');
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ana, bo]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByTitle('Bo Chen bo@macro.com')).toBeTruthy();
+
+  // Typed past the listed term and pressed Enter within the debounce, then
+  // kept typing: the pick is for the typed text and is not lost.
+  menu.setSearchTerm('ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+  expect(onPick).toHaveBeenCalledOnce();
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  menu.setSearchTerm('ana!');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(onPick).toHaveBeenCalledOnce();
 });

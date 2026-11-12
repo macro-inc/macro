@@ -27,6 +27,8 @@ path = "src/scheduling_openapi.rs"
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 universal_input = { path = "../../crates/universal_input" }
+# The global allocator (`src/main.rs`).
+mimalloc = { workspace = true }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false, features = ["axum", "outbound", "schema"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
@@ -146,6 +148,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
+opentelemetry = { workspace = true, features = ["metrics"] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }

@@ -1,5 +1,5 @@
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Index, type JSX, Show } from 'solid-js';
 import { FormInput, isPlausibleEmail } from '../flow/shared';
 import { PREFILL_CAP } from '../flow/teamInvites';

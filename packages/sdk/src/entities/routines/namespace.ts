@@ -121,6 +121,8 @@ export class RoutineNamespace {
    *   ],
    *   dangerouslyOperateAsUser: true,
    * });
+   *
+   * @write
    */
   async create(options: RoutineOptions): Promise<Routine> {
     return Routine.from(
@@ -150,6 +152,8 @@ export class RoutineNamespace {
    *   steps: [{ type: 'code', title: 'Post hello', source }],
    * });
    * if (!check.ok) return { problems: check.problems, steps: check.steps };
+   *
+   * @readonly
    */
   async check(
     options: RoutineOptions,
@@ -192,6 +196,8 @@ export class RoutineNamespace {
    *   keepProbability: 0.6,
    * });
    * if (!outcome.ok) return outcome.problems;
+   *
+   * @write
    */
   async suggest(
     suggestion:
@@ -232,7 +238,11 @@ export class RoutineNamespace {
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
   }
 
-  /** List routines, optionally including event triggers. */
+  /**
+   * List routines, optionally including event triggers.
+   *
+   * @readonly
+   */
   async list(options?: { includeEvents?: boolean }): Promise<Routine[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActions({
