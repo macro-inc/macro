@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use crate::outbound::pg_access_repo::queries::SourceIds;
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
 #[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::{AccessGrant, TeamRole},
@@ -58,15 +60,16 @@ pub async fn get_owned_email_thread_ids(
     Ok(rows.into_iter().map(|row| row.id).collect())
 }
 
-/// Get the highest access level a user has for an email thread.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_thread_access(
+/// Get the highest access level a viewer has for an email thread.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_thread_access(
     pool: &PgPool,
     thread_id: &Uuid,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
+    // A bot reaches threads only through grants, never as an inbox owner or
+    // a CRM teammate.
+    let user_id_str = viewer.user_id().unwrap_or("");
 
     // Thread-specific: the caller owns the thread's inbox, or a macro_user_links
     // edge delegates that inbox to the caller (the caller is its primary).
@@ -99,7 +102,7 @@ pub async fn get_thread_access(
     }
 
     // Check share permission access only
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
@@ -134,7 +137,7 @@ pub async fn get_thread_access(
                 access_level::text FROM entity_access
             WHERE entity_id = $1
             AND entity_type = 'email_thread'
-            AND source_id = ANY($2)
+            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $4))
 
             UNION ALL
             -- Source 2: item share permission
@@ -152,7 +155,7 @@ pub async fn get_thread_access(
                         JOIN email_links l ON l.id = t.link_id
                         JOIN team_user owner_tu ON owner_tu.user_id = l.macro_id
                         WHERE t.id = $1::uuid
-                          AND owner_tu.team_id::text = ANY($2)
+                          AND EXISTS (SELECT FROM entity_access_source_matches(owner_tu.team_id::text, $2, $4))
                     )
                 )
             )
@@ -166,13 +169,14 @@ pub async fn get_thread_access(
             FROM email_threads t
             JOIN entity_access pea ON pea.entity_id::text = t.project_id
                 AND pea.entity_type = 'project'
-                AND pea.source_id = ANY($2)
+                AND EXISTS (SELECT FROM entity_access_source_matches(pea.source_id, $2, $4))
             WHERE t.id = $1::uuid
         ) AS combined_access
         "#,
         thread_id,
-        &source_ids.0,
-        &thread_id_str
+        viewer.id(),
+        &thread_id_str,
+        viewer.scope_team(),
     )
     .fetch_all(pool);
 
