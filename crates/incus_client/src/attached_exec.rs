@@ -41,7 +41,7 @@ pub struct ExecCommand {
 /// a full pipe holds the program back. Dropping it detaches the program,
 /// whose stdin then ends.
 pub struct AttachedExec {
-    /// The program's stdin; shutting it down closes the program's stdin.
+    /// The program's stdin; dropping or shutting it down closes the program's stdin.
     pub stdin: DuplexStream,
     /// The program's stdout.
     pub stdout: DuplexStream,

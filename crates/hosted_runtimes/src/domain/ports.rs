@@ -571,7 +571,7 @@ pub const GUEST_USER: GuestUser = GuestUser {
 /// stdout blocks the program like a full pipe. Dropping the process kills or
 /// detaches it.
 pub struct GuestProcess<Err> {
-    /// The program's stdin; shutting it down closes the program's stdin.
+    /// The program's stdin; dropping it closes the program's stdin.
     pub stdin: Pin<Box<dyn tokio::io::AsyncWrite + Send>>,
     /// The program's stdout.
     pub stdout: Pin<Box<dyn tokio::io::AsyncRead + Send>>,

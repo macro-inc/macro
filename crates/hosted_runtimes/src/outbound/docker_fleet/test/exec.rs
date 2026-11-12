@@ -98,7 +98,8 @@ async fn exec_streams_stdin_to_stdout_and_reports_the_exit_code() {
         .write_all(b"{\"command\":\"status\",\"agent\":\"claude\"}\n")
         .await
         .unwrap();
-    cat.stdin.shutdown().await.unwrap();
+    // Closing stdin is dropping it: a pipe has no half-close.
+    drop(cat.stdin);
     let mut echoed = String::new();
     cat.stdout.read_to_string(&mut echoed).await.unwrap();
     assert_eq!(echoed, "{\"command\":\"status\",\"agent\":\"claude\"}\n");
@@ -110,12 +111,12 @@ async fn exec_streams_stdin_to_stdout_and_reports_the_exit_code() {
             &[
                 "/bin/sh",
                 "-c",
-                "echo \"$(id -u):$(id -g) $HOME $PWD $PATH\"",
+                "echo \"$(/bin/id -u):$(/bin/id -g) $HOME $PWD $PATH\"",
             ],
         )
         .await
         .unwrap();
-    identity.stdin.shutdown().await.unwrap();
+    drop(identity.stdin);
     let mut printed = String::new();
     identity.stdout.read_to_string(&mut printed).await.unwrap();
     assert_eq!(

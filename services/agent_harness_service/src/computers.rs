@@ -610,10 +610,6 @@ impl harnessd::HarnessdTransport for FleetTransport {
                     .await
                     .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
                 // A closed stdin tells harnessd this was the only request.
-                stdin
-                    .shutdown()
-                    .await
-                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
                 drop(stdin);
                 let mut answer = String::new();
                 tokio::io::BufReader::new(process.stdout)
