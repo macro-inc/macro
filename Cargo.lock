@@ -645,6 +645,7 @@ dependencies = [
  "genai_telemetry",
  "github",
  "github_pull_requests",
+ "gmail_client",
  "granola_sync",
  "harness_id",
  "harnessd_protocol",
@@ -23714,6 +23715,7 @@ name = "xtask_local_telemetry"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "libc",
  "reqwest 0.13.4",
  "serde",
  "serde_json",

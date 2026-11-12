@@ -869,11 +869,45 @@ MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 
 For the default instance, omit `--instance`.
 
-### Sending timings to Grafana (opt-in)
+### Timings sent to Grafana (on by default)
 
-`run_local` can also send its timings to Loki and Tempo, as CI does, for the
-`Macro run_local` dashboard. It is off unless you create
-`~/.config/macro/local-telemetry.toml` (`$XDG_CONFIG_HOME/macro/` if set):
+`run_local`, `run_dev`, `just stack up`/`update` and `cargo x build-services`
+send their timings to Loki and Tempo, as CI does, for the `Macro run_local`
+dashboard. This is on by default. To turn it off, either:
+
+```bash
+export MACRO_LOCAL_TELEMETRY=off          # this shell, or put it in your profile
+```
+
+```toml
+# ~/.config/macro/local-telemetry.toml   ($XDG_CONFIG_HOME/macro/ if set)
+enabled = false
+```
+
+It is also off when `CI` is set (`MACRO_LOCAL_TELEMETRY=on` overrides that).
+Opted out, nothing is written or sent.
+
+**What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
+hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
+plus a line per step, per service build (cargo units compiled, sccache hits) and
+per container's wait for its first passing health probe. Lines carry step and
+service names, timings, outcome, the commit, OS/arch and CPU count, and hashed
+host, worktree, instance and branch ids (`default` and `main` are sent as they
+are); never your name, paths, env values, error text or the token. Fields and queries:
+[observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
+
+**Credentials.** The settings file holds the endpoint and the bearer token of
+the OTLP ingest route, which can send telemetry but not read it. When the file
+doesn't exist, the first run writes it (mode 0600) from your own `doppler login`,
+reading only `LOCAL_TELEMETRY_TOKEN` from the `observability` project's `lcl`
+config. That value is never downloaded with the `local` project's secrets, so it
+never reaches a generated env file, a container or a child process's
+environment. If Doppler can't provide it (logged out, offline, no access), the run
+carries on, records nothing, prints one hint once, and tries again after an hour.
+A provisioned token that the endpoint rejects is fetched again once. To edit a
+provisioned file, delete its `provisioned = true` line so it is never replaced.
+
+You can also write the file yourself:
 
 ```toml
 endpoint = "https://otlp.macro-internal.com"
@@ -881,30 +915,18 @@ token = "<OTLP ingestion token>"
 # traces = false  # only Loki
 ```
 
-```bash
-chmod 600 ~/.config/macro/local-telemetry.toml
-```
+`endpoint` must be `https://`, except for `localhost`, and a file with a token
+that others can read (`chmod 600` it) is refused with a one-line warning. A file
+you wrote is never replaced.
 
-The token is the bearer token of the OTLP ingest route: it can send telemetry
-but not read it. Ask an observability owner for it. It stays in this file: it is
-not read from Doppler or the environment, so it never reaches a generated env
-file or a container. `endpoint` must be `https://`, except for `localhost`, and a
-file with a token that others can read is refused with a one-line warning.
-Delete the file to turn telemetry off; without it nothing is written or sent.
-
-Each bring-up, `rebuild`, `restart-frontend`, `stop` and `r`/`f` hotkey sends one
-`run` line, plus a line per step, per service build (cargo units compiled,
-sccache hits) and per container's wait for its first passing health probe. Lines
-carry step and service names, timings, the instance name, branch and commit, and
-hashed host and worktree ids; never paths, env values, error text or the token.
-Fields and queries: [observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
-
-Sending never slows a run down or fails it. Events are written to
-`~/.local/state/macro/local-telemetry/` first and sent in the background every
-20 seconds and when the run is ready; `last-send.json` there shows the last
-attempt's HTTP status. A run killed before sending, a `stop`, or a send that
-failed is sent by your next run, and a killed bring-up shows up as
-`outcome="interrupted"` with the step it was in.
+**Never in your way.** Recording and sending never slow a run down or fail it.
+Events are written to `~/.local/state/macro/local-telemetry/` first, and a
+background thread fetches the token if needed and sends them every 20 seconds
+and when the run is ready; `last-send.json` there shows the last attempt's HTTP
+status, and `provision.json` the last token fetch. A run killed before sending,
+a `stop`, or a send that failed is sent by your next run, and a killed bring-up
+shows up as `outcome="interrupted"` with the step it was in. Unsent events are
+dropped after a week.
 
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
