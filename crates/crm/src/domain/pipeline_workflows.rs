@@ -942,8 +942,8 @@ where
         if input.stages.is_empty() && input.fields.is_empty() {
             return Ok(overview);
         }
-        // The pipeline exists from here on, so every failure says so: a caller
-        // that retries a bare error would create a duplicate.
+        // The pipeline exists from here on, so a stage or field the caller sent
+        // that cannot be set says so: retrying it would create a duplicate.
         let created = |error: WorkflowError| {
             WorkflowError::Invalid(format!(
                 "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
@@ -952,10 +952,7 @@ where
             ))
         };
         let ops = schema_ops(&overview, &input).map_err(created)?;
-        let receipt = self
-            .receipt::<EditAccessLevel>(viewer, id)
-            .await
-            .map_err(created)?;
+        let receipt = self.receipt::<EditAccessLevel>(viewer, id).await?;
         self.apply(receipt, viewer, OpBatch::from(ops))
             .await
             .map_err(created)?;
