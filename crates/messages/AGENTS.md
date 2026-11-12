@@ -140,6 +140,10 @@ a buffer per deleted reply it passes.
 
 ## Gotchas
 
+- Timeline keyset reads spell an absent cursor with `COALESCE` to an infinite
+  bound, never `$3 IS NULL OR ...`: once the statement gets a generic plan the
+  `OR` form filters the whole channel instead of bounding the index scan.
+
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,

@@ -204,17 +204,7 @@ where
             // thread may not hold its root, so the opening window carries it
             // with its thread summary and call, as a timeline page would.
             let root = if starts_thread {
-                let around_root = MessageTimelineQuery {
-                    around: Some(root_id),
-                    limit: Some(1),
-                    ..MessageTimelineQuery::default()
-                };
-                self.service
-                    .timeline_entries(access, around_root)
-                    .await?
-                    .entries
-                    .into_iter()
-                    .find(|entry| entry.position().1 == root_id)
+                self.service.channel_root(&access, root_id).await?
             } else {
                 None
             };

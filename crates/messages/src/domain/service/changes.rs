@@ -49,6 +49,26 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.repo.channel_seq(channel_id).await
     }
 
+    /// One root as the channel's timeline shows it now, with its thread
+    /// summary and call; `None` when the timeline no longer shows it.
+    #[tracing::instrument(skip(self, access), fields(channel_id = %access.entity().entity_id), err(Debug))]
+    pub async fn channel_root(
+        &self,
+        access: &EntityAccessReceipt<MessageView>,
+        root_id: Uuid,
+    ) -> Result<Option<MessageTimelineEntry>, MessageError> {
+        let parent = MessageParent::Channel(channel_from_receipt(access)?);
+        let roots = self.repo.roots_by_ids(&parent, &[root_id]).await?;
+        let page = self
+            .with_call_entries(MessageTimelinePage::from(MessagePage {
+                items: roots,
+                next_cursor: None,
+                previous_cursor: None,
+            }))
+            .await?;
+        Ok(page.entries.into_iter().next())
+    }
+
     /// Everything that changed in a channel after `since`, or a reset when
     /// the log can no longer say.
     #[tracing::instrument(skip(self, access), fields(channel_id = %access.entity().entity_id), err(Debug))]
