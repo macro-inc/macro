@@ -132,15 +132,16 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills',
+    listed: 'listSkills listDatabaseSyncSources listDatabaseSyncs',
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
     `,
     searched: 'searchWeb',
     queried: 'decisions structuredCompletion',
-    created: 'createConfirmedCalendarEvent createChat',
-    deleted: 'deleteChat permanentlyDeleteChat',
+    created:
+      'createConfirmedCalendarEvent createChat createSyncedDatabase createDatabaseSync',
+    deleted: 'deleteChat permanentlyDeleteChat deleteDatabaseSync',
     edited: `
       patchChat
       editExplicitMemory
@@ -150,6 +151,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendConfirmedEmail sendChatMessage',
     generated: 'generateImage',
     stopped: 'stopChatStream',
+    ran: 'runDatabaseSync',
   },
   contacts: { searched: 'searchPeople' },
   email: {
