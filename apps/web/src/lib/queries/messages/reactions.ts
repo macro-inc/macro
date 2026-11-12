@@ -11,7 +11,11 @@ import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
 import { MessageNonceKeys } from './keys';
 import { channelCacheHost } from './local/flag';
-import { reactToChannelMessage } from './local/writes';
+import {
+  channelWriteNetworkMode,
+  reactToChannelMessage,
+  whenOnline,
+} from './local/writes';
 import {
   type MessageTarget,
   patchTargetMessage,
@@ -218,6 +222,7 @@ export function useAddReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
       const host =
         vars.parent.type === 'channel' ? channelCacheHost() : undefined;
@@ -234,6 +239,7 @@ export function useAddReactionMutation(
           nonce: addReactionNonce.use(vars),
         });
       }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -303,6 +309,7 @@ export function useRemoveReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
       const host =
         vars.parent.type === 'channel' ? channelCacheHost() : undefined;
@@ -319,6 +326,7 @@ export function useRemoveReactionMutation(
           nonce: removeReactionNonce.use(vars),
         });
       }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,

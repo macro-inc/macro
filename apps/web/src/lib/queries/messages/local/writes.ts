@@ -20,12 +20,14 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Message, PostMessage } from '@service-storage/messages';
+import { onlineManager } from '@tanstack/solid-query';
 import type {
   AnyVariables,
   Client,
   CombinedError,
   OperationResult,
 } from '@urql/core';
+import { ResultAsync } from 'neverthrow';
 import { mapChannelMessage } from './map';
 import {
   CHANNEL_MESSAGE_TYPENAME,
@@ -34,9 +36,35 @@ import {
 } from './sort-key';
 import { loadChannelMessage } from './thread';
 
+/**
+ * Channel message hooks run their `mutationFn` while offline when the device
+ * queue takes the write: the default mode would pause it in memory, where a
+ * reload loses it, before the queue ever saw it.
+ */
+export function channelWriteNetworkMode(
+  host: ChannelWriteHost | undefined
+): 'always' | 'online' {
+  return host ? 'always' : 'online';
+}
+
+/**
+ * Waits for a connection, as a paused mutation would: writes that still go
+ * over REST from a hook running in `always` mode keep waiting out an outage.
+ */
+export async function whenOnline(): Promise<void> {
+  if (onlineManager.isOnline()) return;
+  await new Promise<void>((resolve) => {
+    const stop = onlineManager.subscribe((online) => {
+      if (!online) return;
+      stop();
+      resolve();
+    });
+  });
+}
+
 export type ChannelWriteHost = Pick<
   CacheHost,
-  'onMutationSettled' | 'readRecordsByKeys'
+  'onMutationSettled' | 'onCacheGenerationChanged' | 'readRecordsByKeys'
 >;
 
 type Mention = { entity_type: string; entity_id: string };
@@ -118,16 +146,27 @@ function refusalOf(error: CombinedError): ThrownResultError {
 function watchSettlements(host: ChannelWriteHost) {
   const settled = new Map<string, MutationSettlement>();
   let wake: (() => void) | undefined;
-  const stop = host.onMutationSettled((settlement) => {
+  let reset = false;
+  const stopSettled = host.onMutationSettled((settlement) => {
     settled.set(settlement.transactionId, settlement);
     wake?.();
   });
+  // A storage reset empties the queue: the write is gone and will not settle.
+  const stopReset = host.onCacheGenerationChanged((change) => {
+    if (change.storage !== 'reset') return;
+    reset = true;
+    wake?.();
+  });
   return {
-    stop,
+    stop() {
+      stopSettled();
+      stopReset();
+    },
     /** Resolves once the transaction, or the one that replaced it, commits. */
     async committed(transactionId: string): Promise<void> {
       let current = transactionId;
       for (;;) {
+        if (reset) throw refusal('CACHE_RESET', 'device cache was reset');
         const settlement = settled.get(current);
         if (!settlement) {
           await new Promise<void>((resolve) => {
@@ -153,6 +192,26 @@ interface QueuedWrite<TData, TVariables extends AnyVariables> {
   run: (client: Client) => Promise<OperationResult<TData, TVariables>>;
   /** The written message in a response the server answered directly. */
   written: (data: TData) => ChannelMessageFieldsFragment;
+  /** The row to answer with when a delivered write cannot be read back. */
+  predicted?: ChannelMessageFieldsFragment;
+}
+
+/** The delivered message as the device holds it, or the row it was sent as. */
+async function deliveredMessage(
+  host: ChannelWriteHost,
+  write: Pick<
+    QueuedWrite<unknown, AnyVariables>,
+    'channelId' | 'messageId' | 'predicted'
+  >
+): Promise<Message> {
+  const stored = await ResultAsync.fromPromise(
+    loadChannelMessage(host, write.channelId, write.messageId),
+    (error) => error
+  );
+  const message = stored.unwrapOr(null) ?? write.predicted;
+  // The write is on the server; failing here would roll back a sent message.
+  if (!message) throw refusal('NOT_FOUND', 'message not found');
+  return mapChannelMessage(message);
 }
 
 /**
@@ -161,36 +220,36 @@ interface QueuedWrite<TData, TVariables extends AnyVariables> {
  * stays pending until the queue delivers it; a refusal rejects, after the
  * queue has already rolled the device's copy back.
  */
-function queuedWrite<TData, TVariables extends AnyVariables>(
+async function queuedWrite<TData, TVariables extends AnyVariables>(
   host: ChannelWriteHost,
   deps: ChannelWriteDeps,
   write: QueuedWrite<TData, TVariables>
 ): Promise<Message> {
-  return Telemetry.span(write.operation, async (span) => {
-    span.setAttr('channel.id', write.channelId);
-    span.setAttr('message.id', write.messageId);
-    const settlements = watchSettlements(host);
-    try {
-      const result = await write.run(deps.client ?? getGraphqlSoupClient());
-      const disposition = optimisticMutationDispositionOf(result);
-      span.setAttr('write.disposition', disposition?.kind ?? 'direct');
-      if (disposition?.kind === 'queued') {
-        await settlements.committed(disposition.transactionId);
-        const stored = await loadChannelMessage(
-          host,
-          write.channelId,
-          write.messageId
-        );
-        if (!stored) throw refusal('NOT_FOUND', 'message not found');
-        return mapChannelMessage(stored);
-      }
-      if (result.error) throw refusalOf(result.error);
-      if (!result.data) throw refusal(undefined, 'empty response');
-      return mapChannelMessage(write.written(result.data));
-    } finally {
-      settlements.stop();
+  const settlements = watchSettlements(host);
+  try {
+    // The span covers the hand-off and a direct answer; a queued write can
+    // wait for hours, which is not this operation's duration.
+    const result = await Telemetry.span(write.operation, async (span) => {
+      span.setAttr('channel.id', write.channelId);
+      span.setAttr('message.id', write.messageId);
+      const answer = await write.run(deps.client ?? getGraphqlSoupClient());
+      span.setAttr(
+        'write.disposition',
+        optimisticMutationDispositionOf(answer)?.kind ?? 'direct'
+      );
+      return answer;
+    });
+    const disposition = optimisticMutationDispositionOf(result);
+    if (disposition?.kind === 'queued') {
+      await settlements.committed(disposition.transactionId);
+      return await deliveredMessage(host, write);
     }
-  });
+    if (result.error) throw refusalOf(result.error);
+    if (!result.data) throw refusal(undefined, 'empty response');
+    return mapChannelMessage(write.written(result.data));
+  } finally {
+    settlements.stop();
+  }
 }
 
 /**
@@ -266,6 +325,7 @@ export function sendChannelMessage(
     operation: 'channel.write.send',
     channelId: send.channelId,
     messageId: send.id,
+    predicted,
     run: (client) =>
       executeOptimisticMutation(
         client,

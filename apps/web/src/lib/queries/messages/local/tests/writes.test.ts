@@ -4,6 +4,7 @@ import {
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from '@graphql-cache/exchange/optimistic';
+import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import {
@@ -65,16 +66,24 @@ function fakeClient(answer: (variables: unknown) => Answer) {
 /** A host holding `records` whose queue settles when the test says so. */
 function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   const listeners = new Set<(settlement: MutationSettlement) => void>();
+  const resets = new Set<(change: CacheGenerationChange) => void>();
   const host: ChannelWriteHost = {
     readRecordsByKeys: fakeHost([], { records }).readRecordsByKeys,
     onMutationSettled(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    onCacheGenerationChanged(listener) {
+      resets.add(listener);
+      return () => resets.delete(listener);
+    },
   };
   return {
     host,
     listeners,
+    reset() {
+      for (const listener of [...resets]) listener({ storage: 'reset' });
+    },
     settle(settlement: MutationSettlement) {
       for (const listener of [...listeners]) listener(settlement);
     },
@@ -202,6 +211,55 @@ describe('queued channel writes', () => {
 
     settle({ transactionId: '4', status: 'committed' });
     expect(await sending).toEqual(mapChannelMessage(stored));
+    expect(listeners.size).toBe(0);
+  });
+
+  it('answers with the row it sent when a delivered send cannot be read back', async () => {
+    const id = graphqlMessage(7).id;
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const { host, settle } = writeHost();
+
+    const sending = sendChannelMessage(
+      host,
+      {
+        channelId: CHANNEL_ID,
+        id,
+        senderId: SENDER,
+        message: { content: 'hello' },
+      },
+      { client, now: () => NOW }
+    );
+    await Promise.resolve();
+    settle({ transactionId: '4', status: 'committed' });
+
+    expect(await sending).toMatchObject({ id, content: 'hello' });
+  });
+
+  it('rejects a held write when the device cache is reset', async () => {
+    const stored = graphqlMessage(7);
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const { host, reset, listeners } = writeHost([stored]);
+
+    const sending = sendChannelMessage(
+      host,
+      {
+        channelId: CHANNEL_ID,
+        id: stored.id,
+        senderId: SENDER,
+        message: { content: 'hello' },
+      },
+      { client }
+    );
+    await Promise.resolve();
+    reset();
+
+    await expect(sending).rejects.toMatchObject({
+      errors: [{ code: 'CACHE_RESET' }],
+    });
     expect(listeners.size).toBe(0);
   });
 
