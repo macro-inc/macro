@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+
 use sqlx::{Pool, Postgres};
 
-/// Which database a pool reads from, and as whom. Database lookups shared
+/// Which database a pool reads from, as whom and with which startup options
+/// (a `search_path`, for one). Database lookups shared
 /// between concurrent callers carry it in their key, so callers on different
 /// databases (the primary and a replica, or two test databases) never share a
 /// run.
@@ -10,6 +13,8 @@ pub struct DatabaseKey {
     port: u16,
     database: Option<String>,
     username: String,
+    socket: Option<PathBuf>,
+    options: Option<String>,
 }
 
 impl DatabaseKey {
@@ -22,6 +27,8 @@ impl DatabaseKey {
             port: options.get_port(),
             database: options.get_database().map(str::to_string),
             username: options.get_username().to_string(),
+            socket: options.get_socket().cloned(),
+            options: options.get_options().map(str::to_string),
         }
     }
 }
