@@ -579,14 +579,17 @@ export type Widget_Deserialize =
    */
   | ({ type: 'md'; markdown: string } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
       source?: never;
@@ -601,13 +604,16 @@ export type Widget_Deserialize =
       events: TimelineEvent_Deserialize[];
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -629,13 +635,16 @@ export type Widget_Deserialize =
       limit?: number;
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
       tags?: never;
@@ -650,13 +659,16 @@ export type Widget_Deserialize =
       messageId: string;
     } & {
       align?: never;
+      botId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       source?: never;
@@ -671,13 +683,16 @@ export type Widget_Deserialize =
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Deserialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -694,13 +709,16 @@ export type Widget_Deserialize =
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -716,6 +734,38 @@ export type Widget_Deserialize =
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Deserialize[] } & {
       align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card on which the user mints a new token for a bot they manage and
+   *  sees its secret; the secret never reaches you. Present it whenever the
+   *  user asks for a bot token or credential, instead of Bot.createToken().
+   */
+  | ({
+      type: 'botCredential';
+      /**  The bot's id, from macro.bots. */
+      botId: string;
+      /**  Where the token will be used, such as "github-webhook". */
+      label?: string;
+      /**  RFC 3339 expiry; omit for a token that does not expire. */
+      expiresAt?: string;
+    } & {
+      align?: never;
       channelId?: never;
       children?: never;
       direction?: never;
@@ -728,6 +778,8 @@ export type Widget_Deserialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -742,10 +794,13 @@ export type Widget_Deserialize =
       title?: string;
       children: Widget_Deserialize[];
     } & {
+      botId?: never;
       channelId?: never;
       events?: never;
+      expiresAt?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -764,14 +819,17 @@ export type Widget_Serialize =
    */
   | ({ type: 'md'; markdown: string } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       messageId?: never;
       source?: never;
@@ -782,13 +840,16 @@ export type Widget_Serialize =
   /**  A chronological sequence of events. Great for "what happened" answers. */
   | ({ type: 'timeline'; title?: string; events: TimelineEvent_Serialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -810,13 +871,16 @@ export type Widget_Serialize =
       limit?: number;
     } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       items?: never;
       justify?: never;
+      label?: never;
       markdown?: never;
       messageId?: never;
       tags?: never;
@@ -831,13 +895,16 @@ export type Widget_Serialize =
       messageId: string;
     } & {
       align?: never;
+      botId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       source?: never;
@@ -852,13 +919,16 @@ export type Widget_Serialize =
    */
   | ({ type: 'events'; title?: string; events: AgendaEvent_Serialize[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       items?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -875,13 +945,16 @@ export type Widget_Serialize =
    */
   | ({ type: 'cards'; title?: string; items: CardItem[] } & {
       align?: never;
+      botId?: never;
       channelId?: never;
       children?: never;
       direction?: never;
       events?: never;
+      expiresAt?: never;
       gap?: never;
       groupBy?: never;
       justify?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;
@@ -897,6 +970,38 @@ export type Widget_Serialize =
    */
   | ({ type: 'tags'; title?: string; tags: TagNode_Serialize[] } & {
       align?: never;
+      botId?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      expiresAt?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      label?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card on which the user mints a new token for a bot they manage and
+   *  sees its secret; the secret never reaches you. Present it whenever the
+   *  user asks for a bot token or credential, instead of Bot.createToken().
+   */
+  | ({
+      type: 'botCredential';
+      /**  The bot's id, from macro.bots. */
+      botId: string;
+      /**  Where the token will be used, such as "github-webhook". */
+      label?: string;
+      /**  RFC 3339 expiry; omit for a token that does not expire. */
+      expiresAt?: string;
+    } & {
+      align?: never;
       channelId?: never;
       children?: never;
       direction?: never;
@@ -909,6 +1014,8 @@ export type Widget_Serialize =
       markdown?: never;
       messageId?: never;
       source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -923,10 +1030,13 @@ export type Widget_Serialize =
       title?: string;
       children: Widget_Serialize[];
     } & {
+      botId?: never;
       channelId?: never;
       events?: never;
+      expiresAt?: never;
       groupBy?: never;
       items?: never;
+      label?: never;
       limit?: never;
       markdown?: never;
       messageId?: never;

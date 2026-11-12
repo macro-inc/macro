@@ -307,8 +307,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.web.search() and macro.web.fetch().
                 | "WebSearch"
                 | "WebFetch"
-                // macro.bots and Bot. IssueBotCredential stays: its chat card
-                // mints the secret without the model ever reading it.
+                // macro.bots and Bot; a botCredential view is the card that
+                // mints a token without the model ever reading it.
+                | "IssueBotCredential"
                 | "ListBots"
                 | "CreateBot"
                 | "ConfigureBot"
