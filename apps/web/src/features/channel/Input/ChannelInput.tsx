@@ -68,7 +68,7 @@ import type { DictationController } from '../../dictation/core/types';
 import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
-import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
+import { channelFilePickerAccept } from './accepted-file-types';
 import { CollapsedAttachmentPreview } from './CollapsedAttachmentPreview';
 import {
   ComposerAddDrawer,
@@ -886,7 +886,7 @@ export function ChannelInput(props: ChannelInputProps) {
         type="file"
         class="hidden"
         multiple
-        accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
+        accept={props.fileAccept ?? channelFilePickerAccept()}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
       />

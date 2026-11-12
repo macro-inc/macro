@@ -897,6 +897,40 @@ export type MutationState =
  */
 export type FormId = string;
 /**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon =
+  | {
+      /**
+       * Catalog name without the SVG extension.
+       */
+      name: string;
+      kind: 'macro';
+    }
+  | {
+      /**
+       * Unicode emoji text, not markup or a URL.
+       */
+      value: string;
+      kind: 'emoji';
+    };
+/**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor =
+  | 'gray'
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink';
+/**
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
@@ -7864,6 +7898,10 @@ export interface SavedForm {
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /**
+   * Entity-owned icon and color overrides.
+   */
+  appearance?: EntityAppearance | null;
   id: FormId;
   /**
    * Its display name. A standalone form follows the database it created;
@@ -7939,6 +7977,19 @@ export interface Form {
    * listings, as for a channel poll.
    */
   isHiddenInDrive: boolean;
+}
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export interface EntityAppearance {
+  /**
+   * A custom Macro glyph or a native emoji.
+   */
+  icon?: AppearanceIcon | null;
+  /**
+   * A shared tag-palette key. Native emoji retain their own colors.
+   */
+  color?: AppearanceColor | null;
 }
 /**
  * A form's logo, cover image and accent color, each unset by default.
@@ -14753,6 +14804,10 @@ export interface ReadMetadataResponse {
  * Full document metadata plus content lifecycle metadata.
  */
 export interface ReadDocumentMetadata {
+  /**
+   * Entity-owned presentation overrides; absent values use type defaults.
+   */
+  appearance?: EntityAppearance | null;
   /**
    * The document id
    */
