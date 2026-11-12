@@ -10,7 +10,6 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   SyncFailure,
   SyncHost,
-  SyncRunOutcome,
   SyncRunResult,
 } from '@graphql-cache/sync-protocol';
 import { Telemetry } from '@macro-inc/observability';
@@ -30,6 +29,7 @@ import {
 import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-backfill';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
+import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Option from 'effect/Option';
 import * as Schedule from 'effect/Schedule';
@@ -55,12 +55,19 @@ import {
   type SoupBackfillCheckpoint,
   saveSoupBackfillCheckpoint,
 } from './backfill-checkpoint';
+import {
+  isServerBusy,
   isSyncHost,
   nextSecondPassPages,
   SECOND_PASS_STREAM,
 } from './sync/host';
 import type { SyncPass } from './sync/lanes';
 import type { SyncPassOptions } from './sync/run';
+import {
+  type SyncPassOutcome,
+  type SyncPassTrace,
+  traceSyncPass,
+} from './sync/telemetry';
 
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
@@ -728,15 +735,6 @@ const SYNC_RETRY_SCHEDULE = Schedule.exponential('2 seconds');
 /** How long to wait before asking a busy server again (its `Retry-After`). */
 const SYNC_BUSY_PAUSE_MS = 30_000;
 /**
- * Statuses that tell this client to wait, not that the stream failed: the
- * user already has a stream open (409), or the server holds its most open
- * streams or asks for fewer requests (503, 429).
- */
-const SYNC_BUSY_STATUSES: readonly number[] = [409, 429, 503];
-
-const isServerBusy = (failure: SyncFailure): boolean =>
-  failure.kind === 'http' && SYNC_BUSY_STATUSES.includes(failure.status);
-/**
  * A lane that fails this many times in one pass is left out of that pass's
  * later streams; it resumes from its saved state on the next pass.
  */
@@ -786,65 +784,34 @@ function skipFailedLanes(failures: LaneFailures): {
 
 type StreamedSyncHost = CacheHost & SyncHost;
 
-function recordSyncTelemetry(pass: SyncPass, outcome: SyncRunOutcome): void {
-  try {
-    const span = Telemetry.anonymousSpan('graphql_cache.sync');
-    const result = outcome.ok ? outcome.result : outcome.partial;
-    span.setAttr('cache.sync_pass', pass);
-    span.setAttr(
-      'cache.sync_outcome',
-      outcome.ok ? outcome.result.reason : outcome.failure.kind
-    );
-    if (result) {
-      span.setAttr('cache.duration_ms', result.durationMs);
-      span.setAttr('cache.sync_bytes', result.bytes);
-      span.setAttr('cache.sync_lanes', result.lanes.length);
-      span.setAttr(
-        'cache.sync_pages',
-        result.lanes.reduce((sum, lane) => sum + lane.pages, 0)
-      );
-      span.setAttr(
-        'cache.sync_items',
-        result.lanes.reduce((sum, lane) => sum + lane.items, 0)
-      );
-      span.setAttr(
-        'cache.sync_failed_lanes',
-        result.lanes.filter((lane) => lane.error !== undefined).length
-      );
-    }
-    span.end();
-  } catch {
-    // Observability must never affect cache sync.
-  }
-}
-
 /**
  * One stream of `pass`, retried with backoff (except `unsupported`). A busy
  * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
  * busy, without spending retries. Every attempt re-plans from the cache's
- * saved lane state, so it resumes rather than restarts. Interrupting it stops
- * the host's run. With `stopAfterMs`, an attempt still running then is
- * stopped (pages written so far are kept) and the stream resolves to `None`
- * instead of a result.
+ * saved lane state, so it resumes rather than restarts, and is one span of
+ * `trace`. Interrupting it stops the host's run. With `stopAfterMs`, an
+ * attempt still running then is stopped (pages written so far are kept) and
+ * the stream resolves to `None` instead of a result.
  */
 const runSyncStream = (
   host: StreamedSyncHost,
   pass: SyncPass,
   options: SyncPassOptions,
+  trace: SyncPassTrace,
   stopAfterMs?: number
 ) =>
   Effect.tryPromise({
-    // Loaded on use: the plan builder reads this module's lane filters.
-    try: async () =>
-      (await import('./sync/run')).runSyncPass(host, pass, options),
+    try: () =>
+      trace.stream(async (traceHeaders) => {
+        // Loaded on use: the plan builder reads this module's lane filters.
+        const { runSyncPass } = await import('./sync/run');
+        return runSyncPass(host, pass, options, traceHeaders);
+      }),
     catch: (error): SyncFailure => ({
       kind: 'stream',
       message: error instanceof Error ? error.message : String(error),
     }),
   }).pipe(
-    Effect.tap((outcome) =>
-      Effect.sync(() => recordSyncTelemetry(pass, outcome))
-    ),
     Effect.flatMap(
       (outcome): Effect.Effect<Option.Option<SyncRunResult>, SyncFailure> =>
         outcome.ok
@@ -873,36 +840,68 @@ const runSyncStream = (
     })
   );
 
+function syncPassOutcome(
+  exit: Exit.Exit<unknown, SyncFailure>
+): SyncPassOutcome {
+  if (Exit.isSuccess(exit)) return 'complete';
+  const failure = Exit.findErrorOption(exit);
+  return Option.isSome(failure) ? failure.value.kind : 'interrupted';
+}
+
+/** Runs one pass of the sync run `session` and records how it ended. */
+const traceSyncPassRun = (
+  session: string,
+  pass: SyncPass,
+  run: (trace: SyncPassTrace) => Effect.Effect<void, SyncFailure>
+) =>
+  Effect.suspend(() => {
+    const trace = traceSyncPass(session, pass);
+    return run(trace).pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => trace.end(syncPassOutcome(exit)))
+      )
+    );
+  });
+
 /**
- * The streamed cache sync: the first pass, resumed for as long as the server
- * ends its stream early, then the second pass as streams sized by time and
- * bytes (`SECOND_PASS_STREAM`) with a short pause between them, until a
- * stream completes. A lane that fails (the server's `laneError`) does not
- * stop the others: each pass re-runs it, from its saved state, until it has
- * failed `SYNC_LANE_FAILURES` times.
+ * The first pass, resumed for as long as the server ends its stream early or
+ * a failed lane may be retried.
  */
-export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
-  host: StreamedSyncHost
+const runFirstPass = Effect.fn('runFirstPass')(function* (
+  host: StreamedSyncHost,
+  calendar: boolean,
+  trace: SyncPassTrace
 ) {
-  const calendar = isFeatureEnabled(enableGraphqlCalendar);
-  const firstPassStartedAt = new Date().toISOString();
-  const firstFailures: LaneFailures = new Map();
+  const startedAt = new Date().toISOString();
+  const failures: LaneFailures = new Map();
   while (true) {
-    const result = yield* runSyncStream(host, 'first', {
-      calendar,
-      completedSince: firstPassStartedAt,
-      ...skipFailedLanes(firstFailures),
-    });
+    const result = yield* runSyncStream(
+      host,
+      'first',
+      { calendar, completedSince: startedAt, ...skipFailedLanes(failures) },
+      trace
+    );
     const retry = Option.isSome(result)
-      ? recordFailedLanes(firstFailures, result.value)
+      ? recordFailedLanes(failures, result.value)
       : undefined;
     const endedEarly =
       Option.isSome(result) && result.value.reason !== 'complete';
-    if (!endedEarly && retry === undefined) break;
+    if (!endedEarly && retry === undefined) return;
     yield* Effect.sleep(retry ?? 0);
   }
-  const secondPassStartedAt = new Date().toISOString();
-  const secondFailures: LaneFailures = new Map();
+});
+
+/**
+ * The second pass, as streams sized by time and bytes (`SECOND_PASS_STREAM`)
+ * with a short pause between them, until a stream completes.
+ */
+const runSecondPass = Effect.fn('runSecondPass')(function* (
+  host: StreamedSyncHost,
+  calendar: boolean,
+  trace: SyncPassTrace
+) {
+  const startedAt = new Date().toISOString();
+  const failures: LaneFailures = new Map();
   let previous: { pages: number; result?: SyncRunResult } | undefined;
   while (true) {
     const pages = nextSecondPassPages(previous);
@@ -911,14 +910,15 @@ export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
       'second',
       {
         calendar,
-        completedSince: secondPassStartedAt,
+        completedSince: startedAt,
         maxPages: pages,
-        ...skipFailedLanes(secondFailures),
+        ...skipFailedLanes(failures),
       },
+      trace,
       SECOND_PASS_STREAM.stopAfterMs
     );
     const retry = Option.isSome(result)
-      ? recordFailedLanes(secondFailures, result.value)
+      ? recordFailedLanes(failures, result.value)
       : undefined;
     if (
       Option.isSome(result) &&
@@ -930,6 +930,25 @@ export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
     previous = { pages, result: Option.getOrUndefined(result) };
     yield* Effect.sleep(Math.max(SECOND_PASS_STREAM.pauseMs, retry ?? 0));
   }
+});
+
+/**
+ * The streamed cache sync: the first pass, then the second. A lane that fails
+ * (the server's `laneError`) does not stop the others: each pass re-runs it,
+ * from its saved state, until it has failed `SYNC_LANE_FAILURES` times. Each
+ * pass and each of its streams is traced (`sync/telemetry.ts`).
+ */
+export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
+  host: StreamedSyncHost
+) {
+  const calendar = isFeatureEnabled(enableGraphqlCalendar);
+  const session = crypto.randomUUID();
+  yield* traceSyncPassRun(session, 'first', (trace) =>
+    runFirstPass(host, calendar, trace)
+  );
+  yield* traceSyncPassRun(session, 'second', (trace) =>
+    runSecondPass(host, calendar, trace)
+  );
 });
 
 /**

@@ -29,8 +29,39 @@ vi.mock('@core/cross-tab/tab-leader', () => ({
   createTabLeaderSignal: vi.fn(),
 }));
 vi.mock('../../email/mail-accounts', () => ({ useMailAccountsQuery: vi.fn() }));
+type RecordedSpan = {
+  name: string;
+  attributes: Record<string, unknown>;
+  failed: boolean;
+  ended: boolean;
+};
+const spans = vi.hoisted((): RecordedSpan[] => []);
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { anonymousSpan: () => ({ setAttr: vi.fn(), end: vi.fn() }) },
+  Telemetry: {
+    span: (name: string) => {
+      const span: RecordedSpan = {
+        name,
+        attributes: {},
+        failed: false,
+        ended: false,
+      };
+      spans.push(span);
+      return {
+        setAttr: (key: string, value: unknown) => {
+          span.attributes[key] = value;
+        },
+        injectTraceHeaders: (headers: Record<string, string>) => {
+          headers.traceparent = `trace-of-span-${spans.indexOf(span)}`;
+        },
+        error: () => {
+          span.failed = true;
+        },
+        end: () => {
+          span.ended = true;
+        },
+      };
+    },
+  },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: vi.fn(),
@@ -62,6 +93,9 @@ function fakeHost() {
 const asHost = (host: ReturnType<typeof fakeHost>) =>
   host as unknown as CacheHost & SyncHost;
 
+const passSpans = () =>
+  spans.filter((span) => span.name === 'graphql_cache.sync.pass');
+
 /** Advances fake time until `promise` settles, for at most `seconds`. */
 async function settle<T>(promise: Promise<T>, seconds = 100): Promise<T> {
   let done = false;
@@ -85,6 +119,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime('2026-11-02T12:00:00.000Z');
   runSyncPass.mockReset();
+  spans.length = 0;
   consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -323,6 +358,90 @@ describe('runStreamedSync', () => {
     expect(runSyncPass).toHaveBeenCalledOnce();
     await Effect.runPromise(Fiber.interrupt(fiber));
     expect(host.syncStop).toHaveBeenCalledOnce();
+    expect(passSpans()).toEqual([
+      expect.objectContaining({
+        failed: false,
+        attributes: expect.objectContaining({
+          'cache.sync_pass': 'first',
+          'cache.sync_outcome': 'interrupted',
+        }),
+      }),
+    ]);
+  });
+
+  it('sends every stream the trace context of its own span', async () => {
+    runSyncPass
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'http', status: 500 },
+      })
+      .mockResolvedValueOnce(complete)
+      .mockResolvedValueOnce(complete);
+    await settle(Effect.runPromise(runStreamedSync(asHost(fakeHost()))));
+    const sent = runSyncPass.mock.calls.map(([, , , headers]) => headers);
+    const streams = spans.filter(
+      (span) => span.name === 'graphql_cache.sync.stream'
+    );
+    expect(sent).toEqual(
+      streams.map((span) => ({
+        traceparent: `trace-of-span-${spans.indexOf(span)}`,
+      }))
+    );
+    expect(new Set(sent.map((headers) => headers.traceparent)).size).toBe(3);
+    expect(streams.every((span) => span.ended)).toBe(true);
+  });
+
+  it('records a pass with what its streams did, busy answers apart from failures', async () => {
+    const page = { id: 'tasks', pages: 2, items: 700, writeMs: 40, done: true };
+    runSyncPass
+      .mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'http', status: 503 },
+      })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          reason: 'complete',
+          durationMs: 90,
+          bytes: 4_000,
+          lanes: [page],
+        },
+      })
+      .mockResolvedValue({ ok: false, failure: { kind: 'http', status: 500 } });
+    const outcome = settle(
+      Effect.runPromiseExit(runStreamedSync(asHost(fakeHost()))),
+      300
+    );
+    expect((await outcome)._tag).toBe('Failure');
+    const [first, second] = passSpans();
+    expect(first).toMatchObject({
+      failed: false,
+      ended: true,
+      attributes: {
+        'cache.sync_pass': 'first',
+        'cache.sync_outcome': 'complete',
+        'cache.sync_streams': 3,
+        'cache.sync_busy_streams': 1,
+        'cache.sync_failed_streams': 1,
+        'cache.sync_pages': 2,
+        'cache.sync_items': 700,
+        'cache.sync_bytes': 4_000,
+        'cache.sync_write_ms': 40,
+      },
+    });
+    expect(second).toMatchObject({
+      failed: true,
+      attributes: {
+        'cache.sync_pass': 'second',
+        'cache.sync_outcome': 'http',
+        'cache.sync_streams': 6,
+        'cache.sync_failed_streams': 6,
+      },
+    });
+    expect(second?.attributes['cache.sync_session']).toBe(
+      first?.attributes['cache.sync_session']
+    );
   });
 });
 

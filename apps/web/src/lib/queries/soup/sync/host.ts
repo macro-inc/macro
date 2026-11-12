@@ -2,7 +2,21 @@
  * The parts of the sync runner the startup path needs. No runtime imports:
  * `backfill.ts` loads the plan builder only when it streams.
  */
-import type { SyncHost, SyncRunResult } from '@graphql-cache/sync-protocol';
+import type {
+  SyncFailure,
+  SyncHost,
+  SyncRunResult,
+} from '@graphql-cache/sync-protocol';
+
+/**
+ * Statuses that tell this client to wait, not that the stream failed: the
+ * user already has a stream open (409), or the server holds its most open
+ * streams or asks for fewer requests (503, 429).
+ */
+const SYNC_BUSY_STATUSES: readonly number[] = [409, 429, 503];
+
+export const isServerBusy = (failure: SyncFailure): boolean =>
+  failure.kind === 'http' && SYNC_BUSY_STATUSES.includes(failure.status);
 
 /**
  * Second-pass streams are sized by time and bytes, not a fixed page count:

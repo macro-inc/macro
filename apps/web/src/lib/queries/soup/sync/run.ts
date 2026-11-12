@@ -38,17 +38,21 @@ const NOTHING_TO_SYNC: SyncRunOutcome = {
   result: { reason: 'complete', durationMs: 0, bytes: 0, lanes: [] },
 };
 
-/** Plans and runs one stream of `pass`. A plan with no lanes is complete. */
+/**
+ * Plans and runs one stream of `pass`, sending `traceHeaders` (the caller's
+ * trace context) with the request. A plan with no lanes is complete.
+ */
 export async function runSyncPass(
   host: SyncPlanHost & SyncHost,
   pass: SyncPass,
-  options: SyncPassOptions = {}
+  options: SyncPassOptions = {},
+  traceHeaders: Record<string, string> = {}
 ): Promise<SyncRunOutcome> {
   const lanes = await buildSyncLanes(host, pass, options);
   if (lanes.length === 0) return NOTHING_TO_SYNC;
   return host.syncStart({
     url: syncStreamUrl(),
-    headers: await syncRequestHeaders(),
+    headers: { ...(await syncRequestHeaders()), ...traceHeaders },
     lanes,
     ...(options.maxPages === undefined ? {} : { maxPages: options.maxPages }),
   });

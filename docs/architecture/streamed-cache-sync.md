@@ -97,8 +97,9 @@ Request body:
   the loop.
 - Traced as one `soup.sync_stream` span (lanes, pages, items, bytes, time
   waited for turns, end reason) with a `soup.sync_stream.page` child per page
-  (lane, page, time waited for its turn, items, outcome). No query text,
-  variables or content in telemetry.
+  (lane, page, time waited for its turn, items, outcome), under the request's
+  span, which adopts the app's `traceparent`. Counts are recorded as integers.
+  No query text, variables or content in telemetry.
 
 ### Response
 
@@ -228,6 +229,26 @@ the next one. A first-pass stream the server ended early (`deadline`) is
 resumed until the pass completes, and only then does the second pass start.
 A stream that fails is retried five times with backoff; a busy server (409,
 429 or 503) is instead asked again every 30 s for as long as it stays busy,
-without spending those retries. Each stream is recorded as a
-`graphql_cache.sync` span (pass, outcome, duration, bytes, lanes, pages,
-items, failed lanes).
+without spending those retries.
+
+### Telemetry
+
+`apps/web/src/lib/queries/soup/sync/telemetry.ts` traces the sync.
+
+- Each stream the app opens is a `graphql_cache.sync.stream` client span:
+  pass, stream number within the pass, outcome (`complete`, `maxPages`, or
+  the failure kind, with `http.response.status_code` for an HTTP failure),
+  duration, bytes, lanes, pages, items, cache write time and failed lanes. Its
+  trace context travels in the plan's request headers, on the browser worker
+  and the native plugin alike, so one trace runs from the app's stream to the
+  server's `soup.sync_stream` and each page's `graphql.execute`.
+- Each pass is a `graphql_cache.sync.pass` span recorded when the pass ends,
+  from its first stream to its outcome: `complete`, `interrupted` (the app
+  stopped it: another tab took over, or the user, flag or cache changed) or
+  the failure it gave up on. It carries the pass's streams, busy answers
+  (409, 429, 503), failed streams, bytes, pages, items, write time and failed
+  lanes. A tab closed mid-pass records no pass span; its stream spans remain.
+- `cache.sync_session` is the same on every span of one sync run and links a
+  pass to its streams and the first pass to the second.
+- Attributes are counts, durations and fixed classes; lane errors and failure
+  messages are not recorded.

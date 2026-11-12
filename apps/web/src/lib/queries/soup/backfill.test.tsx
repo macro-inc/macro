@@ -54,6 +54,12 @@ const leaderMocks = vi.hoisted(() => ({
 
 const telemetryMocks = vi.hoisted(() => ({
   anonymousSpan: vi.fn(),
+  span: () => ({
+    setAttr: () => {},
+    injectTraceHeaders: () => {},
+    error: () => {},
+    end: () => {},
+  }),
 }));
 
 const cacheGenerationCallbacks = new Set<
@@ -85,7 +91,10 @@ vi.mock('@core/cross-tab/tab-leader', () => ({
 }));
 
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { anonymousSpan: telemetryMocks.anonymousSpan },
+  Telemetry: {
+    anonymousSpan: telemetryMocks.anonymousSpan,
+    span: telemetryMocks.span,
+  },
 }));
 
 vi.mock('@service-storage/graphql/generated/graphql', () => ({
