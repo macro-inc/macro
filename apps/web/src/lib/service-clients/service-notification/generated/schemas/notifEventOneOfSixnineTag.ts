@@ -10,5 +10,5 @@ export type NotifEventOneOfSixnineTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixnineTag = {
-  claude_sign_in_expiry: 'claude_sign_in_expiry',
+  agent_sign_in_expiry: 'agent_sign_in_expiry',
 } as const;

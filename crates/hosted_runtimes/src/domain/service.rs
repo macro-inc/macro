@@ -291,7 +291,7 @@ impl<
         }
     }
 
-    /// Every size with its price, availability and the caller's notify requests.
+    /// Every size with its price and availability.
     #[tracing::instrument(skip(self, user_id), err)]
     pub async fn offers(
         &self,
@@ -303,11 +303,6 @@ impl<
         let sold_out = self
             .repo
             .sold_out_sizes(&self.catalog, self.clock.now())
-            .await
-            .map_err(internal)?;
-        let notify = self
-            .repo
-            .notify_requests(team_id, user_id)
             .await
             .map_err(internal)?;
 
@@ -322,7 +317,6 @@ impl<
                 disk_gb: entry.resources.disk_gib.get(),
                 quote: self.quote(team_id, size, &billing).await?,
                 sold_out: sold_out.contains(&size),
-                notify_requested: notify.contains(&size),
             });
         }
         Ok(offers)
@@ -448,21 +442,6 @@ impl<
         }
         self.apply_for_team(team_id, computer_id, Event::ReleaseNow)
             .await
-    }
-
-    /// Ask to hear when a sold-out size is back.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn notify_me(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-        size: ComputerSize,
-    ) -> Result<(), ComputerError> {
-        self.require_attached().await?;
-        self.repo
-            .request_notify(team_id, user_id, size)
-            .await
-            .map_err(internal)
     }
 
     /// A computer's status, with the agents bound to its harness counted.

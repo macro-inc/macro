@@ -901,8 +901,8 @@ To buy one as a team admin:
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
    to Try it. The Computer step has the size radios (**Standard**, **Large**,
-   **XL**) with price per interval, sold-out sizes offering **Notify me**;
-   **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
+   **XL**) with price per interval, a sold-out size disabled and marked
+   **Sold out**; **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
    name); the price breakdown; and under **Buy** the heads-up "Next you'll name
    your agent and sign in to Claude (Pro or Max) — have claude.ai handy."
 3. **Buy · <price>/month** (or **Buy** for an included offer) adds it. Each

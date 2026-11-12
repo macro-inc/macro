@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import type { ComputerSize, SizeOffer } from '@service-auth/computers';
+import type { SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Input } from '@ui';
 import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
 import { formatQuote } from '../core/computer-display';
@@ -17,11 +17,8 @@ export function ComputerPurchaseStep(props: {
   /** Prefilled, editable: "Maya's Agent Box". */
   defaultName: string;
   pending: boolean;
-  /** The size a Notify me request is in flight for. */
-  notifyPending?: ComputerSize;
   error?: string;
   onClose: () => void;
-  onNotify: (size: ComputerSize) => void;
   onConfirm: (offer: SizeOffer, name: string | undefined) => void;
 }) {
   const nameId = createUniqueId();
@@ -62,9 +59,7 @@ export function ComputerPurchaseStep(props: {
         <ComputerSizePicker
           offers={props.offers}
           selected={size()}
-          notifyPending={props.notifyPending}
           onSelect={setSize}
-          onNotify={props.onNotify}
         />
 
         <div class="flex flex-col gap-2">

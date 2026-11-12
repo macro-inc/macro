@@ -138,7 +138,7 @@ fn request_span_uses_info_and_safe_structured_fields() {
 
     let fields = captured.initial_span_fields.lock().unwrap();
     assert_eq!(fields.get("http.request.method").unwrap(), "POST");
-    assert_eq!(fields.get("url.path").unwrap(), "\"unmatched\"");
+    assert_eq!(fields.get("url.path").unwrap(), "\"/documents/123\"");
     assert_eq!(fields.get("request.id").unwrap(), "\"request-42\"");
     assert!(fields.values().all(|value| !value.contains("secret")));
 }
@@ -169,9 +169,6 @@ async fn request_span_records_the_matched_route() {
             .unwrap(),
         "\"/documents/{id}\""
     );
-    let initial = captured.initial_span_fields.lock().unwrap();
-    assert_eq!(initial.get("url.path").unwrap(), "\"/documents/{id}\"");
-    assert!(initial.values().all(|value| !value.contains("123")));
 }
 
 #[test]

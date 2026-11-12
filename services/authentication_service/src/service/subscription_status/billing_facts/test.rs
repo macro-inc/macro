@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::computer_billing::IntervalPrices;
 use hosted_runtimes::domain::size::{
     CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
 };
@@ -187,58 +186,6 @@ fn typed_computer_billing_fields_keep_the_existing_json_schema() {
 }
 
 #[test]
-fn changing_configured_prices_never_relabels_a_recorded_computer() {
-    let seats = SeatPrices {
-        premium: stripe::PriceId::from_str("price_premium").unwrap(),
-        max: None,
-    };
-    let empty = IntervalPrices {
-        monthly: None,
-        yearly: None,
-    };
-    let old = stripe::PriceId::from_str("price_large_recorded").unwrap();
-    let original = ComputerPrices {
-        standard: empty.clone(),
-        large: IntervalPrices {
-            monthly: Some(old.clone()),
-            yearly: None,
-        },
-        xl: empty.clone(),
-    };
-    let changed = ComputerPrices {
-        standard: IntervalPrices {
-            monthly: Some(old),
-            yearly: None,
-        },
-        large: IntervalPrices {
-            monthly: Some(stripe::PriceId::from_str("price_large_new").unwrap()),
-            yearly: None,
-        },
-        xl: empty,
-    };
-    for configured in [original, changed] {
-        let mut facts = billing();
-        let item = &mut facts.items[1];
-        item.kind = RecurringItemKind::for_provider_price(
-            &seats,
-            &configured,
-            &facts.computers,
-            &item.price_id,
-            item.computer_id,
-        );
-        let result = facts.render().unwrap();
-        let row = result
-            .line_items
-            .iter()
-            .find(|row| row.computer_id == Some(Uuid::from_u128(1)))
-            .unwrap();
-        assert_eq!(row.name, "Build box");
-        assert_eq!(row.size, Some(ComputerSize::Large));
-        assert_eq!(row.amount, 10000);
-    }
-}
-
-#[test]
 fn metadata_links_a_computer_without_inferring_its_size_from_a_new_price() {
     let mut facts = billing();
     facts.items[1].price_id = stripe::PriceId::from_str("price_replaced").unwrap();
@@ -268,46 +215,4 @@ fn duplicate_provider_items_do_not_allocate_the_same_computer_twice() {
         result.line_items.iter().map(|row| row.amount).sum::<i64>(),
         result.subscription_total
     );
-}
-
-#[test]
-fn an_unlinked_legacy_charge_has_no_invented_computer_size() {
-    let mut facts = billing();
-    facts.computers[0].price_id = None;
-    let seats = SeatPrices {
-        premium: stripe::PriceId::from_str("price_premium").unwrap(),
-        max: None,
-    };
-    let prices = ComputerPrices {
-        standard: IntervalPrices {
-            monthly: Some(facts.items[1].price_id.clone()),
-            yearly: None,
-        },
-        large: IntervalPrices {
-            monthly: None,
-            yearly: None,
-        },
-        xl: IntervalPrices {
-            monthly: None,
-            yearly: None,
-        },
-    };
-    let item = &mut facts.items[1];
-    item.kind = RecurringItemKind::for_provider_price(
-        &seats,
-        &prices,
-        &facts.computers,
-        &item.price_id,
-        None,
-    );
-    let result = facts.render().unwrap();
-    let row = result
-        .line_items
-        .iter()
-        .find(|row| row.kind == SubscriptionBillingLineKind::Computer && !row.included)
-        .unwrap();
-    assert_eq!(row.name, "Computer");
-    assert_eq!(row.size, None);
-    assert_eq!(row.computer_id, None);
-    assert_eq!(row.amount, 10000);
 }

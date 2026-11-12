@@ -4,7 +4,6 @@ export default {
   purchaseConfirming:
     'Confirming your payment. Setup starts once it goes through.',
   purchaseFailed: "Couldn't buy the computer. Please try again.",
-  notifyFailed: "Couldn't save your request.",
   powerOnFailed: "Couldn't turn the computer on.",
   powerOffFailed: "Couldn't turn it off.",
   cancelFailed: "Couldn't cancel the computer.",

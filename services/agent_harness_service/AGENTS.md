@@ -106,7 +106,7 @@ Pulumi stacks; they do not host extra agent processes.
   active Claude logins (signer, `expires_at` and last notice from
   `harness_account_logins`, capabilities and report time from the harness, the
   team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
-  admins (`teams`) and sends `claude_sign_in_expiry` (inbox, gateway, push)
+  admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
 - `src/computers/control.rs`: commands reach macrod as `computerControl`

@@ -237,14 +237,3 @@ CREATE TABLE hosted_runtime_timer (
 );
 
 CREATE INDEX hosted_runtime_timer_due_idx ON hosted_runtime_timer (fire_at);
-
--- "Notify me" requests for sold-out sizes.
-CREATE TABLE hosted_runtime_waitlist (
-    team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
-    size computer_size NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (team_id, user_id, size)
-);
-
-CREATE INDEX hosted_runtime_waitlist_user_idx ON hosted_runtime_waitlist (user_id);
