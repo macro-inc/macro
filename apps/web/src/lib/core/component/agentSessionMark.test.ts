@@ -11,7 +11,7 @@ describe('agentSessionMark', () => {
     'paints %s with the Claude mark in Claude orange',
     (harness) => {
       expect(agentSessionMark({ harness, botId: TEAM_BOT }).class).toBe(
-        'text-[#D97757]'
+        'text-brand-claude'
       );
     }
   );

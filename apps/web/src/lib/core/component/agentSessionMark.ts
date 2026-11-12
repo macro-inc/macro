@@ -17,7 +17,10 @@ export type AgentSessionMark = {
   class: string;
 };
 
-const CLAUDE: AgentSessionMark = { Icon: ClaudeIcon, class: 'text-[#D97757]' };
+const CLAUDE: AgentSessionMark = {
+  Icon: ClaudeIcon,
+  class: 'text-brand-claude',
+};
 const CODEX: AgentSessionMark = { Icon: CodexIcon, class: 'text-ink' };
 const CURSOR: AgentSessionMark = { Icon: CursorIcon, class: 'text-ink' };
 const MACRO: AgentSessionMark = { Icon: MacroLogo, class: 'text-accent' };

@@ -125,7 +125,7 @@ describe('agent session mention rendering', () => {
     ));
     expect(
       view.container.querySelector('svg')?.getAttribute('class')
-    ).toContain('text-[#D97757]');
+    ).toContain('text-brand-claude');
   });
   it('opens from inside an editable editor, whose shell stops click propagation', () => {
     render(() => (
