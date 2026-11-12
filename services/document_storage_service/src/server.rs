@@ -1596,13 +1596,35 @@ async fn run_server() -> anyhow::Result<()> {
             config.document_permission_jwt.as_ref().to_string(),
         ),
     );
+    // Mention replies run code mode on the harness's Deno runtime for users
+    // with `ai-channel-bot-code-mode`; everyone else keeps the direct tools.
+    let channel_bot_code_mode = channel_bots::outbound::code_mode::ChannelBotCodeMode {
+        tools: ai_tools::tools_for_channel_bot_code_mode(),
+        executions: agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
+            macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
+            config.internal_api_key.as_ref(),
+        )
+        .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
+        gate: Arc::new(channel_bots::outbound::code_mode::FlaggedCodeMode(
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                config.posthog_api_key.as_ref().to_owned(),
+                Duration::from_secs(3),
+                config.environment,
+            )
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?,
+        )),
+    };
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
-        Arc::new(channel_bots::outbound::AgentLoopResponder::new(
-            macro_agent_tool_context,
-            macro_agent_tools,
-        )),
+        Arc::new(
+            channel_bots::outbound::AgentLoopResponder::new(
+                macro_agent_tool_context,
+                macro_agent_tools,
+            )
+            .with_code_mode(channel_bot_code_mode),
+        ),
         Arc::new(
             channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
                 message_service.clone(),

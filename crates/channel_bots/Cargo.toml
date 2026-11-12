@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
+agent_code_mode = { path = "../agent_code_mode" }
 ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
@@ -15,9 +16,12 @@ async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
 calendar_events = { path = "../calendar_events" }
 channel_sender = { path = "../channel_sender" }
+code_execution = { path = "../code_execution" }
+cognition = { path = "../cognition" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 macro_user_id = { path = "../macro_user_id" }
@@ -27,9 +31,11 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 messages = { path = "../messages", features = ["test-utils"] }

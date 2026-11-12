@@ -284,6 +284,14 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
 }
 
+/// The channel-mention bot's direct tools when it runs code mode: the same
+/// SDK-covered filter as agent sessions, minus the Anthropic sandbox tools,
+/// with the reply-only code-mode prompt. The host adds the user-scoped
+/// `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` itself.
+pub fn tools_for_channel_bot_code_mode() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::ChannelBot, true)
+}
+
 /// Existing agent-session tools exposed through the code-mode capability policy.
 pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset
@@ -357,8 +365,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     if code_mode_direct {
         // Review submission still needs these user-tool implementations internally,
         // but advertising their blocking agent calls would reintroduce elicitation.
+        // The channel bot's programs run in Deno; it gets no second sandbox.
+        let drops_sandbox = matches!(host, AiHost::ChannelBot);
         toolset.tools.retain(|name, _| {
-            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
+            !(drops_sandbox
+                && matches!(
+                    name.as_str(),
+                    "BashCodeExecution" | "TextEditorCodeExecution"
+                ))
+                && !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
                 && !agent_code_mode::domain::covered_by_code_sdk(
                     name,
                     toolset.user_tools.contains_key(name),
@@ -391,6 +406,10 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
                 .compose(&prompt::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
+        ),
+        AiHost::ChannelBot if code_mode_direct => (
+            prompt::CODE_MODE_TOOL_USE_PROMPT.to_string(),
+            inline_guides(GuideHost::Code),
         ),
         AiHost::ChannelBot | AiHost::Mcp => (
             prompt::DIRECT_TOOL_USE_PROMPT

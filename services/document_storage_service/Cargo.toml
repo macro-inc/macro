@@ -55,6 +55,7 @@ initiative_description = { path = "../../crates/initiative_description" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
 agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 activity = { path = "../../crates/activity" }
+agent_code_mode = { path = "../../crates/agent_code_mode" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }

@@ -17,7 +17,7 @@ use messages::domain::{
 };
 use uuid::Uuid;
 
-use super::models::{BotEvent, BotTrigger, MarkedPassage};
+use super::models::{BotEvent, BotMention, BotTrigger, MarkedPassage};
 use super::ports::{AgentResponder, CommentMarks, ConversationAccess, UserTimeZones};
 use super::sender_label;
 
@@ -636,7 +636,14 @@ where
         // 3. Run the agent loop to produce the reply.
         let reply = match self
             .responder
-            .respond(event.requesting_user.as_ref(), prompt)
+            .respond(
+                event.requesting_user.as_ref(),
+                BotMention {
+                    message_id: event.message.message_id,
+                    root_id: event.message.root_id,
+                },
+                prompt,
+            )
             .await
         {
             Ok(text) if !text.trim().is_empty() => text,

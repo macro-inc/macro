@@ -14,6 +14,14 @@ decides whether to trigger, authorizes, and delivers a reply.
 - `src/outbound/fast_model_trigger_classifier.rs`: Haiku-based implicit-trigger
   classifier used when there's no explicit mention.
 - `src/outbound/agent_loop_responder.rs`: drives the agent loop to produce a reply.
+- `src/outbound/code_mode.rs`: code-mode replies for users with the
+  `ai-channel-bot-code-mode` PostHog flag (read for the mentioning user; unset,
+  off or unreadable keeps the direct tools). The direct tools are
+  `ai_tools::tools_for_channel_bot_code_mode` (SDK-covered and Anthropic
+  sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,
+  `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
+  (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
+  user attributed to Macro AI, the same identity as the direct tools.
 - `src/outbound/lexical_comment_marks.rs`: comment-mark delivery for document bots.
 - `src/inbound/bot_trigger_router.rs`: wires channel/document message events in.
 
