@@ -2019,6 +2019,11 @@ pub struct CreateAgentSessionResponse {
 /// routes to a session.
 const THREAD_SESSION_EXISTS_MESSAGE: &str = "this bot already has a session for this thread";
 
+/// What the 403 from `POST /agent-sessions` says when a runtime names the tab
+/// a first prompt was typed in.
+const PROMPT_CLIENT_FROM_RUNTIME_MESSAGE: &str =
+    "only a person's own request may name the tab a prompt was typed in";
+
 /// Body of the 409 answered by `POST /agent-sessions` when the request's
 /// thread already routes to one of this bot's sessions.
 ///
@@ -2134,7 +2139,7 @@ impl IntoResponse for CreateSessionApiError {
             ),
             Self::PromptClientFromRuntime => (
                 StatusCode::FORBIDDEN,
-                "only a person's own request may name the tab a prompt was typed in".to_owned(),
+                PROMPT_CLIENT_FROM_RUNTIME_MESSAGE.to_owned(),
             ),
             Self::ExternalPersonaUnsupported(field) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -2342,7 +2347,10 @@ pub async fn create_agent_session_handler<
                         .prompt_client_id
                         .map(crate::domain::model::UiClientId::from_uuid),
                 )
-                .map_err(|_| CreateSessionApiError::PromptClientFromRuntime)?;
+                .map_err(|error| match error {
+                    AgentSessionError::Forbidden => CreateSessionApiError::PromptClientFromRuntime,
+                    error => CreateSessionApiError::Domain(error),
+                })?;
             Some(FirstPrompt {
                 action_id: request.prompt_action_id,
                 prompt,

@@ -1188,6 +1188,10 @@ async fn a_runtime_cannot_name_a_tab_on_the_create() {
         let response = router(opener.clone()).oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body, PROMPT_CLIENT_FROM_RUNTIME_MESSAGE.as_bytes());
         assert!(opener.managed.lock().unwrap().is_empty());
     }
 }
