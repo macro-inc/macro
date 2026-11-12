@@ -173,8 +173,8 @@ test('projector hands a stored null or missing theme data to the registered comp
   }
 });
 
-test('projector rejects a null theme name and the stored model refuses non-map data', () => {
-  // Source getTextContent returns the name, so only text is admitted.
+test('projector keeps its existing refusal of a null theme name and the stored model refuses non-map data', () => {
+  // Retained strict boundary: no Source control yet shows how a null name behaves.
   expect(() =>
     mount('theme-mention', ThemeMentionNode, [
       { name: null, data: { id: 'probe-theme' } },
