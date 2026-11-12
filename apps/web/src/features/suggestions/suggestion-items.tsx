@@ -85,16 +85,17 @@ function Source(props: { target: SuggestionTarget; onOpen(): void }) {
   );
 }
 
-function Draft(props: { draft: SuggestionTarget }) {
+/** A drafted reply's text in quotes, or `fallback` until it is read. */
+function Draft(props: { draft: SuggestionTarget; fallback: string }) {
   const thread = useSuggestionThread(
     () => props.draft.entityId,
     () => props.draft.partId
   );
 
   return (
-    <p class="line-clamp-2">
-      {thread()?.draftText ?? t('suggestions.draftReady')}
-    </p>
+    <Show when={thread()?.draftText} fallback={props.fallback}>
+      {(text) => `“${text()}”`}
+    </Show>
   );
 }
 

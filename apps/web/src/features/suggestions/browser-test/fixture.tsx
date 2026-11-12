@@ -55,7 +55,7 @@ const PARTS: SuggestionItemParts = {
       {props.target.entityType} {props.target.entityId}
     </button>
   ),
-  Draft: (props) => <p>Draft {props.draft.partId}</p>,
+  Draft: (props) => <>“Draft {props.draft.partId}”</>,
   Waiting: (props) => (
     <span data-suggestion-waiting>{props.lead}waiting 2 days</span>
   ),

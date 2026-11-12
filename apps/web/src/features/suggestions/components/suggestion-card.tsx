@@ -168,8 +168,11 @@ function RoutineSentence(props: { text: RoutineCardText }) {
 }
 
 /**
- * The one sentence under the title: why the suggestion matters, or for a routine
- * what it will do, or that its run failed.
+ * The one block of text under the title, never two that repeat each other:
+ * why the suggestion matters; for a routine, what it will do; for a drafted
+ * reply, the draft; for a failed run, that it failed. A background run's
+ * prompt is not shown: its summary says what will be done, and Open in chat
+ * shows the prompt itself.
  */
 function SuggestionSentence(props: SuggestionCardProps) {
   const sentence = () =>
@@ -190,6 +193,23 @@ function SuggestionSentence(props: SuggestionCardProps) {
           </Card.Description>
         )}
       </Match>
+      <Match
+        when={
+          props.status === 'open' &&
+          props.suggestion.kind === 'entity' &&
+          props.suggestion.draft
+        }
+        keyed
+      >
+        {(draft) => (
+          <Card.Description class="line-clamp-2" data-suggestion-draft>
+            <props.parts.Draft
+              draft={draft}
+              fallback={props.suggestion.summary}
+            />
+          </Card.Description>
+        )}
+      </Match>
       <Match when={props.suggestion.summary}>
         <Card.Description
           class={props.status === 'running' ? 'line-clamp-1' : 'line-clamp-2'}
@@ -199,66 +219,6 @@ function SuggestionSentence(props: SuggestionCardProps) {
       </Match>
     </Switch>
   );
-}
-
-/**
- * What the person must read before acting, one step forward from the card:
- * the prompt a background run will follow, or the reply that was drafted.
- * Other kinds need nothing here: their action opens the thing itself.
- */
-function SuggestionBlock(props: SuggestionCardProps) {
-  const waiting = () => props.status === 'open' || props.status === 'failed';
-
-  return (
-    <Show when={waiting()}>
-      <Switch>
-        <Match when={backgroundSuggestion(props.suggestion)} keyed>
-          {(background) => (
-            <Card variant="filled" offset={1}>
-              <Card.Body class="px-3 py-2 text-ink-muted">
-                <p
-                  class="line-clamp-2"
-                  role="note"
-                  aria-label={t('suggestions.promptLabel')}
-                >
-                  “{background.prompt}”
-                </p>
-              </Card.Body>
-            </Card>
-          )}
-        </Match>
-        <Match
-          when={props.suggestion.kind === 'entity' && props.suggestion.draft}
-          keyed
-        >
-          {(draft) => (
-            <Card variant="filled" offset={1}>
-              <Card.Body
-                class="px-3 py-2"
-                role="note"
-                aria-label={t('suggestions.draftReply')}
-                data-suggestion-draft
-              >
-                <props.parts.Draft draft={draft} />
-              </Card.Body>
-            </Card>
-          )}
-        </Match>
-      </Switch>
-    </Show>
-  );
-}
-
-/** Whether the card has a block, a failure or a note to show in its body. */
-function hasBody(props: SuggestionCardProps) {
-  const waiting = props.status === 'open' || props.status === 'failed';
-  const block =
-    waiting &&
-    (backgroundSuggestion(props.suggestion) !== undefined ||
-      (props.suggestion.kind === 'entity' &&
-        props.suggestion.draft !== undefined));
-
-  return block || props.failed || props.changed;
 }
 
 /** The quiet line beside the actions: when, where from, and what a run sends. */
@@ -419,9 +379,8 @@ export function SuggestionCard(props: SuggestionCardProps) {
           </Item.Actions>
         </Item>
       </Card.Header>
-      <Show when={hasBody(props)}>
+      <Show when={props.failed || props.changed}>
         <Card.Body class={`flex flex-col gap-2 pt-0 pb-2 ${UNDER_TITLE}`}>
-          <SuggestionBlock {...props} />
           <Show when={props.failed}>
             <p role="alert" class="text-failure">
               {t('suggestions.actionFailed')}

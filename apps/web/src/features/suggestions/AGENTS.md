@@ -64,20 +64,19 @@ only, behind `enable-suggestions`.
   `Card variant="filled" offset={1}`, and `Card.Footer` with `Card.Metadata`
   and `Card.Actions`. Don't restyle these with local surface, border or type
   classes.
-- A card shows only what the person needs to act: the title, one sentence,
-  and one quiet line of facts beside one main action. A block appears only
-  when it must be read first: the prompt a background run will follow (with
-  what it sends) and a drafted reply. A composer suggestion shows no prompt (the
-  composer does), a running one no prompt, and every finished suggestion is one
-  row. The parts that read the app's items (`SuggestionItemParts`: source link,
-  draft text, waiting time) are supplied by `suggestion-items.tsx`.
+- A card shows only what the person needs to act: the title, one block of
+  text, and one quiet line of facts beside one main action. There is never a
+  second block repeating the first: a background run shows its summary and
+  what it sends, not its prompt (Open in chat shows that); a drafted reply
+  shows the draft in place of the summary; every finished suggestion is one
+  row. The parts that read the app's items (`SuggestionItemParts`: source
+  link, draft text, waiting time) are supplied by `suggestion-items.tsx`.
 - Nothing on a card is loud: the main action is the app's `secondary`
   button and the other a `ghost` one (no `primary`: several white buttons on
-  one page read as shouting), tile and line icons take the muted ink, and
-  dismiss shows on hover or keyboard focus. Colour is left to the state
-  badges and the values AI picked.
-- User-visible text says "suggestion", not "suggestion"; the code keeps `suggestion`
-  until the backend's rename lands.
+  one page read as shouting), line icons take the muted ink, and dismiss
+  shows on hover or keyboard focus. Colour is left to the tile (each kind has
+  its own, from the routine cards' tints), the state badges and the values
+  AI picked.
 - The API has no due or waiting times. A reply suggestion's "waiting 2 days" and
   the sender on its chip come from the email thread itself
   (`queries/suggestion-thread.ts`, `core/thread.ts`): the last message, when the

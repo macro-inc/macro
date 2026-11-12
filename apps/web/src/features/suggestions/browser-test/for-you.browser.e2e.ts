@@ -180,7 +180,6 @@ test('a running suggestion reads as under way, not as one waiting', async ({
   await expect(
     running.getByRole('button', { name: 'View progress' })
   ).toBeVisible();
-  await expect(running.getByLabel('Prompt')).toHaveCount(0);
 });
 
 test('Run on an suggestion that changed shows the new text and starts nothing until pressed again', async ({

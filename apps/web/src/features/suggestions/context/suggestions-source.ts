@@ -55,7 +55,7 @@ export type SuggestionItemParts = {
   /** An item's icon and name, as a chip that opens it. */
   Source: Component<{ target: SuggestionTarget; onOpen(): void }>;
   /** The text of a drafted reply. */
-  Draft: Component<{ draft: SuggestionTarget }>;
+  Draft: Component<{ draft: SuggestionTarget; fallback: string }>;
   /**
    * How long the other side of a thread has waited for the person, as text
    * after `lead`; `fallback` when nobody waits or it isn't known.
