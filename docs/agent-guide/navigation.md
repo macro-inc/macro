@@ -31,14 +31,19 @@ Home; the `X` or a middle click closes one (the last tab cannot close;
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
-a background tab; adding Shift also switches to it. Tabs are not draggable.
+a background tab; adding Shift also switches to it. Every menu that offers
+**Open in new split** (sidebar and favorite rows, list row actions, Chat rail,
+project rows, Reviews) also offers **Open in new tab**, which opens the item in
+a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
+selected item. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
 background tab shows opens it in the current tab, with no toast and no switch,
 and each tab keeps its own instance, scroll, and history. Within one tab an
-entity still has one split: opening it again focuses that split.
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -77,6 +82,18 @@ prevented click does nothing. Browser-only URLs such as `about:blank`, `data:`,
 `blob:` and `javascript:` must not launch an external handler. Web browser anchor
 behavior is unchanged. iOS/Android retain their existing JS opener fallback because
 Tauri's native popup callback is desktop-only.
+
+## Macro links in agent replies
+
+A plain click on a Macro `/app` link in an agent's reply, in its session
+transcript or in a channel message the agent posted, opens the item in the app
+the way the reply's mention chips do: a new split on desktop, in place on touch,
+and reusing a split that already shows it. On the web this replaces the new
+browser tab; the desktop app takes the same path. Links to other sites, links no
+app route matches, and Cmd/Ctrl/Shift/Alt or middle clicks keep opening a
+browser tab, and links in people's messages and prompts are unchanged. To
+check, ask an agent for a link to a document (`https://<host>/app/md/<id>`) and
+to `/app/tasks`, click each, and confirm a split opens with no new tab.
 
 ## Returning from another page
 
@@ -1066,8 +1083,9 @@ view is in the foreground. Leaving the call view restores the current page's
 action, even if the call continues in the background.
 Active phone calls hide the bottom dock but retain the channel header island.
 Their Back button returns to the app while the call continues; tablets keep app
-chrome. Phone media controls sit below the video and hide when idle without
-resizing it; the header islands remain visible.
+chrome. Phone media controls sit below the video and remain visible while idle.
+Away from the Call tab, the call island sits above the dock. Desktop uses the
+rail's call popover and a draggable mini player; see [Calls](calls.md).
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
@@ -1826,8 +1844,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 

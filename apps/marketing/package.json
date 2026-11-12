@@ -4,13 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts",
-    "build": "bun run check:standalone && vite build -c vite.config.ts && vite build -c vite.prerender.config.ts && bun scripts/prerender.ts && bun scripts/verify-seo.ts",
+    "build": "bun run check:standalone && vite build -c vite.config.ts && vite build -c vite.prerender.config.ts && bun scripts/prerender.ts && bun scripts/verify-seo.ts && bun scripts/verify-docs-redirects.ts",
     "check:standalone": "bun scripts/verify-standalone.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run -c vitest.config.ts",
     "check:seo": "bun scripts/verify-seo.ts",
     "check:seo:live": "bun scripts/verify-seo-live.ts",
-    "check:agent-ui": "bun scripts/check-agent-ui.ts"
+    "check:agent-ui": "bun scripts/check-agent-ui.ts",
+    "check:docs-redirects": "bun scripts/verify-docs-redirects.ts"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
+    "@mdx-js/mdx": "^3.1.1",
     "@pierre/diffs": "1.3.5",
     "@playwright/test": "^1.55.1",
     "@solidjs/testing-library": "^0.8.10",
@@ -37,12 +39,14 @@
     "@types/node": "^24.8.0",
     "happy-dom": "20.10.6",
     "jsdom": "^26.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
     "vite-plugin-solid": "^2.11.8",
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "yaml": "^2.9.1"
   }
 }
