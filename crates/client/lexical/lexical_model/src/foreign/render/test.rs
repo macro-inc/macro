@@ -297,6 +297,19 @@ fn raw_root_cache_reads_exact_captures_without_materializing_lazy_text() -> Resu
         tx.append(NodeKey::ROOT, &[p.key()])?;
         Ok(t.key())
     })?;
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .node_or_err(NodeKey::ROOT)?
+            .foreign_raw_root_cached_text(),
+        None,
+        "eligible native structural cache is lazy before the explicit read"
+    );
+    assert_eq!(
+        editor.state().view().foreign_root_cached_text()?.as_deref(),
+        Some("before")
+    );
     let old_root = editor
         .state()
         .view()

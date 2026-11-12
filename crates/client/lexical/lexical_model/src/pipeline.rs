@@ -177,6 +177,8 @@ pub(crate) fn nested_queue() -> VecDeque<(NestedUpdateFn, UpdateOptions)> {
     VecDeque::new()
 }
 pub(crate) use model_caches::apply as apply_model_caches;
+#[cfg(feature = "foreign-nodes")]
+pub(crate) use model_caches::native_root_memo_eligible;
 
 #[cfg(test)]
 mod test;

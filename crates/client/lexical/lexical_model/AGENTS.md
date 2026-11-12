@@ -153,7 +153,15 @@ side effects, UTF-16 boundaries, formatting, block deletion and host movement.
 
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations. Use
-EditorBuilder::without_reconciler_caches when an external JS reconciler owns root
+bounded affected-root-child byte-length differences only to prove inequality for
+unbound native roots; equal, foreign, opaque or over-budget cases retain the full
+next-then-previous text comparison. Walk-step and raw-text limits are not CPU or
+allocation bounds, and lazy native root memos do not change record dirtiness.
+Reuse the prior memo only after an actual equal-text decision and the complete
+pure-native guards; materialize an eligible source's existing derived root cache
+before an explicit capture resets its independent memo. Preserve the existing
+foreign-host capture branch and skip new materialization after read failure.
+Use EditorBuilder::without_reconciler_caches when an external JS reconciler owns root
 text and element text-format/style cache writes; normal native editors retain
 model-derived caches, and explicit writes remain subject to the normal pipeline.
 Hydrating an external-reconciler root preserves an absent raw cache; explicit

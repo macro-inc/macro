@@ -56,6 +56,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - `TMPDIR=/home/wolf/tmp cargo check -p document_session --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p document_session --all-targets -j4 -- -D warnings`
 - `TMPDIR=/home/wolf/tmp cargo test -p document_session --no-default-features --features application -j2` checks generic admission with compatibility disabled.
+- `cargo test -p document_session --features application,compatibility --lib root_text_cache_test` checks structural root-text reconciliation against the actual Macro registry without adding a public counter API.
 - Inspect `cargo tree -p document_session --no-default-features --features application --target wasm32-unknown-unknown -e normal,build --format '{p} {f}'` and reject `workspace-hack`, `foreign-nodes` or `compatibility` in the native production closure.
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 

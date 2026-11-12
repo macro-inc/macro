@@ -1,5 +1,7 @@
 use crate::*;
 use std::sync::Arc;
+
+mod root_length;
 /// Cache writes happen after mutation reporting. Root reconciliation retains
 /// upstream's intentional dirty mark without adding a cache-only mutation.
 pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
@@ -11,6 +13,9 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
     let root_changed = root_text_changed(tx);
+    if !root_changed {
+        root_length::reuse_previous_memo(tx);
+    }
     #[cfg(feature = "foreign-nodes")]
     let root_changed = {
         let root = tx
@@ -130,6 +135,11 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "foreign-nodes")]
+pub(crate) fn native_root_memo_eligible(view: StateRef<'_>) -> bool {
+    root_length::eligible(view)
+}
+
 // A single leaf replacement in an otherwise identical tree changes the root
 // string exactly when it changes that leaf's string. Leave the root cache lazy:
 // callers that request the whole document still pay for that read, once.
@@ -180,8 +190,13 @@ fn root_text_changed(tx: &Transaction<'_>) -> bool {
             return previous_view.text_content(*key) != next_view.text_content(*key);
         }
     }
+    if root_length::proves_change(tx, previous_view, next_view) {
+        return true;
+    }
     next_view.cached_root_text_content() != previous_view.cached_root_text_content()
 }
 
+#[cfg(all(test, feature = "foreign-nodes"))]
+mod adversarial_test;
 #[cfg(all(test, feature = "foreign-nodes"))]
 mod test;

@@ -417,10 +417,15 @@ impl StateRef<'_> {
     pub fn snapshot_for_foreign_read(self) -> Result<ForeignReadSnapshot, Error> {
         // A host may hydrate this exact root after capture. Preserve the source
         // publication's lazy JS cachedText before pending() resets the read memo.
-        if self.state.foreign_instances.has_hooks()
+        let existing_host = self.state.foreign_instances.has_hooks();
+        let native_capture = !existing_host
+            && ForeignReadOperation::check().is_ok()
+            && crate::pipeline::native_root_memo_eligible(self);
+        if (existing_host || native_capture)
             && let Some(cache) = self
                 .slot(NodeKey::ROOT)
                 .and_then(|slot| slot.foreign_root_cache.as_ref())
+            && (existing_host || cache.derived)
             && cache.value.get().is_none()
             && Arc::ptr_eq(&cache.value, &self.state.root_text)
         {
