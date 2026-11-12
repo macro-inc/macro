@@ -748,11 +748,16 @@
             }
           },
           "503": {
-            "description": "AI usage validation unavailable; retry later",
+            "description": "AI usage validation unavailable or reply admission busy; retry later",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -2240,7 +2245,7 @@
             }
           },
           "503": {
-            "description": "AI usage validation unavailable, or replica draining; retry later",
+            "description": "AI usage validation unavailable, replica draining, or reply admission busy; retry later",
             "content": {
               "application/json": {
                 "schema": {
