@@ -18,7 +18,7 @@ import { ToolButton } from './tool-button';
  * group, the side panel's header actions, then `trailing` (Share), with the
  * title menu before the title.
  */
-export function DesktopBlockToolbar(props: {
+export function BlockToolbar(props: {
   /** Buttons for the "Document actions" group, in order. */
   tools?: BlockTool[];
   /** Controls after the side panel's header actions, such as Share. */

@@ -8,7 +8,7 @@ import {
 import { For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { BlockTool } from './block-tool';
-import { DesktopBlockToolbar } from './desktop-block-toolbar';
+import { BlockToolbar } from './block-toolbar';
 
 vi.mock('@ui', async () => ({
   Button: (await import('@app/components/ui/components/Button')).Button,
@@ -61,7 +61,7 @@ it('orders tools, the side panel actions, then the trailing controls', () => {
   const download = vi.fn();
 
   render(() => (
-    <DesktopBlockToolbar
+    <BlockToolbar
       tools={[
         tool('Download', download),
         { ...tool('Present'), condition: () => false },
@@ -98,7 +98,7 @@ it('orders tools, the side panel actions, then the trailing controls', () => {
 
 it('draws no tool group when no tool applies', () => {
   render(() => (
-    <DesktopBlockToolbar
+    <BlockToolbar
       tools={[{ ...tool('Present'), condition: () => false }]}
       trailing={<button>Share</button>}
       menuTools={[]}

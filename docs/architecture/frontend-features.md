@@ -313,10 +313,10 @@ views/shared/<name>-parts.tsx  parts both views render
   (`components/app/mobile-header`). While it is mounted it owns the pane's
   header: nothing else in the pane can add to it. A mobile view may branch on
   `isMobile()` / `mobile:` for phone versus tablet.
-- **A block's desktop header uses `DesktopBlockToolbar`**
-  (`components/app/desktop-block-toolbar`): its tools in one group, the side
-  panel's header actions, trailing controls such as Share, and the title menu
-  with the rows the view lists. `ResponsiveBlockToolbar` builds both
+- **A block's desktop header uses `BlockToolbar`**
+  (`components/app/block-toolbar`): its tools in one group, the side panel's
+  header actions, trailing controls such as Share, and the title menu with the
+  rows the view lists. `ResponsiveBlockToolbar` builds both
   platforms' headers in one component and remains only for blocks not yet
   split.
 

@@ -23,11 +23,8 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
   ),
   SplitPermissionsBadge: () => null,
 }));
-vi.mock('@components/app/desktop-block-toolbar', () => ({
-  DesktopBlockToolbar: (props: {
-    trailing: JSX.Element;
-    menuTools: BlockTool[];
-  }) => (
+vi.mock('@components/app/block-toolbar', () => ({
+  BlockToolbar: (props: { trailing: JSX.Element; menuTools: BlockTool[] }) => (
     <>
       {props.trailing}
       <menu aria-label="Title menu">

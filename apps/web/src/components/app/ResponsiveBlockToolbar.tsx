@@ -4,7 +4,7 @@ import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import { For, Show } from 'solid-js';
 import type { BlockTool } from './block-tool';
-import { DesktopBlockToolbar } from './desktop-block-toolbar';
+import { BlockToolbar } from './block-toolbar';
 import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
@@ -67,7 +67,7 @@ interface BlockToolbarProps {
 /**
  * Legacy header arrangement for blocks whose header one component builds for
  * both desktop and touch. A block that has a desktop and a mobile view uses
- * `DesktopBlockToolbar` in one and `MobileHeader` in the other instead.
+ * `BlockToolbar` in one and `MobileHeader` in the other instead.
  */
 export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
   const isShareTool = (tool: BlockTool) => getToolLabel(tool) === 'Share';
@@ -98,7 +98,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
     <Show
       when={isTouchDevice()}
       fallback={
-        <DesktopBlockToolbar
+        <BlockToolbar
           tools={toolbarTools()}
           trailing={
             <For each={headerTools()}>

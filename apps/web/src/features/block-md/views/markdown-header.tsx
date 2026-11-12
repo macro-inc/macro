@@ -1,8 +1,8 @@
+import { BlockToolbar } from '@components/app/block-toolbar';
 import {
   CollaborationStatusIndicator,
   isCollaborationStatusVisible,
 } from '@components/app/CollaborationStatusIndicator';
-import { DesktopBlockToolbar } from '@components/app/desktop-block-toolbar';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -57,7 +57,7 @@ export function MarkdownHeader(props: {
         <MarkdownHeaderActions />
       </Show>
 
-      <DesktopBlockToolbar
+      <BlockToolbar
         trailing={<ShareTrigger onClick={openShare} />}
         menuTools={[
           actions.history,
