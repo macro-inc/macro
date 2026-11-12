@@ -1,6 +1,6 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import {

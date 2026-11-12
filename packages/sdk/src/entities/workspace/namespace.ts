@@ -85,7 +85,11 @@ import type {
 export class WorkspaceNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** One bounded page of recent items, newest first by default; resume using nextCursor and the same options. */
+  /**
+   * One bounded page of recent items, newest first by default; resume using nextCursor and the same options.
+   *
+   * @readonly
+   */
   async page(options: WorkspacePageOptions = {}): Promise<WorkspacePage> {
     const query = new WorkspaceQuery(this.client);
     return this.fetch(query, await query.body(options), options.cursor);
@@ -96,6 +100,8 @@ export class WorkspaceNamespace {
    * page size, not a total result limit.
    * Break a `for await` loop to stop; no speculative next page is fetched.
    * Tag/inbox resolution is reused within this iterator.
+   *
+   * @readonly
    */
   async *list(
     options: WorkspaceListOptions = {},

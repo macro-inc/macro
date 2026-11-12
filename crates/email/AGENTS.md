@@ -251,6 +251,10 @@ tools — hexagonal, heavily feature-gated.
   Throttling and token refusals give their claim back to `attempts`.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
+- Process deleted-user bindings in the domain by link id, custodian before
+  owner, then actor id, retaining one binding per link and actor; the repository
+  returns each binding's kind so custody cleanup runs before an owner disconnect
+  can suppress it without processing a self-custodian twice.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

@@ -1,3 +1,4 @@
+import redirects from '../seo/page-redirects.json';
 /**
  * Build-time Solid SSR for the homepage and public feature pages.
  *
@@ -33,6 +34,7 @@ const {
   themeHtmlStyle,
   criticalCss,
   postRoutes,
+  documentationRoutes,
 } = (await import(
   // @ts-expect-error -- untyped build artifact; the cast restores the types
   '../dist-prerender/prerenderEntry.js'
@@ -54,8 +56,11 @@ const BUILD_DATE = new Date().toISOString().slice(0, 10);
 // so an unbuilt route 404s), but they set `noindex` and are kept out of the
 // sitemap — they are steps inside the signup flow, not landing pages.
 const STATIC_ROUTES = [
+  '/wall-of-love',
+  '/replace-apps',
   '/demo',
   '/jobs',
+  '/legal',
   '/terms',
   '/privacy',
   '/delete-account',
@@ -69,12 +74,22 @@ const STATIC_ROUTES = [
   '/crm',
   '/agents',
   '/github',
+  '/spreadsheets',
+  '/databases',
+  '/forms',
+  '/canvas',
+  '/snippets',
+  '/calendar',
+  '/booking-links',
+  '/drive',
+  '/routines',
+  '/skills',
+
   '/pricing',
   '/download',
   '/tour',
   '/partners',
   '/partners/terms',
-  '/migrate',
   '/mobile-signup',
   '/mobile-signup-sent',
 ];
@@ -83,8 +98,20 @@ const STATIC_ROUTES = [
 // the build manifest so prerendered pages link their stylesheets up front (no
 // flash of unstyled content) and preload their chunks.
 const ROUTE_MODULES: Array<[RegExp, string]> = [
+  [/^\/forms$/, 'src/features/marketing/views/ProductFormsPage.tsx'],
+  [
+    /^\/(spreadsheets|databases|canvas|snippets|calendar|booking-links|drive|routines|skills)$/,
+    'src/features/marketing/views/WorkspaceFeaturePage.tsx',
+  ],
+  [
+    /^\/docs(?:\/.*)?$/,
+    'src/features/documentation/views/DocumentationPage.tsx',
+  ],
   [/^\/demo$/, 'src/app/routes/RouteDemo.tsx'],
   [/^\/jobs$/, 'src/app/routes/RouteJobs.tsx'],
+  [/^\/wall-of-love$/, 'src/app/routes/RouteWallOfLove.tsx'],
+  [/^\/replace-apps$/, 'src/features/marketing/views/ReplaceAppsPage.tsx'],
+  [/^\/legal$/, 'src/app/routes/RouteLegal.tsx'],
   [/^\/terms$/, 'src/app/routes/RouteTerms.tsx'],
   [/^\/privacy$/, 'src/app/routes/RoutePrivacy.tsx'],
   [/^\/delete-account$/, 'src/app/routes/RouteDeleteAccount.tsx'],
@@ -102,7 +129,6 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
   [/^\/tour$/, 'src/features/marketing/views/SalesPage.tsx'],
   [/^\/partners$/, 'src/app/routes/RoutePartners.tsx'],
   [/^\/partners\/terms$/, 'src/app/routes/RoutePartnerTerms.tsx'],
-  [/^\/migrate$/, 'src/app/routes/RouteMigrate.tsx'],
   [/^\/mobile-signup$/, 'src/app/routes/RouteMobileSignup.tsx'],
   [/^\/mobile-signup-sent$/, 'src/app/routes/RouteMobileSignupSent.tsx'],
   [/^\/posts$/, 'src/routes/posts/index.tsx'],
@@ -154,7 +180,10 @@ function collectChunkAssets(
 // Google promotes these into the per-page hierarchy shown under a result.
 const ROUTE_LABELS: Record<string, string> = {
   '/': 'Home',
+  '/wall-of-love': 'Wall of love',
+  '/replace-apps': 'Replace 27+ apps',
   '/jobs': 'Careers',
+  '/legal': 'Legal',
   '/terms': 'Terms',
   '/privacy': 'Privacy',
   '/delete-account': 'Delete your account',
@@ -173,7 +202,6 @@ const ROUTE_LABELS: Record<string, string> = {
   '/tour': 'Macro tour',
   '/partners': 'Partner Program',
   '/partners/terms': 'Partner Program Terms',
-  '/migrate': 'Switch your startup to Macro',
   '/mobile-signup': 'Start for free',
   '/mobile-signup-sent': 'Check your email',
 };
@@ -197,6 +225,7 @@ const FEATURE_APPS: Record<string, string> = {
 function sitemapHints(route: string): { priority: string; changefreq: string } {
   if (route === '/') return { priority: '1.0', changefreq: 'weekly' };
   if (
+    route === '/legal' ||
     route === '/terms' ||
     route === '/privacy' ||
     route === '/delete-account' ||
@@ -520,7 +549,7 @@ async function main(): Promise<void> {
   const template = fs.readFileSync(templatePath, 'utf-8');
   const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
-  const routes = [...STATIC_ROUTES, ...postRoutes];
+  const routes = [...STATIC_ROUTES, ...postRoutes, ...documentationRoutes];
   const rendered: Array<{ route: string; seo: PageSeo; html: string }> = [];
 
   for (const route of routes) {
@@ -544,6 +573,24 @@ async function main(): Promise<void> {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, buildHtml(template, manifest, route, html, seo));
   }
+  // Static-host fallback; the CDN and local servers issue the actual HTTP 308.
+  for (const [source, destination] of Object.entries(redirects)) {
+    const out = source.endsWith('.md')
+      ? path.join(DIST_DIR, source.slice(1))
+      : outputPathFor(source);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(
+      out,
+      `<!doctype html><html><head><meta name="robots" content="noindex"><link rel="canonical" href="${BASE_URL}${destination}"><title>Page moved</title><script>location.replace(${JSON.stringify(destination)}+location.search+location.hash)</script></head><body><a href="${destination}">Continue to the page</a></body></html>`
+    );
+  }
+  const homepage = await renderHomepage();
+  fs.writeFileSync(
+    path.join(DIST_DIR, 'index.html'),
+    buildHtml(template, manifest, '/', homepage.html, JOURNEY_SEO)
+      .replace('<div id="root"', '<div id="root" data-hydrate-homepage')
+      .replace('</head>', `${homepage.hydration}</head>`)
+  );
   writeSitemapAndRobots([{ route: '/', seo: JOURNEY_SEO }, ...rendered]);
 
   console.log(
@@ -563,10 +610,6 @@ function journeyHtml(seo: PageSeo, structuredData: string[] = []): string {
     [...buildSeoTagsHtml(seo), ...structuredData].join('\n')
   );
 }
-fs.writeFileSync(
-  path.join(DIST_DIR, 'index.html'),
-  journeyHtml(JOURNEY_SEO, buildJsonLd('/', JOURNEY_SEO, ''))
-);
 const start = journeyHtml({
   ...JOURNEY_SEO,
   path: '/start',
@@ -576,21 +619,4 @@ const start = journeyHtml({
 fs.mkdirSync(path.join(DIST_DIR, 'start'), { recursive: true });
 fs.writeFileSync(path.join(DIST_DIR, 'start/index.html'), start);
 fs.writeFileSync(path.join(DIST_DIR, 'start.html'), start);
-const homepage = renderHomepage();
-fs.writeFileSync(
-  path.join(DIST_DIR, 'index.html'),
-  fs
-    .readFileSync(path.join(DIST_DIR, 'index.html'), 'utf8')
-    .replace(
-      /(<div id="root"[^>]*)(><\/div>)/,
-      (_, opening) => `${opening} data-hydrate-homepage>${homepage.html}</div>`
-    )
-    .replace('</head>', `${homepage.hydration}</head>`)
-    // The complete SSR hero only needs CSS and fonts to paint. Keep hydration
-    // downloads from competing with those assets on a slow connection.
-    .replace(
-      /<(script|link)\b(?=[^>]*(?:type="module"|rel="modulepreload"))(?![^>]*fetchpriority)/g,
-      '<$1 fetchpriority="low"'
-    )
-);
 await verifyHomepage(DIST_DIR);

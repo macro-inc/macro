@@ -1,0 +1,3 @@
+.paper-database-fields { --color-ui-canvas: transparent; }
+.paper-database-fields .paper-feature-node-120 { width: calc(100% - 28px); mask-image: linear-gradient(to right, #000 72%, transparent); }
+.paper-database-fields .paper-feature-node-152 { width: calc(100% - 12px); mask-image: linear-gradient(to right, #000 80%, transparent); }
