@@ -14,7 +14,7 @@ import {
 import { rig, teamId } from './rig.ts';
 
 const password = 'correct-horse-battery-staple';
-const login = { type: 'login' as const, username: 'ada', password };
+const login = { username: 'ada', password };
 
 /** What a call threw, as the agent would read it. */
 const thrown = async (run: () => Promise<unknown>): Promise<string> => {
@@ -43,7 +43,7 @@ test('search finds what the team could share, with whether it is usable, and nev
     name: 'Example login',
     kind: 'login',
     url: 'https://example.com',
-    secret: login,
+    slots: login,
   });
   const hits = await searchSecrets(context, { query: 'example' });
   expect(hits).toEqual([
@@ -72,7 +72,7 @@ test('what the agent creates it can copy at once, with no request', async () => 
     kind: 'login',
     url: 'https://new.example.com',
     username: 'agent',
-    value: 'made-up-password-0123456789',
+    password: 'made-up-password-0123456789',
   });
   expect(created.item).toMatchObject({
     name: 'New service',
@@ -95,7 +95,7 @@ test('what the agent creates it can copy at once, with no request', async () => 
 
 test('a shared item is asked for, waits on the owner, and is usable once approved', async () => {
   const { context, stub, clipboard, polling } = rig();
-  const id = stub.add({ name: 'Shared', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Shared', kind: 'login', slots: login });
   const item = await found(context, 'Shared');
   expect(
     await thrown(() => copySecret(context, { item, field: 'password' }))
@@ -122,7 +122,7 @@ test('a shared item is asked for, waits on the owner, and is usable once approve
 
 test('a grant without the first-use approval is pending', async () => {
   const { context, stub } = rig();
-  const id = stub.add({ name: 'Granted', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Granted', kind: 'login', slots: login });
   stub.owner.share(id, 'view');
   const item = await found(context, 'Granted');
   expect(item.access).toBe('request_access');
@@ -133,11 +133,11 @@ test('a grant without the first-use approval is pending', async () => {
 
 test('a team-wide share grants an agent nothing: the item is request_access', async () => {
   const { context, stub } = rig();
-  stub.add({ name: 'Team item', kind: 'login', secret: login, share: 'team' });
+  stub.add({ name: 'Team item', kind: 'login', slots: login, share: 'team' });
   stub.add({
     name: 'Private item',
     kind: 'login',
-    secret: login,
+    slots: login,
     share: 'private',
   });
   const hits = await searchSecrets(context, { query: 'item' });
@@ -156,13 +156,13 @@ test('a creator without a current grant is not granted, never pending, even once
   const created = await createSecret(context, {
     name: 'Mine',
     kind: 'api',
-    value: 'api-key-0123456789abcdef',
+    secret: 'api-key-0123456789abcdef',
   });
   stub.owner.revoke(created.item.itemId, 'grant_and_approval');
   const notGranted = 'you have no access to "Mine"';
   expect(
     await thrown(() =>
-      copySecret(context, { item: created.item, field: 'key' })
+      copySecret(context, { item: created.item, field: 'secret' })
     )
   ).toContain(notGranted);
   expect(await requestSecretAccess(context, { item: created.item })).toBe(
@@ -171,7 +171,7 @@ test('a creator without a current grant is not granted, never pending, even once
   expect((await found(context, 'Mine')).access).toBe('request_access');
   expect(
     await thrown(() =>
-      copySecret(context, { item: created.item, field: 'key' })
+      copySecret(context, { item: created.item, field: 'secret' })
     )
   ).toContain(notGranted);
 });
@@ -182,13 +182,13 @@ test('a TOTP code is copied, never the seed', async () => {
   const id = stub.add({
     name: 'With code',
     kind: 'login',
-    secret: login,
+    slots: login,
     totpSeed: seed,
   });
   stub.owner.approve(id, 'view');
   const item = await found(context, 'With code');
-  expect(await copySecretCode(context, { item })).toBe(
-    'Copied code for With code'
+  expect(await copySecretCode(context, { item })).toMatch(
+    /^Copied code for With code, valid for about \d+ s$/
   );
   expect(clipboard.text).toMatch(/^\d{6}$/);
 });
@@ -200,22 +200,23 @@ test('create and update can take the value from the clipboard, and never hand it
     name: 'From clipboard',
     kind: 'login',
     username: 'agent',
-    fromClipboard: true,
+    password: { fromClipboard: true },
   });
-  expect(stub.secretOf(created.item.itemId)).toEqual({
-    type: 'login',
+  expect(stub.slotsOf(created.item.itemId)).toEqual({
     username: 'agent',
     password: 'from-the-page-0123456789',
+    notes: '',
+    fields: [],
   });
   expect(JSON.stringify(created)).not.toContain('from-the-page');
 
   clipboard.text = 'rotated-0123456789abcdef';
   const updated = await updateSecret(context, {
     item: created.item,
-    fromClipboard: true,
+    password: { fromClipboard: true },
   });
   expect(updated.version).toBe(created.version + 1);
-  expect(stub.secretOf(created.item.itemId)).toMatchObject({
+  expect(stub.slotsOf(created.item.itemId)).toMatchObject({
     password: 'rotated-0123456789abcdef',
   });
   expect(JSON.stringify(updated)).not.toContain('rotated');
@@ -231,19 +232,19 @@ test('create and update can take the value from the clipboard, and never hand it
 
 test('a search hit carries its version, which an update and a copy send, and a changed item is a conflict', async () => {
   const { context, stub } = rig();
-  const id = stub.add({ name: 'Viewable', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Viewable', kind: 'login', slots: login });
   stub.owner.approve(id, 'view');
   const item = await found(context, 'Viewable');
   expect(item.version).toBe(1);
   expect(
     await thrown(() =>
-      updateSecret(context, { item, value: 'new-0123456789abc' })
+      updateSecret(context, { item, password: 'new-0123456789abc' })
     )
   ).toBe('you may not change "Viewable"');
   stub.owner.approve(id, 'edit');
   const updated = await updateSecret(context, {
     item,
-    value: 'new-0123456789abc',
+    password: 'new-0123456789abc',
   });
   expect(updated.version).toBe(2);
   const updates = stub.calls.filter(({ method }) => method === 'PATCH');
@@ -270,7 +271,7 @@ test('a search hit carries its version, which an update and a copy send, and a c
 
 test("with the flag off, team calls say secrets aren't turned on; item calls can't tell that from a missing item", async () => {
   const { context, stub } = rig();
-  const id = stub.add({ name: 'Here', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Here', kind: 'login', slots: login });
   stub.owner.approve(id, 'view');
   const item = await found(context, 'Here');
   stub.flags.enabled = false;
@@ -279,7 +280,7 @@ test("with the flag off, team calls say secrets aren't turned on; item calls can
   );
   expect(
     await thrown(() =>
-      createSecret(context, { name: 'X', kind: 'note', value: 'text' })
+      createSecret(context, { name: 'X', kind: 'api', secret: 'text' })
     )
   ).toBe("secrets aren't turned on for this team");
   expect(
@@ -291,29 +292,210 @@ test("with the flag off, team calls say secrets aren't turned on; item calls can
 
 test('input a type cannot rule out is refused with a clear error', async () => {
   const { context, stub } = rig();
-  stub.add({ name: 'Note', kind: 'note', secret: { type: 'note', text: 't' } });
-  const item = await found(context, 'Note');
+  stub.add({ name: 'Note', kind: 'note', slots: { notes: 't' } });
+  stub.add({ name: 'Login', kind: 'login', slots: login });
+  const note = await found(context, 'Note');
+  const item = await found(context, 'Login');
+  expect(note.fields).toEqual([]);
+  const before = stub.calls.length;
   expect(
-    await thrown(() => copySecret(context, { item, field: 'password' }))
-  ).toBe('a note has no password: its fields are text');
+    await thrown(() => copySecret(context, { item: note, field: 'password' }))
+  ).toBe("you can't copy from a note: only logins and API credentials");
+  // The field is checked against the hit's kind, before anything is asked.
+  expect(await thrown(() => copySecret(context, { item, field: 'key' }))).toBe(
+    'a login has no key: its fields are username, password'
+  );
+  expect(stub.calls.length).toBe(before);
   for (const input of [
     { name: 'X', kind: 'login' },
-    { name: 'X', kind: 'login', value: 'v', fromClipboard: true },
-    { name: ' ', kind: 'login', value: 'v' },
+    { name: ' ', kind: 'login', password: 'v' },
+    { name: 'X', kind: 'login', password: '' },
+    {
+      name: 'X',
+      kind: 'login',
+      username: { fromClipboard: true },
+      password: { fromClipboard: true },
+    },
   ]) {
     const refused = await invoke(secretsModule, 'createSecret', context, input);
-    expect(refused.kind).toBe('failed');
+    expect(refused.kind).not.toBe('succeeded');
   }
   expect(await thrown(() => updateSecret(context, { item }))).toBe(
-    'nothing to change: give a value, fromClipboard, username, name or url'
+    'nothing to change: give username, password, name or url'
   );
-  // A kind the agent can't create doesn't type-check.
-  const card = await invoke(secretsModule, 'createSecret', context, {
-    name: 'Card',
-    kind: 'card',
-    value: 'v',
+  expect(await thrown(() => updateSecret(context, { item, secret: 'x' }))).toBe(
+    'a login has no secret: its fields are username, password'
+  );
+  expect(
+    await thrown(() => updateSecret(context, { item, username: '' }))
+  ).toBe("username: empty (a field can't be cleared)");
+  // A kind the agent can't create, or a field of another kind, doesn't type-check.
+  for (const input of [
+    { name: 'Card', kind: 'card', password: 'v' },
+    { name: 'Api', kind: 'api', password: 'v' },
+  ]) {
+    const refused = await invoke(secretsModule, 'createSecret', context, input);
+    expect(refused.kind).toBe('invalid');
+  }
+});
+
+test('an API credential copies its key and secret by the api selector', async () => {
+  const { context, stub, clipboard } = rig();
+  const id = stub.add({
+    name: 'Api',
+    kind: 'api',
+    slots: { username: 'key-id-0123', password: 'secret-0123456789' },
   });
-  expect(card.kind).toBe('invalid');
+  stub.owner.approve(id, 'view');
+  const item = await found(context, 'Api');
+  expect(item.fields).toEqual(['key', 'secret']);
+  expect(await copySecret(context, { item, field: 'key' })).toBe(
+    'Copied Api key'
+  );
+  expect(clipboard.text).toBe('key-id-0123');
+  expect(await copySecret(context, { item, field: 'secret' })).toBe(
+    'Copied Api secret'
+  );
+  expect(clipboard.text).toBe('secret-0123456789');
+  const selectors = stub.calls
+    .filter(({ path }) => path.endsWith('/disclose'))
+    .map(({ body }) => JSON.parse(body).selector);
+  expect(selectors).toEqual([
+    { kind: 'api', field: 'key' },
+    { kind: 'api', field: 'secret' },
+  ]);
+});
+
+test('a field the item has no value in is said so, not offered as a retry', async () => {
+  const { context, stub, clipboard } = rig();
+  const id = stub.add({
+    name: 'No username',
+    kind: 'login',
+    slots: { password },
+  });
+  stub.owner.approve(id, 'view');
+  const item = await found(context, 'No username');
+  expect(
+    await thrown(() => copySecret(context, { item, field: 'username' }))
+  ).toBe('"No username" has no username');
+  expect(clipboard.text).toBeUndefined();
+});
+
+test('an item whose kind the vault no longer lets agents use is unsupported', async () => {
+  const { context, stub } = rig();
+  const id = stub.add({ name: 'Card', kind: 'card', slots: { password } });
+  stub.owner.approve(id, 'view');
+  const card = await found(context, 'Card');
+  // A caller that hands over a stale kind still hears what the vault said.
+  expect(
+    await thrown(() =>
+      copySecret(context, {
+        item: { ...card, kind: 'login' },
+        field: 'password',
+      })
+    )
+  ).toBe('agents can\'t use "Card": only logins and API credentials');
+});
+
+test('an update sends a typed patch and metadata, and keeps the notes and custom fields', async () => {
+  const { context, stub } = rig();
+  const created = await createSecret(context, {
+    name: 'Api',
+    kind: 'api',
+    key: 'key-0123',
+    secret: 'secret-0123456789',
+  });
+  const id = created.item.itemId;
+  const before = stub.slotsOf(id);
+  if (before === undefined) throw new Error('no item');
+  before.notes = 'kept notes';
+  before.fields = [{ label: 'Region', value: 'eu' }];
+  await updateSecret(context, {
+    item: created.item,
+    secret: 'rotated-0123456789',
+    name: 'Api (rotated)',
+    url: 'https://api.example.com',
+  });
+  const patch = stub.calls.find(({ method }) => method === 'PATCH');
+  const sent = JSON.parse(patch?.body ?? '{}');
+  expect(sent).toEqual({
+    operationId: sent.operationId,
+    expectedVersion: created.version,
+    secretPatch: { kind: 'api', secret: 'rotated-0123456789' },
+    metadataPatch: { name: 'Api (rotated)', url: 'https://api.example.com' },
+  });
+  expect(stub.slotsOf(id)).toEqual({
+    username: 'key-0123',
+    password: 'rotated-0123456789',
+    notes: 'kept notes',
+    fields: [{ label: 'Region', value: 'eu' }],
+  });
+});
+
+test('asking again too soon after a denial says when it may ask again', async () => {
+  const { context, stub } = rig();
+  const id = stub.add({ name: 'Shared', kind: 'login', slots: login });
+  const item = await found(context, 'Shared');
+  await requestSecretAccess(context, { item });
+  stub.owner.deny(id);
+  expect(await thrown(() => requestSecretAccess(context, { item }))).toBe(
+    'you have asked for access too often: you can ask for "Shared" again in about 60 min'
+  );
+});
+
+const seed = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+
+const withCode = async () => {
+  const setup = rig();
+  const id = setup.stub.add({
+    name: 'With code',
+    kind: 'login',
+    slots: login,
+    totpSeed: seed,
+  });
+  setup.stub.owner.approve(id, 'view');
+  return { ...setup, item: await found(setup.context, 'With code') };
+};
+
+test('a code is held on the clipboard for no longer than it has left, less three seconds', async () => {
+  const { context, stub, pasted, item } = await withCode();
+  stub.flags.validForMs = [12_000];
+  stub.flags.latencyMs = 1_000;
+  expect(await copySecretCode(context, { item })).toBe(
+    'Copied code for With code, valid for about 8 s'
+  );
+  // 12 s left when the vault answered, 1 s gone since the request was sent, 3 s to spare.
+  expect(pasted.at(-1)?.ttlMs).toBe(8_000);
+  stub.flags.validForMs = [60_000];
+  stub.flags.latencyMs = 0;
+  await copySecretCode(context, { item });
+  expect(pasted.at(-1)?.ttlMs).toBe(20_000);
+});
+
+test('a code with under three seconds left is asked for once more, timed from the first request', async () => {
+  const { context, stub, pasted, item } = await withCode();
+  stub.flags.validForMs = [3_500, 25_000];
+  stub.flags.latencyMs = 1_000;
+  expect(await copySecretCode(context, { item })).toBe(
+    'Copied code for With code, valid for about 20 s'
+  );
+  expect(
+    stub.calls.filter(({ path }) => path.endsWith('/totp/code'))
+  ).toHaveLength(2);
+  // Two seconds gone since the first request, so 25 - 2 - 3 = 20 s.
+  expect(pasted).toHaveLength(1);
+  expect(pasted[0]?.ttlMs).toBe(20_000);
+});
+
+test('a code that is still too close to its end after one retry is not copied', async () => {
+  const { context, stub, pasted, clipboard, item } = await withCode();
+  stub.flags.validForMs = [3_500, 4_000];
+  stub.flags.latencyMs = 1_000;
+  expect(await thrown(() => copySecretCode(context, { item }))).toBe(
+    'the code for "With code" was too close to expiring to paste: try again'
+  );
+  expect(pasted).toEqual([]);
+  expect(clipboard.text).toBeUndefined();
 });
 
 test('a secret value never appears in anything a function returns, logs, writes or throws', async () => {
@@ -330,7 +512,7 @@ test('a secret value never appears in anything a function returns, logs, writes 
   const id = stub.add({
     name: 'Guarded',
     kind: 'login',
-    secret: { type: 'login', username: sentinel, password: sentinel },
+    slots: { username: sentinel, password: sentinel },
     totpSeed: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
   });
   const item = await found(context, 'Guarded');
@@ -340,15 +522,19 @@ test('a secret value never appears in anything a function returns, logs, writes 
   await record(() => copySecret(context, { item, field: 'password' }));
   await record(() => copySecret(context, { item, field: 'username' }));
   await record(() => copySecretCode(context, { item }));
-  await record(() => updateSecret(context, { item, value: sentinel }));
+  await record(() => updateSecret(context, { item, password: sentinel }));
   clipboard.text = sentinel;
   await record(() =>
-    createSecret(context, { name: 'Also', kind: 'login', fromClipboard: true })
+    createSecret(context, {
+      name: 'Also',
+      kind: 'login',
+      password: { fromClipboard: true },
+    })
   );
   await record(() =>
     updateSecret(context, {
       item: { ...item, version: 99 },
-      fromClipboard: true,
+      password: { fromClipboard: true },
     })
   );
   stub.flags.busy = 10;

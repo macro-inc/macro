@@ -83,6 +83,11 @@ async fn register<I: InflightAuthStore + 'static>(
             );
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+        Err(RegisterClientError::ReservedClientName) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "client_name may not be Macro's own name",
+        )
+            .into_response(),
         Err(RegisterClientError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to persist client registration");
             (

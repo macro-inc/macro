@@ -23,12 +23,12 @@ export const rig = (start = '2026-11-11T12:00:00Z') => {
     return new Uint8Array(10).fill(counter % 256);
   };
   const wake = mintWakeId(clock.now(), bytes());
-  const pasted: string[] = [];
+  const pasted: { readonly value: string; readonly ttlMs?: number }[] = [];
   const clipboard: Clipboard & { text: string | undefined } = {
     text: undefined,
-    put: async (value) => {
+    put: async (value, ttlMs) => {
       clipboard.text = value;
-      pasted.push(value);
+      pasted.push(ttlMs === undefined ? { value } : { value, ttlMs });
     },
     take: async () => {
       if (clipboard.text === undefined)
@@ -55,6 +55,8 @@ export const rig = (start = '2026-11-11T12:00:00Z') => {
     secrets: {
       vault: client,
       clipboard,
+      // The fake clock is the only clock here, so it is the monotonic one too.
+      monotonic: () => clock.now().epochMilliseconds,
       polling: {
         ensure: async () => {
           polling.on = true;

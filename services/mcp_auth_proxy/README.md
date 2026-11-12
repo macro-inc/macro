@@ -173,8 +173,16 @@ SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
 binding (`domain/access_token_clients.rs`). The bearer middleware reads the
 binding and the client's registered `client_name` and attaches the request's
 caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
-writes "via <client_name>". The name is self-reported at `/register`: a display
-label, never an identity or permission. A token issued before its binding was
+writes as "<client_name> · Agent". The name is self-reported at `/register`: a
+display label, never an identity or permission. `domain/client_name.rs` bounds
+it: only ASCII letters, digits, spaces and plain punctuation survive (no
+control, bidi, zero-width, lookalike or mention characters), at most 64 of them,
+and a name that is Macro's own ("Macro", "Macro Agent", a first-party Macro
+bot's name or handle; compared ignoring case, spaces and punctuation) is
+refused with a 400. A name that only mentions Macro ("Claude Code (macro)") is
+fine. A name with nothing left registers as "MCP
+client". Reads apply the same rules, so a name stored before they existed is
+shown normalized, or unnamed if reserved. A token issued before its binding was
 recorded carries no name; the client's next refresh records one. Reading the
 records only through the existing ports keeps them working on any store
 backend.
