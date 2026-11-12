@@ -354,3 +354,26 @@ async fn an_in_process_session_releases_only_while_its_log_rebuilds_it() {
             .expect("the check runs")
     );
 }
+
+/// A session whose row is gone (deleted elsewhere while this process still
+/// held its conversation) has no log to rebuild from, so nothing is lost by
+/// dropping what is held: the check says so rather than failing on every
+/// try.
+#[tokio::test]
+async fn an_in_process_session_whose_row_is_gone_releases() {
+    let (id, repo) = repo_with_session(bot_id::MACRO_NEW_BOT_ID, "opencode");
+    let containers = in_process_containers(&repo);
+    let _attachment = containers.resume(id).await.expect("resumes");
+
+    agent_session::domain::ports::AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("the row is deleted");
+
+    assert!(
+        containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check answers"),
+        "nothing durable is left to differ from"
+    );
+}
