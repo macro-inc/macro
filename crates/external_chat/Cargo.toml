@@ -21,6 +21,8 @@ ports = [
 outbound = [
   "dep:entity_access",
   "dep:entity_access_db_utils",
+  "dep:enterprise",
+  "enterprise/outbound",
   "dep:share_permission_db_utils",
   "dep:opentelemetry",
   "dep:sqlx",
@@ -46,6 +48,7 @@ axum = { workspace = true, features = ["multipart"], optional = true }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+enterprise = { path = "../enterprise", default-features = false, optional = true }
 image = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
@@ -68,4 +71,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

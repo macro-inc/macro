@@ -12,6 +12,9 @@ use models_permissions::share_permission::{
 };
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod test;
+
 fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
     Some(Backfill {
         state: BackfillState::parse(state?)?,
@@ -308,6 +311,7 @@ impl TimelineRepository for PgExternalChatRepository {
             &models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
         >,
     ) -> ExternalChatResult<()> {
+        let actor = user;
         let user = user.as_ref();
         let mut tx = self.pool.begin().await.map_err(failure)?;
         share_permission_db_utils::team_share::acquire_guard(&mut tx)
@@ -322,6 +326,24 @@ impl TimelineRepository for PgExternalChatRepository {
         .await
         .map_err(failure)?
         .ok_or(ExternalChatError::Forbidden)?;
+        let share_link_created = if matches!(update.link_share, Some(Some(_))) {
+            let existing = sqlx::query_scalar!(
+                r#"
+                SELECT sp."linkShare"
+                FROM external_chat ec
+                JOIN "SharePermission" sp ON sp.id = ec.share_permission_id
+                WHERE ec.id = $1 AND ec.user_id = $2
+                "#,
+                chat,
+                user,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(failure)?;
+            existing.is_none()
+        } else {
+            false
+        };
         if let Some(command) = command {
             share_permission_db_utils::team_share::apply(&mut tx, command)
                 .await
@@ -330,6 +352,19 @@ impl TimelineRepository for PgExternalChatRepository {
         share_permission_db_utils::update_link_share(&mut *tx, &permission, update)
             .await
             .map_err(failure)?;
+        if share_link_created {
+            enterprise::audit::append(
+                &mut tx,
+                &enterprise::audit::AuditRecord::new(
+                    actor,
+                    enterprise::audit::AuditAction::ShareLinkCreate,
+                    chat.to_string(),
+                    enterprise::audit::AuditResult::Success,
+                ),
+            )
+            .await
+            .map_err(failure)?;
+        }
         if let Some(channels) = update
             .channel_share_permissions
             .as_deref()

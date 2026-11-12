@@ -116,12 +116,45 @@ pub(super) async fn update(
     .await?;
 
     if let Some(update) = &args.share_permission {
+        let share_link_created = if matches!(update.link_share, Some(Some(_))) {
+            let existing = sqlx::query_scalar!(
+                r#"SELECT "linkShare" FROM "SharePermission" WHERE id = $1"#,
+                share_permission_id,
+            )
+            .fetch_one(tx.as_mut())
+            .await
+            .map_err(AdapterError::Sqlx)
+            .map_err(map_sqlx)?;
+            existing.is_none()
+        } else {
+            false
+        };
+
         super::share::apply_share_patch(
             &mut tx,
             super::share::ShareTarget::initiative(&targets, &share_permission_id),
             update,
         )
         .await?;
+
+        if share_link_created {
+            let actor = args
+                .actor_id
+                .as_ref()
+                .ok_or(InitiativeError::Unauthorized)?;
+            enterprise::audit::append(
+                &mut tx,
+                &enterprise::audit::AuditRecord::new(
+                    actor,
+                    enterprise::audit::AuditAction::ShareLinkCreate,
+                    args.id.to_string(),
+                    enterprise::audit::AuditResult::Success,
+                ),
+            )
+            .await
+            .map_err(AdapterError::Sqlx)
+            .map_err(map_sqlx)?;
+        }
     }
 
     if let Some(command) = &args.team_share {

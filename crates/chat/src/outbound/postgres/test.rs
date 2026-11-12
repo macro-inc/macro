@@ -22,6 +22,29 @@ use super::PgChatRepo;
 use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatRepoArgs};
 use crate::domain::ports::ChatRepo;
 
+async fn migrate_for_test(pool: &Pool<Postgres>) {
+    // Keep both colliding migration bodies in the isolated test database,
+    // remapping only the mailbox migration's in-memory version.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+}
+
 /// Sponsors every bot with the fixture user, so a bot owner also grants that user.
 #[derive(Clone)]
 pub(super) struct SponsoredByOwner;
@@ -205,6 +228,60 @@ async fn create_chat_with_message(repo: &TestRepo) -> (String, String) {
     .unwrap();
 
     (chat_id, message_id)
+}
+
+#[sqlx::test(migrations = false)]
+async fn share_link_enable_writes_one_audit_and_repeated_enable_does_not_duplicate(
+    pool: Pool<Postgres>,
+) {
+    migrate_for_test(&pool).await;
+    sqlx::raw_sql(include_str!("fixtures/users.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+    let mut private_permission = default_share_permission();
+    private_permission.link_share = None;
+    private_permission.link_share_access_level = None;
+    let chat_id = repo
+        .create(
+            Owner::User(user_id),
+            CreateChatArgs {
+                name: "Private chat".to_string(),
+                project_id: None,
+            },
+            private_permission,
+        )
+        .await
+        .unwrap();
+    let enable_link = || UpdateSharePermissionRequestV2 {
+        link_share: Some(Some(LinkShare::Public)),
+        link_share_access_level: Some(Some(AccessLevel::Edit)),
+        team_share_access_level: None,
+        channel_share_permissions: None,
+    };
+
+    patch_share_permission(&repo, &chat_id, enable_link()).await;
+    patch_share_permission(&repo, &chat_id, enable_link()).await;
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1",
+    )
+    .bind(&chat_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(
+        audits[0].get::<String, _>("actor_id"),
+        "macro|test@example.com"
+    );
+    assert_eq!(audits[0].get::<String, _>("action"), "share_link_create");
+    assert_eq!(audits[0].get::<String, _>("resource_id"), chat_id);
+    assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
 #[sqlx::test(

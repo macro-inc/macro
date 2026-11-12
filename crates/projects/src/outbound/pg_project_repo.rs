@@ -423,7 +423,43 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
             args.team_share.as_ref(),
         )
         .await?;
+        let share_link_created = if args
+            .share_permission
+            .as_ref()
+            .is_some_and(|permission| matches!(permission.link_share, Some(Some(_))))
+        {
+            let existing = sqlx::query_scalar!(
+                r#"
+                SELECT sp."linkShare"
+                FROM "ProjectPermission" pp
+                JOIN "SharePermission" sp ON sp.id = pp."sharePermissionId"
+                WHERE pp."projectId" = $1
+                "#,
+                args.project_id,
+            )
+            .fetch_one(&mut *transaction)
+            .await?;
+            existing.is_none()
+        } else {
+            false
+        };
+
         let project = edit::edit_project(&mut transaction, &args).await?;
+
+        if share_link_created {
+            let actor = args.actor_id.as_ref().ok_or(ProjectError::Unauthorized)?;
+            enterprise::audit::append(
+                &mut transaction,
+                &enterprise::audit::AuditRecord::new(
+                    actor,
+                    enterprise::audit::AuditAction::ShareLinkCreate,
+                    &args.project_id,
+                    enterprise::audit::AuditResult::Success,
+                ),
+            )
+            .await?;
+        }
+
         transaction.commit().await?;
         Ok(project)
     }

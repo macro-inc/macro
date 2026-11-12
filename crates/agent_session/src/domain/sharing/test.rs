@@ -57,6 +57,7 @@ impl SessionSharingRepo for Repo {
     async fn update_permissions(
         &self,
         id: AgentSessionId,
+        _actor: MacroUserIdStr<'static>,
         request: UpdateSharePermissionRequestV2,
         command: Option<AuthorizedTeamShareCommand>,
     ) -> Result<SharePermissionV2> {

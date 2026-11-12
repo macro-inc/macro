@@ -21,6 +21,29 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ProjectRepo;
 
+async fn migrate_for_test(pool: &Pool<Postgres>) {
+    // Keep both colliding migration bodies in the isolated test database,
+    // remapping only the mailbox migration's in-memory version.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+}
+
 #[derive(Clone)]
 pub(super) struct NoBots;
 
@@ -141,6 +164,61 @@ async fn project_share_permission_columns(
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+#[sqlx::test(migrations = false)]
+async fn share_link_enable_writes_one_audit_and_repeated_enable_does_not_duplicate(
+    pool: Pool<Postgres>,
+) {
+    migrate_for_test(&pool).await;
+    sqlx::raw_sql(include_str!("../../../fixtures/projects_test_data.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            owner: project_owner(),
+            name: "Private project".to_owned(),
+            parent_id: None,
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+            updated_at: None,
+        })
+        .await
+        .unwrap();
+    let enable_link = || EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
+        project_id: project.id.clone(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+        team_share: None,
+    };
+
+    repo.edit_project(enable_link()).await.unwrap();
+    repo.edit_project(enable_link()).await.unwrap();
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1",
+    )
+    .bind(&project.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(
+        audits[0].get::<String, _>("actor_id"),
+        "macro|owner@test.com"
+    );
+    assert_eq!(audits[0].get::<String, _>("action"), "share_link_create");
+    assert_eq!(audits[0].get::<String, _>("resource_id"), project.id);
+    assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
 #[sqlx::test(
@@ -551,6 +629,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     let repo = test_repo(pool.clone());
     let unchanged = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
             project_id: CHILD_ID.to_owned(),
             name: Some("Renamed".to_owned()),
             update_parent: false,
@@ -563,6 +642,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
 
     let moved = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
             project_id: CHILD_ID.to_owned(),
             name: None,
             update_parent: true,
@@ -578,6 +658,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
 
     let updated = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
             project_id: ROOT_ID.to_owned(),
             name: None,
             update_parent: true,
@@ -601,6 +682,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     );
 
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
         project_id: ROOT_ID.to_owned(),
         name: None,
         update_parent: false,
@@ -623,6 +705,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     );
 
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
         project_id: ROOT_ID.to_owned(),
         name: None,
         update_parent: false,
@@ -646,6 +729,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     );
 
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
         project_id: ROOT_ID.to_owned(),
         name: None,
         update_parent: false,
@@ -665,6 +749,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     );
 
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
         project_id: ROOT_ID.to_owned(),
         name: None,
         update_parent: false,

@@ -564,6 +564,8 @@ pub struct EditCallRecordRequest {
 /// callers cannot request a team grant the owner policy has not approved.
 #[derive(Debug)]
 pub struct EditCallRecordRepoArgs {
+    /// Authenticated actor, required when this edit enables a share link.
+    pub actor_id: Option<MacroUserIdStr<'static>>,
     /// Share permission updates, if changing (link and channel sharing).
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,

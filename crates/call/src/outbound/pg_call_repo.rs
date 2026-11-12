@@ -2275,7 +2275,44 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         if let Some(share_permission) = args.share_permission.as_ref() {
+            let share_link_created = if matches!(share_permission.link_share, Some(Some(_))) {
+                let existing = sqlx::query_scalar!(
+                    r#"
+                    SELECT sp."linkShare"
+                    FROM (
+                        SELECT share_permission_id FROM calls WHERE id = $1
+                        UNION ALL
+                        SELECT share_permission_id FROM call_records WHERE id = $1
+                    ) call_permission
+                    JOIN "SharePermission" sp ON sp.id = call_permission.share_permission_id
+                    LIMIT 1
+                    "#,
+                    call_record_id,
+                )
+                .fetch_one(&mut *tx)
+                .await?;
+                existing.is_none()
+            } else {
+                false
+            };
+
             edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
+
+            if share_link_created {
+                let actor = args.actor_id.as_ref().ok_or_else(|| {
+                    CallError::Forbidden("share-link audit requires an actor".to_string())
+                })?;
+                enterprise::audit::append(
+                    &mut tx,
+                    &enterprise::audit::AuditRecord::new(
+                        actor,
+                        enterprise::audit::AuditAction::ShareLinkCreate,
+                        call_record_id.to_string(),
+                        enterprise::audit::AuditResult::Success,
+                    ),
+                )
+                .await?;
+            }
         }
 
         if let Some(share) = args.live_share_with_team {
