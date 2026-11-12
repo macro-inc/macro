@@ -84,7 +84,7 @@ async function restartPendingChannelTimeline(parent: MessageParent) {
   });
 }
 
-/** A channel event carries the change sequence number its commit took. */
+/** A pushed channel activity carries the change sequence number its commit took. */
 type SequencedEvent = { seq?: number | null };
 
 /**
@@ -254,7 +254,7 @@ export function handleMessageEvent(
   if (!event?.parent || !event.change) return;
   const parent = event.parent;
   const change = event.change;
-  noteCommittedChannelChange(parent, (event as SequencedEvent).seq);
+  noteCommittedChannelChange(parent, event.seq);
   if (change.type === 'typing') {
     handleCommsTyping(
       {
