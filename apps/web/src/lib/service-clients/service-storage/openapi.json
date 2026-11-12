@@ -20323,8 +20323,7 @@
             "description": "Pairing ID",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/PairingId"
             }
           }
         ],
@@ -32783,6 +32782,10 @@
           "owner_id"
         ],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether members of the channel's team join it automatically."
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
@@ -33863,6 +33866,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -34806,6 +34814,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "ComputerId": {
+        "type": "string"
       },
       "ConferenceProvider": {
         "type": "string",
@@ -36378,8 +36389,7 @@
             "description": "When the pairing expires."
           },
           "pairing_id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/PairingId",
             "description": "Pairing id used to poll for the claim."
           },
           "poll_interval_seconds": {
@@ -47190,6 +47200,21 @@
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
           },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for, derived from whether\nit has an active Claude login. Only meaningful for Macro computers."
+          },
+          "computer_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerId",
+                "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+              }
+            ]
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -51191,6 +51216,9 @@
             "description": "Harness display name the daemon asked for."
           }
         }
+      },
+      "PairingId": {
+        "type": "string"
       },
       "ParaPatch": {
         "type": "object",
@@ -56425,6 +56453,25 @@
           }
         }
       },
+      "SoupAgentDmProfile": {
+        "type": "object",
+        "description": "The persona of a viewer's private conversation with an agent.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Persona avatar, when supplied."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Persona id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona display name."
+          }
+        }
+      },
       "SoupAgentSession_SoupPropertiesField": {
         "allOf": [
           {
@@ -56981,6 +57028,17 @@
           {
             "type": "object",
             "properties": {
+              "agent_dm": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupAgentDmProfile",
+                    "description": "Persona identity when this is the viewer's private agent DM."
+                  }
+                ]
+              },
               "interacted_at": {
                 "type": ["string", "null"],
                 "format": "date-time",

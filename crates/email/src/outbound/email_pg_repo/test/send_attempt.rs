@@ -67,6 +67,7 @@ fn prepared() -> PreparedSend {
             provider_thread_id: None,
             replying_to_id: None,
             subject: input.subject.clone(),
+            from_name: None,
             to: vec![],
             cc: vec![],
             bcc: vec![],
