@@ -14,14 +14,21 @@ local stack does it, and never printed:
 ```sh
 umask 077
 key=$(mktemp)
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key"
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key" &&
 jq -n --rawfile key "$key" '{OPENBAO_ADDRESS: "https://openbao-dev.macro-internal.com",
   PASSWORDS_JWT_ISSUER: "macro-dev-passwords", PASSWORDS_JWT_SIGNING_KEY: $key}' \
   | doppler secrets upload -p cloud-storage-service -c dev /dev/stdin > /dev/null
 shred -u "$key"
 ```
 
-Rotating the key means re-running the provisioning for every team.
+Rotating the key interrupts Passwords for every provisioned team. Each team's
+roles trust exactly one public key, and the service reads the signing key only
+at startup. Rotate in this order:
+
+1. Upload the new key with the block above.
+2. Re-run the provisioning below for every provisioned team. From each team's
+   run until step 3 ends, that team's vault requests fail.
+3. Restart the document storage service so it signs with the new key.
 
 1. Open the [operator tunnel](../stacks/openbao/README.md#operator-tunnel).
    It listens on local port 18443.
