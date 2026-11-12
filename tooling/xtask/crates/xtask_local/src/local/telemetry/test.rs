@@ -53,6 +53,13 @@ fn an_action_buffers_its_run_event_before_returning() {
         .find(|line| line["event"] == json!("run"))
         .expect("a buffered run event");
     assert_eq!(run["fields"]["outcome"], json!("success"));
+    let begin = buffered_records(&paths)
+        .into_iter()
+        .find(|line| line["line"] == json!("begin"))
+        .expect("a begin line");
+    // A named instance's name is chosen by a person: only its hash is sent.
+    assert_ne!(begin["common"]["instance"], json!("telemetry-test"));
+    assert_eq!(begin["common"]["instance_kind"], json!("named"));
 }
 
 /// A rebuild can close while its build lane is still reading sccache's

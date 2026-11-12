@@ -103,7 +103,7 @@ like CI's, and a killed run arrives with `outcome="interrupted"`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance`, `instance_kind` (none for `build_services`), `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
 | `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
 | `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |

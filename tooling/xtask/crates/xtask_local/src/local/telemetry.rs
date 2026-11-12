@@ -10,7 +10,8 @@
 //! Off, `begin` returns `None` and every hook is a no-op.
 //!
 //! Fields hold names of our own steps and services, opaque ids, counts and
-//! timings: never paths, env values, error text or anything from the settings file.
+//! timings: never paths, env values, error text or anything from the settings
+//! file. Instance and branch names are hashed unless they are the defaults.
 
 use std::collections::{BTreeMap, HashSet};
 use std::process::Command;
@@ -29,9 +30,14 @@ use super::{BringUp, Mode, Start, repo_root, workspace_root};
 #[cfg(test)]
 mod test;
 
+/// How long closing a run waits for its build and inspection lanes (sccache,
+/// Docker) before closing without them.
+const LANE_WAIT: Duration = Duration::from_secs(2);
 /// How long a background process waits for its last events to be sent. Nobody
 /// waits on such a process, so this never delays a run.
 pub(super) const DETACHED_FINISH_WAIT: Duration = Duration::from_secs(10);
+/// Branch names sent as they are; any other is hashed.
+const MAIN_BRANCHES: &[&str] = &["main"];
 /// Steps whose captured output is a cargo build: they get a `build` event.
 const BUILD_STEP: &str = "Building service binaries";
 /// Waits for infra health; right after it, each container's first healthy probe
@@ -297,11 +303,20 @@ impl RunTelemetry {
         let shared = self.shared;
         if !(shared.kind == RunKind::Up && succeeded) {
             // A rebuild can end right after its build step, before the build
-            // lane has read sccache's counters and recorded.
-            shared.join_lanes();
-            fields.insert("steps".to_owned(), Value::from(shared.state().steps));
-            if let Some(recorder) = shared.take_recorder() {
-                recorder.finish(fields, ended, wait);
+            // lane has read sccache's counters and recorded, so the lanes are
+            // joined first; but on a thread, since a wedged sccache or Docker
+            // must not hold up a command that is done. Past `LANE_WAIT` the run
+            // closes without what the lanes would have added.
+            let (done, finished) = mpsc::channel();
+            let lane_shared = Arc::clone(&shared);
+            let lane_fields = fields.clone();
+            std::thread::spawn(move || {
+                lane_shared.join_lanes();
+                lane_shared.close_run(lane_fields, ended, wait);
+                let _ = done.send(());
+            });
+            if finished.recv_timeout(LANE_WAIT.max(wait)).is_err() {
+                shared.close_run(fields, ended, Duration::ZERO);
             }
             return;
         }
@@ -312,10 +327,7 @@ impl RunTelemetry {
             if succeeded {
                 inspect_services(&shared, "app");
             }
-            fields.insert("steps".to_owned(), Value::from(shared.state().steps));
-            if let Some(recorder) = shared.take_recorder() {
-                recorder.finish(fields, ended, wait);
-            }
+            shared.close_run(fields, ended, wait);
             let _ = done.send(());
         });
         let _ = finished.recv_timeout(wait);
@@ -366,6 +378,14 @@ impl Shared {
         let lanes = std::mem::take(&mut self.state().lanes);
         for lane in lanes {
             let _ = lane.join();
+        }
+    }
+
+    /// Record the run event and send, once: later calls find no recorder.
+    fn close_run(&self, mut fields: BTreeMap<String, Value>, ended: SystemTime, wait: Duration) {
+        fields.insert("steps".to_owned(), Value::from(self.state().steps));
+        if let Some(recorder) = self.take_recorder() {
+            recorder.finish(fields, ended, wait);
         }
     }
 
@@ -436,7 +456,14 @@ fn common_fields(
         } else {
             "named"
         };
-        fields.insert("instance".to_owned(), Value::from(instance.name()));
+        // Instance and branch names are chosen by people and can carry names,
+        // so only the defaults are sent as they are.
+        let name = if instance.name() == DEFAULT_NAME {
+            DEFAULT_NAME.to_owned()
+        } else {
+            opaque_id(instance.name())
+        };
+        fields.insert("instance".to_owned(), Value::from(name));
         fields.insert("instance_kind".to_owned(), Value::from(instance_kind));
     }
     if let Ok(cpus) = std::thread::available_parallelism() {
@@ -449,6 +476,11 @@ fn common_fields(
         fields.insert("git_sha".to_owned(), Value::from(sha));
     }
     if let Some(branch) = git(&["symbolic-ref", "--short", "-q", "HEAD"]) {
+        let branch = if MAIN_BRANCHES.contains(&branch.as_str()) {
+            branch
+        } else {
+            opaque_id(&branch)
+        };
         fields.insert("branch".to_owned(), Value::from(branch));
     }
     fields

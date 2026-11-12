@@ -703,9 +703,9 @@ Opted out, nothing is written or sent.
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
 plus a line per step, per service build (cargo units compiled, sccache hits) and
 per container's wait for its first passing health probe. Lines carry step and
-service names, timings, outcome, the instance name, branch and commit, OS/arch
-and CPU count, and hashed host and worktree ids; never your name, paths, env
-values, error text or the token. Fields and queries:
+service names, timings, outcome, the commit, OS/arch and CPU count, and hashed
+host, worktree, instance and branch ids (`default` and `main` are sent as they
+are); never your name, paths, env values, error text or the token. Fields and queries:
 [observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
 
 **Credentials.** The settings file holds the endpoint and the bearer token of
@@ -716,7 +716,8 @@ config. That value is never downloaded with the `local` project's secrets, so it
 never reaches a generated env file, a container or a child process's
 environment. If Doppler can't provide it (logged out, offline, no access), the run
 carries on, records nothing, prints one hint once, and tries again after an hour.
-A provisioned token that the endpoint rejects is fetched again once.
+A provisioned token that the endpoint rejects is fetched again once. To edit a
+provisioned file, delete its `provisioned = true` line so it is never replaced.
 
 You can also write the file yourself:
 
