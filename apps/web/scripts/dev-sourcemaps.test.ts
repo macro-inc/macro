@@ -65,3 +65,15 @@ it('links inline source maps instead of sending them with every module', async (
     await vite.close();
   }
 });
+
+it('finds the inline map of a multi-megabyte module', async () => {
+  const { findInlineMap } = await import('./dev-sourcemaps');
+  const base64 = Buffer.from('x'.repeat(12_000_000)).toString('base64');
+  const text = `export const big = 1;\n//# sourceMappingURL=data:application/json;base64,${base64}\n`;
+
+  const inline = findInlineMap(text);
+
+  expect(inline?.start).toBe('export const big = 1;'.length);
+  expect(inline?.base64.length).toBe(base64.length);
+  expect(findInlineMap('export const plain = 1;')).toBeUndefined();
+});
