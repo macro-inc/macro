@@ -23,14 +23,17 @@ export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
   );
 }
 
-const persistedCalendarQueryPrefixes = [
-  calendarKeys.occurrences._def,
-  calendarKeys.visibleCalendars.queryKey,
-] as const;
-
 export function shouldPersistCalendarQuery(queryKey: QueryKey): boolean {
-  return persistedCalendarQueryPrefixes.some((prefix) =>
-    partialMatchKey(queryKey, prefix)
+  // Both keys name their account next; a read without one has no owner to
+  // restore it for.
+  return [
+    calendarKeys.occurrences._def,
+    calendarKeys.visibleCalendars._def,
+  ].some(
+    (prefix) =>
+      partialMatchKey(queryKey, prefix) &&
+      typeof queryKey[prefix.length] === 'string' &&
+      queryKey[prefix.length] !== ''
   );
 }
 

@@ -6,6 +6,7 @@ import {
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
+import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
@@ -15,6 +16,7 @@ import type {
 } from './persistence/per-query-idb';
 import {
   createQueryPersistenceScopes,
+  shouldPersistCalendarQuery,
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
@@ -84,6 +86,39 @@ describe('setupQueryPersistence', () => {
     expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
       false
     );
+  });
+
+  it('persists calendar reads only when their key names an account', () => {
+    const range = {
+      start: '2026-11-08T05:00:00.000Z',
+      end: '2026-11-15T05:00:00.000Z',
+      startDate: '2026-11-08',
+      endDate: '2026-11-15',
+    };
+    const occurrences = calendarKeys.occurrences('viewer', range);
+
+    expect(shouldPersistCalendarQuery(occurrences.queryKey)).toBe(true);
+    expect(shouldPersistCalendarQuery(occurrences._ctx.graphql.queryKey)).toBe(
+      true
+    );
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars('viewer').queryKey
+      )
+    ).toBe(true);
+    expect(
+      shouldPersistCalendarQuery(calendarKeys.occurrences('', range).queryKey)
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars(undefined).queryKey
+      )
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.teamOutOfOffice('viewer', range).queryKey
+      )
+    ).toBe(false);
   });
 
   it('writes only the changed query on update', () => {
