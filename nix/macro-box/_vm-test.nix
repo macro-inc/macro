@@ -106,6 +106,7 @@ pkgs.testers.runNixOSTest {
     imports = [ guest ];
     macro.box = {
       inherit macrod;
+      harnessd.package = harnessd;
       agentMode = true;
       dataDisk = null;
       # Prints the environment the `claude` wrapper hands it.
@@ -209,13 +210,22 @@ pkgs.testers.runNixOSTest {
 
       with subtest("a call can capture the agent's desktop and sound"):
           agent.succeed("su - macro -c 'DISPLAY=:1 ${pkgs.ffmpeg-full}/bin/ffmpeg -loglevel error -f x11grab -video_size 1920x1080 -i :1 -frames:v 1 /tmp/frame.png' && test -s /tmp/frame.png")
-          sound = agent.succeed("su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 timeout 2 parec -d @DEFAULT_MONITOR@ --raw | head -c 4096 | wc -c' || true").strip()
+          # parec's default fragment is about 2 s; ask for small ones.
+          sound = agent.succeed("su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 timeout 5 parec -d @DEFAULT_MONITOR@ --raw --latency-msec=50 | head -c 4096 | wc -c' || true").strip()
           assert int(sound) == 4096, sound
+
+      with subtest("the agent's clipboard round-trips on its desktop"):
+          xclip = "${pkgs.lib.getExe pkgs.xclip}"
+          agent.succeed(f"su - macro -c 'printf clip-test | DISPLAY=:1 {xclip} -selection clipboard -loops 1' >/dev/null 2>&1 &")
+          agent.wait_until_succeeds(f"[ \"$(su - macro -c 'DISPLAY=:1 {xclip} -selection clipboard -o')\" = clip-test ]")
 
       with subtest("computer use sees and captures the agent's desktop"):
           agent.wait_for_open_port(5901)
           agent.wait_until_succeeds("systemctl --user --machine=macro@ is-active --quiet macro-agent-openbox.service")
           servers = "${pkgs.writeText "mcp-servers.json" (builtins.toJSON nodes.agent.macro.box.agent.mcpServers)}"
+          # The AT-SPI bus says accessibility is on, so every app on the desktop
+          # exposes its tree.
+          agent.wait_until_succeeds("su - macro -c 'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus busctl --user get-property org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled' | grep -Fx 'b true'")
           # Chromium's AT-SPI tree appears a few seconds after its window.
           size = agent.wait_until_succeeds(f"su - macro -c '${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}'", timeout=120).strip()
           assert int(size) > 1000, size
@@ -247,9 +257,10 @@ pkgs.testers.runNixOSTest {
           agent.succeed("[ $(readlink /home/macro/agent/workspace/node_modules) = ${nodes.agent.macro.box.agent.runtime}/node_modules ]")
           agent.succeed("test -f /home/macro/agent/workspace/node_modules/@macro-inc/sdk/dist/src/macro.js")
           agent.succeed("test -f /home/macro/agent/workspace/node_modules/@macro-inc/muppet/package.json")
+          agent.succeed("test -f /home/macro/agent/workspace/node_modules/@macro-inc/observability/src/core.ts")
           git = "git -c safe.directory=/home/macro/agent/workspace -C /home/macro/agent/workspace"
           agent.succeed(f"[ \"$({git} config user.email)\" = ada@example.com ] && [ \"$({git} config user.name)\" = Ada ]")
-          agent.fail(f"grep -rF test-token /home/macro/agent/workspace/.git/config")
+          agent.fail("grep -rF test-token /home/macro/agent/workspace/.git/config")
           # The helper answers only for the agent's repo.
           helper = agent.succeed(f"{git} config --get-all credential.helper | tail -n 1").strip()
           program, credentials = helper.removeprefix("!").split(" ")
