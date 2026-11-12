@@ -238,7 +238,8 @@ nothing is replaced: the toast says the agent wants to open something and
 offers **Open**. An item an agent opened is not marked read until you click or
 type in its pane.
 
-Only prompts typed in the agent composer carry the tab: channel and DM
+Only prompts typed in the agent composer carry the tab, including the first
+prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
 item in its reply instead. Routes are closed to agents unless they opt in
 (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,

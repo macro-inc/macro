@@ -5,6 +5,10 @@
  * own. It names a tab, not a person, and grants nothing.
  */
 
+import {
+  enableAgentNavigation,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { z } from 'zod';
 
 const STORAGE_KEY = 'macro.ui-client-id';
@@ -37,4 +41,14 @@ export function uiClientId(): string {
   current = readStored() ?? crypto.randomUUID();
   store(current);
   return current;
+}
+
+/**
+ * The id to send with a prompt typed in this tab: none while agent navigation
+ * is off, so the harness records no tab for the turn.
+ */
+export function typedInClientId(): string | undefined {
+  if (!isFeatureEnabled(enableAgentNavigation)) return undefined;
+
+  return uiClientId();
 }

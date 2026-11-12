@@ -20,9 +20,21 @@ pub enum ControlPrincipal {
     Runtime(Option<MacroUserIdStr<'static>>),
 }
 
-enum PrincipalKind {
-    User,
-    Other,
+impl ControlPrincipal {
+    /// The app tab a prompt from this principal is recorded against.
+    ///
+    /// Only the person typing in a tab may name it: a runtime forwarding a
+    /// prompt has no tab, and naming one would let it steer whatever the turn
+    /// shows into a tab it never saw, so it is refused. A program using a
+    /// person's credential keeps the person's authority but not their tab, so
+    /// its tab is dropped rather than refused.
+    pub fn admit_client(&self, client: Option<UiClientId>) -> Result<Option<UiClientId>> {
+        match (self, client) {
+            (Self::User, client) => Ok(client),
+            (Self::Program, _) | (Self::Runtime(_), None) => Ok(None),
+            (Self::Runtime(_), Some(_)) => Err(AgentSessionError::Forbidden),
+        }
+    }
 }
 
 impl ControlEvent {
@@ -34,9 +46,8 @@ impl ControlEvent {
     /// was triggered with. A user could otherwise tell an owner's agent that
     /// the owner asked for something.
     ///
-    /// An app tab is only accepted from the person typing in it: a runtime
-    /// forwarding a prompt has no tab, and naming one would let it steer
-    /// whatever the turn shows into a tab it never saw.
+    /// An app tab is only accepted from the person typing in it; see
+    /// [`ControlPrincipal::admit_client`].
     pub fn authorized(
         action: AgentAction,
         action_id: Option<AgentActionId>,
@@ -49,10 +60,7 @@ impl ControlEvent {
         if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some()) {
             return Err(AgentSessionError::Forbidden);
         }
-        let principal_kind = match &principal {
-            ControlPrincipal::User => PrincipalKind::User,
-            ControlPrincipal::Program | ControlPrincipal::Runtime(_) => PrincipalKind::Other,
-        };
+        let client = principal.admit_client(client)?;
         let actor = match principal {
             ControlPrincipal::User | ControlPrincipal::Program if context.is_some() => {
                 return Err(AgentSessionError::Forbidden);
@@ -63,9 +71,6 @@ impl ControlEvent {
                     .map_err(|_| AgentSessionError::Forbidden)?
                     .clone(),
             ),
-            ControlPrincipal::Runtime(_) if client.is_some() => {
-                return Err(AgentSessionError::Forbidden);
-            }
             ControlPrincipal::Runtime(actor) => {
                 if matches!(
                     action,
@@ -76,7 +81,6 @@ impl ControlEvent {
                 actor
             }
         };
-        let client = client.filter(|_| matches!(principal_kind, PrincipalKind::User));
         Ok(Self {
             action,
             action_id,
