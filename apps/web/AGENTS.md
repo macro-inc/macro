@@ -79,8 +79,10 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
 further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers keep a replaceable window with explicit paging. A
-window key names the page or growing list on screen, never a refresh of it. Reset
+to a bound; property pickers use explicit paging, and query-backed pages append
+to the visible options. Thread/generic pickers advance their browsed-email and
+server-search pages alongside Quick Access; explicit user rosters stay capped.
+A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
@@ -686,6 +688,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   completion after a code has been consumed. New address/back/send attempts must
   verify anew. Keep admission closed until cleanup succeeds; serialize login behind every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
+  `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
+  task/contact/mixed/thread/generic source pagination on desktop and touch.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
