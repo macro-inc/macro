@@ -26,6 +26,7 @@ path = "src/scheduling_openapi.rs"
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+genai_telemetry = { path = "../../crates/genai_telemetry" }
 universal_input = { path = "../../crates/universal_input" }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
