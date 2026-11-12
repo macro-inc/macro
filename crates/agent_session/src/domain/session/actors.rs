@@ -857,7 +857,10 @@ where
                     }
                 }
             }
-            .in_current_span(),
+            .instrument(tracing::info_span!(
+                "agent.session.list_tools",
+                agent.session.id = %id,
+            )),
         );
     }
 
