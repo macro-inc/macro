@@ -121,6 +121,16 @@ describe('Reactions', () => {
 });
 
 describe('formatReactorNames', () => {
+  it('names reactors outside Macro by their given name', () => {
+    expect(
+      formatReactorNames(
+        ['user-1', 'external-reactor:1', 'external-reactor:2'],
+        'user-1',
+        { 'external-reactor:1': 'Ana' }
+      )
+    ).toBe('You, Ana, and 1 other person');
+  });
+
   it('returns empty string for empty input', () => {
     expect(formatReactorNames([], 'user-1')).toBe('');
   });

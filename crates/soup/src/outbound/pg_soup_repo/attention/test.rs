@@ -509,3 +509,35 @@ async fn filed_entity_keying_places_a_channel_and_its_threads_together(
 
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("work_feed", "attention_harnesses")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn runtime_access_notifications_are_candidates(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = &[EntityType::Harness];
+    request.keying = AttentionKeying::FiledEntity;
+    let page = attention_soup_page(&pool, request).await?;
+
+    // runtime-3 belongs to someone on another team, and runtime-4 is deleted.
+    assert_eq!(
+        keys(&page),
+        vec![
+            (
+                EntityType::Harness,
+                "aaaaaaaa-0000-0000-0000-000000000002".to_string()
+            ),
+            (
+                EntityType::Harness,
+                "aaaaaaaa-0000-0000-0000-000000000001".to_string()
+            ),
+        ]
+    );
+    Ok(())
+}

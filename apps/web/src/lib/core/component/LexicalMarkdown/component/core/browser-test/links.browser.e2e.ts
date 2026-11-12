@@ -38,14 +38,18 @@ test('agent URLs navigate and removed links survive save and reopen', async ({
     url
   );
   const cases = page.getByTestId('cases');
-  await expect(cases.getByRole('link')).toHaveCount(2);
-  await expect(cases.getByRole('link').first()).toHaveAttribute(
+  await expect(cases.getByRole('link')).toHaveCount(3);
+  await expect(cases.getByRole('link').nth(0)).toHaveAttribute(
     'href',
     'https://example.com/a%20b?q=x%2Fy#part'
   );
-  await expect(cases.getByRole('link').last()).toHaveAttribute(
+  await expect(cases.getByRole('link').nth(1)).toHaveAttribute(
     'href',
     'https://example.com/a~~b~~c'
+  );
+  await expect(cases.getByRole('link').nth(2)).toHaveAttribute(
+    'href',
+    'https://example.com/post?a=x_y&s=20'
   );
   await expect(cases).toContainText('https://example.com/removed');
   const popupPromise = page.waitForEvent('popup');
@@ -76,6 +80,29 @@ test('agent URLs navigate and removed links survive save and reopen', async ({
     path: testInfo.outputPath('links.png'),
     fullPage: true,
   });
+});
+
+// A message that is only a URL is sent while the caret is still at the URL's
+// end, before the composer links it.
+test('a URL sent before the composer links it saves as a link', async ({
+  page,
+}) => {
+  await page.goto(
+    '/src/lib/core/component/LexicalMarkdown/component/core/browser-test/links.html?markdown='
+  );
+  const editor = page.getByRole('textbox', { name: 'Message' });
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  await editor.click();
+  const url = 'https://example.com/status/1?a=x_y&s=20';
+  await page.keyboard.insertText(url);
+  await expect(editor).toHaveText(url);
+  await expect(editor.locator('a')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save message', exact: true }).click();
+  await expect(page.getByTestId('saved').getByRole('link')).toHaveAttribute(
+    'href',
+    url
+  );
+  await expect(page.getByTestId('saved')).toHaveText(url);
 });
 
 // Pasting j@m.c b and typing o after the c used to swallow the letter when
