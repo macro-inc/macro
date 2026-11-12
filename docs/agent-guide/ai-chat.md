@@ -232,16 +232,18 @@ conversation (a new pane at the end when no pane shows it) and slides in from
 that side while the other panes glide aside; with reduced motion it only fades
 in. Your pane stays active and a composer you were typing in keeps its caret.
 A toast reads **Opened by <agent>** with **Undo**, which slides the pane back
-out and restores the layout. On the phone apps the pane pushes onto the stack.
-When there is no room for another split (a narrow window, a phone browser),
-nothing is replaced: the toast says the agent wants to open something and
-offers **Open**. An item an agent opened is not marked read until you click or
-type in its pane.
+out and restores the layout. When there is no room for another split (a
+narrow window), nothing is replaced: the toast says the agent wants to open
+something and offers **Open**. An item an agent opened is not marked read
+until you click or type in its pane.
 
 Only prompts typed in the agent composer carry the tab, including the first
 prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
-item in its reply instead. Routes are closed to agents unless they opt in
+item in its reply instead. Agents never open anything on mobile, flag or not:
+in the iOS and Android apps (iPad included) and in a phone-size touch browser
+a prompt carries no tab, so the agent links the item, and the tab ignores any
+`ui_command` frame. Routes are closed to agents unless they opt in
 (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
 composing mail and debug views are refused on the server and again in the tab.
 
