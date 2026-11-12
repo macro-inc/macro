@@ -3403,6 +3403,10 @@ export type ChangesetSourceDto = 'github_pull_request';
  */
 export type Channel = {
     /**
+     * Whether members of the channel's team join it automatically.
+     */
+    auto_join_team?: boolean;
+    /**
      * Channel type.
      */
     channel_type: ChannelType;
@@ -18255,6 +18259,24 @@ export type SortKey = {
 };
 
 /**
+ * The persona of a viewer's private conversation with an agent.
+ */
+export type SoupAgentDmProfile = {
+    /**
+     * Persona avatar, when supplied.
+     */
+    avatar_url?: string | null;
+    /**
+     * Persona id.
+     */
+    bot_id: string;
+    /**
+     * Persona display name.
+     */
+    name: string;
+};
+
+/**
  * An agent session as displayed in Soup.
  *
  * Includes the persisted runtime and repository metadata needed to render
@@ -18656,6 +18678,7 @@ export type SoupCallRecordSoupPropertiesField = {
  * A channel as displayed in Soup.
  */
 export type SoupChannel = ChannelWithParticipants & LatestMessage & {
+    agent_dm?: null | SoupAgentDmProfile;
     /**
      * Timestamp when the requesting user last interacted with this channel.
      */
