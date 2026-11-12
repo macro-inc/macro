@@ -83,7 +83,7 @@ fn web_settings_in_the_file_fail_naming_where_they_live_now() {
             ..
         }
     ));
-    assert!(identity.to_string().contains("Settings → Runtimes"));
+    assert!(identity.to_string().contains("Settings → Machines"));
 
     let scope = load(&format!(
         "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
@@ -172,29 +172,41 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     );
     assert_eq!(
         secure.pairing_approval_url("KX7M-4QHD"),
-        "https://macro.com/app/settings/runtimes?pair=KX7M-4QHD",
+        "https://macro.com/app/settings/harness?pair=KX7M-4QHD",
     );
     assert_eq!(
         secure.settings_url(),
-        "https://macro.com/app/settings/runtimes"
+        "https://macro.com/app/settings/harness"
     );
 }
 
 #[test]
-fn macrods_directory_lives_in_home_or_the_windows_user_profile() {
+fn the_default_config_lives_in_home_or_the_windows_user_profile() {
     assert_eq!(
-        macrod_directory_in_home(Some("/home/eric"), Some("C:\\Users\\eric")),
-        Some(PathBuf::from("/home/eric").join(".macrod"))
+        config_path_in_home(Some("/home/eric"), Some("C:\\Users\\eric")),
+        Some(
+            PathBuf::from("/home/eric")
+                .join(".macrod")
+                .join("macrod.toml")
+        )
     );
     assert_eq!(
-        macrod_directory_in_home(None, Some("C:\\Users\\eric")),
-        Some(PathBuf::from("C:\\Users\\eric").join(".macrod"))
+        config_path_in_home(None, Some("C:\\Users\\eric")),
+        Some(
+            PathBuf::from("C:\\Users\\eric")
+                .join(".macrod")
+                .join("macrod.toml")
+        )
     );
     assert_eq!(
-        macrod_directory_in_home(Some(""), Some("C:\\Users\\eric")),
-        Some(PathBuf::from("C:\\Users\\eric").join(".macrod"))
+        config_path_in_home(Some(""), Some("C:\\Users\\eric")),
+        Some(
+            PathBuf::from("C:\\Users\\eric")
+                .join(".macrod")
+                .join("macrod.toml")
+        )
     );
-    assert_eq!(macrod_directory_in_home(None, None), None);
+    assert_eq!(config_path_in_home(None, None), None);
 }
 
 #[test]
@@ -213,22 +225,6 @@ fn a_second_lock_on_one_config_is_refused_until_the_first_is_released() {
 
     drop(held);
     lock(&path).expect("lock after release");
-}
-
-#[test]
-fn probing_a_config_reports_whether_it_is_served_without_taking_it() {
-    let directory = tempfile::tempdir().expect("temp dir");
-    let path = directory.path().join("macrod.toml");
-
-    assert!(!is_served(&path).expect("probe without a lock file"));
-    assert!(!directory.path().join("macrod.toml.lock").exists());
-
-    // A lock file nobody holds, as a stopped macrod leaves it.
-    std::fs::write(directory.path().join("macrod.toml.lock"), "").expect("lock file");
-    assert!(!is_served(&path).expect("probe an unheld lock file"));
-
-    let _held = lock(&path).expect("the probe left the lock free");
-    assert!(is_served(&path).expect("probe while held"));
 }
 
 #[test]

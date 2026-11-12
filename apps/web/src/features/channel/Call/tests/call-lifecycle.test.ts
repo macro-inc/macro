@@ -25,6 +25,7 @@ const token: CallTokenResponse = {
   token: 'token',
   serverUrl: 'ws://localhost',
   participantId: 'macro|test@example.com',
+  started: false,
   shareToken: null,
 } satisfies CallTokenResponse;
 const cleanups: (() => void)[] = [];
@@ -46,6 +47,7 @@ function setup(extra: Partial<Parameters<typeof createCallLifecycle>[0]> = {}) {
     beginJoin: vi.fn(),
     rollbackJoin: vi.fn(),
     setError: vi.fn(),
+    microphoneBlocked: vi.fn(),
     watch: vi.fn((_call, onDisconnect, onNativeEnd) => {
       disconnected = onDisconnect;
       nativeEnded = onNativeEnd;
@@ -342,6 +344,25 @@ describe('shared call lifecycle', () => {
       expect(ports.setError).toHaveBeenLastCalledWith(message);
     }
   );
+
+  it('reports a microphone denial before requesting a token', async () => {
+    const denial = 'Microphone permission is required for calls';
+    const prepareToken =
+      vi.fn<(channelId: string) => Promise<() => Promise<void>>>();
+    prepareToken.mockRejectedValueOnce(denial);
+    const { lifecycle, ports } = setup({ prepareToken });
+    await expect(lifecycle.join(call.channelId)).rejects.toBe(denial);
+    expect(ports.requestToken).not.toHaveBeenCalled();
+    expect(ports.microphoneBlocked).toHaveBeenCalledOnce();
+  });
+
+  it('does not report a microphone denial for other join failures', async () => {
+    const error = new Error('Network unavailable');
+    const { lifecycle, ports } = setup();
+    ports.requestToken.mockRejectedValueOnce(error);
+    await expect(lifecycle.join(call.channelId)).rejects.toBe(error);
+    expect(ports.microphoneBlocked).not.toHaveBeenCalled();
+  });
 
   it('cancels a pending join when native confirms the session ended', async () => {
     const { lifecycle, ports } = setup();

@@ -402,7 +402,7 @@ pub fn ask_for_profile(
     )?;
     writeln!(
         output,
-        "Start another runtime on this machine under a new profile (Ctrl-C to cancel)."
+        "Start another machine on this computer under a new profile (Ctrl-C to cancel)."
     )?;
     loop {
         write!(output, "Profile name [{suggestion}]: ")?;

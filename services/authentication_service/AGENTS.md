@@ -45,8 +45,22 @@ key issuance, and account merge/link flows.
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
 - Signup-policy changes specifically:
-  `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
-  and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+  `cargo test -p authentication_service --lib config::test` (the lib's
+  test-only queries need a live `DATABASE_URL`) and
+  `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+
+## Profile pictures
+
+- `PUT /user/profile_picture` and `PUT /user/profile_picture/file` share
+  `src/api/user/profile_picture_change.rs`: throttle to 1/sec/user (key
+  `profile-picture-set`, 429), then publish `user.picture_changed`
+  (`user_events`, topic `macro.users`) through `ApiContext::event_broker`
+  after the DB write. `file_id` is set only on the file route; an empty url
+  means removed (both `None`). A publish failure logs a warn and never fails
+  the request. The 20/hour upload reservation limit is separate.
+- `POST /user/profile_pictures` accepts API keys (`UserOrInternal`) and
+  returns each picture's `url`; the SDK derives the file id from
+  `<static>/file/<id>`.
 
 ## Subscription checkout
 
@@ -85,9 +99,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
-  not gate actions on `isAgent`; it only changes signup and labeling. The one
-  exception: only an agent can be an account manager, and an agent can't be
-  managed (`crates/account_manager`).
+  not gate general actions on `isAgent`; it changes signup and labeling.
+  Passwords v1 separately requires human accounts. Only an agent can be an
+  account manager, and an agent cannot be managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out.
@@ -120,6 +134,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `FusionAuthClientError` whose `upstream()` is set with that error's
   `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
   route's `utoipa::path`.
+- Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
+
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
@@ -137,9 +153,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.
-- The signup allowlist has a temporary Develop-only bypass
-  (`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST`) that overrides the allowlist even
-  when present; see `README.md` before changing signup behavior.
+- Develop admits new accounts only for `@macro.com` and allowlisted addresses;
+  `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST=true` opens it to everyone. See
+  `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
 - New Outlook connections need the deployment switch
@@ -167,11 +183,30 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   works (`needs_reauth` false); the refusal stands either way. Mirrors
   Outlook's required-scope check in `src/domain/microsoft.rs`; Macro has no
   mailbox-less link for either provider.
-- `/oauth/redirect` without a code answers "Sign-in failed" and logs
-  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+- `/oauth/redirect` without a code logs `auth_handoff_failure=missing_code`
+  with FusionAuth's error. When the state names an allowed `original_url`, it
+  sends the browser back there with `sso_error` (`admin_consent_required`,
+  `cancelled`, `failed`), and the sign-in page opens on email-code sign-up;
+  otherwise it answers "Sign-in failed". `invalid_origin`
   ("Invalid origin uri <origin>") means the page that sent the browser to
   FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
-  these failures carry no user id.
+  these failures carry no user id. When the identity provider itself returns
+  an error (a declined consent) or a reconcile lambda refuses the sign-in,
+  FusionAuth 1.62 shows its own error page instead and never comes back here.
+- `/login/sso?idp_name=microsoft` adds `prompt=select_account` to FusionAuth's
+  authorize URL, which FusionAuth passes on to Microsoft: the `microsoft` IdP
+  discovers its endpoints from its issuer, so its own authorize URL can't
+  carry the prompt. That IdP's reconcile lambda
+  (`infra/stacks/fusionauth-instance/templates/reconcile_microsoft_signin.js`)
+  refuses any sign-in whose verified id_token lacks `xms_edov: true` (the
+  email's domain verified by Microsoft), so FusionAuth creates or links no
+  user on an unverified address.
+- A session code (`/session/login/{session_code}`, the native and dev-proxy
+  SSO handoff) redeems once: `take_mobile_login_session` reads and deletes it
+  in one Redis script, so concurrent redemptions yield one success. A failed
+  token refresh puts it back for the rest of its 5 minutes, so client retries
+  of a 500 work. Never record the code, the redirect URL carrying `token=`, or
+  a refresh token in spans, logs, or `Debug`; the span records `outcome`.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`
@@ -186,3 +221,13 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `.agents/rules/rust/security.md` · Skill: `new-service`
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
+
+## Team vault cleanup
+
+- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
+  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+  namespace purge before `clear_team` lists or purges ordinary entities. Recheck
+  emptiness under the existing team lease and retain its guard in `ClearedTeam`
+  through team deletion; drop it before DSS RPC if data appeared.
+- Keep account deletion and membership compensation independent of vault items;
+  team items retain their immutable creator after a person leaves.

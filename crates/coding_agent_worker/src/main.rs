@@ -47,6 +47,15 @@ use rootcause::prelude::ResultExt as _;
 use crate::config::{ConfigLock, LockError};
 use crate::profiles::{ConfigSelection, MacrodHome, ProfileName};
 
+/// The musl release is linked by zig, whose libc `malloc` keeps freed memory on
+/// the freeing thread's list and maps fresh memory rather than look past the
+/// allocating thread's. Tokio drops a value on whichever worker held it last,
+/// so resident memory grew without bound while the live heap stayed flat
+/// (`e2e/memory_soak.py` measures it).
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// Serve a harness's agent sessions inside the control panel: registration,
 /// bound agents, live sessions, config editing, pairing, removal, and logs -
 /// one process.
@@ -61,7 +70,7 @@ struct Args {
     #[arg(long, conflicts_with = "profile")]
     config: Option<PathBuf>,
     /// Serve the named profile, `~/.macrod/profiles/<name>.toml`: another
-    /// runtime on this machine. `macrod profiles` lists them.
+    /// machine on this computer. `macrod profiles` lists them.
     #[arg(long)]
     profile: Option<ProfileName>,
     #[command(subcommand)]
@@ -141,7 +150,7 @@ enum Command {
         #[arg(long)]
         profile: Option<ProfileName>,
     },
-    /// List this machine's runtimes: the default config and every named
+    /// List this computer's machines: the default config and every named
     /// profile, whether each is paired, and whether a macrod is running it.
     Profiles,
 }
@@ -152,7 +161,7 @@ enum ConfigSelectionError {
     /// Another macrod serves the default config and no new profile was chosen.
     #[error(
         "another macrod is already running with {}; run `macrod --profile {suggestion}` to start \
-         another runtime on this machine",
+         another machine on this computer",
         path.display()
     )]
     DefaultServed {

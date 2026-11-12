@@ -17,6 +17,7 @@ use crate::domain::event_runs::{
 };
 use crate::domain::event_trigger::{ActionTrigger, EventReference, EventSource};
 use crate::domain::models::{ActionExecutionRecord, MAX_ACTION_TIME, ScheduledAction};
+use crate::domain::models::{SubRoutine, SubRoutineKey};
 
 #[cfg(test)]
 mod test;
@@ -297,8 +298,8 @@ impl EventRunRepository for PgEventRunRepo {
         }
         let action = sqlx::query!(
             r#"
-            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id,
-                   description,
+            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id, suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
             WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
@@ -366,7 +367,21 @@ impl EventRunRepository for PgEventRunRepo {
             next_run_at: None,
             claimed: Some(started_at),
             template_id: action.template_id,
+            suggestion_id: action.suggestion_id,
             description: action.description,
+            sub_routine: match (action.parent_id, action.created_by_run_id) {
+                (Some(parent_id), Some(created_by_run_id)) => Some(SubRoutine {
+                    parent_id,
+                    created_by_run_id,
+                    key: action
+                        .child_key
+                        .as_deref()
+                        .map(SubRoutineKey::new)
+                        .transpose()?,
+                    paused_by_parent: action.paused_by_parent,
+                }),
+                _ => None,
+            },
         };
         sqlx::query!(
             "UPDATE scheduled_action SET claimed = $2, claim_token = $3, updated_at = now() WHERE id = $1",
@@ -452,7 +467,8 @@ impl EventRunRepository for PgEventRunRepo {
             if record.action_id != run.key.action_id {
                 bail!("execution record belongs to another action");
             }
-            let id = generate_uuid_v7();
+            // The run's id, known since its claim, when the executor gave one.
+            let id = record.id.unwrap_or_else(generate_uuid_v7);
             execution_record_id = Some(sqlx::query_scalar!(
                 r#"
                 INSERT INTO action_execution_record

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { formatDateAndTime } from '@entity';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -8,11 +9,17 @@ import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   CallStatus,
+  CodeActsAs,
   HistoryCall,
   HistoryRecord,
   HistoryStep,
 } from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
+
+const CODE_ACTS_AS_LABEL: Record<CodeActsAs, string> = {
+  owner: 'Code acted as you',
+  agent: 'Code acted as the agent',
+};
 
 const OUTCOME_LABEL: Record<RunOutcome, string> = {
   running: 'Running',
@@ -36,7 +43,9 @@ function seconds(ms: number): string {
   return `${Math.floor(total / 60)}m ${total % 60}s`;
 }
 
-/** When the run started, how it ended, how long it took, and its AI calls. */
+/** When the run started, how it ended, how long it took, its AI calls, and
+ * whom its code acted as.
+ */
 function runMeta(record: HistoryRecord): string {
   const parts: string[] = [];
   if (record.startedAt) parts.push(formatDateAndTime(record.startedAt));
@@ -50,6 +59,9 @@ function runMeta(record: HistoryRecord): string {
   // The Ask AI step is a call; code's own AI calls are among its calls.
   const calls = steps.filter((step) => step.kind === 'agent').length;
   if (calls) parts.push(calls === 1 ? '1 AI call' : `${calls} AI calls`);
+  const actsAs = record.run?.codeActsAs;
+  if (actsAs && steps.some((step) => step.kind === 'code'))
+    parts.push(CODE_ACTS_AS_LABEL[actsAs]);
   return parts.join(' · ');
 }
 
@@ -185,6 +197,8 @@ export function RunDetail(props: {
   onOpenItem?: () => void;
   /** Opens the run's agent session, when it has one. */
   onOpenConversation?: () => void;
+  /** Opens a routine the run created. */
+  onOpenRoutine?: (id: string) => void;
 }) {
   const steps = () => props.record.steps ?? [];
   // A run can fail outside its steps, e.g. while preparing its agent.
@@ -249,6 +263,35 @@ export function RunDetail(props: {
           )}
         </For>
       </ol>
+      <Show when={props.record.created?.length ? props.record.created : false}>
+        {(created) => (
+          <section
+            aria-label={t('subRoutines.runCreated')}
+            class="grid gap-1.5"
+          >
+            <h3 class="text-xs font-medium text-ink-muted">
+              {t('subRoutines.runCreated')}
+            </h3>
+            <ul class="flex flex-wrap gap-1.5">
+              <For each={created()}>
+                {(routine) => (
+                  <li>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      disabled={!props.onOpenRoutine}
+                      onClick={() => props.onOpenRoutine?.(routine.id)}
+                    >
+                      {routine.name}
+                      <ArrowUpRightIcon class="size-3" />
+                    </Button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        )}
+      </Show>
       <Show when={unexplained()}>
         {(message) => (
           <p

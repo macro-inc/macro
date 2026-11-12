@@ -3,7 +3,9 @@
 // dashboard reads the same queries from nixos/ci-report.json.
 //
 // GRAFANA_TOKEN=$(cat <token file>) bun infra/stacks/observability/scripts/ci-report.ts [--range 24h] [--days 7]
-// Pass --loki <url> to query another Loki API root, such as a local one.
+// Pass --loki <url> to query another Loki API root, such as a local one, and
+// --spec local for run_local's opt-in events (nixos/local-report.json, the
+// Macro run_local dashboard) instead of CI's.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +14,11 @@ const HOSTED_LOKI =
   'https://grafana.macro-internal.com/api/datasources/proxy/uid/loki';
 const TIMEOUT_MILLISECONDS = 30_000;
 const DAY_SECONDS = 86_400;
+/** The report specs, each shared with its dashboard. */
+export const SPECS: Record<string, { file: string; title: string }> = {
+  ci: { file: 'ci-report.json', title: 'CI report' },
+  local: { file: 'local-report.json', title: 'run_local report' },
+};
 
 export type Column = { name: string; unit: string; expr: string };
 export type Table = {
@@ -180,8 +187,13 @@ function utc(seconds: number): string {
 }
 
 export async function main(args: string[]) {
+  const specName = argument(args, '--spec', 'ci');
+  const specFile = SPECS[specName];
+  if (!specFile) {
+    throw new Error(`--spec must be one of ${Object.keys(SPECS).join(', ')}`);
+  }
   const spec: Spec = JSON.parse(
-    readFileSync(new URL('../nixos/ci-report.json', import.meta.url), 'utf8')
+    readFileSync(new URL(`../nixos/${specFile.file}`, import.meta.url), 'utf8')
   );
   const range = argument(args, '--range', '24h');
   const days = Number(argument(args, '--days', '7'));
@@ -195,7 +207,7 @@ export async function main(args: string[]) {
   const loki = new Loki(base, token);
   const now = Math.floor(Date.now() / 1000);
   const output = [
-    `# CI report, ${utc(now - parseRange(range))} to ${utc(now)} UTC`,
+    `# ${specFile.title}, ${utc(now - parseRange(range))} to ${utc(now)} UTC`,
   ];
   for (const table of spec.tables) {
     output.push(`\n## ${table.title}\n\n${table.description}\n`);

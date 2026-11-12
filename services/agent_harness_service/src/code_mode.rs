@@ -6,7 +6,7 @@ use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
-use code_execution::domain::RunEnvironment;
+use code_execution::domain::{RunEnvironment, SdkEndpoints};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
@@ -15,7 +15,7 @@ pub struct RunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
-    pub hosts: BTreeMap<String, String>,
+    pub endpoints: SdkEndpoints,
 }
 
 #[async_trait]
@@ -55,7 +55,7 @@ impl ExecutionCredentials for RunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
             unattended: None,
@@ -72,7 +72,7 @@ impl ExecutionCredentials for RunCredentials {
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
-    pub hosts: BTreeMap<String, String>,
+    pub endpoints: SdkEndpoints,
 }
 
 #[async_trait]
@@ -120,7 +120,7 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: None,
             execution_id: None,
             unattended: None,
@@ -145,10 +145,10 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
 
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
-pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
+pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
     use macro_service_urls::*;
     let storage = DocumentStorageServiceUrl::new()?.to_string();
-    Ok([
+    let hosts = [
         (
             "document-content",
             DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string(),
@@ -175,11 +175,16 @@ pub fn sdk_hosts() -> anyhow::Result<BTreeMap<String, String>> {
     ]
     .into_iter()
     .map(|(name, url)| (name.into(), url))
-    .collect())
+    .collect();
+    Ok(SdkEndpoints {
+        hosts,
+        web_app_url: AppServiceUrl::new()?.to_string(),
+    })
 }
 
 pub mod connected_apps;
 pub mod reviews;
+pub mod ui_commands;
 
 async fn approve_run(
     gate: &dyn NativeToolGate,

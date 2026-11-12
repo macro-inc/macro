@@ -9,9 +9,11 @@ uses the wasm build directly).
 
 ## Start here
 
-- `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine.
+- `openapi` feature: optional derives for the HTTP result contract; keep native transport dependencies out of the engine. The `schema` feature also generates local SQL result contracts; built-in table/column IDs are UUID-shaped constants, not RFC-versioned UUIDs, so validate them as strings.
 - `src/lib.rs`: the pipeline diagram and the public re-exports — read this
   before any other file.
+- `run::describe_read` / `describe_select` return compiler-bound table and column metadata without fetching rows; `run_select` executes a resolved read without a write sink. Browser routing must use this metadata, never SQL-text matching. The wasm shell exposes `describeRead` / `describeView`.
+- `src/local_people.rs`: parameterized SQLite/Turso plans over an adapter-owned, scoped `__people` relation. Filter, group, DISTINCT, ordering and limits execute in storage; unsupported joins fail rather than enumerate contacts. Plans cap output at 500 rows/64 columns; adapters enforce the 512 KiB scalar budget. Exact facts use UTF-8 bytes for indexed comparisons; LIKE shares Unicode normalization with the fold.
 - `src/parse.rs` / `src/resolve.rs` / `src/split.rs` / `src/engine.rs` /
   `src/fold.rs`: the pipeline stages, in order; each has a sibling `test.rs`.
 - `examples/repl.rs`: an interactive console against a live stack; `examples/gql.rs`
@@ -58,6 +60,7 @@ uses the wasm build directly).
   it must compile to `wasm32`; native-only tooling goes behind the `cli` feature.
 - The grammar is the contract: a statement this crate rejects must never reach
   `databases`' ops API some other way.
+- Emit people identity hints only for equality on the built-in `people.id` column; email/name/virtual-row keys are not user IDs. Leave other people reads unhinted so bounded adapters refuse explicitly instead of returning misleading empty results. Ordinary database tables named people retain ordinary hints.
 
 - Preserve `Catalog.scope` through the browser wire boundary; it gives the selected
   database precedence for unqualified table names without hiding qualified joins.

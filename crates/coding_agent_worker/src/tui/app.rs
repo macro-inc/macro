@@ -9,7 +9,7 @@ use harnesses::domain::models::CreatedPairing;
 use tui_input::Input;
 
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
-use super::api::{HarnessSelfApi, Snapshot};
+use super::api::{HarnessSelfApi, Snapshot, dashboard_client};
 use super::config_form::{ConfigForm, Setting, settings};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
@@ -106,6 +106,10 @@ pub(crate) struct App {
     /// after it - shown until the server's name is known.
     pub(crate) pairing_name: String,
     pub(crate) credentials: Option<HarnessCredentials>,
+    /// The one HTTP client every dashboard read sends over. Building a client
+    /// loads and parses the system's root certificates, and the dashboard
+    /// reads every few seconds for as long as the panel is open.
+    http: reqwest::Client,
     pub(crate) snapshot: Snapshot,
     /// This process's pid - the TUI and the daemon are this one process.
     pub(crate) pid: u32,
@@ -150,6 +154,7 @@ impl App {
             config,
             pairing_name: selection.pairing_name(&machine_name()),
             credentials,
+            http: dashboard_client()?,
             snapshot: Snapshot::default(),
             pid: std::process::id(),
             harness_process: None,
@@ -232,7 +237,7 @@ impl App {
     fn api(&self) -> Option<HarnessSelfApi> {
         self.credentials
             .as_ref()
-            .map(|credentials| HarnessSelfApi::new(&self.config, credentials))
+            .map(|credentials| HarnessSelfApi::new(&self.config, credentials, self.http.clone()))
     }
 
     pub(crate) fn ok(&mut self, message: impl Into<String>) {

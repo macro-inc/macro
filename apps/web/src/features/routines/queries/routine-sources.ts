@@ -11,7 +11,7 @@ import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
-import { stepsFromTask } from '../core/routine-steps';
+import { programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -24,12 +24,15 @@ import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
   invalidateSchedules,
+  useChildrenQuery,
   useCodeUpgradesQuery,
   useCreateScheduleMutation,
+  useDetachScheduleMutation,
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useSubRoutinesQuery,
   useUpdateScheduleMutation,
 } from './schedules';
 
@@ -56,12 +59,21 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
     lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
+    parent: schedule.sub_routine
+      ? {
+          id: schedule.sub_routine.parent_id,
+          createdByRunId: schedule.sub_routine.created_by_run_id,
+          pausedByParent: schedule.sub_routine.paused_by_parent ?? false,
+        }
+      : undefined,
   };
 }
 
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
 };
 
 export function createRoutineDetailSource(
@@ -111,6 +123,27 @@ export function createRoutineDetailSource(
       ? pendingCodeReview(upgrades.data ?? [], taskSdk(current.task))
       : undefined;
   });
+  // What this routine's runs created; a sub-routine creates none of its own.
+  const created = useChildrenQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId() && !raw()?.sub_routine)
+  );
+  const children = createMemo(() =>
+    (created.isSuccess ? (created.data ?? []) : [])
+      .filter((item) => item.id)
+      .map(toRoutine)
+  );
+  const parentId = () => raw()?.sub_routine?.parent_id;
+  const parent = createMemo(() => {
+    const found =
+      list.isSuccess || list.isError
+        ? list.data?.find((item) => item.id === parentId())
+        : undefined;
+    return found?.id ? { id: found.id, name: found.name } : undefined;
+  });
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('Failed to keep the routine', error),
+  });
   const [approving, setApproving] = createSignal(false);
   const save = async (draft: ScheduleDraft) => {
     const previous = raw();
@@ -140,7 +173,7 @@ export function createRoutineDetailSource(
     duplicate() {
       const current = raw();
       const body = current && scheduleToDuplicateBody(current);
-      if (body && !duplicate.isPending) duplicate.mutate(body);
+      if (body && !duplicate.isPending) duplicate.mutate({ body });
     },
     duplicationPending: () => duplicate.isPending,
     history: createMemo(() =>
@@ -149,12 +182,18 @@ export function createRoutineDetailSource(
     historyLoading: () => history.isPending,
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
+    subRoutines: children,
+    parent,
+    keepAsOwn: () => {
+      if (!keep.isPending) keep.mutate({ scheduleId: id() });
+    },
+    keepAsOwnPending: () => keep.isPending,
     codeReview,
     // Saving checks the proposal against the current SDK again.
     async approveCodeUpdate() {
       const proposal = codeReview()?.proposal;
       const current = raw();
-      const steps = proposal && stepsFromTask(proposal.task);
+      const steps = proposal && programSteps(proposal.task);
       const draft = current && toRoutine(current).draft;
       if (!steps || !draft || approving()) return;
       setApproving(true);
@@ -177,7 +216,10 @@ export function createRoutineCreatorSource(): RoutineCreatorSource {
   return {
     pending: () => mutation.isPending,
     async create(draft) {
-      const created = await mutation.mutateAsync(draftToCreateBody(draft));
+      const created = await mutation.mutateAsync({
+        body: draftToCreateBody(draft),
+        suggestionId: draft.suggestionId,
+      });
       if (!created.id) throw new Error('Created routine has no ID');
       return created.id;
     },
@@ -188,8 +230,14 @@ export function createRoutineListSource(
   onError: (error: unknown) => void
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
+    subRoutines: createMemo(() =>
+      (children.isSuccess || children.isError ? (children.data ?? []) : [])
+        .filter((item) => item.id)
+        .map(toRoutine)
+    ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
         .filter((item) => item.id)

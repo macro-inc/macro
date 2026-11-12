@@ -31,6 +31,10 @@ export type ActivityWireRow = {
      */
     agent_correlation_id?: string | null;
     /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
      * The entity acted on.
      */
     entity_id: string;
@@ -109,6 +113,24 @@ export type AgentActivityPage = {
      */
     activities: Array<ActivityWireRow>;
     nextCursor?: null | AgentActivityCursor;
+};
+
+/**
+ * An agent acting for a person.
+ */
+export type AgentActor = {
+    /**
+     * The agent.
+     */
+    bot: BotId;
+    /**
+     * Where the agent's own work came from.
+     */
+    lineage: Lineage;
+    /**
+     * The person it acts for.
+     */
+    on_behalf_of: MacroUserIdStr;
 };
 
 /**
@@ -652,6 +674,11 @@ export type AgentSessionResponse = {
      */
     name: string;
     /**
+     * What opened the session: who or what started it, and what it is about.
+     * `unknown` when nothing recorded it.
+     */
+    origin?: TriggerOrigin;
+    /**
      * The exact message that invoked the bot, if any.
      */
     originatingMessageId?: string | null;
@@ -717,6 +744,69 @@ export type AgentSetModelAction = {
      * The model slug the agent should switch to.
      */
     model: string;
+};
+
+/**
+ * One pending interaction, or one stalled session.
+ */
+export type AgentUpdate = {
+    /**
+     * The runtime the session runs on.
+     */
+    harness: string;
+    /**
+     * What the session is waiting for.
+     */
+    kind: AgentUpdateKind;
+    /**
+     * The choices a permission request offers; empty for other kinds.
+     */
+    options: Array<string>;
+    /**
+     * The session's pull request, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The session.
+     */
+    sessionId: string;
+    /**
+     * The session's name.
+     */
+    sessionName: string;
+    /**
+     * When the request was made, or the session's last activity.
+     */
+    since: string;
+    /**
+     * What is asked, or why the session looks stalled, in at most 240 characters.
+     */
+    summary: string;
+};
+
+/**
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+ * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+ * activity for over 20 minutes.
+ */
+export type AgentUpdateKind = 'permission' | 'elicitation' | 'tool_approval' | 'stalled';
+
+/**
+ * Bounded results; truncation means older qualifying sessions were not folded.
+ */
+export type AgentUpdates = {
+    /**
+     * One entry per pending request or stalled session, newest session activity first.
+     */
+    items: Array<AgentUpdate>;
+    /**
+     * Whether qualifying sessions beyond the 25 most recent were left out.
+     */
+    truncated: boolean;
+    /**
+     * Says what was left out, when truncated.
+     */
+    truncationNotice?: string | null;
 };
 
 /**
@@ -880,6 +970,19 @@ export type CallSearchSuggestions = {
      */
     status?: string | null;
 };
+
+/**
+ * Who did something that opened a session.
+ */
+export type Caller = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | (AgentActor & {
+    type: 'agent';
+});
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -1067,6 +1170,46 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * Information used to choose a coding persona for a task.
+ */
+export type CodingAgent = {
+    /**
+     * What the persona is intended to do.
+     */
+    description?: string | null;
+    /**
+     * Runtime configured for the persona.
+     */
+    harness: string;
+    /**
+     * Persona id to pass to dispatch.
+     */
+    id: string;
+    /**
+     * Saved guidance describing the persona's repositories and specialties.
+     */
+    instructions: string;
+    /**
+     * Persona's configured default model, absent when the provider chooses it.
+     */
+    model?: string | null;
+    /**
+     * User-facing persona name.
+     */
+    name: string;
+};
+
+/**
+ * The coding agents the caller can start a session as right now.
+ */
+export type CodingAgentsResponse = {
+    /**
+     * Available coding personas, built-in ones such as Cursor first.
+     */
+    agents: Array<CodingAgent>;
+};
+
+/**
  * Request or response body for the caller's coding preferences.
  */
 export type CodingPreferencesBody = {
@@ -1245,6 +1388,12 @@ export type ConnectorTool = {
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
     /**
+     * The app tab the person typed this in (a UUID the tab keeps for its
+     * lifetime), so what the turn opens in the app reaches that tab only.
+     * Only a person's own request may send it; a runtime's is refused.
+     */
+    clientId?: string | null;
+    /**
      * Why the agent is being asked. Only a runtime forwarding a triggered
      * prompt may send it; a user's request carrying it is refused.
      */
@@ -1356,6 +1505,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -1657,7 +1814,7 @@ export type EmailSuggestions = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -1904,9 +2061,54 @@ export type IntentScore = {
 };
 
 /**
+ * Where an acting agent's work came from.
+ */
+export type Lineage = {
+    /**
+     * The first non-agent cause of its work.
+     */
+    root: Root;
+    /**
+     * The acting session.
+     */
+    session: string;
+    type: 'session';
+} | {
+    type: 'unattributed';
+};
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
+ * The task to link a session to.
+ */
+export type LinkTaskRequest = {
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
+
+/**
+ * The task a session is now linked to.
+ */
+export type LinkedTaskResponse = {
+    /**
+     * The session's pull request, now linked to the task, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * Put this in the pull request description so GitHub activity reaches the task.
+     */
+    reference: string;
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
 
 /**
  * HTTP request selecting one provider to probe.
@@ -1967,6 +2169,8 @@ export type LogFrameDto = {
      */
     direction: LogDirectionDto;
 };
+
+export type MacroUserIdStr = string;
 
 /**
  * The entity whose permissions and lifecycle govern a message.
@@ -2054,6 +2258,26 @@ export type NoteSuggestions = {
      * Suggested note, task, or event title.
      */
     title?: string | null;
+};
+
+/**
+ * Open an item in the prompting person's app tab.
+ */
+export type OpenInApp = {
+    /**
+     * The running execution asking; it must belong to the session's
+     * current turn.
+     */
+    executionId: ExecutionId;
+    /**
+     * An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:
+     * what follows `/app` in a Macro link. Never an origin.
+     */
+    path: string;
+    /**
+     * Where to put it; beside the agent by default.
+     */
+    placement?: UiPlacement;
 };
 
 /**
@@ -2480,6 +2704,39 @@ export type ReviewRecord = {
 };
 
 /**
+ * The first non-agent cause. An agent cannot be one, so a chain always ends
+ * at a person or a routine.
+ */
+export type Root = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | {
+    /**
+     * The routine.
+     */
+    routine: string;
+    type: 'routine';
+};
+
+/**
+ * What made a routine fire.
+ */
+export type RoutineCause = {
+    type: 'scheduled';
+} | {
+    type: 'manual';
+} | {
+    /**
+     * The event.
+     */
+    event_id: string;
+    type: 'event';
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -2719,6 +2976,108 @@ export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' 
  */
 export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
 
+/**
+ * What opened a session.
+ */
+export type TriggerOrigin = {
+    /**
+     * Who posted it.
+     */
+    by: Caller;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'mentioned';
+} | {
+    /**
+     * Who wrote.
+     */
+    by: MacroUserIdStr;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'conversation';
+} | {
+    /**
+     * Who assigned it.
+     */
+    by: Caller;
+    origin: 'task_assigned';
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who added the task to the project.
+     */
+    by: Caller;
+    origin: 'project_inherited';
+    /**
+     * The project.
+     */
+    project: string;
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who opened it.
+     */
+    by: MacroUserIdStr;
+    origin: 'requested';
+} | {
+    /**
+     * The user whose authority the work runs under.
+     */
+    on_behalf_of: MacroUserIdStr;
+    origin: 'dispatched';
+} | {
+    /**
+     * What made it fire.
+     */
+    firing: RoutineCause;
+    origin: 'routine';
+    /**
+     * The routine.
+     */
+    routine: string;
+} | {
+    origin: 'unknown';
+};
+
+/**
+ * What happened to a command.
+ */
+export type UiCommandOutcome = {
+    /**
+     * The command's id, as the tab sees it.
+     */
+    commandId: string;
+    status: 'sent';
+} | {
+    status: 'no_client';
+} | {
+    /**
+     * Why.
+     */
+    reason: UiDeclineReason;
+    status: 'declined';
+};
+
+/**
+ * Why a command was not sent.
+ */
+export type UiDeclineReason = 'turned_off' | 'not_allowed_route' | 'rate_limited';
+
+/**
+ * Where the opened item goes. Neither replaces what the person is reading.
+ */
+export type UiPlacement = 'beside-agent' | 'new';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2861,7 +3220,7 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -3086,7 +3445,7 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -3311,6 +3670,26 @@ export type PreviewAgentSessionsResponses = {
 };
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
+
+export type ListAgentSessionUpdatesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/updates';
+};
+
+export type ListAgentSessionUpdatesErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentSessionUpdatesError = ListAgentSessionUpdatesErrors[keyof ListAgentSessionUpdatesErrors];
+
+export type ListAgentSessionUpdatesResponses = {
+    200: AgentUpdates;
+};
+
+export type ListAgentSessionUpdatesResponse = ListAgentSessionUpdatesResponses[keyof ListAgentSessionUpdatesResponses];
 
 export type WarmAgentSessionHandlerData = {
     body: WarmAgentSessionRequest;
@@ -4293,6 +4672,34 @@ export type PutAgentSessionSandboxSizeResponses = {
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
 
+export type LinkAgentSessionTaskData = {
+    body: LinkTaskRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/task';
+};
+
+export type LinkAgentSessionTaskErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type LinkAgentSessionTaskError = LinkAgentSessionTaskErrors[keyof LinkAgentSessionTaskErrors];
+
+export type LinkAgentSessionTaskResponses = {
+    200: LinkedTaskResponse;
+};
+
+export type LinkAgentSessionTaskResponse = LinkAgentSessionTaskResponses[keyof LinkAgentSessionTaskResponses];
+
 export type AnswerAgentSessionToolApprovalData = {
     body: AnswerToolApprovalRequest;
     path: {
@@ -4334,6 +4741,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type OpenInAppData = {
+    body: OpenInApp;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/ui-commands';
+};
+
+export type OpenInAppErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type OpenInAppResponses = {
+    200: UiCommandOutcome;
+};
+
+export type OpenInAppResponse = OpenInAppResponses[keyof OpenInAppResponses];
 
 export type PresentSessionViewData = {
     body: PresentView;
@@ -4429,6 +4856,33 @@ export type ListAgentWorkRegistrationsResponses = {
 };
 
 export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
+
+export type ListCodingAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/coding-agents';
+};
+
+export type ListCodingAgentsErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The personas or their runtime connections could not be read
+     */
+    500: unknown;
+};
+
+export type ListCodingAgentsResponses = {
+    /**
+     * The caller's available coding agents
+     */
+    200: CodingAgentsResponse;
+};
+
+export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

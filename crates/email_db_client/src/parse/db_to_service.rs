@@ -3,9 +3,8 @@ use models_email::email::service::{message, thread};
 use models_email::email::{db, service};
 use models_email::service::message::MessageToSend;
 
-/// logic for parsing db-layer structs into service-layer structs
+// Logic for parsing db-layer structs into service-layer structs.
 
-#[tracing::instrument]
 pub fn map_db_contact_to_service(
     db_sender: Option<db::contact::Contact>,
 ) -> Option<service::address::ContactInfo> {
@@ -16,7 +15,6 @@ pub fn map_db_contact_to_service(
     })
 }
 
-#[tracing::instrument]
 pub fn map_db_recipients_to_service(
     db_recipients: Vec<(db::contact::Contact, db::address::EmailRecipientType)>,
 ) -> (
@@ -43,7 +41,6 @@ pub fn map_db_recipients_to_service(
     (to_list, cc_list, bcc_list)
 }
 
-#[tracing::instrument]
 pub fn map_db_labels_to_service(
     db_labels: Vec<db::label::Label>,
 ) -> Vec<service::label::LabelInfo> {
@@ -56,7 +53,6 @@ pub fn map_db_labels_to_service(
         .collect()
 }
 
-#[tracing::instrument]
 pub fn map_db_attachments_to_service(
     db_attachments: Vec<attachment::Attachment>,
 ) -> Vec<service::attachment::Attachment> {
@@ -66,7 +62,6 @@ pub fn map_db_attachments_to_service(
         .collect()
 }
 
-#[tracing::instrument]
 pub fn map_db_attachment_to_service(
     db_att: db::attachment::Attachment,
 ) -> service::attachment::Attachment {

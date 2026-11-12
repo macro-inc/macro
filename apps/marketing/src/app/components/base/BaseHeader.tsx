@@ -4,7 +4,13 @@ export const GRID_COLS =
 export const GRID_GAP = '14px';
 export function BaseHeader(props: {
   ctaActive?: boolean;
+  currentPath?: string;
   hideOpenApp?: boolean;
 }) {
-  return <SiteHeader hideOpenApp={props.hideOpenApp} />;
+  return (
+    <SiteHeader
+      currentPath={props.currentPath}
+      hideOpenApp={props.hideOpenApp}
+    />
+  );
 }

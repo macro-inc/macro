@@ -24,9 +24,13 @@ sessions into sessions for the other provider.
 
 After macrod restarts or its runtime connection reconnects, the harness service
 initializes the new connection and calls ACP `session/list`. herdr-acp lists
-the sessions whose Herdr agent still runs, and the service loads each one. That
-replays local history Macro missed and resumes forwarding without a Macro
-prompt. Agents closed in Herdr are not reopened.
+the sessions whose Herdr agent still runs, each with `updatedAt` set to its
+transcript's last write. The service loads the ones with recent activity (in
+Herdr or in Macro), an unfinished turn, or queued prompts; that replays local
+history Macro missed and resumes forwarding without a Macro prompt. A session
+idle for longer loads on its next Macro prompt, so local work started in it
+after the reconnect reaches Macro only from then. Agents closed in Herdr are not
+reopened.
 
 Closing a session's agent in Herdr (its tab or pane, by you or the agent) is
 reported to Macro once with the ACP extension notification `_session/closed`.
@@ -146,11 +150,11 @@ clones and pair with Macro. Native CLI authentication and Git credentials are
 reused. Each instance has one configuration. The TUI and `macrod service`
 share `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows;
 `--config` overrides it), and only one macrod can serve a config at a time.
-Another runtime on the same machine is a named profile, `macrod --profile
+Another machine on the same computer is a named profile, `macrod --profile
 <name>` (`~/.macrod/profiles/<name>.toml`); `macrod profiles` lists them. The
-runtime's name, access, and permission bypass are set on the web at
-Settings → Runtimes. `allow_permission_bypass = false` in an old local config
-no longer vetoes bypass: the runtime's managers decide it on the web.
+machine's name, access, and permission bypass are set on the web at
+Settings → Machines. `allow_permission_bypass = false` in an old local config
+no longer vetoes bypass: the machine's managers decide it on the web.
 
 The Config tab adds **Model** (empty uses the native default, and is only the
 launch fallback: Macro picks each agent's model), **Extra args**
@@ -181,6 +185,14 @@ answers (approve in Herdr), and cancelling a turn Macro did not start.
 Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.
+
+## What opened a session
+
+Each `New` trigger event says what opened its session
+(`NewAgentSessionEvent::origin`). `src/trigger.rs` keeps it on `TriggerWork`, and
+`src/dispatch.rs` copies it onto the create request, where the service stores it
+with the session. macrod reports only what the event said. The service treats it
+as a description, so it never decides a session's visibility or notifications.
 
 ## Replies to chat-agent mentions
 

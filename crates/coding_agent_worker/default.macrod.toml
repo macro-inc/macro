@@ -1,6 +1,6 @@
 # macrod configuration. Pairing adds a bearer token here; keep this file private.
 # Name, ownership, and permission bypass are set on the web at
-# Settings → Runtimes.
+# Settings → Machines.
 
 # Development overrides; every key defaults to production.
 # [macro]

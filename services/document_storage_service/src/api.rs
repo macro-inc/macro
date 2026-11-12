@@ -70,9 +70,12 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(
-                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
-                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
-                    )])
+                    macro_cors::cors_layer_with_headers(vec![
+                        axum::http::HeaderName::from_static("x-macro-passwords"),
+                        axum::http::HeaderName::from_static(
+                            complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                        ),
+                    ])
                     .expose_headers([axum::http::header::RETRY_AFTER]),
                 )
                 .layer(CompressionLayer::new().gzip(true)),
@@ -207,7 +210,11 @@ fn api_router(state: ApiContext) -> Router {
                                 if !uri.contains("/upload") {
                                     return next.run(req).await;
                                 }
-                                tokio::task::spawn(next.run(req)).await.unwrap()
+                                tokio::task::spawn(agent_correlation::context::capture(
+                                    next.run(req),
+                                ))
+                                .await
+                                .unwrap()
                             }
                             _ => next.run(req).await,
                         }
@@ -296,6 +303,12 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/channel-sections",
+            channel_labels::inbound::axum_router::channel_sections_router(
+                state.channel_sections_state.clone(),
+            ),
+        )
+        .nest(
             "/account-managers",
             account_manager::inbound::axum_router::account_manager_router(
                 state.account_manager_state.clone(),
@@ -333,7 +346,12 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/initiatives",
-            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone())
+                .merge(
+                    initiative::inbound::axum_router::initiative_activity_router(
+                        state.initiative_activity_state.clone(),
+                    ),
+                ),
         )
         .nest(
             "/databases",
@@ -391,10 +409,14 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
-                "/pipelines",
-                crm::inbound::pipelines::router(state.pipeline_state.clone()),
-            ),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone())
+                .nest(
+                    "/pipelines",
+                    crm::inbound::pipelines::router(state.pipeline_state.clone()),
+                )
+                .merge(crm::inbound::pipeline_workflows::router(
+                    state.pipeline_workflow_state.clone(),
+                )),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(
@@ -431,6 +453,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
+        .nest(
+            "/passwords",
+            passwords::inbound::router::router(state.passwords_state.clone()),
+        )
         .with_state(state);
     let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())

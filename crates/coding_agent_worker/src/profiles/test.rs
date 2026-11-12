@@ -265,7 +265,7 @@ fn the_profile_prompt_takes_the_suggestion_a_valid_name_or_gives_up_at_end_of_in
     assert_eq!(
         String::from_utf8(output).expect("utf-8"),
         "Another macrod is already running with /home/someone/.macrod/macrod.toml.\n\
-         Start another runtime on this machine under a new profile (Ctrl-C to cancel).\n\
+         Start another machine on this computer under a new profile (Ctrl-C to cancel).\n\
          Profile name [build-box-2]: "
     );
 

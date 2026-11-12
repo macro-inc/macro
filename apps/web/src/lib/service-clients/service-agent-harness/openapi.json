@@ -132,7 +132,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -481,7 +481,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime or Cursor account is not connected"
+            "description": "Macrod machine or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -911,6 +911,45 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/updates": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The caller's coding sessions waiting for their answer, or stalled for over 20 minutes,\nnewest activity first.",
+        "operationId": "list_agent_session_updates",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpdates"
                 }
               }
             }
@@ -3276,6 +3315,97 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/task": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Link a session the caller owns to a task they can view, replacing any earlier link. The\nsession's pull request, now or later, is linked to the task.",
+        "operationId": "link_agent_session_task",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedTaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/tool-approvals/{approval_id}": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3383,6 +3513,52 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/ui-commands": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Open an item in a new pane of the app tab the person who prompted the\nrunning turn typed in. Only a running execution of the session's current\nturn may send, as the account it acts as.",
+        "operationId": "open_in_app",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenInApp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UiCommandOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
           }
         }
       }
@@ -3581,6 +3757,36 @@
         }
       }
     },
+    "/coding-agents": {
+      "get": {
+        "tags": ["coding-agents"],
+        "summary": "List the coding agents the caller can start a session as: the same\npersonas the `ListCodingAgents` tool offers, including built-in ones whose\nruntime the caller has connected (Cursor once its key is saved).",
+        "operationId": "list_coding_agents",
+        "responses": {
+          "200": {
+            "description": "The caller's available coding agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingAgentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "500": {
+            "description": "The personas or their runtime connections could not be read"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -3699,6 +3905,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Originating code-mode invocation, absent on older events."
+          },
+          "agent_verb": {
+            "type": ["string", "null"],
+            "description": "SDK display verb, absent on older events."
           },
           "entity_id": {
             "type": "string",
@@ -3890,6 +4100,25 @@
                 "description": "Resume position, present when more raw rows remain."
               }
             ]
+          }
+        }
+      },
+      "AgentActor": {
+        "type": "object",
+        "description": "An agent acting for a person.",
+        "required": ["bot", "on_behalf_of", "lineage"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent."
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/Lineage",
+            "description": "Where the agent's own work came from."
+          },
+          "on_behalf_of": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The person it acts for."
           }
         }
       },
@@ -4611,6 +4840,10 @@
             "type": "string",
             "description": "User-facing session name."
           },
+          "origin": {
+            "$ref": "#/components/schemas/TriggerOrigin",
+            "description": "What opened the session: who or what started it, and what it is about.\n`unknown` when nothing recorded it."
+          },
           "originatingMessageId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -4690,6 +4923,85 @@
           "model": {
             "type": "string",
             "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "AgentUpdate": {
+        "type": "object",
+        "description": "One pending interaction, or one stalled session.",
+        "required": [
+          "sessionId",
+          "sessionName",
+          "harness",
+          "kind",
+          "summary",
+          "since",
+          "options"
+        ],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "The runtime the session runs on."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AgentUpdateKind",
+            "description": "What the session is waiting for."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The choices a permission request offers; empty for other kinds."
+          },
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's pull request, if it has one."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session."
+          },
+          "sessionName": {
+            "type": "string",
+            "description": "The session's name."
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made, or the session's last activity."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What is asked, or why the session looks stalled, in at most 240 characters."
+          }
+        }
+      },
+      "AgentUpdateKind": {
+        "type": "string",
+        "description": "A kind of action or inactivity the user should see: `permission` to run a tool, an\n`elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no\nactivity for over 20 minutes.",
+        "enum": ["permission", "elicitation", "tool_approval", "stalled"]
+      },
+      "AgentUpdates": {
+        "type": "object",
+        "description": "Bounded results; truncation means older qualifying sessions were not folded.",
+        "required": ["items", "truncated"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentUpdate"
+            },
+            "description": "One entry per pending request or stalled session, newest session activity first."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether qualifying sessions beyond the 25 most recent were left out."
+          },
+          "truncationNotice": {
+            "type": ["string", "null"],
+            "description": "Says what was left out, when truncated."
           }
         }
       },
@@ -4888,6 +5200,45 @@
           }
         },
         "additionalProperties": false
+      },
+      "Caller": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person.",
+            "required": ["user", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "user": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who."
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentActor",
+                "description": "An agent, which always acts for a person on a path that opens a session."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agent"]
+                  }
+                }
+              }
+            ],
+            "description": "An agent, which always acts for a person on a path that opens a session."
+          }
+        ],
+        "description": "Who did something that opened a session."
       },
       "CapabilityHarnessDto": {
         "type": "string",
@@ -5133,6 +5484,52 @@
           }
         }
       },
+      "CodingAgent": {
+        "type": "object",
+        "description": "Information used to choose a coding persona for a task.",
+        "required": ["id", "name", "instructions", "harness"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "What the persona is intended to do."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Runtime configured for the persona."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persona id to pass to dispatch."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Saved guidance describing the persona's repositories and specialties."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Persona's configured default model, absent when the provider chooses it."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing persona name."
+          }
+        }
+      },
+      "CodingAgentsResponse": {
+        "type": "object",
+        "description": "The coding agents the caller can start a session as right now.",
+        "required": ["agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodingAgent"
+            },
+            "description": "Available coding personas, built-in ones such as Cursor first."
+          }
+        }
+      },
       "CodingPreferencesBody": {
         "type": "object",
         "description": "Request or response body for the caller's coding preferences.",
@@ -5337,6 +5734,11 @@
                   }
                 ]
               },
+              "clientId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The app tab the person typed this in (a UUID the tab keeps for its\nlifetime), so what the turn opens in the app reaches that tab only.\nOnly a person's own request may send it; a runtime's is refused."
+              },
               "context": {
                 "type": ["object", "null"],
                 "description": "Why the agent is being asked. Only a runtime forwarding a triggered\nprompt may send it; a user's request carrying it is refused."
@@ -5425,6 +5827,11 @@
               "$ref": "#/components/schemas/PromptAttachment"
             },
             "description": "Files `prompt` refers to, in the order the user attached them.\nRequires `prompt`."
+          },
+          "promptClientId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The app tab the person typed `prompt` in, as `clientId` on a control\nrequest, so what the first turn opens in the app reaches that tab\nonly. Requires `prompt`. Only a person's own request may send it; a\nruntime's is refused, and a program using a person's credential has\nit dropped."
           },
           "repoBranch": {
             "type": ["string", "null"],
@@ -5891,6 +6298,7 @@
           "crm_contact",
           "crm_pipeline",
           "reminder",
+          "harness",
           "skill",
           "agent_session",
           "scheduled_action",
@@ -6273,10 +6681,77 @@
           }
         }
       },
+      "Lineage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The session the agent acted from, and so where the chain started.",
+            "required": ["session", "root", "type"],
+            "properties": {
+              "root": {
+                "$ref": "#/components/schemas/Root",
+                "description": "The first non-agent cause of its work."
+              },
+              "session": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The acting session."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["session"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent acted, but its session was not captured.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["unattributed"]
+              }
+            }
+          }
+        ],
+        "description": "Where an acting agent's work came from."
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
+      },
+      "LinkTaskRequest": {
+        "type": "object",
+        "description": "The task to link a session to.",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The task document's id."
+          }
+        }
+      },
+      "LinkedTaskResponse": {
+        "type": "object",
+        "description": "The task a session is now linked to.",
+        "required": ["taskId", "reference"],
+        "properties": {
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's pull request, now linked to the task, if it has one."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Put this in the pull request description so GitHub activity reaches the task."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task document's id."
+          }
+        }
       },
       "LoadAgentModelsRequest": {
         "type": "object",
@@ -6335,6 +6810,9 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "MacroUserIdStr": {
+        "type": "string"
       },
       "MessageParent": {
         "oneOf": [
@@ -6487,6 +6965,26 @@
           "title": {
             "type": ["string", "null"],
             "description": "Suggested note, task, or event title."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenInApp": {
+        "type": "object",
+        "description": "Open an item in the prompting person's app tab.",
+        "required": ["executionId", "path"],
+        "properties": {
+          "executionId": {
+            "$ref": "#/components/schemas/ExecutionId",
+            "description": "The running execution asking; it must belong to the session's\ncurrent turn."
+          },
+          "path": {
+            "type": "string",
+            "description": "An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:\nwhat follows `/app` in a Macro link. Never an origin."
+          },
+          "placement": {
+            "$ref": "#/components/schemas/UiPlacement",
+            "description": "Where to put it; beside the agent by default."
           }
         },
         "additionalProperties": false
@@ -7097,6 +7595,85 @@
         ],
         "description": "Full UI record, fetched outside the model context."
       },
+      "Root": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person.",
+            "required": ["user", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "user": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine.",
+            "required": ["routine", "type"],
+            "properties": {
+              "routine": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The routine."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["routine"]
+              }
+            }
+          }
+        ],
+        "description": "The first non-agent cause. An agent cannot be one, so a chain always ends\nat a person or a routine."
+      },
+      "RoutineCause": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of its schedules came due.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["scheduled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its owner started it by hand.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An event it watches happened.",
+            "required": ["event_id", "type"],
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The event."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          }
+        ],
+        "description": "What made a routine fire."
+      },
       "SandboxSize": {
         "type": "string",
         "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
@@ -7588,6 +8165,212 @@
         "type": "string",
         "description": "Where a held tool call stands once answered.",
         "enum": ["pending", "approved", "denied", "cancelled", "expired"]
+      },
+      "TriggerOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A message mentioned the agent.",
+            "required": ["by", "message_id", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who posted it."
+              },
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The message."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["mentioned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A person wrote in their private conversation with the agent.",
+            "required": ["by", "message_id", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who wrote."
+              },
+              "message_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The message."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["conversation"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent was added to a task's assignees.",
+            "required": ["by", "task", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who assigned it."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              },
+              "task": {
+                "type": "string",
+                "description": "The task."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The task joined a project, and inherited the project's agents.",
+            "required": ["by", "task", "project", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/Caller",
+                "description": "Who added the task to the project."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["project_inherited"]
+              },
+              "project": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The project."
+              },
+              "task": {
+                "type": "string",
+                "description": "The task."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A person opened the session directly: from the composer, or by asking for a routine draft.",
+            "required": ["by", "origin"],
+            "properties": {
+              "by": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who opened it."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A tool handed the agent work. The tool knows only whose authority it\nruns under, not which agent called it.",
+            "required": ["on_behalf_of", "origin"],
+            "properties": {
+              "on_behalf_of": {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose authority the work runs under."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["dispatched"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine fired. Its owner owns the session, so the owner is not repeated.",
+            "required": ["routine", "firing", "origin"],
+            "properties": {
+              "firing": {
+                "$ref": "#/components/schemas/RoutineCause",
+                "description": "What made it fire."
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routine": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The routine."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not known: an unclaimed warm session, a producer that predates this\nrecord, or a kind this build does not know.",
+            "required": ["origin"],
+            "properties": {
+              "origin": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
+            }
+          }
+        ],
+        "description": "What opened a session."
+      },
+      "UiCommandOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A connection of the prompting person took it. Their tab opens it\nunless it refuses the route or the person is somewhere else.",
+            "required": ["commandId", "status"],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The command's id, as the tab sees it."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["sent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Nobody to show it to: a turn nobody typed in a tab, or the tab is\nnot connected. Link the item in the reply instead.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_client"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not sent, for the given reason.",
+            "required": ["reason", "status"],
+            "properties": {
+              "reason": {
+                "$ref": "#/components/schemas/UiDeclineReason",
+                "description": "Why."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["declined"]
+              }
+            }
+          }
+        ],
+        "description": "What happened to a command."
+      },
+      "UiDeclineReason": {
+        "type": "string",
+        "description": "Why a command was not sent.",
+        "enum": ["turned_off", "not_allowed_route", "rate_limited"]
+      },
+      "UiPlacement": {
+        "type": "string",
+        "description": "Where the opened item goes. Neither replaces what the person is reading.",
+        "enum": ["beside-agent", "new"]
       },
       "UpdateChannelSharePermission": {
         "type": "object",

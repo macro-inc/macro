@@ -198,9 +198,13 @@ pub enum WebhookEvent {
     Document(documents::domain::events::DocumentTopicEvent),
     /// Channel lifecycle events from the `macro.channels` topic.
     Channel(channels::domain::broker_events::ChannelTopicEvent),
+    /// Access-checked call notifications from `macro.call_notifications`.
+    Call(call::domain::notification_events::CallNotificationEvent),
     /// Message facts for channels and documents from the `macro.messages` topic.
     Message(messages::outbound::broker::MessageTopicEvent),
     /// Agent session lifecycle events from the `macro.agent_session_lifecycle`
     /// topic.
     AgentSession(agent_session::domain::events::AgentSessionLifecycleEvent),
+    /// User profile events from the `macro.users` topic.
+    User(user_events::UserTopicEvent),
 }

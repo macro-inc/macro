@@ -224,6 +224,8 @@ deny = [
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
+    "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
+    "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
     "convert_service",           # process_message span status tests only (dev-dependency)
@@ -234,6 +236,7 @@ deny = [
     "email",                     # Dev logging only
     "email_api_client",          # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
+    "email_service",             # CRM backfill trace propagation and HTTP server span tests only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests
@@ -248,6 +251,7 @@ deny = [
     "notification",              # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
+    "passwords",                 # Provider credential-redaction tests only (dev-dependency)
     "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web

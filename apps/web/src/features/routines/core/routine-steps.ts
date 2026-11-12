@@ -1,12 +1,11 @@
+import type {
+  RoutineStep,
+  RoutineTask,
+} from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
-import { type Knob, knobSchema, knobToWire } from './knobs';
-import {
-  type RoutineTarget,
-  routineAgentIdSchema,
-  routineModelSchema,
-  routineTargetSchema,
-} from './routine-target';
+import { type Knob, knobFromWire, knobSchema, knobToWire } from './knobs';
+import { type RoutineTarget, routineTargetSchema } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
 /** TypeScript against Macro's SDK, written by the AI that built the routine. */
@@ -56,45 +55,6 @@ export const STEP_LIMITS = {
   sourceBytes: 64 * 1024,
 } as const;
 
-const stepIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/);
-
-export type WireStep =
-  | {
-      type: 'code';
-      id?: string | null;
-      title: string;
-      summary?: string | null;
-      source: string;
-      knobs?: Knob[];
-      sentence?: string | null;
-    }
-  | {
-      type: 'agent';
-      model?: string | null;
-      agent?: { bot_id: string } | null;
-      instructions: string;
-    };
-
-const wireStepSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('code'),
-    id: stepIdSchema.nullish(),
-    title: z.string(),
-    summary: z.string().nullish(),
-    source: z.string(),
-    knobs: z.array(knobSchema).optional(),
-    sentence: z.string().nullish(),
-  }),
-  z.object({
-    type: z.literal('agent'),
-    model: routineModelSchema.nullish(),
-    agent: z.object({ bot_id: routineAgentIdSchema }).nullish(),
-    instructions: z.string(),
-  }),
-]);
-
-const programSchema = z.looseObject({ steps: z.array(wireStepSchema) });
-
 /** Editor state, as saved with unsent composer drafts. */
 export const stepDraftSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -129,7 +89,7 @@ export function agentStep(
 }
 
 function targetFromWire(
-  step: Extract<WireStep, { type: 'agent' }>
+  step: Extract<RoutineStep, { type: 'agent' }>
 ): RoutineTarget | undefined {
   if (step.agent)
     return step.model != null
@@ -138,7 +98,8 @@ function targetFromWire(
   return step.model != null ? { kind: 'model', model: step.model } : undefined;
 }
 
-function fromWire(steps: WireStep[]): StepDraft[] | undefined {
+/** Stored steps for the editor; undefined when an agent step has no target. */
+export function stepsFromWire(steps: RoutineStep[]): StepDraft[] | undefined {
   const drafts: StepDraft[] = [];
   for (const step of steps) {
     const draft = match(step)
@@ -154,7 +115,7 @@ function fromWire(steps: WireStep[]): StepDraft[] | undefined {
         title: step.title,
         summary: step.summary ?? '',
         source: step.source,
-        knobs: step.knobs ?? [],
+        knobs: (step.knobs ?? []).map(knobFromWire),
         ...(step.sentence ? { sentence: step.sentence } : {}),
       }))
       .exhaustive();
@@ -164,10 +125,9 @@ function fromWire(steps: WireStep[]): StepDraft[] | undefined {
   return drafts;
 }
 
-/** A stored program's steps; undefined for single agent tasks and unknown shapes. */
-export function stepsFromTask(task: unknown): StepDraft[] | undefined {
-  const parsed = programSchema.safeParse(task);
-  return parsed.success ? fromWire(parsed.data.steps) : undefined;
+/** A stored program's steps; undefined for a single agent task. */
+export function programSteps(task: RoutineTask): StepDraft[] | undefined {
+  return 'steps' in task ? stepsFromWire(task.steps) : undefined;
 }
 
 function targetToWire(target: RoutineTarget) {
@@ -181,10 +141,10 @@ function targetToWire(target: RoutineTarget) {
       };
 }
 
-export function stepsToWire(steps: StepDraft[]): WireStep[] {
+export function stepsToWire(steps: StepDraft[]): RoutineStep[] {
   return steps.map((step) =>
     match(step)
-      .returnType<WireStep>()
+      .returnType<RoutineStep>()
       .with({ kind: 'agent' }, (step) => ({
         type: 'agent',
         ...targetToWire(routineTargetSchema.parse(step.target)),

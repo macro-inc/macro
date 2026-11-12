@@ -38,9 +38,11 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
         id: HarnessId::TEST_A,
         kind: "macrod".to_owned(),
         name: "Desk".to_owned(),
-        owner: HarnessOwner::Team {
-            team_id: uuid::Uuid::nil(),
+        owner: HarnessOwner::User {
+            user_id: "macro|user".to_owned(),
         },
+        access: Default::default(),
+        shared_team_ids: vec![uuid::Uuid::nil()],
         created_by: "macro|user".to_owned(),
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),

@@ -18,6 +18,7 @@ name: Export CI telemetry
     - Build macOS DMG
     - CI Gate Reminder
     - CI Gate for Forks
+    - CI Gate Label Check
     - CLA
     - Cancel Stuck Cloud Storage Deploys
     - Cleanup Preview
@@ -26,6 +27,7 @@ name: Export CI telemetry
     - Deploy CLA Worker
     - Deploy FusionAuth Instance
     - Deploy Lexical Service
+    - Deploy Observability
     - Deploy Production Release
     - Deploy Service (Generic)
     - Deploy Sync Service

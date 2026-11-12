@@ -15,8 +15,12 @@ threads, pins, recents, notifications, folders, activity.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
-- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy.
+- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- Personal contact pages use `graphql_contacts` and the contacts directory service.
+  Compose primary-backed graph and name readers in `server.rs`, and insert the
+  context through the shared GraphQL HTTP/websocket request-data function.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
@@ -36,6 +40,9 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
+- Authenticated call routes are composed from `crates/call` under `/call`;
+  `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
+  `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types. Folder duplication runs on its own task and copies
   documents and chats through `entity_mutation/project_contents.rs`, the
@@ -86,15 +93,22 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
+  the CRM domain owns authorization, normalization and relation invariants.
+
 - Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
   evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+- The same flag client evaluates `enable-programmatic-calls` per caller for the
+  explicit call start, join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.
-- Soup GraphQL reads a replica with multi-second lag; a read immediately after
+- CRM-scoped Soup email previews read the primary so consent withdrawal and
+  exclusions take effect without replica lag; ordinary inbox lists keep the replica.
+- Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
 - Dev's readonly pool keeps 2–20 connections per task, independently of the
@@ -113,3 +127,25 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+## Passwords vault
+
+`/passwords` hosts human-only team vault routes, with policy in `passwords`.
+Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_SIGNING_KEY`
+together. Partial configuration fails startup; absent configuration denies vault work.
+Human routes, cleanup jobs and internal team purge use `enable-passwords-v1` for
+explicit service context `passwords-v1`. Human admissions additionally evaluate the
+same key for the authenticated actor, so service authority never admits an unflagged
+account. Local explicitly enables both. Missing/error results in either fail closed.
+Postgres stores metadata; values stay in OpenBao. Admission checks current human
+account classification and membership, including session-shaped agent accounts.
+
+`src/passwords_cleanup.rs` retries explicit item deletion and TOTP generation erasure
+every minute. Jobs gate before discovery; paused/failed work retains its journal.
+The task tracker cancels and drains the worker. Membership/account deletion never
+erases vault items. Internal `/internal/passwords/teams/{team}` DELETE accepts only
+service credentials and the same global rollout/provider gate. Team cleanup skips
+RPC only on authoritative empty metadata rechecked under the existing team lease;
+the returned guard stays in the deletion proof through team-row deletion. Retained
+state requires acknowledged purge before ordinary cleanup; release the guard before RPC.
+- The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.

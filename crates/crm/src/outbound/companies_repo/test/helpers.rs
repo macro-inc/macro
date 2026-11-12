@@ -80,6 +80,61 @@ pub(super) async fn insert_email_link(
     Ok(link_id)
 }
 
+pub(super) async fn consent_to_mailbox(
+    pool: &PgPool,
+    team: Uuid,
+    link: Uuid,
+) -> anyhow::Result<()> {
+    use crate::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyRepository};
+    let user = sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", link)
+        .fetch_one(pool)
+        .await?;
+    sqlx::query!("INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING", team, user).execute(pool).await?;
+    super::super::CompaniesRepositoryImpl::new(pool.clone())
+        .change_email_privacy(
+            team,
+            &user,
+            EmailPrivacyChange::SetConsent {
+                enabled: true,
+                link_id: Some(link),
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+/// Persist a real non-draft interaction before delivering its CRM job.
+pub(super) async fn insert_interaction(
+    pool: &PgPool,
+    link: Uuid,
+    email: &str,
+    at: chrono::DateTime<chrono::Utc>,
+    sent: bool,
+) -> anyhow::Result<Uuid> {
+    let thread = Uuid::now_v7();
+    let message = Uuid::now_v7();
+    let contact = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id) VALUES ($1, $2)",
+        thread,
+        link
+    )
+    .execute(pool)
+    .await?;
+    let contact = sqlx::query_scalar!(
+        r#"INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)
+           ON CONFLICT (link_id, email_address) DO UPDATE SET email_address = EXCLUDED.email_address RETURNING id"#, contact, link, email
+    ).fetch_one(pool).await?;
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, internal_date_ts, is_sent, is_draft)
+           VALUES ($1, $2, $3, $4, $5, $6, FALSE)"#, message, thread, link, if sent { None } else { Some(contact) }, at, sent
+    ).execute(pool).await?;
+    if sent {
+        sqlx::query!("INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')", message, contact).execute(pool).await?;
+    }
+    Ok(thread)
+}
+
 pub(super) async fn insert_contact_with_source(
     pool: &PgPool,
     company_id: Uuid,
@@ -267,7 +322,7 @@ pub(super) async fn fetch_contact_id(
 pub(super) async fn enable_crm_for_team(pool: &PgPool, team_id: Uuid) -> sqlx::Result<()> {
     sqlx::query(
         r#"INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE)
-           ON CONFLICT (team_id) DO UPDATE SET crm_enabled = TRUE"#,
+           ON CONFLICT (team_id) DO NOTHING"#,
     )
     .bind(team_id)
     .execute(pool)

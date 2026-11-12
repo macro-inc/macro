@@ -81,8 +81,20 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never previews sessions")
     }
 
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
+    }
+
+    async fn billing(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<agent_session::domain::model::SessionBilling> {
+        Ok(agent_session::domain::model::SessionBilling::default())
+    }
+
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            origin: Default::default(),
             repo_branch: self.repo_branch.clone(),
             id,
             owner_id: model_owner::Owner::User(
@@ -344,6 +356,7 @@ async fn fake_cursor_api() -> (
                         "displayName": "Cursor Grok 4.6",
                         "variants": [
                             {"params": [{"id":"effort","value":"low"}], "isDefault": false},
+                            {"params": [{"id":"effort","value":"medium"},{"id":"fast","value":"true"}], "isDefault": false},
                             {"params": [{"id":"effort","value":"high"},{"id":"fast","value":"true"}], "isDefault": true},
                         ],
                     }],
@@ -460,12 +473,13 @@ async fn fake_cursor_api() -> (
 }
 
 /// A config source: `key` is `Some` for an owner who has connected Cursor,
-/// `None` for one who has not — the state every user starts in. `model` is the
-/// default model that owner chose, if any.
+/// `None` for one who has not — the state every user starts in. `model` and
+/// `effort` are the defaults that owner chose, if any.
 #[derive(Clone, Copy)]
 struct StubKeys {
     key: Option<&'static str>,
     model: Option<&'static str>,
+    effort: Option<&'static str>,
 }
 
 impl StubKeys {
@@ -474,6 +488,7 @@ impl StubKeys {
         Self {
             key: Some("crsr_test"),
             model: None,
+            effort: None,
         }
     }
 
@@ -482,6 +497,7 @@ impl StubKeys {
         Self {
             key: None,
             model: None,
+            effort: None,
         }
     }
 }
@@ -495,6 +511,7 @@ impl CursorApiKeys for StubKeys {
         Ok(ResolvedCursorConfig {
             key,
             default_model_id: self.model.map(str::to_owned),
+            default_effort: self.effort.map(str::to_owned),
         })
     }
 }
@@ -641,11 +658,11 @@ async fn spawning_and_prompting_records_the_minted_agent() {
     );
 }
 
-/// A fresh session starts on the owner's configured default model, resolved
-/// to its variant against the live model table — the per-user setting reaching
-/// all the way to the agent Cursor mints.
+/// A fresh session starts on the owner's configured default model and effort,
+/// resolved to a variant against the live model table — the per-user settings
+/// reaching all the way to the agent Cursor mints.
 #[tokio::test]
-async fn spawn_uses_the_owners_default_model() {
+async fn spawn_uses_the_owners_default_model_and_effort() {
     let (base_url, _, created) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
@@ -655,6 +672,7 @@ async fn spawn_uses_the_owners_default_model() {
         StubKeys {
             key: Some("crsr_test"),
             model: Some("grok-4.6"),
+            effort: Some("medium"),
         },
     );
 
@@ -702,11 +720,11 @@ async fn spawn_uses_the_owners_default_model() {
 
     let body = created.lock().expect("create log poisoned")[0].clone();
     assert_eq!(body["model"]["id"], "grok-4.6");
-    // The default variant's params travel with the id — a bare id is not a
-    // selection Cursor accepts.
+    // The chosen effort's variant travels with the id, keeping the default
+    // variant's other params — a bare id is not a selection Cursor accepts.
     assert_eq!(
         body["model"]["params"],
-        serde_json::json!([{"id":"effort","value":"high"},{"id":"fast","value":"true"}])
+        serde_json::json!([{"id":"effort","value":"medium"},{"id":"fast","value":"true"}])
     );
 }
 

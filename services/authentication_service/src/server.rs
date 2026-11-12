@@ -256,6 +256,7 @@ async fn run_server() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -667,6 +668,10 @@ async fn run_server() -> anyhow::Result<()> {
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
+        Arc::new(
+            passwords::outbound::postgres::PgRepository::new(db.clone())
+                .map_err(|_| anyhow::anyhow!("invalid Passwords metadata pool capacity"))?,
+        ),
         PgBotsRepo::new(db.clone()),
         EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
         document_storage_service_client.clone(),
@@ -796,6 +801,7 @@ async fn run_server() -> anyhow::Result<()> {
             environment: config.environment,
             signup_policy,
             rate_limit_service: rate_limit,
+            event_broker: macro_event_broker.clone(),
             calendar_scope_enabled: config.calendar_scope_enabled,
             account_link_state_key,
             jwt_args,

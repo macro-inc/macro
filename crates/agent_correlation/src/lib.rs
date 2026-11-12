@@ -1,5 +1,6 @@
 #![deny(missing_docs)]
-//! Attribution of code-mode work to its originating agent session.
+//! Attribution of work to its originating code-mode invocation (agent
+//! session) and to the routine run it acts for.
 //!
 //! This context grants no access. HTTP validates the signed claim once, before
 //! application work; durable events retain the accepted ID independently of the
@@ -7,6 +8,8 @@
 
 pub mod context;
 pub mod domain;
+pub mod verb;
+pub use verb::AgentVerb;
 #[cfg(feature = "http")]
 pub mod inbound;
 #[cfg(feature = "postgres")]
