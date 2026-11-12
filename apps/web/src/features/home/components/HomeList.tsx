@@ -634,18 +634,12 @@ export function HomeList(props: HomeListProps) {
                   class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                 >
                   {/* A new account's Home starts empty, when the tutorial
-                      matters most. The row then takes the touch top inset. */}
-                  <Show
-                    when={state.tab === 'signal'}
-                    fallback={<HomeEmptyState />}
-                  >
-                    <div class="touch:pt-(--mobile-content-inset-top)">
-                      <HomeTutorial />
-                    </div>
-                    <div class="contents touch:[--mobile-content-inset-top:0px]">
-                      <HomeEmptyState />
-                    </div>
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={state.tab === 'signal'}>
+                    <HomeTutorial />
                   </Show>
+                  <HomeEmptyState />
                 </div>
               </Match>
 
