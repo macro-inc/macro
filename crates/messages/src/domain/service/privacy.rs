@@ -41,7 +41,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         fields(
             ephemeral = tracing::field::Empty,
             private = tracing::field::Empty,
-            forked_private_thread = false,
+            forked_private_thread = tracing::field::Empty,
         )
     )]
     pub(super) async fn post_visibility(
@@ -59,10 +59,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         };
         let span = tracing::Span::current();
         span.record("ephemeral", ephemeral);
-        span.record("private", false);
+        let outcome = |private: bool, forked: bool| {
+            span.record("private", private);
+            span.record("forked_private_thread", forked);
+        };
         // A call's canonical thread is created atomically by its first post.
         // It is always shared, so privacy must not require that root to exist.
         if matches!(parent_from_receipt(access)?, MessageParent::Call(_)) {
+            outcome(false, false);
             if ephemeral {
                 return Err(MessageError::Invalid(
                     "call chat does not support private threads",
@@ -70,25 +74,28 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
             return Ok(MessageVisibility::Public);
         }
+        let mut forked = false;
         if let Some(root) = input.thread_id {
             let state = self
                 .active_thread(access.auth(), &parent_from_receipt(access)?, root)
                 .await?;
             if !state.visibility.is_public() || !ephemeral {
-                span.record("private", !state.visibility.is_public());
+                outcome(!state.visibility.is_public(), false);
                 return Ok(state.visibility);
             }
             // Mentioning an ephemeral agent in a shared thread starts a separate
             // private thread without changing the shared thread's audience.
             input.thread_id = None;
-            span.record("forked_private_thread", true);
+            forked = true;
         }
         if !ephemeral {
+            outcome(false, forked);
             return Ok(MessageVisibility::Public);
         }
         // Document anchors are serialized into shared content and cannot
         // carry a hidden thread.
         if input.anchor.is_some() {
+            outcome(false, forked);
             return Err(MessageError::Invalid(
                 "private messages require an unanchored thread",
             ));
@@ -100,7 +107,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 bots.push(sender);
             }
         }
-        span.record("private", true);
+        outcome(true, forked);
         Ok(MessageVisibility::Private {
             user_id: user.to_string(),
             bot_ids: bots

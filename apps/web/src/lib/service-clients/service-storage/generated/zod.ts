@@ -3112,6 +3112,29 @@ export const guestCallChatPostMessageResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -3305,6 +3328,29 @@ export const guestCallChatPatchMessageResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -3492,6 +3538,29 @@ export const guestCallChatReactMessageResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -3722,6 +3791,37 @@ export const guestCallChatReadThreadResponse = zod
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
+                    visibility: zod
+                      .union([
+                        zod
+                          .object({
+                            type: zod.enum(['public']),
+                          })
+                          .describe(
+                            'Everyone with access to the conversation.'
+                          ),
+                        zod
+                          .object({
+                            bot_ids: zod
+                              .array(zod.string())
+                              .describe(
+                                'Canonical bot principals invited when the thread was created.'
+                              ),
+                            type: zod.enum(['private']),
+                            user_id: zod
+                              .string()
+                              .describe(
+                                'Authenticated user who started the thread.'
+                              ),
+                          })
+                          .describe(
+                            'Only the initiating user and explicitly invited agents.'
+                          ),
+                      ])
+                      .optional()
+                      .describe(
+                        'The immutable audience of a durable message thread.'
+                      ),
                   })
                   .describe(
                     'Shared message representation for channel timelines and entity discussions.'
@@ -3929,6 +4029,35 @@ export const guestCallChatReadThreadResponse = zod
                 updated_at: zod.iso
                   .datetime({})
                   .describe('Last persisted update.'),
+                visibility: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['public']),
+                      })
+                      .describe('Everyone with access to the conversation.'),
+                    zod
+                      .object({
+                        bot_ids: zod
+                          .array(zod.string())
+                          .describe(
+                            'Canonical bot principals invited when the thread was created.'
+                          ),
+                        type: zod.enum(['private']),
+                        user_id: zod
+                          .string()
+                          .describe(
+                            'Authenticated user who started the thread.'
+                          ),
+                      })
+                      .describe(
+                        'Only the initiating user and explicitly invited agents.'
+                      ),
+                  ])
+                  .optional()
+                  .describe(
+                    'The immutable audience of a durable message thread.'
+                  ),
               })
               .describe(
                 'Shared message representation for channel timelines and entity discussions.'
@@ -4056,6 +4185,35 @@ export const guestCallChatReadThreadResponse = zod
                   .string()
                   .describe(
                     'User who owns this discussion, including imported discussions.'
+                  ),
+                visibility: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['public']),
+                      })
+                      .describe('Everyone with access to the conversation.'),
+                    zod
+                      .object({
+                        bot_ids: zod
+                          .array(zod.string())
+                          .describe(
+                            'Canonical bot principals invited when the thread was created.'
+                          ),
+                        type: zod.enum(['private']),
+                        user_id: zod
+                          .string()
+                          .describe(
+                            'Authenticated user who started the thread.'
+                          ),
+                      })
+                      .describe(
+                        'Only the initiating user and explicitly invited agents.'
+                      ),
+                  ])
+                  .optional()
+                  .describe(
+                    'The immutable audience of a durable message thread.'
                   ),
               })
               .describe(
