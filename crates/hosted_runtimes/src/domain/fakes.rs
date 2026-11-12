@@ -124,6 +124,14 @@ impl crate::domain::agent::ComputerAgents for FakeRepo {
             })
             .map(|(id, _)| *id))
     }
+
+    async fn has_live_computer(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.computer_for_agent(team_id, agent).await?.is_some())
+    }
 }
 
 impl FakeRepo {
