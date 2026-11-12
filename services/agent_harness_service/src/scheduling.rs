@@ -438,6 +438,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()

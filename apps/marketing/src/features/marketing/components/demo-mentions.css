@@ -62,7 +62,7 @@
 .workspace-demo .demo-mention-icon.mention-task { color: var(--color-task, #37bb72); }
 .workspace-demo .demo-mention-icon.mention-agent { color: var(--color-chat, #69cbe0); }
 .workspace-demo .demo-mention-icon.mention-spreadsheet { color: var(--color-success, #37bb72); }
-.workspace-demo .demo-mention-empty { padding: 8px; color: var(--color-ink-extra-muted, #888); font-weight: 400; }
+.workspace-demo .demo-mention-empty { padding: 8px; color: var(--color-ink-extra-muted, #888); font-weight: 370; }
 
 /* UserMention and DocumentMention/MentionContainer use the editor's font size. */
 .workspace-demo .demo-inline-mention { display: inline; white-space: normal; color: inherit; }

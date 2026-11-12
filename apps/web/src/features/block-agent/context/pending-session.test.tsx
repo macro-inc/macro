@@ -15,7 +15,10 @@ const fold = vi.hoisted(() => ({
   readSession: vi.fn(),
   closeSession: vi.fn(),
 }));
-const flags = vi.hoisted(() => ({ firstPromptOnCreate: true }));
+const flags = vi.hoisted(() => ({
+  firstPromptOnCreate: true,
+  agentNavigation: false,
+}));
 const harness = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
@@ -28,10 +31,13 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     await importOriginal<typeof import('@core/constant/featureFlags')>();
   return {
     ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableFirstPromptOnCreate
-        ? flags.firstPromptOnCreate
-        : actual.isFeatureEnabled(flag),
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) => {
+      if (flag === actual.enableFirstPromptOnCreate) {
+        return flags.firstPromptOnCreate;
+      }
+      if (flag === actual.enableAgentNavigation) return flags.agentNavigation;
+      return actual.isFeatureEnabled(flag);
+    },
   };
 });
 vi.mock('@service-agent-harness/client', () => ({
@@ -119,6 +125,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
+  flags.agentNavigation = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -479,6 +486,17 @@ describe('first prompt on the create', () => {
     destination.unmount();
     expect(AgentSession.get(id)).toBeUndefined();
     expect(fold.closeSession).toHaveBeenCalledExactlyOnceWith(id);
+  });
+
+  it('names the tab the first prompt was typed in while agent navigation is on', async () => {
+    flags.agentNavigation = true;
+    startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+    await settle();
+
+    const [request] = harness.create.mock.calls[0];
+    expect(request.promptClientId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
   });
 
   it("keeps an effort's first prompt for after the session is configured", async () => {
