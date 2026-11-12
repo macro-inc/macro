@@ -19,7 +19,8 @@ they need.
   transaction boundaries and policy limits to it, then map rows to domain types.
   DSS composes atomic activity logging; the call repository appends root changes.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
-  adapters call through.
+  adapters call through; `thread_page` adds bounded reply windows while
+  `get_thread` preserves the complete REST thread read.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
 - `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
   (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,
@@ -32,7 +33,8 @@ they need.
 - `src/domain/service/guest_chat.rs` + `src/inbound/guest_chat.rs`: live guest
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
-  adapters (feature `outbound`).
+  adapters (feature `outbound`); `pg_message_repo/thread.rs` pages replies
+  by `(import_order NULLS LAST, created_at, id)` using the thread-order index.
 - `src/outbound/pg_message_repo/write_hydration.rs`: channel writes hydrate in
   one indexed statement (plus a bot lookup when needed); other parents keep
   their existing statements.
@@ -109,6 +111,10 @@ grant users another agent invocation's edit, deletion, or reaction authority.
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
+
+- Thread summaries count live replies on each page. With stale statistics after a
+  very large import, an ordinary-reply page can also scan that thread's imported
+  prefix; keep this cost visible when changing the thread queries.
 
 ## Related
 

@@ -11,6 +11,7 @@ mod event_posts;
 mod guest_chat;
 mod initiative;
 mod sequences;
+mod thread_reads;
 
 #[derive(Clone)]
 struct Repo {
@@ -125,6 +126,40 @@ impl MessageRepository for Repo {
             .filter(|reply| reply.parent == *parent && reply.thread_id == Some(root))
             .cloned()
             .collect())
+    }
+    async fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> Result<Option<MessageListItem>, MessageError> {
+        Ok(self
+            .timeline(
+                parent,
+                MessageTimelineQuery {
+                    ids: vec![root_id],
+                    ..Default::default()
+                },
+            )
+            .await?
+            .items
+            .pop())
+    }
+    async fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        _: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        Ok(MessageThreadPage {
+            root: self
+                .root(parent, root_id)
+                .await?
+                .ok_or(MessageError::NotFound)?,
+            replies: self.replies(parent, root_id).await?,
+            next_cursor: None,
+            previous_cursor: None,
+            call: None,
+        })
     }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
@@ -330,6 +365,7 @@ fn fixture() -> Repo {
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
+            import_order: None,
             sender_id: ChannelSender::try_from(user.to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],
@@ -379,6 +415,7 @@ fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
     Message {
         id: Uuid::from_u128(id),
         thread_id: Some(root.id),
+        import_order: None,
         sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
         guest_name: None,
         imported_author: None,
@@ -1448,6 +1485,21 @@ impl MessageRepository for StrictRepo {
         root: Uuid,
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.replies(parent, root).await
+    }
+    async fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> Result<Option<MessageListItem>, MessageError> {
+        self.inner.root(parent, root_id).await
+    }
+    async fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        self.inner.thread_page(parent, root_id, query).await
     }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(self.parent_exists)

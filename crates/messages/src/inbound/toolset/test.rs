@@ -77,6 +77,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         id,
         parent: initiative(),
         thread_id,
+        import_order: None,
         sender_id: sender,
         guest_name: None,
         imported_author: None,
@@ -204,6 +205,22 @@ impl MessageReader for FakeMessages {
             .find(|thread| thread.root.id == root)
             .cloned()
             .ok_or(MessageError::NotFound)
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<crate::domain::ports::MessageTimelineEntry, crate::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+        _: crate::domain::ports::MessageThreadQuery,
+    ) -> Result<crate::domain::ports::MessageThreadPage, crate::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,
