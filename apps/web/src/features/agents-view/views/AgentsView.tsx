@@ -228,17 +228,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const openPage = (next: AgentsPage) => {
     setCreatingKind(undefined);
     setMobileList(false);
-    if (next === 'routines') {
-      layout.openWithSplit(routineContent(), {
-        handle: panel.handle,
-        activate: true,
-        search: {},
-      });
-      return;
-    }
-    if (next === 'connections') {
+    if (next === 'routines' || next === 'connections') {
       layout.openWithSplit(
-        { type: 'component', id: 'connections' },
+        next === 'routines'
+          ? routineContent()
+          : { type: 'component', id: next },
         { handle: panel.handle, activate: true, search: {} }
       );
       return;

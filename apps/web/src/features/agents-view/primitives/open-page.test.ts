@@ -33,15 +33,6 @@ describe('openAgentsPage', () => {
     ]);
   });
 
-  it('opens Connections as its own destination without an imperative page request', () => {
-    const openWithSplit = vi.fn(() => ({ status: 'navigating' as const }));
-    openAgentsPage({ openWithSplit }, 'connections');
-    expect(openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'connections', params: {} },
-      { activate: true, search: {} }
-    );
-  });
-
   it('allows navigation to be intercepted', () => {
     expect(() =>
       openAgentsPage(

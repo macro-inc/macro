@@ -6,7 +6,6 @@ import { AgentsRouteView } from './route-views';
 const state = vi.hoisted(() => ({
   routeId: 'agents',
   redirect: vi.fn(),
-  restore: vi.fn(),
   touch: false,
 }));
 
@@ -26,7 +25,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('@components/app/split-layout/view-restoration', () => ({
-  useViewRestoration: (key?: string) => state.restore(key),
+  useViewRestoration: () => {},
 }));
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (view: unknown) => view,
@@ -48,16 +47,6 @@ beforeEach(() => {
   state.routeId = 'agents';
 });
 afterEach(cleanup);
-
-it('remembers a directly opened Connections page as part of the Agents workspace', () => {
-  state.routeId = 'connections';
-  render(() => (
-    <Suspense>
-      <AgentsRouteView />
-    </Suspense>
-  ));
-  expect(state.restore).toHaveBeenCalledWith('agents');
-});
 
 it('replaces the mobile conversation alias instead of trapping Back in a redirect', () => {
   state.touch = true;

@@ -1,8 +1,10 @@
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import {
   createMemoryHistory,
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  formatPanePath,
   SplitRouter,
   type SplitRouterMiddleware,
   type SplitRoutes,
@@ -109,6 +111,7 @@ function setup(
 ) {
   let router!: ReturnType<typeof createSplitRouter>;
   let manager!: SplitManager;
+  const history = createMemoryHistory(url);
   const [account, setAccount] = createSignal<string | undefined>(
     options.account === null ? undefined : (options.account ?? 'account-one')
   );
@@ -157,7 +160,7 @@ function setup(
     };
     router = createSplitRouter({
       routes,
-      history: createMemoryHistory(url),
+      history,
       paneStore: createMemoryPaneStore<Entry>(),
       middleware: options.middleware,
       policy: createAppPanePolicy({
@@ -189,7 +192,7 @@ function setup(
       </SplitRouterProvider>
     );
   });
-  return { router, manager, setAccount, setRetaining };
+  return { router, manager, history, setAccount, setRetaining };
 }
 
 afterEach(() => {
@@ -199,11 +202,53 @@ afterEach(() => {
 });
 
 describe('opt-in view restoration', () => {
+  it('keeps Connections navigation in the same pane through Back and Forward', async () => {
+    const { router, manager, history } = setup('/agents');
+    const handle = manager.activeSplit()!;
+    openAgentsPage(manager, 'connections');
+    await router.settled();
+    expect(manager.splits()).toHaveLength(1);
+    expect(history.read().path).toBe('/connections');
+    expect(handle.content()).toMatchObject({ id: 'connections' });
+
+    await router.navigatePane(router.panes()[0]!, '/home');
+    history.back();
+    expect(history.read().path).toBe('/connections');
+    expect(handle.content()).toMatchObject({ id: 'connections' });
+    history.back();
+    expect(history.read().path).toBe('/agents');
+    history.forward();
+    expect(history.read().path).toBe('/connections');
+    expect(handle.content()).toMatchObject({ id: 'connections' });
+  });
+
+  it.each([
+    ['view-agents', '/connections'],
+    ['view-home', '/home'],
+  ])('restores saved Connections content with %s metadata', (routeId, path) => {
+    const { router } = setup();
+    const location = resolveContentLocation(router.routes, {
+      type: 'component',
+      id: 'agents',
+      params: { agentPage: 'connections' },
+      entryMetadata: {
+        route: {
+          matches: [
+            { id: 'app', params: {} },
+            { id: routeId, params: {} },
+          ],
+        },
+      },
+    });
+    expect(formatPanePath(router.routes, location.route)).toBe(path);
+  });
+
   it('resumes a directly opened Connections page when returning to Agents', async () => {
     const { router, manager } = setup('/connections');
     const pane = router.panes()[0]!;
     const handle = manager.activeSplit()!;
     await router.settled();
+    expect(handle.content()).toMatchObject({ id: 'connections' });
     await router.navigatePane(pane, '/home');
     manager.openWithSplit(
       { type: 'component', id: 'agents' },
