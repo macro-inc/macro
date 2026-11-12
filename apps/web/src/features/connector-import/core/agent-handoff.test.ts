@@ -8,7 +8,7 @@ describe('agent import handoff', () => {
     const hubspot = crm.providers.find((p) => p.appSlug === 'hubspot')!;
     const handoff = agentImportHandoff(crm, hubspot);
     expect(handoff.input).toBe(
-      'Import my most recent companies and contacts from HubSpot into the Macro CRM.'
+      'Import my most recent companies and contacts from HubSpot into the Rox CRM.'
     );
     expect(handoff.instructions).toContain('ask which ones to bring over');
     expect(handoff.instructions).toContain('CreateCompany');

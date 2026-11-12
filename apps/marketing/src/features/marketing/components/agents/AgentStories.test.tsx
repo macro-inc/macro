@@ -8,7 +8,11 @@ import DummyWorkspaceView from '../workspace/DummyWorkspace';
 import { AgentMcpDemo } from './AgentStories';
 import { NorthwindCollaboration } from './NorthwindCollaboration';
 import { NorthwindSession, NorthwindStory } from './NorthwindSession';
-import { createNorthwindAccessTask, NORTHWIND_PLAN } from './northwindScenario';
+import {
+  createNorthwindAccessTask,
+  NORTHWIND_COLLAB_PLAN,
+  NORTHWIND_PLAN,
+} from './northwindScenario';
 
 let intersections: IntersectionObserverCallback[];
 let reduced = false;
@@ -256,6 +260,12 @@ it('updates the plan and task ownership without falsely completing the access ch
   });
   createNorthwindAccessTask(w);
   expect(w.data.tasks.filter((t) => t.id === 'northwind-sso')).toHaveLength(1);
+});
+
+it('removes unsupported SSO claims and produces a collaboration checklist', () => {
+  expect(NORTHWIND_PLAN).not.toContain('SSO');
+  expect(NORTHWIND_COLLAB_PLAN).toContain('- [ ]');
+  expect(NORTHWIND_COLLAB_PLAN).not.toContain('SSO');
 });
 
 it('shows both collaborators’ edits and preserves a visitor’s later writing', () => {

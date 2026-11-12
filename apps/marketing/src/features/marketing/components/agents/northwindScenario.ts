@@ -6,9 +6,9 @@ export const NORTHWIND_PROMPT =
 export const NORTHWIND_OLD_PLAN =
   '## Friday rollout\n\nLaunch for all 20 operations staff on Friday, October 9. Use password sign-in.\n\n## Training\n\nJacob prepares one training session for 20 people.\n\n## Before launch\n\nConfirm the participant list and send invitations.';
 export const NORTHWIND_PLAN =
-  '## Friday pilot\n\nStart with 10 operations staff on Friday, October 9. The remaining 30 join on Monday, October 12.\n\n## Access\n\nEveryone uses sign-in. Teo verifies sign-in before the Friday pilot can start.\n\n## Training\n\nJulia prepares two sessions for the 40-person group.\n\n## Launch checks\n\nSSO verification is still open. Confirm access before sending invitations.';
+  '## Friday pilot\n\nStart with 10 operations staff on Friday, October 9. The remaining 30 join on Monday, October 12.\n\n## Access\n\nEveryone uses sign-in. Teo verifies sign-in before the Friday pilot can start.\n\n## Training\n\nJulia prepares two sessions for the 40-person group.\n\n## Launch checks\n\nAccess verification is still open. Confirm access before sending invitations.';
 export const NORTHWIND_COLLAB_PLAN = NORTHWIND_PLAN.replace(
-  'sign-in verification is still open. Confirm access before sending invitations.',
+  'Access verification is still open. Confirm access before sending invitations.',
   '- [ ] Teo verifies sign-in before the pilot.\n- [ ] Julia confirms both training sessions.\n- [ ] Send invitations after access is confirmed.'
 );
 export const NORTHWIND_HUMAN_NOTE =
