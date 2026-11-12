@@ -32828,6 +32828,10 @@
           "owner_id"
         ],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether members of the channel's team join it automatically."
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
@@ -56544,6 +56548,25 @@
           }
         }
       },
+      "SoupAgentDmProfile": {
+        "type": "object",
+        "description": "The persona of a viewer's private conversation with an agent.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Persona avatar, when supplied."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Persona id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona display name."
+          }
+        }
+      },
       "SoupAgentSession_SoupPropertiesField": {
         "allOf": [
           {
@@ -57100,6 +57123,17 @@
           {
             "type": "object",
             "properties": {
+              "agent_dm": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupAgentDmProfile",
+                    "description": "Persona identity when this is the viewer's private agent DM."
+                  }
+                ]
+              },
               "interacted_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
