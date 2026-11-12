@@ -134,6 +134,12 @@ enforced by the ordinary backend APIs.
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
+- `src/entities/imports/`: `macro.imports`, the import ledger (cognition
+  `/import/entities`, `/import/notion/pages`): `list`, `track`,
+  `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
+  hides the matching ledger tools. `ImportEntry.item()` maps the row's
+  `entity_type` (`md`, `task`, `channel`, `database`, `project`,
+  `initiative`) to a handle.
 - `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
