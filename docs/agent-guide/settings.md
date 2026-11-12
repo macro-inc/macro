@@ -351,8 +351,9 @@ Left nav (feature and platform gates still apply):
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the running JavaScript was
-built, not when it was installed on the computer. Bundle date is when the active
+date card in the desktop app. Build date is when the installed native binary
+was built (from `get_native_build_time`), not when it was installed or when the
+running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
 OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
 the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
