@@ -74,6 +74,13 @@ query metadata. If a test reports missing SQLx cache data, follow the
 [database troubleshooting workflow](database.md#troubleshooting);
 do not enable offline mode to work around it.
 
+Some suites also talk to Redis: `email_service`, `authentication_service`,
+`documents`, and `macro_cache_client` connect to `REDIS_URL`, or to
+`redis://127.0.0.1:6379` when it is unset. `just run_dbs` brings that Redis up
+with the database, so a local run expects it too. Without it those suites fail
+every Redis-backed case with `Connection refused`, which hides the real result
+behind dozens of unrelated-looking failures.
+
 CI runs `test` and `check` on a 32 vCPU, 64 GiB runner with no build job limit.
 Don't lift the job limit on the 8 vCPU, 16 GiB runner by itself: linking many
 large test binaries exhausts its memory and can lose the runner.
