@@ -210,7 +210,7 @@ export const emailPageInbox: readonly (DemoEmail & { body?: string })[] = [
     id: 'product-digest',
     sender: 'Product Brief',
     subject: 'Your weekly product roundup',
-    snippet: 'New releases and suggestions from teams building collaboration tools.',
+    snippet: 'New releases and ideas from teams building collaboration tools.',
     time: 'Yesterday',
     account: 'work',
     yesterday: true,

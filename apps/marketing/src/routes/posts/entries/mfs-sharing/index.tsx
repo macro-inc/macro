@@ -146,7 +146,7 @@ export default function MfsSharingPost() {
           made it purely user based: one row per user per item they could reach.
           Sharing a project with your organization meant writing a row for every
           member, so adding or removing someone from the org meant fanning that
-          change out across every shared item. That was not suggestionl, but shared
+          change out across every shared item. That was not ideal, but shared
           item counts were small and membership rarely changed, so it held up
           fine early on. (We have since dropped organizations entirely in favor
           of a new team system.)
@@ -226,7 +226,7 @@ export default function MfsSharingPost() {
           it.
         </p>
         <p>
-          At first the suggestion was a webhook that would auto-share things with the
+          At first the idea was a webhook that would auto-share things with the
           members of a channel using the share system we already had. Sharing an
           item in a channel would grab every user in that channel and insert{' '}
           <code>UserItemAccess</code> rows for them. That bought us the behavior
@@ -237,7 +237,7 @@ export default function MfsSharingPost() {
 
         <h2>The problem: it was slow</h2>
         <p>
-          Copying Google Drive seemed fine. The webhook suggestion seemed fine. But it
+          Copying Google Drive seemed fine. The webhook idea seemed fine. But it
           was slow.
         </p>
         <p>

@@ -120,7 +120,7 @@ export function PaperDatabaseFieldsMobile() {
                 <div class="paper-feature-node-161">1</div>
               </div>
               <div class="paper-feature-node-156">
-                <div class="paper-feature-node-162">Add your first suggestion</div>
+                <div class="paper-feature-node-162">Add your first idea</div>
               </div>
               <div class="paper-feature-node-158">
                 <div class="paper-feature-node-163">
