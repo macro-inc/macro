@@ -19,6 +19,11 @@ export default {
   editContactCompany: 'Change contact company',
   noCompany: 'No company',
   removeCompany: 'Remove company',
+  removeCompanyTitle: 'Remove company from this contact?',
+  removeCompanyBody:
+    'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
+  removeCompanyPermanent:
+    'Its primary email is not a personal address, so it cannot be linked to a company again from here.',
   contactCompanyLinkedByEmail:
     'Linked by an email address on this company’s domain.',
   goToCompany: 'Go to company',

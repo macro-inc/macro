@@ -7,7 +7,7 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
-import { Badge, Button, Dialog, Dropdown, Tooltip } from '@ui';
+import { Badge, Button, ConfirmDialog, Dialog, Dropdown, Tooltip } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import {
   contactPropertyIconTouchTarget,
@@ -16,13 +16,16 @@ import {
 
 /**
  * A singleton company relation with separate edit and navigation actions.
- * `editable` offers link and switch; `removable` offers Remove company.
+ * `editable` offers link and switch; `removable` offers Remove company, which
+ * asks for confirmation before it saves.
  */
 export function ContactCompanyProperty(props: {
   companyId: string | null | undefined;
   companyName: string | undefined;
   editable: boolean;
   removable: boolean;
+  /** Whether the app could link a company again after removing this one. */
+  relinkable: boolean;
   /** Why a linked company can be neither switched nor removed. */
   lockedReason: string | undefined;
   /** Null removes the company. */
@@ -32,8 +35,8 @@ export function ContactCompanyProperty(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<string | null>(null);
-  // The last save requested: Retry repeats a link or switch, never a removal.
-  const [attempt, setAttempt] = createSignal<{ companyId: string | null }>();
+  const [confirmingRemoval, setConfirmingRemoval] = createSignal(false);
+  const [removalError, setRemovalError] = createSignal<string>();
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let triggerElement: HTMLButtonElement | undefined;
@@ -54,26 +57,43 @@ export function ContactCompanyProperty(props: {
     setOpen(next);
     if (!next && !isTouchDevice()) triggerElement?.focus();
   };
-  const save = async (companyId: string | null) => {
-    if (saving()) return;
-    if (companyId ? !props.editable : !removable()) return;
-    if (companyId) setDraft(companyId);
-    setAttempt({ companyId });
+  // A removal can leave a read-only value where the trigger was.
+  const focusValue = () =>
+    (triggerElement?.isConnected ? triggerElement : valueElement)?.focus();
+  const save = async (companyId: string) => {
+    if (saving() || !props.editable) return;
+    setDraft(companyId);
     setSaving(true);
     setError(undefined);
     try {
       await props.save(companyId);
       if (active) {
         setOpen(false);
-        // A removal can leave a read-only value where the trigger was.
-        if (!isTouchDevice())
-          (triggerElement?.isConnected
-            ? triggerElement
-            : valueElement
-          )?.focus();
+        if (!isTouchDevice()) triggerElement?.focus();
       }
     } catch (cause) {
       if (active) setError(props.errorMessage(cause));
+    } finally {
+      if (active) setSaving(false);
+    }
+  };
+  // The editor closes first: the confirmation is its own dialog, and a
+  // rejection stays in it so the relation on screen is never ahead of the server.
+  const confirmRemoval = () => {
+    if (saving() || !removable()) return;
+    setOpen(false);
+    setRemovalError(undefined);
+    setConfirmingRemoval(true);
+  };
+  const remove = async () => {
+    if (saving() || !removable()) return;
+    setSaving(true);
+    setRemovalError(undefined);
+    try {
+      await props.save(null);
+      if (active) setConfirmingRemoval(false);
+    } catch (cause) {
+      if (active) setRemovalError(props.errorMessage(cause));
     } finally {
       if (active) setSaving(false);
     }
@@ -137,7 +157,7 @@ export function ContactCompanyProperty(props: {
             variant="danger-ghost"
             size="sm"
             disabled={saving()}
-            onClick={() => fireAndForget(save(null), 'crm')}
+            onClick={confirmRemoval}
           >
             {t('crm.removeCompany')}
           </Button>
@@ -147,13 +167,13 @@ export function ContactCompanyProperty(props: {
             {t('crm.savingContact')}
           </span>
         </Show>
-        <Show when={error() && !isTouchDevice() && attempt()?.companyId}>
+        <Show when={error() && !isTouchDevice()}>
           <Button
             variant="primary"
             size="sm"
             disabled={saving()}
             onClick={() => {
-              const id = attempt()?.companyId;
+              const id = draft();
               if (id) fireAndForget(save(id), 'crm');
             }}
           >
@@ -288,6 +308,40 @@ export function ContactCompanyProperty(props: {
           <ArrowSquareOutIcon class="size-3 shrink-0" />
         </Button>
       </Show>
+      <ConfirmDialog
+        open={confirmingRemoval()}
+        onOpenChange={(next) => {
+          setConfirmingRemoval(next);
+          if (!next) setRemovalError(undefined);
+        }}
+        onCloseAutoFocus={(event) => {
+          if (isTouchDevice()) return;
+          event.preventDefault();
+          focusValue();
+        }}
+        tone="danger"
+        title={t('crm.removeCompanyTitle')}
+        confirmLabel={t('crm.removeCompany')}
+        cancelLabel={t('crm.cancel')}
+        pending={saving()}
+        onConfirm={() => fireAndForget(remove(), 'crm')}
+        body={
+          <>
+            {t('crm.removeCompanyBody')}
+            <Show when={!props.relinkable}>
+              {' '}
+              {t('crm.removeCompanyPermanent')}
+            </Show>
+            <Show when={removalError()}>
+              {(message) => (
+                <p role="alert" class="mt-3 text-failure">
+                  {message()}
+                </p>
+              )}
+            </Show>
+          </>
+        }
+      />
     </div>
   );
 }

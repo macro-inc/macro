@@ -60,7 +60,12 @@ let company: CrmCompanyResponse = {
   contacts: [],
 };
 const PERSONAL_DOMAIN = 'gmail.com';
-const domain = params.has('personal') ? PERSONAL_DOMAIN : 'example.com';
+// `independent` is a business address away from the company's domain.
+const domain = params.has('personal')
+  ? PERSONAL_DOMAIN
+  : params.has('independent')
+    ? 'example.org'
+    : 'example.com';
 const isPersonal = (email: string | null | undefined) =>
   !!email?.endsWith(`@${PERSONAL_DOMAIN}`);
 /** The identity fields the server derives from a contact's addresses. */

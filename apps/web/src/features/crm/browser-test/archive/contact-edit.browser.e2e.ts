@@ -573,37 +573,89 @@ test('several addresses: make primary, reject a duplicate, add, remove, and keep
   ).toHaveCount(0);
 });
 
-test('Remove company keeps a rejected relation and unlinks once the server commits', async ({
+test('Remove company confirms, keeps a rejected relation and unlinks once the server commits', async ({
   page,
 }, info) => {
   await page.goto('/?personal');
-  await page
+  const chip = page
     .getByRole('button', { name: 'Change contact company', exact: true })
-    .first()
-    .click();
+    .first();
   const remove = page.getByRole('button', {
     name: 'Remove company',
     exact: true,
   });
-  await page.evaluate(() => window.archiveFixture.failNext());
+  const dialog = page.getByRole('dialog').filter({
+    hasText: 'Remove company from this contact?',
+  });
+  const companyId = () =>
+    page.evaluate(() => window.archiveFixture.snapshot().contacts[0].companyId);
+
+  // Cancelling writes nothing.
+  await chip.click();
   await remove.click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => window.archiveFixture.snapshot().contacts[0].companyId
-    )
-  ).toBe('company-1');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toContainText('cannot be linked');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
+
+  await chip.click();
+  await remove.click();
+  await page.evaluate(() => {
+    window.archiveFixture.holdNext();
+    window.archiveFixture.failNext();
+  });
+  await dialog.getByRole('button', { name: 'Remove company' }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Remove company' })
+  ).toBeDisabled();
+  expect(await companyId()).toBe('company-1');
+  await page.evaluate(() => window.archiveFixture.release());
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  expect(await companyId()).toBe('company-1');
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('remove-company-rejected.png'),
   });
-  await remove.click();
+  await dialog.getByRole('button', { name: 'Remove company' }).click();
+  await expect(dialog).toBeHidden();
   await expect(
     page.getByRole('button', { name: 'Add company', exact: true }).first()
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Go to company', exact: true })
   ).toHaveCount(0);
+  expect(await companyId()).toBeNull();
+});
+
+test('a contact that cannot be linked again is told so before its company is removed', async ({
+  page,
+}, info) => {
+  await page.goto('/?independent');
+  await page
+    .getByRole('button', { name: 'Change contact company', exact: true })
+    .first()
+    .click();
+  await expect(page.getByPlaceholder('Search companies…')).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Remove company', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog').filter({
+    hasText: 'Remove company from this contact?',
+  });
+  await expect(dialog).toContainText('cannot be linked to a company again');
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('remove-company-permanent.png'),
+  });
+  await dialog.getByRole('button', { name: 'Remove company' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole('button', {
+      name: /Change contact company|Add company|Remove company/,
+    })
+  ).toHaveCount(0);
+  await expect(page.getByText('No company').first()).toBeVisible();
   expect(
     await page.evaluate(
       () => window.archiveFixture.snapshot().contacts[0].companyId

@@ -216,7 +216,10 @@ address on their company's domain, can link or switch company. Their company
 pill opens the Tasks singleton picker; on touch, select a company then **Done**.
 Cancel keeps the original relation. **Remove company** sits in the same editor
 for every linked contact that holds no address on the company's domain; a
-contact that cannot switch gets an editor with that action alone. A contact
+contact that cannot switch gets an editor with that action alone. It asks for
+confirmation first, and says when the contact cannot be linked to a company
+again from the app (its primary is not a personal-provider address). A
+rejected removal stays in the confirmation with its message. A contact
 with an address on its company's domain has a read-only company value, with
 the reason in its tooltip, and the one address that links it to the company
 shows no Remove. Extra addresses can still be added to it. The separate

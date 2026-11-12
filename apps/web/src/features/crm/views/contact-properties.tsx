@@ -74,6 +74,7 @@ export function ContactCompanyField(props: {
         <ContactCompanyProperty
           editable={props.contact.personalEmail === true && independent()}
           removable={independent()}
+          relinkable={props.contact.personalEmail === true}
           lockedReason={
             props.contact.companyDomain
               ? t('crm.contactCompanyLinkedByEmail')
