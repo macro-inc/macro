@@ -1034,8 +1034,9 @@ fn system_prompt(
     rest.push_str(&format!(
         "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
          long, its earlier part is summarized to keep it within your context. To find the exact \
-         words of anything said earlier, summarized or not, run ContentSearch with \
-         agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+         words of anything said earlier, summarized or not, search it with \
+         macro.search.page(query, {{ agentSessions: \
+         [macro.agentSessions.byId(\"{session_id}\")] }}).\n</agent_session>"
     ));
     if delivery == ReplyDelivery::Whole {
         rest.push('\n');
