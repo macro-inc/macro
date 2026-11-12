@@ -1,6 +1,5 @@
 //! In-memory fakes of the ports, for domain tests.
 
-
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;
 use harness_id::HarnessId;

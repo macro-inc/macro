@@ -123,7 +123,12 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
 
     /// Read and record the Claude sign-in of every awake computer. One
     /// computer's failure is logged and the rest still refresh.
-    #[tracing::instrument(name = "computer.harnessd.refresh_all", skip_all, fields(computers), err)]
+    #[tracing::instrument(
+        name = "computer.harnessd.refresh_all",
+        skip_all,
+        fields(computers),
+        err
+    )]
     pub async fn refresh_awake(&self, pool: &sqlx::PgPool) -> Result<(), HarnessdError> {
         let awake = sqlx::query!(
             r#"

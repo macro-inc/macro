@@ -26,12 +26,7 @@ fn session_new() -> Value {
 #[test]
 fn sessions_point_claude_code_at_the_gateway_of_the_sessions_internal_mcp() {
     let mut frame = session_new();
-    prepare_session(
-        &mut frame,
-        std::path::Path::new("/home/macro/work"),
-        None,
-    )
-    .unwrap();
+    prepare_session(&mut frame, std::path::Path::new("/home/macro/work"), None).unwrap();
     assert_eq!(
         frame["params"]["_meta"]["claudeCode"]["options"]["env"],
         json!({
@@ -52,12 +47,7 @@ fn only_session_starts_are_touched() {
         "params": { "sessionId": "s", "prompt": [] }
     });
     let before = prompt.clone();
-    prepare_session(
-        &mut prompt,
-        std::path::Path::new("/home/macro/work"),
-        None,
-    )
-    .unwrap();
+    prepare_session(&mut prompt, std::path::Path::new("/home/macro/work"), None).unwrap();
     assert_eq!(prompt, before);
 
     // Without the internal MCP server there is no gateway to point at.
@@ -68,14 +58,7 @@ fn only_session_starts_are_touched() {
         "params": { "sessionId": "s", "cwd": "/", "mcpServers": [] }
     });
     let before = bare.clone();
-    assert!(
-        prepare_session(
-            &mut bare,
-            std::path::Path::new("/home/macro/work"),
-            None
-        )
-        .is_err()
-    );
+    assert!(prepare_session(&mut bare, std::path::Path::new("/home/macro/work"), None).is_err());
     assert_eq!(bare, before);
 }
 

@@ -718,8 +718,8 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         harness_id,
         claude_sign_in("sha256:computer", "2027-01-01T00:00:00Z", Some(caller())),
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
     let renamed = repo
         .update_harness(
             harness_id,
@@ -1234,7 +1234,11 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
     assert!(
         repo.record_account_login(
             mine,
-            claude_sign_in("sha256:first", "2027-01-01T00:00:00Z", Some(teammate.clone()))
+            claude_sign_in(
+                "sha256:first",
+                "2027-01-01T00:00:00Z",
+                Some(teammate.clone())
+            )
         )
         .await
         .unwrap()
@@ -1246,7 +1250,10 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         .unwrap();
     assert_eq!(first.signed_in_by, Some(teammate.clone()));
     assert_eq!(first.account.identity.external_account_id, "sha256:first");
-    assert_eq!(first.expires_at, Some("2027-01-01T00:00:00Z".parse().unwrap()));
+    assert_eq!(
+        first.expires_at,
+        Some("2027-01-01T00:00:00Z".parse().unwrap())
+    );
     assert_eq!(
         repo.get_harness(mine).await.unwrap().unwrap().claude_mode,
         ClaudeMode::OwnAccount
@@ -1289,7 +1296,10 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         .unwrap();
     assert_ne!(second.id, first.id);
     assert_eq!(second.signed_in_by, Some(caller()));
-    assert_eq!(second.expires_at, Some("2027-02-01T00:00:00Z".parse().unwrap()));
+    assert_eq!(
+        second.expires_at,
+        Some("2027-02-01T00:00:00Z".parse().unwrap())
+    );
     // The same account on another machine is the same provider account.
     assert!(
         repo.record_account_login(

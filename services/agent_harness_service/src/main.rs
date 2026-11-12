@@ -1384,9 +1384,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let harnessd: computers::HostedHarnessd = computers::harnessd::Harnessd::new(
         match &computer_operator {
-            Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(
-                operator,
-            ))),
+            Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
             None => Arc::new(computers::harnessd::NoFleet),
         },
         Arc::new(computers::harnessd::PgComputerLocks::new(pool.clone())),

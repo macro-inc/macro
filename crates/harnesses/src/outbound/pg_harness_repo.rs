@@ -24,8 +24,8 @@ use uuid::Uuid;
 use crate::domain::{
     account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin},
     models::{
-        ClaudeMode, Harness, HarnessAccess, HarnessAgent, HarnessOwner,
-        HarnessResident, HarnessSession, PairingClaimFacts, PairingDetails, PairingStatus,
+        ClaudeMode, Harness, HarnessAccess, HarnessAgent, HarnessOwner, HarnessResident,
+        HarnessSession, PairingClaimFacts, PairingDetails, PairingStatus,
     },
     ports::{
         HarnessChanges, HarnessRepo, HostedPairingUpsert, NewHarness, NewPairing,

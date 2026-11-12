@@ -81,7 +81,9 @@ impl ComputerLocks for FakeLocks {
         &self,
         _computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<ComputerLock, HarnessdError>> + Send + '_>> {
-        Box::pin(async move { Ok(Box::new(Arc::clone(&self.lock).lock_owned().await) as ComputerLock) })
+        Box::pin(
+            async move { Ok(Box::new(Arc::clone(&self.lock).lock_owned().await) as ComputerLock) },
+        )
     }
 }
 

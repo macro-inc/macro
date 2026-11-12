@@ -2,7 +2,6 @@
 
 pub use crate::domain::lifecycle::InstanceStatus;
 
-
 use bot_id::BotId;
 use harness_id::HarnessId;
 use std::collections::HashMap;

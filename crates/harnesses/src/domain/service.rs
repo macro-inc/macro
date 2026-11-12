@@ -17,8 +17,8 @@ use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
-        HarnessAgent, HarnessOwner, HarnessPermission, HarnessResident,
-        HarnessSession, HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
+        HarnessAgent, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
+        HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
         SetHarnessTeamAccessRequest,
     },
     ports::{

@@ -491,13 +491,15 @@ impl ComputerRouteError {
             }
             ErrorKind::Cancelled => Self::SignInCancelled,
             ErrorKind::Timeout => Self::Timeout,
-            ErrorKind::Failed => Self::Failed("Claude could not sign in on the computer".to_owned()),
+            ErrorKind::Failed => {
+                Self::Failed("Claude could not sign in on the computer".to_owned())
+            }
             ErrorKind::Unavailable => {
                 Self::Conflict("the computer's sign-in service is not running".to_owned())
             }
-            ErrorKind::InvalidRequest => {
-                Self::Internal(rootcause::report!("harnessd did not understand the request"))
-            }
+            ErrorKind::InvalidRequest => Self::Internal(rootcause::report!(
+                "harnessd did not understand the request"
+            )),
         }
     }
 }

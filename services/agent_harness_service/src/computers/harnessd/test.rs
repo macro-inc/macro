@@ -135,7 +135,10 @@ async fn a_status_read_by_the_timer_names_no_signer() {
         .await
         .unwrap();
 
-    assert_eq!(*changes.lock().unwrap(), vec![(HARNESS, claude_sign_in(None))]);
+    assert_eq!(
+        *changes.lock().unwrap(),
+        vec![(HARNESS, claude_sign_in(None))]
+    );
 }
 
 #[tokio::test]

@@ -13,10 +13,9 @@ use uuid::Uuid;
 use super::account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin};
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
-    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent,
-    HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
-    HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
-    SetHarnessTeamAccessRequest,
+    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent, HarnessOwner,
+    HarnessPermission, HarnessResident, HarnessSession, HostedPairing, PairingClaimFacts,
+    PairingDetails, PairingStatus, PatchHarnessRequest, SetHarnessTeamAccessRequest,
 };
 
 /// A pairing row to persist.

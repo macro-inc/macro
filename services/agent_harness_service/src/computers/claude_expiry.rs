@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use harness_id::HarnessId;
 use hosted_runtimes::domain::claude_sign_in::{
-    ClaudeSignIn, SignInExpiry, ClaudeSignInNotice, ClaudeSignInNotices,
-    ClaudeSignInStage, ClaudeSignIns,
+    ClaudeSignIn, ClaudeSignInNotice, ClaudeSignInNotices, ClaudeSignInStage, ClaudeSignIns,
+    SignInExpiry,
 };
 use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::cowlike::CowLike;

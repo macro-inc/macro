@@ -250,44 +250,45 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
-        let outcome: anyhow::Result<()> = match pass {
-            Pass::Effects => operator
-                .run_fleet_effects_until(shutdown.cancelled())
-                .await
-                .map(|_| ())
-                .map_err(anyhow::Error::from),
-            Pass::Timers => shutdown
-                .run_until_cancelled(operator.fire_timers())
-                .await
-                .transpose()
-                .map(|_| ())
-                .map_err(anyhow::Error::from),
-            Pass::Reconcile => shutdown
-                .run_until_cancelled(operator.reconcile())
-                .await
-                .transpose()
-                .map(|_| ())
-                .map_err(anyhow::Error::from),
-            Pass::ClaudeSignIns => shutdown
-                .run_until_cancelled(operator.notify_claude_sign_ins(
-                    &claude_sign_ins.sign_ins,
-                    &claude_sign_ins.notices,
-                ))
-                .await
-                .transpose()
-                .map(|_| ())
-                .map_err(anyhow::Error::from),
-            Pass::ClaudeStatus => shutdown
-                .run_until_cancelled(
-                    claude_sign_ins
-                        .harnessd
-                        .refresh_awake(&claude_sign_ins.pool),
-                )
-                .await
-                .transpose()
-                .map(|_| ())
-                .map_err(anyhow::Error::from),
-        };
+        let outcome: anyhow::Result<()> =
+            match pass {
+                Pass::Effects => operator
+                    .run_fleet_effects_until(shutdown.cancelled())
+                    .await
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Timers => shutdown
+                    .run_until_cancelled(operator.fire_timers())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Reconcile => shutdown
+                    .run_until_cancelled(operator.reconcile())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::ClaudeSignIns => shutdown
+                    .run_until_cancelled(operator.notify_claude_sign_ins(
+                        &claude_sign_ins.sign_ins,
+                        &claude_sign_ins.notices,
+                    ))
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::ClaudeStatus => shutdown
+                    .run_until_cancelled(
+                        claude_sign_ins
+                            .harnessd
+                            .refresh_awake(&claude_sign_ins.pool),
+                    )
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+            };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();
             tracing::error!(pass = name, error = ?error, "computer pass failed");
@@ -588,7 +589,13 @@ impl harnessd::HarnessdTransport for FleetTransport {
         &self,
         computer_id: ComputerId,
         request: harnessd_protocol::Request,
-    ) -> Pin<Box<dyn Future<Output = Result<harnessd_protocol::Response, harnessd::HarnessdError>> + Send + '_>> {
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<harnessd_protocol::Response, harnessd::HarnessdError>>
+                + Send
+                + '_,
+        >,
+    > {
         Box::pin(async move {
             use hosted_runtimes::domain::ports::Fleet as _;
             use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _};

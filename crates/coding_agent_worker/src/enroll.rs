@@ -387,4 +387,3 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
         },
     )
 }
-

@@ -21,9 +21,9 @@ use serde::Serialize;
 use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
-        HarnessResident, HarnessSession, PairingDetails, PatchHarnessRequest,
-        RUNTIME_CONNECTED_HEADER, SetHarnessTeamAccessRequest,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessResident,
+        HarnessSession, PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
+        SetHarnessTeamAccessRequest,
     },
     ports::{HarnessError, HarnessService},
 };
