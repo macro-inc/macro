@@ -18,7 +18,6 @@ const SUBSCRIPTION: &str = "sub_team";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Step {
     Purge(Uuid),
-    PurgeVault(Uuid),
     CancelSubscription(String),
     DeleteTeam { team_id: Uuid, bot_ids: Vec<BotId> },
     Published(String),
@@ -27,7 +26,7 @@ pub(super) enum Step {
 /// The timeline that the cleanup fake and `test.rs`'s repository, customer
 /// repository, and broker mocks append to, so ordering across ports is one
 /// assertion.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default)]
 pub(super) struct Journal(Arc<Mutex<Vec<Step>>>);
 
 impl Journal {
@@ -40,17 +39,6 @@ impl Journal {
     }
 }
 
-#[derive(Debug, Default)]
-pub(super) struct RecordingVaultCleanup(pub Journal);
-impl crate::domain::vault::VaultCleanup for RecordingVaultCleanup {
-    fn purge(&self, team: Uuid) -> crate::domain::vault::VaultCleanupFuture<'_> {
-        Box::pin(async move {
-            self.0.record(Step::PurgeVault(team));
-            Ok(())
-        })
-    }
-}
-
 #[derive(Default)]
 struct FakeWorld {
     /// Each team's bots, flagged when soft-deleted. The roster returns both,
@@ -59,6 +47,7 @@ struct FakeWorld {
     registry: BTreeMap<Uuid, OwnedEntityRef>,
     /// Entities a listing returns for an owner that does not own them.
     misfiled: Vec<(TeamDeletionOwner, OwnedEntityRef)>,
+    fail_prepare: bool,
     fail_purge_of: Option<Uuid>,
     /// How many more purges register a fresh entity for the purged one's owner.
     respawns_left: usize,
@@ -155,6 +144,17 @@ impl RecordingOwnedEntityCleanup {
 
 impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
     type Err = std::io::Error;
+
+    async fn prepare_team_deletion(
+        &self,
+        _: Uuid,
+    ) -> Result<Option<Box<dyn crate::domain::owned_entity_cleanup::TeamDeletionGuard>>, Self::Err>
+    {
+        if self.world.lock().unwrap().fail_prepare {
+            return Err(std::io::Error::other("namespace cleanup unavailable"));
+        }
+        Ok(None)
+    }
 
     async fn team_bots(&self, team_id: Uuid) -> Result<Vec<BotId>, Self::Err> {
         let world = self.world.lock().unwrap();
@@ -285,8 +285,7 @@ fn deleting_service(
         NoOpTeamCrmSettingsRepository,
     )
     .with_event_broker(broker.clone())
-    .with_owned_entity_cleanup(cleanup.clone())
-    .with_vault_cleanup(RecordingVaultCleanup(journal.clone()));
+    .with_owned_entity_cleanup(cleanup.clone());
     (service, broker)
 }
 
@@ -321,7 +320,6 @@ async fn delete_team_purges_what_the_team_owns_directly() {
             purge(1),
             purge(2),
             purge(3),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -347,7 +345,6 @@ async fn delete_team_purges_what_the_teams_bots_own() {
         vec![
             purge(1),
             purge(2),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -374,7 +371,6 @@ async fn delete_team_purges_what_soft_deleted_team_bots_own() {
         vec![
             purge(1),
             purge(2),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(vec![bot(0xb01), bot(0xb02)]),
             published_team_deleted(),
@@ -405,7 +401,6 @@ async fn delete_team_purges_in_rank_order_before_billing_the_row_and_the_event()
             purge(3),
             purge(6),
             purge(1),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -428,7 +423,6 @@ async fn delete_team_purges_content_created_while_it_purges() {
         vec![
             purge(1),
             purge(0x1000),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -484,7 +478,6 @@ async fn delete_team_keeps_the_team_when_a_purge_fails_and_a_retry_resumes() {
             purge(3),
             purge(4),
             purge(5),
-            Step::PurgeVault(TEAM_ID),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -559,8 +552,8 @@ async fn delete_team_without_a_cleanup_refuses_before_billing_or_the_row() {
 
     let error = cleanup_failure(service.delete_team(owner_receipt()).await);
 
-    let OwnedEntityCleanupError::ListBots { source } = &error else {
-        panic!("expected the bot listing to fail, got {error:?}");
+    let OwnedEntityCleanupError::Prepare { source } = &error else {
+        panic!("expected preflight to fail, got {error:?}");
     };
     assert_eq!(
         source.downcast_ref::<OwnedEntityCleanupUnwired>(),
@@ -634,27 +627,26 @@ async fn team_deleted_event_lists_the_bots_and_each_purged_entity_with_its_owner
 }
 
 #[tokio::test]
-async fn missing_vault_purge_preserves_team_and_billing_and_reports_failure() {
+async fn namespace_preflight_failure_stops_before_any_team_side_effect_and_retry_resumes() {
     let journal = Journal::default();
-    let cleanup = RecordingOwnedEntityCleanup::new(&journal);
-    let (repo, customer, broker) = team_ports(&journal);
-    let service = TeamServiceImpl::new(
-        repo,
-        customer,
-        RecordingChannelService::default(),
-        MockUserRolesAndPermissionsService::default(),
-        Arc::new(MockNotificationIngress::new(HashSet::new())),
-        NoOpCrmEnqueuer,
-        NoOpTeamCrmSettingsRepository,
-    )
-    .with_event_broker(broker)
-    .with_owned_entity_cleanup(cleanup);
+    let cleanup = RecordingOwnedEntityCleanup::new(&journal)
+        .owning(TeamDeletionOwner::Team(TEAM_ID), [session(1), document(2)]);
+    cleanup.world.lock().unwrap().fail_prepare = true;
+    let (service, broker) = deleting_service(&journal, &cleanup);
     assert!(matches!(
-        service.delete_team(owner_receipt()).await,
-        Err(DeleteTeamError::VaultCleanup(_))
+        cleanup_failure(service.delete_team(owner_receipt()).await),
+        OwnedEntityCleanupError::Prepare { .. }
     ));
+    assert!(journal.steps().is_empty());
+    assert!(broker.events().is_empty());
+    assert_eq!(cleanup.world.lock().unwrap().registry.len(), 2);
+    cleanup.world.lock().unwrap().fail_prepare = false;
+    service.delete_team(owner_receipt()).await.unwrap();
+    assert!(cleanup.world.lock().unwrap().registry.is_empty());
     assert!(
-        journal.steps().is_empty(),
-        "failed vault purge must precede billing, row deletion and success event"
+        journal
+            .steps()
+            .iter()
+            .any(|step| matches!(step, Step::DeleteTeam { .. }))
     );
 }

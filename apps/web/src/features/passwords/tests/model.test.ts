@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterItems,
-  generatePassword,
   type PasswordDraft,
   type PasswordItem,
   validateDraft,
@@ -18,6 +17,8 @@ const ITEMS: PasswordItem[] = [
     favorite: true,
     shared: false,
     shareCount: 0,
+    sharedWithTeam: true,
+    canManage: true,
     version: 1,
     hasTotp: false,
     createdAt: '',
@@ -34,6 +35,8 @@ const ITEMS: PasswordItem[] = [
     favorite: false,
     shared: true,
     shareCount: 1,
+    sharedWithTeam: true,
+    canManage: true,
     version: 1,
     hasTotp: false,
     createdAt: '',
@@ -61,17 +64,6 @@ describe('metadata filters', () => {
     expect(ITEMS[0].id).toBe('one');
   });
 });
-it('generates bounded cryptographic passwords without excluded characters', () => {
-  for (const length of [12, 24, 128]) {
-    const value = generatePassword(length);
-    expect(value).toHaveLength(length);
-    expect(value).toMatch(
-      /^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+\-=?]+$/
-    );
-  }
-  expect(() => generatePassword(0)).toThrow();
-  expect(() => generatePassword(129)).toThrow();
-});
 it('blocks blank names and dangerous URL schemes before saving', () => {
   const draft: PasswordDraft = {
     name: 'Portal',
@@ -79,6 +71,7 @@ it('blocks blank names and dangerous URL schemes before saving', () => {
     url: '',
     folderId: null,
     favorite: false,
+    private: false,
     values: { username: '', password: '', notes: '', fields: [] },
   };
   expect(validateDraft(draft)).toBeUndefined();

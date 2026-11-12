@@ -46,7 +46,10 @@ async fn main() -> anyhow::Result<()> {
     let state = api::context::ApiContext {
         authorization_state,
         environment: config.environment,
-        logo_service: domain::LogoService::new(outbound::FaviconProvider(http_client.clone())),
+        logo_service: domain::LogoService::new(outbound::FaviconProvider(
+            outbound::remote_image::build_http_client()
+                .context("failed to build favicon client")?,
+        )),
         http_client,
     };
 

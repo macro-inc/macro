@@ -21,11 +21,6 @@ import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 import { desktopAuthCallbackUrl } from './core/post-auth-target';
-import {
-  authenticationParams,
-  reauthenticationReturnUrl,
-  requiresReauthentication,
-} from './core/reauthentication';
 
 /**
  * Run the hosted flow in the system browser and return through the `macro://`
@@ -49,7 +44,7 @@ async function startDesktopSso(
     'original_url',
     desktopAuthCallbackUrl(
       DESKTOP_AUTH_CALLBACK_URL,
-      authenticationParams(new URL(window.location.href)).get('redirect')
+      new URL(window.location.href).searchParams.get('redirect')
     )
   );
 
@@ -139,8 +134,6 @@ export function useSsoLogin(opts?: {
   signupMode?: boolean;
   /** Started on the agent signup page: a new account becomes an agent. */
   isAgent?: boolean;
-  /** Native sign-in completed with new session credentials. */
-  onAuthenticated?: () => void;
 }) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
@@ -155,9 +148,6 @@ export function useSsoLogin(opts?: {
 
     const authUrl = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     authUrl.searchParams.set('idp_name', idp_name);
-    const currentUrl = new URL(window.location.href);
-    if (requiresReauthentication(currentUrl))
-      authUrl.searchParams.set('reauthenticate', 'true');
 
     const referral_code =
       new URL(window.location.href).searchParams.get('referral_code') ??
@@ -197,7 +187,6 @@ export function useSsoLogin(opts?: {
             analyticsProviders
           );
         }
-        if (outcome === 'success') opts?.onAuthenticated?.();
       } finally {
         releaseReloadHold();
       }
@@ -219,10 +208,7 @@ export function useSsoLogin(opts?: {
         `${window.location.origin}${pathname}${search}${hash}`
       );
     } else {
-      authUrl.searchParams.set(
-        'original_url',
-        reauthenticationReturnUrl(currentUrl)
-      );
+      authUrl.searchParams.set('original_url', window.location.href);
     }
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);

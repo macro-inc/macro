@@ -1,4 +1,4 @@
-//! Cancellation-aware scheduling for the vault's durable item and enrollment cleanup.
+//! Cancellation-aware scheduling for explicit item deletion and retained TOTP cleanup.
 
 use passwords::domain::service::PasswordService;
 use std::{sync::Arc, time::Duration};

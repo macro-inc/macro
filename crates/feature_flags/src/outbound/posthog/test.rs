@@ -242,3 +242,42 @@ async fn connection_failure_is_not_a_missing_flag() {
     ));
     assert!(!format!("{error:?}").contains(&host));
 }
+
+#[tokio::test]
+async fn service_evaluation_uses_explicit_context_and_the_same_strict_transport() {
+    use crate::{ServiceContext, ServiceFeatureFlags};
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/flags/"))
+        .and(body_partial_json(json!({"distinct_id":"passwords-v1", "evaluation_runtime":"server", "geoip_disable":true})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({
+            "enable-passwords-v1": {"key":"enable-passwords-v1", "enabled":true}
+        }))))
+        .expect(1).mount(&server).await;
+    assert!(
+        loader(&server)
+            .load_service(ServiceContext::new("passwords-v1"))
+            .await
+            .unwrap()
+            .is_enabled("enable-passwords-v1")
+    );
+    for response in [
+        json!({"flags":{},"errorsWhileComputingFlags":true}),
+        json!({"flags":{},"errorsWhileComputingFlags":false,"quotaLimited":["feature_flags"]}),
+        json!({"flags":{"enable-passwords-v1":{"key":"enable-passwords-v1","enabled":true,"failed":true}},"errorsWhileComputingFlags":false}),
+        json!({"flags":{}}),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(response))
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert!(
+            loader(&server)
+                .load_service(ServiceContext::new("passwords-v1"))
+                .await
+                .is_err()
+        );
+    }
+}

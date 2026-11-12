@@ -1,46 +1,3 @@
-struct EmptyVault;
-impl crate::outbound::member_vault::MemberVault for EmptyVault {
-    fn finish<'a>(
-        &'a self,
-        _: &'a mut sqlx::PgConnection,
-        _: uuid::Uuid,
-        _: &'a str,
-    ) -> crate::outbound::member_vault::MemberVaultFuture<'a> {
-        Box::pin(async { Ok(()) })
-    }
-    fn rollback<'a>(
-        &'a self,
-        _: &'a mut sqlx::PgConnection,
-        _: uuid::Uuid,
-        _: &'a str,
-    ) -> crate::outbound::member_vault::MemberVaultFuture<'a> {
-        Box::pin(async { Ok(()) })
-    }
-    fn prepare<'a>(
-        &'a self,
-        connection: &'a mut sqlx::PgConnection,
-        team: uuid::Uuid,
-        _: &'a str,
-        _: &'a str,
-        _: crate::domain::vault::MemberRemovalMode,
-    ) -> crate::outbound::member_vault::MemberVaultFuture<'a> {
-        Box::pin(async move {
-            let has_items = sqlx::query_scalar!(
-                "SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1)",
-                team
-            )
-            .fetch_one(connection)
-            .await?;
-            assert_eq!(
-                has_items,
-                Some(false),
-                "empty-vault fixture must not bypass real lifecycle policy"
-            );
-            Ok(())
-        })
-    }
-}
-
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Pool, Postgres, Row};
@@ -823,7 +780,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
 async fn test_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool).with_member_vault(EmptyVault);
+    let team_repo = TeamRepositoryImpl::new(pool);
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
@@ -1148,7 +1105,7 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
 async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone()).with_member_vault(EmptyVault);
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
@@ -1214,7 +1171,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
 async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone()).with_member_vault(EmptyVault);
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let user_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;

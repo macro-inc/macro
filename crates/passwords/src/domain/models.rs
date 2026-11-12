@@ -14,7 +14,7 @@ pub struct ItemId(
 );
 
 /// Team isolation boundary.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(transparent)]
 #[schema(as=PasswordTeamId)]
 pub struct TeamId(
@@ -27,8 +27,6 @@ pub struct TeamId(
 pub struct Actor {
     /// Authenticated Macro user identity; never a provider credential.
     pub user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-    /// Original session credential, used only to verify recent authentication.
-    pub session_token: Option<SecretString>,
 }
 
 /// Owned sensitive text. Deliberately does not implement Debug or Display.
@@ -81,12 +79,14 @@ pub enum ItemKind {
     Identity,
     /// API credential template.
     Api,
+    /// Standalone time-based verification code for an account kept elsewhere.
+    VerificationCode,
 }
 
 /// Searchable display fields, without any credential values.
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schema(as=PasswordItemMetadata)]
+#[schema(as=PasswordItemFields)]
 pub struct ItemMetadata {
     /// Identity of this resource within its team.
     pub id: ItemId,
@@ -120,6 +120,26 @@ pub struct ItemMetadata {
     pub last_used_at: Option<DateTime<Utc>>,
 }
 
+/// Actor-specific response capabilities, never part of persisted metadata or write intents.
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as=PasswordItemMetadata)]
+pub struct ItemView {
+    /// Stored display fields, without confidential values or derived authority.
+    #[serde(flatten)]
+    pub metadata: ItemMetadata,
+    /// Whether this caller may change grants or delete the team item now.
+    pub can_manage: bool,
+    /// Whether the team has an explicit grant, independent of direct recipients.
+    pub shared_with_team: bool,
+}
+impl std::ops::Deref for ItemView {
+    type Target = ItemMetadata;
+    fn deref(&self) -> &Self::Target {
+        &self.metadata
+    }
+}
+
 /// Mutation without provider-specific representations.
 #[derive(Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -137,6 +157,9 @@ pub struct WriteItem {
     pub folder_id: Option<Uuid>,
     /// Whether the item is marked as a favorite.
     pub favorite: bool,
+    /// Create without the default team edit grant. Updates preserve existing grants.
+    #[serde(default)]
+    pub private: bool,
     /// Version observed by the editor; absent only for creation.
     pub expected_version: Option<i32>,
     /// Private payload; never serialize into the metadata repository.
@@ -196,7 +219,7 @@ pub enum GranteeKind {
 pub enum Permission {
     /// Read metadata and request protected disclosure.
     View,
-    /// View and edit the item, without owner-only grant management.
+    /// View and edit the item, without creator or administrator grant management.
     Edit,
 }
 /// Internal metadata record with authorization facts.
@@ -204,15 +227,12 @@ pub enum Permission {
 pub struct Record {
     /// Searchable fields only; excludes all private payloads.
     pub metadata: ItemMetadata,
-    /// Authenticated Macro user identity; never a provider credential.
+    /// Immutable creator; ownership remains with the team after this person leaves.
     pub user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
     /// Explicit recipients and their item capabilities.
     pub grants: Vec<Grant>,
     /// Deletion fence; prevents reads and delayed-write resurrection.
     pub deleting: bool,
-    /// A reversible membership-removal fence; values remain intact until finalization.
-    #[serde(default)]
-    pub member_removal_pending: bool,
     /// Metadata revision used to preserve later edits during recovery.
     pub revision: i64,
     /// Active generation of the TOTP enrollment; never a seed.
@@ -229,6 +249,8 @@ pub struct Folder {
     pub team_id: TeamId,
     /// Searchable display name; must not contain credential values.
     pub name: String,
+    /// Containing folder in the same team; absent for a top-level folder.
+    pub parent_id: Option<Uuid>,
 }
 /// Bounded audit entry, correlated by opaque item/event IDs.
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -313,24 +335,21 @@ pub struct TotpCode {
 /// Sanitized domain failures. Provider messages may contain secrets, so are discarded.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// A voluntary departure would abandon live owned vault items.
-    #[error("dispose of owned vault items before leaving")]
-    OwnedItems,
     #[error("vault item not found")]
     /// Resource absent or hidden by its authorization boundary.
     NotFound,
     #[error("vault access denied")]
     /// Authenticated caller lacks the required capability.
     Forbidden,
-    #[error("recent sign-in required")]
-    /// A recent signed human authentication is required.
-    ReauthenticationRequired,
     #[error("invalid vault request")]
     /// Request violates a validated domain invariant.
     Invalid,
     #[error("vault version conflict")]
     /// Observed version or retry operation no longer matches.
     Conflict,
+    #[error("folder no longer exists")]
+    /// The referenced folder was deleted; the caller must choose another folder.
+    FolderMissing,
     #[error("vault is busy; retry the request")]
     /// Lease admission or the team lease is currently held by another operation.
     Busy,

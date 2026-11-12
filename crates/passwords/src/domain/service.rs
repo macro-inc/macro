@@ -4,19 +4,19 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
+const CLEANUP_ATTEMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Provider-independent vault use cases with current membership and item grant enforcement.
 pub struct PasswordService {
     /// Metadata, grants, durable write intents and distributed vault locks.
     pub repository: Arc<dyn Repository>,
     /// Replaceable confidential value and TOTP storage.
     pub provider: Arc<dyn SecretProvider>,
-    /// Verifies a recent interactive sign-in for confidential disclosure.
-    pub reauthentication: Arc<dyn Reauthentication>,
-    /// Per-user remote rollout and explicit provider availability.
+    /// Service authority, actor targeting and explicit provider availability.
     pub availability: Arc<dyn Availability>,
 }
 impl PasswordService {
-    fn metadata(mut record: Record) -> ItemMetadata {
+    fn view(mut record: Record, actor: &Actor, admin: bool) -> ItemView {
         record.metadata.share_count = record
             .grants
             .iter()
@@ -24,15 +24,35 @@ impl PasswordService {
             .collect::<std::collections::HashSet<_>>()
             .len();
         record.metadata.shared = record.metadata.share_count > 0;
-        record.metadata
+        ItemView {
+            can_manage: record.user_id == actor.user_id || admin,
+            shared_with_team: record.grants.iter().any(|grant| {
+                matches!(grant.kind, GranteeKind::Team)
+                    && grant.id == record.metadata.team_id.0.to_string()
+            }),
+            metadata: record.metadata,
+        }
+    }
+    async fn metadata(&self, actor: &Actor, record: Record) -> Result<ItemView, Error> {
+        let admin = self
+            .repository
+            .is_team_admin(&actor.user_id, record.metadata.team_id)
+            .await?;
+        Ok(Self::view(record, actor, admin))
     }
     /// List currently enabled vault memberships.
     pub async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         self.availability.require_enabled(actor).await?;
+        if !self.repository.is_human(&actor.user_id).await? {
+            return Err(Error::Forbidden);
+        }
         self.repository.teams(actor).await
     }
     async fn membership(&self, actor: &Actor, team: TeamId) -> Result<(), Error> {
         self.availability.require_enabled(actor).await?;
+        if !self.repository.is_human(&actor.user_id).await? {
+            return Err(Error::Forbidden);
+        }
         if !self.repository.teams(actor).await?.contains(&team) {
             return Err(Error::NotFound);
         }
@@ -64,21 +84,9 @@ impl PasswordService {
     }
     /// A lost provider response can be reconciled from its operation UUID and durable metadata intent.
     /// Every caller holds the same distributed item lock throughout this and the protected action.
-    async fn reconcile(&self, actor: &Actor, team: TeamId, item: ItemId) -> Result<(), Error> {
+    async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
         let current = self.repository.get(team, item).await;
         let current_record = current.as_ref().ok().cloned();
-        if let Some(record) = current_record
-            .as_ref()
-            .filter(|record| record.member_removal_pending)
-        {
-            if record.deleting
-                || record.metadata.team_id != team
-                || !Self::permission(actor, team, record, false)
-            {
-                return Err(Error::NotFound);
-            }
-            return Err(Error::Busy);
-        }
         if matches!(&current,Ok(record) if record.deleting) {
             return Ok(());
         }
@@ -120,7 +128,14 @@ impl PasswordService {
             }
         }
         record.metadata.shared = !record.grants.is_empty();
-        self.repository.save(&record, expected).await?;
+        match self.repository.save(&record, expected).await {
+            // The folder was deleted after validation; land the write unfiled.
+            Err(Error::FolderMissing) => {
+                record.metadata.folder_id = None;
+                self.repository.save(&record, expected).await?;
+            }
+            result => result?,
+        }
         self.repository.finish(operation).await
     }
     async fn access(
@@ -134,12 +149,10 @@ impl PasswordService {
         let record = self.repository.get(team, item).await?;
         if record.deleting
             || record.metadata.team_id != team
-            || !Self::permission(actor, team, &record, edit)
+            || !(Self::permission(actor, team, &record, edit)
+                || self.repository.is_team_admin(&actor.user_id, team).await?)
         {
             return Err(Error::NotFound);
-        }
-        if record.member_removal_pending {
-            return Err(Error::Busy);
         }
         Ok(record)
     }
@@ -189,28 +202,25 @@ impl PasswordService {
         actor: &Actor,
         team: TeamId,
         search: &str,
-    ) -> Result<Vec<ItemMetadata>, Error> {
+    ) -> Result<Vec<ItemView>, Error> {
         self.membership(actor, team).await?;
         if search.len() > 200 {
             return Err(Error::Invalid);
         }
+        let admin = self.repository.is_team_admin(&actor.user_id, team).await?;
         Ok(self
             .repository
             .list(actor, team, search)
             .await?
             .into_iter()
-            .filter(|record| Self::permission(actor, team, record, false))
-            .map(Self::metadata)
+            .filter(|record| admin || Self::permission(actor, team, record, false))
+            .map(|record| Self::view(record, actor, admin))
             .collect())
     }
     /// Read an authorized metadata detail without consulting the secret provider.
-    pub async fn get(
-        &self,
-        actor: &Actor,
-        team: TeamId,
-        item: ItemId,
-    ) -> Result<ItemMetadata, Error> {
-        Ok(Self::metadata(self.access(actor, team, item, false).await?))
+    pub async fn get(&self, actor: &Actor, team: TeamId, item: ItemId) -> Result<ItemView, Error> {
+        self.metadata(actor, self.access(actor, team, item, false).await?)
+            .await
     }
     /// Resolve the current account identifier after normal human view authorization.
     #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy))]
@@ -254,7 +264,7 @@ impl PasswordService {
         actor: &Actor,
         team: TeamId,
         command: WriteItem,
-    ) -> Result<ItemMetadata, Error> {
+    ) -> Result<ItemView, Error> {
         let id = ItemId(command.operation_id);
         let _lock = self.admit(actor, team, id).await?;
         command.validate()?;
@@ -272,13 +282,13 @@ impl PasswordService {
         {
             return Err(Error::Forbidden);
         }
-        self.reconcile(actor, team, id).await?;
+        self.reconcile(team, id).await?;
         match self.repository.get(team, id).await {
             Ok(record) if record.user_id == actor.user_id && !record.deleting => {
                 self.repository
                     .audit(team, id, actor, Action::Create, command.operation_id)
                     .await?;
-                return Ok(Self::metadata(record));
+                return self.metadata(actor, record).await;
             }
             Ok(_) => return Err(Error::Conflict),
             Err(Error::NotFound) => {}
@@ -287,9 +297,16 @@ impl PasswordService {
         let now = Utc::now();
         let record = Record {
             user_id: actor.user_id.clone(),
-            grants: vec![],
+            grants: if command.private {
+                vec![]
+            } else {
+                vec![Grant {
+                    kind: GranteeKind::Team,
+                    id: team.0.to_string(),
+                    permission: Permission::Edit,
+                }]
+            },
             deleting: false,
-            member_removal_pending: false,
             revision: 0,
             totp_key_id: None,
             metadata: ItemMetadata {
@@ -315,11 +332,11 @@ impl PasswordService {
         self.provider
             .write(team, id, 0, command.operation_id, &command.values)
             .await?;
-        self.reconcile(actor, team, id).await?;
+        self.reconcile(team, id).await?;
         self.repository
             .audit(team, id, actor, Action::Create, command.operation_id)
             .await?;
-        Ok(Self::metadata(record))
+        self.metadata(actor, record).await
     }
     #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update an editable credential with provider CAS and retry recovery.
@@ -329,10 +346,10 @@ impl PasswordService {
         team: TeamId,
         item: ItemId,
         command: WriteItem,
-    ) -> Result<ItemMetadata, Error> {
+    ) -> Result<ItemView, Error> {
         let _lock = self.admit(actor, team, item).await?;
         self.access(actor, team, item, true).await?;
-        self.reconcile(actor, team, item).await?;
+        self.reconcile(team, item).await?;
         let mut record = self.access(actor, team, item, true).await?;
         command.validate()?;
         if command.expected_version != Some(record.metadata.version) {
@@ -343,7 +360,7 @@ impl PasswordService {
                 self.repository
                     .audit(team, item, actor, Action::Update, command.operation_id)
                     .await?;
-                return Ok(Self::metadata(record));
+                return self.metadata(actor, record).await;
             }
             return Err(Error::Conflict);
         }
@@ -362,11 +379,11 @@ impl PasswordService {
         self.provider
             .write(team, item, expected, command.operation_id, &command.values)
             .await?;
-        self.reconcile(actor, team, item).await?;
+        self.reconcile(team, item).await?;
         self.repository
             .audit(team, item, actor, Action::Update, command.operation_id)
             .await?;
-        Ok(Self::metadata(record))
+        self.metadata(actor, record).await
     }
     #[tracing::instrument(skip_all,err,name="passwords.metadata.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update display fields without resolving or replacing secret values.
@@ -376,7 +393,7 @@ impl PasswordService {
         team: TeamId,
         item: ItemId,
         command: PatchItem,
-    ) -> Result<ItemMetadata, Error> {
+    ) -> Result<ItemView, Error> {
         let _lock = self.admit(actor, team, item).await?;
         let mut record = self.access(actor, team, item, true).await?;
         if command.expected_version != record.metadata.version {
@@ -397,7 +414,7 @@ impl PasswordService {
         self.repository
             .audit(team, item, actor, Action::Update, Uuid::now_v7())
             .await?;
-        Ok(Self::metadata(record))
+        self.metadata(actor, record).await
     }
     /// Deleted items retain internal tombstones for owner retries and durable provider cleanup.
     #[tracing::instrument(skip_all,err,name="passwords.delete",fields(team_id=%team.0,item_id=%item.0))]
@@ -407,7 +424,9 @@ impl PasswordService {
             Ok(record) => record,
             Err(Error::NotFound) => match self.repository.staged(team, item, item.0).await {
                 Ok(record) => {
-                    if record.user_id != actor.user_id {
+                    if record.user_id != actor.user_id
+                        && !self.repository.is_team_admin(&actor.user_id, team).await?
+                    {
                         return Err(Error::Forbidden);
                     }
                     self.repository.save(&record, None).await?;
@@ -418,11 +437,10 @@ impl PasswordService {
             },
             Err(error) => return Err(error),
         };
-        if record.user_id != actor.user_id {
+        if record.user_id != actor.user_id
+            && !self.repository.is_team_admin(&actor.user_id, team).await?
+        {
             return Err(Error::Forbidden);
-        }
-        if record.member_removal_pending {
-            return Err(Error::Busy);
         }
         if !record.deleting {
             record.deleting = true;
@@ -435,7 +453,7 @@ impl PasswordService {
         }
         self.erase_retired_record(team, item).await.map(|_| ())
     }
-    /// Copy an authorized version with a distinct action span and the disclosure reauthentication policy.
+    /// Copy an authorized version with a distinct audited action.
     #[tracing::instrument(skip_all,err,name="passwords.copy",fields(team_id=%team.0,item_id=%item.0))]
     pub async fn copy(
         &self,
@@ -447,7 +465,7 @@ impl PasswordService {
         self.reveal(actor, team, item, version, true).await
     }
     #[tracing::instrument(skip_all,err,name="passwords.reveal",fields(team_id=%team.0,item_id=%item.0,copy))]
-    /// Reveal or copy an authorized version after recent interactive authentication.
+    /// Reveal or copy an authorized version after current human and item authorization.
     pub async fn reveal(
         &self,
         actor: &Actor,
@@ -458,8 +476,7 @@ impl PasswordService {
     ) -> Result<Revealed, Error> {
         let _lock = self.admit(actor, team, item).await?;
         self.access(actor, team, item, false).await?;
-        self.reauthentication.verify(actor).await?;
-        self.reconcile(actor, team, item).await?;
+        self.reconcile(team, item).await?;
         let mut record = self.access(actor, team, item, false).await?;
         let version = version.unwrap_or(record.metadata.version);
         if version < 1 || version > record.metadata.version {
@@ -505,7 +522,7 @@ impl PasswordService {
         self.repository.activity(team, item).await
     }
     #[tracing::instrument(skip_all,err,name="passwords.share",fields(team_id=%team.0,item_id=%item.0))]
-    /// Replace explicit grants; only the current item owner may share.
+    /// Replace explicit grants; the creator and current team administrators may share.
     pub async fn share(
         &self,
         actor: &Actor,
@@ -515,7 +532,9 @@ impl PasswordService {
     ) -> Result<(), Error> {
         let _lock = self.admit(actor, team, item).await?;
         let mut record = self.access(actor, team, item, true).await?;
-        if record.user_id != actor.user_id {
+        if record.user_id != actor.user_id
+            && !self.repository.is_team_admin(&actor.user_id, team).await?
+        {
             return Err(Error::Forbidden);
         }
         if grants.len() > 100 {
@@ -529,9 +548,10 @@ impl PasswordService {
                         user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&grant.id)
                             .map(macro_user_id::cowlike::CowLike::into_owned)
                             .map_err(|_| Error::Invalid)?,
-                        session_token: None,
                     };
-                    if !self.repository.teams(&recipient).await?.contains(&team) {
+                    if !self.repository.is_human(&recipient.user_id).await?
+                        || !self.repository.teams(&recipient).await?.contains(&team)
+                    {
                         return Err(Error::NotFound);
                     }
                     grant.id = recipient.user_id.to_string();
@@ -548,7 +568,7 @@ impl PasswordService {
             .audit(team, item, actor, Action::Share, Uuid::now_v7())
             .await
     }
-    /// List grants for the current owner to manage sharing.
+    /// List grants for the creator and current team administrators to manage sharing.
     pub async fn grants(
         &self,
         actor: &Actor,
@@ -556,7 +576,9 @@ impl PasswordService {
         item: ItemId,
     ) -> Result<Vec<Grant>, Error> {
         let record = self.access(actor, team, item, false).await?;
-        if record.user_id != actor.user_id {
+        if record.user_id != actor.user_id
+            && !self.repository.is_team_admin(&actor.user_id, team).await?
+        {
             return Err(Error::Forbidden);
         }
         Ok(record.grants)
@@ -575,46 +597,50 @@ impl PasswordService {
         name: String,
     ) -> Result<Folder, Error> {
         let _lock = self.admit(actor, team, ItemId(Uuid::nil())).await?;
-        if name.trim().is_empty() || name.len() > 200 {
-            return Err(Error::Invalid);
-        }
-        if !self
-            .repository
-            .folders(team)
-            .await?
-            .iter()
-            .any(|folder| folder.id == id)
-        {
-            return Err(Error::NotFound);
-        }
-        let folder = Folder {
-            id,
-            team_id: team,
-            name,
-        };
-        self.repository.save_folder(&folder).await?;
-        Ok(folder)
+        let name = Self::folder_name(name)?;
+        // The repository's own row check decides NotFound; a pre-read could be
+        // stale once the lease is lost.
+        self.repository.rename_folder(team, id, &name).await
     }
-    /// Create an inline folder in the current team vault.
+    /// Create an inline folder in the current team vault, optionally inside another.
     pub async fn create_folder(
         &self,
         actor: &Actor,
         team: TeamId,
         name: String,
+        parent_id: Option<Uuid>,
     ) -> Result<Folder, Error> {
         let _lock = self.admit(actor, team, ItemId(Uuid::nil())).await?;
-        if name.trim().is_empty() || name.len() > 200 {
-            return Err(Error::Invalid);
-        }
         let folder = Folder {
             id: Uuid::now_v7(),
             team_id: team,
-            name,
+            name: Self::folder_name(name)?,
+            parent_id,
         };
         self.repository.save_folder(&folder).await?;
         Ok(folder)
     }
-    /// Delete a folder and move its children to the unfiled view.
+    /// Move a folder under another folder of the team, or to the top level.
+    pub async fn move_folder(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        id: Uuid,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        let _lock = self.admit(actor, team, ItemId(Uuid::nil())).await?;
+        if parent_id == Some(id) {
+            return Err(Error::Invalid);
+        }
+        self.repository.move_folder(team, id, parent_id).await
+    }
+    fn folder_name(name: String) -> Result<String, Error> {
+        if name.trim().is_empty() || name.len() > 200 {
+            return Err(Error::Invalid);
+        }
+        Ok(name)
+    }
+    /// Delete a folder and its subfolders, moving their items to the unfiled view.
     pub async fn delete_folder(&self, actor: &Actor, team: TeamId, id: Uuid) -> Result<(), Error> {
         let _lock = self.admit(actor, team, ItemId(Uuid::nil())).await?;
         self.repository.delete_folder(team, id).await
@@ -631,7 +657,6 @@ impl PasswordService {
     ) -> Result<(), Error> {
         let _lock = self.admit(actor, team, item).await?;
         let record = self.access(actor, team, item, true).await?;
-        self.reauthentication.verify(actor).await?;
         let action = if let Some(key) = key {
             if key.0.len() > 1024 || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0) {
                 return Err(Error::Invalid);
@@ -656,12 +681,11 @@ impl PasswordService {
             .audit(team, item, actor, action, Uuid::now_v7())
             .await
     }
-    /// Resolve only the active enrollment generation after current authorization and recent sign-in.
+    /// Resolve only the active enrollment generation after current authorization and current human membership.
     #[tracing::instrument(skip_all,err,name="passwords.totp.code",fields(team_id=%team.0,item_id=%item.0))]
     pub async fn totp(&self, actor: &Actor, team: TeamId, item: ItemId) -> Result<TotpCode, Error> {
         let _lock = self.admit(actor, team, item).await?;
         let record = self.access(actor, team, item, false).await?;
-        self.reauthentication.verify(actor).await?;
         let key_id = record.totp_key_id.ok_or(Error::NotFound)?;
         self.repository
             .audit(team, item, actor, Action::TotpCode, Uuid::now_v7())
@@ -675,10 +699,20 @@ impl PasswordService {
     /// Retired identities remain journaled for periodic erasure; cancellation and failures remain retryable.
     #[tracing::instrument(skip_all, err, name = "passwords.totp.cleanup",fields(completed=tracing::field::Empty,failed=tracing::field::Empty))]
     pub async fn cleanup_expired_totp_enrollments(&self) -> Result<usize, Error> {
+        self.availability.require_service_enabled().await?;
         let mut completed = 0;
         let mut failed = 0;
         for cleanup in self.repository.totp_cleanup_due().await? {
-            match self.erase_retired_totp(cleanup).await {
+            let result = match tokio::time::timeout(
+                CLEANUP_ATTEMPT_TIMEOUT,
+                self.erase_retired_totp(cleanup),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => Err(Error::Unavailable),
+            };
+            match result {
                 Ok(true) => completed += 1,
                 Ok(false) => {}
                 Err(error) => {

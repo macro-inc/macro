@@ -254,8 +254,6 @@ export * from './teamLanguage';
 export * from './teamMember';
 export * from './teamPlan';
 export * from './teamRole';
-export * from './teamVaultFailure';
-export * from './teamVaultFailureCode';
 export * from './teamWithMembers';
 export * from './teamWithMembersScheduledSeatPlans';
 export * from './teamWithMembersScheduledSeatPlansAnyOf';

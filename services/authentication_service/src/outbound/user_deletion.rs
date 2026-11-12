@@ -97,21 +97,6 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
 }
 
 impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdapter<T, O> {
-    #[tracing::instrument(skip_all, err, name = "account.delete.vault.close")]
-    async fn close_vault_access(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
-        self.documents
-            .close_user_vault(user.as_ref())
-            .await
-            .map_err(|error| Report::new(error).into_dynamic())
-    }
-    #[tracing::instrument(skip_all, err, name = "account.delete.vault.purge")]
-    async fn delete_vault_items(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
-        self.documents
-            .purge_user_vault(user.as_ref())
-            .await
-            .map_err(|error| Report::new(error).into_dynamic())
-    }
-
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.delete_owned(&self.scheduled_action_url, "scheduled-actions", user)
             .await

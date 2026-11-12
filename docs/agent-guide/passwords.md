@@ -1,42 +1,59 @@
 # Passwords
 
-Passwords is a Macro-managed team vault. The `enable-passwords` feature flag
-controls its sidebar entry and `/passwords` route. A team membership is required.
-Authorized Macro servers resolve usernames on selection and protected values on
-explicit reveal or copy; this is a team vault with server-side decryption.
+Passwords is a Macro-managed team vault: Macro's servers decrypt protected
+values on explicit reveal or copy. The `enable-passwords-v1` feature flag controls
+the `/passwords` route, and the route also needs a team: without the flag it
+redirects to Home, and without a team it shows "Passwords is for teams". The
+rail entry and phone dock entry appear only when both hold. By default the rail
+entry sits below Calendar and above Agents; a saved custom rail order without
+it gets it right after Calendar, and the user can reorder it like any other.
 
-Open Passwords from the app rail. All items, Favorites, Recently used, Shared,
-and folders filter the metadata list; search matches names and websites. New
-folder creates an inline input. Desktop rows drag onto folders; editing an item
-also offers Move to folder. On a phone, Password navigation expands the filters,
-and opening an item replaces the list; Back returns to the list.
-The detail header identifies the item and folder path. Shared with shows the
-number of explicit shares, counting a team grant once. Phone lists and details
-scroll clear of the floating New button and navigation dock.
+The view uses the shared view shell. The inner sidebar (Drive's sidebar
+patterns) has a New dropdown, All items, Favorites, Recently used, Shared, and
+a Folders section: a Passwords root row and the folder tree, built from Drive's
+`FolderTree`. Folders nest; selecting one lists its items and its subfolders'
+items. Rows drag onto a folder (or the root row, to unfile). Right-click a
+folder, or open the "…" folder actions beside New in the list header, for New
+subfolder, Rename (inline), Move to folder (an inline destination list), and
+Delete folder. Delete confirms in place and says how many items move to All
+items and how many subfolders go too; it never deletes items or their values.
+On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
+Folders shows the same tree, and the floating New button opens the same kinds.
 
-New item and Edit use the detail pane. Name is required and websites must use
-HTTP or HTTPS. Save publishes changes; Cancel discards them. Changing selection
-with a draft offers Discard changes and Keep editing. Closing or navigating away
-is guarded while a draft exists. Generate password opens an anchored generator
-with length control and Use password.
+New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
+API credential, Verification code, or Folder. Each kind's form and detail label
+the shared username, password, website and notes values for that kind (Card:
+Cardholder and Card number; API credential: Endpoint, Key and Secret; Identity
+and Card start with labeled custom fields such as Expires or Email). A new item
+appears as a Draft row at the top of the list. New items belong to the team
+and are shared with it by default; the form's Shared with team / Private
+control leaves out the team grant (team admins and people it is shared with
+still have access). The list labels each item Team or Private. Share changes sharing afterwards. Share,
+Delete item and dragging into folders appear only for items the viewer can
+manage (their creator or a team admin). Drafts and in-place edits stay
+in memory while you select other items, start other kinds, lock, switch apps or
+hide the tab; Discard or a successful Save ends them. Leaving the view with
+drafts asks Keep editing or Discard and leave. Name is required and websites
+must use HTTP or HTTPS. Drafts are never written to the query cache or browser
+storage.
 
-Usernames appear with Copy username without revealing the password. Copying a
-username uses a dedicated audited endpoint that returns no other field values.
-Reveal password and Copy password require a sign-in within the server's recent
-reauthentication window. Sign in again opens the login route on web and native
-apps and renews that proof. Revealed values clear when selection changes, on Lock Passwords, after a minute, when the app loses focus or becomes hidden, or on unmount.
-Explicit lock also discards editor drafts and pending verification-code seeds.
-Unsaved plaintext drafts also clear on loss of focus or visibility. Values
-are never kept in the query cache or browser storage. Password history lists
-versions and reveals an explicitly selected version through the same gate.
+A Verification code item needs its secret key (or `otpauth://` link) before it
+saves. The item saves first and the key enrolls next; if enrollment fails the
+draft stays open on the saved item with a notice, and Save retries only the
+enrollment. Logins can add a verification code in the form or the detail pane.
+Show verification code loads the current code with a countdown ring and reloads
+it when it expires; a failed load offers Retry.
 
-Share opens an anchored people/team grant editor; permissions are Can view or
-Can edit. Verification code setup accepts a TOTP secret. Show verification code
-retrieves the current code and refreshes it when its validity expires. Replace
-and Remove verification code update the item's TOTP enrollment. More item actions
-contains Activity and Delete item; deletion requires inline confirmation.
-Activity shows server audit events. Brand icons come from Macro's authenticated
-image proxy; failed icons show a letter tile.
+The detail header shows the logo tile, name, folder path and kind, then
+Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
+Copy action and never reveal the password. Any signed-in team member with
+access can reveal and copy the password, notes and verification code; there is
+no separate re-sign-in step. Revealed values and codes clear on Lock
+Passwords (a client-side conceal only), after a minute, when the window loses
+focus or the tab hides, on selection change, or on unmount. Password history
+reveals an explicitly selected version. The generator
+picks a length (12–128) and character classes; every selected class is always
+present, and characters are drawn uniformly with rejection sampling.
 
 The backend-free desktop and phone interaction suite mounts the actual vault
 with an injected fake source:

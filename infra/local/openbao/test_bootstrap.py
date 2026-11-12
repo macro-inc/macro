@@ -83,6 +83,21 @@ class BootstrapIntegration(unittest.TestCase):
             service.request("POST", "passwords/data/item", {
                 "options": {"cas": 1}, "data": {"password": "synthetic-version-two"},
             }, first_namespace)
+            metadata = service.request("GET", "passwords/metadata/item", namespace=first_namespace)
+            self.assertEqual(metadata["data"]["current_version"], 2)
+            # Runtime policy cannot remove the durable CAS fence or resurrect
+            # erased data. Generated client has no methods for these operations.
+            for method, path, body in (
+                ("DELETE", "passwords/metadata/item", None),
+                ("DELETE", "passwords/data/item", None),
+                ("POST", "passwords/undelete/item", {"versions": [1]}),
+                ("LIST", "passwords/metadata", None),
+                ("GET", "totp/keys/item", None),
+                ("GET", "sys/policies/acl/passwords-service", None),
+                ("POST", "sys/namespaces/unrelated", {}),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
+                    service.request(method, path, body, first_namespace)
             history = service.request("GET", "passwords/data/item?version=1", namespace=first_namespace)
             self.assertEqual(history["data"]["data"]["password"], "synthetic-version-one")
             bootstrap(root, first_team, public_key, "local-integration")
@@ -103,6 +118,12 @@ class BootstrapIntegration(unittest.TestCase):
                 service.request("GET", "passwords/data/item", namespace=second_namespace)
             with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
                 service.request("GET", "sys/mounts", namespace=first_namespace)
+            service.request("POST", "passwords/destroy/item", {"versions": [1]}, first_namespace)
+            retained = service.request("GET", "passwords/metadata/item", namespace=first_namespace)
+            self.assertEqual(retained["data"]["current_version"], 2)
+            self.assertTrue(retained["data"]["versions"]["1"]["destroyed"])
+            self.assertEqual(service.request("GET", "passwords/data/item", namespace=first_namespace)["data"]["data"]["password"], "synthetic-version-two")
+
 
             lifecycle_claims = encoded(json.dumps({
                 "iss": "local-integration", "sub": "macro-passwords-lifecycle",
@@ -148,7 +169,9 @@ class BootstrapIntegration(unittest.TestCase):
         mount = "audit-check-" + uuid4().hex
         client.request("POST", "sys/mounts/" + mount, {"type": "kv", "options": {"version": "2"}})
         try:
+            configure_kv(client, None, True, mount)
             client.request("POST", mount + "/data/item", {
+                "options": {"cas": 0},
                 "data": {"password": "synthetic-audit-password", "totp_seed": "JBSWY3DPEHPK3PXP"},
             })
         finally:

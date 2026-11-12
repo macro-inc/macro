@@ -5,17 +5,16 @@ edition = "2024"
 publish = false
 
 [dependencies]
-tokio = { workspace = true, features = ["sync"] }
+openbao_client = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
 rootcause = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 jsonwebtoken = { workspace = true }
 lazy-regex = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 feature_flags = { path = "../feature_flags" }
-macro_auth = { path = "../macro_auth" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_db_client = { path = "../macro_db_client" }
 serde = { workspace = true }
@@ -28,15 +27,12 @@ opentelemetry = { workspace = true, features = ["trace"] }
 utoipa = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
-vaultrs = { workspace = true }
 zeroize = { workspace = true, features = ["derive"] }
-reqwest = { workspace = true }
-rustify = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-macro_auth = { path = "../macro_auth", features = ["testing"] }
 model_user = { path = "../model_user" }
 tower = { workspace = true }
 tracing-subscriber = { workspace = true }

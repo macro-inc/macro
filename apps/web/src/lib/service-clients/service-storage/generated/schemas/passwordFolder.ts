@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PasswordFolderParentId } from './passwordFolderParentId';
 import type { PasswordTeamId } from './passwordTeamId';
 
 /**
@@ -14,6 +15,8 @@ export interface PasswordFolder {
   id: string;
   /** Searchable display name; must not contain credential values. */
   name: string;
+  /** Containing folder in the same team; absent for a top-level folder. */
+  parentId?: PasswordFolderParentId;
   /** Team namespace and authorization boundary. */
   teamId: PasswordTeamId;
 }

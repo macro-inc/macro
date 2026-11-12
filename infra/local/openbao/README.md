@@ -74,7 +74,10 @@ Each `team-<uuid>` namespace contains `passwords` (KV v2, CAS required, 100 vers
 `totp`, and JWT auth at `macro`. Role `passwords-service` accepts only RS256 JWTs
 from the configured issuer with `sub=macro-passwords-service`, `aud=macro-passwords`,
 and a matching `team_id`. It issues 60-second tokens with only `passwords-service`
-policy and no default policy. The policy has no namespace, auth, or system rights.
+policy and no default policy. The values policy grants KV data create/read/update,
+metadata read, version destroy, TOTP key create/update/delete and code read only.
+It cannot list/delete metadata, soft-delete/undelete data, read TOTP key settings,
+or access namespace, auth or system endpoints. This preserves the CAS deletion fence.
 JWT leeway is explicitly disabled; hosted issuer and provider clocks must stay
 synchronized so credential expiration and cleanup deadlines remain bounded.
 The JWT `audit_id` claim maps to token audit metadata for KV/auth correlation.

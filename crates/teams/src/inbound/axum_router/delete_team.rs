@@ -18,8 +18,6 @@ use super::TeamRouterState;
     path = "/team",
     operation_id = "delete_team",
     responses(
-        (status = 409, body = super::TeamVaultFailure),
-        (status = 503, body = super::TeamVaultFailure),
         (status = 200),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),

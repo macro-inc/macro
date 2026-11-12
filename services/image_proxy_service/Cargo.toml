@@ -36,7 +36,6 @@ macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 model = { path = "../../crates/model" }
 bytes = { workspace = true }
 futures = { workspace = true }
-http = { workspace = true }
 lazy-regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 url = { workspace = true }

@@ -1,15 +1,16 @@
 import { err, ok } from 'neverthrow';
 import type { PasswordSource } from '../context/passwords-context';
-import type {
-  PasswordFolder,
-  PasswordGrant,
-  PasswordItem,
-  PasswordValues,
+import {
+  folderSubtree,
+  type PasswordFolder,
+  type PasswordGrant,
+  type PasswordItem,
+  type PasswordValues,
 } from '../core/types';
 
 export function createFakePasswordSource(): PasswordSource {
   let items: PasswordItem[] = [];
-  const folders: PasswordFolder[] = [];
+  let folders: PasswordFolder[] = [];
   const values = new Map<string, PasswordValues>();
   const grants = new Map<string, PasswordGrant[]>();
   return {
@@ -33,6 +34,10 @@ export function createFakePasswordSource(): PasswordSource {
         favorite: draft.favorite,
         shared: currentGrants.length > 0,
         shareCount: currentGrants.length,
+        sharedWithTeam: id
+          ? (items.find((item) => item.id === id)?.sharedWithTeam ?? true)
+          : !draft.private,
+        canManage: true,
         version: (version ?? 0) + 1,
         hasTotp: false,
         createdAt: timestamp,
@@ -40,7 +45,8 @@ export function createFakePasswordSource(): PasswordSource {
         lastUsedAt: null,
       };
       items = [...items.filter((existing) => existing.id !== item.id), item];
-      values.set(item.id, draft.values);
+      // Stored like the server's JSON: a copy, never the caller's live draft.
+      values.set(item.id, JSON.parse(JSON.stringify(draft.values)));
       return ok(item);
     },
     async move(item, folderId) {
@@ -101,12 +107,43 @@ export function createFakePasswordSource(): PasswordSource {
       );
       return ok(undefined);
     },
-    async createFolder(name) {
-      const folder = { id: crypto.randomUUID(), name };
+    async createFolder(name, parentId) {
+      if (parentId && !folders.some((folder) => folder.id === parentId))
+        return err('failed');
+      const folder = { id: crypto.randomUUID(), name, parentId };
       folders.push(folder);
       return ok(folder);
     },
-    async setTotp() {
+    async renameFolder(id, name) {
+      const current = folders.find((folder) => folder.id === id);
+      if (!current) return err('failed');
+      const renamed = { ...current, name };
+      folders = folders.map((folder) => (folder.id === id ? renamed : folder));
+      return ok(renamed);
+    },
+    async moveFolder(id, parentId) {
+      const current = folders.find((folder) => folder.id === id);
+      if (!current || (parentId && folderSubtree(folders, id).has(parentId)))
+        return err('failed');
+      const moved = { ...current, parentId };
+      folders = folders.map((folder) => (folder.id === id ? moved : folder));
+      return ok(moved);
+    },
+    async deleteFolder(id) {
+      if (!folders.some((folder) => folder.id === id)) return err('failed');
+      const removed = folderSubtree(folders, id);
+      folders = folders.filter((folder) => !removed.has(folder.id));
+      items = items.map((item) =>
+        item.folderId && removed.has(item.folderId)
+          ? { ...item, folderId: null }
+          : item
+      );
+      return ok(undefined);
+    },
+    async setTotp(id) {
+      items = items.map((item) =>
+        item.id === id ? { ...item, hasTotp: true } : item
+      );
       return ok(undefined);
     },
     async removeTotp() {
@@ -116,6 +153,7 @@ export function createFakePasswordSource(): PasswordSource {
       return ok({
         code: '123456',
         validUntil: new Date(Date.now() + 30000).toISOString(),
+        period: 30,
       });
     },
     async logo() {

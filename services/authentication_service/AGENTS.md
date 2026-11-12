@@ -99,9 +99,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
-  not gate actions on `isAgent`; it only changes signup and labeling. The one
-  exception: only an agent can be an account manager, and an agent can't be
-  managed (`crates/account_manager`).
+  not gate general actions on `isAgent`; it changes signup and labeling.
+  Passwords v1 separately requires human accounts. Only an agent can be an
+  account manager, and an agent cannot be managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out.
@@ -124,10 +124,6 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   the asynchronous upload event.
 
 ## Gotchas
-
-- `/login/sso?reauthenticate=true` adds `prompt=login&max_age=0` to the
-  identity-provider authorization request; token refresh is never fresh login.
-  Keep the query parameter optional in OpenAPI; omission defaults to false.
 
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets
@@ -226,14 +222,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
 
-## Vault lifecycle
+## Team vault cleanup
 
-- Wire `PasswordMemberVault` into TeamRepositoryImpl so membership commit,
-  reversible fencing, compensation, and final erasure publication share transactions.
-- Account deletion closes vault admission before team cleanup and awaits private
-  erasure before deleting profile/account metadata; any failure stops the job.
-- Use internal DSS lifecycle endpoints for provider work. Keep runtime bootstrap
-  credentials out of the service; local provisioning supplies the scoped parent JWT role.
-
-- Keep regression coverage for both failed-join compensations and late write-intent
-  publication against the real membership/vault transaction bridge.
+- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
+  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+  namespace purge before `clear_team` lists or purges ordinary entities. Recheck
+  emptiness under the existing team lease and retain its guard in `ClearedTeam`
+  through team deletion; drop it before DSS RPC if data appeared.
+- Keep account deletion and membership compensation independent of vault items;
+  team items retain their immutable creator after a person leaves.

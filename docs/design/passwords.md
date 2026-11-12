@@ -3,14 +3,13 @@
 Passwords is a Macro-managed **team vault**. Macro servers decrypt values to
 serve authorized humans. This is not a zero-knowledge personal password manager:
 the service, its operators, and its infrastructure are inside the trust boundary.
-The `enable-passwords` PostHog flag controls discovery; authorization remains
+The `enable-passwords-v1` PostHog flag controls discovery and backend admission; authorization remains
 mandatory regardless of the flag.
 
 ## Model and boundaries
 
 `crates/passwords` owns items, typed fields, versions, folders, user/team grants,
-favorites, last use, and activity. Its domain service owns authorization and
-recent-authentication policy. Inbound Axum handlers translate authenticated
+favorites, last use, and activity. Its domain service owns human membership, grant and administrator policy. Inbound Axum handlers translate authenticated
 requests; PostgreSQL and OpenBao implement repository and secret-provider ports.
 The provider boundary allows future 1Password and Bitwarden implementations.
 
@@ -22,7 +21,7 @@ boundary: secret-provider credentials stay server-side either way.
 Postgres stores the searchable metadata index and grants, never field values,
 notes, passwords, TOTP seeds, or historical secret payloads. OpenBao KV v2 holds
 versioned payloads. Reads of list/detail/history metadata do not resolve values.
-Password reveal/copy and TOTP-code operations require recent authentication and
+Password reveal/copy and TOTP-code operations require normal human item access and
 return `Cache-Control: no-store`. Updating metadata and external payloads needs
 version guards: an interrupted provider write must never publish metadata that
 points at missing values. Authorization must precede every provider operation.
@@ -38,7 +37,7 @@ user/team grants already loaded with metadata; a team grant counts as one share.
 
 Durable metadata-only intents correlate accepted writes with their logical
 operation IDs. Recovery that resolves a provider operation marker runs only
-during explicitly authorized mutations or recent-authenticated disclosure;
+during explicitly authorized mutations or disclosure;
 ordinary metadata reads never fetch payloads. Deletes retain a provider metadata
 fence so a delayed write cannot recreate values after deletion.
 Nonblocking team vault locks serialize changes across replicas and protect folder
@@ -47,7 +46,7 @@ lease admission and access is rechecked under the lease. Contention returns
 typed `vault_busy`, distinct from `version_conflict`; the client uses at most
 three attempts with jittered exponential backoff and traces the retry count. Journal
 publication locks the actual publisher's membership row until the intent commits,
-serializing it with revocation's scan. If revocation already committed, publication
+serializing publication with membership revocation. If revocation already committed, publication
 fails without leaving an unseen intent. Every disclosure shares a post-provider-I/O
 access check, so a lost lease cannot return values after access was revoked. A
 denied recheck records `post_io_access_denied=true`; verification codes also require
@@ -55,7 +54,7 @@ the same active enrollment generation.
 
 Each TOTP setup uses a unique enrollment key and journals its identity before
 contacting OpenBao. Replacement switches the active pointer only after setup;
-activation and user removal compare the authorized metadata revision so a lost
+activation and enrollment removal compare the authorized metadata revision so a lost
 lease cannot let an older request override a newer enrollment decision.
 Removal and item deletion retire enrollments. A tracked worker quarantines retired
 and abandoned enrollments under the team lease, then erases them after 180 seconds,
@@ -68,37 +67,39 @@ after a lost database lease. The grace covers the 60-second runtime token, a
 provider request bound of at most 90 seconds, and clock margin. Hosted OpenBao
 must enforce that bound and synchronized clocks with JWT leeway disabled.
 
-## Membership and deletion
+## Team ownership and deletion
 
-A voluntary departure returns typed `vault_items_owned` while the person owns
-live vault items or an unfinished create. Administrative removal is never blocked
-by item ownership or provider availability. Membership revocation and a reversible
-vault fence commit in the same database transaction, under the existing team
-lease. Affected disclosures return retryable `vault_busy` until the removal saga
-finishes or rolls back; values remain intact during that phase.
+Items belong to the team; `Record.user_id` records the immutable creator. New items
+include a team Edit grant unless `private=true`. Updates preserve grants; sharing
+replaces grants explicitly. Current human team administrators can view, edit,
+delete and change access to private items after their creator leaves. `canManage`
+and `sharedWithTeam` are actor-specific response fields, never stored authority.
+Private means no team grant; direct recipients and administrators may retain access.
 
-After the saga's final required step succeeds, one transaction marks its outbox
-record finished, transfers already-shared items to the current team owner with
-existing grants preserved, drops the removed member's own grants, and queues
-private erasure. Uncommitted write intents are fenced privately; their snapshots
-cannot create new sharing grants. Rollback restores membership and removes the
-reversible fence without enqueueing erasure. Successful failed-join compensation
-is definitive revocation: auto-join and invite rollback fence, finish the outbox,
-and queue private erasure in the membership-rollback transaction, while preserving
-existing billing and seat compensation. Private values are never transferred
-to another person. The tracked worker retries private erasures independently of
-rollout or the removed member's session; each failure warns and marks its child
-span as an error. Acknowledged KV erasure retains a CAS fence; TOTP generations
-retain the quarantine and repeat-erasure journal.
+Membership removal and account deletion do not erase items, transfer creators or
+create Passwords lifecycle journals. Every access uses current membership, and
+post-provider-I/O rechecks prevent values returning after revocation. Ordinary
+membership compensation stays unchanged.
 
-Account deletion closes vault admission for the immutable account identity before
-team discovery, then awaits team cleanup and private erasure before deleting a
-profile. Closure survives retries without blocking a later new account that reuses
-an address. Acknowledged private erasures strip identifying metadata and retain
-only anonymous lifecycle fences. Team deletion first purges the provider namespace,
-then vault metadata, then billing and the team row. No operator purge step is
-required. A failed or pending purge returns a typed error and marks the deletion
-span as failed; it does not report partial success or remove the retry metadata.
+Team deletion invokes the existing owned-entity cleanup preflight before ordinary
+entity/session/billing side effects. Authoritative empty metadata means no vault
+RPC or provider work. The caller rechecks emptiness under the existing vault lease
+and retains its opaque guard in `ClearedTeam` through ordinary team deletion, so a
+first create cannot race the proof. If data appears under that lease, release it
+before DSS takes the same lease for namespace purge. Any retained item or tombstone requires
+the internal team purge, with the same global rollout and provider gate as human
+admission. Off-existing, remote error and absent provider configuration fail before
+ordinary team cleanup. Namespace erasure precedes metadata purge; incomplete
+erasure retains retry identities and the closed-team fence.
+
+The global rollout evaluates `enable-passwords-v1` for explicit service context
+`passwords-v1` through the shared strict feature_flags transport. Human admissions
+also require the same key for the authenticated actor, matching frontend discovery.
+Configure the service context explicitly alongside the intended human cohorts. Local
+composition enables both explicitly; missing/error results in either never default on.
+Both bounded jobs gate before discovery: explicit failed-item deletion and retained
+TOTP generation cleanup pause while off and resume on enablement. No person-erasure
+queue or per-person fence is used.
 
 ## OpenBao
 
@@ -125,27 +126,25 @@ Never represent an unimplemented encryption layer as shipped protection.
 
 ## Disclosure and auditing
 
-Protected reveal/copy, historical-value disclosure, and current TOTP codes
-require a signed authentication time within five minutes. Token refresh must not
-advance that time. Missing, expired, or future authentication times fail closed; the UI
-must complete an interactive login before retrying. Stale sign-in returns
-HTTP 403 with typed `reauthentication_required`; expired sessions retain HTTP
-401 and the normal refresh path. API keys and agent identities
-cannot obtain human disclosure privileges. Username-only view and copy use the
-same human item authorization without the recent-authentication requirement.
+Reveal/copy, history, username and TOTP codes require normal authenticated human
+item access, without a separate reauthentication step. Session origin alone is
+insufficient: fresh authoritative `User.isAgent=false` is required even when agent
+claims are absent. Missing classification fails closed. Direct recipients must be
+canonical current human members; team grants never admit an agent account.
 
-The human-session-only vault endpoints are deliberately excluded from SDK entity
-wrappers in v1 and must not appear as agent capabilities. Protected disclosures
-additionally require interactive reauthentication. Generated OpenAPI contracts
-still describe the HTTP API.
+These human-only endpoints are excluded from SDK entity wrappers and agent
+capabilities in v1. Generated OpenAPI contracts describe the HTTP API.
 
 Secret wrappers redact debug output and zeroize application-owned plaintext on
 drop. HTTP buffers and browser memory cannot guarantee immediate erasure: keep
 their lifetime short and never persist values in browser storage. Traces contain
 only opaque IDs, operation names, counts, and audit correlation. Provider error
 bodies, item names, values, and TOTP material must never become log attributes.
-The `vaultrs` futures disable their internal subscriber because its HTTP library
-can trace raw provider error bodies; Macro retains sanitized outer provider spans.
+The `openbao_client` wrapper calls only the generated mounted OpenBao API. It
+retains typed provider causes and secret-wrapped messages while ordinary error
+formatting, source chains and tracing expose only safe categories. The adapter
+maps those causes to sanitized domain failures; only a true CAS mismatch becomes
+a version conflict.
 OpenBao's audit device and Macro's activity records complement each other; a
 failed audit write must not silently produce an unaudited disclosure.
 

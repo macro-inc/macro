@@ -1,4 +1,10 @@
-export type PasswordKind = 'login' | 'card' | 'note' | 'identity' | 'api';
+export type PasswordKind =
+  | 'login'
+  | 'card'
+  | 'note'
+  | 'identity'
+  | 'api'
+  | 'verification_code';
 export type PasswordItem = {
   id: string;
   teamId: string;
@@ -11,6 +17,10 @@ export type PasswordItem = {
   hasTotp: boolean;
   shared: boolean;
   shareCount: number;
+  /** The whole team can use it; false for an item kept to its creator. */
+  sharedWithTeam: boolean;
+  /** The viewer may share, move or delete it (its creator or a team admin). */
+  canManage: boolean;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
@@ -21,7 +31,11 @@ export type PasswordValues = {
   notes: string;
   fields: { label: string; value: string }[];
 };
-export type PasswordFolder = { id: string; name: string };
+export type PasswordFolder = {
+  id: string;
+  name: string;
+  parentId: string | null;
+};
 export type PasswordGrant = {
   kind: 'user' | 'team';
   id: string;
@@ -48,6 +62,8 @@ export type PasswordDraft = {
   url: string;
   folderId: string | null;
   favorite: boolean;
+  /** Only for new items: kept to its creator instead of shared with the team. */
+  private: boolean;
   values: PasswordValues;
 };
 export type PasswordFilter =
@@ -57,18 +73,25 @@ export type PasswordFilter =
   | 'shared'
   | `folder:${string}`;
 
+/**
+ * Items in a collection. A folder includes its subfolders' items; an item whose
+ * folder no longer exists is treated as unfiled.
+ */
 export function filterItems(
   items: PasswordItem[],
   filter: PasswordFilter,
-  search: string
+  search: string,
+  folders: readonly PasswordFolder[] = []
 ) {
+  const scope = filter.startsWith('folder:')
+    ? folderSubtree(folders, filter.slice(7))
+    : undefined;
   const query = search.trim().toLocaleLowerCase();
   const filtered = items.filter((item) => {
     if (filter === 'favorites' && !item.favorite) return false;
     if (filter === 'recent' && !item.lastUsedAt) return false;
     if (filter === 'shared' && !item.shared) return false;
-    if (filter.startsWith('folder:') && item.folderId !== filter.slice(7))
-      return false;
+    if (scope && !(item.folderId && scope.has(item.folderId))) return false;
     return `${item.name} ${item.url ?? ''}`.toLocaleLowerCase().includes(query);
   });
   if (filter === 'recent')
@@ -76,23 +99,6 @@ export function filterItems(
       (right.lastUsedAt ?? '').localeCompare(left.lastUsedAt ?? '')
     );
   return filtered;
-}
-
-export function generatePassword(length: number) {
-  if (!Number.isInteger(length) || length < 12 || length > 128)
-    throw new Error('Invalid password length');
-  const alphabet =
-    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+-=?';
-  const ceiling = 256 - (256 % alphabet.length);
-  let password = '';
-  while (password.length < length) {
-    const bytes = crypto.getRandomValues(new Uint8Array(length * 2));
-    for (const byte of bytes) {
-      if (byte < ceiling && password.length < length)
-        password += alphabet[byte % alphabet.length];
-    }
-  }
-  return password;
 }
 
 export function validateDraft(
@@ -114,3 +120,42 @@ export type PasswordRecipient = {
   id: string;
   name: string;
 };
+
+/** The folder and every folder under it; cycles from stale data stop the walk. */
+export function folderSubtree(
+  folders: readonly PasswordFolder[],
+  id: string
+): Set<string> {
+  const result = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const folder of folders)
+      if (
+        folder.parentId &&
+        result.has(folder.parentId) &&
+        !result.has(folder.id)
+      ) {
+        result.add(folder.id);
+        grew = true;
+      }
+  }
+  return result;
+}
+
+/** Folder names from the top level down to `id`. */
+export function folderPath(
+  folders: readonly PasswordFolder[],
+  id: string | null
+): string[] {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let current = id ? byId.get(id) : undefined;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.unshift(current.name);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return path;
+}

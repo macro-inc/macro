@@ -27,6 +27,8 @@ export interface PasswordWriteItem {
   name: string;
   /** UUIDv7 identifying one logical save across uncertain retries. */
   operationId: string;
+  /** Create without the default team edit grant. Updates preserve existing grants. */
+  private?: boolean;
   url?: PasswordWriteItemUrl;
   /** Private payload; never serialize into the metadata repository. */
   values: PasswordSecretValues;

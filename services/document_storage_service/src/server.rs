@@ -933,11 +933,6 @@ async fn run_server() -> anyhow::Result<()> {
                     .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
             ),
             provider: passwords_provider,
-            reauthentication: Arc::new(
-                passwords::outbound::reauthentication::SessionReauthentication {
-                    validation: jwt_validation_args.clone(),
-                },
-            ),
             availability: passwords_availability,
         }),
         authorization: authorization_state.clone(),

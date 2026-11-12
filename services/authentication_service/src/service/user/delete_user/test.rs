@@ -19,13 +19,6 @@ impl FakeGateway {
 }
 
 impl UserDeletionGateway for FakeGateway {
-    async fn close_vault_access(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
-        self.call("vault_close", user.as_ref())
-    }
-    async fn delete_vault_items(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
-        self.call("vault_purge", user.as_ref())
-    }
-
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("actions", user.as_ref())
     }
@@ -65,9 +58,7 @@ fn expected_calls() -> Vec<String> {
         for step in [
             "actions",
             "sessions",
-            "vault_close",
             "teams",
-            "vault_purge",
             "items",
             "onboarding",
             "profile",

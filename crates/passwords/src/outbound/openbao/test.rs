@@ -1,9 +1,40 @@
 use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::{process::Command, sync::Mutex};
+use tracing::instrument::WithSubscriber;
+
+// This external protocol can finish after one adapter polling budget. Busy-only
+// reinvocation models its durable retry; each call already waits on namespace GET.
+async fn purge_namespace_with_ack(provider: &OpenBaoProvider, team: TeamId) -> Result<(), Error> {
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        for _ in 0..4 {
+            match provider.purge_namespace(team).await {
+                Err(Error::Busy) => {}
+                outcome => return outcome,
+            }
+        }
+        Err(Error::Busy)
+    })
+    .await
+    .expect("namespace acknowledgement must complete within thirty seconds")
+}
+
+// Acquire every pool slot so queued transaction rollbacks have released their
+// advisory leases before the next independent cleanup pass.
+async fn drain_fixture_rollbacks(pool: &sqlx::PgPool) {
+    let mut connections = Vec::new();
+    for _ in 0..pool.options().get_max_connections() {
+        connections.push(pool.acquire().await.expect("drain fixture rollback"));
+    }
+    drop(connections);
+}
 
 #[tokio::test]
 #[ignore = "requires explicit disposable local OpenBao and bootstrap signing key"]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "disposable fixture requires explicit process environment and must never inherit APP_SECRETS_JSON"
+)]
 async fn local_provider_versions_totp_isolation_and_deletion_fence() {
     let address = std::env::var("PASSWORDS_TEST_OPENBAO_ADDRESS")
         .expect("explicit disposable local OpenBao address");
@@ -191,12 +222,32 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
         .write(second, item, 0, uuid::Uuid::now_v7(), &values)
         .await
         .expect("other team survives");
-    provider
-        .purge_namespace(first)
+    purge_namespace_with_ack(&provider, first)
         .await
         .expect("parent JWT namespace erasure");
-    provider
-        .purge_namespace(first)
+    let first_session = provider
+        .authenticated_client(first, NamespaceAccess::Lifecycle)
+        .await
+        .expect("parent JWT for acknowledged namespace lookup");
+    assert!(
+        !provider
+            .api
+            .namespace_exists(&first_session, &format!("team-{}", first.0), None)
+            .await
+            .expect("deleted namespace GET must return 404")
+    );
+    let second_session = provider
+        .authenticated_client(second, NamespaceAccess::Lifecycle)
+        .await
+        .expect("other team's parent JWT");
+    assert!(
+        provider
+            .api
+            .namespace_exists(&second_session, &format!("team-{}", second.0), None)
+            .await
+            .expect("other namespace GET must return 200")
+    );
+    purge_namespace_with_ack(&provider, first)
         .await
         .expect("retry after namespace already erased");
     assert!(provider.read(first, item, 1).await.is_err());
@@ -237,7 +288,7 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
 }
 #[tokio::test]
 async fn malicious_provider_error_body_never_reaches_tracing_subscriber() {
-    use axum::{Router, http::StatusCode, routing::get};
+    use axum::{Router, http::StatusCode, routing::any};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener");
@@ -245,7 +296,7 @@ async fn malicious_provider_error_body_never_reaches_tracing_subscriber() {
     let server = tokio::spawn(async move {
         axum::serve(
             listener,
-            Router::new().fallback(get(|| async {
+            Router::new().fallback(any(|| async {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     r#"{"errors":["synthetic-provider-secret"]}"#,
@@ -261,22 +312,17 @@ async fn malicious_provider_error_body_never_reaches_tracing_subscriber() {
         .with_ansi(false)
         .with_writer(buffer.clone())
         .finish();
-    let client = VaultClient::new(
-        VaultClientSettingsBuilder::default()
-            .address(format!("http://{address}"))
-            .token("synthetic-token")
-            .build()
-            .expect("settings"),
-    )
-    .expect("client");
+    let client = OpenBaoClient::new(&format!("http://{address}")).expect("client");
     async {
         tracing::info!("capture-active");
-        let result = quiet(kv2::read::<serde_json::Value>(
-            &client,
-            "passwords",
-            "synthetic-item",
-        ))
-        .await;
+        let result = client
+            .login_team(
+                "team-fixture",
+                "passwords-service",
+                &openbao_client::SecretString::new("synthetic-token".into()),
+                None,
+            )
+            .await;
         assert!(result.is_err());
     }
     .with_subscriber(subscriber)
@@ -289,22 +335,23 @@ async fn malicious_provider_error_body_never_reaches_tracing_subscriber() {
     assert!(!logs.contains("synthetic-token"));
 }
 
-struct RecentSession;
+struct Available;
 #[async_trait]
-impl crate::domain::ports::Reauthentication for RecentSession {
-    async fn verify(&self, _: &Actor) -> Result<(), Error> {
+impl crate::domain::ports::Availability for Available {
+    async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
         Ok(())
     }
-}
-#[async_trait]
-impl crate::domain::ports::Availability for RecentSession {
-    async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
+    async fn require_service_enabled(&self) -> Result<(), Error> {
         Ok(())
     }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 #[ignore = "requires explicit disposable local OpenBao and bootstrap signing key"]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "disposable fixture requires explicit process environment and must never inherit APP_SECRETS_JSON"
+)]
 async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanup(
     pool: sqlx::PgPool,
 ) {
@@ -347,7 +394,6 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         user_id: MacroUserIdStr::parse_from_str("macro|enrollment@example.test")
             .expect("identity")
             .into_owned(),
-        session_token: None,
     };
     let macro_user_id = uuid::Uuid::now_v7();
     sqlx::query!("INSERT INTO macro_user(id,username,email,stripe_customer_id) VALUES ($1,'enrollment@example.test','enrollment@example.test',$2)",macro_user_id,format!("fixture-{macro_user_id}")).execute(&pool).await.expect("account");
@@ -384,7 +430,6 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
                 user_id: owner.user_id.clone(),
                 grants: vec![],
                 deleting: false,
-                member_removal_pending: false,
                 revision: 0,
                 totp_key_id: None,
                 metadata: ItemMetadata {
@@ -411,8 +456,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: Arc::new(RecentSession),
-        availability: Arc::new(RecentSession),
+        availability: Arc::new(Available),
     };
     service
         .configure_totp(
@@ -459,6 +503,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         Some(second)
     );
     assert!(service.totp(&owner, team, item).await.is_ok());
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -466,6 +511,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("grace period"),
         0
     );
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -473,7 +519,10 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("quarantine before grace expiry"),
         0
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1",team.0).execute(&pool).await.expect("expire synthetic journal");
+    // Simulate elapsed quarantine and discovery backoff only after the real
+    // grace assertions above; neither clock changes in production code.
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second',cleanup_retry_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,first.0).execute(&pool).await.expect("expire synthetic journal");
+    drain_fixture_rollbacks(&pool).await;
     service
         .cleanup_expired_totp_enrollments()
         .await
@@ -492,6 +541,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         service.totp(&owner, team, item).await,
         Err(Error::NotFound)
     ));
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -499,7 +549,8 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("quarantine before grace expiry"),
         0
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1",team.0).execute(&pool).await.expect("expire synthetic journal");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second',cleanup_retry_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,second.0).execute(&pool).await.expect("expire synthetic journal");
+    drain_fixture_rollbacks(&pool).await;
     service
         .cleanup_expired_totp_enrollments()
         .await
@@ -518,6 +569,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         service.totp(&owner, team, item).await,
         Err(Error::NotFound)
     ));
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -525,7 +577,8 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("quarantine before grace expiry"),
         0
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1",team.0).execute(&pool).await.expect("expire synthetic journal");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second',cleanup_retry_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,pending.0).execute(&pool).await.expect("expire synthetic journal");
+    drain_fixture_rollbacks(&pool).await;
     service
         .cleanup_expired_totp_enrollments()
         .await
@@ -558,6 +611,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         service.totp(&owner, team, item).await,
         Err(Error::NotFound)
     ));
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -565,7 +619,8 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("quarantine before grace expiry"),
         0
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1",team.0).execute(&pool).await.expect("expire synthetic journal");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second',cleanup_retry_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,third.0).execute(&pool).await.expect("expire synthetic journal");
+    drain_fixture_rollbacks(&pool).await;
     service
         .cleanup_expired_totp_enrollments()
         .await
@@ -591,7 +646,8 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         .set_totp(team, first, &SecretString("JBSWY3DPEHPK3PXP".into()))
         .await
         .expect("write after acknowledged cleanup");
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,first.0).execute(&pool).await.expect("expire synthetic hourly retry");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second',cleanup_retry_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",team.0,first.0).execute(&pool).await.expect("expire synthetic hourly retry");
+    drain_fixture_rollbacks(&pool).await;
     assert_eq!(
         service
             .cleanup_expired_totp_enrollments()
@@ -607,4 +663,58 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
             .expect("hourly retry deferred")
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn status_pins_operation_to_metadata_version_during_independent_write() {
+    use axum::{
+        Router,
+        extract::Query,
+        routing::{get, post},
+    };
+    let key = Command::new("openssl")
+        .args([
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:2048",
+        ])
+        .output()
+        .expect("synthetic RSA key generator");
+    assert!(key.status.success());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener");
+    let address = listener.local_addr().expect("address");
+    let observed = uuid::Uuid::now_v7();
+    let newer = uuid::Uuid::now_v7();
+    let item = ItemId(uuid::Uuid::now_v7());
+    let app = Router::new()
+        .route("/v1/auth/macro/login",post(|| async { axum::Json(serde_json::json!({"auth":{"client_token":"synthetic-token"}})) }))
+        .route(&format!("/v1/passwords/metadata/{}",item.0),get(|| async {
+            axum::Json(serde_json::json!({"data":{"current_version":1,"versions":{"1":{"created_time":"2026-01-01T00:00:00Z","deletion_time":"","destroyed":false}}}}))
+        }))
+        .route(&format!("/v1/passwords/data/{}",item.0),get(move |Query(query): Query<std::collections::BTreeMap<String,String>>| async move {
+            // An independent writer has already published operation two, but
+            // recovery must pair observed version one with operation one.
+            let operation = if query.get("version").map(String::as_str) == Some("1") { observed } else { newer };
+            axum::Json(serde_json::json!({"data":{"data":{"operation_id":operation,"values":{"username":"synthetic-user","password":"synthetic-password","notes":"","fields":[]}},"metadata":{"created_time":"2026-01-01T00:00:00Z","deletion_time":"","destroyed":false,"version":1}}}))
+        }));
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.expect("server") });
+    let provider = OpenBaoProvider::new(
+        format!("http://{address}"),
+        "synthetic-issuer".into(),
+        &String::from_utf8(key.stdout).expect("PEM"),
+    )
+    .expect("provider");
+    assert_eq!(
+        provider
+            .status(TeamId(uuid::Uuid::now_v7()), item)
+            .await
+            .expect("status"),
+        Some((1, observed))
+    );
+    server.abort();
+    let _ = server.await;
 }

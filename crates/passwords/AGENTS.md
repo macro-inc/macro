@@ -9,8 +9,8 @@ means this is a Macro-managed team vault.
 ## Start here
 
 - `src/domain/models.rs`: public DTOs, zeroizing sensitive values.
-- `src/domain/service.rs`: membership, grant, recent sign-in policy and retry recovery.
-- `src/domain/ports.rs`: provider, metadata, lock, reauthentication and rollout ports.
+- `src/domain/service.rs`: human membership, grants, administrator policy and retry recovery.
+- `src/domain/ports.rs`: provider, metadata, lock and global rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
@@ -32,19 +32,24 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 
 ## Gotchas
 
-- Every human use case checks `enable-passwords` and current team membership; hosted
-  evaluation is remote and Local uses an explicit development snapshot. Cleanup
-  continues independently of rollout so disabling the feature cannot strand seeds.
-- Only human session credentials are accepted. Secret responses additionally verify
-  signed FusionAuth `auth_time` within five minutes; refresh does not extend it.
+- Every human use case, job and internal team purge uses `enable-passwords-v1`,
+  evaluated for explicit service context `passwords-v1`. Human admission additionally
+  requires the same key for the authenticated actor. Local explicitly enables both.
+  Missing/error results in either evaluation and absent
+  provider configuration deny work. Off pauses cleanup and retains every retry.
+- Require session origin and authoritative `User.isAgent=false`; session-shaped
+  agent accounts never gain access through direct or team grants.
+- Keep `Record.user_id` as immutable creator. New items get a team Edit grant
+  unless `private=true`; updates preserve grants. Current human team administrators
+  can access and manage private items after creator departure.
+- Derive `canManage` and `sharedWithTeam` only in `ItemView` responses; never
+  persist actor-specific capabilities in metadata or write intents.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
-- Return typed `reauthentication_required` with HTTP 403 for stale sign-in; keep
-  HTTP 401 for invalid sessions so token refresh does not repeat stale disclosures.
 - Username GET and audited username-copy POST resolve only the current committed
   identifier with normal human view authorization. Recheck access and revision after
   the provider read; never reconcile or return passwords, notes or custom fields.
   Automatic username GETs hold no mutation lease; explicit username-copy POSTs do.
-  Password reveal/copy and verification codes still require recent sign-in.
+  Reveal/copy, history and codes use normal authenticated human item access.
 - Derive `shareCount` from distinct grant `(kind,id)` pairs already loaded with each
   record. Count a team grant once; do not fetch grants per list row or expand members.
 - UUIDv7 `operationId` is stable across create/save retries. Pending metadata intents
@@ -53,8 +58,9 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   admission checks rollout and membership before any user lease; item access is
   rechecked under the lease. Contention returns typed `vault_busy`, distinct from
   `version_conflict`; clients retry only contention with a bounded jittered backoff.
-- All vaultrs futures run with `NoSubscriber`: upstream rustify traces raw provider
-  error response bodies. Keep sanitized outer provider spans outside that scope.
+- Every OpenBao call uses `openbao_client` generated API methods. Keep provider
+  causes typed there and map narrowly to sanitized domain failures; never put
+  response bodies in Debug, Display, error sources or tracing.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
 
@@ -95,23 +101,20 @@ metadata revision, so losing a lease cannot restore stale grants or TOTP pointer
 
 ## Membership and deletion
 
-- Keep departure policy in `domain/lifecycle.rs` and transaction SQL in
-  `outbound/postgres/lifecycle.rs`; the membership adapter holds the team lease.
-- Fence affected records reversibly at membership commit. Pending records return
-  typed `vault_busy` only after normal grant checks; keep unauthorized items opaque.
-  Only saga completion publishes private erasure and marks
-  the removal finished in one transaction. Rollback restores the original grants
-  and ownership without erasing values. Never transfer private values.
-- Close account admission by immutable account UUID, and close team admission
-  before namespace deletion. Purge metadata only after provider deletion is
-  acknowledged; retain the closed identity to reject suspended senders.
-- Prioritize first erasure/quarantine before hourly repeats. Retain journal
-  tombstones for the lifetime of the namespace, including acknowledged erasures.
+- Membership and account deletion never erase items or transfer creators. Current
+  membership checks end access while values and creator metadata stay with the team.
+- Close team admission under the current lease before namespace erasure; purge
+  metadata only after acknowledgement and retain the team fence against delayed senders.
+- Use existing owned-entity cleanup preflight: the caller proves empty metadata
+  before skipping RPC. Any retained item, intent, enrollment or tombstone requires
+  guarded internal team purge. Recheck empty under the existing team lease and
+  retain its opaque guard through team deletion; release before RPC if data appears.
+  Off-existing fails before ordinary cleanup effects.
+- Retain bounded explicit item-delete retries and TOTP cleanup journals; jobs
+  gate before metadata discovery and provider work, and resume retained retries on enablement.
 - Namespace cleanup uses parent JWT mount `macro-lifecycle`, per-team role
-  `team-<team-id>`, and exact namespace read/delete policy. Require GET 404 before
-  acknowledging asynchronous provider deletion. Never use a bootstrap token at runtime.
-
-- Lock the actual publisher's membership row through write-intent publication so
-  revocation's scan includes every admitted intent. Share the post-I/O disclosure
-  recheck across username, reveal/copy, history, and codes; record denied rechecks
-  with `post_io_access_denied=true` and reject retired TOTP generations.
+  `team-<team-id>` and exact namespace read/delete policy. Require GET 404 to
+  acknowledge asynchronous erasure; never use runtime bootstrap credentials.
+- Lock the actual publisher's membership row through write-intent publication.
+  Recheck username, reveal/copy, history and codes after I/O; denied rechecks record
+  `post_io_access_denied=true` and codes require the same active enrollment generation.

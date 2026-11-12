@@ -8,7 +8,6 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
-use macro_auth::headers::AccessTokenExtractor;
 use macro_authorization::{
     CredentialOrigin, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, UserOnly,
@@ -78,6 +77,10 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
             "/teams/{team}/folders/{folder}",
             delete(remove_folder::<A>).put(rename_folder::<A>),
         )
+        .route(
+            "/teams/{team}/folders/{folder}/parent",
+            put(move_folder::<A>),
+        )
         .layer(DefaultBodyLimit::max(256 * 1024))
         .layer(from_fn(csrf))
         .layer(map_response(no_store))
@@ -90,10 +93,6 @@ pub fn internal_router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
 ) -> Router<T> {
     Router::new()
         .route("/teams/{team}", delete(purge_team_internal::<A>))
-        .route(
-            "/users/{user}",
-            post(close_user_internal::<A>).delete(purge_user_internal::<A>),
-        )
         .layer(map_response(no_store))
         .with_state(state)
 }
@@ -104,25 +103,6 @@ async fn purge_team_internal<A: MacroAuthorizationService>(
     Path(team): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     state.service.purge_team(TeamId(team)).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-#[tracing::instrument(skip_all, err, name = "passwords.account.close.internal")]
-async fn close_user_internal<A: MacroAuthorizationService>(
-    _: MacroAuthorizationExtractor<A, InternalOnly>,
-    State(state): State<PasswordRouterState<A>>,
-    Path(user): Path<macro_user_id::user_id::MacroUserIdStr<'static>>,
-) -> Result<StatusCode, ApiError> {
-    state.service.close_user(&user).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-#[tracing::instrument(skip_all, err, name = "passwords.account.purge.internal")]
-async fn purge_user_internal<A: MacroAuthorizationService>(
-    _: MacroAuthorizationExtractor<A, InternalOnly>,
-    State(state): State<PasswordRouterState<A>>,
-    Path(user): Path<macro_user_id::user_id::MacroUserIdStr<'static>>,
-) -> Result<StatusCode, ApiError> {
-    state.service.purge_user(&user).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -174,20 +154,18 @@ async fn no_store(mut response: Response) -> Response {
 #[serde(rename_all = "snake_case")]
 #[schema(as = PasswordErrorCode)]
 pub enum FailureCode {
-    /// A voluntary departure must first dispose of owned items.
-    VaultItemsOwned,
     /// Absent or concealed by the caller's access boundary.
     NotFound,
     /// The caller lacks the required capability.
     Forbidden,
-    /// Interactive sign-in is no longer recent enough for disclosure.
-    ReauthenticationRequired,
     /// Invalid request syntax or a violated domain invariant.
     InvalidRequest,
     /// The item's observed version no longer matches.
     VersionConflict,
     /// Lease admission or the team lease is temporarily unavailable.
     VaultBusy,
+    /// The referenced folder was deleted; choose another folder and retry.
+    FolderMissing,
     /// A required vault dependency is unavailable.
     VaultUnavailable,
 }
@@ -212,15 +190,12 @@ impl From<Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = match self.0 {
-            Error::OwnedItems => (StatusCode::CONFLICT, FailureCode::VaultItemsOwned),
             Error::NotFound => (StatusCode::NOT_FOUND, FailureCode::NotFound),
             Error::Forbidden => (StatusCode::FORBIDDEN, FailureCode::Forbidden),
-            Error::ReauthenticationRequired => {
-                (StatusCode::FORBIDDEN, FailureCode::ReauthenticationRequired)
-            }
             Error::Invalid => (StatusCode::BAD_REQUEST, FailureCode::InvalidRequest),
             Error::Conflict => (StatusCode::CONFLICT, FailureCode::VersionConflict),
             Error::Busy => (StatusCode::CONFLICT, FailureCode::VaultBusy),
+            Error::FolderMissing => (StatusCode::CONFLICT, FailureCode::FolderMissing),
             Error::Unavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 FailureCode::VaultUnavailable,
@@ -231,14 +206,12 @@ impl IntoResponse for ApiError {
 }
 fn actor<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: Option<AccessTokenExtractor>,
 ) -> Result<Actor, ApiError> {
     if user.authorization.origin != CredentialOrigin::Session {
         return Err(ApiError(Error::Forbidden));
     }
     Ok(Actor {
         user_id: user.authorization.macro_user_id,
-        session_token: token.map(|token| SecretString(token.as_ref().into())),
     })
 }
 #[derive(Deserialize, utoipa::IntoParams)]
@@ -269,6 +242,25 @@ pub struct FolderBody {
     pub name: String,
 }
 #[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as=PasswordCreateFolderBody)]
+/// New folder, at the top level or inside another folder of the team.
+pub struct CreateFolderBody {
+    /// Folder display name.
+    pub name: String,
+    /// Containing folder; absent or null for a top-level folder.
+    #[serde(default)]
+    pub parent_id: Option<Uuid>,
+}
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schema(as=PasswordMoveFolderBody)]
+/// New containing folder for an existing folder.
+pub struct MoveFolderBody {
+    /// Containing folder; null moves the folder to the top level.
+    pub parent_id: Option<Uuid>,
+}
+#[derive(Deserialize, utoipa::ToSchema)]
 #[schema(as=PasswordTotpBody)]
 /// Private seed submitted only to the verification-code provider.
 pub struct TotpBody {
@@ -282,53 +274,53 @@ pub async fn teams<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
 ) -> Result<Json<Vec<TeamId>>, ApiError> {
-    Ok(Json(state.service.teams(&actor(user, None)?).await?))
+    Ok(Json(state.service.teams(&actor(user)?).await?))
 }
-#[utoipa::path(operation_id = "passwords_list",get,path="/passwords/teams/{team}/items",params(("team"=Uuid,Path),Search),responses((status=200,body=Vec<ItemMetadata>),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_list",get,path="/passwords/teams/{team}/items",params(("team"=Uuid,Path),Search),responses((status=200,body=Vec<ItemView>),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Search authorized metadata without resolving private values.
 pub async fn list<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path(team): Path<Uuid>,
     Query(query): Query<Search>,
-) -> Result<Json<Vec<ItemMetadata>>, ApiError> {
+) -> Result<Json<Vec<ItemView>>, ApiError> {
     Ok(Json(
         state
             .service
             .list(
-                &actor(user, None)?,
+                &actor(user)?,
                 TeamId(team),
                 query.search.as_deref().unwrap_or(""),
             )
             .await?,
     ))
 }
-#[utoipa::path(operation_id = "passwords_create",post,path="/passwords/teams/{team}/items",params(("team"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=WriteItem,responses((status=200,body=ItemMetadata),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_create",post,path="/passwords/teams/{team}/items",params(("team"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=WriteItem,responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Create one item using an idempotent logical operation identifier.
 pub async fn create<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path(team): Path<Uuid>,
     Json(command): Json<WriteItem>,
-) -> Result<Json<ItemMetadata>, ApiError> {
+) -> Result<Json<ItemView>, ApiError> {
     Ok(Json(
         state
             .service
-            .create(&actor(user, None)?, TeamId(team), command)
+            .create(&actor(user)?, TeamId(team), command)
             .await?,
     ))
 }
-#[utoipa::path(operation_id = "passwords_detail",get,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path)),responses((status=200,body=ItemMetadata),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_detail",get,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path)),responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Read authorized item metadata only.
 pub async fn detail<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ItemMetadata>, ApiError> {
+) -> Result<Json<ItemView>, ApiError> {
     Ok(Json(
         state
             .service
-            .get(&actor(user, None)?, TeamId(team), ItemId(item))
+            .get(&actor(user)?, TeamId(team), ItemId(item))
             .await?,
     ))
 }
@@ -342,7 +334,7 @@ pub async fn username<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .username(&actor(user, None)?, TeamId(team), ItemId(item), false)
+            .username(&actor(user)?, TeamId(team), ItemId(item), false)
             .await?,
     ))
 }
@@ -356,37 +348,37 @@ pub async fn copy_username<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .username(&actor(user, None)?, TeamId(team), ItemId(item), true)
+            .username(&actor(user)?, TeamId(team), ItemId(item), true)
             .await?,
     ))
 }
-#[utoipa::path(operation_id = "passwords_update",put,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=WriteItem,responses((status=200,body=ItemMetadata),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_update",put,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=WriteItem,responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Save a new protected value version and its metadata.
 pub async fn update<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     Json(command): Json<WriteItem>,
-) -> Result<Json<ItemMetadata>, ApiError> {
+) -> Result<Json<ItemView>, ApiError> {
     Ok(Json(
         state
             .service
-            .update(&actor(user, None)?, TeamId(team), ItemId(item), command)
+            .update(&actor(user)?, TeamId(team), ItemId(item), command)
             .await?,
     ))
 }
-#[utoipa::path(operation_id = "passwords_patch",patch,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=PatchItem,responses((status=200,body=ItemMetadata),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_patch",patch,path="/passwords/teams/{team}/items/{item}",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=PatchItem,responses((status=200,body=ItemView),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Change metadata without resolving private values.
 pub async fn patch<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path((team, item)): Path<(Uuid, Uuid)>,
     Json(command): Json<PatchItem>,
-) -> Result<Json<ItemMetadata>, ApiError> {
+) -> Result<Json<ItemView>, ApiError> {
     Ok(Json(
         state
             .service
-            .patch(&actor(user, None)?, TeamId(team), ItemId(item), command)
+            .patch(&actor(user)?, TeamId(team), ItemId(item), command)
             .await?,
     ))
 }
@@ -399,16 +391,15 @@ pub async fn remove<A: MacroAuthorizationService>(
 ) -> Result<StatusCode, ApiError> {
     state
         .service
-        .delete(&actor(user, None)?, TeamId(team), ItemId(item))
+        .delete(&actor(user)?, TeamId(team), ItemId(item))
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[utoipa::path(operation_id = "passwords_reveal",post,path="/passwords/teams/{team}/items/{item}/reveal",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=RevealBody,responses((status=200,body=Revealed),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
-/// Disclose a current or historical value after recent human authentication.
+/// Disclose a current or historical value with normal human-session item access.
 pub async fn reveal<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: AccessTokenExtractor,
     Path((team, item)): Path<(Uuid, Uuid)>,
     Json(body): Json<RevealBody>,
 ) -> Result<Json<Revealed>, ApiError> {
@@ -416,7 +407,7 @@ pub async fn reveal<A: MacroAuthorizationService>(
         state
             .service
             .reveal(
-                &actor(user, Some(token))?,
+                &actor(user)?,
                 TeamId(team),
                 ItemId(item),
                 body.version,
@@ -430,19 +421,13 @@ pub async fn reveal<A: MacroAuthorizationService>(
 pub async fn copy<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: AccessTokenExtractor,
     Path((team, item)): Path<(Uuid, Uuid)>,
     Json(body): Json<RevealBody>,
 ) -> Result<Json<Revealed>, ApiError> {
     Ok(Json(
         state
             .service
-            .copy(
-                &actor(user, Some(token))?,
-                TeamId(team),
-                ItemId(item),
-                body.version,
-            )
+            .copy(&actor(user)?, TeamId(team), ItemId(item), body.version)
             .await?,
     ))
 }
@@ -456,7 +441,7 @@ pub async fn history<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .history(&actor(user, None)?, TeamId(team), ItemId(item))
+            .history(&actor(user)?, TeamId(team), ItemId(item))
             .await?,
     ))
 }
@@ -470,7 +455,7 @@ pub async fn activity<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .activity(&actor(user, None)?, TeamId(team), ItemId(item))
+            .activity(&actor(user)?, TeamId(team), ItemId(item))
             .await?,
     ))
 }
@@ -484,7 +469,7 @@ pub async fn grants<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .grants(&actor(user, None)?, TeamId(team), ItemId(item))
+            .grants(&actor(user)?, TeamId(team), ItemId(item))
             .await?,
     ))
 }
@@ -498,7 +483,7 @@ pub async fn share<A: MacroAuthorizationService>(
 ) -> Result<StatusCode, ApiError> {
     state
         .service
-        .share(&actor(user, None)?, TeamId(team), ItemId(item), body.grants)
+        .share(&actor(user)?, TeamId(team), ItemId(item), body.grants)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -510,24 +495,21 @@ pub async fn folders<A: MacroAuthorizationService>(
     Path(team): Path<Uuid>,
 ) -> Result<Json<Vec<Folder>>, ApiError> {
     Ok(Json(
-        state
-            .service
-            .folders(&actor(user, None)?, TeamId(team))
-            .await?,
+        state.service.folders(&actor(user)?, TeamId(team)).await?,
     ))
 }
-#[utoipa::path(operation_id = "passwords_create_folder",post,path="/passwords/teams/{team}/folders",params(("team"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=FolderBody,responses((status=200,body=Folder),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
+#[utoipa::path(operation_id = "passwords_create_folder",post,path="/passwords/teams/{team}/folders",params(("team"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=CreateFolderBody,responses((status=200,body=Folder),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
 /// Create a folder within the authenticated team.
 pub async fn create_folder<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
     Path(team): Path<Uuid>,
-    Json(body): Json<FolderBody>,
+    Json(body): Json<CreateFolderBody>,
 ) -> Result<Json<Folder>, ApiError> {
     Ok(Json(
         state
             .service
-            .create_folder(&actor(user, None)?, TeamId(team), body.name)
+            .create_folder(&actor(user)?, TeamId(team), body.name, body.parent_id)
             .await?,
     ))
 }
@@ -540,56 +522,48 @@ pub async fn remove_folder<A: MacroAuthorizationService>(
 ) -> Result<StatusCode, ApiError> {
     state
         .service
-        .delete_folder(&actor(user, None)?, TeamId(team), folder)
+        .delete_folder(&actor(user)?, TeamId(team), folder)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[utoipa::path(operation_id = "passwords_set_totp",put,path="/passwords/teams/{team}/items/{item}/totp",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=TotpBody,responses((status=204),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
-/// Enroll or replace a verification-code seed after recent authentication.
+/// Enroll or replace a verification-code seed with normal human-session edit access.
 pub async fn set_totp<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: AccessTokenExtractor,
     Path((team, item)): Path<(Uuid, Uuid)>,
     Json(body): Json<TotpBody>,
 ) -> Result<StatusCode, ApiError> {
     state
         .service
-        .configure_totp(
-            &actor(user, Some(token))?,
-            TeamId(team),
-            ItemId(item),
-            Some(body.key),
-        )
+        .configure_totp(&actor(user)?, TeamId(team), ItemId(item), Some(body.key))
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[utoipa::path(operation_id = "passwords_remove_totp",delete,path="/passwords/teams/{team}/items/{item}/totp",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=204),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
-/// Remove a verification-code seed after recent authentication.
+/// Remove a verification-code seed with normal human-session edit access.
 pub async fn remove_totp<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: AccessTokenExtractor,
     Path((team, item)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, ApiError> {
     state
         .service
-        .configure_totp(&actor(user, Some(token))?, TeamId(team), ItemId(item), None)
+        .configure_totp(&actor(user)?, TeamId(team), ItemId(item), None)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[utoipa::path(operation_id = "passwords_totp",post,path="/passwords/teams/{team}/items/{item}/totp/code",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=200,body=TotpCode),(status=403,body=Failure),(status=409,body=Failure)),tag="passwords")]
-/// Resolve the current verification code after recent authentication.
+/// Resolve the current verification code with normal human-session item access.
 pub async fn totp<A: MacroAuthorizationService>(
     State(state): State<PasswordRouterState<A>>,
     user: MacroAuthorizationExtractor<A, UserOnly>,
-    token: AccessTokenExtractor,
     Path((team, item)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<TotpCode>, ApiError> {
     Ok(Json(
         state
             .service
-            .totp(&actor(user, Some(token))?, TeamId(team), ItemId(item))
+            .totp(&actor(user)?, TeamId(team), ItemId(item))
             .await?,
     ))
 }
@@ -605,7 +579,22 @@ pub async fn rename_folder<A: MacroAuthorizationService>(
     Ok(Json(
         state
             .service
-            .rename_folder(&actor(user, None)?, TeamId(team), folder, body.name)
+            .rename_folder(&actor(user)?, TeamId(team), folder, body.name)
+            .await?,
+    ))
+}
+#[utoipa::path(operation_id = "passwords_move_folder",put,path="/passwords/teams/{team}/folders/{folder}/parent",params(("team"=Uuid,Path),("folder"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),request_body=MoveFolderBody,responses((status=200,body=Folder),(status=400,body=Failure),(status=403,body=Failure),(status=404,body=Failure),(status=409,body=Failure)),tag="passwords")]
+/// Move a folder under another folder of the team, or to the top level.
+pub async fn move_folder<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path((team, folder)): Path<(Uuid, Uuid)>,
+    Json(body): Json<MoveFolderBody>,
+) -> Result<Json<Folder>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .move_folder(&actor(user)?, TeamId(team), folder, body.parent_id)
             .await?,
     ))
 }

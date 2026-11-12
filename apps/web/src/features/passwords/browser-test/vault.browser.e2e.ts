@@ -1,36 +1,102 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
-for (const viewport of [
-  { name: 'desktop', width: 1440, height: 960 },
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
   { name: 'phone', width: 390, height: 844 },
   { name: 'tablet', width: 1024, height: 768 },
-]) {
+] as const;
+
+type Viewport = (typeof VIEWPORTS)[number];
+
+/** New → kind, from the desktop New menu or the phone's floating New. */
+async function startNew(page: Page, viewport: Viewport, kind: string) {
+  if (viewport.name === 'desktop') {
+    await page
+      .getByRole('button', { name: /^New item or folder in/ })
+      .last()
+      .click();
+    await page.getByRole('menuitem', { name: kind, exact: true }).click();
+    return;
+  }
+  await page.getByRole('button', { name: 'New', exact: true }).last().tap();
+  await page.getByRole('button', { name: kind, exact: true }).last().tap();
+  // The touch menu runs its choice after it closes; wait for the new pane.
+  await expect(
+    page.getByRole('heading', { name: 'Untitled', exact: true })
+  ).toBeVisible();
+}
+
+async function press(page: Page, viewport: Viewport, name: string | RegExp) {
+  const button = page
+    .getByRole('button', { name, exact: typeof name === 'string' })
+    .first();
+  if (viewport.name === 'desktop') await button.click();
+  else await button.tap();
+}
+
+/** Phones replace the list with the detail; wider layouts keep both. */
+async function backToList(page: Page, viewport: Viewport) {
+  const back = page.getByRole('button', { name: 'Back', exact: true });
+  if (await back.isVisible()) await press(page, viewport, 'Back');
+}
+
+for (const viewport of VIEWPORTS) {
   test.describe(viewport.name, () => {
     test.use({
       hasTouch: viewport.name !== 'desktop',
       isMobile: viewport.name !== 'desktop',
     });
-    const pressMethod = viewport.name === 'desktop' ? 'click' : 'tap';
-    test(`${viewport.name}: create, reveal, edit, cancel, generate and copy`, async ({
+    // The first load compiles the fixture under a cold dev server.
+    test.setTimeout(360_000);
+
+    test(`${viewport.name}: a new item keeps its input through blur, hiding, lock and selecting away`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
-      await page.goto('/src/features/passwords/browser-test/vault.html');
-      await page
-        .getByRole('button', { name: 'New item', exact: true })
-        .last()
-        [pressMethod]();
+      await page.goto('/src/features/passwords/browser-test/vault.html', {
+        timeout: 240_000,
+      });
+
+      await startNew(page, viewport, 'Login');
+      await expect(page.getByLabel('Type', { exact: true })).toHaveCount(0);
       await page.getByLabel('Name', { exact: true }).fill('Workspace login');
       await page.getByLabel('Username', { exact: true }).fill('fixture-user');
       await page
         .getByLabel('Password', { exact: true })
         .fill('initial-password');
-      await page
-        .getByRole('button', { name: 'Save', exact: true })
-        .first()
-        [pressMethod]();
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('blur'));
+        Object.defineProperty(document, 'hidden', {
+          configurable: true,
+          get: () => true,
+        });
+        document.dispatchEvent(new Event('visibilitychange'));
+        Object.defineProperty(document, 'hidden', {
+          configurable: true,
+          get: () => false,
+        });
+      });
+      await backToList(page, viewport);
+      await startNew(page, viewport, 'Secure note');
+      await page.getByLabel('Name', { exact: true }).fill('Second draft');
+      await backToList(page, viewport);
+      if (viewport.name === 'desktop')
+        await press(page, viewport, 'Lock Passwords');
+      await press(page, viewport, /Workspace login.*Draft/);
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+        'Workspace login'
+      );
+      await expect(page.getByLabel('Username', { exact: true })).toHaveValue(
+        'fixture-user'
+      );
+      await expect(page.getByLabel('Password', { exact: true })).toHaveValue(
+        'initial-password'
+      );
+
+      await press(page, viewport, 'Save');
       await expect(
         page.getByRole('heading', { name: 'Workspace login' })
       ).toBeVisible();
@@ -40,258 +106,134 @@ for (const viewport of [
       await expect(
         page.getByText('initial-password', { exact: true })
       ).toHaveCount(0);
-      await page
-        .getByRole('button', { name: 'Copy username', exact: true })
-        [pressMethod]();
-      await expect(page.locator('body')).toHaveAttribute(
-        'data-copied',
-        'fixture-user'
-      );
-      await expect(
-        page.getByText('initial-password', { exact: true })
-      ).toHaveCount(0);
-      await page
-        .getByRole('button', { name: 'Reveal password', exact: true })
-        [pressMethod]();
+      await press(page, viewport, 'Reveal Password');
       await expect(
         page.getByText('initial-password', { exact: true })
       ).toBeVisible();
-      await page
-        .getByRole('button', { name: 'Copy password', exact: true })
-        [pressMethod]();
+      await press(page, viewport, 'Copy Password');
       await expect(page.locator('body')).toHaveAttribute(
         'data-copied',
         'initial-password'
       );
-      await page
-        .getByRole('button', { name: 'Edit', exact: true })
-        [pressMethod]();
-      await page.getByLabel('Name', { exact: true }).fill('Discarded name');
-      await page
-        .getByRole('button', { name: 'Cancel', exact: true })
-        [pressMethod]();
-      await expect(
-        page.getByRole('heading', { name: 'Workspace login' })
-      ).toBeVisible();
-      await page
-        .getByRole('button', { name: 'Edit', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('button', { name: 'Generate password', exact: true })
-        [pressMethod]();
+      await press(page, viewport, 'Edit');
+      await press(page, viewport, 'Generate password');
       await page
         .getByRole('menuitem', { name: 'Use password', exact: true })
-        [pressMethod]();
+        .click();
       await expect(
         page.getByLabel('Password', { exact: true })
       ).not.toHaveValue('initial-password');
-      await page
-        .getByRole('button', { name: 'Save', exact: true })
-        .first()
-        [pressMethod]();
-      await page
-        .getByRole('button', { name: 'Reveal password', exact: true })
-        [pressMethod]();
+      await press(page, viewport, 'Discard');
       await expect(
-        page.getByText('initial-password', { exact: true })
-      ).toHaveCount(0);
+        page.getByRole('heading', { name: 'Workspace login' })
+      ).toBeVisible();
+
+      await backToList(page, viewport);
+      await expect(
+        page.getByRole('button', { name: /Second draft.*Draft/ })
+      ).toBeVisible();
       await page.screenshot({
-        path: `/tmp/passwords-${viewport.name}.png`,
-        fullPage: true,
+        path: `/home/wolf/tmp/passwords-shots/drafts-${viewport.name}.png`,
+      });
+      expect(errors).toEqual([]);
+    });
+
+    test(`${viewport.name}: verification code items need a key and show a live code`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/src/features/passwords/browser-test/vault.html', {
+        timeout: 240_000,
+      });
+      await startNew(page, viewport, 'Verification code');
+      await page.getByLabel('Name', { exact: true }).fill('Domain registrar');
+      await page.getByLabel('Account', { exact: true }).fill('ops@example.com');
+      await press(page, viewport, 'Save');
+      await expect(page.getByText('Enter the secret key.')).toBeVisible();
+      await page
+        .getByLabel('Verification code', { exact: true })
+        .fill('JBSWY3DPEHPK3PXP');
+      await press(page, viewport, 'Save');
+      await expect(
+        page.getByRole('heading', { name: 'Domain registrar' })
+      ).toBeVisible();
+      await press(page, viewport, 'Show verification code');
+      await expect(page.getByText('123 456', { exact: true })).toBeVisible();
+      await page.screenshot({
+        path: `/home/wolf/tmp/passwords-shots/totp-${viewport.name}.png`,
       });
       expect(errors).toEqual([]);
     });
   });
 }
 
-for (const viewport of [
-  { name: 'desktop', width: 1440, height: 960 },
-  { name: 'phone', width: 390, height: 844 },
-  { name: 'tablet', width: 1024, height: 768 },
-]) {
-  test.describe(viewport.name, () => {
-    test.use({
-      hasTouch: viewport.name !== 'desktop',
-      isMobile: viewport.name !== 'desktop',
+test.describe('desktop folders', () => {
+  test('creates, nests, renames and deletes folders; items move to All items', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
     });
-    const pressMethod = viewport.name === 'desktop' ? 'click' : 'tap';
-    test(`${viewport.name}: folders, shared access, history, TOTP and unsaved guard`, async ({
-      page,
-    }) => {
-      await page.setViewportSize(viewport);
-      await page.goto('/src/features/passwords/browser-test/vault.html');
-      await page
-        .getByRole('button', { name: 'New item', exact: true })
-        .last()
-        [pressMethod]();
-      await page.getByLabel('Name', { exact: true }).fill('Team credential');
-      await page
-        .getByLabel('Password', { exact: true })
-        .fill('fixture-only-secret');
-      if (viewport.name === 'phone') {
-        await page
-          .getByRole('button', { name: 'Back', exact: true })
-          [pressMethod]();
-        await expect(page.getByText('You have unsaved changes.')).toBeVisible();
-        await page
-          .getByRole('button', { name: 'Keep editing', exact: true })
-          [pressMethod]();
-        await expect(page.getByLabel('Password', { exact: true })).toHaveValue(
-          'fixture-only-secret'
-        );
-      }
-      await page
-        .getByRole('button', { name: 'Save', exact: true })
-        .first()
-        [pressMethod]();
-      if (viewport.name === 'phone') {
-        await page
-          .getByRole('button', { name: 'Back', exact: true })
-          [pressMethod]();
-        await page
-          .getByRole('button', { name: 'Password navigation', exact: true })
-          [pressMethod]();
-      }
-      await page
-        .getByRole('button', { name: 'New folder', exact: true })
-        [pressMethod]();
-      await page.getByLabel('Folder name', { exact: true }).fill('Operations');
-      await page
-        .getByRole('button', { name: 'Save', exact: true })
-        [pressMethod]();
-      if (viewport.name === 'phone') {
-        await page
-          .getByRole('button', { name: 'Password navigation', exact: true })
-          [pressMethod]();
-        await page
-          .getByRole('button', { name: /Team credential/ })
-          [pressMethod]();
-      }
-      await page
-        .getByRole('button', { name: 'Move to folder', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('menuitem', { name: 'Operations', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('button', { name: 'Share', exact: true })
-        [pressMethod]();
-      await page
-        .getByLabel('Search people and teams', { exact: true })
-        .fill('Avery');
-      await page
-        .getByRole('button', { name: /Avery Lee.*Person/ })
-        [pressMethod]();
-      await page.screenshot({
-        path: `/tmp/passwords-share-picker-${viewport.name}.png`,
-        fullPage: true,
-      });
-      await page
-        .getByRole('button', { name: 'Share', exact: true })
-        .last()
-        [pressMethod]();
-      await expect(
-        page.getByText('Avery Lee', { exact: true }).last()
-      ).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(
-        page.getByText('1 share', { exact: true }).last()
-      ).toBeVisible();
-      await page
-        .getByRole('button', { name: 'Password history', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('menuitem', { name: 'Password history', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('button', { name: 'Password history', exact: true })
-        [pressMethod]();
-      await page.getByRole('menuitem', { name: /Version 1/ })[pressMethod]();
-      await expect(
-        page.getByText('fixture-only-secret', { exact: true })
-      ).toBeVisible();
-      await page
-        .getByRole('button', { name: 'Set up verification code', exact: true })
-        [pressMethod]();
-      await page
-        .getByLabel('TOTP secret key', { exact: true })
-        .fill('JBSWY3DPEHPK3PXP');
-      await page
-        .getByRole('button', { name: 'Save', exact: true })
-        [pressMethod]();
-      await page.keyboard.press('Escape');
-      await page
-        .getByRole('button', { name: 'Show verification code', exact: true })
-        [pressMethod]();
-      await expect(page.getByText('123456', { exact: true })).toBeVisible();
-      await page.screenshot({
-        path: `/tmp/passwords-main-flows-${viewport.name}.png`,
-        fullPage: true,
-      });
-      await page
-        .getByRole('button', { name: 'More item actions', exact: true })
-        [pressMethod]();
-      await page
-        .getByRole('menuitem', { name: 'Activity', exact: true })
-        [pressMethod]();
-      await expect(page.getByText(/Item created ·/).first()).toBeVisible();
-      if (viewport.name === 'phone') {
-        // The app publishes the combined dock/accessory height through this property.
-        await page.evaluate(() => {
-          document.documentElement.style.setProperty(
-            '--mobile-content-inset-bottom',
-            '180px'
-          );
-          const controls = document.createElement('div');
-          controls.dataset.phoneControls = '';
-          controls.setAttribute('aria-hidden', 'true');
-          controls.style.cssText =
-            'position:fixed;bottom:0;left:0;right:0;height:180px;z-index:100;background:gray';
-          document.body.append(controls);
-        });
-        await page
-          .locator('[data-passwords-detail-scroll]')
-          .evaluate((element) => {
-            element.scrollTop = element.scrollHeight;
-          });
-        const lastAction = page.getByRole('button', {
-          name: 'Replace verification code',
-          exact: true,
-        });
-        const lastActionBounds = await lastAction.boundingBox();
-        expect(lastActionBounds).not.toBeNull();
-        expect(
-          lastActionBounds!.y + lastActionBounds!.height
-        ).toBeLessThanOrEqual(viewport.height - 180);
-        await page
-          .getByRole('button', { name: 'More item actions', exact: true })
-          .tap();
-        await page
-          .getByRole('menuitem', { name: 'Delete item', exact: true })
-          .tap();
-        const confirmation = page.getByRole('button', {
-          name: 'Delete item',
-          exact: true,
-        });
-        await expect(confirmation).toBeVisible();
-        const bounds = await confirmation.boundingBox();
-        expect(bounds).not.toBeNull();
-        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(
-          viewport.height - 180
-        );
-        await page.getByRole('button', { name: 'Edit', exact: true }).tap();
-        await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
-        await expect(confirmation).toHaveCount(0);
-        await page.getByRole('button', { name: 'Cancel', exact: true }).tap();
-        await expect(confirmation).toHaveCount(0);
-        await page.screenshot({
-          path: '/tmp/passwords-phone-bottom-controls.png',
-          fullPage: true,
-        });
-        await page.evaluate(() =>
-          document.querySelector('[data-phone-controls]')?.remove()
-        );
-      }
+
+    await press(page, viewport, 'New folder');
+    await page.getByLabel('Folder name', { exact: true }).fill('Engineering');
+    await page.getByLabel('Folder name', { exact: true }).press('Enter');
+    const tree = page.getByRole('navigation', { name: 'Folders' });
+    await tree
+      .getByRole('button', { name: 'Engineering', exact: true })
+      .click();
+    await press(page, viewport, 'Folder actions for Engineering');
+    await page
+      .getByRole('menuitem', { name: 'New subfolder', exact: true })
+      .click();
+    await page.getByLabel('Folder name', { exact: true }).fill('Production');
+    await page.getByLabel('Folder name', { exact: true }).press('Enter');
+
+    await startNew(page, viewport, 'Login');
+    await page.getByLabel('Name', { exact: true }).fill('Filed login');
+    await press(page, viewport, 'Save');
+    await expect(page.getByText('Engineering / Login')).toBeVisible();
+
+    await tree.getByRole('button', { name: 'Production', exact: true }).click({
+      button: 'right',
     });
+    await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    await page.getByLabel('Rename', { exact: true }).fill('Prod');
+    await page.getByLabel('Rename', { exact: true }).press('Enter');
+    await expect(
+      tree.getByRole('button', { name: 'Prod', exact: true })
+    ).toBeVisible();
+
+    await tree.getByRole('button', { name: 'Engineering', exact: true }).click({
+      button: 'right',
+    });
+    await page
+      .getByRole('menuitem', { name: 'Delete folder', exact: true })
+      .click();
+    await expect(page.getByText('1 item moves to All items.')).toBeVisible();
+    await expect(page.getByText('1 subfolder is deleted too.')).toBeVisible();
+    await page.screenshot({
+      path: '/home/wolf/tmp/passwords-shots/folder-delete-desktop.png',
+    });
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Delete folder' })
+      .click();
+    await expect(
+      tree.getByRole('button', { name: 'Engineering', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'All items' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Filed login/ })
+    ).toBeVisible();
+    expect(errors).toEqual([]);
   });
-}
+});

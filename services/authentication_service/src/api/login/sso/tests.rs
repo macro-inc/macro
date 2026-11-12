@@ -7,26 +7,6 @@ use cool_asserts::assert_matches;
 use super::*;
 
 #[test]
-fn fresh_login_forces_provider_authentication_without_changing_callback() {
-    let original =
-        "https://example.com/oauth2/authorize?client_id=example&state=destination".to_string();
-    assert_eq!(fresh_login_url(original.clone(), false).unwrap(), original);
-    let url = Url::parse(&fresh_login_url(original, true).unwrap()).unwrap();
-    let params = url
-        .query_pairs()
-        .collect::<std::collections::HashMap<_, _>>();
-    assert_eq!(
-        params.get("prompt").map(|value| value.as_ref()),
-        Some("login")
-    );
-    assert_eq!(params.get("max_age").map(|value| value.as_ref()), Some("0"));
-    assert_eq!(
-        params.get("state").map(|value| value.as_ref()),
-        Some("destination")
-    );
-}
-
-#[test]
 fn allowed_original_urls_are_accepted() {
     for original_url in [
         "macro://login",
@@ -110,7 +90,6 @@ async fn it_works_with_no_params() {
     assert_matches!(
         extracted,
         Query(LoginQueryParams {
-            reauthenticate: false,
             idp_name: None,
             idp_id: None,
             login_hint: None,
@@ -136,7 +115,6 @@ async fn it_works_with_mobile() {
     assert_matches!(
         extracted,
         Query(LoginQueryParams {
-            reauthenticate: false,
             idp_name: None,
             idp_id: None,
             login_hint: None,
@@ -162,7 +140,6 @@ async fn it_works_with_mobile_false() {
     assert_matches!(
         extracted,
         Query(LoginQueryParams {
-            reauthenticate: false,
             idp_name: None,
             idp_id: None,
             login_hint: None,
@@ -195,7 +172,6 @@ async fn it_works_with_everything() {
         .expect("it should extract");
 
     assert_matches!(extracted, Query(LoginQueryParams {
-            reauthenticate: false,
        idp_name: Some(idp_name),
        idp_id: Some(idp_id),
        login_hint: Some(login_hint),
@@ -221,7 +197,6 @@ async fn it_works_with_macro_scheme() {
         .expect("it should extract");
 
     assert_matches!(extracted, Query(LoginQueryParams {
-            reauthenticate: false,
        idp_name: Some(idp_name),
        idp_id: None,
        login_hint: None,
@@ -244,7 +219,6 @@ async fn it_works_with_double_encoded_scheme() {
         .expect("it should extract");
 
     assert_matches!(extracted, Query(LoginQueryParams {
-            reauthenticate: false,
        idp_name: Some(idp_name),
        idp_id: None,
        login_hint: None,
@@ -306,17 +280,4 @@ fn it_should_read_the_agent_signup_flag() {
     .unwrap();
 
     assert!(query.is_agent);
-}
-
-#[test]
-fn sso_contract_preserves_the_optional_fresh_authentication_parameter() {
-    let operation = <super::__path_handler as utoipa::Path>::operation();
-    let schema = serde_json::to_value(operation).unwrap();
-    let parameter = schema["parameters"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|parameter| parameter["name"] == "reauthenticate")
-        .unwrap();
-    assert_eq!(parameter["required"], false);
 }

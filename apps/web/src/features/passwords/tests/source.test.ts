@@ -46,6 +46,11 @@ vi.mock('@macro-inc/observability', () => {
   };
 });
 
+const CURRENT = {
+  isCurrent: () => true,
+  signal: new AbortController().signal,
+};
+
 const disclosed = {
   version: 1,
   values: {
@@ -64,17 +69,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('shows fresh sign-in for the typed stale-auth response without refreshing or duplicating disclosure', async () => {
-  mocks.fetch.mockResolvedValue(
-    new Response(
-      JSON.stringify({ code: PasswordErrorCode.reauthentication_required }),
-      { status: 403 }
-    )
+it('never replays a request under another account after a delayed session refresh', async () => {
+  let finishRefresh: ((value: ReturnType<typeof ok<void>>) => void) | undefined;
+  let refreshStarted: (() => void) | undefined;
+  const refreshing = new Promise<void>((resolve) => {
+    refreshStarted = resolve;
+  });
+  mocks.refresh.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishRefresh = resolve;
+        refreshStarted?.();
+      })
   );
-  const result = await createPasswordSource('team').reveal('item');
-  expect(result.isErr() && result.error).toBe('reauth');
+  mocks.fetch.mockResolvedValue(new Response('', { status: 401 }));
+  const viewer = new AbortController();
+  let current = true;
+  const source = createPasswordSource('team', {
+    isCurrent: () => current,
+    signal: viewer.signal,
+  });
+  const pending = source.share('item', [
+    { kind: 'team', id: 'team', permission: 'view' },
+  ]);
+  await refreshing;
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  // Account A signs out and B signs in while A's refresh is still pending.
+  current = false;
+  viewer.abort();
+  finishRefresh?.(ok(undefined));
+  const result = await pending;
+  expect(result.isErr()).toBe(true);
   expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  expect(mocks.refresh).not.toHaveBeenCalled();
+  expect(await source.list().catch(() => 'refused')).toBe('refused');
+  expect(await source.folders().catch(() => 'refused')).toBe('refused');
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
 });
 
 it('preserves cookie refresh for an expired session and keeps ordinary permission denials separate', async () => {
@@ -86,7 +115,9 @@ it('preserves cookie refresh for an expired session and keeps ordinary permissio
         headers: { 'Content-Type': 'application/json' },
       })
     );
-  expect((await createPasswordSource('team').reveal('item')).isOk()).toBe(true);
+  expect(
+    (await createPasswordSource('team', CURRENT).reveal('item')).isOk()
+  ).toBe(true);
   expect(mocks.refresh).toHaveBeenCalledTimes(1);
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
   mocks.fetch.mockClear();
@@ -96,7 +127,7 @@ it('preserves cookie refresh for an expired session and keeps ordinary permissio
       status: 403,
     })
   );
-  const result = await createPasswordSource('team').reveal('item');
+  const result = await createPasswordSource('team', CURRENT).reveal('item');
   expect(result.isErr() && result.error).toBe('failed');
   expect(mocks.refresh).not.toHaveBeenCalled();
   expect(mocks.fetch).toHaveBeenCalledTimes(1);
@@ -114,7 +145,7 @@ it('bounds busy retries with jittered exponential backoff and records their coun
       { status: 409 }
     );
   });
-  const pending = createPasswordSource('team').reveal('item');
+  const pending = createPasswordSource('team', CURRENT).reveal('item');
   await vi.advanceTimersByTimeAsync(1000);
   const result = await pending;
   expect(result.isErr() && result.error).toBe('failed');
@@ -145,6 +176,8 @@ it('retries contention successfully with the same payload but never retries a re
     hasTotp: false,
     shared: false,
     shareCount: 0,
+    sharedWithTeam: true,
+    canManage: true,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     lastUsedAt: null,
@@ -155,6 +188,7 @@ it('retries contention successfully with the same payload but never retries a re
     url: '',
     folderId: null,
     favorite: false,
+    private: false,
     values: {
       username: 'account',
       password: 'original-secret',
@@ -175,7 +209,7 @@ it('retries contention successfully with the same payload but never retries a re
       })
     );
   const operationId = '019a0000-0000-7000-8000-000000000001';
-  const pending = createPasswordSource('team').save(
+  const pending = createPasswordSource('team', CURRENT).save(
     undefined,
     undefined,
     draft,
@@ -202,7 +236,109 @@ it('retries contention successfully with the same payload but never retries a re
       status: 409,
     })
   );
-  const conflict = await createPasswordSource('team').reveal('item');
+  const conflict = await createPasswordSource('team', CURRENT).reveal('item');
   expect(conflict.isErr() && conflict.error).toBe('failed');
   expect(mocks.fetch).toHaveBeenCalledTimes(1);
+});
+
+it('chooses team or private sharing only when an item is created', async () => {
+  const metadata = {
+    id: 'item',
+    teamId: 'team',
+    name: 'Credential',
+    kind: 'login',
+    url: null,
+    folderId: null,
+    favorite: false,
+    version: 1,
+    hasTotp: false,
+    shared: false,
+    shareCount: 0,
+    sharedWithTeam: false,
+    canManage: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    lastUsedAt: null,
+  };
+  mocks.fetch.mockImplementation(
+    async () =>
+      new Response(JSON.stringify(metadata), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+  );
+  const draft = {
+    name: 'Credential',
+    kind: 'login' as const,
+    url: '',
+    folderId: null,
+    favorite: false,
+    private: true,
+    values: { username: '', password: 'secret', notes: '', fields: [] },
+  };
+  const source = createPasswordSource('team', CURRENT);
+  await source.save(
+    undefined,
+    undefined,
+    draft,
+    '019a0000-0000-7000-8000-000000000030'
+  );
+  await source.save('item', 1, draft, '019a0000-0000-7000-8000-000000000031');
+  const [created, updated] = mocks.fetch.mock.calls.map(([, init]) =>
+    JSON.parse(init.body)
+  );
+  expect(created.private).toBe(true);
+  expect('private' in updated).toBe(false);
+});
+
+function codeResponse(code: string) {
+  return new Response(JSON.stringify({ code, period: 30 }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+it('never advertises a verification code that may come from the previous period', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-01-01T00:00:29.500Z'));
+  let finishFirst: ((response: Response) => void) | undefined;
+  let firstStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    firstStarted = resolve;
+  });
+  mocks.fetch
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishFirst = resolve;
+          firstStarted?.();
+        })
+    )
+    .mockImplementationOnce(async () => codeResponse('222222'));
+  const pending = createPasswordSource('team', CURRENT).totp('item');
+  await started;
+  // The server produced this code at :29.5; it arrives after the period ends.
+  vi.setSystemTime(new Date('2026-01-01T00:00:30.200Z'));
+  finishFirst?.(codeResponse('111111'));
+  const result = await pending;
+  expect(result.isOk() && result.value).toEqual({
+    code: '222222',
+    period: 30,
+    validUntil: '2026-01-01T00:01:00.000Z',
+  });
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
+});
+
+it('fails instead of publishing a code when retries keep crossing a period boundary', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  let now = Date.parse('2026-01-01T00:00:29.900Z');
+  vi.setSystemTime(now);
+  mocks.fetch.mockImplementation(async () => {
+    now += 30_000;
+    vi.setSystemTime(now);
+    return codeResponse('333333');
+  });
+  const result = await createPasswordSource('team', CURRENT).totp('item');
+  expect(result.isErr() && result.error).toBe('failed');
+  expect(mocks.fetch).toHaveBeenCalledTimes(2);
 });

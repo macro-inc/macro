@@ -77,17 +77,6 @@ import { useSsoLogin } from './useSsoLogin';
 const loginUrl = 'https://localhost:3003/app/login?referral_code=invite';
 const proxyAuthHost = 'https://localhost:3003/__macro_dev/gateway/auth';
 
-it('forces SSO authentication and clears the request from its return URL', async () => {
-  window.location.href = `${loginUrl}&prompt=login&max_age=0&redirect=%2Fpasswords`;
-  await useSsoLogin()('google');
-  const request = new URL(window.location.href);
-  expect(request.searchParams.get('reauthenticate')).toBe('true');
-  const original = new URL(request.searchParams.get('original_url')!);
-  expect(original.searchParams.get('prompt')).toBeNull();
-  expect(original.searchParams.get('max_age')).toBeNull();
-  expect(original.searchParams.get('redirect')).toBe('/passwords');
-});
-
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal('window', {
@@ -359,17 +348,4 @@ describe('useSsoLogin', () => {
     expect(mocks.track).not.toHaveBeenCalled();
     expect(mocks.reloadHolds).toBe(0);
   });
-});
-
-it('preserves native hash-route fresh-login intent and destination in the desktop SSO handoff', async () => {
-  mocks.platform = 'desktop';
-  window.location.href =
-    'tauri://localhost/#/login?prompt=login&max_age=0&redirect=%2Fpasswords';
-  await useSsoLogin()('google');
-  const request = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
-  expect(request.searchParams.get('reauthenticate')).toBe('true');
-  const callback = new URL(request.searchParams.get('original_url')!);
-  expect(decodeURIComponent(callback.searchParams.get('redirect')!)).toBe(
-    '/passwords'
-  );
 });

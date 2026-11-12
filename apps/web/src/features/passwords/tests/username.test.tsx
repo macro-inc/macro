@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import {
 } from '../context/passwords-context';
 import { createVault, type VaultController } from '../primitives/vault';
 import { createFakePasswordSource } from './fake-source';
+import { FIXTURE_SCOPE } from './fixture-scope';
 
 afterEach(cleanup);
 
@@ -22,6 +23,7 @@ it('loads and copies only the username without disclosing or caching the passwor
       url: '',
       folderId: null,
       favorite: false,
+      private: false,
       values: {
         username: 'account-identifier',
         password: 'protected-password',
@@ -45,13 +47,14 @@ it('loads and copies only the username without disclosing or caching the passwor
   const queryClient = new QueryClient();
   let controller: VaultController | undefined;
   function Probe() {
-    controller = createVault('fixture-team');
+    controller = createVault();
     return null;
   }
   render(() => (
     <QueryClientProvider client={queryClient}>
       <PasswordsProvider
         value={{
+          scope: FIXTURE_SCOPE,
           source,
           recipients: () => [],
           recipientsLoading: () => false,
@@ -64,6 +67,7 @@ it('loads and copies only the username without disclosing or caching the passwor
     </QueryClientProvider>
   ));
   if (!controller) throw new Error('Fixture controller missing');
+  await waitFor(() => expect(controller?.loadedItems()).toHaveLength(1));
   controller.select(saved.value);
   await identifier;
   expect(controller.username()).toBe('account-identifier');
@@ -99,6 +103,7 @@ it.each(['username', 'copyUsername'] as const)(
         url: '',
         folderId: null,
         favorite: false,
+        private: false,
         values: {
           username: 'old-identifier',
           password: 'protected-password',
@@ -123,13 +128,14 @@ it.each(['username', 'copyUsername'] as const)(
     const clipboard = vi.fn(async () => {});
     let controller: VaultController | undefined;
     function Probe() {
-      controller = createVault('fixture-team');
+      controller = createVault();
       return null;
     }
     render(() => (
       <QueryClientProvider client={new QueryClient()}>
         <PasswordsProvider
           value={{
+            scope: FIXTURE_SCOPE,
             source,
             recipients: () => [],
             recipientsLoading: () => false,
@@ -142,6 +148,7 @@ it.each(['username', 'copyUsername'] as const)(
       </QueryClientProvider>
     ));
     if (!controller) throw new Error('Fixture controller missing');
+    await waitFor(() => expect(controller?.loadedItems()).toHaveLength(1));
     controller.select(saved.value);
     const pending =
       action === 'copyUsername' ? controller.copyUsername() : identifier;

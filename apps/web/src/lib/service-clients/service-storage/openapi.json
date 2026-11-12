@@ -22379,7 +22379,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PasswordFolderBody"
+                "$ref": "#/components/schemas/PasswordCreateFolderBody"
               }
             }
           },
@@ -22534,6 +22534,104 @@
             "description": ""
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/folders/{folder}/parent": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Move a folder under another folder of the team, or to the top level.",
+        "operationId": "passwords_move_folder",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordMoveFolderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFolder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -23160,7 +23258,7 @@
     "/passwords/teams/{team}/items/{item}/reveal": {
       "post": {
         "tags": ["passwords"],
-        "summary": "Disclose a current or historical value after recent human authentication.",
+        "summary": "Disclose a current or historical value with normal human-session item access.",
         "operationId": "passwords_reveal",
         "parameters": [
           {
@@ -23369,7 +23467,7 @@
     "/passwords/teams/{team}/items/{item}/totp": {
       "put": {
         "tags": ["passwords"],
-        "summary": "Enroll or replace a verification-code seed after recent authentication.",
+        "summary": "Enroll or replace a verification-code seed with normal human-session edit access.",
         "operationId": "passwords_set_totp",
         "parameters": [
           {
@@ -23438,7 +23536,7 @@
       },
       "delete": {
         "tags": ["passwords"],
-        "summary": "Remove a verification-code seed after recent authentication.",
+        "summary": "Remove a verification-code seed with normal human-session edit access.",
         "operationId": "passwords_remove_totp",
         "parameters": [
           {
@@ -23499,7 +23597,7 @@
     "/passwords/teams/{team}/items/{item}/totp/code": {
       "post": {
         "tags": ["passwords"],
-        "summary": "Resolve the current verification code after recent authentication.",
+        "summary": "Resolve the current verification code with normal human-session item access.",
         "operationId": "passwords_totp",
         "parameters": [
           {
@@ -33186,7 +33284,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -37061,7 +37159,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by document owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -50727,17 +50825,33 @@
           }
         }
       },
+      "PasswordCreateFolderBody": {
+        "type": "object",
+        "description": "New folder, at the top level or inside another folder of the team.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Folder display name."
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Containing folder; absent or null for a top-level folder."
+          }
+        },
+        "additionalProperties": false
+      },
       "PasswordErrorCode": {
         "type": "string",
         "description": "Closed, payload-free failure codes exposed by the human vault API.",
         "enum": [
-          "vault_items_owned",
           "not_found",
           "forbidden",
-          "reauthentication_required",
           "invalid_request",
           "version_conflict",
           "vault_busy",
+          "folder_missing",
           "vault_unavailable"
         ]
       },
@@ -50765,6 +50879,11 @@
           "name": {
             "type": "string",
             "description": "Searchable display name; must not contain credential values."
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Containing folder in the same team; absent for a top-level folder."
           },
           "teamId": {
             "$ref": "#/components/schemas/PasswordTeamId",
@@ -50808,17 +50927,7 @@
         "description": "Future principals can extend this without exposing agent controls in v1.",
         "enum": ["user", "team"]
       },
-      "PasswordItemId": {
-        "type": "string",
-        "format": "uuid",
-        "description": "Vault item identity, UUIDv7 for new items."
-      },
-      "PasswordItemKind": {
-        "type": "string",
-        "description": "Product template. Values use the same protected representation for every template.",
-        "enum": ["login", "card", "note", "identity", "api"]
-      },
-      "PasswordItemMetadata": {
+      "PasswordItemFields": {
         "type": "object",
         "description": "Searchable display fields, without any credential values.",
         "required": [
@@ -50907,9 +51016,61 @@
         },
         "additionalProperties": false
       },
+      "PasswordItemId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Vault item identity, UUIDv7 for new items."
+      },
+      "PasswordItemKind": {
+        "type": "string",
+        "description": "Product template. Values use the same protected representation for every template.",
+        "enum": [
+          "login",
+          "card",
+          "note",
+          "identity",
+          "api",
+          "verification_code"
+        ]
+      },
+      "PasswordItemMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PasswordItemFields",
+            "description": "Stored display fields, without confidential values or derived authority."
+          },
+          {
+            "type": "object",
+            "required": ["canManage", "sharedWithTeam"],
+            "properties": {
+              "canManage": {
+                "type": "boolean",
+                "description": "Whether this caller may change grants or delete the team item now."
+              },
+              "sharedWithTeam": {
+                "type": "boolean",
+                "description": "Whether the team has an explicit grant, independent of direct recipients."
+              }
+            }
+          }
+        ],
+        "description": "Actor-specific response capabilities, never part of persisted metadata or write intents."
+      },
       "PasswordLoginUrl": {
         "type": "string",
         "description": "A public HTTP(S) login URL; credentials and userinfo are rejected before indexing."
+      },
+      "PasswordMoveFolderBody": {
+        "type": "object",
+        "description": "New containing folder for an existing folder.",
+        "properties": {
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Containing folder; null moves the folder to the top level."
+          }
+        },
+        "additionalProperties": false
       },
       "PasswordPatchItem": {
         "type": "object",
@@ -51141,6 +51302,10 @@
             "type": "string",
             "format": "uuid",
             "description": "UUIDv7 identifying one logical save across uncertain retries."
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Create without the default team edit grant. Updates preserve existing grants."
           },
           "url": {
             "oneOf": [
@@ -52711,7 +52876,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "description": "Filter by project owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",

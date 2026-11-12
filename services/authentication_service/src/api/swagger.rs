@@ -238,8 +238,6 @@ use model::user::{
         ),
         components(
             schemas(
-                teams::inbound::axum_router::TeamVaultFailure,
-                teams::inbound::axum_router::TeamVaultFailureCode,
                         Permission,
                         PasswordlessRequest,
                         PasswordRequest,

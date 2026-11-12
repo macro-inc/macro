@@ -7,16 +7,38 @@ use axum::{
     routing::get,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use reqwest::StatusCode;
 use serde::Deserialize;
 
-use super::{
-    context::{ApiContext, AuthorizationService},
-    proxy::ProxyError,
-};
+use super::context::{ApiContext, AuthorizationService};
 use crate::{
     domain::{LogoDomain, LogoError, LogoService},
-    outbound::FaviconProvider,
+    outbound::{FaviconProvider, remote_image::ProxyError},
 };
+
+impl IntoResponse for ProxyError {
+    fn into_response(self) -> Response {
+        let status = match &self {
+            Self::Busy => StatusCode::SERVICE_UNAVAILABLE,
+            Self::InvalidUrl(_)
+            | Self::InvalidScheme
+            | Self::MissingHost
+            | Self::DnsLookupFailed(_) => StatusCode::BAD_REQUEST,
+            Self::PrivateIp => StatusCode::FORBIDDEN,
+            Self::UpstreamTimeout(_) => StatusCode::GATEWAY_TIMEOUT,
+            // Hosts refuse hotlinking or have dropped the image; neither is
+            // a gateway failure.
+            Self::UpstreamStatus(status) if status.is_client_error() => StatusCode::NOT_FOUND,
+            Self::UpstreamConnect(_)
+            | Self::UpstreamRedirect(_)
+            | Self::UpstreamNetwork(_)
+            | Self::UpstreamStatus(_) => StatusCode::BAD_GATEWAY,
+            Self::NotAnImage(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::ImageTooLarge { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        };
+        (status, self.to_string()).into_response()
+    }
+}
 
 #[derive(Deserialize)]
 pub struct LogoParams {

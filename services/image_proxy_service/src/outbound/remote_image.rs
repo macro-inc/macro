@@ -1,7 +1,6 @@
-//! Shared SSRF-safe image transport.
+//! SSRF-safe upstream transport for domain logos.
 
 use super::resolver::PrivateIpFilteringResolver;
-use futures::StreamExt;
 use std::{error::Error, fmt, net::IpAddr, sync::Arc};
 use url::Url;
 
@@ -21,8 +20,7 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 /// User-Agent for the primary upstream fetch. `reqwest` sends none by default,
 /// and some origins (strict WAFs, bare nginx) 403 requests with no User-Agent;
 /// a browser-like string clears those rules. Shaped like Gmail's image proxy —
-/// a real browser string plus a proxy identifier. A minority of hosts do the
-/// reverse, so [`crate::api::proxy::proxy_request_handler`] retries once with no UA on failure.
+/// a real browser string plus a proxy identifier.
 const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /// Build the HTTP client used to fetch upstream images.
@@ -30,7 +28,7 @@ const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0)
 /// SSRF mitigations baked into the client:
 ///
 /// 1. **Redirects disabled** at the reqwest level so the manual loop in
-///    [`crate::api::proxy::proxy_request_handler`] can run [`assert_not_internal`] on every hop
+///    [`fetch_upstream`] can run [`assert_not_internal`] on every hop
 ///    and follows up to [`MAX_REDIRECTS`] redirects itself.
 /// 2. **Private-IP-filtering DNS resolver** ([`PrivateIpFilteringResolver`])
 ///    enforces the same private-IP check at the moment reqwest actually
@@ -38,9 +36,8 @@ const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0)
 ///    and the connect attempt could see different answers from the
 ///    authoritative DNS server.
 ///
-/// Owning the client construction here keeps the mitigation inseparable from
-/// the handler that relies on it — callers can't accidentally hand in a
-/// redirect-following or unfiltered client.
+/// The composition root constructs this client separately from the legacy
+/// generic proxy client so logo fetches retain these stricter protections.
 pub(crate) fn build_http_client() -> anyhow::Result<reqwest::Client> {
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
@@ -67,20 +64,9 @@ pub enum ProxyError {
     UpstreamStatus(reqwest::StatusCode),
     NotAnImage(String),
     ImageTooLarge { content_length: u64 },
-    ResponseBuild(http::Error),
 }
 
 impl std::error::Error for ProxyError {}
-
-impl ProxyError {
-    /// Whether this failure might be the upstream rejecting our User-Agent —
-    /// a non-2xx status or a non-image challenge page. Worth one retry with no
-    /// UA. Network/timeout/redirect errors aren't UA-related, so we don't retry
-    /// those (it would just double latency on genuinely-broken hosts).
-    pub(crate) fn is_retryable_without_ua(&self) -> bool {
-        matches!(self, Self::UpstreamStatus(_) | Self::NotAnImage(_))
-    }
-}
 
 impl fmt::Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -109,14 +95,13 @@ impl fmt::Display for ProxyError {
                 f,
                 "image exceeds max size of {MAX_IMAGE_SIZE} bytes (Content-Length: {content_length})"
             ),
-            Self::ResponseBuild(e) => write!(f, "could not build response: {e}"),
         }
     }
 }
 
 /// Follow redirects (re-checking each hop for private IPs) and validate the
-/// final response is an image. `send_user_agent` toggles the browser-like
-/// [`UPSTREAM_USER_AGENT`] so the handler can fall back to a no-UA request.
+/// final response is an image. `send_user_agent` selects whether to send the
+/// browser-like [`UPSTREAM_USER_AGENT`].
 pub(crate) async fn fetch_upstream(
     http_client: &reqwest::Client,
     mut url: Url,
@@ -153,17 +138,6 @@ pub(crate) async fn fetch_upstream(
     let content_type = extract_content_type(&response)?;
 
     Ok((response, content_type))
-}
-
-pub(crate) fn validate_url(raw_url: &str) -> Result<Url, ProxyError> {
-    let mut url = Url::parse(raw_url).map_err(|e| ProxyError::InvalidUrl(e.to_string()))?;
-
-    if url.scheme() != "http" && url.scheme() != "https" {
-        return Err(ProxyError::InvalidScheme);
-    }
-
-    url.set_fragment(None);
-    Ok(url)
 }
 
 pub(crate) async fn assert_not_internal(url: &Url) -> Result<(), ProxyError> {
@@ -224,7 +198,7 @@ pub(crate) fn is_private_ip(ip: &IpAddr) -> bool {
 /// Issue a GET against `url`. The response is returned without inspecting its
 /// status — the caller decides how to handle 3xx (redirect-follow) vs 4xx /
 /// 5xx (error). This is intentional: the redirect loop in
-/// [`crate::api::proxy::proxy_request_handler`] needs to see 3xx responses so it can run
+/// [`fetch_upstream`] needs to see 3xx responses so it can run
 /// [`assert_not_internal`] against each hop before following.
 async fn send_request(
     http_client: &reqwest::Client,
@@ -253,7 +227,7 @@ async fn send_request(
 }
 
 /// Resolve the `Location` header of a 3xx response into the next URL to
-/// fetch, applying the same scheme / fragment hygiene as [`validate_url`].
+/// fetch, allowing only HTTP(S) and removing the fragment.
 ///
 /// Does **not** check the target's IPs — the caller must run
 /// [`assert_not_internal`] on the returned URL before issuing the next
@@ -307,49 +281,6 @@ pub(crate) fn is_allowed_content_type(content_type: &str) -> bool {
         .to_ascii_lowercase();
 
     media_type.starts_with("image/") || media_type == "application/octet-stream"
-}
-
-pub(crate) fn check_content_length(
-    response: &reqwest::Response,
-    original_url: &str,
-) -> Result<(), ProxyError> {
-    if let Some(content_length) = response.content_length() {
-        tracing::info!(
-            content_length,
-            url = original_url,
-            "upstream content length"
-        );
-        if content_length > MAX_IMAGE_SIZE {
-            return Err(ProxyError::ImageTooLarge { content_length });
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn apply_size_limit<
-    S: futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send,
->(
-    stream: S,
-    url: String,
-) -> impl futures::Stream<Item = Result<bytes::Bytes, std::io::Error>> + Send + use<S> {
-    let mut bytes_received: u64 = 0;
-
-    stream.map(move |chunk_result: Result<bytes::Bytes, reqwest::Error>| {
-        let chunk = chunk_result.map_err(std::io::Error::other)?;
-        bytes_received += chunk.len() as u64;
-        if bytes_received > MAX_IMAGE_SIZE {
-            tracing::warn!(
-                bytes_received,
-                max = MAX_IMAGE_SIZE,
-                url = url,
-                "image exceeded max size during streaming"
-            );
-            return Err(std::io::Error::other(format!(
-                "image exceeded max size of {MAX_IMAGE_SIZE} bytes during streaming"
-            )));
-        }
-        Ok(chunk)
-    })
 }
 
 fn build_error_chain(err: &reqwest::Error) -> String {

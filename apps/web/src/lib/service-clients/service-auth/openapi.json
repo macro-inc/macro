@@ -3029,15 +3029,6 @@
             "schema": {
               "type": "boolean"
             }
-          },
-          {
-            "name": "reauthenticate",
-            "in": "query",
-            "description": "Require a fresh interactive login, preserving the original destination.",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
           }
         ],
         "responses": {
@@ -3995,32 +3986,12 @@
               }
             }
           },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TeamVaultFailure"
-                }
-              }
-            }
-          },
           "500": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TeamVaultFailure"
                 }
               }
             }
@@ -5052,32 +5023,12 @@
               }
             }
           },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TeamVaultFailure"
-                }
-              }
-            }
-          },
           "500": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TeamVaultFailure"
                 }
               }
             }
@@ -9253,22 +9204,6 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["member", "admin", "owner"]
-      },
-      "TeamVaultFailure": {
-        "type": "object",
-        "description": "Sanitized lifecycle response; contains no provider or credential data.",
-        "required": ["code"],
-        "properties": {
-          "code": {
-            "$ref": "#/components/schemas/TeamVaultFailureCode",
-            "description": "Machine-readable failure category."
-          }
-        }
-      },
-      "TeamVaultFailureCode": {
-        "type": "string",
-        "description": "Typed vault lifecycle failures shared with generated clients.",
-        "enum": ["vault_busy", "vault_items_owned", "vault_unavailable"]
       },
       "TeamWithMembers": {
         "type": "object",

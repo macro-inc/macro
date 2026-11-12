@@ -6,12 +6,9 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use opentelemetry::trace::TraceContextExt;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
-use tracing::instrument::WithSubscriber;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-use vaultrs::{
-    client::{Client, VaultClient, VaultClientSettings, VaultClientSettingsBuilder},
-    kv2,
-};
+
+use openbao_client::{Cause, OpenBaoClient, Session};
 
 #[derive(Serialize, Deserialize)]
 struct StoredSecret {
@@ -27,75 +24,41 @@ enum NamespaceAccess {
 
 /// Namespace-isolated OpenBao KV v2 and TOTP adapter with short-lived team JWT login.
 pub struct OpenBaoProvider {
-    address: String,
     issuer: String,
     signing_key: Arc<EncodingKey>,
-    http: reqwest::Client,
-    settings: VaultClientSettings,
+    api: OpenBaoClient,
 }
+
 impl OpenBaoProvider {
-    /// Required explicit URL, issuer and RSA key; no implicit Vault environment defaults.
+    /// Explicit origin, issuer and RSA key; no environment credentials or root token.
     pub fn new(address: String, issuer: String, signing_key: &str) -> Result<Self, Error> {
-        let url = reqwest::Url::parse(&address).map_err(|_| Error::Invalid)?;
-        if !matches!(url.scheme(), "https" | "http")
-            || url.host_str().is_none()
-            || !url.username().is_empty()
-            || url.password().is_some()
-        {
-            return Err(Error::Invalid);
-        }
+        let api = OpenBaoClient::new(&address).map_err(provider_error)?;
         let signing_key = Arc::new(
             EncodingKey::from_rsa_pem(signing_key.as_bytes()).map_err(|_| Error::Invalid)?,
         );
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .redirect(reqwest::redirect::Policy::none())
-            .retry(reqwest::retry::never())
-            .build()
-            .map_err(|_| Error::Unavailable)?;
-        let settings = VaultClientSettingsBuilder::default()
-            .address(&address)
-            .token("")
-            .namespace(None)
-            .ca_certs(Vec::new())
-            .identity(None)
-            .verify(true)
-            .timeout(Some(Duration::from_secs(10)))
-            .build()
-            .map_err(|_| Error::Invalid)?;
         Ok(Self {
-            settings,
-            address: address.trim_end_matches('/').into(),
             issuer,
             signing_key,
-            http,
+            api,
         })
     }
+
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.authenticate")]
-    async fn client(&self, team: TeamId) -> Result<VaultClient, Error> {
+    async fn client(&self, team: TeamId) -> Result<Session, Error> {
         self.authenticated_client(team, NamespaceAccess::Values)
             .await
     }
+
     async fn authenticated_client(
         &self,
         team: TeamId,
         access: NamespaceAccess,
-    ) -> Result<VaultClient, Error> {
-        let (subject, audience, mount, role, namespace) = match access {
-            NamespaceAccess::Values => (
-                "macro-passwords-service",
-                "macro-passwords",
-                "macro",
-                "passwords-service".to_string(),
-                Some(format!("team-{}", team.0)),
-            ),
-            NamespaceAccess::Lifecycle => (
-                "macro-passwords-lifecycle",
-                "macro-passwords-lifecycle",
-                "macro-lifecycle",
-                format!("team-{}", team.0),
-                None,
-            ),
+    ) -> Result<Session, Error> {
+        let (subject, audience) = match access {
+            NamespaceAccess::Values => ("macro-passwords-service", "macro-passwords"),
+            NamespaceAccess::Lifecycle => {
+                ("macro-passwords-lifecycle", "macro-passwords-lifecycle")
+            }
         };
         #[derive(Serialize)]
         struct Claims<'a> {
@@ -108,7 +71,8 @@ impl OpenBaoProvider {
             audit_id: String,
         }
         let now = Utc::now().timestamp();
-        let jwt = SecretString(
+        let audit_id = audit_id();
+        let jwt = openbao_client::SecretString::new(
             jsonwebtoken::encode(
                 &Header::new(Algorithm::RS256),
                 &Claims {
@@ -118,155 +82,77 @@ impl OpenBaoProvider {
                     team_id: team.0.to_string(),
                     iat: now,
                     exp: now + 60,
-                    audit_id: tracing::Span::current()
-                        .context()
-                        .span()
-                        .span_context()
-                        .trace_id()
-                        .to_string(),
+                    audit_id: audit_id.clone(),
                 },
                 &self.signing_key,
             )
             .map_err(|_| Error::Unavailable)?,
         );
-        let mut settings = self.settings.clone();
-        settings.namespace = namespace;
-        let middle = vaultrs::api::EndpointMiddleware {
-            token: String::new(),
-            version: "v1".into(),
-            wrap: None,
-            namespace: settings.namespace.clone(),
-        };
-        let http =
-            rustify::clients::reqwest::Client::new(settings.address.as_str(), self.http.clone());
-        let mut client = VaultClient {
-            http,
-            middle,
-            settings,
-        };
-        let auth = quiet(vaultrs::auth::oidc::login(
-            &client,
-            mount,
-            &jwt.0,
-            Some(role),
-        ))
-        .await
-        .map_err(|_| Error::Unavailable)?;
-        client.set_token(&auth.client_token);
-        Ok(client)
-    }
-    async fn totp_request(
-        &self,
-        team: TeamId,
-        key_id: TotpKeyId,
-        method: reqwest::Method,
-        key: Option<&SecretString>,
-        code: bool,
-    ) -> Result<Option<TotpCode>, Error> {
-        let client = self.client(team).await?;
-        let token = SecretString(client.settings().token.clone());
-        let endpoint = if code { "code" } else { "keys" };
-        let mut request = self
-            .http
-            .request(
-                method,
-                format!("{}/v1/totp/{endpoint}/{}", self.address, key_id.0),
-            )
-            .header("X-Vault-Namespace", format!("team-{}", team.0))
-            .header("X-Vault-Token", &token.0)
-            .header(
-                "x-macro-audit-id",
-                tracing::Span::current()
-                    .context()
-                    .span()
-                    .span_context()
-                    .trace_id()
-                    .to_string(),
-            );
-        if let Some(key) = key {
-            request = request
-                .json(&serde_json::json!({"key":key.0,"period":30,"digits":6,"algorithm":"SHA1"}));
-        }
-        let response = request.send().await.map_err(|_| Error::Unavailable)?;
-        if response.status() == reqwest::StatusCode::NOT_FOUND && !code && key.is_none() {
-            return Ok(None);
-        }
-        if !response.status().is_success() {
-            return Err(Error::Unavailable);
-        }
-        if code {
-            #[derive(Deserialize)]
-            struct Envelope {
-                data: Code,
+        match access {
+            NamespaceAccess::Values => {
+                self.api
+                    .login_team(
+                        &format!("team-{}", team.0),
+                        "passwords-service",
+                        &jwt,
+                        Some(&audit_id),
+                    )
+                    .await
             }
-            #[derive(Deserialize)]
-            struct Code {
-                code: SecretString,
+            NamespaceAccess::Lifecycle => {
+                self.api
+                    .login_lifecycle(&format!("team-{}", team.0), &jwt, Some(&audit_id))
+                    .await
             }
-            let value: Envelope = response.json().await.map_err(|_| Error::Unavailable)?;
-            Ok(Some(TotpCode {
-                code: value.data.code,
-                period: 30,
-            }))
-        } else {
-            Ok(None)
         }
+        .map_err(provider_error)
     }
 }
+
+fn audit_id() -> String {
+    tracing::Span::current()
+        .context()
+        .span()
+        .span_context()
+        .trace_id()
+        .to_string()
+}
+
+// Keep transport causes in the typed client. Domain failures remain sanitized;
+// provider authentication failure is an installation failure, not human denial.
+fn provider_error(error: openbao_client::Error) -> Error {
+    tracing::warn!(cause = ?error.cause(), status = error.status().map(i64::from), "OpenBao operation failed");
+    match error.cause() {
+        Cause::CasMismatch => Error::Conflict,
+        Cause::InvalidInput => Error::Invalid,
+        _ => Error::Unavailable,
+    }
+}
+
 #[async_trait]
 impl SecretProvider for OpenBaoProvider {
     #[tracing::instrument(skip_all,err,name="passwords.openbao.purge_namespace",fields(team_id=%team.0,outcome=tracing::field::Empty))]
     async fn purge_namespace(&self, team: TeamId) -> Result<(), Error> {
-        let client = self
+        let session = self
             .authenticated_client(team, NamespaceAccess::Lifecycle)
             .await?;
-        let token = SecretString(client.settings().token.clone());
-        let audit_id = tracing::Span::current()
-            .context()
-            .span()
-            .span_context()
-            .trace_id()
-            .to_string();
-        let response = self
-            .http
-            .delete(format!(
-                "{}/v1/sys/namespaces/team-{}",
-                self.address, team.0
-            ))
-            .header("X-Vault-Token", &token.0)
-            .header("x-macro-audit-id", &audit_id)
-            .send()
+        let path = format!("team-{}", team.0);
+        let audit_id = audit_id();
+        self.api
+            .delete_namespace(&session, &path, Some(&audit_id))
             .await
-            .map_err(|_| Error::Unavailable)?;
-        if !matches!(
-            response.status(),
-            reqwest::StatusCode::OK
-                | reqwest::StatusCode::NO_CONTENT
-                | reqwest::StatusCode::NOT_FOUND
-        ) {
-            return Err(Error::Unavailable);
-        }
-        // DELETE taints the namespace and starts asynchronous revocation. A 200/204
-        // alone is not proof of erasure; retain metadata until lookup returns 404.
+            .map_err(provider_error)?;
+        // Deletion is asynchronous. Only a successful authenticated GET 404
+        // acknowledges erasure; timeouts and policy denial retain metadata.
         for attempt in 0u32..8 {
-            let status = self
-                .http
-                .get(format!(
-                    "{}/v1/sys/namespaces/team-{}",
-                    self.address, team.0
-                ))
-                .header("X-Vault-Token", &token.0)
-                .header("x-macro-audit-id", &audit_id)
-                .send()
+            if !self
+                .api
+                .namespace_exists(&session, &path, Some(&audit_id))
                 .await
-                .map_err(|_| Error::Unavailable)?
-                .status();
-            if status == reqwest::StatusCode::NOT_FOUND {
+                .map_err(provider_error)?
+            {
                 tracing::Span::current().record("outcome", "namespace_purged");
                 return Ok(());
-            }
-            if status != reqwest::StatusCode::OK {
-                return Err(Error::Unavailable);
             }
             tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt.min(3)))).await;
         }
@@ -275,43 +161,48 @@ impl SecretProvider for OpenBaoProvider {
 
     #[tracing::instrument(skip_all,err,name="passwords.openbao.current_version",fields(team_id=%team.0,item_id=%item.0))]
     async fn current_version(&self, team: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
-        let client = self.client(team).await?;
-        match quiet(kv2::read_metadata(
-            &client,
-            "passwords",
-            &item.0.to_string(),
-        ))
-        .await
+        let session = self.client(team).await?;
+        match self
+            .api
+            .metadata(&session, &item.0.to_string(), Some(&audit_id()))
+            .await
         {
             Ok(metadata) => Ok(Some(
                 i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
             )),
-            Err(vaultrs::error::ClientError::APIError { code: 404, .. }) => Ok(None),
-            Err(_) => Err(Error::Unavailable),
+            Err(error) if error.cause() == Cause::NotFound => Ok(None),
+            Err(error) => Err(provider_error(error)),
         }
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.status",fields(team_id=%team.0,item_id=%item.0))]
     async fn status(&self, team: TeamId, item: ItemId) -> Result<Option<(i32, uuid::Uuid)>, Error> {
-        let client = self.client(team).await?;
-        let metadata = match quiet(kv2::read_metadata(
-            &client,
-            "passwords",
-            &item.0.to_string(),
-        ))
-        .await
-        {
+        let session = self.client(team).await?;
+        let path = item.0.to_string();
+        let audit_id = audit_id();
+        let metadata = match self.api.metadata(&session, &path, Some(&audit_id)).await {
             Ok(metadata) => metadata,
-            Err(vaultrs::error::ClientError::APIError { code: 404, .. }) => return Ok(None),
-            Err(_) => return Err(Error::Unavailable),
+            Err(error) if error.cause() == Cause::NotFound => return Ok(None),
+            Err(error) => return Err(provider_error(error)),
         };
-        let stored: StoredSecret = quiet(kv2::read(&client, "passwords", &item.0.to_string()))
+        // Pin the operation ID to the observed fence: an independent provider
+        // writer must not pair a newer operation with the previous version.
+        let stored: StoredSecret = self
+            .api
+            .read(
+                &session,
+                &path,
+                Some(metadata.current_version),
+                Some(&audit_id),
+            )
             .await
-            .map_err(|_| Error::Unavailable)?;
+            .map_err(provider_error)?;
         Ok(Some((
             i32::try_from(metadata.current_version).map_err(|_| Error::Unavailable)?,
             stored.operation_id,
         )))
     }
+
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.write")]
     async fn write(
         &self,
@@ -321,37 +212,42 @@ impl SecretProvider for OpenBaoProvider {
         operation: uuid::Uuid,
         values: &SecretValues,
     ) -> Result<i32, Error> {
-        let client = self.client(team).await?;
-        let cas = u32::try_from(expected_version).map_err(|_| Error::Invalid)?;
-        let result = quiet(kv2::set_with_options(
-            &client,
-            "passwords",
-            &item.0.to_string(),
-            &StoredSecret {
-                operation_id: operation,
-                values: values.clone(),
-            },
-            vaultrs::api::kv2::requests::SetSecretRequestOptions { cas },
-        ))
-        .await
-        .map_err(|error| match error {
-            vaultrs::error::ClientError::APIError { code: 400, .. } => Error::Conflict,
-            _ => Error::Unavailable,
-        })?;
-        i32::try_from(result.version).map_err(|_| Error::Unavailable)
+        let session = self.client(team).await?;
+        let cas = u64::try_from(expected_version).map_err(|_| Error::Invalid)?;
+        let version = self
+            .api
+            .write(
+                &session,
+                &item.0.to_string(),
+                cas,
+                &StoredSecret {
+                    operation_id: operation,
+                    values: values.clone(),
+                },
+                Some(&audit_id()),
+            )
+            .await
+            .map_err(provider_error)?;
+        i32::try_from(version).map_err(|_| Error::Unavailable)
     }
+
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.read")]
     async fn read(&self, team: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
-        let stored: StoredSecret = quiet(kv2::read_version(
-            &self.client(team).await?,
-            "passwords",
-            &item.0.to_string(),
-            u64::try_from(version).map_err(|_| Error::Invalid)?,
-        ))
-        .await
-        .map_err(|_| Error::Unavailable)?;
+        let session = self.client(team).await?;
+        let version = u64::try_from(version).map_err(|_| Error::Invalid)?;
+        let stored: StoredSecret = self
+            .api
+            .read(
+                &session,
+                &item.0.to_string(),
+                Some(version),
+                Some(&audit_id()),
+            )
+            .await
+            .map_err(provider_error)?;
         Ok(stored.values)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.username",fields(team_id=%team.0,item_id=%item.0))]
     async fn username(
         &self,
@@ -367,26 +263,33 @@ impl SecretProvider for OpenBaoProvider {
         struct UsernameValue {
             username: SecretString,
         }
-        let stored: StoredUsername = quiet(kv2::read_version(
-            &self.client(team).await?,
-            "passwords",
-            &item.0.to_string(),
-            u64::try_from(version).map_err(|_| Error::Invalid)?,
-        ))
-        .await
-        .map_err(|_| Error::Unavailable)?;
+        let session = self.client(team).await?;
+        let version = u64::try_from(version).map_err(|_| Error::Invalid)?;
+        let stored: StoredUsername = self
+            .api
+            .read(
+                &session,
+                &item.0.to_string(),
+                Some(version),
+                Some(&audit_id()),
+            )
+            .await
+            .map_err(provider_error)?;
         Ok(stored.values.username)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.delete",fields(team_id=%team.0,item_id=%item.0))]
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
-        let client = self.client(team).await?;
+        let session = self.client(team).await?;
         let path = item.0.to_string();
-        // Advance CAS before erasing: delayed pre-delete writes can never recreate values.
+        let audit_id = audit_id();
+        // Advance CAS before erasing, preserving metadata so delayed pre-delete
+        // writes cannot recreate credentials. Retry only a confirmed CAS race.
         for _ in 0..3 {
-            let metadata = match quiet(kv2::read_metadata(&client, "passwords", &path)).await {
+            let metadata = match self.api.metadata(&session, &path, Some(&audit_id)).await {
                 Ok(metadata) => Some(metadata),
-                Err(vaultrs::error::ClientError::APIError { code: 404, .. }) => None,
-                Err(_) => return Err(Error::Unavailable),
+                Err(error) if error.cause() == Cause::NotFound => None,
+                Err(error) => return Err(provider_error(error)),
             };
             let tombstone = StoredSecret {
                 operation_id: uuid::Uuid::now_v7(),
@@ -397,21 +300,14 @@ impl SecretProvider for OpenBaoProvider {
                     fields: vec![],
                 },
             };
-            let cas = u32::try_from(
-                metadata
-                    .as_ref()
-                    .map(|metadata| metadata.current_version)
-                    .unwrap_or(0),
-            )
-            .map_err(|_| Error::Unavailable)?;
-            match quiet(kv2::set_with_options(
-                &client,
-                "passwords",
-                &path,
-                &tombstone,
-                vaultrs::api::kv2::requests::SetSecretRequestOptions { cas },
-            ))
-            .await
+            let cas = metadata
+                .as_ref()
+                .map(|metadata| metadata.current_version)
+                .unwrap_or(0);
+            match self
+                .api
+                .write(&session, &path, cas, &tombstone, Some(&audit_id))
+                .await
             {
                 Ok(version) => {
                     let mut versions = Vec::new();
@@ -420,26 +316,28 @@ impl SecretProvider for OpenBaoProvider {
                             versions.push(version.parse::<u64>().map_err(|_| Error::Unavailable)?);
                         }
                     }
-                    versions.push(version.version);
-                    return quiet(kv2::destroy_versions(&client, "passwords", &path, versions))
+                    versions.push(version);
+                    return self
+                        .api
+                        .destroy_versions(&session, &path, versions, Some(&audit_id))
                         .await
-                        .map_err(|_| Error::Unavailable);
+                        .map_err(provider_error);
                 }
-                Err(vaultrs::error::ClientError::APIError { code: 400, .. }) => continue,
-                Err(_) => return Err(Error::Unavailable),
+                Err(error) if error.cause() == Cause::CasMismatch => continue,
+                Err(error) => return Err(provider_error(error)),
             }
         }
         Err(Error::Conflict)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.history",fields(team_id=%team.0,item_id=%item.0))]
     async fn history(&self, team: TeamId, item: ItemId) -> Result<Vec<Version>, Error> {
-        let metadata = quiet(kv2::read_metadata(
-            &self.client(team).await?,
-            "passwords",
-            &item.0.to_string(),
-        ))
-        .await
-        .map_err(|_| Error::Unavailable)?;
+        let session = self.client(team).await?;
+        let metadata = self
+            .api
+            .metadata(&session, &item.0.to_string(), Some(&audit_id()))
+            .await
+            .map_err(provider_error)?;
         let mut versions = Vec::new();
         for (version, metadata) in metadata.versions {
             if metadata.destroyed || !metadata.deletion_time.is_empty() {
@@ -447,12 +345,13 @@ impl SecretProvider for OpenBaoProvider {
             }
             versions.push(Version {
                 version: version.parse().map_err(|_| Error::Unavailable)?,
-                created_at: metadata.created_time,
+                created_at: metadata.created_time.to_rfc3339(),
             });
         }
         versions.sort_by_key(|version| std::cmp::Reverse(version.version));
         Ok(versions)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.set_totp",fields(team_id=%team.0,key_id=%key_id.0))]
     async fn set_totp(
         &self,
@@ -460,29 +359,40 @@ impl SecretProvider for OpenBaoProvider {
         key_id: TotpKeyId,
         key: &SecretString,
     ) -> Result<(), Error> {
-        self.totp_request(team, key_id, reqwest::Method::POST, Some(key), false)
-            .await?;
-        Ok(())
+        let session = self.client(team).await?;
+        self.api
+            .write_totp(
+                &session,
+                &key_id.0.to_string(),
+                &openbao_client::SecretString::new(key.0.clone()),
+                Some(&audit_id()),
+            )
+            .await
+            .map_err(provider_error)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.delete_totp",fields(team_id=%team.0,key_id=%key_id.0))]
     async fn delete_totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<(), Error> {
-        self.totp_request(team, key_id, reqwest::Method::DELETE, None, false)
-            .await?;
-        Ok(())
+        let session = self.client(team).await?;
+        self.api
+            .delete_totp(&session, &key_id.0.to_string(), Some(&audit_id()))
+            .await
+            .map_err(provider_error)
     }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.totp",fields(team_id=%team.0,key_id=%key_id.0))]
     async fn totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<TotpCode, Error> {
-        self.totp_request(team, key_id, reqwest::Method::GET, None, true)
-            .await?
-            .ok_or(Error::Unavailable)
+        let session = self.client(team).await?;
+        let code = self
+            .api
+            .totp(&session, &key_id.0.to_string(), Some(&audit_id()))
+            .await
+            .map_err(provider_error)?;
+        Ok(TotpCode {
+            code: SecretString(code.expose().into()),
+            period: 30,
+        })
     }
-}
-
-// rustify traces raw provider error bodies; suppress its subscriber before any network polling.
-async fn quiet<T>(future: impl std::future::Future<Output = T>) -> T {
-    future
-        .with_subscriber(tracing::subscriber::NoSubscriber::default())
-        .await
 }
 
 /// Explicit unavailable state for installations that have not provisioned a vault.

@@ -63,12 +63,12 @@ class LocalOpenBao:
             raise OpenBaoRequestError(method, path, error.code) from None
 
 
-def configure_kv(client, namespace, newly_mounted):
+def configure_kv(client, namespace, newly_mounted, mount="passwords"):
     # The KV v2 plugin may still be initializing after sys/mounts acknowledges it.
     # Retry only a newly mounted backend's temporary 400, never an existing config.
     for attempt in range(8):
         try:
-            client.request("POST", "passwords/config", {"max_versions": 100, "cas_required": True}, namespace)
+            client.request("POST", f"{mount}/config", {"max_versions": 100, "cas_required": True}, namespace)
             return
         except OpenBaoRequestError as error:
             if not newly_mounted or error.status != 400 or attempt == 7:
@@ -112,11 +112,10 @@ def bootstrap(client, team_id, public_key, issuer):
         "jwt_supported_algs": ["RS256"],
     }, namespace)
     policy = '\n'.join((
-        'path "passwords/data/*" { capabilities = ["create", "read", "update", "delete"] }',
-        'path "passwords/metadata/*" { capabilities = ["read", "list", "delete"] }',
-        'path "passwords/undelete/*" { capabilities = ["update"] }',
+        'path "passwords/data/*" { capabilities = ["create", "read", "update"] }',
+        'path "passwords/metadata/*" { capabilities = ["read"] }',
         'path "passwords/destroy/*" { capabilities = ["update"] }',
-        'path "totp/keys/*" { capabilities = ["create", "read", "update", "delete"] }',
+        'path "totp/keys/*" { capabilities = ["create", "update", "delete"] }',
         'path "totp/code/*" { capabilities = ["read"] }',
     ))
     client.request("PUT", "sys/policies/acl/passwords-service", {"policy": policy}, namespace)

@@ -9,7 +9,6 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
         user_id: MacroUserIdStr::parse_from_str("macro|viewer@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     let now = Utc::now();
@@ -21,7 +20,7 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
             permission: Permission::View,
         }],
         deleting: false,
-        member_removal_pending: false,
+
         revision: 0,
         totp_key_id: None,
         metadata: ItemMetadata {
@@ -61,32 +60,26 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
 pub(crate) mod fakes;
 use fakes::*;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 
 #[tokio::test]
-async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_reauthentication() {
+async fn metadata_never_decrypts_and_disclosure_checks_membership_and_grants() {
     let repository = Arc::new(FakeRepository::new());
     let provider = Arc::new(FakeProvider::new());
-    let recent = Arc::new(FakeReauthentication {
-        recent: AtomicBool::new(true),
-    });
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: recent.clone(),
         availability: Arc::new(FakeAvailability),
     };
     let owner = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let stranger = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|stranger@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     repository
@@ -105,6 +98,7 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
             &owner,
             team,
             WriteItem {
+                private: true,
                 operation_id: operation,
                 name: "Work login".into(),
                 kind: ItemKind::Login,
@@ -152,11 +146,10 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
             .await,
         Err(Error::NotFound)
     ));
-    recent.recent.store(false, Ordering::SeqCst);
     let identifier = service
         .username(&owner, team, metadata.id, true)
         .await
-        .expect("identifier does not require recent reauthentication");
+        .expect("authorized identifier");
     assert_eq!(
         serde_json::to_value(identifier).expect("username JSON"),
         serde_json::json!({"username":"login","version":1})
@@ -171,14 +164,7 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
             .await,
         Err(Error::NotFound)
     ));
-    assert!(matches!(
-        service
-            .reveal(&owner, team, metadata.id, Some(1), true)
-            .await,
-        Err(Error::ReauthenticationRequired)
-    ));
     assert_eq!(provider.reads.load(Ordering::SeqCst), 0);
-    recent.recent.store(true, Ordering::SeqCst);
     service
         .share(
             &owner,
@@ -277,16 +263,12 @@ async fn accepted_provider_write_recovers_metadata_and_deletion_remains_resumabl
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: Arc::new(FakeReauthentication {
-            recent: AtomicBool::new(true),
-        }),
         availability: Arc::new(FakeAvailability),
     };
     let owner = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     repository
@@ -296,6 +278,7 @@ async fn accepted_provider_write_recovers_metadata_and_deletion_remains_resumabl
         .insert(owner.user_id.to_string(), vec![team]);
     let operation = Uuid::now_v7();
     let command = || WriteItem {
+        private: true,
         operation_id: operation,
         name: "Recoverable".into(),
         kind: ItemKind::Login,
@@ -361,22 +344,17 @@ async fn cancelling_a_create_with_accepted_provider_values_erases_values_and_pre
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: Arc::new(FakeReauthentication {
-            recent: AtomicBool::new(true),
-        }),
         availability: Arc::new(FakeAvailability),
     };
     let owner = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let stranger = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|stranger@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     repository
@@ -391,6 +369,7 @@ async fn cancelling_a_create_with_accepted_provider_values_erases_values_and_pre
         .insert(stranger.user_id.to_string(), vec![team]);
     let operation = Uuid::now_v7();
     let command = || WriteItem {
+        private: true,
         operation_id: operation,
         name: "Pending create".into(),
         kind: ItemKind::Login,
@@ -435,22 +414,17 @@ async fn delayed_write_recovery_preserves_later_grant_revocation_and_metadata_ed
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: Arc::new(FakeReauthentication {
-            recent: AtomicBool::new(true),
-        }),
         availability: Arc::new(FakeAvailability),
     };
     let owner = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let viewer = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|viewer@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     repository
@@ -469,6 +443,7 @@ async fn delayed_write_recovery_preserves_later_grant_revocation_and_metadata_ed
             &owner,
             team,
             WriteItem {
+                private: true,
                 operation_id: operation,
                 name: "Initial".into(),
                 kind: ItemKind::Login,
@@ -568,16 +543,12 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
     let service = PasswordService {
         repository: repository.clone(),
         provider: provider.clone(),
-        reauthentication: Arc::new(FakeReauthentication {
-            recent: AtomicBool::new(true),
-        }),
         availability: Arc::new(FakeAvailability),
     };
     let owner = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("valid fixture")
             .into_owned(),
-        session_token: None,
     };
     let team = TeamId(Uuid::from_u128(1));
     repository
@@ -590,6 +561,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
             &owner,
             team,
             WriteItem {
+                private: true,
                 operation_id: Uuid::now_v7(),
                 name: "TOTP lifecycle".into(),
                 kind: ItemKind::Login,
@@ -682,7 +654,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         .expect("fixture lock")
         .values_mut()
     {
-        entry.3 = true;
+        entry.grace_elapsed = true;
     }
     provider.fail_delete.store(true, Ordering::SeqCst);
     assert_eq!(
@@ -743,7 +715,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         .expect("fixture lock")
         .values_mut()
     {
-        entry.3 = true;
+        entry.grace_elapsed = true;
     }
     assert!(
         service
@@ -780,7 +752,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         .expect("fixture lock")
         .values_mut()
     {
-        entry.3 = true;
+        entry.grace_elapsed = true;
     }
     assert!(
         service
@@ -823,7 +795,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         .expect("fixture lock")
         .values_mut()
     {
-        entry.3 = true;
+        entry.grace_elapsed = true;
     }
     assert!(
         service

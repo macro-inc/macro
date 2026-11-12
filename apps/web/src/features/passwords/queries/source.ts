@@ -5,11 +5,13 @@ import { statusError } from '@core/util/safeFetch';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import type { PasswordActivity as ActivityDto } from '@service-storage/generated/schemas/passwordActivity';
+import type { PasswordCreateFolderBody } from '@service-storage/generated/schemas/passwordCreateFolderBody';
 import { PasswordErrorCode } from '@service-storage/generated/schemas/passwordErrorCode';
 import type { PasswordFolder as FolderDto } from '@service-storage/generated/schemas/passwordFolder';
 import type { PasswordFolderBody } from '@service-storage/generated/schemas/passwordFolderBody';
 import type { PasswordGrant as GrantDto } from '@service-storage/generated/schemas/passwordGrant';
 import type { PasswordItemMetadata } from '@service-storage/generated/schemas/passwordItemMetadata';
+import type { PasswordMoveFolderBody } from '@service-storage/generated/schemas/passwordMoveFolderBody';
 import type { PasswordPatchItem } from '@service-storage/generated/schemas/passwordPatchItem';
 import type { PasswordRevealBody } from '@service-storage/generated/schemas/passwordRevealBody';
 import type { PasswordRevealed } from '@service-storage/generated/schemas/passwordRevealed';
@@ -25,7 +27,7 @@ import type {
   PasswordResult,
   PasswordSource,
 } from '../context/passwords-context';
-import type { PasswordItem } from '../core/types';
+import type { PasswordFolder, PasswordItem } from '../core/types';
 
 function metadata(item: PasswordItemMetadata): PasswordItem {
   return {
@@ -36,7 +38,37 @@ function metadata(item: PasswordItemMetadata): PasswordItem {
   };
 }
 
-export function createPasswordSource(teamId: string): PasswordSource {
+/** A read that finished after the viewer's account or session changed. */
+class PasswordScopeChangedError extends Error {
+  constructor() {
+    super('Passwords viewer changed');
+  }
+}
+
+function folder(dto: FolderDto): PasswordFolder {
+  return { id: dto.id, name: dto.name, parentId: dto.parentId ?? null };
+}
+
+function failure(codes: readonly (string | undefined)[]): PasswordFailure {
+  if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
+  return 'failed';
+}
+
+/**
+ * The viewer the source serves. `signal` aborts when that viewer's account or
+ * session changes, so a request waiting on a session refresh is never replayed
+ * for the next viewer.
+ */
+export type PasswordSourceScope = {
+  isCurrent: () => boolean;
+  signal: AbortSignal;
+};
+
+export function createPasswordSource(
+  teamId: string,
+  scope: PasswordSourceScope
+): PasswordSource {
+  const isCurrent = () => !scope.signal.aborted && scope.isCurrent();
   const root = `${SERVER_HOSTS['document-storage-service']}/passwords/teams/${encodeURIComponent(teamId)}`;
   async function request<T extends object>(
     path: string,
@@ -46,6 +78,8 @@ export function createPasswordSource(teamId: string): PasswordSource {
     const payload = body ? JSON.stringify(body) : undefined;
     return Telemetry.span('passwords.request', async (span) => {
       for (let retries = 0; ; retries++) {
+        // Never send or finish a request for a viewer that has since changed.
+        if (!isCurrent()) return err('failed' as const);
         span.setAttr('retry.count', retries);
         const response = await fetchWithToken<T, PasswordErrorCode>(
           `${root}${path}`,
@@ -56,6 +90,7 @@ export function createPasswordSource(teamId: string): PasswordSource {
               'X-Macro-Passwords': '1',
             },
             body: payload,
+            signal: scope.signal,
             retry: { maxTries: 1 },
             trace: { parentSpan: span },
             errorResponseHandler: async (response) => {
@@ -88,14 +123,9 @@ export function createPasswordSource(teamId: string): PasswordSource {
           await sleep(100 * 2 ** retries * (0.5 + Math.random()));
           continue;
         }
-        return response.mapErr(
-          (errors): PasswordFailure =>
-            errors.some(
-              (error) =>
-                error.code === PasswordErrorCode.reauthentication_required
-            )
-              ? 'reauth'
-              : 'failed'
+        if (!isCurrent()) return err('failed' as const);
+        return response.mapErr((errors) =>
+          failure(errors.map((error) => error.code))
         );
       }
     });
@@ -108,28 +138,56 @@ export function createPasswordSource(teamId: string): PasswordSource {
   ): PasswordResult<T> {
     return Telemetry.span(name, async () => request<T>(path, method, body));
   }
+  /**
+   * A code is only known to belong to the period the request started in if
+   * the response arrives in that same period. Across a boundary it may be the
+   * previous period's code, so ask once more; never publish a code that could
+   * already be expired.
+   */
   async function currentCode(id: string) {
-    const result = await request<PasswordTotpCode>(
-      `/items/${id}/totp/code`,
-      'POST',
-      {}
-    );
-    return result.map(({ code, period }) => ({
-      code,
-      validUntil: new Date(
-        (Math.floor(Date.now() / (period * 1000)) + 1) * period * 1000
-      ).toISOString(),
-    }));
+    // One action trace across the attempts; only the attempt count is recorded.
+    return Telemetry.span('passwords.totp_code', async (span) => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        span.setAttr('passwords.totp.attempts', attempt + 1);
+        const requestedAt = Date.now();
+        const result = await span.run(() =>
+          request<PasswordTotpCode>(`/items/${id}/totp/code`, 'POST', {})
+        );
+        if (result.isErr()) return err(result.error);
+        const { code, period } = result.value;
+        const periodMs = period * 1000;
+        const window = Math.floor(requestedAt / periodMs);
+        if (Math.floor(Date.now() / periodMs) !== window) continue;
+        return ok({
+          code,
+          period,
+          validUntil: new Date((window + 1) * periodMs).toISOString(),
+        });
+      }
+      span.setAttr('passwords.outcome', 'period_boundary');
+      return err('failed' as const);
+    });
   }
   return {
     async list() {
+      if (!isCurrent()) throw new PasswordScopeChangedError();
       const items = await throwOnErr(() =>
-        fetchWithToken<PasswordItemMetadata[]>(`${root}/items`)
+        fetchWithToken<PasswordItemMetadata[]>(`${root}/items`, {
+          signal: scope.signal,
+        })
       );
+      if (!isCurrent()) throw new PasswordScopeChangedError();
       return items.map(metadata);
     },
     async folders() {
-      return throwOnErr(() => fetchWithToken<FolderDto[]>(`${root}/folders`));
+      if (!isCurrent()) throw new PasswordScopeChangedError();
+      const folders = await throwOnErr(() =>
+        fetchWithToken<FolderDto[]>(`${root}/folders`, {
+          signal: scope.signal,
+        })
+      );
+      if (!isCurrent()) throw new PasswordScopeChangedError();
+      return folders.map(folder);
     },
     async save(id, version, draft, operationId) {
       return (
@@ -138,8 +196,14 @@ export function createPasswordSource(teamId: string): PasswordSource {
           id ? `/items/${id}` : '/items',
           id ? 'PUT' : 'POST',
           {
-            ...draft,
+            name: draft.name,
+            kind: draft.kind,
             url: draft.url || null,
+            folderId: draft.folderId,
+            favorite: draft.favorite,
+            // Sharing is set once at creation; later changes go through Share.
+            ...(id ? {} : { private: draft.private }),
+            values: draft.values,
             expectedVersion: version ?? null,
             operationId,
           } satisfies PasswordWriteItem
@@ -209,10 +273,38 @@ export function createPasswordSource(teamId: string): PasswordSource {
         } satisfies PasswordShareBody)
       ).map(() => undefined);
     },
-    createFolder(name) {
-      return request<FolderDto>('/folders', 'POST', {
-        name,
-      } satisfies PasswordFolderBody);
+    async createFolder(name, parentId) {
+      return (
+        await action<FolderDto>('passwords.folder.create', '/folders', 'POST', {
+          name,
+          parentId,
+        } satisfies PasswordCreateFolderBody)
+      ).map(folder);
+    },
+    async renameFolder(id, name) {
+      return (
+        await action<FolderDto>(
+          'passwords.folder.rename',
+          `/folders/${id}`,
+          'PUT',
+          { name } satisfies PasswordFolderBody
+        )
+      ).map(folder);
+    },
+    async moveFolder(id, parentId) {
+      return (
+        await action<FolderDto>(
+          'passwords.folder.move',
+          `/folders/${id}/parent`,
+          'PUT',
+          { parentId } satisfies PasswordMoveFolderBody
+        )
+      ).map(folder);
+    },
+    async deleteFolder(id) {
+      return (
+        await action('passwords.folder.delete', `/folders/${id}`, 'DELETE')
+      ).map(() => undefined);
     },
     async setTotp(id, key) {
       return (
@@ -232,9 +324,9 @@ export function createPasswordSource(teamId: string): PasswordSource {
     async logo(domain) {
       const response = await fetchWithToken<Uint8Array>(
         `${SERVER_HOSTS['image-proxy-service']}/logos?domain=${encodeURIComponent(domain)}`,
-        { retry: { maxTries: 1 } }
+        { retry: { maxTries: 1 }, signal: scope.signal }
       );
-      if (response.isErr()) return err('failed');
+      if (response.isErr() || !isCurrent()) return err('failed');
       return ok(
         URL.createObjectURL(new Blob([new Uint8Array(response.value)]))
       );

@@ -2,10 +2,6 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { authServiceClient } from '@service-auth/client';
 import type { SendCodeResult, VerifyCodeResult } from '../context/auth-context';
-import {
-  reauthenticationReturnUrl,
-  requiresReauthentication,
-} from '../core/reauthentication';
 
 /** Where the passwordless magic link returns. */
 const REDIRECT_URI = `${window.location.origin}/app`;
@@ -81,14 +77,6 @@ export async function sendEmailCode(input: {
     const sso = new URL(`${SERVER_HOSTS['auth-service']}/login/sso`);
     sso.searchParams.set('idp_id', body.idp_id);
     sso.searchParams.set('login_hint', email);
-    const currentUrl = new URL(window.location.href);
-    if (requiresReauthentication(currentUrl)) {
-      sso.searchParams.set('reauthenticate', 'true');
-      sso.searchParams.set(
-        'original_url',
-        reauthenticationReturnUrl(currentUrl)
-      );
-    }
     if (referral_code) sso.searchParams.set('referral_code', referral_code);
     window.location.href = sso.toString();
     return { t: 'redirected' };

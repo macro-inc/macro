@@ -4,46 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { PasswordItemId } from './passwordItemId';
-import type { PasswordItemKind } from './passwordItemKind';
-import type { PasswordItemMetadataFolderId } from './passwordItemMetadataFolderId';
-import type { PasswordItemMetadataLastUsedAt } from './passwordItemMetadataLastUsedAt';
-import type { PasswordItemMetadataUrl } from './passwordItemMetadataUrl';
-import type { PasswordTeamId } from './passwordTeamId';
+import type { PasswordItemFields } from './passwordItemFields';
+import type { PasswordItemMetadataAllOf } from './passwordItemMetadataAllOf';
 
 /**
- * Searchable display fields, without any credential values.
+ * Actor-specific response capabilities, never part of persisted metadata or write intents.
  */
-export interface PasswordItemMetadata {
-  /** Resource creation timestamp. */
-  createdAt: string;
-  /** Whether the item is marked as a favorite. */
-  favorite: boolean;
-  /** Optional folder belonging to this same team. */
-  folderId?: PasswordItemMetadataFolderId;
-  /** Whether the item has an enrolled verification-code seed. */
-  hasTotp: boolean;
-  /** Identity of this resource within its team. */
-  id: PasswordItemId;
-  /** Item template or grantee category. */
-  kind: PasswordItemKind;
-  /** Most recent protected disclosure timestamp, when available. */
-  lastUsedAt?: PasswordItemMetadataLastUsedAt;
-  /** Searchable display name; must not contain credential values. */
-  name: string;
-  /**
-   * Number of distinct explicitly shared recipients; a team grant counts once.
-   * @minimum 0
-   */
-  shareCount: number;
-  /** Whether the item currently has explicit grants. */
-  shared: boolean;
-  /** Team namespace and authorization boundary. */
-  teamId: PasswordTeamId;
-  /** Most recent metadata modification timestamp. */
-  updatedAt: string;
-  url?: PasswordItemMetadataUrl;
-  /** Committed provider value version. */
-  version: number;
-}
+export type PasswordItemMetadata = PasswordItemFields &
+  PasswordItemMetadataAllOf;

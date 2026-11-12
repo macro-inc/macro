@@ -69,7 +69,7 @@ use crate::domain::{
 mod delete_team;
 mod invite_link;
 
-use delete_team::{Journal, RecordingOwnedEntityCleanup, RecordingVaultCleanup, Step};
+use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
 // Historical thresholds are regression fixtures, not membership policy.
 const FORMER_FREE_MEMBER_LIMIT: i32 = 5;
@@ -100,7 +100,6 @@ struct MockTeamRepository {
     removed_member: Option<TeamMember<'static>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
     rollback_remove_calls: Arc<Mutex<usize>>,
-    finish_removal_calls: Arc<Mutex<usize>>,
     fail_rollback_accept: bool,
     fail_rollback_remove: bool,
     patch_team_user_role_calls: Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
@@ -184,7 +183,6 @@ impl MockTeamRepository {
             removed_member: None,
             rollback_accept_calls: Arc::new(Mutex::new(0)),
             rollback_remove_calls: Arc::new(Mutex::new(0)),
-            finish_removal_calls: Arc::new(Mutex::new(0)),
             fail_rollback_accept: false,
             fail_rollback_remove: false,
             patch_team_user_role_calls: Arc::new(Mutex::new(Vec::new())),
@@ -480,32 +478,6 @@ impl TeamRepository for MockTeamRepository {
         let take = due.len().min(usize::try_from(limit).unwrap_or(0));
         let claimed: Vec<_> = due.drain(..take).collect();
         async move { Ok(claimed) }
-    }
-
-    async fn rollback_add_user_to_team(
-        &self,
-        team: &uuid::Uuid,
-        user: &MacroUserIdStr<'_>,
-    ) -> Result<(), RemoveUserFromTeamError> {
-        self.remove_user_from_team(team, user).await?;
-        self.finish_user_removal(team, user).await
-    }
-
-    async fn finish_user_removal(
-        &self,
-        _: &uuid::Uuid,
-        _: &MacroUserIdStr<'_>,
-    ) -> Result<(), RemoveUserFromTeamError> {
-        *self.finish_removal_calls.lock().unwrap() += 1;
-        Ok(())
-    }
-
-    async fn leave_user_from_team(
-        &self,
-        team: &uuid::Uuid,
-        user: &MacroUserIdStr<'_>,
-    ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
-        self.remove_user_from_team(team, user).await
     }
 
     fn remove_user_from_team(
@@ -4471,7 +4443,6 @@ fn build_service_with_repo_and_broker(
     )
     .with_event_broker(event_broker)
     .with_owned_entity_cleanup(RecordingOwnedEntityCleanup::default())
-    .with_vault_cleanup(RecordingVaultCleanup::default())
 }
 
 fn build_service_with_team(
@@ -5999,7 +5970,6 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
         plan: SeatPlan::Premium,
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
-    let finish_removal_calls = team_repo.finish_removal_calls.clone();
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
 
     let customer_repo = MockCustomerRepository {
@@ -6062,11 +6032,6 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
     assert!(increment_calls.lock().unwrap().is_empty());
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 0);
     assert_eq!(
-        *finish_removal_calls.lock().unwrap(),
-        1,
-        "success durably publishes erasure"
-    );
-    assert_eq!(
         *remove_channel_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
     );
@@ -6098,7 +6063,6 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
         plan: SeatPlan::Premium,
     });
     team_repo.team_subscription_id = Some(subscription_id.clone());
-    let finish_removal_calls = team_repo.finish_removal_calls.clone();
     let rollback_remove_calls = team_repo.rollback_remove_calls.clone();
 
     let customer_repo = MockCustomerRepository {
@@ -6177,11 +6141,6 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*rollback_remove_calls.lock().unwrap(), 1);
-    assert_eq!(
-        *finish_removal_calls.lock().unwrap(),
-        0,
-        "failed saga never publishes private erasure"
-    );
     assert!(event_broker.events().is_empty());
 }
 
@@ -6966,7 +6925,6 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
     // The rollback removes the freshly added member again.
     team_repo.removed_member = Some(member);
     team_repo.team_subscription_id = Some(subscription_id.clone());
-    let finish_removal_calls = team_repo.finish_removal_calls.clone();
     let remove_user_calls = team_repo.remove_user_calls.clone();
 
     let customer_repo = MockCustomerRepository {
@@ -7014,11 +6972,6 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
-    assert_eq!(
-        *finish_removal_calls.lock().unwrap(),
-        1,
-        "failed auto-join compensation must finalize vault revocation"
-    );
     assert!(event_broker.events().is_empty());
 }
 

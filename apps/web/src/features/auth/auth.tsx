@@ -13,7 +13,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { getWebOrigin } from '@core/util/webOrigin';
-import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createMemo, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
@@ -23,7 +23,6 @@ import {
   postAuthTarget,
   readRedirectParam,
 } from './core/post-auth-target';
-import { requiresReauthentication } from './core/reauthentication';
 import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
@@ -35,21 +34,13 @@ import { MobileWebSignupView } from './views/mobile-web-signup-view';
  */
 export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
-  const location = useLocation();
-  const requireFreshLogin = requiresReauthentication(
-    new URLSearchParams(location.search)
-  );
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
   return (
-    <AuthProvider
-      value={createAppAuthContext({
-        requireFreshLogin,
-      })}
-    >
+    <AuthProvider value={createAppAuthContext()}>
       <AuthView
         intent={props.signupMode ? 'signup' : 'login'}
         showApple={getNativeMobilePlatform() === 'ios'}

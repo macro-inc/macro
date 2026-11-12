@@ -249,6 +249,7 @@ use utoipa::OpenApi;
         passwords::inbound::router::create_folder,
         passwords::inbound::router::remove_folder,
         passwords::inbound::router::rename_folder,
+        passwords::inbound::router::move_folder,
         passwords::inbound::router::set_totp,
         passwords::inbound::router::remove_totp,
         passwords::inbound::router::totp,

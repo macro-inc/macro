@@ -16,7 +16,7 @@ import type {
   PasswordVersion,
 } from '../core/types';
 
-export type PasswordFailure = 'reauth' | 'forbidden' | 'failed';
+export type PasswordFailure = 'forbidden' | 'folderMissing' | 'failed';
 export type PasswordResult<T> = Promise<Result<T, PasswordFailure>>;
 export type PasswordSource = {
   list(): Promise<PasswordItem[]>;
@@ -45,13 +45,34 @@ export type PasswordSource = {
   history(id: string): PasswordResult<PasswordVersion[]>;
   activity(id: string): PasswordResult<PasswordActivity[]>;
   share(id: string, grants: PasswordGrant[]): PasswordResult<void>;
-  createFolder(name: string): PasswordResult<PasswordFolder>;
+  createFolder(
+    name: string,
+    parentId: string | null
+  ): PasswordResult<PasswordFolder>;
+  renameFolder(id: string, name: string): PasswordResult<PasswordFolder>;
+  moveFolder(
+    id: string,
+    parentId: string | null
+  ): PasswordResult<PasswordFolder>;
+  deleteFolder(id: string): PasswordResult<void>;
   setTotp(id: string, key: string): PasswordResult<void>;
   removeTotp(id: string): PasswordResult<void>;
-  totp(id: string): PasswordResult<{ code: string; validUntil: string }>;
+  totp(
+    id: string
+  ): PasswordResult<{ code: string; validUntil: string; period: number }>;
   logo(domain: string): PasswordResult<string>;
 };
+/**
+ * One viewer's vault: account, sign-in session and team. A new sign-in, even
+ * to the same account, is a new scope; work started under an old scope never
+ * completes into the new one.
+ */
+export type PasswordScope = {
+  key: string;
+  isCurrent: () => boolean;
+};
 export type PasswordCapabilities = {
+  scope: PasswordScope;
   source: PasswordSource;
   recipients: Accessor<PasswordRecipient[]>;
   recipientsLoading: Accessor<boolean>;

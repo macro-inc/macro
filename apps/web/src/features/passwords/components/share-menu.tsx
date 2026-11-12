@@ -77,7 +77,8 @@ export function ShareMenu(props: {
         if (open) await load();
       }}
     >
-      <Dropdown.Trigger variant="secondary">
+      <Dropdown.Trigger variant="secondary" size="sm">
+        <UsersIcon class="size-4" />
         {t('passwords.share')}
       </Dropdown.Trigger>
       <Dropdown.Content>
@@ -85,7 +86,6 @@ export function ShareMenu(props: {
           class="flex min-w-64 max-w-[80vw] flex-col gap-3 p-3"
           onSubmit={share}
         >
-          <p class="text-xs text-ink-muted">{t('passwords.sharedHint')}</p>
           <Input
             type="search"
             aria-label={t('passwords.searchRecipients')}

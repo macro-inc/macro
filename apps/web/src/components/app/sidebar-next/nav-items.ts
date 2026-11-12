@@ -12,6 +12,7 @@ import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import LockFillIcon from '@icon/system/fill/lock-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
@@ -87,15 +88,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkeyToken: TOKENS.sidebar.goTo.notifications,
   },
   {
-    id: 'passwords',
-    get label() {
-      return t('passwords.title');
-    },
-    href: '/passwords',
-    icon: PasswordIcon,
-    iconActive: PasswordIcon,
-  },
-  {
     id: 'documents',
     get label() {
       return t('nav.drive');
@@ -149,6 +141,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: CalendarBlankFillIcon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
+  },
+  {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    href: '/passwords',
+    icon: PasswordIcon,
+    iconActive: LockFillIcon,
   },
   {
     id: 'agents',
@@ -258,6 +259,22 @@ export const isNavItemAvailable = (
 };
 
 /**
+ * Passwords joined the rail after people saved custom orders. A saved order
+ * without it places it right after Calendar, its default slot, instead of last;
+ * every other id keeps the user's order.
+ */
+const withPasswords = (order: readonly string[]): readonly string[] => {
+  if (order.includes('passwords')) return order;
+  const calendar = order.indexOf('calendar');
+  if (calendar === -1) return order;
+  return [
+    ...order.slice(0, calendar + 1),
+    'passwords',
+    ...order.slice(calendar + 1),
+  ];
+};
+
+/**
  * Apply the user's custom order. Home stays first. Ids absent from `order`
  * keep their relative catalog position after ordered ones.
  */
@@ -277,7 +294,7 @@ export const orderNavItems = (
     used.add('home');
   }
 
-  for (const id of order) {
+  for (const id of withPasswords(order)) {
     if (id === 'home' || used.has(id)) continue;
     const item = byId.get(id);
     if (item) {

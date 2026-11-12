@@ -13,12 +13,11 @@ export type PasswordErrorCode =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PasswordErrorCode = {
-  vault_items_owned: 'vault_items_owned',
   not_found: 'not_found',
   forbidden: 'forbidden',
-  reauthentication_required: 'reauthentication_required',
   invalid_request: 'invalid_request',
   version_conflict: 'version_conflict',
   vault_busy: 'vault_busy',
+  folder_missing: 'folder_missing',
   vault_unavailable: 'vault_unavailable',
 } as const;

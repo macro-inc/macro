@@ -199,3 +199,43 @@ describe('orderNavItems', () => {
     ]);
   });
 });
+
+describe('Passwords on the rail', () => {
+  it('is absent for accounts without a team and sits between Calendar and Agents by default', () => {
+    expect(
+      visibleNavItems(defaultGates({ showPasswords: false })).map(
+        (item) => item.id
+      )
+    ).not.toContain('passwords');
+    const ids = visibleNavItems(defaultGates({ showPasswords: true })).map(
+      (item) => item.id
+    );
+    expect(
+      ids.slice(ids.indexOf('calendar'), ids.indexOf('calendar') + 3)
+    ).toEqual(['calendar', 'passwords', 'agents']);
+  });
+
+  it('joins a saved order right after Calendar and keeps every other position', () => {
+    const order = ['home', 'agents', 'mail', 'calendar', 'tasks', 'documents'];
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
+    expect(ids.slice(0, 7)).toEqual([
+      'home',
+      'agents',
+      'mail',
+      'calendar',
+      'passwords',
+      'tasks',
+      'documents',
+    ]);
+  });
+
+  it('keeps a saved position the user chose for it', () => {
+    const order = ['home', 'passwords', 'mail', 'calendar', 'agents'];
+    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
+      (item) => item.id
+    );
+    expect(ids.slice(0, 5)).toEqual(order);
+  });
+});

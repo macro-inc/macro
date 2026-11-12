@@ -1,80 +1,137 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { useQuery } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
+import { createStore, produce } from 'solid-js/store';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type PasswordFailure,
   usePasswords,
 } from '../context/passwords-context';
+import { KIND_LAYOUTS } from '../core/kinds';
 import {
   filterItems,
+  folderSubtree,
   type PasswordActivity,
   type PasswordDraft,
   type PasswordFilter,
   type PasswordGrant,
   type PasswordItem,
+  type PasswordKind,
   type PasswordValues,
   type PasswordVersion,
   validateDraft,
 } from '../core/types';
 import { passwordKeys } from '../queries/keys';
 
-export function createVault(teamId: string) {
-  const { source, writeClipboard } = usePasswords();
+/**
+ * An unsaved new item or an in-place edit of an existing one. Drafts live only
+ * in this in-memory store: never in a query cache or browser storage.
+ */
+export type VaultDraft = {
+  key: string;
+  /** Set for edits, and for a new item once its first save succeeds. */
+  itemId?: string;
+  version?: number;
+  draft: PasswordDraft;
+  /** Verification-code seed to enroll after the item saves. */
+  totpKey: string;
+  validation?: 'name' | 'url' | 'totp';
+  failure?: PasswordFailure | 'totp';
+  busy: boolean;
+};
+
+export type VaultSelection =
+  | { kind: 'item'; id: string }
+  | { kind: 'draft'; key: string };
+
+type DraftState = {
+  drafts: Record<string, VaultDraft>;
+  /** New-item drafts, newest first, as they appear at the top of the list. */
+  order: string[];
+};
+
+type DraftBookkeeping = {
+  operationId?: string;
+  submitted?: PasswordDraft;
+  /** Content the item already holds, so a seed retry skips a second write. */
+  saved?: PasswordDraft;
+};
+
+const REVEAL_WINDOW_MS = 60_000;
+
+const editKey = (itemId: string) => `edit:${itemId}`;
+
+export function createVault() {
+  const { scope, source, writeClipboard } = usePasswords();
+  /** False once the viewer's account or session changed under this vault. */
+  const stale = () => !scope.isCurrent();
   const items = useQuery(() => ({
-    queryKey: passwordKeys.items(teamId),
+    queryKey: passwordKeys.items(scope.key).queryKey,
     queryFn: source.list,
     reconcile: 'id',
   }));
   const folders = useQuery(() => ({
-    queryKey: passwordKeys.folders(teamId),
+    queryKey: passwordKeys.folders(scope.key).queryKey,
     queryFn: source.folders,
     reconcile: 'id',
   }));
-  const [selected, setSelected] = createSignal<PasswordItem>();
+  const loadedItems = () => (items.isPending ? [] : (items.data ?? []));
+  const loadedFolders = () => (folders.isPending ? [] : (folders.data ?? []));
+
+  const [selection, setSelection] = createSignal<VaultSelection>();
   const [filter, setFilter] = createSignal<PasswordFilter>('all');
   const [search, setSearch] = createSignal('');
-  const [draft, setDraft] = createSignal<PasswordDraft>();
+  const [state, setState] = createStore<DraftState>({ drafts: {}, order: [] });
+  const bookkeeping = new Map<string, DraftBookkeeping>();
   const [values, setValues] = createSignal<PasswordValues>();
   const [username, setUsername] = createSignal<string>();
   const [usernameLoading, setUsernameLoading] = createSignal(false);
   const [usernameCopied, setUsernameCopied] = createSignal(false);
   const [failure, setFailure] = createSignal<PasswordFailure>();
-  const [validation, setValidation] = createSignal<'name' | 'url'>();
-  const [busy, setBusy] = createSignal(false);
   const [history, setHistory] = createSignal<PasswordVersion[]>([]);
   const [activity, setActivity] = createSignal<PasswordActivity[]>([]);
-  const [pendingSelection, setPendingSelection] = createSignal<{
-    item: PasswordItem | undefined;
-  }>();
   const [copied, setCopied] = createSignal(false);
-  const [code, setCode] = createSignal<{ code: string; validUntil: string }>();
-  const [totpKey, setTotpKey] = createSignal('');
+  const [code, setCode] = createSignal<{
+    code: string;
+    validUntil: string;
+    period: number;
+  }>();
+  const [codeFailed, setCodeFailed] = createSignal(false);
   let requestGeneration = 0;
   let usernameGeneration = 0;
-  let operationId: string | undefined;
-  let submittedDraft: PasswordDraft | undefined;
   let codePending = false;
   let revealTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const selectedId = () => {
+    const current = selection();
+    return current?.kind === 'item' ? current.id : undefined;
+  };
+  const selected = (): PasswordItem | undefined => {
+    const current = selection();
+    if (current?.kind !== 'item') return undefined;
+    return loadedItems().find((item) => item.id === current.id);
+  };
+  const activeDraft = (): VaultDraft | undefined => {
+    const current = selection();
+    if (!current) return undefined;
+    return current.kind === 'draft'
+      ? state.drafts[current.key]
+      : state.drafts[editKey(current.id)];
+  };
+  const dirty = () => Object.keys(state.drafts).length > 0;
+
+  /** Hide revealed values; drafts and the selection are untouched. */
   const conceal = () => {
     requestGeneration++;
     setValues(undefined);
     setCopied(false);
     setCode(undefined);
-    setTotpKey('');
+    setCodeFailed(false);
     if (revealTimer) clearTimeout(revealTimer);
-  };
-  const clearDraft = () => {
-    operationId = undefined;
-    submittedDraft = undefined;
-    setDraft(undefined);
-    setValidation(undefined);
-  };
-  const lock = () => {
-    conceal();
-    clearDraft();
-    setPendingSelection(undefined);
+    revealTimer = undefined;
   };
   function clearUsername() {
     usernameGeneration++;
@@ -88,7 +145,8 @@ export function createVault(teamId: string) {
     setUsernameLoading(true);
     setUsernameCopied(false);
     const response = await source.username(item.id);
-    if (generation !== usernameGeneration || selected()?.id !== item.id) return;
+    if (stale()) return;
+    if (generation !== usernameGeneration || selectedId() !== item.id) return;
     setUsernameLoading(false);
     if (response.isErr()) {
       setFailure(response.error);
@@ -96,55 +154,106 @@ export function createVault(teamId: string) {
     }
     setUsername(response.value.username);
   }
-  function select(item: PasswordItem | undefined) {
-    if (draft()) {
-      setPendingSelection({ item });
-      return;
-    }
-    lock();
+  function resetDetail() {
+    conceal();
     clearUsername();
-    setSelected(item);
     setFailure(undefined);
     setHistory([]);
     setActivity([]);
-    setCopied(false);
-    if (item) fireAndForget(loadUsername(item), 'passwords');
   }
-  function discard() {
-    clearDraft();
-    const pending = pendingSelection();
-    setPendingSelection(undefined);
-    if (pending) select(pending.item);
+  function select(item: PasswordItem | undefined) {
+    resetDetail();
+    setSelection(item ? { kind: 'item', id: item.id } : undefined);
+    if (item?.kind !== 'note' && item)
+      fireAndForget(loadUsername(item), 'passwords');
   }
-  function createItem() {
-    if (draft()) return;
-    lock();
-    clearUsername();
-    setSelected(undefined);
-    setFailure(undefined);
-    setDraft({
-      name: '',
-      kind: 'login',
-      url: '',
-      folderId: null,
-      favorite: false,
-      values: { username: '', password: '', notes: '', fields: [] },
-    });
+  function selectDraft(key: string) {
+    resetDetail();
+    setSelection({ kind: 'draft', key });
+  }
+  function emptyValues(kind: PasswordKind): PasswordValues {
+    return {
+      username: '',
+      password: '',
+      notes: '',
+      fields: KIND_LAYOUTS[kind].template.map((entry) => ({
+        label: t(`passwords.field_${entry.field}`),
+        value: '',
+      })),
+    };
+  }
+  /** Start a new item of the chosen kind; any other open draft is kept. */
+  function createItem(kind: PasswordKind, folderId: string | null) {
+    const key = `new:${crypto.randomUUID()}`;
+    setState(
+      produce((draftState) => {
+        draftState.drafts[key] = {
+          key,
+          draft: {
+            name: '',
+            kind,
+            url: '',
+            folderId,
+            favorite: false,
+            private: false,
+            values: emptyValues(kind),
+          },
+          totpKey: '',
+          busy: false,
+        };
+        draftState.order.unshift(key);
+      })
+    );
+    selectDraft(key);
+    return key;
+  }
+  function updateDraft(key: string, draft: PasswordDraft) {
+    if (!state.drafts[key]) return;
+    setState('drafts', key, { draft, validation: undefined });
+  }
+  function setDraftTotpKey(key: string, totpKey: string) {
+    if (!state.drafts[key]) return;
+    setState('drafts', key, { totpKey, validation: undefined });
+  }
+  function removeDraft(key: string) {
+    bookkeeping.delete(key);
+    setState(
+      produce((draftState) => {
+        delete draftState.drafts[key];
+        draftState.order = draftState.order.filter((entry) => entry !== key);
+      })
+    );
+  }
+  /** Explicitly throw away a draft's typed values. */
+  function discard(key: string) {
+    const entry = state.drafts[key];
+    if (!entry) return;
+    removeDraft(key);
+    const current = selection();
+    if (current?.kind === 'draft' && current.key === key) {
+      const item = entry.itemId
+        ? loadedItems().find((candidate) => candidate.id === entry.itemId)
+        : undefined;
+      select(item);
+    }
+  }
+  function discardAll() {
+    for (const key of Object.keys(state.drafts)) removeDraft(key);
   }
   async function refreshUsedItem(itemId: string, generation: number) {
-    const refreshed = await items.refetch();
+    await items.refetch();
     if (generation !== requestGeneration || selected()?.id !== itemId) return;
-    const metadata = refreshed.data?.find((item) => item.id === itemId);
-    if (!metadata) return;
-    setSelected((current) =>
-      current ? { ...current, lastUsedAt: metadata.lastUsedAt } : current
-    );
+  }
+  function scheduleConceal() {
+    if (revealTimer) clearTimeout(revealTimer);
+    revealTimer = setTimeout(conceal, REVEAL_WINDOW_MS);
   }
   async function reveal(version?: number) {
     const item = selected();
     if (!item) return;
     const generation = ++requestGeneration;
     const response = await source.reveal(item.id, version);
+    if (stale()) return;
     if (generation !== requestGeneration) return;
     if (response.isErr()) {
       setFailure(response.error);
@@ -152,76 +261,169 @@ export function createVault(teamId: string) {
     }
     setFailure(undefined);
     setValues(response.value.values);
-    if (revealTimer) clearTimeout(revealTimer);
-    revealTimer = setTimeout(lock, 60_000);
+    scheduleConceal();
     await refreshUsedItem(item.id, generation);
   }
+  /** Open the selected item for in-place editing; needs a fresh reveal. */
   async function edit() {
     const item = selected();
     if (!item) return;
-    await reveal();
-    const revealed = values();
-    if (!revealed || selected()?.id !== item.id) return;
-    setDraft({
-      name: item.name,
-      kind: item.kind,
-      url: item.url ?? '',
-      folderId: item.folderId,
-      favorite: item.favorite,
-      values: { ...revealed },
-    });
-    conceal();
-  }
-  async function save() {
-    const current = draft();
-    if (!current || busy()) return;
-    const invalid = validateDraft(current);
-    setValidation(invalid);
-    if (invalid) return;
-    setBusy(true);
-    const generation = requestGeneration;
-    if (submittedDraft !== current) {
-      operationId = uuidv7();
-      submittedDraft = current;
-    }
-    operationId ??= uuidv7();
-    const response = await source.save(
-      selected()?.id,
-      selected()?.version,
-      current,
-      operationId
-    );
-    setBusy(false);
-    if (generation !== requestGeneration) {
-      await items.refetch();
-      return;
-    }
+    const key = editKey(item.id);
+    if (state.drafts[key]) return;
+    const generation = ++requestGeneration;
+    const response = await source.reveal(item.id);
+    if (stale()) return;
+    if (generation !== requestGeneration || selectedId() !== item.id) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
     }
-    if (draft() === current) clearDraft();
-    conceal();
-    setSelected(response.value);
     setFailure(undefined);
-    await loadUsername(response.value);
-    await items.refetch();
+    setState('drafts', key, {
+      key,
+      itemId: item.id,
+      version: item.version,
+      draft: {
+        name: item.name,
+        kind: item.kind,
+        url: item.url ?? '',
+        folderId: item.folderId,
+        favorite: item.favorite,
+        private: !item.sharedWithTeam,
+        values: structuredClone(response.value.values),
+      },
+      totpKey: '',
+      busy: false,
+    });
+    conceal();
+  }
+  function validate(entry: VaultDraft) {
+    const invalid = validateDraft(entry.draft);
+    if (invalid) return invalid;
+    const needsSeed =
+      KIND_LAYOUTS[entry.draft.kind].totp === 'required' &&
+      !entry.totpKey.trim() &&
+      !(
+        entry.itemId &&
+        loadedItems().find((item) => item.id === entry.itemId)?.hasTotp
+      );
+    return needsSeed ? 'totp' : undefined;
+  }
+  async function writeDraft(entry: VaultDraft, notes: DraftBookkeeping) {
+    if (notes.saved === entry.draft && entry.itemId)
+      return { id: entry.itemId, version: entry.version };
+    if (notes.submitted !== entry.draft) {
+      notes.operationId = uuidv7();
+      notes.submitted = entry.draft;
+    }
+    notes.operationId ??= uuidv7();
+    const response = await source.save(
+      entry.itemId,
+      entry.version,
+      entry.draft,
+      notes.operationId
+    );
+    if (response.isErr()) return response.error;
+    notes.saved = entry.draft;
+    notes.operationId = undefined;
+    return { id: response.value.id, version: response.value.version };
+  }
+  /**
+   * Save a draft. A verification-code seed enrolls after the item exists; if
+   * that fails the draft stays open against the saved item, and Save retries
+   * only the enrollment.
+   */
+  async function save(key: string) {
+    const entry = state.drafts[key];
+    if (!entry || entry.busy) return;
+    const invalid = validate(entry);
+    setState('drafts', key, { validation: invalid, failure: undefined });
+    if (invalid) return;
+    setState('drafts', key, 'busy', true);
+    // One trace for the whole save: the item write and any seed enrollment
+    // are children of it even though they start after awaits.
+    try {
+      await Telemetry.span('passwords.item.save', (span) =>
+        saveDraft(key, entry, span)
+      );
+    } finally {
+      if (state.drafts[key]?.busy) setState('drafts', key, 'busy', false);
+    }
+  }
+  async function saveDraft(key: string, entry: VaultDraft, span: Span) {
+    span.setAttr('passwords.item.kind', entry.draft.kind);
+    span.setAttr('passwords.item.new', !entry.itemId);
+    const notes = bookkeeping.get(key) ?? {};
+    bookkeeping.set(key, notes);
+    const written = await span.run(() => writeDraft(entry, notes));
+    if (stale()) return;
+    if (typeof written === 'string') {
+      span.setAttr('passwords.outcome', written);
+      await keepFailedDraft(key, written, span);
+      return;
+    }
+    if (state.drafts[key])
+      setState('drafts', key, { itemId: written.id, version: written.version });
+    if (!(await enrollSeed(key, written.id, span))) return;
+    span.setAttr('passwords.outcome', 'saved');
+    await finishSave(key, written.id, notes, span);
+  }
+  async function keepFailedDraft(
+    key: string,
+    failure: PasswordFailure,
+    span: Span
+  ) {
+    setState('drafts', key, { busy: false, failure });
+    if (failure !== 'folderMissing') return;
+    await span.run(() => folders.refetch());
+    if (state.drafts[key]) setState('drafts', key, 'draft', 'folderId', null);
+  }
+  /** Enrolls a pending seed; on failure the draft stays open on the saved item. */
+  async function enrollSeed(key: string, itemId: string, span: Span) {
+    const seed = state.drafts[key]?.totpKey.trim();
+    if (!seed) return true;
+    const enrolled = await span.run(() => source.setTotp(itemId, seed));
+    if (stale()) return false;
+    if (enrolled.isOk()) return true;
+    span.setAttr('passwords.outcome', 'totp_failed');
+    await span.run(() => items.refetch());
+    if (state.drafts[key])
+      setState('drafts', key, { busy: false, failure: 'totp' });
+    return false;
+  }
+  async function finishSave(
+    key: string,
+    itemId: string,
+    notes: DraftBookkeeping,
+    span: Span
+  ) {
+    const savedDraft = state.drafts[key];
+    if (savedDraft?.draft === notes.saved) removeDraft(key);
+    else if (savedDraft) setState('drafts', key, { busy: false, totpKey: '' });
+    const refreshed = await span.run(() => items.refetch());
+    const current = selection();
+    const stillShowing =
+      (current?.kind === 'draft' && current.key === key) ||
+      (current?.kind === 'item' && current.id === itemId);
+    if (!stillShowing || state.drafts[key]) return;
+    select(refreshed.data?.find((candidate) => candidate.id === itemId));
   }
   async function copyPassword() {
     const item = selected();
     if (!item) return;
     const generation = requestGeneration;
     const response = await source.copy(item.id);
+    if (stale()) return;
     if (generation !== requestGeneration) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
     }
-    const copied = await catchToResult(() =>
+    const written = await catchToResult(() =>
       writeClipboard(response.value.values.password)
     );
     if (generation !== requestGeneration) return;
-    if (copied.isErr()) setFailure('failed');
+    if (written.isErr()) setFailure('failed');
     else setCopied(true);
     await refreshUsedItem(item.id, generation);
   }
@@ -231,6 +433,7 @@ export function createVault(teamId: string) {
     const generation = requestGeneration;
     const identifierGeneration = usernameGeneration;
     const response = await source.copyUsername(item.id);
+    if (stale()) return;
     if (
       generation !== requestGeneration ||
       identifierGeneration !== usernameGeneration
@@ -240,7 +443,7 @@ export function createVault(teamId: string) {
       setFailure(response.error);
       return;
     }
-    const copied = await catchToResult(() =>
+    const written = await catchToResult(() =>
       writeClipboard(response.value.username)
     );
     if (
@@ -248,20 +451,28 @@ export function createVault(teamId: string) {
       identifierGeneration !== usernameGeneration
     )
       return;
-    if (copied.isErr()) setFailure('failed');
+    if (written.isErr()) setFailure('failed');
     else {
       setUsername(response.value.username);
       setUsernameCopied(true);
     }
     await refreshUsedItem(item.id, generation);
   }
+  /** Copy a revealed value (notes, a custom field, a code). */
+  async function copyValue(value: string) {
+    if (stale()) return false;
+    const written = await catchToResult(() => writeClipboard(value));
+    if (stale()) return false;
+    if (written.isErr()) setFailure('failed');
+    return written.isOk();
+  }
   async function loadHistory() {
     const item = selected();
     if (!item) return;
     const generation = requestGeneration;
     const response = await source.history(item.id);
-    if (generation !== requestGeneration) return;
-    if (selected()?.id !== item.id) return;
+    if (stale()) return;
+    if (generation !== requestGeneration || selectedId() !== item.id) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
@@ -273,8 +484,8 @@ export function createVault(teamId: string) {
     if (!item) return;
     const generation = requestGeneration;
     const response = await source.activity(item.id);
-    if (generation !== requestGeneration) return;
-    if (selected()?.id !== item.id) return;
+    if (stale()) return;
+    if (generation !== requestGeneration || selectedId() !== item.id) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
@@ -283,11 +494,24 @@ export function createVault(teamId: string) {
   }
   async function move(item: PasswordItem, folderId: string | null) {
     const response = await source.move(item, folderId);
+    if (stale()) return;
+    if (response.isErr()) {
+      setFailure(response.error);
+      if (response.error === 'folderMissing') await folders.refetch();
+      return;
+    }
+    await items.refetch();
+  }
+  async function toggleFavorite(item: PasswordItem) {
+    const response = await source.move(
+      { ...item, favorite: !item.favorite },
+      item.folderId
+    );
+    if (stale()) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
     }
-    if (selected()?.id === item.id) setSelected(response.value);
     await items.refetch();
   }
   async function share(grants: PasswordGrant[]) {
@@ -295,25 +519,63 @@ export function createVault(teamId: string) {
     if (!item) return;
     const generation = requestGeneration;
     const response = await source.share(item.id, grants);
+    if (stale()) return;
     if (generation !== requestGeneration) return;
     if (response.isErr()) {
       setFailure(response.error);
       return false;
     }
-    const refreshed = await items.refetch();
-    if (generation !== requestGeneration) return true;
-    const metadata = refreshed.data?.find((entry) => entry.id === item.id);
-    if (metadata) setSelected(metadata);
+    await items.refetch();
     return true;
   }
-  async function createFolder(name: string) {
+  async function createFolder(name: string, parentId: string | null) {
     if (!name.trim()) return;
-    const response = await source.createFolder(name.trim());
+    const response = await source.createFolder(name.trim(), parentId);
+    if (stale()) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
     }
     await folders.refetch();
+    return response.value;
+  }
+  async function renameFolder(id: string, name: string) {
+    if (!name.trim()) return false;
+    const response = await source.renameFolder(id, name.trim());
+    if (stale()) return;
+    if (response.isErr()) {
+      setFailure(response.error);
+      return false;
+    }
+    await folders.refetch();
+    return true;
+  }
+  async function moveFolder(id: string, parentId: string | null) {
+    const response = await source.moveFolder(id, parentId);
+    if (stale()) return;
+    if (response.isErr()) {
+      setFailure(response.error);
+      return false;
+    }
+    await folders.refetch();
+    return true;
+  }
+  /** Delete a folder and its subfolders; their items move to All items. */
+  async function deleteFolder(id: string) {
+    const removed = folderSubtree(loadedFolders(), id);
+    const response = await source.deleteFolder(id);
+    if (stale()) return;
+    if (response.isErr()) {
+      setFailure(response.error);
+      return false;
+    }
+    const current = filter();
+    if (current.startsWith('folder:') && removed.has(current.slice(7)))
+      setFilter('all');
+    for (const entry of Object.values(state.drafts))
+      if (entry.draft.folderId && removed.has(entry.draft.folderId))
+        setState('drafts', entry.key, 'draft', 'folderId', null);
+    await Promise.all([folders.refetch(), items.refetch()]);
     return true;
   }
   async function remove() {
@@ -321,6 +583,7 @@ export function createVault(teamId: string) {
     if (!item) return;
     const generation = requestGeneration;
     const response = await source.remove(item.id);
+    if (stale()) return;
     if (generation !== requestGeneration) {
       await items.refetch();
       return;
@@ -329,10 +592,8 @@ export function createVault(teamId: string) {
       setFailure(response.error);
       return;
     }
-    lock();
-    clearDraft();
-    setSelected(undefined);
-    clearUsername();
+    removeDraft(editKey(item.id));
+    select(undefined);
     await items.refetch();
   }
   async function setTotp(key: string) {
@@ -342,98 +603,105 @@ export function createVault(teamId: string) {
     const response = key
       ? await source.setTotp(item.id, key)
       : await source.removeTotp(item.id);
+    if (stale()) return;
     if (generation !== requestGeneration) return;
     if (response.isErr()) {
       setFailure(response.error);
       return;
     }
-    setSelected({ ...item, hasTotp: !!key });
     setCode(undefined);
     await items.refetch();
     return true;
   }
   async function loadCode() {
     const item = selected();
-    if (!item) return;
+    if (!item || codePending) return;
     const generation = requestGeneration;
-    if (codePending) return;
     codePending = true;
-    setCode(undefined);
+    setCodeFailed(false);
     const response = await source.totp(item.id);
+    if (stale()) return;
     codePending = false;
     if (generation !== requestGeneration) return;
     if (response.isErr()) {
-      setFailure(response.error);
+      setCode(undefined);
+      setCodeFailed(true);
       return;
     }
     setCode(response.value);
+    scheduleConceal();
   }
   const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (draft()) event.preventDefault();
+    if (dirty()) event.preventDefault();
   };
   const hide = () => {
-    if (document.hidden) lock();
+    if (document.hidden) conceal();
   };
-  const blur = lock;
-  window.addEventListener('blur', blur);
+  window.addEventListener('blur', conceal);
   document.addEventListener('visibilitychange', hide);
   window.addEventListener('beforeunload', beforeUnload);
   onCleanup(() => {
-    lock();
+    conceal();
     clearUsername();
-    window.removeEventListener('blur', blur);
+    window.removeEventListener('blur', conceal);
     document.removeEventListener('visibilitychange', hide);
     window.removeEventListener('beforeunload', beforeUnload);
   });
   return {
     items,
     folders,
+    loadedItems,
+    loadedFolders,
+    selection,
     selected,
     select,
+    selectDraft,
     filter,
     setFilter,
     search,
     setSearch,
-    draft,
-    setDraft,
+    drafts: () => state.order.map((key) => state.drafts[key]),
+    draft: (key: string): VaultDraft | undefined => state.drafts[key],
+    activeDraft,
+    dirty,
+    createItem,
+    updateDraft,
+    setDraftTotpKey,
+    discard,
+    discardAll,
+    edit,
+    save,
     values,
     username,
     usernameLoading,
     usernameCopied,
     failure,
-    validation,
-    busy,
-    createItem,
-    edit,
-    save,
     reveal,
     copy: copyPassword,
     copyUsername,
+    copyValue,
     copied,
-    lock,
+    conceal,
+    /** Client-side only: hides revealed values. Drafts and the session stay. */
+    lock: conceal,
     history,
     loadHistory,
     activity,
     loadActivity,
     share,
     move,
+    toggleFavorite,
     createFolder,
+    renameFolder,
+    moveFolder,
+    deleteFolder,
     remove,
     code,
+    codeFailed,
     loadCode,
     setTotp,
-    totpKey,
-    setTotpKey,
-    pendingSelection,
-    setPendingSelection,
-    discard,
-    cancel: clearDraft,
     visibleItems: () =>
-      filterItems(
-        items.isPending ? [] : (items.data ?? []),
-        filter(),
-        search()
-      ),
+      filterItems(loadedItems(), filter(), search(), loadedFolders()),
   };
 }
 export type VaultController = ReturnType<typeof createVault>;

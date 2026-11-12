@@ -4089,9 +4089,9 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by chat owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -6783,9 +6783,9 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by document owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -15119,9 +15119,23 @@ export type PasswordActivity = {
 };
 
 /**
+ * New folder, at the top level or inside another folder of the team.
+ */
+export type PasswordCreateFolderBody = {
+    /**
+     * Folder display name.
+     */
+    name: string;
+    /**
+     * Containing folder; absent or null for a top-level folder.
+     */
+    parentId?: string | null;
+};
+
+/**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'vault_items_owned' | 'not_found' | 'forbidden' | 'reauthentication_required' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'vault_unavailable';
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.
@@ -15145,6 +15159,10 @@ export type PasswordFolder = {
      * Searchable display name; must not contain credential values.
      */
     name: string;
+    /**
+     * Containing folder in the same team; absent for a top-level folder.
+     */
+    parentId?: string | null;
     /**
      * Team namespace and authorization boundary.
      */
@@ -15185,19 +15203,9 @@ export type PasswordGrant = {
 export type PasswordGranteeKind = 'user' | 'team';
 
 /**
- * Vault item identity, UUIDv7 for new items.
- */
-export type PasswordItemId = string;
-
-/**
- * Product template. Values use the same protected representation for every template.
- */
-export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api';
-
-/**
  * Searchable display fields, without any credential values.
  */
-export type PasswordItemMetadata = {
+export type PasswordItemFields = {
     /**
      * Resource creation timestamp.
      */
@@ -15254,9 +15262,43 @@ export type PasswordItemMetadata = {
 };
 
 /**
+ * Vault item identity, UUIDv7 for new items.
+ */
+export type PasswordItemId = string;
+
+/**
+ * Product template. Values use the same protected representation for every template.
+ */
+export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api' | 'verification_code';
+
+/**
+ * Actor-specific response capabilities, never part of persisted metadata or write intents.
+ */
+export type PasswordItemMetadata = PasswordItemFields & {
+    /**
+     * Whether this caller may change grants or delete the team item now.
+     */
+    canManage: boolean;
+    /**
+     * Whether the team has an explicit grant, independent of direct recipients.
+     */
+    sharedWithTeam: boolean;
+};
+
+/**
  * A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.
  */
 export type PasswordLoginUrl = string;
+
+/**
+ * New containing folder for an existing folder.
+ */
+export type PasswordMoveFolderBody = {
+    /**
+     * Containing folder; null moves the folder to the top level.
+     */
+    parentId?: string | null;
+};
 
 /**
  * A metadata-only change never reads or writes a secret value.
@@ -15450,6 +15492,10 @@ export type PasswordWriteItem = {
      * UUIDv7 identifying one logical save across uncertain retries.
      */
     operationId: string;
+    /**
+     * Create without the default team edit grant. Updates preserve existing grants.
+     */
+    private?: boolean;
     url?: null | PasswordLoginUrl;
     /**
      * Private payload; never serialize into the metadata repository.
@@ -16310,9 +16356,9 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by project owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -32728,7 +32774,7 @@ export type PasswordsFoldersResponses = {
 export type PasswordsFoldersResponse = PasswordsFoldersResponses[keyof PasswordsFoldersResponses];
 
 export type PasswordsCreateFolderData = {
-    body: PasswordFolderBody;
+    body: PasswordCreateFolderBody;
     headers: {
         /**
          * Required CSRF header; send 1
@@ -32812,6 +32858,37 @@ export type PasswordsRenameFolderResponses = {
 };
 
 export type PasswordsRenameFolderResponse = PasswordsRenameFolderResponses[keyof PasswordsRenameFolderResponses];
+
+export type PasswordsMoveFolderData = {
+    body: PasswordMoveFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}/parent';
+};
+
+export type PasswordsMoveFolderErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsMoveFolderError = PasswordsMoveFolderErrors[keyof PasswordsMoveFolderErrors];
+
+export type PasswordsMoveFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsMoveFolderResponse = PasswordsMoveFolderResponses[keyof PasswordsMoveFolderResponses];
 
 export type PasswordsListData = {
     body?: never;

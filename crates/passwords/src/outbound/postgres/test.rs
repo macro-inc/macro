@@ -11,13 +11,11 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         user_id: MacroUserIdStr::parse_from_str("macro|owner@example.test")
             .expect("fixture")
             .into_owned(),
-        session_token: None,
     };
     let viewer = Actor {
         user_id: MacroUserIdStr::parse_from_str("macro|viewer@example.test")
             .expect("fixture")
             .into_owned(),
-        session_token: None,
     };
     for (actor, team) in [(&owner, first), (&viewer, second)] {
         let email = actor
@@ -71,6 +69,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         id: Uuid::now_v7(),
         team_id: first,
         name: "Operations".into(),
+        parent_id: None,
     };
     repository.save_folder(&folder).await.expect("folder");
     let now = Utc::now();
@@ -78,7 +77,6 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         user_id: owner.user_id.clone(),
         grants: vec![],
         deleting: false,
-        member_removal_pending: false,
         totp_key_id: None,
         revision: 0,
         metadata: ItemMetadata {
@@ -189,6 +187,14 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .expect("hidden without grant")
             .is_empty()
     );
+    sqlx::query!(
+        "UPDATE team_user SET team_id=$1,team_role='member' WHERE user_id=$2",
+        first.0,
+        viewer.user_id.as_ref()
+    )
+    .execute(&repository.pool)
+    .await
+    .expect("current viewer membership");
     record.grants = vec![Grant {
         kind: GranteeKind::User,
         id: viewer.user_id.to_string(),
@@ -254,10 +260,10 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .expect("foreign folders")
             .is_empty()
     );
-    repository
-        .delete_folder(second, folder.id)
-        .await
-        .expect("foreign delete");
+    assert!(matches!(
+        repository.delete_folder(second, folder.id).await,
+        Err(Error::NotFound)
+    ));
     assert_eq!(repository.folders(first).await.expect("folders").len(), 1);
     let stale_folder = repository
         .get(first, record.metadata.id)
@@ -278,6 +284,12 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
     );
     assert!(matches!(
         repository.save(&stale_folder, Some(3)).await,
+        Err(Error::FolderMissing)
+    ));
+    let mut stale_revision = stale_folder;
+    stale_revision.metadata.folder_id = None;
+    assert!(matches!(
+        repository.save(&stale_revision, Some(3)).await,
         Err(Error::Conflict)
     ));
     let enrollment_revision = repository
@@ -341,7 +353,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .await
             .expect("start retirement quarantine")
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1",first.0).execute(&repository.pool).await.expect("expire synthetic enrollment");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_retry_after=now()-interval '1 second',cleanup_after=now()-interval '1 second' WHERE team_id=$1",first.0).execute(&repository.pool).await.expect("expire synthetic enrollment");
     let due = repository
         .totp_cleanup_due()
         .await
@@ -429,7 +441,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .expect("fresh retirement grace")
             .is_empty()
     );
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",first.0,second_key.0).execute(&repository.pool).await.expect("expire synthetic retirement");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_retry_after=now()-interval '1 second',cleanup_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",first.0,second_key.0).execute(&repository.pool).await.expect("expire synthetic retirement");
     let due = repository
         .totp_cleanup_due()
         .await
@@ -488,7 +500,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .await,
         Err(Error::Conflict)
     ));
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",first.0,canceled_key.0).execute(&repository.pool).await.expect("expire canceled setup quarantine");
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_retry_after=now()-interval '1 second',cleanup_after=now()-interval '1 second' WHERE team_id=$1 AND key_id=$2",first.0,canceled_key.0).execute(&repository.pool).await.expect("expire canceled setup quarantine");
     assert!(
         repository
             .totp_cleanup_ready(canceled)
@@ -567,6 +579,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .expect("list")
             .is_empty()
     );
+    record.metadata.folder_id = None;
     assert!(matches!(
         repository.save(&record, None).await,
         Err(Error::Conflict)
@@ -693,7 +706,6 @@ async fn stale_totp_setup_and_removal_cannot_override_a_newer_enrollment_or_remo
                 user_id: owner,
                 grants: vec![],
                 deleting: false,
-                member_removal_pending: false,
                 revision: 0,
                 totp_key_id: None,
                 metadata: ItemMetadata {
@@ -819,7 +831,7 @@ async fn first_erasure_and_quarantine_are_not_starved_by_repeat_tombstones(pool:
             .await
             .expect("acknowledged erasure");
     }
-    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 hour' WHERE team_id=$1", team.0)
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_retry_after=now()-interval '1 second',cleanup_after=now()-interval '1 hour' WHERE team_id=$1", team.0)
         .execute(&repository.pool).await.expect("repeat erasures due");
     let first_erasure = TotpKeyId(Uuid::now_v7());
     repository
@@ -845,3 +857,7 @@ async fn first_erasure_and_quarantine_are_not_starved_by_repeat_tombstones(pool:
         Some(101)
     );
 }
+
+mod access;
+mod support;
+pub(super) use support::{another_team, folder_fixture};

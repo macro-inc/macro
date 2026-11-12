@@ -98,20 +98,10 @@ event contract (schema, sanitization, delivery semantics).
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
 
-## Vault lifecycle
+## Team vault cleanup
 
-- Compose `MemberVault` with the vault adapter in authentication_service; an
-  unwired membership mutation fails closed. Teams does not write vault tables.
-- Hold the team vault lease when committing membership revocation and its
-  reversible metadata fence. Preserve existing billing and channel compensation:
-  rollback restores membership and unfences together. After the last required
-  saga step, finish the removal and enqueue erasure atomically before best-effort work.
-- Block voluntary leave for live owned items. Administrative removal preserves
-  existing shared grants, drops the removed member's grants, and transfers shared
-  ownership to the current team owner; private values are erased by the durable worker.
-- Purge the vault namespace before deleting the team row. Missing provider roles
-  and incomplete erasure are errors, never successful partial deletion.
-
-- Treat successful failed-join compensation as definitive revocation: auto-join
-  and invite rollback fence, finish, and enqueue private erasure in the same
-  membership-rollback transaction. Preserve billing/seat compensation.
+- Run `OwnedEntityCleanup::prepare_team_deletion` before census and ordinary cleanup;
+  namespace failures stop before entity, session, subscription or team deletion.
+  Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
+- Keep membership removal and rollback unchanged: vault items belong to the team,
+  retain their creator, and lose departing members through current membership checks.

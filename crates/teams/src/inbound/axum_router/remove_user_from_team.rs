@@ -27,8 +27,6 @@ pub struct Param {
         ("remove_user_id" = String, Path, description = "The ID of the user to remove")
     ),
     responses(
-        (status = 503, body = super::TeamVaultFailure),
-        (status = 409, body = super::TeamVaultFailure),
         (status = 200),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),

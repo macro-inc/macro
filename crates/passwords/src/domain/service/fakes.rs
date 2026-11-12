@@ -8,18 +8,28 @@ use std::{
     },
 };
 
+pub struct FakeEnrollment {
+    pub team_id: TeamId,
+    pub item_id: ItemId,
+    pub active: bool,
+    pub grace_elapsed: bool,
+    pub cleanup_started: bool,
+}
+
 pub struct FakeRepository {
     pub records: Mutex<HashMap<Uuid, Record>>,
     pub staged: Mutex<HashMap<Uuid, Record>>,
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
     pub lock_calls: AtomicUsize,
+    pub calls: AtomicUsize,
     pub closed_teams: Mutex<HashSet<Uuid>>,
-    pub closed_users: Mutex<HashSet<String>>,
+    pub agents: Mutex<HashSet<String>>,
+    pub admins: Mutex<HashSet<(String, TeamId)>>,
+    pub cleanup_calls: AtomicUsize,
     pub erased_items: Mutex<HashSet<Uuid>>,
-    pub team_owners: Mutex<HashMap<Uuid, macro_user_id::user_id::MacroUserIdStr<'static>>>,
     pub audits: Mutex<Vec<Action>>,
-    pub enrollments: Mutex<HashMap<Uuid, (TeamId, ItemId, bool, bool, bool)>>,
+    pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
 }
 impl FakeRepository {
     pub fn new() -> Self {
@@ -29,10 +39,12 @@ impl FakeRepository {
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
             lock_calls: AtomicUsize::new(0),
+            calls: AtomicUsize::new(0),
             closed_teams: Mutex::new(HashSet::new()),
-            closed_users: Mutex::new(HashSet::new()),
+            agents: Mutex::new(HashSet::new()),
+            admins: Mutex::new(HashSet::new()),
+            cleanup_calls: AtomicUsize::new(0),
             erased_items: Mutex::new(HashSet::new()),
-            team_owners: Mutex::new(HashMap::new()),
             audits: Mutex::new(vec![]),
             enrollments: Mutex::new(HashMap::new()),
         }
@@ -42,91 +54,55 @@ struct FakeLock;
 impl ItemLock for FakeLock {}
 #[async_trait]
 impl Repository for FakeRepository {
-    async fn retired_user_items(
+    async fn is_human(
         &self,
-        team: TeamId,
         user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<ItemId>, Error> {
+    ) -> Result<bool, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(!self.agents.lock().unwrap().contains(user.as_ref()))
+    }
+    async fn is_team_admin(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        team: TeamId,
+    ) -> Result<bool, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .admins
+            .lock()
+            .unwrap()
+            .contains(&(user.to_string(), team)))
+    }
+    async fn has_team_data(&self, team: TeamId) -> Result<bool, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .records
             .lock()
             .unwrap()
             .values()
-            .filter(|r| {
-                r.metadata.team_id == team
-                    && r.user_id == *user
-                    && r.deleting
-                    && !self.erased_items.lock().unwrap().contains(&r.metadata.id.0)
-            })
-            .map(|r| r.metadata.id)
-            .collect())
-    }
-    async fn close_user(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error> {
-        self.closed_users.lock().unwrap().insert(user.to_string());
-        Ok(())
-    }
-    async fn user_vault_teams(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<TeamId>, Error> {
-        Ok(self
-            .records
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|r| r.user_id == *user)
-            .map(|r| r.metadata.team_id)
-            .collect())
-    }
-    async fn team_owner(
-        &self,
-        team: TeamId,
-    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, Error> {
-        self.team_owners
-            .lock()
-            .unwrap()
-            .get(&team.0)
-            .cloned()
-            .ok_or(Error::NotFound)
-    }
-    async fn depart_user(
-        &self,
-        team: TeamId,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-        owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error> {
-        for record in self
-            .records
-            .lock()
-            .unwrap()
-            .values_mut()
-            .filter(|r| r.metadata.team_id == team)
-        {
-            crate::domain::lifecycle::depart_member(
-                record,
-                user,
-                owner,
-                crate::domain::lifecycle::Departure::Administrative,
-            )?;
-        }
-        Ok(())
-    }
-    async fn scrub_user_metadata(
-        &self,
-        _: TeamId,
-        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error> {
-        Ok(())
+            .any(|record| record.metadata.team_id == team)
+            || self
+                .staged
+                .lock()
+                .unwrap()
+                .values()
+                .any(|record| record.metadata.team_id == team)
+            || self
+                .enrollments
+                .lock()
+                .unwrap()
+                .values()
+                .any(|entry| entry.team_id == team)
+            || self.closed_teams.lock().unwrap().contains(&team.0))
     }
 
     async fn close_team(&self, team: TeamId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.closed_teams.lock().unwrap().insert(team.0);
         Ok(())
     }
     async fn purge_team_metadata(&self, team: TeamId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.records
             .lock()
             .unwrap()
@@ -134,6 +110,8 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.cleanup_calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .records
             .lock()
@@ -145,10 +123,17 @@ impl Repository for FakeRepository {
     }
 
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error> {
-        self.enrollments
-            .lock()
-            .expect("fixture lock")
-            .insert(key.0, (team, item, false, false, false));
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.enrollments.lock().expect("fixture lock").insert(
+            key.0,
+            FakeEnrollment {
+                team_id: team,
+                item_id: item,
+                active: false,
+                grace_elapsed: false,
+                cleanup_started: false,
+            },
+        );
         Ok(())
     }
     async fn activate_totp(
@@ -158,6 +143,7 @@ impl Repository for FakeRepository {
         key: TotpKeyId,
         expected_revision: i64,
     ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let mut records = self.records.lock().expect("fixture lock");
         let record = records
             .get_mut(&item.0)
@@ -167,15 +153,14 @@ impl Repository for FakeRepository {
             return Err(Error::Conflict);
         }
         let mut enrollments = self.enrollments.lock().expect("fixture lock");
-        if !enrollments
-            .get(&key.0)
-            .is_some_and(|entry| entry.0 == team && entry.1 == item && !entry.4)
-        {
+        if !enrollments.get(&key.0).is_some_and(|entry| {
+            entry.team_id == team && entry.item_id == item && !entry.cleanup_started
+        }) {
             return Err(Error::Conflict);
         }
         for (id, entry) in enrollments.iter_mut() {
-            if entry.0 == team && entry.1 == item {
-                entry.2 = *id == key.0;
+            if entry.team_id == team && entry.item_id == item {
+                entry.active = *id == key.0;
             }
         }
         record.totp_key_id = Some(key);
@@ -189,6 +174,7 @@ impl Repository for FakeRepository {
         item: ItemId,
         expected_revision: Option<i64>,
     ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let mut records = self.records.lock().expect("fixture lock");
         let record = records
             .get_mut(&item.0)
@@ -201,8 +187,8 @@ impl Repository for FakeRepository {
             return Err(Error::Conflict);
         }
         for entry in self.enrollments.lock().expect("fixture lock").values_mut() {
-            if entry.0 == team && entry.1 == item {
-                entry.2 = false;
+            if entry.team_id == team && entry.item_id == item {
+                entry.active = false;
             }
         }
         record.totp_key_id = None;
@@ -211,57 +197,63 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn totp_keys(&self, team: TeamId, item: ItemId) -> Result<Vec<TotpKeyId>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .enrollments
             .lock()
             .expect("fixture lock")
             .iter()
-            .filter(|(_, entry)| entry.0 == team && entry.1 == item)
+            .filter(|(_, entry)| entry.team_id == team && entry.item_id == item)
             .map(|(id, _)| TotpKeyId(*id))
             .collect())
     }
     async fn totp_cleanup_due(&self) -> Result<Vec<TotpCleanup>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.cleanup_calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .enrollments
             .lock()
             .expect("fixture lock")
             .iter()
-            .filter(|(_, entry)| !entry.2 && (!entry.4 || entry.3))
+            .filter(|(_, entry)| !entry.active && (!entry.cleanup_started || entry.grace_elapsed))
             .map(|(id, entry)| TotpCleanup {
-                team_id: entry.0,
-                item_id: entry.1,
+                team_id: entry.team_id,
+                item_id: entry.item_id,
                 key_id: TotpKeyId(*id),
             })
             .collect())
     }
     async fn totp_cleanup_ready(&self, cleanup: TotpCleanup) -> Result<bool, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let mut enrollments = self.enrollments.lock().expect("fixture lock");
         let Some(entry) = enrollments.get_mut(&cleanup.key_id.0) else {
             return Ok(false);
         };
-        if entry.0 != cleanup.team_id || entry.1 != cleanup.item_id || entry.2 {
+        if entry.team_id != cleanup.team_id || entry.item_id != cleanup.item_id || entry.active {
             return Ok(false);
         }
-        if !entry.4 {
-            entry.4 = true;
-            entry.3 = false;
+        if !entry.cleanup_started {
+            entry.cleanup_started = true;
+            entry.grace_elapsed = false;
             return Ok(false);
         }
-        Ok(entry.3)
+        Ok(entry.grace_elapsed)
     }
     async fn finish_totp_cleanup(&self, cleanup: TotpCleanup) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(entry) = self
             .enrollments
             .lock()
             .expect("fixture lock")
             .get_mut(&cleanup.key_id.0)
         {
-            entry.3 = false;
+            entry.grace_elapsed = false;
         }
         Ok(())
     }
 
     async fn lock(&self, _: TeamId, _: ItemId) -> Result<Box<dyn ItemLock>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.lock_calls.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(FakeLock))
     }
@@ -271,16 +263,12 @@ impl Repository for FakeRepository {
         record: &Record,
         publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self
             .closed_teams
             .lock()
             .unwrap()
             .contains(&record.metadata.team_id.0)
-            || self
-                .closed_users
-                .lock()
-                .unwrap()
-                .contains(publisher.as_ref())
             || !self
                 .memberships
                 .lock()
@@ -305,6 +293,7 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn staged(&self, team: TeamId, item: ItemId, operation: Uuid) -> Result<Record, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let record = self
             .staged
             .lock()
@@ -318,17 +307,11 @@ impl Repository for FakeRepository {
         Ok(record)
     }
     async fn finish(&self, _: Uuid) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
-        if self
-            .closed_users
-            .lock()
-            .unwrap()
-            .contains(actor.user_id.as_ref())
-        {
-            return Ok(vec![]);
-        }
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .memberships
             .lock()
@@ -341,6 +324,7 @@ impl Repository for FakeRepository {
             .collect())
     }
     async fn list(&self, _: &Actor, team: TeamId, _: &str) -> Result<Vec<Record>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .records
             .lock()
@@ -351,6 +335,7 @@ impl Repository for FakeRepository {
             .collect())
     }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let record = self
             .records
             .lock()
@@ -364,6 +349,7 @@ impl Repository for FakeRepository {
         Ok(record)
     }
     async fn save(&self, record: &Record, expected: Option<i32>) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_save.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -380,6 +366,7 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.erased_items.lock().unwrap().insert(item.0);
         if let Some(record) = self.records.lock().expect("fixture lock").get_mut(&item.0) {
             record.deleting = true;
@@ -394,27 +381,58 @@ impl Repository for FakeRepository {
         action: Action,
         _: Uuid,
     ) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.audits.lock().expect("fixture lock").push(action);
         Ok(())
     }
     async fn activity(&self, _: TeamId, _: ItemId) -> Result<Vec<Activity>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![])
     }
     async fn folders(&self, _: TeamId) -> Result<Vec<Folder>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![])
     }
     async fn save_folder(&self, _: &Folder) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+    async fn rename_folder(&self, team: TeamId, id: Uuid, name: &str) -> Result<Folder, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(Folder {
+            id,
+            team_id: team,
+            name: name.to_owned(),
+            parent_id: None,
+        })
+    }
+    async fn move_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        parent: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(Folder {
+            id,
+            team_id: team,
+            name: "Folder".to_owned(),
+            parent_id: parent,
+        })
+    }
     async fn delete_folder(&self, _: TeamId, _: Uuid) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 }
 type UsernameGate = (Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>);
 pub struct FakeProvider {
+    pub calls: AtomicUsize,
     pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues)>>,
     pub reads: AtomicUsize,
     pub fail_delete: AtomicBool,
+    pub blocked_deletes: Mutex<HashSet<Uuid>>,
+    pub blocked_totp_deletes: Mutex<HashSet<Uuid>>,
     pub fail_purge: AtomicBool,
     pub purged: Mutex<Vec<TeamId>>,
     pub tombstones: Mutex<HashSet<Uuid>>,
@@ -432,9 +450,12 @@ impl FakeProvider {
     }
     pub fn new() -> Self {
         Self {
+            calls: AtomicUsize::new(0),
             stored: Mutex::new(HashMap::new()),
             reads: AtomicUsize::new(0),
             fail_delete: AtomicBool::new(false),
+            blocked_deletes: Mutex::new(HashSet::new()),
+            blocked_totp_deletes: Mutex::new(HashSet::new()),
             fail_purge: AtomicBool::new(false),
             purged: Mutex::new(vec![]),
             tombstones: Mutex::new(HashSet::new()),
@@ -449,6 +470,7 @@ impl FakeProvider {
 #[async_trait]
 impl SecretProvider for FakeProvider {
     async fn purge_namespace(&self, team: TeamId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_purge.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -456,6 +478,7 @@ impl SecretProvider for FakeProvider {
         Ok(())
     }
     async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let gate = self.username_gate.lock().expect("fixture lock").clone();
         if let Some((started, release)) = gate {
             started.notify_one();
@@ -478,6 +501,7 @@ impl SecretProvider for FakeProvider {
         Ok(username)
     }
     async fn current_version(&self, _: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self
             .tombstones
             .lock()
@@ -494,6 +518,7 @@ impl SecretProvider for FakeProvider {
             .map(|stored| stored.0))
     }
     async fn status(&self, _: TeamId, item: ItemId) -> Result<Option<(i32, Uuid)>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.reads.fetch_add(1, Ordering::SeqCst);
         if self
             .tombstones
@@ -518,6 +543,7 @@ impl SecretProvider for FakeProvider {
         operation: Uuid,
         values: &SecretValues,
     ) -> Result<i32, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let mut stored = self.stored.lock().expect("fixture lock");
         let actual = stored.get(&item.0).map(|stored| stored.0).unwrap_or(0);
         if actual != expected {
@@ -527,6 +553,7 @@ impl SecretProvider for FakeProvider {
         Ok(expected + 1)
     }
     async fn read(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.revoke_during_disclosure();
         self.reads.fetch_add(1, Ordering::SeqCst);
         let stored = self.stored.lock().expect("fixture lock");
@@ -537,19 +564,26 @@ impl SecretProvider for FakeProvider {
         Ok(stored.2.clone())
     }
     async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
+        }
+        let blocked = self.blocked_deletes.lock().unwrap().contains(&item.0);
+        if blocked {
+            return std::future::pending().await;
         }
         self.stored.lock().expect("fixture lock").remove(&item.0);
         self.tombstones.lock().expect("fixture lock").insert(item.0);
         Ok(())
     }
     async fn history(&self, _: TeamId, _: ItemId) -> Result<Vec<Version>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.revoke_during_disclosure();
         Ok(vec![])
     }
 
     async fn set_totp(&self, _: TeamId, key: TotpKeyId, seed: &SecretString) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.totp_seeds
             .lock()
             .expect("fixture lock")
@@ -560,13 +594,19 @@ impl SecretProvider for FakeProvider {
         Ok(())
     }
     async fn delete_totp(&self, _: TeamId, key: TotpKeyId) -> Result<(), Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
+        }
+        let blocked = self.blocked_totp_deletes.lock().unwrap().contains(&key.0);
+        if blocked {
+            return std::future::pending().await;
         }
         self.totp_seeds.lock().expect("fixture lock").remove(&key.0);
         Ok(())
     }
     async fn totp(&self, _: TeamId, key: TotpKeyId) -> Result<TotpCode, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.revoke_during_disclosure();
         if !self
             .totp_seeds
@@ -582,23 +622,13 @@ impl SecretProvider for FakeProvider {
         })
     }
 }
-pub struct FakeReauthentication {
-    pub recent: AtomicBool,
-}
-#[async_trait]
-impl Reauthentication for FakeReauthentication {
-    async fn verify(&self, _: &Actor) -> Result<(), Error> {
-        if self.recent.load(Ordering::SeqCst) {
-            Ok(())
-        } else {
-            Err(Error::ReauthenticationRequired)
-        }
-    }
-}
 pub struct FakeAvailability;
 #[async_trait]
 impl Availability for FakeAvailability {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
+        self.require_service_enabled().await
+    }
+    async fn require_service_enabled(&self) -> Result<(), Error> {
         Ok(())
     }
 }

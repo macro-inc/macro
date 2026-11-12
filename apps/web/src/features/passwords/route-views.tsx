@@ -9,9 +9,12 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enablePasswords } from '@core/constant/featureFlags';
 import { idToDisplayName } from '@core/user/util';
+import LockIcon from '@icon/system/regular/lock.svg';
 import { useUserNames } from '@queries/auth';
+import { isCurrentQueryAccount } from '@queries/auth/account-scope';
+import { useQueryAccount } from '@queries/auth/use-query-account';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { createMemo, Show, Suspense } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { PasswordsProvider } from './context/passwords-context';
 import { passwordRecipients } from './queries/recipients';
 import { createPasswordSource } from './queries/source';
@@ -37,39 +40,88 @@ function PasswordsTeamView() {
   usePending('passwords.recipients', () =>
     names().some((name) => name.loading)
   );
-  let dirty: () => boolean = () => false;
-  useBeforeLeave(() => !dirty());
+  const account = useQueryAccount();
+  // Remount the vault, and drop its drafts, whenever the viewer's account,
+  // sign-in session or team changes; nothing carries across viewers.
+  const scope = createMemo(
+    () => {
+      const viewer = account();
+      const teamId = team.isPending ? undefined : team.data?.team.id;
+      return viewer && teamId
+        ? {
+            account: viewer,
+            teamId,
+            key: `${viewer.userId}:${viewer.session}:${teamId}`,
+          }
+        : undefined;
+    },
+    undefined,
+    { equals: (previous, next) => previous?.key === next?.key }
+  );
+  let guard: () => Promise<boolean> = async () => true;
+  useBeforeLeave(() => guard());
   return (
     <Suspense fallback={<p class="p-4">{t('passwords.loading')}</p>}>
       <Show
-        when={!team.isPending && team.data?.team.id}
+        when={scope()}
         keyed
         fallback={
-          <p class="p-4">
-            {team.isError ? t('passwords.failed') : t('passwords.noTeam')}
-          </p>
+          <Switch>
+            <Match when={team.isPending || !account()}>
+              <p class="p-4 text-sm text-ink-muted">{t('passwords.loading')}</p>
+            </Match>
+            <Match when={team.isError}>
+              <p role="alert" class="p-4 text-sm">
+                {t('passwords.failed')}
+              </p>
+            </Match>
+            <Match when={true}>
+              <div class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center touch:pt-(--mobile-content-inset-top)">
+                <LockIcon class="size-5 text-ink-extra-muted" />
+                <h2 class="text-sm font-semibold text-ink">
+                  {t('passwords.noTeamTitle')}
+                </h2>
+                <p class="text-sm text-ink-muted">
+                  {t('passwords.noTeamBody')}
+                </p>
+              </div>
+            </Match>
+          </Switch>
         }
       >
-        {(teamId) => (
-          <PasswordsProvider
-            value={{
-              source: createPasswordSource(teamId),
-              recipients,
-              recipientsLoading: () =>
-                team.isLoading || names().some((name) => name.loading),
-              recipientsError: () =>
-                team.isError || names().some((name) => Boolean(name.error)),
-              writeClipboard: (value) => navigator.clipboard.writeText(value),
-            }}
-          >
-            <VaultView
-              teamId={teamId}
-              onGuard={(guard) => {
-                dirty = guard;
+        {(current) => {
+          // Ends with this viewer: in-flight requests stop, including any
+          // waiting on a session refresh.
+          const viewer = new AbortController();
+          onCleanup(() => viewer.abort());
+          const isCurrent = () => isCurrentQueryAccount(current.account);
+          return (
+            <PasswordsProvider
+              value={{
+                scope: {
+                  key: current.key,
+                  isCurrent: () => !viewer.signal.aborted && isCurrent(),
+                },
+                source: createPasswordSource(current.teamId, {
+                  isCurrent,
+                  signal: viewer.signal,
+                }),
+                recipients,
+                recipientsLoading: () =>
+                  team.isLoading || names().some((name) => name.loading),
+                recipientsError: () =>
+                  team.isError || names().some((name) => Boolean(name.error)),
+                writeClipboard: (value) => navigator.clipboard.writeText(value),
               }}
-            />
-          </PasswordsProvider>
-        )}
+            >
+              <VaultView
+                onGuard={(next) => {
+                  guard = next;
+                }}
+              />
+            </PasswordsProvider>
+          );
+        }}
       </Show>
     </Suspense>
   );

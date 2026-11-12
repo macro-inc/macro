@@ -52,7 +52,6 @@ crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", d
 ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
 curve25519-dalek-164d15cefe24d7eb = { package = "curve25519-dalek", version = "4", default-features = false, features = ["alloc", "digest", "precomputed-tables", "zeroize"] }
 curve25519-dalek-cdf1610d3e1514e9 = { package = "curve25519-dalek", version = "5", features = ["rand_core"] }
-derive_builder = { version = "0.20" }
 derive_more = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
 digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid", "rand_core", "zeroize"] }
@@ -216,7 +215,6 @@ crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", d
 ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
 curve25519-dalek-164d15cefe24d7eb = { package = "curve25519-dalek", version = "4", default-features = false, features = ["alloc", "digest", "precomputed-tables", "zeroize"] }
 curve25519-dalek-cdf1610d3e1514e9 = { package = "curve25519-dalek", version = "5", features = ["rand_core"] }
-derive_builder = { version = "0.20" }
 derive_more = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
 derive_more-impl = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
@@ -324,7 +322,7 @@ sqlx-postgres = { version = "0.8", default-features = false, features = ["any", 
 stable_deref_trait = { version = "1" }
 subtle = { version = "2", features = ["const-generics"] }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit-mut"] }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit"] }
+syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 thiserror = { version = "2" }

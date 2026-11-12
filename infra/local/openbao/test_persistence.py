@@ -42,8 +42,9 @@ class PersistenceIntegration(unittest.TestCase):
                 try:
                     return subprocess.check_output(command + list(arguments), stderr=subprocess.PIPE)
                 except subprocess.CalledProcessError as error:
-                    logs = subprocess.run(command + ["logs", "--tail", "20"], capture_output=True).stdout.decode()
-                    raise RuntimeError(error.stderr.decode() + logs) from None
+                    logs = subprocess.run(command + ["logs", "--tail", "20"], capture_output=True)
+                    output = (logs.stdout + logs.stderr).decode()
+                    raise RuntimeError(error.stderr.decode() + output) from None
 
             try:
                 run("up", "-d", "--wait", "--wait-timeout", "90")

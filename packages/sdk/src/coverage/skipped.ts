@@ -384,8 +384,8 @@ export const storageExcluded = [
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
-  // The v1 vault is human-session-only; protected disclosure also requires
-  // interactive reauthentication. Agent SDK credentials cannot access it.
+  // The v1 vault requires a normal human session and item access.
+  // Agent SDK credentials cannot access it.
   'passwordsActivity',
   'passwordsCopy',
   'passwordsCopyUsername',
@@ -396,6 +396,7 @@ export const storageExcluded = [
   'passwordsGrants',
   'passwordsHistory',
   'passwordsList',
+  'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
   'passwordsRemoveFolder',

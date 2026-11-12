@@ -18,4 +18,5 @@ export const PasswordItemKind = {
   note: 'note',
   identity: 'identity',
   api: 'api',
+  verification_code: 'verification_code',
 } as const;

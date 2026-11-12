@@ -1,15 +1,5 @@
 SET LOCAL lock_timeout = '5s';
 
-CREATE TABLE password_member_removals (
-    id UUID PRIMARY KEY,
-    team_id UUID NOT NULL REFERENCES team(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
-    state TEXT NOT NULL CHECK(state IN ('prepared','finished','rolled_back')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    finished_at TIMESTAMPTZ
-);
-CREATE UNIQUE INDEX password_member_removals_prepared ON password_member_removals(team_id,user_id) WHERE state='prepared';
-
 CREATE TABLE password_item_entities (
     team_id UUID NOT NULL REFERENCES team(id) ON DELETE CASCADE,
     id UUID NOT NULL,
@@ -22,14 +12,11 @@ CREATE TABLE password_item_entities (
     totp_key_id UUID,
     cleanup_due_at TIMESTAMPTZ,
     deleted_at TIMESTAMPTZ,
-    member_removal_id UUID REFERENCES password_member_removals(id),
-    member_removal_created BOOLEAN NOT NULL DEFAULT false,
     PRIMARY KEY(team_id, id)
 );
--- Account erasure must find acknowledged item fences as well as live records.
+-- Creator lookup includes retained item fences.
 CREATE INDEX password_item_entities_owner ON password_item_entities(user_id, team_id);
 CREATE INDEX password_item_entities_grants ON password_item_entities USING gin(grants) WHERE deleted_at IS NULL;
-CREATE INDEX password_item_entities_member_removal ON password_item_entities(member_removal_id,id) WHERE member_removal_id IS NOT NULL;
 CREATE INDEX password_item_entities_search ON password_item_entities(team_id, (lower(metadata->>'name'))) WHERE deleted_at IS NULL;
 CREATE TABLE password_folders (
     team_id UUID NOT NULL REFERENCES team(id) ON DELETE CASCADE,
@@ -59,7 +46,6 @@ CREATE TABLE password_write_intents (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX password_write_intents_item ON password_write_intents(team_id,item_id);
-CREATE INDEX password_write_intents_owner ON password_write_intents((record->>'user_id'),team_id);
 
 -- Generations isolate delayed setup requests from replacements and removals.
 CREATE TABLE password_totp_enrollments (
@@ -80,12 +66,5 @@ CREATE INDEX password_totp_enrollments_cleanup ON password_totp_enrollments(clea
 -- senders cannot reopen a namespace whose team metadata has been removed.
 CREATE TABLE password_team_lifecycle (
     team_id UUID PRIMARY KEY,
-    closed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Account deletion closes every vault admission before it discovers private
--- erasures or removes memberships. Keep the identity fence on retries.
-CREATE TABLE password_account_lifecycle (
-    account_id UUID PRIMARY KEY,
     closed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

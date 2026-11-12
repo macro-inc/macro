@@ -1,8 +1,6 @@
 use super::*;
 use crate::domain::ports::Availability;
-use crate::outbound::{
-    openbao::UnavailableProvider, postgres::PgRepository, reauthentication::SessionReauthentication,
-};
+use crate::outbound::{openbao::UnavailableProvider, postgres::PgRepository};
 use axum::{
     body::{Body, to_bytes},
     http::Request,
@@ -16,9 +14,14 @@ use tower::ServiceExt;
 #[derive(Clone)]
 struct Authorization;
 impl MacroAuthorizationService for Authorization {
-    async fn authorize(&self, _: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    async fn authorize(&self, token: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         Ok(UserContext {
-            user_id: "macro|synthetic@example.test".into(),
+            user_id: if token == "agent-session" {
+                "macro|agent@example.test"
+            } else {
+                "macro|synthetic@example.test"
+            }
+            .into(),
             fusion_user_id: "fixture".into(),
             permissions: None,
             organization_id: None,
@@ -30,7 +33,7 @@ impl MacroAuthorizationService for Authorization {
     ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
         let mut credential = ValidatedCredential::session(self.authorize(token).await?);
         credential.origin = match token {
-            "session" => CredentialOrigin::Session,
+            "session" | "agent-session" => CredentialOrigin::Session,
             "api" => CredentialOrigin::MacroApiJwt,
             "key" => CredentialOrigin::UserApiKey,
             "agent" => CredentialOrigin::Bot,
@@ -60,38 +63,77 @@ struct Disabled;
 #[async_trait::async_trait]
 impl Availability for Disabled {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
+        self.require_service_enabled().await
+    }
+    async fn require_service_enabled(&self) -> Result<(), Error> {
         Err(Error::Unavailable)
     }
 }
-fn app() -> Router {
-    router(PasswordRouterState {
+fn flagged_app_with_actor(
+    result: Result<feature_flags::FlagSnapshot, String>,
+    actor_result: Result<feature_flags::FlagSnapshot, String>,
+    configured: bool,
+) -> (
+    Router,
+    Arc<crate::domain::service::test::fakes::FakeRepository>,
+    Arc<crate::domain::service::test::fakes::FakeProvider>,
+) {
+    use crate::{domain::service::test::fakes::*, outbound::availability::*};
+    let repository = Arc::new(FakeRepository::new());
+    let provider = Arc::new(FakeProvider::new());
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in ["macro|synthetic@example.test", "macro|agent@example.test"] {
+        use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+        flags.set(
+            MacroUserIdStr::parse_from_str(user).unwrap().into_owned(),
+            actor_result.clone(),
+        );
+    }
+    flags.set_service(PASSWORDS_CONTEXT, result);
+    let app = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
-            repository: Arc::new(
-                PgRepository::new(
-                    sqlx::postgres::PgPoolOptions::new()
-                        .connect_lazy("postgres://user:password@127.0.0.1:15442/macrodb")
-                        .expect("fixture URL"),
-                )
-                .expect("repository capacity"),
-            ),
-            provider: Arc::new(UnavailableProvider),
-            availability: Arc::new(Disabled),
-            reauthentication: Arc::new(SessionReauthentication {
-                validation: macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+            repository: repository.clone(),
+            provider: provider.clone(),
+            availability: Arc::new(PasswordAvailability {
+                flags,
+                provider_configured: configured,
             }),
         }),
-    })
+    });
+    (app, repository, provider)
+}
+fn flagged_app(
+    result: Result<feature_flags::FlagSnapshot, String>,
+    configured: bool,
+) -> (
+    Router,
+    Arc<crate::domain::service::test::fakes::FakeRepository>,
+    Arc<crate::domain::service::test::fakes::FakeProvider>,
+) {
+    flagged_app_with_actor(
+        result,
+        Ok(feature_flags::FlagSnapshot::new([(
+            crate::outbound::availability::PASSWORDS_FLAG.into(),
+            feature_flags::FlagValue::Boolean(true),
+        )])),
+        configured,
+    )
+}
+fn app() -> Router {
+    flagged_app(Err("flag transport failed".into()), true).0
 }
 fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
     let team = Uuid::from_u128(1);
     let item = format!("/teams/{team}/items/{}", Uuid::from_u128(2));
     let values = serde_json::json!({"username":"synthetic-secret", "password":"synthetic-secret", "notes":"", "fields":[]});
     let write = serde_json::json!({"operationId":Uuid::now_v7(),"name":"Fixture","kind":"login","url":null,"folderId":null,"favorite":false,"expectedVersion":1,"values":values});
-    vec![
+    let mut create = write.clone();
+    create["expectedVersion"] = serde_json::Value::Null;
+    let mut routes = vec![
         ("GET", "/teams".into(), serde_json::json!({})),
         ("GET", format!("/teams/{team}/items"), serde_json::json!({})),
-        ("POST", format!("/teams/{team}/items"), write.clone()),
+        ("POST", format!("/teams/{team}/items"), create),
         ("GET", item.clone(), serde_json::json!({})),
         ("GET", format!("{item}/username"), serde_json::json!({})),
         (
@@ -151,7 +193,19 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
             format!("/teams/{team}/folders/{}", Uuid::from_u128(3)),
             serde_json::json!({}),
         ),
-    ]
+        (
+            "PUT",
+            format!("/teams/{team}/folders/{}/parent", Uuid::from_u128(3)),
+            serde_json::json!({"parentId":null}),
+        ),
+    ];
+    let heads: Vec<_> = routes
+        .iter()
+        .filter(|(method, _, _)| *method == "GET")
+        .map(|(_, path, body)| ("HEAD", path.clone(), body.clone()))
+        .collect();
+    routes.extend(heads);
+    routes
 }
 #[tokio::test]
 async fn every_route_rejects_non_session_origins_and_keeps_responses_private() {
@@ -191,7 +245,7 @@ async fn every_route_rejects_non_session_origins_and_keeps_responses_private() {
 async fn mutations_reject_missing_header_and_cross_site_requests() {
     for (method, path, body) in routes()
         .into_iter()
-        .filter(|(method, _, _)| *method != "GET")
+        .filter(|(method, _, _)| !matches!(*method, "GET" | "HEAD"))
     {
         for cross_site in [false, true] {
             let mut request = Request::builder()
@@ -249,6 +303,9 @@ struct Enabled;
 #[async_trait::async_trait]
 impl Availability for Enabled {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
+        self.require_service_enabled().await
+    }
+    async fn require_service_enabled(&self) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -319,7 +376,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             .into_owned(),
         grants: vec![],
         deleting: false,
-        member_removal_pending: false,
+
         totp_key_id: None,
         revision: 0,
         metadata: ItemMetadata {
@@ -366,9 +423,6 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             repository: repository.clone(),
             provider: provider.clone(),
             availability: Arc::new(Enabled),
-            reauthentication: Arc::new(SessionReauthentication {
-                validation: macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
-            }),
         }),
     });
     let item = record.metadata.id.0;
@@ -376,13 +430,9 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         repository: repository.clone(),
         provider: provider.clone(),
         availability: Arc::new(Enabled),
-        reauthentication: Arc::new(crate::domain::service::test::fakes::FakeReauthentication {
-            recent: std::sync::atomic::AtomicBool::new(true),
-        }),
     };
     let actor = Actor {
         user_id: record.user_id.clone(),
-        session_token: None,
     };
     interaction_service
         .configure_totp(
@@ -478,16 +528,6 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             "POST",
             format!("/teams/{}/items/{item}/username/copy", second.0),
             StatusCode::NOT_FOUND,
-        ),
-        (
-            "POST",
-            format!("/teams/{}/items/{item}/reveal", first.0),
-            StatusCode::FORBIDDEN,
-        ),
-        (
-            "POST",
-            format!("/teams/{}/items/{item}/copy", first.0),
-            StatusCode::FORBIDDEN,
         ),
     ] {
         finish_lease_rollbacks(&pool).await;
@@ -632,13 +672,8 @@ async fn every_route_rejects_verified_internal_and_api_key_headers() {
 }
 
 #[tokio::test]
-async fn stale_sign_in_and_lease_contention_have_distinct_typed_failures() {
+async fn access_and_lease_contention_have_distinct_typed_failures() {
     for (error, status, code) in [
-        (
-            Error::ReauthenticationRequired,
-            StatusCode::FORBIDDEN,
-            FailureCode::ReauthenticationRequired,
-        ),
         (
             Error::Forbidden,
             StatusCode::FORBIDDEN,
@@ -682,13 +717,6 @@ async fn stale_sign_in_and_lease_contention_have_distinct_typed_failures() {
     }
     assert_eq!(
         serde_json::to_value(Failure {
-            code: FailureCode::ReauthenticationRequired
-        })
-        .unwrap()["code"],
-        "reauthentication_required"
-    );
-    assert_eq!(
-        serde_json::to_value(Failure {
             code: FailureCode::VaultBusy
         })
         .unwrap()["code"],
@@ -713,17 +741,10 @@ async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_muta
             repository: repository.clone(),
             provider: Arc::new(UnavailableProvider),
             availability: Arc::new(Disabled),
-            reauthentication: Arc::new(SessionReauthentication {
-                validation: macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
-            }),
         }),
     });
     for token in ["session", "api", "key", "agent", "internal"] {
-        for (method, path) in [
-            ("DELETE", format!("/teams/{}", Uuid::from_u128(1))),
-            ("POST", "/users/macro%7Csynthetic@example.test".into()),
-            ("DELETE", "/users/macro%7Csynthetic@example.test".into()),
-        ] {
+        for (method, path) in [("DELETE", format!("/teams/{}", Uuid::from_u128(1)))] {
             let response = app
                 .clone()
                 .oneshot(
@@ -740,7 +761,6 @@ async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_muta
             assert_eq!(response.headers()[CACHE_CONTROL], "private, no-store");
         }
     }
-    assert!(repository.closed_users.lock().unwrap().is_empty());
     assert!(repository.closed_teams.lock().unwrap().is_empty());
     let response = app
         .oneshot(
@@ -762,3 +782,5 @@ async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_muta
     let failure: Failure = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(failure.code, FailureCode::VaultUnavailable);
 }
+
+mod admission;

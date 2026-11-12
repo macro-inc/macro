@@ -5,47 +5,25 @@ use async_trait::async_trait;
 #[async_trait]
 /// Metadata storage and cross-replica serialization. Object-safe for composition.
 pub trait Repository: Send + Sync {
-    /// Bounded account-owned erasures that have not yet been acknowledged.
-    async fn retired_user_items(
+    /// Current authoritative account classification; missing accounts are not humans.
+    async fn is_human(
         &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<bool, Error>;
+    /// Current owner/admin role in this team; this fact never implies human admission.
+    async fn is_team_admin(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
         team: TeamId,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<ItemId>, Error>;
-
-    /// Permanently close a deleting account's admissions before enumerating erasures.
-    async fn close_user(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error>;
-    /// Team vaults containing the user's records or durable pending write intents.
-    async fn user_vault_teams(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<TeamId>, Error>;
-    /// Current team owner used by the domain's shared-item transfer policy.
-    async fn team_owner(
-        &self,
-        team: TeamId,
-    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, Error>;
-    /// Apply administrative metadata fencing while the caller holds the team lease.
-    async fn depart_user(
-        &self,
-        team: TeamId,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-        owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error>;
-    /// Strip user metadata from acknowledged private erasures, retaining only lifecycle fences.
-    async fn scrub_user_metadata(
-        &self,
-        team: TeamId,
-        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<(), Error>;
+    ) -> Result<bool, Error>;
+    /// Any retained item, intent, enrollment or namespace closure identity, including tombstones.
+    async fn has_team_data(&self, team: TeamId) -> Result<bool, Error>;
 
     /// Durably close a team vault before provider deletion; future human admissions fail.
     async fn close_team(&self, team: TeamId) -> Result<(), Error>;
     /// Remove team vault metadata only after acknowledged namespace erasure.
     async fn purge_team_metadata(&self, team: TeamId) -> Result<(), Error>;
-    /// Discover bounded durable item erasures, with first erasures ahead of repeats.
+    /// Discover bounded retained explicit item-deletion retries, ahead of repeats.
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error>;
 
     /// Persist a unique pending enrollment before any provider mutation.
@@ -98,7 +76,8 @@ pub trait Repository: Send + Sync {
     async fn list(&self, actor: &Actor, team: TeamId, search: &str) -> Result<Vec<Record>, Error>;
     /// Load an item and its authorization facts without resolving secret values.
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error>;
-    /// Commit metadata with its observed version guard.
+    /// Commit metadata with its observed version guard. A live record's folder is
+    /// share-locked in the same transaction; a deleted one fails with `FolderMissing`.
     async fn save(&self, record: &Record, expected_version: Option<i32>) -> Result<(), Error>;
     /// Retain a deletion fence while retiring the visible metadata record.
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error>;
@@ -115,9 +94,25 @@ pub trait Repository: Send + Sync {
     async fn activity(&self, team: TeamId, item: ItemId) -> Result<Vec<Activity>, Error>;
     /// List the team folders.
     async fn folders(&self, team: TeamId) -> Result<Vec<Folder>, Error>;
-    /// Create or rename a folder belonging to the team.
+    /// Create a new folder (insert only, never an upsert) under its parent.
+    /// Rejects a missing parent, the team folder cap, and trees deeper than the limit.
     async fn save_folder(&self, folder: &Folder) -> Result<(), Error>;
-    /// Remove the folder and its metadata-only item assignments.
+    /// Rename an existing folder (update only); `NotFound` when it no longer exists.
+    async fn rename_folder(
+        &self,
+        team: TeamId,
+        id: uuid::Uuid,
+        name: &str,
+    ) -> Result<Folder, Error>;
+    /// Move a folder under another folder of the team, or to the top level.
+    /// Rejects cycles and trees deeper than the limit, checked in the same transaction.
+    async fn move_folder(
+        &self,
+        team: TeamId,
+        id: uuid::Uuid,
+        parent: Option<uuid::Uuid>,
+    ) -> Result<Folder, Error>;
+    /// Remove the folder and its subfolders, unfiling their items without touching values.
     async fn delete_folder(&self, team: TeamId, id: uuid::Uuid) -> Result<(), Error>;
 }
 
@@ -165,19 +160,14 @@ pub trait SecretProvider: Send + Sync {
     async fn totp(&self, team: TeamId, key_id: TotpKeyId) -> Result<TotpCode, Error>;
 }
 
-#[async_trait]
-/// Verifies recent signed human authentication. Object-safe for composition.
-pub trait Reauthentication: Send + Sync {
-    /// Require the original signed human authentication within the allowed window.
-    async fn verify(&self, actor: &Actor) -> Result<(), Error>;
-}
-
 /// A scope-bound team-vault lock; releasing the guard releases its lease.
 pub trait ItemLock: Send + Sync {}
 
-/// Per-user rollout is checked in the domain at every entry point.
+/// Global service rollout is checked in the domain at every entry point.
 #[async_trait]
 pub trait Availability: Send + Sync {
-    /// Fail closed unless rollout and backing-provider configuration permit access.
+    /// Fail closed unless service authority, actor targeting and provider configuration permit access.
     async fn require_enabled(&self, actor: &Actor) -> Result<(), Error>;
+    /// The same authoritative global decision for jobs and trusted lifecycle callers.
+    async fn require_service_enabled(&self) -> Result<(), Error>;
 }

@@ -2647,6 +2647,7 @@
       "crates/notification",
       "crates/notification_state",
       "crates/onboarding",
+      "crates/openbao_client",
       "crates/passwords",
       "crates/pptx_engine",
       "crates/prompt",
@@ -5769,6 +5770,7 @@
       "crates/notification",
       "crates/notification_inbox",
       "crates/notification_state",
+      "crates/openbao_client",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
       "crates/passwords",
@@ -12402,6 +12404,11 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "openbao_client": [
+      "crates/macro_tower_layers",
+      "crates/openbao_client",
+      "crates/workspace-hack"
+    ],
     "opensearch_client": [
       "crates/models_opensearch",
       "crates/models_search_cursor",
@@ -12561,6 +12568,7 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
+      "crates/openbao_client",
       "crates/passwords",
       "crates/prompt",
       "crates/properties",

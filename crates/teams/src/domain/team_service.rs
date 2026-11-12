@@ -59,7 +59,6 @@ use crate::domain::{
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
-    vault::{MemberRemovalMode, UnwiredVaultCleanup, VaultCleanup},
 };
 
 /// Most new invites a non-enterprise team may create in a rolling day.
@@ -151,7 +150,6 @@ pub struct TeamServiceImpl<
     /// Outbound port that purges everything a team owns before the team is
     /// deleted. The default refuses, so an unwired service cannot delete teams.
     owned_entity_cleanup: OEC,
-    vault_cleanup: Arc<dyn VaultCleanup>,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
 }
@@ -190,7 +188,6 @@ where
             event_broker: self.event_broker.clone(),
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
-            vault_cleanup: self.vault_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
         }
     }
@@ -296,7 +293,6 @@ where
             event_broker: NoopMacroEventBroker,
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
-            vault_cleanup: Arc::new(UnwiredVaultCleanup),
             invite_rewarder: Arc::new(NoOpInviteRewarder),
         }
     }
@@ -664,7 +660,6 @@ where
             event_broker: self.event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
-            vault_cleanup: self.vault_cleanup,
             invite_rewarder: self.invite_rewarder,
         }
     }
@@ -690,7 +685,6 @@ where
             event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
-            vault_cleanup: self.vault_cleanup,
             invite_rewarder: self.invite_rewarder,
         }
     }
@@ -716,7 +710,6 @@ where
             event_broker: self.event_broker,
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
-            vault_cleanup: self.vault_cleanup,
             invite_rewarder: self.invite_rewarder,
         }
     }
@@ -773,7 +766,6 @@ where
             event_broker: self.event_broker,
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
-            vault_cleanup: self.vault_cleanup,
             invite_rewarder: self.invite_rewarder,
         }
     }
@@ -845,12 +837,6 @@ where
         }
     }
 
-    /// Supply the owning service that must purge the vault before team deletion.
-    pub fn with_vault_cleanup(mut self, cleanup: impl VaultCleanup + 'static) -> Self {
-        self.vault_cleanup = Arc::new(cleanup);
-        self
-    }
-
     /// Deletes `team_id` on behalf of `actor_user_id`. Purges everything the
     /// team and its bots own, cancels the team subscription, deletes the team
     /// with its memberships, bots, and grants, publishes `team.deleted`, and
@@ -858,7 +844,6 @@ where
     ///
     /// A failed purge stops before billing and the team row, so the team stays
     /// intact and deleting it again resumes where this attempt stopped.
-    #[tracing::instrument(skip_all, err, name="teams.delete", fields(team_id=%team_id, outcome=tracing::field::Empty))]
     async fn delete_team_as(
         &self,
         team_id: uuid::Uuid,
@@ -873,8 +858,6 @@ where
         let cleared = clear_team(&self.owned_entity_cleanup, team_id)
             .await
             .map_err(DeleteTeamError::OwnedEntityCleanup)?;
-
-        self.vault_cleanup.purge(team_id).await?;
 
         let subscription_id = self
             .team_repository
@@ -922,7 +905,6 @@ where
             }
         }
 
-        tracing::Span::current().record("outcome", "deleted");
         Ok(())
     }
 
@@ -933,7 +915,6 @@ where
         team_id: uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
         removed_by_id: MacroUserIdStr<'static>,
-        mode: MemberRemovalMode,
     ) -> Result<(), RemoveUserFromTeamError> {
         let enterprise = self
             .team_repository
@@ -986,27 +967,16 @@ where
         } else {
             None
         };
-        let removal = match mode {
-            MemberRemovalMode::Voluntary => {
-                self.team_repository
-                    .leave_user_from_team(&team_id, user_id)
-                    .await
-            }
-            MemberRemovalMode::Administrative => {
-                self.team_repository
-                    .remove_user_from_team(&team_id, user_id)
-                    .await
-            }
-        };
-        let removed_member = match removal {
+        let removed_member = match self
+            .team_repository
+            .remove_user_from_team(&team_id, user_id)
+            .await
+        {
             Ok(removed_member) => removed_member,
             Err(RemoveUserFromTeamError::UserNotInTeam) => {
                 if let Err(error) = self.open_seat_release.release(team_id, user_id).await {
                     return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
                 }
-                self.team_repository
-                    .finish_user_removal(&team_id, user_id)
-                    .await?;
                 return Err(RemoveUserFromTeamError::UserNotInTeam);
             }
             Err(error) => return Err(error),
@@ -1120,10 +1090,6 @@ where
                 .await;
             return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }
-
-        self.team_repository
-            .finish_user_removal(&team_id, user_id)
-            .await?;
 
         // Best-effort: ask the email service to tear down CRM rows
         // sourced from this user's email link. Log and swallow failures
@@ -1335,7 +1301,7 @@ where
         failed_step: &str,
     ) {
         self.team_repository
-            .rollback_add_user_to_team(team_id, user_id)
+            .remove_user_from_team(team_id, user_id)
             .await
             .inspect_err(|rollback_err| {
                 tracing::error!(
@@ -1752,13 +1718,7 @@ where
             .clone()
             .into_owned();
 
-        let mode = if removed_by_id == *user_id {
-            MemberRemovalMode::Voluntary
-        } else {
-            MemberRemovalMode::Administrative
-        };
-        self.remove_member(team_id, user_id, removed_by_id, mode)
-            .await
+        self.remove_member(team_id, user_id, removed_by_id).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1853,12 +1813,7 @@ where
                     .await?;
             } else {
                 match self
-                    .remove_member(
-                        team_id,
-                        user_id,
-                        user_id.clone().into_owned(),
-                        MemberRemovalMode::Administrative,
-                    )
+                    .remove_member(team_id, user_id, user_id.clone().into_owned())
                     .await
                 {
                     // The goal is that the user is off the team, so a

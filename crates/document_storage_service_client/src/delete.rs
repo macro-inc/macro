@@ -114,28 +114,11 @@ impl DocumentStorageServiceClient {
         self.vault_lifecycle_request(reqwest::Method::DELETE, &["teams", &team.to_string()])
             .await
     }
-    /// Close account admission before the deletion job discovers memberships.
-    #[tracing::instrument(skip_all, err, name = "passwords.lifecycle.account.close.request")]
-    pub async fn close_user_vault(&self, user: &str) -> Result<(), VaultLifecycleRequestError> {
-        self.vault_lifecycle_request(reqwest::Method::POST, &["users", user])
-            .await
-    }
-    /// Await private erasures before the deletion job removes the profile.
-    #[tracing::instrument(skip_all, err, name = "passwords.lifecycle.account.purge.request")]
-    pub async fn purge_user_vault(&self, user: &str) -> Result<(), VaultLifecycleRequestError> {
-        self.vault_lifecycle_request(reqwest::Method::DELETE, &["users", user])
-            .await
-    }
     async fn vault_lifecycle_request(
         &self,
         method: reqwest::Method,
         resource: &[&str],
     ) -> Result<(), VaultLifecycleRequestError> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|_| VaultLifecycleRequestError::Unreachable)?;
         let mut url =
             reqwest::Url::parse(&self.url).map_err(|_| VaultLifecycleRequestError::Unreachable)?;
         url.path_segments_mut()
@@ -145,7 +128,8 @@ impl DocumentStorageServiceClient {
             .extend(resource);
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
-        let response = client
+        let response = self
+            .lifecycle_client
             .request(method, url)
             .headers(headers)
             .header(
