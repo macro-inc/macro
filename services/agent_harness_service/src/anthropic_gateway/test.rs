@@ -628,9 +628,12 @@ mod brain_route {
     #[tokio::test]
     async fn without_a_flag_provider_the_brain_is_refused() {
         let (upstream_url, seen) = fake_anthropic().await;
-        let (app, _) =
-            brain_gateway_with(&upstream_url, Some(Arc::new(OneAgent)), BrainRollout::default())
-                .await;
+        let (app, _) = brain_gateway_with(
+            &upstream_url,
+            Some(Arc::new(OneAgent)),
+            BrainRollout::default(),
+        )
+        .await;
 
         let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
 

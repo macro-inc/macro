@@ -51,7 +51,10 @@ impl BrainRollout {
                         .load(&user)
                         .await
                         .inspect_err(|error| {
-                            tracing::warn!(?error, "agent teammates rollout unavailable; refusing the brain");
+                            tracing::warn!(
+                                ?error,
+                                "agent teammates rollout unavailable; refusing the brain"
+                            );
                         })
                         .unwrap_or_default()
                         .is_enabled(agent_credentials::AGENT_TEAMMATES_FLAG)
