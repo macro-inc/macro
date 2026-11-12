@@ -82,6 +82,9 @@ Cmd+W before the page sees the key, so the item emits `desktop-close-tab` to the
 focused window, and `useCloseTabShortcut` (`components/app/tab-layout`) closes
 the active desktop tab, or the window when no other tab is open or tabs are off.
 Window > Close Window has no shortcut; the title bar's close button is unchanged.
+When the key window isn't a Tauri window (a popup wry opened, Web Inspector),
+both items close it natively. Until the frontend mounts its listener (a blank
+or crashed webview), Cmd+W does nothing; the close button still works.
 The frontend's window close needs `core:window:allow-close` in
 `capabilities/desktop.json`. Both the WKWebView and Chromium builds use this
 menu; Linux and Windows have no app menu and no desktop tabs. The menu is a

@@ -10,6 +10,8 @@
 //! Window keeps a way to close the window from the menu, without a shortcut.
 //! The title bar's close button does not go through the menu.
 
+use objc2::runtime::AnyObject;
+use objc2::{class, msg_send};
 use tauri::menu::{
     AboutMetadata, HELP_SUBMENU_ID, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu,
     WINDOW_SUBMENU_ID,
@@ -135,8 +137,11 @@ fn on_menu_event(app: &AppHandle<AppRuntime>, event: MenuEvent) {
         return;
     }
 
+    // Windows Tauri doesn't track (a sign-in popup wry opened, Web Inspector)
+    // have no tabs and no listener: both items close them, as the default
+    // Close Window item did.
     let Some(window) = focused_window(app) else {
-        tracing::debug!(menu_item = id, "no focused window for menu item");
+        close_key_window();
         return;
     };
 
@@ -156,4 +161,20 @@ fn focused_window(app: &AppHandle<AppRuntime>) -> Option<WebviewWindow<AppRuntim
     app.webview_windows()
         .into_values()
         .find(|window| window.is_focused().unwrap_or(false))
+}
+
+/// Closes the key window the way the default Close Window item does, by
+/// sending it `performClose:`. Menu events arrive on the main thread.
+fn close_key_window() {
+    // SAFETY: called on the main thread; `sharedApplication` and `keyWindow`
+    // take no arguments, `keyWindow` may be nil (checked), and `performClose:`
+    // takes an optional sender.
+    unsafe {
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        let window: *mut AnyObject = msg_send![app, keyWindow];
+        if window.is_null() {
+            return;
+        }
+        let _: () = msg_send![window, performClose: std::ptr::null::<AnyObject>()];
+    }
 }
