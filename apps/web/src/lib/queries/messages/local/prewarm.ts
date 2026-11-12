@@ -1,55 +1,15 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { MAX_EVICTED_CHANNELS } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
-import type { ApiChannelWithLatest } from '@service-storage/generated/schemas/apiChannelWithLatest';
 import { catchUpAndRefresh, type FetchChannelChanges } from './catch-up';
 import { type FetchChannelServerPage, loadChannelPage } from './pages';
 
-/** Recently used channels kept ready on the device, besides unread ones. */
-export const PREWARM_RECENT_CHANNELS = 20;
-/** Bound on unread channels warmed in one pass, newest message first. */
-export const PREWARM_UNREAD_CHANNELS = 50;
 /** The page a channel opens with. */
 const PREWARM_PAGE_SIZE = 50;
 const CHANNEL_DELAY_MS = 500;
 /** Channels not opened for this long leave the device. */
 export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
 const MAX_EVICTION_PASSES = 10;
-
-type PrewarmChannel = Pick<
-  ApiChannelWithLatest,
-  | 'id'
-  | 'is_participant'
-  | 'viewed_at'
-  | 'interacted_at'
-  | 'latest_non_thread_message'
->;
-
-const time = (value: string | null | undefined) =>
-  value ? Date.parse(value) || 0 : 0;
-
-const lastUsed = (channel: PrewarmChannel) =>
-  Math.max(time(channel.viewed_at), time(channel.interacted_at));
-
-const latestMessage = (channel: PrewarmChannel) =>
-  time(channel.latest_non_thread_message?.created_at);
-
-/**
- * The channels to keep ready, in warming order: those with a message newer
- * than the viewer's last visit (newest first), then the most recently used.
- */
-export function prewarmChannelIds(channels: PrewarmChannel[]): string[] {
-  const joined = channels.filter((channel) => channel.is_participant);
-  const unread = joined
-    .filter((channel) => latestMessage(channel) > time(channel.viewed_at))
-    .sort((a, b) => latestMessage(b) - latestMessage(a))
-    .slice(0, PREWARM_UNREAD_CHANNELS);
-  const recent = joined
-    .filter((channel) => lastUsed(channel) > 0)
-    .sort((a, b) => lastUsed(b) - lastUsed(a))
-    .slice(0, PREWARM_RECENT_CHANNELS);
-  return [...new Set([...unread, ...recent].map((channel) => channel.id))];
-}
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
@@ -82,7 +42,8 @@ export interface ChannelPrewarmOutcome {
 /**
  * Keeps the latest page of each listed channel on the device: fetches it when
  * missing, and otherwise replays what changed since the device last looked.
- * One channel failing does not stop the rest.
+ * One channel at a time, each only once `ready` resolves. One channel failing
+ * does not stop the rest.
  */
 export async function runChannelPrewarm(
   host: ChannelPrewarmHost,
@@ -90,6 +51,8 @@ export async function runChannelPrewarm(
   options: {
     signal: AbortSignal;
     delayMs?: number;
+    /** Resolves when the next channel may start: the person is not using the app. */
+    ready?: (signal: AbortSignal) => Promise<void>;
     fetchPage?: FetchChannelServerPage;
     fetchChanges?: FetchChannelChanges;
     now?: () => number;
@@ -105,6 +68,7 @@ export async function runChannelPrewarm(
     };
     span.setAttr('prewarm.channels', channelIds.length);
     for (const channelId of channelIds) {
+      await options.ready?.(signal);
       if (signal.aborted) break;
       try {
         const loaded = await loadChannelPage(

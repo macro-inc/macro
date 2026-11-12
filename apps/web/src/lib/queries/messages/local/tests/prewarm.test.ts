@@ -4,8 +4,6 @@ import type { FetchChannelServerPage } from '../pages';
 import {
   CHANNEL_EVICTION_AGE_MS,
   evictIdleChannels,
-  PREWARM_RECENT_CHANNELS,
-  prewarmChannelIds,
   runChannelPrewarm,
 } from '../prewarm';
 import { devicePage, fakeHost } from './fixtures';
@@ -19,64 +17,7 @@ vi.mock('../../../client', () => ({
   queryClient: { invalidateQueries: vi.fn() },
 }));
 
-const at = (minute: number) =>
-  `2026-11-01T10:${String(minute).padStart(2, '0')}:00Z`;
-
-const channel = (
-  id: string,
-  fields: { viewed?: number; interacted?: number; latest?: number } = {},
-  isParticipant = true
-) => ({
-  id,
-  is_participant: isParticipant,
-  viewed_at: fields.viewed === undefined ? null : at(fields.viewed),
-  interacted_at: fields.interacted === undefined ? null : at(fields.interacted),
-  latest_non_thread_message:
-    fields.latest === undefined
-      ? null
-      : {
-          content: '',
-          created_at: at(fields.latest),
-          mentions: [],
-          message_id: id,
-          sender_id: 'macro|sender@example.test',
-          updated_at: at(fields.latest),
-        },
-});
-
 afterEach(() => resetChannelSync());
-
-describe('prewarmChannelIds', () => {
-  it('lists unread channels newest first, then the most recently used', () => {
-    expect(
-      prewarmChannelIds([
-        channel('read-old', { viewed: 5, latest: 4 }),
-        channel('unread-old', { viewed: 1, latest: 2 }),
-        channel('read-new', { viewed: 30, latest: 20 }),
-        channel('unread-new', { viewed: 3, latest: 40 }),
-        channel('never-opened', { latest: 10 }),
-        channel('not-joined', { viewed: 1, latest: 50 }, false),
-        channel('empty'),
-      ])
-    ).toEqual([
-      'unread-new',
-      'never-opened',
-      'unread-old',
-      'read-new',
-      'read-old',
-    ]);
-  });
-
-  it('keeps only the twenty most recently used read channels', () => {
-    const channels = Array.from({ length: 30 }, (_, index) =>
-      channel(`c${index}`, { viewed: index + 1, interacted: 0, latest: 0 })
-    );
-    const ids = prewarmChannelIds(channels);
-    expect(ids).toHaveLength(PREWARM_RECENT_CHANNELS);
-    expect(ids[0]).toBe('c29');
-    expect(ids).not.toContain('c9');
-  });
-});
 
 describe('runChannelPrewarm', () => {
   const signal = () => new AbortController().signal;
@@ -128,6 +69,32 @@ describe('runChannelPrewarm', () => {
     expect(outcome.caughtUp).toBe(1);
     expect(fetchPage).not.toHaveBeenCalled();
     expect(fetchChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts each channel only once the caller says the person is idle', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const order: string[] = [];
+    const fetchPage = vi.fn<FetchChannelServerPage>(async (input) => {
+      order.push(`fetch ${input.channelId}`);
+      return {
+        page: { entries: [], olderCursor: null, newerCursor: null, seq: '1' },
+        cached: Promise.resolve(),
+      };
+    });
+    const abort = new AbortController();
+    let waits = 0;
+    await runChannelPrewarm(host, ['a', 'b', 'c'], {
+      signal: abort.signal,
+      delayMs: 0,
+      fetchPage,
+      ready: async () => {
+        waits += 1;
+        order.push('ready');
+        // The person acts before the third channel: the pass stops.
+        if (waits === 3) abort.abort();
+      },
+    });
+    expect(order).toEqual(['ready', 'fetch a', 'ready', 'fetch b', 'ready']);
   });
 
   it('carries on past a channel that fails', async () => {

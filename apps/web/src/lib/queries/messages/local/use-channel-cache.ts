@@ -6,31 +6,29 @@ import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import { loadChannelList } from '../../channel/channels';
 import { resetChannelSync } from './catch-up';
 import { channelCacheHost } from './flag';
 import { resetPendingChannelPages } from './pages';
-import {
-  evictIdleChannels,
-  prewarmChannelIds,
-  runChannelPrewarm,
-} from './prewarm';
+import { evictIdleChannels, runChannelPrewarm } from './prewarm';
+import { loadPrewarmChannelIds } from './prewarm-list';
 
 /** Leaves startup and the first screen alone. */
 const START_DELAY_MS = 5_000;
 /** Picks up channels that became unread or recently used since the last pass. */
 const PREWARM_INTERVAL_MS = 10 * 60_000;
 
-/** Resolves once the browser is idle (or shortly after, where it cannot say). */
-function whenIdle(signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      if (signal.aborted || typeof requestIdleCallback === 'undefined') {
-        resolve();
-        return;
-      }
-      requestIdleCallback(() => resolve(), { timeout: START_DELAY_MS });
-    }, START_DELAY_MS);
+/** How long the person must leave the app alone before the next channel. */
+const QUIET_MS = 3_000;
+const INPUT_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+
+let lastInputAt = 0;
+const noteInput = () => {
+  lastInputAt = Date.now();
+};
+
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
     signal.addEventListener(
       'abort',
       () => {
@@ -40,15 +38,29 @@ function whenIdle(signal: AbortSignal): Promise<void> {
       { once: true }
     );
   });
+
+/** Resolves once the person has left the app alone and the browser is idle. */
+async function whenIdle(signal: AbortSignal): Promise<void> {
+  while (!signal.aborted) {
+    const quietFor = Date.now() - lastInputAt;
+    if (quietFor >= QUIET_MS) break;
+    await sleep(QUIET_MS - quietFor, signal);
+  }
+  if (signal.aborted || typeof requestIdleCallback === 'undefined') return;
+  await new Promise<void>((resolve) => {
+    requestIdleCallback(() => resolve(), { timeout: START_DELAY_MS });
+  });
 }
 
 async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
+  await sleep(START_DELAY_MS, signal);
   await whenIdle(signal);
   if (signal.aborted) return;
-  const channels = await loadChannelList();
+  const channelIds = await loadPrewarmChannelIds();
   if (signal.aborted) return;
-  const outcome = await runChannelPrewarm(host, prewarmChannelIds(channels), {
+  const outcome = await runChannelPrewarm(host, channelIds, {
     signal,
+    ready: whenIdle,
   });
   if (outcome.unavailable || signal.aborted) return;
   await evictIdleChannels(host, { signal });
@@ -56,9 +68,10 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
 
 /**
  * While `active` and channels read from the device cache, the cross-tab
- * leader keeps unread and recently used channels ready when idle, again after
- * a reconnect or a replaced cache, and drops channels not opened for thirty
- * days.
+ * leader keeps up to forty unread and the twenty most recently used channels
+ * ready, one request at a time and only while the person leaves the app alone,
+ * again after a reconnect or a replaced cache, and drops channels not opened
+ * for thirty days.
  */
 export function useChannelCache(active: Accessor<boolean>): void {
   const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
@@ -72,11 +85,20 @@ export function useChannelCache(active: Accessor<boolean>): void {
     const again = () => setPass((value) => value + 1);
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(again);
     const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(again);
+    for (const event of INPUT_EVENTS) {
+      window.addEventListener(event, noteInput, {
+        capture: true,
+        passive: true,
+      });
+    }
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') again();
     }, PREWARM_INTERVAL_MS);
     onCleanup(() => {
       clearInterval(interval);
+      for (const event of INPUT_EVENTS) {
+        window.removeEventListener(event, noteInput, { capture: true });
+      }
       unsubscribeGeneration();
       unsubscribeReconnect();
       // Sequence bookkeeping belongs to the account and cache it was read for.
