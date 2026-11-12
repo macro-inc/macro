@@ -32,11 +32,6 @@ pub const EXPIRES_TODAY_WITHIN: Duration = Duration::days(1);
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::AsRefStr, strum::EnumString,
 )]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
-#[cfg_attr(
-    feature = "outbound",
-    sqlx(type_name = "account_notice_stage", rename_all = "snake_case")
-)]
 #[strum(serialize_all = "snake_case")]
 pub enum ClaudeSignInStage {
     /// Expires within [`EXPIRES_SOON_WITHIN`].

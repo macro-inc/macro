@@ -166,6 +166,27 @@ fn consent_submission(
         .expect("request should build")
 }
 
+#[tokio::test]
+async fn registration_under_a_reserved_name_is_a_bad_request() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"client_name":"Macro","redirect_uris":["{TRUSTED_REDIRECT_URI}"]}}"#
+            )))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(registration.status, StatusCode::BAD_REQUEST);
+    assert_eq!(registration.body, "client_name may not be Macro's own name");
+}
+
 async fn register_client(harness: &Harness, redirect_uri: &str) -> String {
     let registration = send(harness, register_request(redirect_uri)).await;
     assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
@@ -221,7 +242,7 @@ async fn consent_screen_escapes_the_client_name() {
             .uri("/register")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(format!(
-                r#"{{"client_name":"<script>alert(1)</script>","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
+                r#"{{"client_name":"<script>alert(1)</script> Tom & Jerry's","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
             )))
             .expect("request should build"),
     )
@@ -238,7 +259,8 @@ async fn consent_screen_escapes_the_client_name() {
     .await;
 
     assert!(!page.body.contains("<script>"));
-    assert!(page.body.contains("&#60;script&#62;") || page.body.contains("&lt;script&gt;"));
+    assert!(!page.body.contains("Tom & Jerry"));
+    assert!(page.body.contains("Tom &#38; Jerry") || page.body.contains("Tom &amp; Jerry"));
 }
 
 /// Approving on the consent screen, in the browser that was shown it, signs

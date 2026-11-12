@@ -6,15 +6,11 @@ import { vault } from '../vault.ts';
 import { agentKey, origin, rig, teamId } from './rig.ts';
 import { stubVault } from './stub.ts';
 
-const login = {
-  type: 'login' as const,
-  username: 'ada',
-  password: 'correct-horse-battery',
-};
+const login = { username: 'ada', password: 'correct-horse-battery' };
 
 test('every call carries the key and the wake; only writes carry the passwords header', async () => {
   const { client, stub, wake } = rig();
-  const id = stub.add({ name: 'Example', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Example', kind: 'login', slots: login });
   await client.search(teamId, { query: 'ex', limit: 10 });
   await client.mine(teamId, id);
   await client.requestAccess(teamId, id, 'view');
@@ -69,9 +65,11 @@ test('the refusals come back as the contract codes, in its order', async () => {
   expect(await client.mine(teamId, 'no-such-item')).toMatchObject({
     code: 'not_found',
   });
-  const id = stub.add({ name: 'Example', kind: 'login', secret: login });
+  const id = stub.add({ name: 'Example', kind: 'login', slots: login });
   expect(
-    await client.disclose(teamId, id, { selector: { type: 'login_password' } })
+    await client.disclose(teamId, id, {
+      selector: { kind: 'login', field: 'password' },
+    })
   ).toMatchObject({ code: 'not_granted' });
 });
 
@@ -105,7 +103,7 @@ test("an answer the client can't read is unexpected, and says nothing of what it
     jitter: () => 0,
   });
   const answer = await strange.disclose(teamId, 'x', {
-    selector: { type: 'login_password' },
+    selector: { kind: 'login', field: 'password' },
   });
   expect(answer).toMatchObject({ kind: 'refused', code: 'unexpected' });
   expect(JSON.stringify(answer)).not.toContain(sentinel);
@@ -150,9 +148,8 @@ test("through the agent's relay a script presents only its capability, and the v
   });
   const created = await script.create(teamId, {
     name: 'Through the relay',
-    kind: 'note',
     url: null,
-    secret: { type: 'note', text: 'hello-0123456789' },
+    secret: { kind: 'api', secret: 'hello-0123456789' },
   });
   expect(created).toMatchObject({ kind: 'ok', status: 201 });
   expect(stub.calls[0]?.path).toBe(
@@ -161,4 +158,56 @@ test("through the agent's relay a script presents only its capability, and the v
   expect(stub.calls[0]?.headers['x-macro-user-api-key']).toBe(realKey);
   expect(stub.calls[0]?.headers['x-macro-passwords']).toBe('1');
   expect(stub.calls[0]?.headers['x-macro-agent-session-id']).toBeDefined();
+});
+
+test('a disclosure sends the closed selector and purpose copy; a code request purpose copy', async () => {
+  const { client, stub } = rig();
+  const id = stub.add({ name: 'Api', kind: 'api', slots: { password: 's' } });
+  stub.owner.approve(id, 'view');
+  await client.disclose(teamId, id, {
+    selector: { kind: 'api', field: 'secret' },
+    expectedVersion: 1,
+  });
+  await client.totpCode(teamId, id);
+  expect(stub.calls.map(({ body }) => JSON.parse(body))).toEqual([
+    {
+      selector: { kind: 'api', field: 'secret' },
+      purpose: 'copy',
+      expectedVersion: 1,
+    },
+    { purpose: 'copy' },
+  ]);
+});
+
+test('a create is operationId, name, url and the typed secret: no outer kind, folder or private', async () => {
+  const { client, stub } = rig();
+  await client.create(teamId, {
+    name: 'New',
+    url: 'https://new.example.com',
+    secret: { kind: 'login', username: 'agent', password: 'pw-0123456789' },
+  });
+  const sent = JSON.parse(stub.calls[0]?.body ?? '{}');
+  expect(Object.keys(sent).sort()).toEqual([
+    'name',
+    'operationId',
+    'secret',
+    'url',
+  ]);
+  expect(sent.secret).toEqual({
+    kind: 'login',
+    username: 'agent',
+    password: 'pw-0123456789',
+  });
+});
+
+test('a rate-limited refusal carries how long to wait', async () => {
+  const { client, stub } = rig();
+  const id = stub.add({ name: 'Shared', kind: 'login', slots: login });
+  await client.requestAccess(teamId, id, 'view');
+  stub.owner.deny(id);
+  expect(await client.requestAccess(teamId, id, 'view')).toMatchObject({
+    kind: 'refused',
+    code: 'rate_limited',
+    retryAfterMs: 60 * 60 * 1000,
+  });
 });

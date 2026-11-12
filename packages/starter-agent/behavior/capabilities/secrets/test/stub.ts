@@ -1,9 +1,10 @@
 /**
  * A stand-in for Macro's vault API (the agent routes of the "Vault API
- * contract"): the same routes, statuses, camelCase JSON and error
- * precedence, over memory, as a fetch handler a test hands the client. The
- * owner's side (sharing, approving, denying, revoking) is plain functions,
- * since the agent never calls it.
+ * contract", with the selectors and payloads of the selector proposal, rev
+ * 4): the same routes, statuses, camelCase JSON and error precedence, over
+ * memory, as a fetch handler a test hands the client. The owner's side
+ * (sharing, approving, denying, revoking) is plain functions, since the
+ * agent never calls it.
  *
  * Precedence, for every agent route: the key (401 unauthorized), the wake id
  * (400 invalid_session_attribution), the feature flags (404 not_found, as the
@@ -11,13 +12,14 @@
  * mutation header (400 invalid_request), the route and body (404 / 400), the
  * item (404 not_found, also for a person's private item), then access:
  * usable, else pending (a live request, or a shared grant without approval;
- * never for an item the agent created), else not_granted; then forbidden and
+ * never for an item the agent created), else not_granted; then the kind and
+ * selector (unsupported_kind, invalid_request, field_not_set), forbidden and
  * version_conflict.
  *
- * Items are the team's, shared with it (the default) or private to the
- * person who made it; the creator never changes. A share with the team
- * grants an agent nothing: only an Agent grant does, which needs the
- * owner's standing approval unless the agent created the item.
+ * Items are stored as the vault stores them today, four untyped slots: a
+ * login's username and password, and an API credential's key and secret in
+ * the same two. Notes and custom fields are never selectable, and a patch
+ * keeps them as they were.
  */
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { isoText } from '@macro-inc/muppet/utilities/time';
@@ -31,16 +33,22 @@ import {
   type AgentSearchHit,
   type ErrorCode,
   headers,
-  ItemKind,
+  type ItemKind,
   ItemSecret,
   ItemSecretPatch,
-  kindOfSecret,
+  isAgentKind,
   Permission,
-  patched,
   type RequestStatus,
   SecretSelector,
-  selected,
 } from '../wire.ts';
+
+/** What the vault stores for an item: today's SecretValues. */
+export type Slots = {
+  username: string;
+  password: string;
+  notes: string;
+  fields: readonly { readonly label: string; readonly value: string }[];
+};
 
 type Item = {
   readonly id: string;
@@ -48,7 +56,7 @@ type Item = {
   name: string;
   readonly kind: ItemKind;
   url: string | null;
-  secret: ItemSecret;
+  slots: Slots;
   version: number;
   /** Whether this agent created it. */
   readonly creator: boolean;
@@ -95,6 +103,9 @@ const statusOf: Record<ErrorCode, number> = {
   pending: 403,
   forbidden: 403,
   invalid_request: 400,
+  unsupported_kind: 400,
+  field_not_set: 409,
+  rate_limited: 429,
   version_conflict: 409,
   vault_busy: 409,
   vault_unavailable: 503,
@@ -106,26 +117,30 @@ const refuse = (code: ErrorCode, retryAfterMs?: number): Response =>
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   });
 
+/** The stored slot each selectable field is, per the contract's mapping table. */
+const slotOf = {
+  login: { username: 'username', password: 'password' },
+  api: { key: 'username', secret: 'password' },
+} as const;
+
 const UuidV7 = z.string().refine((id) => wakeInstant(id) !== undefined);
 
 const Disclose = z.strictObject({
-  selector: SecretSelector,
-  purpose: z.enum(['copy', 'type']),
+  selector: z.unknown(),
+  purpose: z.literal('copy'),
   expectedVersion: z.number().int().optional(),
 });
-const Code = z.strictObject({ purpose: z.enum(['copy', 'type']) });
+const Code = z.strictObject({ purpose: z.literal('copy') });
 const Create = z.strictObject({
   operationId: UuidV7,
   name: z.string().min(1).max(200),
-  kind: ItemKind,
   url: z.string().nullable().optional(),
-  folderId: z.string().nullable().optional(),
-  secret: ItemSecret,
+  secret: z.looseObject({ kind: z.string() }),
 });
 const Patch = z.strictObject({
   operationId: UuidV7,
   expectedVersion: z.number().int(),
-  secretPatch: ItemSecretPatch.optional(),
+  secretPatch: z.looseObject({ kind: z.string() }).optional(),
   metadataPatch: AgentEditableMetadata.optional(),
 });
 const SetTotp = z.strictObject({
@@ -138,13 +153,34 @@ const Ask = z.strictObject({ permission: Permission });
 const mutations = new Set(['POST', 'PATCH', 'PUT']);
 const route = /\/passwords\/agent\/teams\/([^/]+)(\/.*)?$/;
 
+/** How long after a denial the agent may ask for the same item again. */
+const deniedCooldownMs = 60 * 60 * 1000;
+/** The vault's assumed skew from the provider's clock, taken off a code's window. */
+const totpMarginMs = 2_000;
+
+/** The slots a typed secret is stored in. */
+const slotsOf = (secret: ItemSecret): Slots =>
+  secret.kind === 'login'
+    ? {
+        username: secret.username ?? '',
+        password: secret.password,
+        notes: '',
+        fields: [],
+      }
+    : {
+        username: secret.key ?? '',
+        password: secret.secret,
+        notes: '',
+        fields: [],
+      };
+
 export const stubVault = ({
   clock,
   teamId,
   agentKey,
   agentAccountId = 'macro|agent@example.com',
 }: {
-  readonly clock: Pick<Clock, 'now'>;
+  readonly clock: Pick<Clock, 'now' | 'sleep'>;
   readonly teamId: string;
   /** The key the vault takes as the agent's. */
   readonly agentKey: string;
@@ -156,7 +192,14 @@ export const stubVault = ({
   const revisions = new Map<string, number>();
   const operations = new Map<string, Written>();
   const calls: Call[] = [];
-  const flags = { enabled: true, busy: 0 };
+  const flags: {
+    enabled: boolean;
+    busy: number;
+    /** How long each answer takes to come back. */
+    latencyMs: number;
+    /** What the next TOTP answers give as validForMs, in order, instead of the window's. */
+    validForMs: number[];
+  } = { enabled: true, busy: 0, latencyMs: 0, validForMs: [] };
   let counter = 0;
   const newId = () => {
     counter += 1;
@@ -262,15 +305,26 @@ export const stubVault = ({
   const visible = (item: Item): boolean =>
     item.teamId === teamId && (item.share === 'team' || item.creator);
 
-  const handle = async (request: globalThis.Request): Promise<Response> => {
-    const url = new URL(request.url);
-    const text = request.method === 'GET' ? '' : await request.clone().text();
-    calls.push({
-      method: request.method,
-      path: url.pathname + url.search,
-      headers: Object.fromEntries(request.headers),
-      body: text,
+  const totpCode = async (item: Item): Promise<Response> => {
+    if (item.totpSeed === undefined) return refuse('invalid_request');
+    const now = clock.now();
+    const periodMs = 30_000;
+    const end =
+      (Math.floor(now.epochMilliseconds / periodMs) + 1) * periodMs -
+      totpMarginMs;
+    const validForMs =
+      flags.validForMs.shift() ?? Math.floor(end - now.epochMilliseconds);
+    if (validForMs <= 0) return refuse('vault_unavailable');
+    return json(200, {
+      code: await totp(item.totpSeed, now),
+      expiresAt: isoText(Temporal.Instant.fromEpochMilliseconds(end)),
+      periodSeconds: periodMs / 1000,
+      validForMs,
     });
+  };
+
+  const answer = async (request: globalThis.Request): Promise<Response> => {
+    const url = new URL(request.url);
     if (request.headers.get(headers.key) !== agentKey)
       return refuse('unauthorized');
     if (
@@ -315,16 +369,20 @@ export const stubVault = ({
       const parsed = Create.safeParse(await body(request));
       if (!parsed.success) return refuse('invalid_request');
       const input = parsed.data;
-      if (kindOfSecret(input.secret) !== input.kind)
-        return refuse('invalid_request');
+      if (input.secret.kind !== 'login' && input.secret.kind !== 'api')
+        return refuse('unsupported_kind');
+      const secret = ItemSecret.safeParse(input.secret);
+      if (!secret.success) return refuse('invalid_request');
+      const slots = slotsOf(secret.data);
+      if (slots.password === '') return refuse('invalid_request');
       return once(input.operationId, () => {
         const item: Item = {
           id: newId(),
           teamId,
           name: input.name,
-          kind: input.kind,
+          kind: secret.data.kind,
           url: input.url ?? null,
-          secret: input.secret,
+          slots,
           version: 1,
           creator: true,
           share: 'team',
@@ -377,8 +435,14 @@ export const stubVault = ({
       const permission = Ask.parse(input).permission;
       if (access(item).status === 'usable')
         return json(200, requestState(item));
-      if (live(item.id) === undefined) {
-        const previous = requests.get(item.id);
+      const previous = requests.get(item.id);
+      if (previous?.status === 'denied') {
+        const since =
+          clock.now().epochMilliseconds - previous.updatedAt.epochMilliseconds;
+        if (since < deniedCooldownMs)
+          return refuse('rate_limited', deniedCooldownMs - since);
+      }
+      if (live(item.id) === undefined)
         requests.set(item.id, {
           requestId: newId(),
           permission,
@@ -386,7 +450,6 @@ export const stubVault = ({
           revision: (previous?.revision ?? 0) + 1,
           updatedAt: clock.now(),
         });
-      }
       return json(202, requestState(item));
     }
 
@@ -394,27 +457,26 @@ export const stubVault = ({
     if (why !== undefined) return refuse(why);
 
     if (action === 'disclose') {
-      const { selector, expectedVersion } = Disclose.parse(input);
-      const value = selected(item.secret, selector);
-      if (value === undefined) return refuse('invalid_request');
+      const { selector: given, expectedVersion } = Disclose.parse(input);
+      const selector = SecretSelector.safeParse(given);
+      if (!selector.success) return refuse('invalid_request');
+      if (!isAgentKind(item.kind)) return refuse('unsupported_kind');
+      if (selector.data.kind !== item.kind) return refuse('invalid_request');
       if (expectedVersion !== undefined && expectedVersion !== item.version)
         return refuse('version_conflict');
-      return json(200, { value, version: item.version, selector });
-    }
-
-    if (action === 'totp/code') {
-      if (item.totpSeed === undefined) return refuse('invalid_request');
-      const now = clock.now();
-      const period = 30;
-      const window = Math.floor(now.epochMilliseconds / 1000 / period);
+      const value =
+        selector.data.kind === 'login'
+          ? item.slots[slotOf.login[selector.data.field]]
+          : item.slots[slotOf.api[selector.data.field]];
+      if (value === '') return refuse('field_not_set');
       return json(200, {
-        code: await totp(item.totpSeed, now),
-        expiresAt: isoText(
-          Temporal.Instant.fromEpochMilliseconds((window + 1) * period * 1000)
-        ),
-        periodSeconds: period,
+        value,
+        version: item.version,
+        selector: selector.data,
       });
     }
+
+    if (action === 'totp/code') return totpCode(item);
 
     if (action === 'totp') {
       const { operationId, expectedVersion, seed } = SetTotp.parse(input);
@@ -430,18 +492,53 @@ export const stubVault = ({
     const { operationId, expectedVersion, secretPatch, metadataPatch } =
       Patch.parse(input);
     if (!access(item).canUpdate) return refuse('forbidden');
-    if (secretPatch !== undefined && kindOfSecret(secretPatch) !== item.kind)
+    if (!isAgentKind(item.kind)) return refuse('unsupported_kind');
+    const typedPatch =
+      secretPatch === undefined
+        ? undefined
+        : ItemSecretPatch.safeParse(secretPatch);
+    if (typedPatch !== undefined && !typedPatch.success)
       return refuse('invalid_request');
+    const patch = typedPatch?.data;
+    if (patch !== undefined) {
+      if (patch.kind !== item.kind) return refuse('invalid_request');
+      // No clearing in v1.
+      if (Object.values(patch).some((value) => value === ''))
+        return refuse('invalid_request');
+    }
     return once(operationId, () => {
       if (expectedVersion !== item.version)
         return { status: 409, body: { code: 'version_conflict' } };
-      if (secretPatch !== undefined)
-        item.secret = patched(item.secret, secretPatch);
+      if (patch !== undefined) {
+        const slots = { ...item.slots };
+        if (patch.kind === 'login') {
+          if (patch.username !== undefined) slots.username = patch.username;
+          if (patch.password !== undefined) slots.password = patch.password;
+        } else {
+          if (patch.key !== undefined) slots.username = patch.key;
+          if (patch.secret !== undefined) slots.password = patch.secret;
+        }
+        item.slots = slots;
+      }
       if (metadataPatch?.name !== undefined) item.name = metadataPatch.name;
       if (metadataPatch?.url !== undefined) item.url = metadataPatch.url;
       item.version += 1;
       return { status: 200, body: { item: hit(item), version: item.version } };
     });
+  };
+
+  const handle = async (request: globalThis.Request): Promise<Response> => {
+    const url = new URL(request.url);
+    const text = request.method === 'GET' ? '' : await request.clone().text();
+    calls.push({
+      method: request.method,
+      path: url.pathname + url.search,
+      headers: Object.fromEntries(request.headers),
+      body: text,
+    });
+    const response = await answer(request);
+    if (flags.latencyMs > 0) await clock.sleep(flags.latencyMs);
+    return response;
   };
 
   const resolve = (
@@ -464,7 +561,7 @@ export const stubVault = ({
       readonly name: string;
       readonly kind: ItemKind;
       readonly url?: string;
-      readonly secret: ItemSecret;
+      readonly slots: Partial<Slots>;
       readonly totpSeed?: string;
       readonly teamId?: string;
       readonly share?: 'team' | 'private';
@@ -476,7 +573,13 @@ export const stubVault = ({
         name: item.name,
         kind: item.kind,
         url: item.url ?? null,
-        secret: item.secret,
+        slots: {
+          username: '',
+          password: '',
+          notes: '',
+          fields: [],
+          ...item.slots,
+        },
         version: 1,
         creator: false,
         share: item.share ?? 'team',
@@ -484,8 +587,7 @@ export const stubVault = ({
       });
       return id;
     },
-    secretOf: (itemId: string): ItemSecret | undefined =>
-      items.get(itemId)?.secret,
+    slotsOf: (itemId: string): Slots | undefined => items.get(itemId)?.slots,
     owner: {
       /** Grants the agent an item without the standing approval its first use needs. */
       share: (itemId: string, permission: Permission) => {

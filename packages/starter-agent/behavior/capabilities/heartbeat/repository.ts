@@ -53,3 +53,21 @@ export const branchRef = (branch: string): string => `refs/heads/${branch}`;
 /** `owner/name` from a GitHub remote's URL, or undefined if it isn't one. */
 export const githubRepo = (url: string): string | undefined =>
   /github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?\s*$/.exec(url)?.[1];
+
+/**
+ * The argv of a git command in `directory`, never running a hook: hooks are
+ * files in the workspace the agent writes, and one would run with the
+ * runtime's environment on every commit, pull and push.
+ */
+export const gitCommand = (
+  git: string,
+  directory: string,
+  args: readonly string[]
+): string[] => [
+  git,
+  '-c',
+  'core.hooksPath=/dev/null',
+  '-C',
+  directory,
+  ...args,
+];

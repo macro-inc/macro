@@ -1,6 +1,31 @@
-use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
-use crate::outbound::guarded_http::McpHttp;
+use super::models::{MacroUserIdStr, McpServer, McpServerRecord, RefusedAddress};
+use rmcp::transport::auth::{AuthError, AuthorizationManager};
+use rmcp::transport::streamable_http_client::StreamableHttpClient;
 use std::sync::Arc;
+use url::Url;
+
+/// Port for the address-guarded HTTP clients every connection to a user's
+/// MCP server goes through.
+pub trait McpServerHttp: Send + Sync {
+    /// The HTTP client the MCP transport runs on.
+    type Transport: StreamableHttpClient + Sync;
+
+    /// Refuse `url` if its host is an IP literal the address policy does not
+    /// allow. Named hosts are checked when they resolve.
+    fn check_url(&self, url: &Url) -> Result<(), RefusedAddress>;
+
+    /// The client for the MCP transport. It follows only same-origin 307/308
+    /// redirects and has no overall timeout, since event streams stay open
+    /// for as long as a tool call runs.
+    fn transport(&self) -> Self::Transport;
+
+    /// An rmcp authorization manager for `server_url` whose OAuth requests go
+    /// through the guarded clients.
+    fn authorization_manager(
+        &self,
+        server_url: &str,
+    ) -> impl Future<Output = Result<AuthorizationManager, AuthError>> + Send;
+}
 
 /// Port for persisting MCP server records, keyed by user.
 pub trait McpServerStore: Send + Sync + 'static {
@@ -40,7 +65,7 @@ pub trait McpConnector: Send + Sync {
     /// through `server_store`.
     fn connect<S: McpServerStore>(
         &self,
-        http: &McpHttp,
+        http: &impl McpServerHttp,
         server_store: Arc<S>,
     ) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
 }

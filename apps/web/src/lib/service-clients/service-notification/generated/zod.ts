@@ -2303,7 +2303,7 @@ export const listTypedNotificationsResponse = zod
                           agent: zod
                             .enum(['claude'])
                             .describe(
-                              "Who an agent's account belongs to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there."
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
                             ),
                           computerName: zod
                             .string()
@@ -4520,7 +4520,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           agent: zod
                             .enum(['claude'])
                             .describe(
-                              "Who an agent's account belongs to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there."
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
                             ),
                           computerName: zod
                             .string()
@@ -6687,7 +6687,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           agent: zod
                             .enum(['claude'])
                             .describe(
-                              "Who an agent's account belongs to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there."
+                              'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
                             ),
                           computerName: zod
                             .string()
@@ -8696,7 +8696,7 @@ export const getTypedNotificationByIdResponse = zod
                   agent: zod
                     .enum(['claude'])
                     .describe(
-                      "Who an agent's account belongs to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there."
+                      'Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.'
                     ),
                   computerName: zod
                     .string()

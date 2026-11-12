@@ -15,15 +15,15 @@ use hosted_runtimes::domain::ids::ComputerId;
 use super::{ComputerLock, ComputerLocks, HarnessdError, HarnessdTransport};
 
 /// harnessd answering each request with `answer`, recording every request
-/// it was sent. With `hold_complete`, a completion waits until a cancel
-/// arrives, as a real one waits on Claude.
+/// it was sent. With `hold_complete`, a completion waits until the test
+/// releases it, as a real one waits on Claude.
 pub(crate) struct FakeHarnessd {
     pub(crate) requests: Mutex<Vec<Request>>,
     answer: Box<dyn Fn(&Request) -> Response + Send + Sync>,
     hold_complete: bool,
     /// Signalled when a completion starts waiting.
     pub(crate) complete_started: tokio::sync::Notify,
-    cancelled: tokio::sync::Semaphore,
+    released: tokio::sync::Semaphore,
 }
 
 impl FakeHarnessd {
@@ -33,16 +33,16 @@ impl FakeHarnessd {
             answer: Box::new(answer),
             hold_complete: false,
             complete_started: tokio::sync::Notify::new(),
-            cancelled: tokio::sync::Semaphore::new(0),
+            released: tokio::sync::Semaphore::new(0),
         }
     }
 
-    /// Let a waiting completion answer, as a cancel would.
+    /// Let a waiting completion answer.
     pub(crate) fn release_complete(&self) {
-        self.cancelled.add_permits(1);
+        self.released.add_permits(1);
     }
 
-    /// Make a completion wait for a cancel.
+    /// Make a completion wait for [`Self::release_complete`].
     pub(crate) fn holding_complete(mut self) -> Self {
         self.hold_complete = true;
         self
@@ -60,9 +60,8 @@ impl HarnessdTransport for FakeHarnessd {
             match &request {
                 Request::SignInComplete { .. } if self.hold_complete => {
                     self.complete_started.notify_one();
-                    let _permit = self.cancelled.acquire().await.unwrap();
+                    let _permit = self.released.acquire().await.unwrap();
                 }
-                Request::SignInCancel { .. } => self.cancelled.add_permits(1),
                 _ => {}
             }
             Ok((self.answer)(&request))

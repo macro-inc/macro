@@ -86,7 +86,8 @@ export function computerStatusKey(
 /**
  * The last presence and status keys acted on, shared by every
  * `useComputersQuery` caller, so one change refreshes once however many
- * callers are mounted.
+ * callers are mounted. Module-level on purpose: two components (on Settings →
+ * Agents) each run the query, and keys kept per hook would invalidate twice.
  */
 const handledKeys = { presence: '', status: '' };
 

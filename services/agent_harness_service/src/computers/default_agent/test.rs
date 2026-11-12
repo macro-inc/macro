@@ -95,6 +95,36 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     .fetch_one(pool)
     .await
     .unwrap();
+    // The computer row: its team, not its buyer, decides who may use and
+    // manage the harness (harness_access_level).
+    let host_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
+        VALUES ($1, 'host-1', 8, 8)
+        "#,
+        host_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime (
+            id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry,
+            purchase_key, host_id, state, harness_id, created_by
+        )
+        VALUES ($1, $2, 'Ada', 'standard', 4, 8, 100, 'standard@2026-11', 'buy-ada', $3, '{}', $4, $5)
+        "#,
+        computer_id.as_uuid(),
+        team_id,
+        host_id,
+        harness,
+        BUYER,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     (computer_id, HarnessId::new_from_uuid(harness))
 }
 

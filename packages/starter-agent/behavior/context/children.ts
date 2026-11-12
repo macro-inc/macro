@@ -2,7 +2,8 @@ type Environment = Readonly<Record<string, string | undefined>>;
 
 /**
  * What every child process gets from the agent's own environment: enough to
- * find programs, a home, a locale and a screen, and nothing else. The rest of
+ * find programs, a home, a locale and a screen (its browser's DevTools
+ * included), and nothing else. The rest of
  * its environment (where its credentials are, anything a launcher left) stays
  * with it; a child is given more only by name, by whoever starts it.
  */
@@ -14,6 +15,7 @@ export const baseline = [
   'DISPLAY',
   'PULSE_SERVER',
   'XDG_RUNTIME_DIR',
+  'MUPPET_BROWSER_CDP_URL',
 ] as const;
 
 /** A child's environment: the baseline of `own`, then `added`, where an undefined value unsets one. */

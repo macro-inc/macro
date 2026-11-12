@@ -2,11 +2,12 @@
 
 The computer's Chromium, which the image runs as the `macro-agent-browser` service on the agent's
 display (`:1`, the one computer use drives and a call's share shows), with a profile that keeps
-what the agent signs in to. DevTools on `127.0.0.1:9223`, loopback only.
+what the agent signs in to. DevTools at `MUPPET_BROWSER_CDP_URL` (the image sets
+`http://127.0.0.1:9223`, loopback only; startup defaults to that when it is unset).
 
 | File         | What it holds                                                                                   |
 | ------------ | ----------------------------------------------------------------------------------------------- |
-| `config.ts`  | The endpoint and the screenshots directory.                                                     |
+| `config.ts`  | The endpoint (from startup) and the screenshots directory.                                      |
 | `browse.ts`  | The steps over muppet's `Tab`, each a `browser.step` span. Pure.                                |
 | `context.ts` | The real port: muppet's `withTab` on the endpoint.                                              |
 | `index.ts`   | `openPage`, `readPage`, `clickOn`, `typeInto`, `pasteInto`, `pressKey`, `screenshotPage`.       |

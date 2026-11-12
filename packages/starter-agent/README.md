@@ -55,10 +55,12 @@ key and where Macro is (`MACRO_GATEWAY` and the `OVERRIDE_*` service URLs),
 its repository's, and, in Macro-credits mode, `ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, the
 only ones Claude Code is given. They are read once, only read, used by name
-and never printed: `setCredential` refuses. A self-hosted agent sets
-`MUPPET_CREDENTIALS=sops` instead, and keeps them in `secrets.enc.json`,
-encrypted with SOPS to its machine's age key, where `setCredential` adds one
-(value on stdin, never as an argument).
+and never printed; the agent can't add one (its owner adds it to the
+enrollment). A self-hosted agent sets `MUPPET_CREDENTIALS=sops` instead, and
+keeps them in `secrets.enc.json`, encrypted with SOPS to its machine's age
+key, where its owner adds one with `sops`. `setCredential` and
+`useCredential` refuse in a script's process, which is where the catalog runs
+them.
 
     bin/agent listCredentials
 
@@ -80,8 +82,8 @@ One process, `bin/agent run`, under the computer's agent service, which sets
 `AGENT_WORKSPACE` (this repository), `MUPPET_CREDENTIALS_FILE`,
 `MUPPET_LAST_GOOD_FILE`, `MUPPET_RESTART_FILE` and, for stdio MCP servers
 every wake gets (e.g. computer use), `MUPPET_MCP_SERVERS_JSON`. None has a
-default: a missing or invalid one exits 78, which the service retries without
-rolling back. It runs Claude Code as the `claude` on PATH. It builds
+default: a missing or invalid one exits 78, which the service retries (and
+rolls back only when the code changed since the last good boot). It runs Claude Code as the `claude` on PATH. It builds
 the behavior in `behavior/`, shows the agent online in Macro, and waits on its
 event sources. A handler decides cheaply what each event needs, and wakes the
 agent (Claude Code, with `AGENT.md` and who it is as its system prompt) only
@@ -155,7 +157,10 @@ mode, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, which only Claude Code gets.
 Without them, Claude Code uses the computer's Claude login (harnessd).
 
-Exit codes of `run`: `0` stopped; `78` a setting or credential is missing or
-invalid (not the code's fault: the launcher retries and doesn't roll back);
-anything else, or a crash before the healthy-boot marker moves, is a failed
-boot, and three in a row roll the workspace back to the last good HEAD.
+Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
+credential is missing or invalid. Anything but 0 and 75 before the healthy-boot
+marker moves is a failed boot (78 too, unless the boot was already on the last
+good HEAD: then the enrollment, not the code, is wrong), and three in a row
+roll the workspace back to the last good HEAD, recorded as a commit so it
+stays rolled back. A lock that differs from the image's is adopted unless the
+agent changed `package.json`.

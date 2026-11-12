@@ -14,7 +14,7 @@ import { bashCommand, type Guard, type ToolCall } from '../guard.ts';
 import { gitParts, isAgentSession, setsToken } from './session.ts';
 import { type Command, commands, program } from './shell.ts';
 
-export const identityReason = `This run has no GitHub token, so gh or a push would act as the machine's own login, which belongs to its user, not to you. GitHub needs the ${githubToken} credential: ask your owner to add it with setCredential.`;
+export const identityReason = `This run has no GitHub token, so gh or a push would act as the machine's own login, which belongs to its user, not to you. GitHub needs the ${githubToken} credential: ask your owner to add it to your credentials; you can't store one yourself.`;
 
 const actsOnGithub = (command: Command, call: ToolCall): boolean => {
   const name = program(command);

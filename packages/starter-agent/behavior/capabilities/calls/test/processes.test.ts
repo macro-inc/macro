@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { startJoin } from '../context/processes.ts';
+
+/** This package: a join runs one of its own programs. */
+const root = join(import.meta.dir, '..', '..', '..', '..');
 
 test("a call's process starts under the agent's sandbox, so its brain can't read the enrollment's secrets", async () => {
   const started: (readonly string[])[] = [];
@@ -11,13 +16,13 @@ test("a call's process starts under the agent's sandbox, so its brain can't read
       },
     },
     disk: { makeDirectory: async () => {} },
-    config: { root: '/agent' },
+    config: { root },
     paths: {
       call: (id) => `/state/calls/${id}`,
       joinLog: (id) => `/state/calls/${id}/join.log`,
       joinErrors: (id) => `/state/calls/${id}/join.err`,
     },
-    join: (...parts) => parts.join('/'),
+    join,
     relayed: async () => ({}),
     sandbox: ['bwrap', '--dev-bind', '/', '/', '--tmpfs', '/run/credentials', '--'],
   });
@@ -32,6 +37,7 @@ test("a call's process starts under the agent's sandbox, so its brain can't read
     '/run/credentials',
     '--',
   ]);
-  expect(argv).toContain('/agent/bin/assistant');
-  expect(argv).toContain('joinCall');
+  const program = argv[argv.indexOf('joinCall') - 1] ?? '';
+  expect(program).toBe(join(root, 'bin', 'agent'));
+  expect(existsSync(program)).toBe(true);
 });

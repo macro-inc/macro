@@ -89,10 +89,40 @@ fn parse_cgi_headers(block: &[u8]) -> Result<(u16, Vec<(String, String)>), GitHt
     Ok((status, response_headers))
 }
 
+/// A body's byte count, recorded on the current span once, when the body is
+/// dropped: finished, failed or abandoned.
+struct ByteCount {
+    span: tracing::Span,
+    field: &'static str,
+    bytes: i64,
+}
+
+impl ByteCount {
+    fn new(field: &'static str) -> Self {
+        Self {
+            span: tracing::Span::current(),
+            field,
+            bytes: 0,
+        }
+    }
+
+    fn add(&mut self, bytes: usize) {
+        self.bytes = self
+            .bytes
+            .saturating_add(i64::try_from(bytes).unwrap_or(i64::MAX));
+    }
+}
+
+impl Drop for ByteCount {
+    fn drop(&mut self) {
+        self.span.record(self.field, self.bytes);
+    }
+}
+
 impl GitBackend for GitHttpBackend {
     type Err = GitHttpBackendError;
 
-    #[tracing::instrument(name = "agent_git.transfer", skip_all, fields(repo_id = %agent_credentials::telemetry_id(repo.agent_user_id().as_ref()), endpoint = ?request.endpoint, git.request.bytes = 0_i64, git.response.bytes = 0_i64, git.rejected_reason, otel.status_code), err)]
+    #[tracing::instrument(name = "agent_git.transfer", skip_all, fields(repo_id = %agent_credentials::telemetry_id(repo.agent_user_id().as_ref()), endpoint = ?request.endpoint, git.request.bytes = tracing::field::Empty, git.response.bytes = tracing::field::Empty, git.rejected_reason, otel.status_code), err)]
     async fn serve(
         &self,
         repo: &AuthorizedRepo,
@@ -165,7 +195,7 @@ impl GitBackend for GitHttpBackend {
         let input_span = tracing::Span::current();
         self.tasks.spawn(
             async move {
-                let mut bytes = 0_i64;
+                let mut bytes = ByteCount::new("git.request.bytes");
                 loop {
                     let chunk = tokio::select! {
                         _ = input_cancel.cancelled() => return,
@@ -174,9 +204,7 @@ impl GitBackend for GitHttpBackend {
                     let Some(chunk) = chunk else { break };
                     let written = match chunk {
                         Ok(chunk) => {
-                            bytes = bytes
-                                .saturating_add(i64::try_from(chunk.len()).unwrap_or(i64::MAX));
-                            tracing::Span::current().record("git.request.bytes", bytes);
+                            bytes.add(chunk.len());
                             stdin.write_all(&chunk).await
                         }
                         Err(error) => Err(error),
@@ -251,17 +279,13 @@ impl GitBackend for GitHttpBackend {
             tracing::Span::current().record("git.rejected_reason", "backend_http_error");
         }
         let response_span = tracing::Span::current();
-        let mut bytes = 0_i64;
+        let mut bytes = ByteCount::new("git.response.bytes");
         Ok(GitResponse {
             status,
             headers,
             body: Box::pin(ReaderStream::new(reader).map(move |chunk| {
                 match &chunk {
-                    Ok(chunk) => {
-                        bytes =
-                            bytes.saturating_add(i64::try_from(chunk.len()).unwrap_or(i64::MAX));
-                        response_span.record("git.response.bytes", bytes);
-                    }
+                    Ok(chunk) => bytes.add(chunk.len()),
                     Err(_) => {
                         response_span.record("otel.status_code", "ERROR");
                         response_span.record("git.rejected_reason", "response_body_failed");

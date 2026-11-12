@@ -6,7 +6,7 @@
  */
 
 /**
- * Who an agent's account belongs to: the Postgres `agent_provider` enum of
+ * Whose account an agent signs in to: the Postgres `agent_provider` enum of
 `provider_accounts.provider` and `harness_account_logins.provider`. New
 providers add a value there.
  */

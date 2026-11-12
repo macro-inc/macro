@@ -16,10 +16,10 @@ import {
   ErrorBody,
   type ErrorCode,
   headers,
-  type ItemKind,
   type ItemSecret,
   type ItemSecretPatch,
   type Permission,
+  purpose,
   SearchPage,
   type SecretSelector,
   TotpCode,
@@ -54,7 +54,13 @@ export type Answer<Value> =
       readonly value: Value;
       readonly wake: string;
     }
-  | { readonly kind: 'refused'; readonly code: Refusal; readonly wake: string };
+  | {
+      readonly kind: 'refused';
+      readonly code: Refusal;
+      readonly wake: string;
+      /** How long to wait before asking again, on a busy or rate-limited refusal. */
+      readonly retryAfterMs?: number;
+    };
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT';
 
@@ -123,9 +129,15 @@ export const vault = (ports: VaultPorts) => {
       }
       const error = ErrorBody.safeParse(json);
       if (!error.success) return { kind: 'refused', code: 'unexpected', wake };
-      if (error.data.code !== 'vault_busy' || attempt >= busy.retries)
-        return { kind: 'refused', code: error.data.code, wake };
-      const wait = error.data.retryAfterMs ?? busy.firstWaitMs * 2 ** attempt;
+      const { code, retryAfterMs } = error.data;
+      if (code !== 'vault_busy' || attempt >= busy.retries)
+        return {
+          kind: 'refused',
+          code,
+          wake,
+          ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+        };
+      const wait = retryAfterMs ?? busy.firstWaitMs * 2 ** attempt;
       await ports.clock.sleep(Math.round(wait * (1 + ports.jitter())));
     }
   };
@@ -155,7 +167,7 @@ export const vault = (ports: VaultPorts) => {
       search.set('limit', String(limit));
       return read('GET', `${agentBase(teamId)}/items?${search}`, SearchPage);
     },
-    /** One field's value, for the clipboard. Purpose is always `copy` in v1. */
+    /** One field's value, for the clipboard: the only purpose v1 has. */
     disclose: (
       teamId: string,
       itemId: string,
@@ -169,18 +181,15 @@ export const vault = (ports: VaultPorts) => {
     ) =>
       read('POST', `${item(teamId, itemId)}/disclose`, Disclosed, {
         selector,
-        purpose: 'copy',
+        purpose,
         ...(expectedVersion === undefined ? {} : { expectedVersion }),
       }),
     totpCode: (teamId: string, itemId: string) =>
-      read('POST', `${item(teamId, itemId)}/totp/code`, TotpCode, {
-        purpose: 'copy',
-      }),
+      read('POST', `${item(teamId, itemId)}/totp/code`, TotpCode, { purpose }),
     create: (
       teamId: string,
       input: {
         readonly name: string;
-        readonly kind: ItemKind;
         readonly url: string | null;
         readonly secret: ItemSecret;
       }

@@ -220,7 +220,7 @@ where
         .await?
     {
         harnessd_protocol::Response::SignInStarted { url, .. } => Ok(Json(ClaudeSignInStarted {
-            url: trusted_sign_in_url(&url)?.to_owned(),
+            url: trusted_sign_in_url(&url)?,
         })),
         other => Err(ComputerRouteError::from_answer(other)),
     }
@@ -344,13 +344,14 @@ where
 /// uses `claude.com`.
 const SIGN_IN_HOSTS: &[&str] = &["claude.com", "claude.ai"];
 
-/// `url` when it is a Claude OAuth sign-in link, which the browser then
-/// opens. The link comes from the guest, which its users control, so
-/// anything else (another scheme or host) is refused.
 /// The exact paths of Claude's OAuth authorize page.
 const SIGN_IN_PATHS: &[&str] = &["/cai/oauth/authorize", "/oauth/authorize"];
 
-fn trusted_sign_in_url(url: &str) -> Result<&str, ComputerRouteError> {
+/// `url` when it is a Claude OAuth sign-in link, which the browser then
+/// opens, exactly as it was checked. The link comes from the guest, which
+/// its users control, so anything else (another scheme, host or path) is
+/// refused.
+fn trusted_sign_in_url(url: &str) -> Result<String, ComputerRouteError> {
     let parsed = url::Url::parse(url).map_err(|_| ComputerRouteError::UntrustedSignInUrl)?;
     let trusted = parsed.scheme() == "https"
         && parsed.username().is_empty()
@@ -364,7 +365,7 @@ fn trusted_sign_in_url(url: &str) -> Result<&str, ComputerRouteError> {
         tracing::warn!("a computer returned an untrusted Claude sign-in link");
         return Err(ComputerRouteError::UntrustedSignInUrl);
     }
-    Ok(url)
+    Ok(parsed.as_str().to_owned())
 }
 
 impl<Harnesses, Auth> ClaudeAccessState<Harnesses, Auth>

@@ -1543,3 +1543,79 @@ async fn a_computer_harness_belongs_to_its_team_not_its_buyer(pool: PgPool) {
         HarnessAccess::Owner
     );
 }
+
+/// The Anthropic gateway serves a session only through this lookup: a bot
+/// on a live computer harness has its computer; a paired machine, a deleted
+/// computer harness or no harness at all has none.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_bot_has_a_computer_only_on_a_live_computer_harness(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let team_id = team_of(&pool, &[OWNER_ID]).await;
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
+    let harness = hosted_harness(team_id, computer_id);
+    let harness_id = harness.id;
+    repo.upsert_hosted_pairing(
+        hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "secret"),
+        harness,
+    )
+    .await
+    .unwrap();
+    let paired_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'laptop', $2, $2)
+        "#,
+        paired_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let on_computer = Uuid::new_v4();
+    let on_laptop = Uuid::new_v4();
+    let unbound = Uuid::new_v4();
+    for (bot, handle, harness) in [
+        (on_computer, "on-computer", Some(harness_id.as_uuid())),
+        (on_laptop, "on-laptop", Some(paired_id)),
+        (unbound, "unbound", None),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+            VALUES ($1, 'owned', $2, 'Agent', $3, true)
+            "#,
+            bot,
+            OWNER_ID,
+            handle,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+            VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
+            "#,
+            bot,
+            harness,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let computer_for = |bot: Uuid| repo.computer_for_bot(bot_id::BotId::new_from_uuid(bot));
+
+    assert_eq!(computer_for(on_computer).await.unwrap(), Some(computer_id));
+    assert_eq!(computer_for(on_laptop).await.unwrap(), None);
+    assert_eq!(computer_for(unbound).await.unwrap(), None);
+
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        harness_id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(computer_for(on_computer).await.unwrap(), None);
+}

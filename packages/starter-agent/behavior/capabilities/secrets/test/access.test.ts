@@ -7,18 +7,14 @@ import { requestSecretAccess, searchSecrets } from '../index.ts';
 import type { AccessRequestState } from '../wire.ts';
 import { rig } from './rig.ts';
 
-const login = {
-  type: 'login' as const,
-  username: 'ada',
-  password: 'pw-0123456789abcdef',
-};
+const login = { username: 'ada', password: 'pw-0123456789abcdef' };
 
 /** The rig with two items asked for, and a stand-in for waking the agent. */
 const asked = async () => {
   const setup = rig();
   const { context, stub } = setup;
-  const shared = stub.add({ name: 'Shared', kind: 'login', secret: login });
-  const other = stub.add({ name: 'Other', kind: 'login', secret: login });
+  const shared = stub.add({ name: 'Shared', kind: 'login', slots: login });
+  const other = stub.add({ name: 'Other', kind: 'login', slots: login });
   for (const item of await searchSecrets(context, {}))
     await requestSecretAccess(context, { item });
   const woken: string[] = [];

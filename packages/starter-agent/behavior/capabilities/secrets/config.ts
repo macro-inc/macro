@@ -24,3 +24,6 @@ export const busy = { retries: 3, firstWaitMs: 250 };
 
 /** What a search returns by default, and at most (the vault's own bounds). */
 export const searchLimit = { default: 50, most: 100 };
+
+/** A code is pasted only with this long to spare, and asked for at most this many times. */
+export const code = { spareMs: 3_000, attempts: 2 };

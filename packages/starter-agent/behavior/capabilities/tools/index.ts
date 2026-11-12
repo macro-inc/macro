@@ -23,10 +23,9 @@ type Needs<Keys extends keyof ToolsContext> = Pick<ToolsContext, Keys>;
  * The names of every credential you hold. Names only, never values.
  *
  * A service's credentials are named <SERVICE>_<WHAT>, e.g.
- * EXAMPLE_API_KEY. To use one, hand it to a program with useCredential;
- * nothing gives you a value. Something you can't do for want of a
- * credential says which one: your owner can give it to you, and you store
- * it with setCredential.
+ * EXAMPLE_API_KEY. Nothing gives you a value. Something you can't do for
+ * want of a credential says which one: ask your owner to add it to your
+ * credentials (on a Macro computer, its enrollment); you can't store one.
  */
 export const listCredentials = ({
   credentials,
@@ -42,7 +41,10 @@ export const hasCredential = (
  * Store a credential: a password it generates, a program's output, or a
  * value.
  *
- * The only way a password or key is stored. Give exactly one of:
+ * Not for you to call: your credentials come from your computer's enrollment
+ * and your scripts never hold one, so this refuses; ask your owner to add a
+ * credential instead. Where credentials can be stored (a self-hosted agent's
+ * own process), the only way a password or key is stored. Give exactly one of:
  * - `generate: true`: a new 32-character password, which nobody ever sees.
  * - `fromCommand`: a program and its arguments; what it prints is stored (a
  *   JSON string is unwrapped). Use it to take a key straight from where it
@@ -102,7 +104,9 @@ export const setCredential = async (
 };
 
 /**
- * Run a program with a credential on its stdin or in its environment.
+ * Not for you to call: your scripts never hold a credential, so this refuses.
+ * In the agent's own process, it runs a program with a credential on its
+ * stdin or in its environment.
  *
  * How a credential reaches the thing that needs it without passing through
  * you. `argv` is the program and its arguments. `stdin` names the credential
@@ -168,7 +172,7 @@ export const useCredential = async (
 export const toolsModule = module({
   name: 'tools',
   summary:
-    'Your credentials, by name only: which you hold, storing one, and handing one to a program.',
+    'Your credentials, by name only: which you hold. Your owner adds them; you never store or handle one.',
   file: import.meta.path,
   functions: {
     listCredentials,

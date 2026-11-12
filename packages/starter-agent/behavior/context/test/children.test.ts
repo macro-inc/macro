@@ -13,6 +13,7 @@ const parent = {
   DISPLAY: ':1',
   PULSE_SERVER: 'unix:/run/pulse',
   XDG_RUNTIME_DIR: '/run/user/1000',
+  MUPPET_BROWSER_CDP_URL: 'http://127.0.0.1:9223',
   MACRO_API_KEY: 'mak_secret',
   CREDENTIALS_DIRECTORY: '/run/credentials/macro-agent.service',
   MUPPET_CREDENTIALS_FILE: '/run/credentials/macro-agent.service/agent.env',
@@ -29,6 +30,7 @@ describe('childEnvironment', () => {
       DISPLAY: ':1',
       PULSE_SERVER: 'unix:/run/pulse',
       XDG_RUNTIME_DIR: '/run/user/1000',
+      MUPPET_BROWSER_CDP_URL: 'http://127.0.0.1:9223',
     });
   });
 

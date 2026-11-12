@@ -19,8 +19,8 @@ import type { Shell } from '../../context/shell.ts';
 import { clipboard as limits } from './config.ts';
 
 export type Clipboard = {
-  /** Puts `value` on the clipboard, for one paste or until it times out. */
-  readonly put: (value: string) => Promise<void>;
+  /** Puts `value` on the clipboard, for one paste or until it times out: after 20 seconds, or `ttlMs` if sooner. */
+  readonly put: (value: string, ttlMs?: number) => Promise<void>;
   /** The text on the clipboard now. Throws if there is none. */
   readonly take: () => Promise<string>;
 };
@@ -28,9 +28,13 @@ export type Clipboard = {
 /** How long a server that fails at once (no xclip, no display) takes to say so. */
 const settleMs = 150;
 
-const serve = [
+/** `timeout`'s duration, in seconds to the millisecond, never past the clipboard's limit. */
+const seconds = (ttlMs: number | undefined): string =>
+  String(Math.floor(Math.min(ttlMs ?? Infinity, limits.seconds * 1000)) / 1000);
+
+const serve = (ttlMs: number | undefined) => [
   'timeout',
-  String(limits.seconds),
+  seconds(ttlMs),
   'xclip',
   '-selection',
   'clipboard',
@@ -48,9 +52,9 @@ export const xClipboard = ({
   readonly shell: Pick<Shell, 'start' | 'run'>;
   readonly clock: Pick<Clock, 'sleep'>;
 }): Clipboard => ({
-  put: async (value) => {
+  put: async (value, ttlMs) => {
     // Detached, so it outlives the script's process, which ends at once.
-    const server = shell.start(serve, { stdin: value, detached: true });
+    const server = shell.start(serve(ttlMs), { stdin: value, detached: true });
     const early = await Promise.race([
       server.exited,
       clock.sleep(settleMs).then(() => undefined),

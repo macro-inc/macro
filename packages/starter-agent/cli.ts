@@ -36,6 +36,7 @@ import { z } from 'zod';
 import { refusal } from './behavior/agent/guard.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
+import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
 import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
 import { macroKey } from './behavior/context/index.ts';
@@ -137,7 +138,7 @@ const run = async (): Promise<void> => {
   // Built, credentials read, presence open and sources started: a healthy
   // boot, so the launcher's rollback starts from this HEAD.
   await markHealthy({
-    git: (args) => base.shell.run(['git', '-C', base.config.root, ...args]),
+    git: (args) => base.shell.run(gitCommand('git', base.config.root, args)),
     disk: base.disk,
     file: files.lastGood,
   });
