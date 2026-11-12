@@ -1150,9 +1150,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
+      // The coordinator may still run its copy; only the caller stops waiting.
+      const drop = () => {
+        if (!pending.delete(id)) return;
+        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.reject(supersededError());
+        finishGracefulDisposeIfDrained();
+      };
+      // One signal serves every replay of a query, so a settled request must
+      // not stay reachable from it.
+      const forgetSignal = () => signal?.removeEventListener('abort', drop);
       const entry: Pending = {
-        resolve,
-        reject,
+        resolve: (value) => {
+          forgetSignal();
+          resolve(value);
+        },
+        reject: (error) => {
+          forgetSignal();
+          reject(error);
+        },
         kind: msg.kind,
         typedSearch: isTypedSearch({ ...msg, id }),
         opKey,
@@ -1170,17 +1186,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         armRequestTimeout(id, entry, timeoutMs);
       }
       pending.set(id, entry);
-      // The coordinator may still run its copy; only the caller stops waiting.
-      signal?.addEventListener(
-        'abort',
-        () => {
-          if (!pending.delete(id)) return;
-          if (entry.timer !== undefined) clearTimeout(entry.timer);
-          entry.reject(supersededError());
-          finishGracefulDisposeIfDrained();
-        },
-        { once: true }
-      );
+      signal?.addEventListener('abort', drop, { once: true });
       try {
         getAdapter().postMessage({ ...msg, id } as CacheRequest);
         // The first accepted coordinator send is the browser Turso host's
@@ -1193,7 +1199,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         }
         const requestError = asError(error);
         recordRequestOutcome(entry, 'error', requestError);
-        reject(requestError);
+        entry.reject(requestError);
       }
     });
   }

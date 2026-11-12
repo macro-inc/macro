@@ -44,7 +44,7 @@ export const MAX_BROWSE_PAGES_PER_LOAD = 4;
  * How long a search the cache has not answered keeps reporting as pending.
  * It outlasts the host's own wait for an owner change (its one-second read
  * budget plus the read timeout a held search gets), so a search the host gave
- * up on stops at once and an owner change that never completes still ends.
+ * up on stops by then and an owner change that never completes still ends.
  */
 export const UNANSWERED_SEARCH_LIMIT_MS = 12_000;
 

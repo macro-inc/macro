@@ -16,6 +16,7 @@ const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function root<T>(fn: () => T): T {
@@ -296,7 +297,6 @@ describe('Quick Access local projection', () => {
     engineReplaced();
     await vi.advanceTimersByTimeAsync(0);
     expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }]);
-    vi.useRealTimers();
   });
 
   it('tells the host to release a search once another query supersedes it', async () => {

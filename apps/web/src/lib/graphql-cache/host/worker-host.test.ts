@@ -876,6 +876,14 @@ describe('createWorkerCacheHost', () => {
       }
     }
     await expect(typed('', AbortSignal.abort())).rejects.toThrow('superseded');
+
+    // A settled search no longer listens to the signal its replays share.
+    adapter.ignoredKinds.delete('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    const shared = new AbortController();
+    const removeListener = vi.spyOn(shared.signal, 'removeEventListener');
+    await typed('todo', shared.signal);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
     host.dispose();
   });
 
