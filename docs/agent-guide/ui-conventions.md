@@ -22,8 +22,10 @@ filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
 Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
-`variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
-(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+`variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
+the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
+(28px controls); collection headers, beside New and Search, use `md`/`icon-md`
+(32px). Tabs, New, and Search retain `md` sizing.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
