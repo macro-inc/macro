@@ -1,0 +1,232 @@
+/** @vitest-environment jsdom */
+
+// KNOWN GAPS: Source opens every stored node below and passes the null or
+// omitted value on to a feature query or helper. Native still refuses the
+// projection and the whole document fails. Each test pins the current
+// refusal; flip it to admission when that feature accepts null.
+
+import {
+  AccountManagerRequestNode,
+  AgentActivityNode,
+  AgentContextNode,
+  AwaitNode,
+  CursorSystemNotificationNode,
+  MagicChipNode,
+  PullRequestMentionNode,
+  ReplyTargetNode,
+  SnapshotNode,
+  WatermarkNode,
+} from '@macro-inc/lexical-core';
+import {
+  clearDecorators,
+  setDecorator,
+} from '@macro-inc/lexical-core/decoratorRegistry';
+import {
+  type MacroDecorators,
+  registerMacroDecoratorViews,
+} from '@macro-inc/lexical-wasm-view/view/node-views/macro';
+import {
+  initializeNativeSurfaceTests,
+  nativeSurface,
+} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
+import type { Klass, LexicalNode } from 'lexical';
+import { afterEach, beforeAll, expect, test } from 'vitest';
+import { theme } from '../theme';
+import { createNativeFastCachedDecoratorViews } from './fast-cached-views';
+import { createNativeFastStaticDecoratorViews } from './fast-static-views';
+import { createNativeContactContext } from './native-contact-host';
+import { createNativeMagicDecoratorContext } from './native-magic-host';
+import {
+  createNativePullRequestMentionContext,
+  createNativePullRequestMentionViews,
+} from './native-pr-mention-views';
+import {
+  createNativeSnapshotContext,
+  createNativeSnapshotViews,
+} from './native-snapshot-views';
+
+beforeAll(initializeNativeSurfaceTests);
+afterEach(clearDecorators);
+
+interface Family {
+  readonly rows: readonly Klass<LexicalNode>[];
+  create(): { views: Partial<MacroDecorators>; dispose(): void };
+}
+
+const STATIC: Family = {
+  rows: [
+    ReplyTargetNode,
+    AccountManagerRequestNode,
+    CursorSystemNotificationNode,
+    WatermarkNode,
+    AwaitNode,
+    AgentContextNode,
+  ],
+  create() {
+    const context = createNativeContactContext(theme);
+    return {
+      views: createNativeFastStaticDecoratorViews(context),
+      dispose: context.dispose,
+    };
+  },
+};
+const CACHED: Family = {
+  rows: [AgentActivityNode, MagicChipNode],
+  create() {
+    const context = createNativeMagicDecoratorContext(theme, 'markdown-sync');
+    return {
+      views: createNativeFastCachedDecoratorViews(context),
+      dispose: context.dispose,
+    };
+  },
+};
+const SNAPSHOT: Family = {
+  rows: [SnapshotNode],
+  create() {
+    const context = createNativeSnapshotContext(theme);
+    return {
+      views: createNativeSnapshotViews(context),
+      dispose: context.dispose,
+    };
+  },
+};
+const PULL_REQUEST: Family = {
+  rows: [PullRequestMentionNode],
+  create() {
+    const context = createNativePullRequestMentionContext(theme);
+    return {
+      views: createNativePullRequestMentionViews(context),
+      dispose: context.dispose,
+    };
+  },
+};
+
+/** Opens one stored node beside a sibling paragraph; components are inert. */
+function open(family: Family, node: object, inline: boolean) {
+  for (const row of family.rows) setDecorator(row, () => null);
+  const fixture = nativeSurface();
+  const { views, dispose } = family.create();
+  registerMacroDecoratorViews(fixture.view.registry, views);
+  const close = () => {
+    dispose();
+    fixture.close();
+  };
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            inline ? { type: 'paragraph', version: 1, children: [node] } : node,
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'sibling stays' }],
+            },
+          ],
+        },
+      })
+    );
+  } catch (error) {
+    // An expected refusal must not leak the constructed session and root.
+    close();
+    throw error;
+  }
+  close();
+}
+
+function without(node: Record<string, unknown>, field: string) {
+  return Object.fromEntries(
+    Object.entries(node).filter(([key]) => key !== field)
+  );
+}
+
+const GRANT = {
+  type: 'account-manager-request',
+  version: 1,
+  grantId: 'probe-grant',
+};
+const ACTIVITY = {
+  type: 'agent-activity',
+  version: 1,
+  agentSessionId: '00000000-0000-4000-8000-000000000001',
+  turn: 1,
+  segment: 0,
+  sealed: true,
+  rows: [{ id: 'r1', label: 'Read file', status: 'completed' }],
+};
+const MAGIC = {
+  type: 'magic-chip',
+  version: 5,
+  agentSessionId: '00000000-0000-4000-8000-000000000001',
+  promptedMessage: null,
+  status: 'no_messages',
+};
+const SNAPSHOT_NODE = {
+  type: 'snapshot',
+  version: 1,
+  documentId: 'probe-doc',
+  documentName: 'Probe Doc',
+  blockName: 'md',
+  content: 'Snapshot body text',
+  snapshotDate: '2026-11-01T00:00:00Z',
+};
+const PR = {
+  type: 'pr-mention',
+  version: 1,
+  id: 'probe-pr',
+  label: 'Probe PR #1',
+  url: 'https://github.com/example/repo/pull/1',
+};
+
+test('controls: the valid stored nodes open', () => {
+  open(STATIC, GRANT, true);
+  open(CACHED, ACTIVITY, false);
+  open(CACHED, MAGIC, true);
+  open(SNAPSHOT, SNAPSHOT_NODE, false);
+  open(PULL_REQUEST, PR, true);
+});
+
+test('known gap: a stored null or missing account manager grant id is refused', () => {
+  for (const node of [{ ...GRANT, grantId: null }, without(GRANT, 'grantId')])
+    expect(() => open(STATIC, node, true)).toThrow(
+      'Invalid account manager request payload'
+    );
+});
+
+test('known gap: stored null or missing agent activity session and position fields are refused', () => {
+  for (const node of [
+    { ...ACTIVITY, agentSessionId: null },
+    without(ACTIVITY, 'agentSessionId'),
+    { ...ACTIVITY, turn: null },
+    { ...ACTIVITY, segment: null },
+    without(ACTIVITY, 'segment'),
+    { ...ACTIVITY, sealed: null },
+  ])
+    expect(() => open(CACHED, node, false)).toThrow(
+      'Invalid agent activity payload'
+    );
+});
+
+test('known gap: a stored null or missing magic chip session id is refused', () => {
+  for (const node of [
+    { ...MAGIC, agentSessionId: null },
+    without(MAGIC, 'agentSessionId'),
+  ])
+    expect(() => open(CACHED, node, true)).toThrow(
+      'Invalid magic chip payload'
+    );
+});
+
+test('known gap: a stored null snapshot document id is refused', () => {
+  expect(() =>
+    open(SNAPSHOT, { ...SNAPSHOT_NODE, documentId: null }, false)
+  ).toThrow('Invalid native Snapshot payload');
+});
+
+test('known gap: a stored pull request mention without an id is refused', () => {
+  expect(() => open(PULL_REQUEST, without(PR, 'id'), true)).toThrow(
+    'Invalid native PR mention payload'
+  );
+});
