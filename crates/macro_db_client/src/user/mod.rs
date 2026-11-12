@@ -1,3 +1,4 @@
+pub mod claim_handle;
 pub mod count;
 pub mod create;
 pub mod create_user;

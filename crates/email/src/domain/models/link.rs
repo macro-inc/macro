@@ -12,6 +12,8 @@ pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    /// The account's first-party Rox mailbox.
+    Rox,
 }
 
 impl UserProvider {
@@ -19,6 +21,7 @@ impl UserProvider {
         match self {
             UserProvider::Gmail => "GMAIL",
             UserProvider::Outlook => "OUTLOOK",
+            UserProvider::Rox => "ROX",
         }
     }
 }

@@ -15,6 +15,8 @@ pub struct LegacyUserInfo {
     pub ai_data_consent: bool,
     pub has_trialed: bool,
     pub referral_code: String,
+    /// The claimed first-party mailbox handle, if this account has one.
+    pub handle: Option<String>,
     /// When the account was created. `None` for accounts that predate the
     /// `createdAt` column.
     pub created_at: Option<DateTime<Utc>>,
@@ -41,6 +43,7 @@ pub async fn get_legacy_user_info(
             u."hasChromeExt" as has_chrome_ext,
             u."aiDataConsent" as ai_data_consent,
             mu.has_trialed as has_trialed,
+            CASE WHEN mu.mailbox_handle_claimed_at IS NOT NULL THEN mu.username END as handle,
             u.macro_user_id as "macro_user_id",
             u."createdAt" as "created_at?"
         FROM "User" u
@@ -61,6 +64,7 @@ pub async fn get_legacy_user_info(
         ai_data_consent: row.ai_data_consent,
         has_trialed: row.has_trialed,
         referral_code: converter.from_uuid(&row.macro_user_id),
+        handle: row.handle,
         created_at: row.created_at,
     })
     .fetch_one(db)

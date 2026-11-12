@@ -39,6 +39,8 @@ export async function expectLanded(page: Page, target: string) {
 
 export async function signInWithCode(page: Page, email: string, code: string) {
   await page.getByPlaceholder('you@company.com').fill(email);
+  const handle = page.getByPlaceholder('Your Rox handle');
+  if (await handle.count()) await handle.fill('ada');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByText(email)).toBeVisible();
   await page.getByLabel('One-time code').fill(code);

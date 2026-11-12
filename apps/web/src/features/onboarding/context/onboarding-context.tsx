@@ -24,6 +24,8 @@ export type Loadable<T> =
 export type Viewer = {
   id: string;
   email: string | undefined;
+  /** The claimed first-party mailbox handle, absent until a legacy user claims it. */
+  handle: string | undefined;
   tutorialComplete: boolean;
   /** An active or trialing paid license. */
   licensed: boolean;
@@ -110,6 +112,8 @@ export type OnboardingContext = {
   viewer: Accessor<ViewerState>;
   /** Re-reads the viewer from the server, e.g. while a webhook settles. */
   refreshViewer(): Promise<ViewerState>;
+  /** Claims the handle once and initializes its Rox mailbox link. */
+  claimHandle(handle: string): Promise<void>;
   createOnboardingRecord(): Accessor<Loadable<OnboardingRecord>>;
   createEmailAccounts(): EmailAccountsSource;
   /**

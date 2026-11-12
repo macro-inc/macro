@@ -27,6 +27,7 @@ import {
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
+import { HandleStep } from './handle-step';
 import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
 import { RoutinesStep } from './routines-step';
@@ -250,6 +251,9 @@ export function OnboardingFlowView(props: {
                 <ToolsStep onContinue={() => advance()} />
               </StoryStageView>
             )}
+          </Match>
+          <Match when={step() === 'handle'}>
+            <HandleStep onContinue={() => advance()} />
           </Match>
           <Match when={step() === 'work' || step() === 'personal'}>
             <EmailStep

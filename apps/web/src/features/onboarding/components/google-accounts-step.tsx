@@ -11,6 +11,8 @@ import { animateOnboardingStep } from './motion/step-transition';
 
 export interface GoogleAccountsStepProps {
   mode?: 'work' | 'personal';
+  /** Labels the external provider as an optional import after signup. */
+  importMode?: boolean;
   accountEmail?: string;
   workConnected?: boolean;
   workNeedsReconnect?: boolean;
@@ -49,6 +51,8 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
   const googleLabel = () => {
     if (props.loading) return 'Checking connection…';
     if (googleConnecting()) return 'Opening Google…';
+    if (props.importMode)
+      return personal() ? 'Import personal email' : 'Import work email';
     if (withMicrosoft()) return 'Continue with Google';
     if (personal()) return 'Connect personal email';
     if (props.workNeedsReconnect) return 'Reconnect work email';
@@ -79,7 +83,9 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted max-[359px]:text-[13px] sm:text-[15px] [text-wrap:balance]">
           <Switch
             fallback={
-              'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
+              props.importMode
+                ? 'Optional: import an external inbox to read, send, and organize email and manage its calendars. Your Rox address and native Drive remain yours without it. Your password stays with Google, and you can disconnect anytime.'
+                : 'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
             }
           >
             <Match when={withMicrosoft()}>
@@ -184,7 +190,9 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             </Show>
             {props.microsoftConnecting
               ? 'Opening Microsoft…'
-              : 'Continue with Microsoft'}
+              : props.importMode
+                ? 'Import from Microsoft'
+                : 'Continue with Microsoft'}
           </button>
         </Show>
         <Show when={!connected() && props.onSkip}>

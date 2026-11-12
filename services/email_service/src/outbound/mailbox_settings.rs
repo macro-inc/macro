@@ -7,6 +7,11 @@ pub struct ProviderMailboxSettings<R, T, L> {
     pub gmail: super::email_api::GmailApi,
     pub outlook: MailboxApiService<R, T, L>,
 }
+fn unsupported_rox() -> EmailApiError {
+    EmailApiError::Permanent {
+        message: "first-party mailbox settings are not available".into(),
+    }
+}
 fn access(mailbox: SettingsMailbox) -> MailboxAccess {
     MailboxAccess {
         link_id: mailbox.key.link_id,
@@ -24,6 +29,7 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.list_labels(mailbox.key.link_id).await,
             UserProvider::Outlook => self.outlook.labels(access(mailbox)).await,
+            UserProvider::Rox => Err(unsupported_rox()),
         }
     }
     async fn create_label(
@@ -34,6 +40,7 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.create_label(mailbox.key.link_id, name).await,
             UserProvider::Outlook => self.outlook.create_label(access(mailbox), name).await,
+            UserProvider::Rox => Err(unsupported_rox()),
         }
     }
     async fn delete_label(
@@ -44,6 +51,7 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.delete_label(mailbox.key.link_id, name).await,
             UserProvider::Outlook => self.outlook.delete_label(access(mailbox), name).await,
+            UserProvider::Rox => Err(unsupported_rox()),
         }
     }
     async fn category_messages(

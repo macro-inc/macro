@@ -1,7 +1,7 @@
 use crate::api::ApiContext;
 use crate::api::context::{AuthorizationService, CalendarGrantService};
 use crate::pubsub::publish_email_event;
-use crate::utils::extract_email_with_response;
+
 use anyhow::Context;
 use axum::{
     extract::{Query, State},
@@ -43,6 +43,9 @@ pub enum InitError {
     #[error("No Gmail grant available to provision from")]
     NoGmailGrant,
 
+    #[error("A mailbox handle must be claimed before initializing Rox mail")]
+    HandleRequired,
+
     #[error("Failed to enqueue backfill message")]
     EnqueueError,
 
@@ -72,6 +75,9 @@ pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
 /// Stable machine-readable code for [`InitError::NoGmailGrant`].
 pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
 
+/// Stable machine-readable code for [`InitError::HandleRequired`].
+pub const HANDLE_REQUIRED_CODE: &str = "HANDLE_REQUIRED";
+
 /// Structured 400 body carrying a machine-readable code. Clients branch on
 /// `code` instead of parsing the human message.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -95,6 +101,7 @@ impl InitError {
             },
             InitError::AlreadyInitialized
             | InitError::NoGmailGrant
+            | InitError::HandleRequired
             | InitError::BadRequest(_)
             | InitError::Parse(_) => StatusCode::BAD_REQUEST,
             InitError::ProviderError(EmailApiError::RateLimited { .. }) => {
@@ -146,6 +153,14 @@ impl IntoResponse for InitError {
                 }),
             )
                 .into_response(),
+            InitError::HandleRequired => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: HANDLE_REQUIRED_CODE.to_string(),
+                    message: InitError::HandleRequired.to_string(),
+                }),
+            )
+                .into_response(),
             other => (status_code, headers, other.to_string()).into_response(),
         }
     }
@@ -179,8 +194,8 @@ pub struct InitResponse {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct InitParams {
-    /// Optional link id from a `/link/gmail` flow. When set, init provisions the inbox
-    /// for the email recorded on the in_progress_user_link row instead of the JWT email.
+    /// Optional external import attempt from `/link/gmail` or `/link/outlook`.
+    /// Without it, init returns or creates the account's first-party Rox link.
     link_id: Option<Uuid>,
     /// When set, a connect that collides with a mailbox already connected by another
     /// macro user promotes it to a shared inbox instead of returning a 409 conflict.
@@ -214,6 +229,22 @@ pub async fn handler(
     query: Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
+    if query.link_id.is_none() {
+        let link = crate::outbound::mailbox_init::ensure_rox_mailbox(
+            &ctx.db,
+            &authorization.authorization.user.user_context.fusion_user_id,
+            authorization.authorization.user.macro_user_id.clone(),
+        )
+        .await
+        .map_err(InitError::DatabaseError)?
+        .ok_or(InitError::HandleRequired)?;
+        return Ok(Json(InitResponse {
+            link_id: link.id,
+            backfill_job_id: None,
+        })
+        .into_response());
+    }
+
     if let Some(attempt) = query.link_id {
         let request = InitializeMailbox {
             attempt,
@@ -325,7 +356,9 @@ async fn init_user(
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
 
-    let (link, _email_address) = if let Some(link_id) = link_id {
+    let (link, _email_address) = {
+        let link_id = link_id
+            .ok_or_else(|| InitError::BadRequest("external import requires a link_id".into()))?;
         let in_progress =
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
@@ -679,57 +712,6 @@ async fn init_user(
 
             (link, linked_email)
         }
-    } else {
-        let existing_link = pg_repo
-            .link_by_fusionauth_and_macro_id(
-                &user_context.fusion_user_id,
-                macro_user_id.clone(),
-                UserProvider::Gmail,
-            )
-            .await
-            .context("Failed to fetch existing link")?;
-
-        if existing_link.is_some() {
-            return Err(InitError::AlreadyInitialized);
-        }
-
-        let email = extract_email_with_response(&user_context.user_id)
-            .map_err(|_| InitError::BadRequest("Failed to extract email".to_string()))?;
-
-        let provisional_link = new_gmail_link(
-            user_context.fusion_user_id.clone(),
-            macro_user_id.clone(),
-            email,
-        )?;
-        let subscription = ctx
-            .email_api
-            .register_subscription_without_cache(&provisional_link)
-            .await
-            .map_err(classify_provider_init_error)?;
-
-        let mut tx = ctx
-            .db
-            .begin()
-            .await
-            .context("Failed to begin link transaction")?;
-        crate::outbound::mailbox_init::lock_gmail_connection(
-            &mut tx,
-            &user_context.user_id,
-            provisional_link.email_address.0.as_ref(),
-        )
-        .await
-        .map_err(InitError::MailboxInitialization)?;
-
-        let link =
-            enable_gmail_sync_for(tx.as_mut(), provisional_link, subscription.cursor.as_str())
-                .await?;
-        let email = link.email_address.0.as_ref().to_string();
-
-        tx.commit()
-            .await
-            .context("Failed to commit link transaction")?;
-
-        (link, email)
     };
 
     if let (Some(grant), Some(link_id)) = (completed_google_grant.as_ref(), link_id) {
@@ -1035,7 +1017,7 @@ fn new_gmail_link(
     email_address: String,
 ) -> Result<Link, InitError> {
     let email_address = EmailStr::try_from(email_address)?;
-    let is_primary = Link::derive_is_primary(&macro_id, &email_address);
+    let is_primary = Link::derive_is_primary(link::UserProvider::Gmail);
     Ok(Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,

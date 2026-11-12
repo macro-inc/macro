@@ -78,11 +78,13 @@ export function createOnboardingFlow(
   const restore = (userId: string | undefined) => {
     if (!userId || step()) return;
     const draft = readSignupDraft();
-    const initial = restoreOnboardingStep(
-      draft?.authenticating ? 'work' : readSavedStep(userId),
+    const restored = restoreOnboardingStep(
+      draft?.authenticating ? 'handle' : readSavedStep(userId),
       options.checkoutReturn() !== undefined,
       options.requestedStep()
     );
+    const initial =
+      restored === 'handle' && viewer()?.handle ? 'work' : restored;
     saveStep(userId, initial);
     if (draft?.authenticating && draft.accent)
       context.applyAccent(draft.accent, userId);
@@ -166,7 +168,8 @@ export function createOnboardingFlow(
       index: index(),
       state: outcome,
     });
-    return nextOnboardingStep(current, outcome);
+    const next = nextOnboardingStep(current, outcome);
+    return next === 'handle' && viewer()?.handle ? 'work' : next;
   };
 
   return { status, step, index, commit, leave, signupProvider };

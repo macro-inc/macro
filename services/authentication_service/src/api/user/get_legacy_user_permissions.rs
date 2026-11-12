@@ -38,6 +38,8 @@ pub struct GetLegacyUserPermissionsResponse {
     ai_data_consent: bool,
     /// The referral code for the user
     referral_code: String,
+    /// The claimed first-party mailbox handle, if one exists.
+    handle: Option<String>,
     /// When the account was created. Absent for accounts that predate
     /// creation-time tracking.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,6 +152,7 @@ pub async fn handler(
         has_trialed: legacy_user_info.has_trialed,
         ai_data_consent: legacy_user_info.ai_data_consent,
         referral_code: legacy_user_info.referral_code,
+        handle: legacy_user_info.handle,
         created_at: legacy_user_info.created_at,
     })
 }

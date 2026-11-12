@@ -495,3 +495,124 @@ async fn concurrent_gmail_and_outlook_connections_share_one_remaining_free_slot(
     let count=sqlx::query_scalar!("SELECT count(*) FROM email_links l WHERE l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links a WHERE a.link_id=l.id AND a.primary_macro_id=$1)",owner.1.as_ref()).fetch_one(&db).await.unwrap();
     assert_eq!(count, Some(2));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rox_init_uses_the_claimed_handle_without_a_gmail_client(db: PgPool) {
+    let owner = actor(&db, "legacy@example.com").await;
+    assert_eq!(
+        macro_db_client::macro_user::get_macro_user(&db, &owner.0.to_string())
+            .await
+            .unwrap()
+            .username,
+        "macro|legacy@example.com"
+    );
+    assert!(
+        ensure_rox_mailbox(&db, &owner.0.to_string(), owner.1.clone())
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let gmail = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider,is_primary) VALUES($1,$2,$3,'legacy@example.com','GMAIL',true)",
+        gmail,
+        owner.1.as_ref(),
+        owner.0.to_string()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE macro_user SET username = 'ada', mailbox_handle_claimed_at = now() WHERE id = $1",
+        owner.0
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let link = ensure_rox_mailbox(&db, &owner.0.to_string(), owner.1.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(link.email_address.0.as_ref(), "ada@rox.one");
+    assert_eq!(
+        link.provider,
+        models_email::email::service::link::UserProvider::Rox
+    );
+    assert!(link.is_primary);
+    assert!(!link.is_sync_active);
+    assert_eq!(
+        ensure_rox_mailbox(&db, &owner.0.to_string(), owner.1.clone())
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        link.id
+    );
+    assert!(
+        !sqlx::query_scalar!("SELECT is_primary FROM email_links WHERE id = $1", gmail)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_backfill_jobs WHERE link_id = $1",
+            link.id
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn gmail_connected_after_rox_stays_non_primary(db: PgPool) {
+    let owner = actor(&db, "owner@example.com").await;
+    sqlx::query!(
+        "UPDATE macro_user SET username = 'ada', mailbox_handle_claimed_at = now() WHERE id = $1",
+        owner.0
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    ensure_rox_mailbox(&db, &owner.0.to_string(), owner.1.clone())
+        .await
+        .unwrap();
+
+    let email_address =
+        macro_user_id::email::EmailStr::try_from("owner@gmail.example".to_owned()).unwrap();
+    let gmail = models_email::email::service::link::Link {
+        id: Uuid::now_v7(),
+        macro_id: owner.1.clone(),
+        fusionauth_user_id: owner.0.to_string(),
+        email_address,
+        provider: models_email::email::service::link::UserProvider::Gmail,
+        is_sync_active: true,
+        is_primary: models_email::email::service::link::Link::derive_is_primary(
+            models_email::email::service::link::UserProvider::Gmail,
+        ),
+        needs_reauth: false,
+        last_sync_error_at: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+    };
+    let mut tx = db.begin().await.unwrap();
+    let gmail = email_db_client::links::insert::upsert_link(&mut tx, gmail)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    assert!(!gmail.is_primary);
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT is_primary FROM email_links WHERE macro_id = $1 AND provider = 'ROX'",
+            owner.1.as_ref()
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap()
+    );
+}

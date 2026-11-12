@@ -1,6 +1,8 @@
 /** A connected Google inbox as onboarding shows it. */
 export type EmailAccount = {
   address: string;
+  /** Absent in older fixtures, which represent external imports. */
+  provider?: 'GMAIL' | 'OUTLOOK' | 'ROX';
   isPrimary: boolean;
   /** The Macro user who owns the link — another user's for a shared inbox. */
   ownerId: string;

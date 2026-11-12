@@ -429,7 +429,7 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
             .context("failed to parse email address")?;
 
         let is_primary =
-            models_email::email::service::link::Link::derive_is_primary(&macro_id, &email_str);
+            models_email::email::service::link::Link::derive_is_primary(seed_data.provider);
         let link = models_email::email::service::link::Link {
             id: Uuid::now_v7(),
             macro_id,

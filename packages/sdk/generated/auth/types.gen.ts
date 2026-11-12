@@ -730,6 +730,10 @@ export type GetLegacyUserPermissionsResponse = {
      */
     hasTrialed: boolean;
     /**
+     * The claimed first-party mailbox handle, if one exists.
+     */
+    handle?: string | null;
+    /**
      * Whether this is an agent account rather than a person
      */
     isAgent: boolean;
@@ -1331,6 +1335,30 @@ export type MergeGithubPullRequestResponse = {
     sha: string;
 };
 
+/**
+ * An authenticated request to claim the account's first-party mailbox handle.
+ */
+export type ClaimHandleRequest = {
+    /**
+     * A lowercase handle satisfying the shared Rox mailbox grammar.
+     */
+    handle: string;
+};
+
+/**
+ * The claimed handle and its first-party address.
+ */
+export type ClaimHandleResponse = {
+    /**
+     * `handle@rox.one`.
+     */
+    address: string;
+    /**
+     * The canonical handle.
+     */
+    handle: string;
+};
+
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -1344,6 +1372,10 @@ export type PasswordlessRequest = {
      * The email to initiate passwordless authentication for
      */
     email: string;
+    /**
+     * Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one.
+     */
+    handle?: string | null;
     /**
      * Create an agent account if this address has no account yet. Otherwise
      * `true` has no effect, and `false` reverts an agent flag nobody has proven:
@@ -4667,6 +4699,28 @@ export type GetUserInfoResponses = {
 };
 
 export type GetUserInfoResponse = GetUserInfoResponses[keyof GetUserInfoResponses];
+
+export type ClaimHandleData = {
+    body: ClaimHandleRequest;
+    path?: never;
+    query?: never;
+    url: '/user/handle';
+};
+
+export type ClaimHandleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimHandleError = ClaimHandleErrors[keyof ClaimHandleErrors];
+
+export type ClaimHandleResponses = {
+    200: ClaimHandleResponse;
+};
+
+export type ClaimHandleResponse2 = ClaimHandleResponses[keyof ClaimHandleResponses];
 
 export type GetUserNameData = {
     body?: never;

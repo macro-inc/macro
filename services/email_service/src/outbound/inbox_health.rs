@@ -37,6 +37,7 @@ impl InboxHealthRepository for PgInboxHealth {
             provider: match row.provider.as_str() {
                 "GMAIL" => UserProvider::Gmail,
                 "OUTLOOK" => UserProvider::Outlook,
+                "ROX" => UserProvider::Rox,
                 _ => return Err(MailboxError::Persistence),
             },
             is_sync_active: row.is_sync_active,
@@ -114,6 +115,9 @@ impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealth
                         message: "Microsoft token health is temporarily unavailable".into(),
                     },
                 }),
+            UserProvider::Rox => Err(EmailApiError::Permanent {
+                message: "first-party token health is not available".into(),
+            }),
         }
     }
     async fn renew_gmail_watch(

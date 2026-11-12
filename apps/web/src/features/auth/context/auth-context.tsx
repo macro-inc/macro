@@ -53,6 +53,8 @@ export type AuthContext = {
   startSso(provider: SsoProvider, intent: AuthIntent): Promise<void>;
   sendEmailCode(input: {
     email: string;
+    /** Required when this address creates a new account. */
+    handle?: string;
     password?: string;
     isAgent: boolean;
   }): Promise<SendCodeResult>;

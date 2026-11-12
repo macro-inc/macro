@@ -176,11 +176,14 @@ function EmailStep(props: { login: EmailLogin }) {
   return (
     <EmailForm
       email={props.login.email()}
+      handle={props.login.handle()}
+      signup={props.login.isSignup()}
       password={props.login.password()}
       passwordRequired={props.login.passwordRequired()}
       sending={props.login.sending()}
       error={props.login.sendError()}
       onEmailInput={props.login.setEmail}
+      onHandleInput={props.login.setHandle}
       onPasswordInput={props.login.setPassword}
       onSubmit={props.login.submitEmail}
       onBack={props.login.back}

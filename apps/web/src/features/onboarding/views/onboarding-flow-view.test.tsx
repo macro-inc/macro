@@ -13,6 +13,7 @@ import {
   saveStep,
 } from '../primitives/flow-storage';
 import {
+  defaultFakeWorld,
   FAKE_VIEWER_ID,
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
@@ -119,6 +120,22 @@ const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
 describe('onboarding flow', () => {
+  it('requires a legacy account to claim a valid handle before imports', async () => {
+    const world = defaultFakeWorld();
+    if (world.viewer) world.viewer.handle = undefined;
+    const { fake } = setup({ world, resume: 'handle' });
+
+    await heading('Choose your Rox handle.');
+    fireEvent.input(screen.getByLabelText('Handle'), {
+      target: { value: 'ada' },
+    });
+    click('Continue');
+
+    await heading(/Connect your work/);
+    expect(fake.calls()).toContain('claimHandle:ada');
+    expect(fake.world.viewer?.handle).toBe('ada');
+  });
+
   it('walks every step and finishes with Free', async () => {
     const { fake, navigate } = setup({ next: '/channel/launch' });
 
@@ -133,7 +150,7 @@ describe('onboarding flow', () => {
     click('Continue');
 
     await heading(/Connect your work/);
-    click('Connect work email');
+    click('Import work email');
     await screen.findByText('ada@acme.com');
     click('Continue');
 
@@ -1188,7 +1205,7 @@ describe('after a Microsoft sign-up', () => {
     const { fake } = setup({ world: { outlookAvailable: true } });
     await heading(/Continue with your work/);
     expect(connects(fake.calls())).toEqual([]);
-    click('Continue with Microsoft');
+    click('Import from Microsoft');
     expect(connects(fake.calls())).toEqual(['connectInbox:microsoft']);
   });
 });

@@ -277,6 +277,7 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 })
                 .map(|r| r.sender)
                 .collect(),
+            UserProvider::Rox => Vec::new(),
         };
         result.sort();
         result.dedup();

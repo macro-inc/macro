@@ -6,6 +6,7 @@
  */
 import type { GetLegacyUserPermissionsResponseCreatedAt } from './getLegacyUserPermissionsResponseCreatedAt';
 import type { GetLegacyUserPermissionsResponseGroup } from './getLegacyUserPermissionsResponseGroup';
+import type { GetLegacyUserPermissionsResponseHandle } from './getLegacyUserPermissionsResponseHandle';
 import type { GetLegacyUserPermissionsResponseName } from './getLegacyUserPermissionsResponseName';
 
 export interface GetLegacyUserPermissionsResponse {
@@ -21,6 +22,8 @@ creation-time tracking. */
   hasChromeExt: boolean;
   /** Whether the user has trialed through stripe */
   hasTrialed: boolean;
+  /** The claimed first-party mailbox handle, if one exists. */
+  handle?: GetLegacyUserPermissionsResponseHandle;
   /** Whether this is an agent account rather than a person */
   isAgent: boolean;
   /** The user's license status */

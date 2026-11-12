@@ -41,6 +41,7 @@ export function EmailStep(props: {
   return (
     <GoogleAccountsStep
       mode={props.mode}
+      importMode
       accountEmail={inboxes.primary()?.address}
       workConnected={inboxes.primary() !== undefined}
       personalEmail={inboxes.secondary()?.address}

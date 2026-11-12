@@ -119,6 +119,7 @@ impl EmailCodeProvider for AuthServiceEmailCodes {
                     .json(&PasswordlessRequest {
                         email: email.to_owned(),
                         redirect_uri: self.redirect_uri.clone(),
+                        handle: None,
                         referral_code: None,
                         is_agent: false,
                     })

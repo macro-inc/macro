@@ -2,6 +2,7 @@ export const ONBOARDING_STEPS = [
   'welcome',
   'vision',
   'security',
+  'handle',
   'work',
   'personal',
   'tools',
@@ -71,7 +72,7 @@ export function restoreOnboardingStep(
 /** Migrate in-progress sessions from the previous flow without losing OAuth returns. */
 function resumeSavedStep(saved: unknown): OnboardingStep | undefined {
   if (typeof saved !== 'string') return undefined;
-  if (saved === 'email') return 'work';
+  if (saved === 'email') return 'handle';
   if (saved.startsWith('connect-')) return 'tools';
   if (saved === 'building' || saved === 'summary') return 'plan';
   return ONBOARDING_STEPS.find((step) => step === saved);

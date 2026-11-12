@@ -1,7 +1,7 @@
 use crate::links::get::{
     fetch_inbox_details_for_macro_id, fetch_inboxes_for_macro_id, fetch_link_by_email,
-    fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
-    fetch_owned_link_for_thread, fetch_readable_owned_inboxes,
+    fetch_owned_link_for_message, fetch_owned_link_for_thread, fetch_primary_link_by_macro_id,
+    fetch_readable_owned_inboxes,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -667,57 +667,37 @@ async fn fetch_link_by_email_none_when_mailbox_unconnected(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn fetch_link_by_macro_id_and_email_address_picks_own_inbox_not_newest(
+async fn fetch_primary_link_uses_first_party_address_not_legacy_user_id(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    // A user with two inboxes under one macro_id. CRM backfill must resolve the
-    // inbox that IS the user (address == the macro_id email), not the newest
-    // link — which is what a plain macro_id lookup would return.
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
-
-    // Own inbox first...
-    let (own_link, _, _) =
+    let (external, _, _) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
-    // ...then a second, newer inbox on the same macro_id.
-    let (other_link, _, _) =
-        insert_inbox_with_thread_and_message(&pool, CHILD, "other@corp.test").await;
-    assert_ne!(own_link, other_link);
+    let (rox, _, _) = insert_inbox_with_thread_and_message(&pool, CHILD, "ada@rox.one").await;
+    sqlx::query!(
+        "UPDATE email_links SET is_primary = (id = $1), provider = CASE WHEN id = $1 THEN 'ROX' ELSE provider END",
+        rox
+    )
+        .execute(&pool)
+        .await?;
 
-    let found =
-        fetch_link_by_macro_id_and_email_address(&pool, CHILD, "sharedbox@corp.test").await?;
-    assert_eq!(found.map(|l| l.id), Some(own_link));
-
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn fetch_link_by_macro_id_and_email_address_is_case_insensitive(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    // The macro_id email is always lowercased, but a stored email_address may
-    // preserve its original casing — the match must still succeed.
-    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
-    let (link_id, _, _) =
-        insert_inbox_with_thread_and_message(&pool, CHILD, "SharedBox@Corp.Test").await;
-
-    let found =
-        fetch_link_by_macro_id_and_email_address(&pool, CHILD, "sharedbox@corp.test").await?;
-    assert_eq!(found.map(|l| l.id), Some(link_id));
+    let found = fetch_primary_link_by_macro_id(&pool, CHILD).await?;
+    assert_eq!(found.map(|link| link.id), Some(rox));
+    assert_ne!(rox, external);
 
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn fetch_link_by_macro_id_and_email_address_none_when_no_match(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    // Macro_id has a link, but none whose address matches the macro_id email.
+async fn fetch_primary_link_ignores_external_imports(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
     insert_inbox_with_thread_and_message(&pool, CHILD, "delegated@corp.test").await;
 
-    let found =
-        fetch_link_by_macro_id_and_email_address(&pool, CHILD, "sharedbox@corp.test").await?;
-    assert!(found.is_none());
+    assert!(
+        fetch_primary_link_by_macro_id(&pool, CHILD)
+            .await?
+            .is_none()
+    );
 
     Ok(())
 }

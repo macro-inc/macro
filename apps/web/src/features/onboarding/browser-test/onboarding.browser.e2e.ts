@@ -33,7 +33,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   expect((await fakeWorld(page)).accent).toBe('#f77d67');
 
   // Inbox OAuth is a full-page round-trip back into the same step.
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Import work email' }).click();
   await expect(page.getByText('ada@acme.com')).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -83,7 +83,7 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Import work email' }).click();
   await expect(page.getByText('ada@acme.com')).toBeVisible();
   expect(new URL(page.url()).searchParams.get('next')).toBeNull();
 
@@ -401,7 +401,7 @@ test.describe('with motion', () => {
     ).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(
-      page.getByRole('button', { name: 'Connect work email' })
+      page.getByRole('button', { name: 'Import work email' })
     ).toBeEnabled();
     await expect(page.locator('[inert]')).toHaveCount(0);
   });
@@ -473,7 +473,7 @@ for (const width of [1440, 390]) {
         )
       );
       await page.reload();
-      await page.getByRole('button', { name: 'Connect work email' }).click();
+      await page.getByRole('button', { name: 'Import work email' }).click();
       await expect(page.getByText('ada@acme.com')).toBeVisible();
       await expect(page.locator('.onboarding-flow')).toHaveCSS(
         'background-color',

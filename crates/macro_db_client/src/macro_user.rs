@@ -100,7 +100,8 @@ pub async fn check_username_exists(
         r#"
         SELECT id
         FROM macro_user
-        WHERE username = $1
+        WHERE lower(username) = lower($1)
+          AND mailbox_handle_claimed_at IS NOT NULL
         "#,
         username
     )

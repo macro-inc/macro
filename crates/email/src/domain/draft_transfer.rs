@@ -190,6 +190,11 @@ where
         let maximum = match plan.destination_provider {
             UserProvider::Gmail => 18_000_000,
             UserProvider::Outlook => 150_000_000,
+            UserProvider::Rox => {
+                return Err(EmailErr::InvalidDraft(
+                    "first-party mailbox attachments are not available".to_string(),
+                ));
+            }
         };
         let mut total = plan
             .uploads

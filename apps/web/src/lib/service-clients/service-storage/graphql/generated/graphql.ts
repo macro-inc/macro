@@ -1421,7 +1421,9 @@ export type GraphqlEmailProvider =
   /** Google Gmail. */
   | 'GMAIL'
   /** Microsoft Outlook and Microsoft 365. */
-  | 'OUTLOOK';
+  | 'OUTLOOK'
+  /** The account's first-party Rox mailbox. */
+  | 'ROX';
 
 /** GraphQL input representing the email value. */
 export type GraphqlEmailValue =

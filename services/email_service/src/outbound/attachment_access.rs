@@ -65,6 +65,7 @@ impl<A: MailboxAttachmentAccess> AttachmentBytes for ProviderAttachmentBytes<A> 
                     MailboxError::Provider(e) => provider_error(e),
                     _ => AttachmentError::Infrastructure,
                 }),
+            UserProvider::Rox => Err(AttachmentError::NotFound),
         }
     }
 }

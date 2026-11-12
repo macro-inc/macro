@@ -83,10 +83,13 @@ function setupWithTokenSignal(
 const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 // Stepper swaps steps on the next frame, so each step is awaited.
-const typeEmail = async (value: string) =>
+const typeEmail = async (value: string) => {
   fireEvent.input(await screen.findByPlaceholderText('you@company.com'), {
     target: { value },
   });
+  const handle = screen.queryByPlaceholderText('Your Rox handle');
+  if (handle) fireEvent.input(handle, { target: { value: 'ada' } });
+};
 const typeCode = async (value: string) =>
   fireEvent.input(await screen.findByLabelText(/code/i), {
     target: { value },

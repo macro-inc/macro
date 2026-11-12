@@ -30,15 +30,19 @@ pub async fn create_user(
     // Create macro user
     let macro_user_id = sqlx::query!(
         r#"
-        INSERT INTO "macro_user" ("id", "username", "stripe_customer_id", "email", "has_trialed")
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO "macro_user" (
+            "id", "username", "stripe_customer_id", "email", "has_trialed",
+            "mailbox_handle_claimed_at"
+        )
+        VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 THEN now() ELSE NULL END)
         RETURNING id
         "#,
         &id,
         username,
         macro_user_customer_id,
         email,
-        false // has_trialed
+        false, // has_trialed
+        macro_user_id::handle::MailboxHandle::parse(username).is_ok()
     )
     .map(|row| row.id)
     .fetch_one(&mut *transaction)
