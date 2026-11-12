@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 const { fetchWithToken } = vi.hoisted(() => ({ fetchWithToken: vi.fn() }));
@@ -85,5 +86,59 @@ describe('teamAgentsClient', () => {
       `${SERVER_HOSTS['auth-service']}/team_agents/macro%7Cada%40agents.macro.invalid`,
       { method: 'DELETE' }
     );
+  });
+
+  it('reads a missing voice as none, and keeps other failures', async () => {
+    const voiceUrl = `${SERVER_HOSTS['auth-service']}/team_agents/macro%7Cada%40agents.macro.invalid/voice`;
+    fetchWithToken.mockReset();
+    fetchWithToken.mockResolvedValueOnce(
+      err([{ code: 'NOT_FOUND', message: 'Resource not found' }])
+    );
+    const missing = await teamAgentsClient.voice(
+      'macro|ada@agents.macro.invalid'
+    );
+    expect(missing.isOk() && missing.value).toBeNull();
+    expect(fetchWithToken).toHaveBeenCalledWith(voiceUrl);
+
+    fetchWithToken.mockResolvedValueOnce(
+      err([{ code: 'FORBIDDEN', message: 'Forbidden' }])
+    );
+    const forbidden = await teamAgentsClient.voice(
+      'macro|ada@agents.macro.invalid'
+    );
+    expect(forbidden.isErr()).toBe(true);
+
+    fetchWithToken.mockResolvedValueOnce(ok({ model: 'aura-2-thalia-en' }));
+    const saved = await teamAgentsClient.voice(
+      'macro|ada@agents.macro.invalid'
+    );
+    expect(saved.isOk() && saved.value).toEqual({ model: 'aura-2-thalia-en' });
+  });
+
+  it('puts the voice and names an unknown voice apart from a repository failure', async () => {
+    fetchWithToken.mockReset();
+    await teamAgentsClient.setVoice('macro|ada@agents.macro.invalid', {
+      model: 'aura-2-arcas-en',
+    });
+    const [url, init] = fetchWithToken.mock.calls[0] as [
+      string,
+      { method: string; body: string; errorResponseHandler: ErrorHandler },
+    ];
+    expect(url).toBe(
+      `${SERVER_HOSTS['auth-service']}/team_agents/macro%7Cada%40agents.macro.invalid/voice`
+    );
+    expect(init).toMatchObject({
+      method: 'PUT',
+      body: JSON.stringify({ model: 'aura-2-arcas-en' }),
+    });
+    await expect(
+      init.errorResponseHandler(new Response('{}', { status: 400 }))
+    ).resolves.toMatchObject({ code: 'INVALID_VOICE' });
+    await expect(
+      init.errorResponseHandler(new Response('{}', { status: 502 }))
+    ).resolves.toMatchObject({ code: 'REPOSITORY_FAILED' });
+    await expect(
+      init.errorResponseHandler(new Response('{}', { status: 404 }))
+    ).resolves.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

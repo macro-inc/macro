@@ -20,9 +20,12 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
-use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
+use crate::api::{
+    CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest, SetVoiceRequest, VoiceQuery,
+};
 use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService};
 use crate::domain::ports::AgentGitService;
+use crate::domain::voice::VoiceConfig;
 use credential::{BASIC_CHALLENGE, GitCredentialExtractor};
 
 /// Suffix of every repo path segment.
@@ -75,6 +78,8 @@ impl<Service, Auth> FromRef<AgentGitRouterState<Service, Auth>> for MacroAuthori
 ///
 /// - `POST /internal/repos`: create or re-key a repo (internal key).
 /// - `DELETE /internal/repos/{agent_user_id}`: delete it (internal key).
+/// - `GET`/`PUT /internal/repos/{agent_user_id}/voice`: read or commit
+///   `config/voice.json` for an already authorized team (internal key).
 /// - `GET /{agent_user_id}.git/info/refs?service=…`
 /// - `POST /{agent_user_id}.git/git-upload-pack`
 /// - `POST /{agent_user_id}.git/git-receive-pack`
@@ -93,6 +98,10 @@ where
         .route(
             "/internal/repos/{agent_user_id}",
             delete(delete_repo::<Service, Auth>),
+        )
+        .route(
+            "/internal/repos/{agent_user_id}/voice",
+            get(read_voice::<Service, Auth>).put(set_voice::<Service, Auth>),
         )
         .route("/{repository}/info/refs", get(info_refs::<Service, Auth>))
         .route(
@@ -136,7 +145,9 @@ impl IntoResponse for AgentGitHttpError {
                 format!("{message}\n"),
             )
                 .into_response(),
-            AgentGitError::NotFound => text(StatusCode::NOT_FOUND, message),
+            AgentGitError::NotFound | AgentGitError::NoVoice => {
+                text(StatusCode::NOT_FOUND, message)
+            }
             AgentGitError::EncodedPush => text(StatusCode::UNSUPPORTED_MEDIA_TYPE, message),
             AgentGitError::Forbidden(_) => text(StatusCode::FORBIDDEN, message),
             AgentGitError::TeamMismatch => text(StatusCode::CONFLICT, message),
@@ -385,6 +396,41 @@ async fn delete_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     };
 
     state.service.delete_repo(&agent_user_id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref())), err)]
+async fn read_voice<Service: AgentGitService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentGitRouterState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(agent_user_id): Path<String>,
+    Query(query): Query<VoiceQuery>,
+) -> Result<Json<VoiceConfig>, AgentGitHttpError> {
+    let Ok(agent_user_id) = MacroUserIdStr::try_from(agent_user_id) else {
+        return Err(AgentGitHttpError(AgentGitError::NotFound));
+    };
+
+    Ok(Json(
+        state.service.voice(&agent_user_id, query.team_id).await?,
+    ))
+}
+
+#[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref())), err)]
+async fn set_voice<Service: AgentGitService, Auth: MacroAuthorizationService>(
+    State(state): State<AgentGitRouterState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(agent_user_id): Path<String>,
+    Json(request): Json<SetVoiceRequest>,
+) -> Result<StatusCode, AgentGitHttpError> {
+    let Ok(agent_user_id) = MacroUserIdStr::try_from(agent_user_id) else {
+        return Err(AgentGitHttpError(AgentGitError::NotFound));
+    };
+
+    state
+        .service
+        .set_voice(&agent_user_id, request.team_id, &request.voice)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

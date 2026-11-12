@@ -26,6 +26,28 @@ describe('team agent draft', () => {
     });
   });
 
+  it('sends the picked voice, and leaves it out when none is picked', () => {
+    const draft: TeamAgentDraft = {
+      name: 'Ada',
+      jobDescription: 'Triage support email.',
+      personality: 'Warm and concise.',
+      size: 'standard',
+      avatarUrl: undefined,
+      purchaseKey: 'purchase-1',
+    };
+
+    expect(teamAgentRequest({ ...draft, voice: 'aura-2-thalia-en' })).toEqual({
+      name: 'Ada',
+      jobDescription: 'Triage support email.',
+      personality: 'Warm and concise.',
+      size: 'standard',
+      avatarUrl: null,
+      purchaseKey: 'purchase-1',
+      voice: 'aura-2-thalia-en',
+    });
+    expect(teamAgentRequest(draft)).not.toHaveProperty('voice');
+  });
+
   it('requires a name, job description, personality and size', () => {
     const draft = {
       name: '   ',

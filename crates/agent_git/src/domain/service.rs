@@ -12,6 +12,7 @@ use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
 };
 use crate::domain::template::{PersonaSeed, WorkspaceTemplate};
+use crate::domain::voice::{VOICE_PATH, VoiceConfig};
 
 /// The adapters [`AgentGitServiceImpl`] runs on.
 pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend> {
@@ -48,6 +49,34 @@ impl<Repos, Store, Admins, Limiter, Backend>
             limits,
             template,
         }
+    }
+}
+
+/// Message of the commit a voice change makes.
+const VOICE_COMMIT_MESSAGE: &str = "Set call voice";
+
+impl<Repos: RepoRepository, Store, Admins, Limiter, Backend>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend>
+{
+    /// The agent's repo row, which must belong to `team_id`.
+    async fn team_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<(), AgentGitError> {
+        let repo = self
+            .adapters
+            .repos
+            .find_repo(agent_user_id)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentGitError::NotFound)?;
+
+        if repo.team_id != team_id {
+            return Err(AgentGitError::TeamMismatch);
+        }
+
+        Ok(())
     }
 }
 
@@ -205,6 +234,55 @@ where
         self.adapters
             .repos
             .delete_repo(agent_user_id)
+            .await
+            .map_err(internal)
+    }
+
+    #[cfg_attr(any(feature = "inbound", feature = "outbound"), tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err))]
+    async fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<VoiceConfig, AgentGitError> {
+        self.team_repo(agent_user_id, team_id).await?;
+        let contents = self
+            .adapters
+            .store
+            .read_file(agent_user_id, VOICE_PATH)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentGitError::NoVoice)?;
+
+        // The agent owns its repo and may have written anything there.
+        serde_json::from_slice(&contents).map_err(|_| AgentGitError::NoVoice)
+    }
+
+    #[cfg_attr(any(feature = "inbound", feature = "outbound"), tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id, voice = %voice.model), err))]
+    async fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: &VoiceConfig,
+    ) -> Result<(), AgentGitError> {
+        // Serialized with delete and pushes on every replica, so a voice
+        // change never revives a repo.
+        let _lock = self
+            .adapters
+            .repos
+            .lock_repo(agent_user_id)
+            .await
+            .map_err(internal)?;
+        self.team_repo(agent_user_id, team_id).await?;
+        let contents = voice.to_file_contents().map_err(internal)?;
+
+        self.adapters
+            .store
+            .commit_file(
+                agent_user_id,
+                VOICE_PATH,
+                contents.as_bytes(),
+                VOICE_COMMIT_MESSAGE,
+            )
             .await
             .map_err(internal)
     }

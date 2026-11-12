@@ -50,7 +50,15 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  mapArray,
+  Show,
+} from 'solid-js';
+import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
@@ -296,6 +304,13 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const agents = () =>
     agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
   const agentUserIds = () => agents().map((agent) => agent.userId);
+  // Voices are team-admin only on the server, like the rest of agent management.
+  const canChangeVoice = () => agentsOn() && isAdminOrOwner();
+  const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
+  // Losing access closes the dialog for good, not until access returns.
+  createEffect(() => {
+    if (!canChangeVoice()) setVoiceAgent(undefined);
+  });
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
@@ -574,6 +589,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       agent={agent}
                       canRemove={isAdminOrOwner()}
                       onRemove={() => setAgentToRemove(agent)}
+                      onChangeVoice={
+                        canChangeVoice()
+                          ? () => setVoiceAgent(agent)
+                          : undefined
+                      }
                     />
                   )}
                 </For>
@@ -699,6 +719,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
 
+      <AgentVoiceDialog
+        teamId={props.team.id}
+        agent={canChangeVoice() ? voiceAgent() : undefined}
+        onClose={() => setVoiceAgent(undefined)}
+      />
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}

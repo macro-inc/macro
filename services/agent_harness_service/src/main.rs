@@ -32,7 +32,9 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod speech_gateway;
 mod trigger;
+mod voice_gateway;
 
 #[cfg(test)]
 mod test;
@@ -1372,6 +1374,24 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
+        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+    );
+    // Both brain routes serve only agents with agent teammates on.
+    let brain_rollout = feature_flags
+        .clone()
+        .map(anthropic_gateway::brain::BrainRollout::new)
+        .unwrap_or_default();
+    let speech = Arc::new(speech_gateway::SpeechGateway::new(
+        brains.clone(),
+        brain_rollout.clone(),
+        admission.clone(),
+        recorder.clone(),
+        config.livekit_api_key.as_ref(),
+        config.livekit_api_secret.as_ref(),
+        speech_gateway::LIVEKIT_INFERENCE_URL,
+        speech_gateway::DEEPGRAM_MODELS_URL,
+    )?);
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1385,16 +1405,9 @@ async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(
-            Arc::new(anthropic_gateway::brain::PgBrainAuthenticator::new(
-                pool.clone(),
-            )),
-            feature_flags
-                .clone()
-                .map(anthropic_gateway::brain::BrainRollout::new)
-                .unwrap_or_default(),
-        ),
-    );
+        .with_brains(brains, brain_rollout),
+    )
+    .merge(speech_gateway::router(speech.clone()));
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
@@ -1851,6 +1864,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         &computer_tasks,
     );
+    let voices = voice_gateway::router(voice_gateway::VoiceState {
+        voices: Arc::new(team_agents::domain::voice::Voices::new(
+            speech_gateway::VoiceCatalog(speech),
+            feature_flags.clone(),
+        )),
+        access: entity_access.clone(),
+        authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    });
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -2054,6 +2075,7 @@ async fn run() -> anyhow::Result<()> {
             .with_coding_agents(coding_agents)
             .with_claude_access(computer_claude)
             .with_capabilities(capabilities)
+            .with_voices(voices)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_session_tasks(session_task_links)

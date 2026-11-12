@@ -3,6 +3,8 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::voice::{VOICE_PATH, VoiceConfig, VoiceModel};
+
 /// One file of the template.
 #[derive(Debug, Clone, Copy)]
 pub struct TemplateFile {
@@ -41,6 +43,9 @@ pub struct PersonaSeed {
     pub job_description: String,
     /// How the agent behaves and talks.
     pub personality: String,
+    /// The call voice chosen at invite; `None` keeps the template's default.
+    #[serde(default)]
+    pub voice: Option<VoiceModel>,
 }
 
 /// One file of a new repo's initial commit, rendered for one agent.
@@ -107,6 +112,7 @@ impl WorkspaceTemplate {
             .files
             .iter()
             .filter(|file| file.path != SETTINGS_EXAMPLE_PATH)
+            .filter(|file| seed.voice.is_none() || file.path != VOICE_PATH)
             .map(|file| RenderedFile {
                 path: file.path,
                 contents: file.contents.to_owned(),
@@ -118,6 +124,16 @@ impl WorkspaceTemplate {
             contents: format!("{}\n", serde_json::to_string_pretty(&settings)?),
             executable: false,
         });
+        if let Some(model) = &seed.voice {
+            files.push(RenderedFile {
+                path: VOICE_PATH,
+                contents: VoiceConfig {
+                    model: model.clone(),
+                }
+                .to_file_contents()?,
+                executable: false,
+            });
+        }
         if let Some(identity) = identity(seed) {
             files.push(RenderedFile {
                 path: IDENTITY_PATH,

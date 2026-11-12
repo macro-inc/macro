@@ -7,9 +7,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
+use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest, SetVoiceRequest};
 use crate::domain::models::RepoToken;
 use crate::domain::template::PersonaSeed;
+use crate::domain::voice::VoiceConfig;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -137,6 +138,60 @@ impl AgentGitClient {
             .send()
             .await?;
         Ok(Self::checked(response).await?.json().await?)
+    }
+
+    /// The voice committed in the agent's repo; `None` when the repo has no
+    /// valid `config/voice.json`. The caller authorized `team_id`.
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    pub async fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<Option<VoiceConfig>, AgentGitClientError> {
+        let response = self
+            .http
+            .get(format!(
+                "{}?teamId={team_id}",
+                self.voice_url(agent_user_id)
+            ))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .send()
+            .await?;
+
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        Ok(Some(Self::checked(response).await?.json().await?))
+    }
+
+    /// Commit a voice to the agent's repo. The caller authorized `team_id`.
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    pub async fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: VoiceConfig,
+    ) -> Result<(), AgentGitClientError> {
+        let response = self
+            .http
+            .put(self.voice_url(agent_user_id))
+            .headers(self.headers())
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .json(&SetVoiceRequest { team_id, voice })
+            .send()
+            .await?;
+
+        Self::checked(response).await?;
+        Ok(())
+    }
+
+    fn voice_url(&self, agent_user_id: &MacroUserIdStr<'_>) -> String {
+        format!(
+            "{}/internal/repos/{}/voice",
+            self.base_url,
+            urlencoding::encode(agent_user_id.as_ref())
+        )
     }
 
     /// Delete the agent's repo. Idempotent.

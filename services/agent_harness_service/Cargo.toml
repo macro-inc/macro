@@ -72,6 +72,7 @@ bots = { path = "../../crates/bots", features = ["outbound", "ports"] }
 call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
 channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }
+base64 = { workspace = true }
 chrono = { workspace = true }
 code_execution = { path = "../../crates/code_execution" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
@@ -121,6 +122,7 @@ import_linear = { path = "../../crates/import_linear" }
 import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
+jsonwebtoken = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
@@ -191,10 +193,12 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+team_agents = { path = "../../crates/team_agents", features = ["inbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
+tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }

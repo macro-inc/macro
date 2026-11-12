@@ -39,6 +39,16 @@ export type AgentSetupResponse = {
 };
 
 /**
+ * The voice an agent speaks with on calls.
+ */
+export type AgentVoice = {
+    /**
+     * The Aura-2 model, `aura-2-<name>-<language>`.
+     */
+    model: string;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -505,6 +515,11 @@ export type CreateTeamAgent = {
      * The computer to buy.
      */
     size: string;
+    /**
+     * The call voice picked in the invite; `None` keeps the starter
+     * agent's default.
+     */
+    voice?: string | null;
 };
 
 /**
@@ -5163,6 +5178,64 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type GetTeamAgentVoiceData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type GetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetTeamAgentVoiceError = GetTeamAgentVoiceErrors[keyof GetTeamAgentVoiceErrors];
+
+export type GetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type GetTeamAgentVoiceResponse = GetTeamAgentVoiceResponses[keyof GetTeamAgentVoiceResponses];
+
+export type SetTeamAgentVoiceData = {
+    body: AgentVoice;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type SetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type SetTeamAgentVoiceError = SetTeamAgentVoiceErrors[keyof SetTeamAgentVoiceErrors];
+
+export type SetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type SetTeamAgentVoiceResponse = SetTeamAgentVoiceResponses[keyof SetTeamAgentVoiceResponses];
 
 export type AgentSetupData = {
     body?: never;

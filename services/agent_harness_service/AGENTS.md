@@ -57,6 +57,25 @@ Pulumi stacks; they do not host extra agent processes.
   and counts usage against the agent account, with no session entity. It
   serves only agents with `enable-agent-teammates` on for their own account
   (`BrainRollout`; no provider or a failed load refuses with 403).
+- `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
+  `/brain/inference/tts` WebSockets on the egress listener, for agent
+  teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
+  `enable-agent-teammates` check and admission as `/brain/anthropic`; the upgrade query must be exactly
+  `model=deepgram/nova-3` (STT) or `model=deepgram/aura-2` (TTS). The gateway
+  opens LiveKit Inference with a 60-second `inference.perform` JWT signed with
+  `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` (both empty: speech is off; one
+  alone fails startup) and relays events. `protocol.rs` pins the session:
+  Nova-3 English STT on mono PCM16 16 kHz, Aura-2 TTS as PCM16 24 kHz with a
+  catalog voice; a second `session.create`, an unknown field or a changed
+  voice closes the socket. Forwarded PCM seconds and synthesized characters
+  are recorded once, when the socket closes, against the agent
+  (`livekit-inference-deepgram-*` pricing rows). Upstream error details stay
+  in logs. Span: `speech_gateway.session`; never record transcripts or text.
+- `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
+  team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
+  The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
+  fixed-line WAV sample per process, billed to the admin's team when it is
+  synthesized.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls

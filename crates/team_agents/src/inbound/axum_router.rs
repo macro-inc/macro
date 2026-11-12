@@ -8,7 +8,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{delete, post},
+    routing::{delete, get, post},
 };
 use entity_access::{
     domain::{
@@ -30,6 +30,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{ComputerId, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents};
 use crate::domain::ports::TeamAgentService;
+use crate::domain::voice::AgentVoice;
 
 /// Router state.
 pub struct TeamAgentsRouterState<S, Eas, Auth> {
@@ -71,10 +72,11 @@ impl IntoResponse for TeamAgentError {
             | Self::InvalidAvatar
             | Self::InvalidPurchaseKey
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
-            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::UnknownVoice => StatusCode::BAD_REQUEST,
+            Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
             Self::NotEnabled => StatusCode::FORBIDDEN,
             Self::ComputerUnavailable(_) => StatusCode::CONFLICT,
-            Self::RepoUnavailable(_) => StatusCode::BAD_GATEWAY,
+            Self::RepoUnavailable(_) | Self::VoiceUnavailable(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match &self {
@@ -84,6 +86,10 @@ impl IntoResponse for TeamAgentError {
             }
             Self::RepoUnavailable(error) => {
                 tracing::error!(error = ?error, "the workspace repository service failed");
+                self.to_string()
+            }
+            Self::VoiceUnavailable(error) => {
+                tracing::error!(error = ?error, "a voice request failed");
                 self.to_string()
             }
             other => other.to_string(),
@@ -103,6 +109,8 @@ impl IntoResponse for TeamAgentError {
 /// - `POST /` — a team admin invites an agent teammate and buys its computer.
 /// - `GET /` — a team member lists the team's agents.
 /// - `DELETE /{agent_user_id}` — a team admin removes an agent.
+/// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads or changes the
+///   agent's call voice.
 pub fn team_agents_router<S, Eas, Auth, T>(state: TeamAgentsRouterState<S, Eas, Auth>) -> Router<T>
 where
     S: TeamAgentService,
@@ -119,6 +127,11 @@ where
         .route(
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{agent_user_id}/voice",
+            get(get_team_agent_voice_handler::<S, Eas, Auth>)
+                .put(set_team_agent_voice_handler::<S, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -233,6 +246,88 @@ where
         .delete(access.entity_access_receipt, &agent)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// The agent's call voice, as committed in its workspace repository.
+/// Requires a team admin or owner.
+#[utoipa::path(
+    get,
+    tag = "team-agents",
+    operation_id = "get_team_agent_voice",
+    path = "/team_agents/{agent_user_id}/voice",
+    params(AgentPath),
+    responses(
+        (status = 200, body = AgentVoice),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_team_agent_voice_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+) -> Result<Json<AgentVoice>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::InvalidAgentId)?;
+    Ok(Json(
+        state
+            .service
+            .voice(access.entity_access_receipt, &agent)
+            .await?,
+    ))
+}
+
+/// Change the agent's call voice: a commit to its workspace repository that
+/// its next call picks up. Requires a team admin or owner.
+#[utoipa::path(
+    put,
+    tag = "team-agents",
+    operation_id = "set_team_agent_voice",
+    path = "/team_agents/{agent_user_id}/voice",
+    params(AgentPath),
+    request_body = AgentVoice,
+    responses(
+        (status = 200, body = AgentVoice),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_team_agent_voice_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+    Json(voice): Json<AgentVoice>,
+) -> Result<Json<AgentVoice>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::InvalidAgentId)?;
+    Ok(Json(
+        state
+            .service
+            .set_voice(access.entity_access_receipt, &agent, voice)
+            .await?,
+    ))
 }
 
 /// State for the internal enrollment route.

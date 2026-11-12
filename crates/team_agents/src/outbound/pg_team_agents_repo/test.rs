@@ -53,6 +53,7 @@ fn sam() -> NewAgentAccount {
             name: "Sam Rivera".to_owned(),
             job_description: "Runs vendor relations.".to_owned(),
             personality: "Dry, direct, kind.".to_owned(),
+            voice: None,
         },
     }
 }
