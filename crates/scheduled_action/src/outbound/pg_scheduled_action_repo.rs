@@ -223,9 +223,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .await?;
 
         let created = ScheduledAction::try_from(row)?;
-        // Saving a routine from a drafted suggestion finishes its idea.
+        // Saving a routine from a drafted suggestion finishes its suggestion.
         if let Some(suggestion) = action.suggestion_id {
-            ideas_db_utils::complete_routine_idea(
+            suggestions_db_utils::complete_routine_card(
                 &mut tx,
                 owner.as_ref(),
                 suggestion,

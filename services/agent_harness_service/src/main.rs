@@ -545,6 +545,7 @@ async fn run() -> anyhow::Result<()> {
     if let Some(rollout) = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         connectors = connectors.with_rollout(rollout);
     }
@@ -760,6 +761,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
@@ -773,7 +775,9 @@ async fn run() -> anyhow::Result<()> {
                 pool.clone(),
             ),
         ),
-        runs: Arc::new(ideas::outbound::pg_idea_repo::PgIdeaRepo::new(pool.clone())),
+        runs: Arc::new(
+            suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
+        ),
     });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
@@ -1778,6 +1782,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()

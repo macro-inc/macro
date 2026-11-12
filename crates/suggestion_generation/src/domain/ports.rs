@@ -4,9 +4,9 @@ use std::future::Future;
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
-use ideas::domain::model::{GenerationTrigger, SessionKind};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use suggestions::domain::model::{GenerationTrigger, SessionKind};
 
 use super::model::{AudienceMember, StaleSession};
 

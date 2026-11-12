@@ -1,6 +1,6 @@
 #![deny(missing_docs)]
 //! Generations: runs of hidden agent sessions, at onboarding and nightly,
-//! that write each person's ideas and routine suggestions through those
+//! that write each person's suggestions and routine suggestions through those
 //! crates' tools.
 
 pub mod domain;

@@ -29,11 +29,11 @@ pub trait SessionScopes: Send + Sync + 'static {
 }
 
 /// Suggestion generation sessions read, and write only through their own
-/// tools and email drafts; a background run whose idea sends nothing
+/// tools and email drafts; a background run whose suggestion sends nothing
 /// reaches nobody.
 pub struct HarnessScopes {
-    pub generations: Arc<dyn ideas::domain::ports::GenerationSessions>,
-    pub runs: Arc<dyn ideas::domain::ports::RunScopes>,
+    pub generations: Arc<dyn suggestions::domain::ports::GenerationSessions>,
+    pub runs: Arc<dyn suggestions::domain::ports::RunScopes>,
 }
 
 #[async_trait]

@@ -1,9 +1,7 @@
-import { A } from '@solidjs/router';
 import type { Component } from 'solid-js';
 import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
-import '../../routes/posts/posts-shell.css';
-import './RoutePartnerTerms.css';
+import './RouteLegal.css';
 
 const content = String.raw`Macro
 
@@ -417,7 +415,7 @@ Macro may provide Partner with documentation, training material, beta software, 
 
 Unless expressly stated otherwise, Program resources and pre-release functionality are provided "as is" and may change or be discontinued.
 
-Partner may provide ideas, suggestions, or feedback relating to Macro. Partner grants Macro a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
+Partner may provide suggestions, suggestions, or feedback relating to Macro. Partner grants Macro a perpetual, worldwide, royalty-free right to use such feedback without restriction or obligation.
 
 This does not transfer ownership of Partner's pre-existing intellectual property to Macro.
 
@@ -606,17 +604,8 @@ export const RoutePartnerTerms: Component = () => {
   });
 
   return (
-    <article class="posts-shell posts-article">
-      <header class="posts-article-header">
-        <nav class="posts-eyebrow" aria-label="Breadcrumb">
-          <A href="/partners">Partners</A>
-          <span class="posts-eyebrow-sep">/</span>
-          Terms
-        </nav>
-        <h1 class="posts-title">Macro Partner Program Terms</h1>
-        <p class="posts-updated">Effective August 31, 2026 · Version 1.3</p>
-      </header>
-      <UtilPlainText content={content} lists variant="post" />
-    </article>
+    <>
+      <UtilPlainText content={content} lists />
+    </>
   );
 };
