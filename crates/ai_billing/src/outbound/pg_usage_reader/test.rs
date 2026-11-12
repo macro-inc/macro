@@ -799,9 +799,7 @@ async fn delayed_plan_cycle_retains_max_consumption_without_creating_downgrade_d
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn deepseek_cache_migration_resolves_missing_cost_without_repricing_known_usage(
-    pool: PgPool,
-) {
+async fn deepseek_cache_migration_prices_new_calls_without_rewriting_usage(pool: PgPool) {
     let user = MacroUserIdStr::try_from("macro|cache@example.com").unwrap();
     let repo = PgUsageRepo::new(pool.clone());
     sqlx::query!(
@@ -837,6 +835,23 @@ async fn deepseek_cache_migration_resolves_missing_cost_without_repricing_known_
     .execute(&pool)
     .await
     .unwrap();
+    // Deploying a rate must not rewrite historical usage in the migration.
+    assert_eq!(
+        reader
+            .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
+            .await
+            .unwrap(),
+        before
+    );
+    let pricing = repo
+        .get_pricing(&missing.cost.model)
+        .await
+        .unwrap()
+        .unwrap();
+    missing.cost.price = Price::compute(pricing, missing.cost.amount);
+    assert!(missing.cost.price.is_some());
+    repo.insert_usage(&missing, true).await.unwrap();
+    repo.insert_usage(&missing, false).await.unwrap();
     let after = reader
         .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
         .await
