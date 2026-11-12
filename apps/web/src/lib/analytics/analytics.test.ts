@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   unregister: vi.fn(),
   reset: vi.fn(),
   setPersonProperties: vi.fn(),
+  setPersonPropertiesForFlags: vi.fn(),
   gtag: vi.fn(),
   fbq: vi.fn(),
 }));
@@ -42,6 +43,7 @@ vi.mock('posthog-js', () => ({
     unregister = mocks.unregister;
     reset = mocks.reset;
     setPersonProperties = mocks.setPersonProperties;
+    setPersonPropertiesForFlags = mocks.setPersonPropertiesForFlags;
   },
 }));
 
@@ -158,6 +160,32 @@ describe('Meta pixel platform support', () => {
       );
     }
   );
+});
+
+describe('PostHog flag environment', () => {
+  it('sends the build environment with flag requests from load and after reset', async () => {
+    vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
+    const { analytics } = await import('./analytics');
+    const { loaded } = mocks.init.mock.calls[0][1];
+
+    // posthog-js calls `loaded` before its first `/flags` request.
+    loaded({ setPersonPropertiesForFlags: mocks.setPersonPropertiesForFlags });
+    expect(mocks.setPersonPropertiesForFlags).toHaveBeenLastCalledWith(
+      { environment: 'prod' },
+      false
+    );
+
+    mocks.setPersonPropertiesForFlags.mockClear();
+    analytics.reset();
+    expect(mocks.reset).toHaveBeenCalled();
+    expect(mocks.setPersonPropertiesForFlags).toHaveBeenCalledWith(
+      { environment: 'prod' },
+      false
+    );
+    expect(mocks.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.setPersonPropertiesForFlags.mock.invocationCallOrder[0]
+    );
+  });
 });
 
 describe('PostHog exception frames', () => {
