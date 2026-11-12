@@ -89,6 +89,29 @@ async function catalog(at: Stack, token: string): Promise<CatalogEntry[]> {
   return (await response.json()) as CatalogEntry[];
 }
 
+/**
+ * Fails before any draft when the stack can't save event routines: every
+ * event-triggered draft's check would then fail and the session would keep
+ * retrying, which times nothing real.
+ */
+async function preflight(at: Stack, token: string, entries: CatalogEntry[]) {
+  const base = entries.find((entry) => entry.code && (entry.trigger as { type?: string }).type === 'events');
+  if (!base) return;
+  const response = await fetch(`${at.harness}/scheduled-action/scheduled-actions/check`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      routine: { name: 'Preflight', kind: 'Agent', enabled: false, trigger: base.trigger, task: { steps: [base.code] } },
+      created: [],
+    }),
+  });
+  if (!response.ok) throw new Error(`preflight check ${response.status}: ${await response.text()}`);
+  const { problems } = (await response.json()) as { problems: string[] };
+  if (problems.some((problem) => /event-trigger management/.test(problem))) {
+    throw new Error('the stack has event routines off: restart it with EVENT_ROUTINES_ENABLED=true (see README)');
+  }
+}
+
 function requestBody(item: Case, entries: CatalogEntry[], model: string) {
   const context = { timezone: TIMEZONE, agentModel: model, code: item.code, conditions: true };
   if (item.kind === 'routine') return { draft: { type: 'routine', description: item.text }, context };
@@ -401,6 +424,7 @@ async function run(args: string[]) {
   const at = stack(values.instance as string, values.tempo as string);
   const token = await login(at, USER);
   const entries = await catalog(at, token);
+  await preflight(at, token, entries);
   const wanted = values.cases ? new Set(values.cases.split(',')) : undefined;
   const cases = CASES.filter((item) => !wanted || wanted.has(item.id));
   const commit = Bun.spawnSync(['git', 'rev-parse', '--short', 'HEAD']).stdout.toString().trim();
