@@ -367,6 +367,11 @@ use utoipa::OpenApi;
         messages::inbound::axum_router::timeline,
         messages::inbound::guest_chat::read,
         messages::inbound::guest_chat::post,
+        messages::inbound::guest_chat::read_thread,
+        messages::inbound::guest_chat::post_message,
+        messages::inbound::guest_chat::patch_message,
+        messages::inbound::guest_chat::delete_message,
+        messages::inbound::guest_chat::react_message,
         messages::inbound::axum_router::timeline_entries,
         messages::inbound::axum_router::create,
         messages::inbound::axum_router::get_message,
@@ -1047,6 +1052,11 @@ use utoipa::OpenApi;
             messages::domain::ports::MessageEvent,
             messages::domain::ports::MessageChange,
             messages::inbound::axum_router::ReactionInput,
+            messages::domain::service::guest_chat::GuestChatThread,
+            messages::domain::service::guest_chat::GuestChatPatch,
+            messages::domain::service::guest_chat::GuestChatPost,
+            messages::domain::service::guest_chat::GuestChatMessage,
+            messages::domain::service::guest_chat::GuestChatPage,
             messages::inbound::axum_router::TypingInput,
 
             // Channels

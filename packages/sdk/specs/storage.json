@@ -2291,6 +2291,219 @@
         }
       }
     },
+    "/call/guest-chat/{call_id}/messages": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Post a guest message to the shared call thread.",
+        "operationId": "guest_call_chat_post_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}": {
+      "delete": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Delete a message owned by this guest.",
+        "operationId": "guest_call_chat_delete_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Edit a message owned by this guest.",
+        "operationId": "guest_call_chat_patch_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestChatPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/messages/{message_id}/reactions": {
+      "post": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Add or remove this guest's reaction.",
+        "operationId": "guest_call_chat_react_message",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/guest-chat/{call_id}/thread": {
+      "get": {
+        "tags": ["messages::inbound::guest_chat"],
+        "summary": "Read the shared call thread with identities redacted.",
+        "operationId": "guest_call_chat_read_thread",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestChatThread"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/call/join/{token}": {
       "get": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -35580,6 +35793,16 @@
             "type": "string",
             "description": "Emoji being reacted with."
           },
+          "names": {
+            "type": "object",
+            "description": "Display names for reactors whose account identity is not visible to this viewer.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "users": {
             "type": "array",
             "items": {
@@ -47708,6 +47931,18 @@
           }
         }
       },
+      "GuestChatPatch": {
+        "type": "object",
+        "description": "Text-only update to a guest-authored message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Replacement message body."
+          }
+        },
+        "additionalProperties": false
+      },
       "GuestChatPost": {
         "type": "object",
         "description": "Guests may send text only; attribution and parent are server-owned.",
@@ -47724,6 +47959,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "GuestChatThread": {
+        "type": "object",
+        "description": "A call thread and the verified viewer's sender identity.",
+        "required": ["viewer_id"],
+        "properties": {
+          "thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageThread",
+                "description": "None until the first message is posted."
+              }
+            ]
+          },
+          "viewer_id": {
+            "type": "string",
+            "description": "Guest sender ID used for own-message controls."
+          }
+        }
       },
       "GuestId": {
         "type": "string",

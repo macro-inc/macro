@@ -32,6 +32,7 @@ pub mod lifecycle;
 pub mod link_manager;
 pub mod progress;
 pub mod projection;
+pub mod reimport;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]

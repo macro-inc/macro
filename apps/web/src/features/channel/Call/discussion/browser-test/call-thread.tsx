@@ -57,6 +57,7 @@ function Fixture() {
   const [overlay, setOverlay] = createSignal<HTMLDivElement>();
   const Discussion = () => (
     <CallDiscussionContent
+      access={{ kind: 'member' }}
       discussion={() => ({
         kind: 'channel_thread',
         channel_id: CHANNEL_ID,

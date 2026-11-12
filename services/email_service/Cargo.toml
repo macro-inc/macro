@@ -30,6 +30,10 @@ name = "backfill_outlook_snippets"
 path = "src/bin/backfill_outlook_snippets/backfill_outlook_snippets.rs"
 
 [[bin]]
+name = "reimport_outlook_folders"
+path = "src/bin/reimport_outlook_folders/reimport_outlook_folders.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
