@@ -129,6 +129,7 @@ impl Transaction<'_> {
         match &mut self.writable(key)?.base {
             BaseData::Element(data) => {
                 data.absent.remove(crate::node::AbsentKeys::INDENT);
+                data.raw_indent_is_null = false;
                 data.indent = indent;
                 Ok(())
             }

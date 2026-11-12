@@ -188,6 +188,9 @@ macro_rules! common_node_hooks {
 /// Hooks inherited by element node types.
 /// s2: EL-04, EL-05, EL-06, EL-07, EL-08, EL-09
 pub trait ElementNode: NodeType<Kind = ElementKind> {
+    /// This exact native type preserves imported null indentation as a stored value.
+    /// Subclasses opt in independently; runtime virtual wrappers remain excluded.
+    const PRESERVE_RAW_NULL_INDENT: bool = false;
     /// Immediate parent of the same kind.
     type Parent: ElementNode;
     /// Borrow the parent payload.

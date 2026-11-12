@@ -68,3 +68,139 @@ fn filtered_diff_search_state_preserves_storage_through_cold_session_attach() {
     assert_eq!(doc.oplog_vv(), vv);
     assert!(surface.projection.is_some());
 }
+
+#[test]
+fn stored_null_paragraph_indent_attaches_read_edit_and_survives_projection_reload() {
+    for access in [Access::Read, Access::Edit] {
+        let doc = lexical_loro::new_doc(17).expect("Loro document");
+        lexical_loro::mirror::set_state(
+            &doc,
+            &serde_json::json!({
+                "type":"root", "version":1, "indent":0, "format":"", "direction":null,
+                "$":{"id":"fixture-root", "documentMetadata":{"version":10}},
+                "children":[{"type":"paragraph", "version":1, "indent":null,
+                    "format":"", "direction":null, "textFormat":0, "textStyle":"",
+                    "$":{"id":"fixture-paragraph"},
+                    "children":[{"type":"text", "version":1, "text":"fixture",
+                        "format":0, "detail":0, "mode":"normal", "style":"",
+                        "$":{"id":"fixture-text"}}]}]
+            }),
+        )
+        .expect("actual null-bearing stored map");
+        let config = crate::application_editor_config(
+            EditorConfig::default(),
+            Arc::new(AtomicI64::new(0)),
+            macro_document_model::EditorType::MarkdownSync,
+        );
+        let policy = config.policy;
+        let before = lexical_loro::reconstruct_initial_state(&doc, policy).expect("stored tree");
+        let vv = doc.oplog_vv();
+        let now = Now {
+            mono: doc_sync_core::Millis(0),
+            wall: doc_sync_core::UnixMillis(0),
+        };
+        let mut surface = EditorSurface::new(config, 18, now).expect("actual Macro surface");
+        surface
+            .init(&doc, now, access, &mut Vec::new())
+            .expect("strict null indent attach");
+        surface
+            .projection
+            .as_ref()
+            .expect("actual projection")
+            .check(&doc, surface.state())
+            .expect("full stored comparison and index");
+        let paragraph = surface
+            .state()
+            .first_child_or_err(NodeKey::ROOT)
+            .expect("paragraph");
+        assert_eq!(
+            surface
+                .state()
+                .view()
+                .export_stored_json(paragraph)
+                .expect("stored paragraph")
+                .get("indent"),
+            Some(&serde_json::Value::Null)
+        );
+        if access == Access::Read {
+            assert_eq!(doc.oplog_vv(), vv);
+            assert_eq!(
+                lexical_loro::reconstruct_initial_state(&doc, policy)
+                    .expect("same stored tree")
+                    .state,
+                before.state
+            );
+        } else {
+            let text = surface.state().first_child_or_err(paragraph).expect("text");
+            surface
+                .apply(
+                    &doc,
+                    Input::TextFromView {
+                        key: text,
+                        text: "changed".into(),
+                        anchor: Some(Utf16Offset(0)),
+                        focus: Some(Utf16Offset(0)),
+                        composition_end: false,
+                        composition_data: None,
+                        selection: ViewSelection::Range {
+                            anchor: Point::text(text, Utf16Offset(0)),
+                            focus: Point::text(text, Utf16Offset(0)),
+                            resolution_dirty: false,
+                        },
+                    },
+                    Now {
+                        mono: doc_sync_core::Millis(1),
+                        wall: doc_sync_core::UnixMillis(1),
+                    },
+                    access,
+                    &mut Vec::new(),
+                )
+                .expect("actual native text input");
+            surface
+                .projection
+                .as_ref()
+                .expect("actual projection")
+                .check(&doc, surface.state())
+                .expect("full comparison after text input");
+            let stored =
+                lexical_loro::reconstruct_initial_state(&doc, policy).expect("projected tree");
+            assert_eq!(
+                stored.state.root["children"][0].get("indent"),
+                Some(&serde_json::Value::Null)
+            );
+            assert_eq!(
+                stored.state.root["children"][0]["children"][0]["text"],
+                "changed"
+            );
+        }
+        drop(surface);
+        let config = crate::application_editor_config(
+            EditorConfig::default(),
+            Arc::new(AtomicI64::new(0)),
+            macro_document_model::EditorType::MarkdownSync,
+        );
+        let mut reloaded = EditorSurface::new(config, 19, now).expect("fresh Macro surface");
+        reloaded
+            .init(&doc, now, Access::Read, &mut Vec::new())
+            .expect("strict reload");
+        reloaded
+            .projection
+            .as_ref()
+            .expect("reloaded projection")
+            .check(&doc, reloaded.state())
+            .expect("full comparison on reload");
+        let paragraph = reloaded
+            .state()
+            .first_child_or_err(NodeKey::ROOT)
+            .expect("paragraph");
+        assert_eq!(
+            reloaded
+                .state()
+                .view()
+                .export_stored_json(paragraph)
+                .expect("reloaded stored paragraph")
+                .get("indent"),
+            Some(&serde_json::Value::Null)
+        );
+    }
+}

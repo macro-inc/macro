@@ -60,7 +60,14 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
     let slot = view.slot(key).ok_or(Error::NodeNotFound(key))?;
     let table = view.state.registry.vtable(slot.type_index);
     #[cfg(feature = "foreign-nodes")]
-    if table.foreign.is_some() || slot.foreign_instance.get().is_some() {
+    if table.foreign.is_some()
+        || slot.foreign_instance.get().is_some()
+        || view
+            .state
+            .registry
+            .native_overlays
+            .contains_key(&slot.type_index)
+    {
         return Ok(false);
     }
     let root = table.type_id == TypeId::of::<Root>();
@@ -116,7 +123,11 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
             string(data.format.as_str(), output);
             if !data.absent.contains(AbsentKeys::INDENT) {
                 output.push_str(",\"indent\":");
-                number(data.indent, output);
+                if data.raw_indent_is_null && table.raw_null_indent {
+                    output.push_str("null");
+                } else {
+                    number(data.indent, output);
+                }
             }
             comma = true;
         }

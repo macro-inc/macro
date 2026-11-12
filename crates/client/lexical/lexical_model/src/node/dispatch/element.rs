@@ -62,6 +62,7 @@ pub(in crate::node) fn element<Node: ElementNode>() -> NodeVTable {
         type_name: Node::TYPE,
         class_name: Node::class_name(),
         kind: NodeKind::Element,
+        raw_null_indent: Node::PRESERVE_RAW_NULL_INDENT,
         type_id: TypeId::of::<Node>(),
         marker: Node::IS_MARKER,
         ancestry,

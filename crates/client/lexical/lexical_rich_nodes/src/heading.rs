@@ -32,6 +32,7 @@ impl NodeType for HeadingNode {
     impl_default_node!();
 }
 impl ElementNode for HeadingNode {
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn insert_new_after(
         tx: &mut Transaction<'_>,

@@ -231,6 +231,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     table
 }
 pub(crate) fn install_methods(table: &mut NodeVTable) {
+    table.raw_null_indent = false;
     table.adjust_export_json = |data, node, json| {
         read_hook(
             ForeignHook::AdjustExportJson,

@@ -218,6 +218,7 @@ impl NodeType for Paragraph {
     impl_default_node!();
 }
 impl ElementNode for Paragraph {
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     fn adjust_export_json(
         &self,
         node: NodeView<'_>,

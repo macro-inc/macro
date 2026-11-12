@@ -33,6 +33,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
 - Use selection slots in hooks; detached selections must not read the active range.
 - Keep nullable/absent list wire values in ListNode so projected setters replace the same canonical fields.
+- Opt only canonical HeadingNode and QuoteNode into stored-null indentation; ListItem and custom getters keep their computed serialization.
 - Import stored ListNode JSON without resolving replacements; authored list creation still applies replacements, matching upstream static-config import.
 - Construct host-converted HTML drafts through clipboard::generate_nodes_from_dom_drafts so list factories apply recursively without changing stored imports or stripping constructor context.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.

@@ -54,3 +54,6 @@ pub mod clipboard;
 /// Portable HTML exporters, enabled independently of the model.
 #[cfg(feature = "html")]
 pub mod html;
+
+#[cfg(test)]
+mod indent_null_test;

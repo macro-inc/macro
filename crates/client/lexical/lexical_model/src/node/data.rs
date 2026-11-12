@@ -41,6 +41,7 @@ impl BaseData {
 /// s2: EL-01
 pub struct ElementData {
     pub(crate) absent: AbsentKeys,
+    pub(crate) raw_indent_is_null: bool,
     pub(crate) first: Option<NodeKey>,
     pub(crate) last: Option<NodeKey>,
     pub(crate) size: u32,

@@ -10,6 +10,7 @@ impl NodeType for QuoteNode {
     impl_default_node!();
 }
 impl ElementNode for QuoteNode {
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn insert_new_after(
         tx: &mut Transaction<'_>,

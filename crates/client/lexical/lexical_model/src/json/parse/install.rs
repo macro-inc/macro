@@ -60,6 +60,7 @@ impl ParsedNode<'_> {
         if layout.entries.iter().any(|entry| entry.flat) {
             return Ok(None);
         }
+        let preserve_raw_null_indent = table.raw_null_indent;
         let key = if root {
             NodeKey::ROOT
         } else if text {
@@ -132,6 +133,11 @@ impl ParsedNode<'_> {
                 .unwrap_or_default();
             data.direction = direction;
             data.indent = self.number("indent");
+            data.raw_indent_is_null = preserve_raw_null_indent
+                && matches!(
+                    self.fields.get("indent"),
+                    Some(FieldValue::Other(Value::Null))
+                );
             data.text_format = TextFormat::from_bits_retain(self.number("textFormat"));
             data.text_style = Arc::from(self.string("textStyle").unwrap_or_default());
             data.absent = self.absent(&["indent", "direction"]);

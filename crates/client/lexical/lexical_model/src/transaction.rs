@@ -907,10 +907,13 @@ impl<'editor> Transaction<'editor> {
                         .set_direction(direction)?
                         .set_text_format(text_format)?
                         .set_text_style(text_style)?;
+                    let raw_indent_is_null = self.pending.registry.vtable(index).raw_null_indent
+                        && json.get("indent").is_some_and(serde_json::Value::is_null);
                     let BaseData::Element(data) = &mut self.writable(key)?.base else {
                         return Err(Error::NotAnElement(key));
                     };
                     data.absent = AbsentKeys::from_json(json, &["indent", "direction"]);
+                    data.raw_indent_is_null = raw_indent_is_null;
                 }
                 _ => {}
             }

@@ -62,6 +62,7 @@ pub(in crate::node) fn linebreak<Node: LineBreakNode>() -> NodeVTable {
         type_name: Node::TYPE,
         class_name: Node::class_name(),
         kind: NodeKind::LineBreak,
+        raw_null_indent: false,
         type_id: TypeId::of::<Node>(),
         marker: Node::IS_MARKER,
         ancestry,

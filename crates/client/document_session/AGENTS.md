@@ -144,7 +144,7 @@ Keep ordinary host listener registration behind the specialized EditorSurface se
 
 For browser MarkdownSync history, clear selection in the historic content update and skip the DOM write. Restore only current resolvable awareness in a separate selection update and let actual browser selection changes settle unresolved carets.
 
-Preserve filtered importer state in the initial stored comparison while keeping ordinary Source import omissions; readonly initialization must not repair persisted slots merely to attach.
+Preserve filtered importer state in the initial stored comparison while keeping ordinary Source import omissions; readonly initialization must not repair persisted slots merely to attach. Keep qualified imported null indentation in that exact stored comparison and through unrelated projection edits.
 
 Observe checklist candidates from actual accepted/error commit arrays and derive plans only at the sealed final-output epilogue; acknowledge exact receipts only after native host output transfer succeeds.
 

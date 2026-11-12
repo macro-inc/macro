@@ -62,6 +62,7 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         type_name: Node::TYPE,
         class_name: Node::class_name(),
         kind: NodeKind::Decorator,
+        raw_null_indent: false,
         type_id: TypeId::of::<Node>(),
         marker: Node::IS_MARKER,
         ancestry,

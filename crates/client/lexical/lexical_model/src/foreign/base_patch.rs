@@ -58,6 +58,7 @@ impl ForeignBaseField {
                 data.absent.remove(AbsentKeys::field("style"));
             }
             (BaseData::Element(data), ForeignBaseField::Indent(value)) => {
+                data.raw_indent_is_null = false;
                 data.indent = value;
                 data.absent.remove(AbsentKeys::field("indent"));
             }

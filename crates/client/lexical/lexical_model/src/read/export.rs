@@ -115,7 +115,13 @@ impl StateRef<'_> {
                 json.insert("children".into(), serde_json::json!([]));
                 json.insert("direction".into(), serde_json::to_value(data.direction)?);
                 json.insert("format".into(), serde_json::to_value(data.format)?);
-                json.insert("indent".into(), serde_json::json!(self.indent(key)));
+                let effective_indent = self.indent(key);
+                let indent = if data.raw_indent_is_null && v.raw_null_indent {
+                    Value::Null
+                } else {
+                    serde_json::json!(effective_indent)
+                };
+                json.insert("indent".into(), indent);
             }
             BaseData::Text(data) => {
                 json.insert("detail".into(), serde_json::json!(data.detail.bits()));
@@ -181,3 +187,6 @@ impl StateRef<'_> {
 mod stored_test;
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod indent_null_test;

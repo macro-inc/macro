@@ -125,6 +125,7 @@ pub struct NodeVTable {
         selection: Option<&Selection>,
         destination: CopyDestination,
     ) -> bool,
+    pub(crate) raw_null_indent: bool,
     pub(crate) indent: fn(data: &dyn Any, node: NodeView<'_>) -> u32,
     pub(crate) splice: SpliceHook,
     pub(crate) append:
