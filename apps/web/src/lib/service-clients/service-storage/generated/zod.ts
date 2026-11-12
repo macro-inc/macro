@@ -2893,6 +2893,1153 @@ export const guestCallChatPostResponse = zod
   );
 
 /**
+ * @summary Post a guest message to the shared call thread.
+ */
+export const guestCallChatPostMessageParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatPostMessageBody = zod
+  .object({
+    content: zod.string().describe('Text to append to the call discussion.'),
+    id: zod
+      .uuid()
+      .describe(
+        'UUIDv7 used to deduplicate retries, including the first message.'
+      ),
+  })
+  .describe(
+    'Guests may send text only; attribution and parent are server-owned.'
+  );
+
+export const guestCallChatPostMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Delete a message owned by this guest.
+ */
+export const guestCallChatDeleteMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+/**
+ * @summary Edit a message owned by this guest.
+ */
+export const guestCallChatPatchMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatPatchMessageBody = zod
+  .object({
+    content: zod.string().describe('Replacement message body.'),
+  })
+  .describe('Text-only update to a guest-authored message.');
+
+export const guestCallChatPatchMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Add or remove this guest's reaction.
+ */
+export const guestCallChatReactMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatReactMessageBody = zod
+  .object({
+    add: zod.boolean().describe('Add when true, remove when false.'),
+    emoji: zod.string().describe('Emoji.'),
+    nonce: zod.string().nullish().describe('Client nonce.'),
+  })
+  .describe('Reaction mutation for the authenticated user.');
+
+export const guestCallChatReactMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Read the shared call thread with identities redacted.
+ */
+export const guestCallChatReadThreadParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatReadThreadResponse = zod
+  .object({
+    thread: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            replies: zod
+              .array(
+                zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    guest_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name of a verified call guest, retained after the call ends.'
+                      ),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'An initiative, presented as a project in the application.'
+                              ),
+                            type: zod.enum(['initiative']),
+                          })
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM company.'),
+                            type: zod.enum(['crm_company']),
+                          })
+                          .describe('A CRM company.'),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM contact.'),
+                            type: zod.enum(['crm_contact']),
+                          })
+                          .describe('A CRM contact.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A video call and its persistent chat thread.'
+                              ),
+                            type: zod.enum(['call']),
+                          })
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  )
+              )
+              .describe('Replies in display order.'),
+            root: zod
+              .object({
+                attachments: zod
+                  .array(
+                    zod
+                      .object({
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the attachment was added.'),
+                        entity_id: zod
+                          .string()
+                          .describe('Attached entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Attached entity type.'),
+                        height: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media height.'),
+                        id: zod.uuid().describe('Attachment UUID.'),
+                        width: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media width.'),
+                      })
+                      .describe('An entity attached to a message.')
+                  )
+                  .describe('Attached entities.'),
+                bot_profile: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        avatar_url: zod
+                          .string()
+                          .nullish()
+                          .describe('Bot avatar URL.'),
+                        name: zod.string().describe('Bot display name.'),
+                      })
+                      .describe(
+                        'Public bot profile attached to bot-authored messages.'
+                      ),
+                  ])
+                  .optional(),
+                content: zod.string().describe('Macro Markdown body.'),
+                created_at: zod.iso.datetime({}).describe('Creation time.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Message tombstone, independent of thread deletion.'
+                  ),
+                edited_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Last content edit, if any.'),
+                guest_name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Display name of a verified call guest, retained after the call ends.'
+                  ),
+                id: zod.uuid().describe('Message UUID.'),
+                imported_author: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .describe(
+                            'Original author text; never interpreted as an authenticated principal.'
+                          ),
+                      })
+                      .describe(
+                        'Display attribution for a comment imported from an external document.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod
+                  .enum(['message', 'call_root'])
+                  .optional()
+                  .describe(
+                    'What a persisted message is. Set by the server, never by a client.'
+                  ),
+                mentions: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Mentioned entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Mentioned entity type.'),
+                      })
+                      .describe('A mention tracked in a message body.')
+                  )
+                  .describe(
+                    'Tracked mentions, retained when a caller changes attachments only.'
+                  ),
+                parent: zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe('A channel, including direct messages.'),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('A channel, including direct messages.'),
+                    zod
+                      .object({
+                        id: zod
+                          .string()
+                          .describe(
+                            'A validated document identifier. Historical document ids need not be UUIDs.'
+                          ),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('A document, including tasks and PDFs.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        type: zod.enum(['initiative']),
+                      })
+                      .describe(
+                        'An initiative, presented as a project in the application.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM company.'),
+                        type: zod.enum(['crm_company']),
+                      })
+                      .describe('A CRM company.'),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM contact.'),
+                        type: zod.enum(['crm_contact']),
+                      })
+                      .describe('A CRM contact.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                        type: zod.enum(['call']),
+                      })
+                      .describe('A video call and its persistent chat thread.'),
+                  ])
+                  .describe(
+                    'The entity whose permissions and lifecycle govern a message.'
+                  ),
+                reactions: zod
+                  .array(
+                    zod
+                      .object({
+                        emoji: zod
+                          .string()
+                          .describe('Emoji being reacted with.'),
+                        names: zod
+                          .record(zod.string(), zod.string())
+                          .optional()
+                          .describe(
+                            'Display names for reactors whose account identity is not visible to this viewer.'
+                          ),
+                        users: zod
+                          .array(zod.string())
+                          .describe('User identifiers.'),
+                      })
+                      .describe('Reaction emoji and the users who added it.')
+                  )
+                  .describe('Aggregated reactions.'),
+                sender_id: zod
+                  .string()
+                  .describe(
+                    'Authenticated actor or owner of imported content.'
+                  ),
+                thread_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Root message UUID for replies; absent on roots.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe('User who triggered a bot-authored message.'),
+                triggered_via: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('Last persisted update.'),
+              })
+              .describe(
+                'Shared message representation for channel timelines and entity discussions.'
+              ),
+            state: zod
+              .object({
+                anchor: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            mark_id: zod
+                              .uuid()
+                              .describe(
+                                'Mark UUID serialized in the document.'
+                              ),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                              ),
+                            type: zod.enum(['markdown']),
+                          })
+                          .describe(
+                            'Stable Lexical mark identity, independent of transient node keys.'
+                          ),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Highlight annotation UUID.'),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                              ),
+                            type: zod.enum(['pdf_highlight']),
+                          })
+                          .describe('An independently existing PDF highlight.'),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Placeable annotation UUID.'),
+                            type: zod.enum(['pdf_placeable']),
+                          })
+                          .describe(
+                            'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                          ),
+                        zod
+                          .object({
+                            range: zod
+                              .string()
+                              .describe(
+                                'A1 cell or range, such as B4 or B4:C9.'
+                              ),
+                            sheetId: zod
+                              .string()
+                              .describe(
+                                'Stable sheet identity within the workbook.'
+                              ),
+                            sheetName: zod
+                              .string()
+                              .describe(
+                                'Sheet name when the discussion was created.'
+                              ),
+                            type: zod.enum(['spreadsheet']),
+                          })
+                          .describe(
+                            'A cell or rectangular range in a native spreadsheet.'
+                          ),
+                        zod
+                          .object({
+                            nodeId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Layer the pin follows; absent for a pin on the bare canvas.'
+                              ),
+                            pageId: zod
+                              .string()
+                              .describe('Page (canvas) the pin is on.'),
+                            type: zod.enum(['fig']),
+                            x: zod
+                              .number()
+                              .describe(
+                                "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                              ),
+                            y: zod
+                              .number()
+                              .describe('Vertical offset, measured like `x`.'),
+                          })
+                          .describe(
+                            'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                          ),
+                      ])
+                      .describe(
+                        "A thread's location within its document. PDF geometry remains annotation-owned."
+                      ),
+                  ])
+                  .optional(),
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('Creation time of the discussion.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Explicit deletion of the entire thread, distinct from root deletion.'
+                  ),
+                resolved: zod
+                  .boolean()
+                  .describe('Whether this discussion has been resolved.'),
+                root_id: zod
+                  .uuid()
+                  .describe(
+                    'Root message UUID; there is no separate thread identity.'
+                  ),
+                updated_at: zod.iso.datetime({}).describe('Last state change.'),
+                user_id: zod
+                  .string()
+                  .describe(
+                    'User who owns this discussion, including imported discussions.'
+                  ),
+              })
+              .describe(
+                'State belonging to a whole thread, keyed by its root message.'
+              ),
+          })
+          .describe(
+            'A discussion with its root and ordered replies, including root tombstones.'
+          ),
+      ])
+      .optional(),
+    viewer_id: zod
+      .string()
+      .describe('Guest sender ID used for own-message controls.'),
+  })
+  .describe("A call thread and the verified viewer's sender identity.");
+
+/**
  * @summary Handle `GET /call/join/{token}` through the call domain service.
  */
 export const meetingLookupParams = zod.object({
@@ -7586,6 +8733,279 @@ export const createCrmPipelineResponse = zod
     })
   )
   .describe("Metadata together with the caller's effective grant.");
+
+/**
+ * @summary Create a pipeline with its stages, replacing the team's defaults, and its
+fields, in one call.
+ */
+export const createCrmPipelineWithFieldsBody = zod
+  .object({
+    fields: zod
+      .array(
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe('Its name, unique in the pipeline ignoring case.'),
+            options: zod
+              .array(zod.string())
+              .optional()
+              .describe("A select field's labels, in order."),
+            type: zod
+              .enum([
+                'text',
+                'number',
+                'checkbox',
+                'date',
+                'link',
+                'select',
+                'multi_select',
+                'person',
+                'people',
+              ])
+              .describe('The type of a field to add.'),
+          })
+          .describe('A field to add.')
+      )
+      .optional()
+      .describe(
+        "Fields to add after the standard ones, or after a generic pipeline's Name."
+      ),
+    name: zod.string().describe('Its name.'),
+    recordType: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['company', 'contact'])
+          .describe(
+            'Which CRM entity each row references. Fixed when a pipeline is created.'
+          ),
+      ])
+      .optional(),
+    sharing: zod
+      .enum(['private', 'team'])
+      .optional()
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    stages: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "Its stages, first to last, replacing the team's default stages. A\ngeneric pipeline starts without a Stage field, so these add one."
+      ),
+  })
+  .describe('A new pipeline with its stages and fields.');
+
+export const createCrmPipelineWithFieldsResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    databaseId: zod.uuid().describe('Dedicated backing database.'),
+    id: zod
+      .uuid()
+      .describe('Entity identity, used with `CrmPipeline` access receipts.'),
+    name: zod.string().describe('Pipeline display name.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
+    sharing: zod
+      .enum(['private', 'team'])
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    tableId: zod.uuid().describe('Table of entries.'),
+    teamId: zod
+      .uuid()
+      .describe(
+        'Team owning the pipeline; references retain their own access controls.'
+      ),
+    trashedAt: zod.iso
+      .datetime({})
+      .nullable()
+      .describe('Trashed pipelines are omitted from navigation.'),
+    userId: zod
+      .string()
+      .describe('Owning user; sharing never changes ownership.'),
+  })
+  .describe(
+    'Pipeline metadata; table schema and data are read through the database service.'
+  )
+  .and(
+    zod.object({
+      grant: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    })
+  )
+  .describe("Metadata together with the caller's effective grant.")
+  .and(
+    zod.object({
+      fields: zod
+        .array(
+          zod
+            .object({
+              multiple: zod
+                .boolean()
+                .describe('Whether it holds several values.'),
+              name: zod.string().describe('The name entries and filters use.'),
+              options: zod
+                .array(zod.string())
+                .describe(
+                  "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                ),
+              readOnly: zod
+                .boolean()
+                .describe('Whether the caller cannot write it.'),
+              required: zod
+                .boolean()
+                .describe('Whether every entry must have a value.'),
+              type: zod
+                .enum([
+                  'company',
+                  'contact',
+                  'text',
+                  'number',
+                  'checkbox',
+                  'date',
+                  'date_range',
+                  'link',
+                  'select',
+                  'tags',
+                  'person',
+                  'item',
+                  'relation',
+                  'formula',
+                ])
+                .describe('What a field holds.'),
+            })
+            .describe('One field of a pipeline, named as people see it.')
+        )
+        .describe(
+          "Its fields in column order; a tracked pipeline's first names its record."
+        ),
+      version: zod.number().describe("Its table's version when read."),
+    })
+  )
+  .describe('A pipeline with its fields.');
+
+/**
+ * @summary The caller's live pipelines, each with its fields in column order (a
+select field lists its options, so Stage lists the stages) and its table
+version: what `ListPipelines` gives the agent, in one call.
+ */
+export const listCrmPipelineDetailsResponseItem = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    databaseId: zod.uuid().describe('Dedicated backing database.'),
+    id: zod
+      .uuid()
+      .describe('Entity identity, used with `CrmPipeline` access receipts.'),
+    name: zod.string().describe('Pipeline display name.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
+    sharing: zod
+      .enum(['private', 'team'])
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    tableId: zod.uuid().describe('Table of entries.'),
+    teamId: zod
+      .uuid()
+      .describe(
+        'Team owning the pipeline; references retain their own access controls.'
+      ),
+    trashedAt: zod.iso
+      .datetime({})
+      .nullable()
+      .describe('Trashed pipelines are omitted from navigation.'),
+    userId: zod
+      .string()
+      .describe('Owning user; sharing never changes ownership.'),
+  })
+  .describe(
+    'Pipeline metadata; table schema and data are read through the database service.'
+  )
+  .and(
+    zod.object({
+      grant: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    })
+  )
+  .describe("Metadata together with the caller's effective grant.")
+  .and(
+    zod.object({
+      fields: zod
+        .array(
+          zod
+            .object({
+              multiple: zod
+                .boolean()
+                .describe('Whether it holds several values.'),
+              name: zod.string().describe('The name entries and filters use.'),
+              options: zod
+                .array(zod.string())
+                .describe(
+                  "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                ),
+              readOnly: zod
+                .boolean()
+                .describe('Whether the caller cannot write it.'),
+              required: zod
+                .boolean()
+                .describe('Whether every entry must have a value.'),
+              type: zod
+                .enum([
+                  'company',
+                  'contact',
+                  'text',
+                  'number',
+                  'checkbox',
+                  'date',
+                  'date_range',
+                  'link',
+                  'select',
+                  'tags',
+                  'person',
+                  'item',
+                  'relation',
+                  'formula',
+                ])
+                .describe('What a field holds.'),
+            })
+            .describe('One field of a pipeline, named as people see it.')
+        )
+        .describe(
+          "Its fields in column order; a tracked pipeline's first names its record."
+        ),
+      version: zod.number().describe("Its table's version when read."),
+    })
+  )
+  .describe('A pipeline with its fields.');
+export const listCrmPipelineDetailsResponse = zod.array(
+  listCrmPipelineDetailsResponseItem
+);
 
 /**
  * @summary Entries whose company or contact matches the search, across the caller's
@@ -14589,6 +16009,73 @@ export const listDatabasesResponseItem = zod
   .object({
     database: zod
       .object({
+        appearance: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                color: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'gray',
+                        'red',
+                        'tomato',
+                        'orange',
+                        'amber',
+                        'yellow',
+                        'green',
+                        'teal',
+                        'blue',
+                        'indigo',
+                        'purple',
+                        'pink',
+                      ])
+                      .describe(
+                        'Named tint keys from the shared tag color palette.'
+                      ),
+                  ])
+                  .optional(),
+                icon: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['macro']),
+                            name: zod
+                              .string()
+                              .describe(
+                                'Catalog name without the SVG extension.'
+                              ),
+                          })
+                          .describe(
+                            "A stable name from Macro's original, distinct icon catalog."
+                          ),
+                        zod
+                          .object({
+                            kind: zod.enum(['emoji']),
+                            value: zod
+                              .string()
+                              .describe(
+                                'Unicode emoji text, not markup or a URL.'
+                              ),
+                          })
+                          .describe(
+                            'A single native emoji, including skin-tone and joined sequences.'
+                          ),
+                      ])
+                      .describe("The source of an entity's custom icon."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                "An entity's optional icon and tint overrides; absent values retain type defaults."
+              ),
+          ])
+          .optional(),
         created_at: zod.iso.datetime({}).describe('Creation time.'),
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
@@ -15128,6 +16615,73 @@ export const getDatabaseResponse = zod
   .object({
     database: zod
       .object({
+        appearance: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                color: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'gray',
+                        'red',
+                        'tomato',
+                        'orange',
+                        'amber',
+                        'yellow',
+                        'green',
+                        'teal',
+                        'blue',
+                        'indigo',
+                        'purple',
+                        'pink',
+                      ])
+                      .describe(
+                        'Named tint keys from the shared tag color palette.'
+                      ),
+                  ])
+                  .optional(),
+                icon: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['macro']),
+                            name: zod
+                              .string()
+                              .describe(
+                                'Catalog name without the SVG extension.'
+                              ),
+                          })
+                          .describe(
+                            "A stable name from Macro's original, distinct icon catalog."
+                          ),
+                        zod
+                          .object({
+                            kind: zod.enum(['emoji']),
+                            value: zod
+                              .string()
+                              .describe(
+                                'Unicode emoji text, not markup or a URL.'
+                              ),
+                          })
+                          .describe(
+                            'A single native emoji, including skin-tone and joined sequences.'
+                          ),
+                      ])
+                      .describe("The source of an entity's custom icon."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                "An entity's optional icon and tint overrides; absent values retain type defaults."
+              ),
+          ])
+          .optional(),
         created_at: zod.iso.datetime({}).describe('Creation time.'),
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
@@ -15884,6 +17438,127 @@ export const getDatabaseResponse = zod
   })
   .describe(
     'Everything a client needs to render and edit one database: tables,\ncolumn placements with their definitions, and the SQL names the query\nsurface exposes them under.'
+  );
+
+/**
+ * @summary Replace a database's icon and color without changing its content timestamp.
+ */
+export const setDatabaseAppearanceParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+});
+
+export const setDatabaseAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setDatabaseAppearanceResponse = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
   );
 
 /**
@@ -20990,6 +22665,73 @@ export const getUserDocumentsHandlerResponse = zod.object({
       zod.object({
         documents: zod.array(
           zod.object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             branchedFromId: zod
               .string()
               .nullish()
@@ -21175,6 +22917,73 @@ export const createDocumentResponse = zod.object({
     .object({
       documentMetadata: zod
         .object({
+          appearance: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  color: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'gray',
+                          'red',
+                          'tomato',
+                          'orange',
+                          'amber',
+                          'yellow',
+                          'green',
+                          'teal',
+                          'blue',
+                          'indigo',
+                          'purple',
+                          'pink',
+                        ])
+                        .describe(
+                          'Named tint keys from the shared tag color palette.'
+                        ),
+                    ])
+                    .optional(),
+                  icon: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .union([
+                          zod
+                            .object({
+                              kind: zod.enum(['macro']),
+                              name: zod
+                                .string()
+                                .describe(
+                                  'Catalog name without the SVG extension.'
+                                ),
+                            })
+                            .describe(
+                              "A stable name from Macro's original, distinct icon catalog."
+                            ),
+                          zod
+                            .object({
+                              kind: zod.enum(['emoji']),
+                              value: zod
+                                .string()
+                                .describe(
+                                  'Unicode emoji text, not markup or a URL.'
+                                ),
+                            })
+                            .describe(
+                              'A single native emoji, including skin-tone and joined sequences.'
+                            ),
+                        ])
+                        .describe("The source of an entity's custom icon."),
+                    ])
+                    .optional(),
+                })
+                .describe(
+                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                ),
+            ])
+            .optional(),
           branchedFromId: zod
             .string()
             .nullish()
@@ -21336,6 +23145,73 @@ export const createCanvasHandlerResponse = zod
       .string()
       .describe('The document ID of the created native Canvas'),
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -21448,6 +23324,73 @@ export const createMarkdownHandlerResponse = zod
       .string()
       .describe('The document ID of the created markdown document'),
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -21804,6 +23747,73 @@ export const createTaskHandlerResponse = zod
   .object({
     documentId: zod.string().describe('The document ID of the created task.'),
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -22072,6 +24082,73 @@ export const getBatchPreviewHandlerResponse = zod.object({
     zod.union([
       zod
         .object({
+          appearance: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  color: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'gray',
+                          'red',
+                          'tomato',
+                          'orange',
+                          'amber',
+                          'yellow',
+                          'green',
+                          'teal',
+                          'blue',
+                          'indigo',
+                          'purple',
+                          'pink',
+                        ])
+                        .describe(
+                          'Named tint keys from the shared tag color palette.'
+                        ),
+                    ])
+                    .optional(),
+                  icon: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .union([
+                          zod
+                            .object({
+                              kind: zod.enum(['macro']),
+                              name: zod
+                                .string()
+                                .describe(
+                                  'Catalog name without the SVG extension.'
+                                ),
+                            })
+                            .describe(
+                              "A stable name from Macro's original, distinct icon catalog."
+                            ),
+                          zod
+                            .object({
+                              kind: zod.enum(['emoji']),
+                              value: zod
+                                .string()
+                                .describe(
+                                  'Unicode emoji text, not markup or a URL.'
+                                ),
+                            })
+                            .describe(
+                              'A single native emoji, including skin-tone and joined sequences.'
+                            ),
+                        ])
+                        .describe("The source of an entity's custom icon."),
+                    ])
+                    .optional(),
+                })
+                .describe(
+                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                ),
+            ])
+            .optional(),
           document_id: zod.string().describe('The document id'),
           document_name: zod.string().describe('The name of the document'),
           file_type: zod
@@ -22438,6 +24515,73 @@ export const getDocumentResponse = zod.object({
     .object({
       documentMetadata: zod
         .object({
+          appearance: zod
+            .union([
+              zod.null(),
+              zod
+                .object({
+                  color: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'gray',
+                          'red',
+                          'tomato',
+                          'orange',
+                          'amber',
+                          'yellow',
+                          'green',
+                          'teal',
+                          'blue',
+                          'indigo',
+                          'purple',
+                          'pink',
+                        ])
+                        .describe(
+                          'Named tint keys from the shared tag color palette.'
+                        ),
+                    ])
+                    .optional(),
+                  icon: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .union([
+                          zod
+                            .object({
+                              kind: zod.enum(['macro']),
+                              name: zod
+                                .string()
+                                .describe(
+                                  'Catalog name without the SVG extension.'
+                                ),
+                            })
+                            .describe(
+                              "A stable name from Macro's original, distinct icon catalog."
+                            ),
+                          zod
+                            .object({
+                              kind: zod.enum(['emoji']),
+                              value: zod
+                                .string()
+                                .describe(
+                                  'Unicode emoji text, not markup or a URL.'
+                                ),
+                            })
+                            .describe(
+                              'A single native emoji, including skin-tone and joined sequences.'
+                            ),
+                        ])
+                        .describe("The source of an entity's custom icon."),
+                    ])
+                    .optional(),
+                })
+                .describe(
+                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                ),
+            ])
+            .optional(),
           branchedFromId: zod
             .string()
             .nullish()
@@ -22622,6 +24766,73 @@ export const saveDocumentHandlerBody = zod.object({
 export const saveDocumentHandlerResponse = zod.object({
   data: zod.object({
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -23300,6 +25511,127 @@ export const editDocumentWithAiResponse = zod
   .describe('A completed edit by instructions.');
 
 /**
+ * @summary Replace a document's presentation overrides without editing its content.
+ */
+export const setDocumentAppearanceParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const setDocumentAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setDocumentAppearanceResponse = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+/**
  * Returns the short UUID and git branch name for a task document.
 Returns 400 if the document is not a task.
  * @summary Handler for `GET /documents/{document_id}/branch_name`.
@@ -23748,6 +26080,12 @@ export const commentOnDocumentTextResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -23822,6 +26160,73 @@ export const copyDocumentResponse = zod
       .object({
         documentMetadata: zod
           .object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             branchedFromId: zod
               .string()
               .nullish()
@@ -32507,6 +34912,73 @@ export const simpleSaveParams = zod.object({
 export const simpleSaveResponse = zod.object({
   data: zod.object({
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -35952,6 +38424,73 @@ export const getDocumentVersionParams = zod.object({
 export const getDocumentVersionResponse = zod.object({
   data: zod.object({
     documentMetadata: zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       branchedFromId: zod
         .string()
         .nullish()
@@ -38793,6 +41332,69 @@ export const listFormsResponseItem = zod
       .describe(
         'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
       ),
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     audience: zod
       .enum(['members', 'public'])
       .describe('Who may respond to a form.'),
@@ -38944,6 +41546,73 @@ export const listAccessibleFormsResponseItem = zod
           .describe(
             'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
           ),
+        appearance: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                color: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'gray',
+                        'red',
+                        'tomato',
+                        'orange',
+                        'amber',
+                        'yellow',
+                        'green',
+                        'teal',
+                        'blue',
+                        'indigo',
+                        'purple',
+                        'pink',
+                      ])
+                      .describe(
+                        'Named tint keys from the shared tag color palette.'
+                      ),
+                  ])
+                  .optional(),
+                icon: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['macro']),
+                            name: zod
+                              .string()
+                              .describe(
+                                'Catalog name without the SVG extension.'
+                              ),
+                          })
+                          .describe(
+                            "A stable name from Macro's original, distinct icon catalog."
+                          ),
+                        zod
+                          .object({
+                            kind: zod.enum(['emoji']),
+                            value: zod
+                              .string()
+                              .describe(
+                                'Unicode emoji text, not markup or a URL.'
+                              ),
+                          })
+                          .describe(
+                            'A single native emoji, including skin-tone and joined sequences.'
+                          ),
+                      ])
+                      .describe("The source of an entity's custom icon."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                "An entity's optional icon and tint overrides; absent values retain type defaults."
+              ),
+          ])
+          .optional(),
         audience: zod
           .enum(['members', 'public'])
           .describe('Who may respond to a form.'),
@@ -39069,6 +41738,73 @@ export const getFormResponse = zod
           .describe(
             'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
           ),
+        appearance: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                color: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum([
+                        'gray',
+                        'red',
+                        'tomato',
+                        'orange',
+                        'amber',
+                        'yellow',
+                        'green',
+                        'teal',
+                        'blue',
+                        'indigo',
+                        'purple',
+                        'pink',
+                      ])
+                      .describe(
+                        'Named tint keys from the shared tag color palette.'
+                      ),
+                  ])
+                  .optional(),
+                icon: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['macro']),
+                            name: zod
+                              .string()
+                              .describe(
+                                'Catalog name without the SVG extension.'
+                              ),
+                          })
+                          .describe(
+                            "A stable name from Macro's original, distinct icon catalog."
+                          ),
+                        zod
+                          .object({
+                            kind: zod.enum(['emoji']),
+                            value: zod
+                              .string()
+                              .describe(
+                                'Unicode emoji text, not markup or a URL.'
+                              ),
+                          })
+                          .describe(
+                            'A single native emoji, including skin-tone and joined sequences.'
+                          ),
+                      ])
+                      .describe("The source of an entity's custom icon."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                "An entity's optional icon and tint overrides; absent values retain type defaults."
+              ),
+          ])
+          .optional(),
         audience: zod
           .enum(['members', 'public'])
           .describe('Who may respond to a form.'),
@@ -39845,6 +42581,69 @@ export const updateFormResponse = zod
       .describe(
         'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
       ),
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     audience: zod
       .enum(['members', 'public'])
       .describe('Who may respond to a form.'),
@@ -39930,6 +42729,127 @@ export const updateFormResponse = zod
   );
 
 /**
+ * @summary Replace a form's icon and color without changing its content timestamp.
+ */
+export const setFormAppearanceParams = zod.object({
+  id: zod.uuid().describe('Form id'),
+});
+
+export const setFormAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setFormAppearanceResponse = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+/**
  * @summary Open the editor-only collaborative layout, or publish its latest valid
 revision. Content stays in the existing collaboration surface.
  */
@@ -39957,6 +42877,73 @@ export const collaborateFormResponse = zod
               .describe(
                 'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
               ),
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             audience: zod
               .enum(['members', 'public'])
               .describe('Who may respond to a form.'),
@@ -41333,6 +44320,73 @@ export const putFormLayoutResponse = zod
               .describe(
                 'Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded.'
               ),
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             audience: zod
               .enum(['members', 'public'])
               .describe('Who may respond to a form.'),
@@ -43772,6 +46826,13 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43812,7 +46873,7 @@ code) addresses it.
  * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
  */
 export const claimHarnessPairingParams = zod.object({
-  pairing_id: zod.uuid().describe('Pairing ID'),
+  pairing_id: zod.string().describe('Pairing ID'),
 });
 
 export const claimHarnessPairingBody = zod
@@ -43839,6 +46900,13 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Whether agents may bypass ACP permission requests on this harness.'
           ),
+        claude_mode: zod
+          .enum(['macro_credits', 'own_account'])
+          .optional()
+          .describe(
+            'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+          ),
+        computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43894,6 +46962,13 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43943,6 +47018,13 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43994,6 +47076,13 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44106,6 +47195,13 @@ export const patchHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44373,6 +47469,73 @@ export const listInitiativesResponse = zod
       .array(
         zod
           .object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             id: zod
               .uuid()
               .describe(
@@ -44587,6 +47750,69 @@ export const createInitiativeBody = zod
 
 export const createInitiativeResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
@@ -44703,6 +47929,73 @@ export const pageInitiativesResponse = zod
       .array(
         zod
           .object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             id: zod
               .uuid()
               .describe(
@@ -44780,6 +48073,69 @@ export const getInitiativeParams = zod.object({
 
 export const getInitiativeResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
@@ -44936,6 +48292,69 @@ export const updateInitiativeBody = zod
 
 export const updateInitiativeResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
@@ -45092,6 +48511,127 @@ export const getInitiativeActivityResponse = zod
   })
   .describe(
     'History page. Access filtering can shorten records; follow nextCursor until exhausted.'
+  );
+
+/**
+ * @summary Replace a project's appearance without changing content timestamps.
+ */
+export const setInitiativeAppearanceParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const setInitiativeAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setInitiativeAppearanceResponse = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
   );
 
 /**
@@ -45441,6 +48981,75 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     branchedFromId: zod
                       .uuid()
                       .nullish()
@@ -46412,6 +50021,75 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
@@ -46889,6 +50567,12 @@ export const getItemsSoupResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -47028,6 +50712,25 @@ export const getItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -49433,7 +53136,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "Filter by session owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -49650,7 +53353,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by chat owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -49735,7 +53438,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by document owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -50018,7 +53721,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by project owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -50439,6 +54142,75 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     branchedFromId: zod
                       .uuid()
                       .nullish()
@@ -51410,6 +55182,75 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
@@ -51887,6 +55728,12 @@ export const postItemsSoupResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -52026,6 +55873,25 @@ export const postItemsSoupResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -54876,6 +58742,75 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     branchedFromId: zod
                       .uuid()
                       .nullish()
@@ -55847,6 +59782,75 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    appearance: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            color: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'gray',
+                                    'red',
+                                    'tomato',
+                                    'orange',
+                                    'amber',
+                                    'yellow',
+                                    'green',
+                                    'teal',
+                                    'blue',
+                                    'indigo',
+                                    'purple',
+                                    'pink',
+                                  ])
+                                  .describe(
+                                    'Named tint keys from the shared tag color palette.'
+                                  ),
+                              ])
+                              .optional(),
+                            icon: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['macro']),
+                                        name: zod
+                                          .string()
+                                          .describe(
+                                            'Catalog name without the SVG extension.'
+                                          ),
+                                      })
+                                      .describe(
+                                        "A stable name from Macro's original, distinct icon catalog."
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['emoji']),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'Unicode emoji text, not markup or a URL.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A single native emoji, including skin-tone and joined sequences.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "The source of an entity's custom icon."
+                                  ),
+                              ])
+                              .optional(),
+                          })
+                          .describe(
+                            "An entity's optional icon and tint overrides; absent values retain type defaults."
+                          ),
+                      ])
+                      .optional(),
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
@@ -56324,6 +60328,12 @@ export const postItemsSoupAstResponse = zod
                 .object({
                   channel: zod
                     .object({
+                      auto_join_team: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "Whether members of the channel's team join it automatically."
+                        ),
                       channel_type: zod
                         .enum(['public', 'private', 'direct_message', 'team'])
                         .describe('Type of channel.'),
@@ -56465,6 +60475,25 @@ export const postItemsSoupAstResponse = zod
                 )
                 .and(
                   zod.object({
+                    agent_dm: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Persona avatar, when supplied.'),
+                            bot_id: zod.string().describe('Persona id.'),
+                            name: zod
+                              .string()
+                              .describe('Persona display name.'),
+                          })
+                          .describe(
+                            "The persona of a viewer's private conversation with an agent."
+                          ),
+                      ])
+                      .optional(),
                     interacted_at: zod.iso
                       .datetime({})
                       .nullish()
@@ -59768,6 +63797,75 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          appearance: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  color: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'gray',
+                                          'red',
+                                          'tomato',
+                                          'orange',
+                                          'amber',
+                                          'yellow',
+                                          'green',
+                                          'teal',
+                                          'blue',
+                                          'indigo',
+                                          'purple',
+                                          'pink',
+                                        ])
+                                        .describe(
+                                          'Named tint keys from the shared tag color palette.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  icon: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['macro']),
+                                              name: zod
+                                                .string()
+                                                .describe(
+                                                  'Catalog name without the SVG extension.'
+                                                ),
+                                            })
+                                            .describe(
+                                              "A stable name from Macro's original, distinct icon catalog."
+                                            ),
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['emoji']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'Unicode emoji text, not markup or a URL.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'A single native emoji, including skin-tone and joined sequences.'
+                                            ),
+                                        ])
+                                        .describe(
+                                          "The source of an entity's custom icon."
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                                ),
+                            ])
+                            .optional(),
                           branchedFromId: zod
                             .uuid()
                             .nullish()
@@ -60751,6 +64849,75 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          appearance: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  color: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'gray',
+                                          'red',
+                                          'tomato',
+                                          'orange',
+                                          'amber',
+                                          'yellow',
+                                          'green',
+                                          'teal',
+                                          'blue',
+                                          'indigo',
+                                          'purple',
+                                          'pink',
+                                        ])
+                                        .describe(
+                                          'Named tint keys from the shared tag color palette.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  icon: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['macro']),
+                                              name: zod
+                                                .string()
+                                                .describe(
+                                                  'Catalog name without the SVG extension.'
+                                                ),
+                                            })
+                                            .describe(
+                                              "A stable name from Macro's original, distinct icon catalog."
+                                            ),
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['emoji']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'Unicode emoji text, not markup or a URL.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'A single native emoji, including skin-tone and joined sequences.'
+                                            ),
+                                        ])
+                                        .describe(
+                                          "The source of an entity's custom icon."
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                                ),
+                            ])
+                            .optional(),
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
@@ -61261,6 +65428,12 @@ export const postItemsSoupAstGroupedResponse = zod
                       .object({
                         channel: zod
                           .object({
+                            auto_join_team: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                "Whether members of the channel's team join it automatically."
+                              ),
                             channel_type: zod
                               .enum([
                                 'public',
@@ -61419,6 +65592,25 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          agent_dm: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Persona avatar, when supplied.'),
+                                  bot_id: zod.string().describe('Persona id.'),
+                                  name: zod
+                                    .string()
+                                    .describe('Persona display name.'),
+                                })
+                                .describe(
+                                  "The persona of a viewer's private conversation with an agent."
+                                ),
+                            ])
+                            .optional(),
                           interacted_at: zod.iso
                             .datetime({})
                             .nullish()
@@ -64178,6 +68370,75 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          appearance: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  color: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'gray',
+                                          'red',
+                                          'tomato',
+                                          'orange',
+                                          'amber',
+                                          'yellow',
+                                          'green',
+                                          'teal',
+                                          'blue',
+                                          'indigo',
+                                          'purple',
+                                          'pink',
+                                        ])
+                                        .describe(
+                                          'Named tint keys from the shared tag color palette.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  icon: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['macro']),
+                                              name: zod
+                                                .string()
+                                                .describe(
+                                                  'Catalog name without the SVG extension.'
+                                                ),
+                                            })
+                                            .describe(
+                                              "A stable name from Macro's original, distinct icon catalog."
+                                            ),
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['emoji']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'Unicode emoji text, not markup or a URL.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'A single native emoji, including skin-tone and joined sequences.'
+                                            ),
+                                        ])
+                                        .describe(
+                                          "The source of an entity's custom icon."
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                                ),
+                            ])
+                            .optional(),
                           branchedFromId: zod
                             .uuid()
                             .nullish()
@@ -65161,6 +69422,75 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          appearance: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  color: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'gray',
+                                          'red',
+                                          'tomato',
+                                          'orange',
+                                          'amber',
+                                          'yellow',
+                                          'green',
+                                          'teal',
+                                          'blue',
+                                          'indigo',
+                                          'purple',
+                                          'pink',
+                                        ])
+                                        .describe(
+                                          'Named tint keys from the shared tag color palette.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  icon: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .union([
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['macro']),
+                                              name: zod
+                                                .string()
+                                                .describe(
+                                                  'Catalog name without the SVG extension.'
+                                                ),
+                                            })
+                                            .describe(
+                                              "A stable name from Macro's original, distinct icon catalog."
+                                            ),
+                                          zod
+                                            .object({
+                                              kind: zod.enum(['emoji']),
+                                              value: zod
+                                                .string()
+                                                .describe(
+                                                  'Unicode emoji text, not markup or a URL.'
+                                                ),
+                                            })
+                                            .describe(
+                                              'A single native emoji, including skin-tone and joined sequences.'
+                                            ),
+                                        ])
+                                        .describe(
+                                          "The source of an entity's custom icon."
+                                        ),
+                                    ])
+                                    .optional(),
+                                })
+                                .describe(
+                                  "An entity's optional icon and tint overrides; absent values retain type defaults."
+                                ),
+                            ])
+                            .optional(),
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
@@ -65671,6 +70001,12 @@ export const postItemsSoupAstGroupedResponse = zod
                       .object({
                         channel: zod
                           .object({
+                            auto_join_team: zod
+                              .boolean()
+                              .optional()
+                              .describe(
+                                "Whether members of the channel's team join it automatically."
+                              ),
                             channel_type: zod
                               .enum([
                                 'public',
@@ -65829,6 +70165,25 @@ export const postItemsSoupAstGroupedResponse = zod
                       )
                       .and(
                         zod.object({
+                          agent_dm: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Persona avatar, when supplied.'),
+                                  bot_id: zod.string().describe('Persona id.'),
+                                  name: zod
+                                    .string()
+                                    .describe('Persona display name.'),
+                                })
+                                .describe(
+                                  "The persona of a viewer's private conversation with an agent."
+                                ),
+                            ])
+                            .optional(),
                           interacted_at: zod.iso
                             .datetime({})
                             .nullish()
@@ -68466,6 +72821,12 @@ export const messageTimelineResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -68821,6 +73182,12 @@ export const messageTimelineResponse = zod
                                   emoji: zod
                                     .string()
                                     .describe('Emoji being reacted with.'),
+                                  names: zod
+                                    .record(zod.string(), zod.string())
+                                    .optional()
+                                    .describe(
+                                      'Display names for reactors whose account identity is not visible to this viewer.'
+                                    ),
                                   users: zod
                                     .array(zod.string())
                                     .describe('User identifiers.'),
@@ -69200,6 +73567,12 @@ export const entityMessageCreateResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -69374,6 +73747,12 @@ export const entityMessageGetMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -69552,6 +73931,12 @@ export const entityMessageDeleteMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -69826,6 +74211,12 @@ export const entityMessageEditResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70008,6 +74399,12 @@ export const entityMessageReactResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70189,6 +74586,12 @@ export const entityMessageLegacyResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70388,6 +74791,12 @@ export const entityMessageGetThreadResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -70567,6 +74976,12 @@ export const entityMessageGetThreadResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -71171,6 +75586,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -71555,6 +75976,12 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -71819,6 +76246,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -72204,6 +76637,12 @@ export const messageTimelineEntriesResponse = zod
                                             .describe(
                                               'Emoji being reacted with.'
                                             ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
+                                            ),
                                           users: zod
                                             .array(zod.string())
                                             .describe('User identifiers.'),
@@ -72358,6 +76797,1178 @@ export const entityMessageTypingBody = zod
       .describe('Root being replied to, absent for the parent composer.'),
   })
   .describe('Transient typing update.');
+
+/**
+ * @summary List current teams available to the authenticated human.
+ */
+export const passwordsTeamsResponseItem = zod
+  .uuid()
+  .describe('Team isolation boundary.');
+export const passwordsTeamsResponse = zod.array(passwordsTeamsResponseItem);
+
+/**
+ * @summary List the authenticated team’s folders.
+ */
+export const passwordsFoldersParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsFoldersResponseItem = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+export const passwordsFoldersResponse = zod.array(passwordsFoldersResponseItem);
+
+/**
+ * @summary Create a folder within the authenticated team.
+ */
+export const passwordsCreateFolderParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsCreateFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCreateFolderBody = zod
+  .object({
+    name: zod.string().describe('Folder display name.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe('Containing folder; absent or null for a top-level folder.'),
+  })
+  .describe(
+    'New folder, at the top level or inside another folder of the team.'
+  );
+
+export const passwordsCreateFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Rename a folder within the authenticated team.
+ */
+export const passwordsRenameFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsRenameFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsRenameFolderBody = zod
+  .object({
+    name: zod.string().describe('Folder display name.'),
+  })
+  .describe('Validated folder display-name request.');
+
+export const passwordsRenameFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Delete a folder within the authenticated team.
+ */
+export const passwordsRemoveFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsRemoveFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Move a folder under another folder of the team, or to the top level.
+ */
+export const passwordsMoveFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsMoveFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsMoveFolderBody = zod
+  .object({
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe('Containing folder; null moves the folder to the top level.'),
+  })
+  .describe('New containing folder for an existing folder.');
+
+export const passwordsMoveFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Search authorized metadata without resolving private values.
+ */
+export const passwordsListParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsListQueryParams = zod.object({
+  search: zod
+    .string()
+    .nullish()
+    .describe('Optional metadata search text; never a value search.'),
+});
+
+export const passwordsListResponseShareCountMin = 0;
+
+export const passwordsListResponseItem = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsListResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+export const passwordsListResponse = zod.array(passwordsListResponseItem);
+
+/**
+ * @summary Create one item using an idempotent logical operation identifier.
+ */
+export const passwordsCreateParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsCreateHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCreateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7 identifying one logical save across uncertain retries.'
+      ),
+    private: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Create without the default team edit grant. Updates preserve existing grants.'
+      ),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+  })
+  .describe('Mutation without provider-specific representations.');
+
+export const passwordsCreateResponseShareCountMin = 0;
+
+export const passwordsCreateResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsCreateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Read authorized item metadata only.
+ */
+export const passwordsDetailParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsDetailResponseShareCountMin = 0;
+
+export const passwordsDetailResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsDetailResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Save a new protected value version and its metadata.
+ */
+export const passwordsUpdateParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsUpdateHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsUpdateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7 identifying one logical save across uncertain retries.'
+      ),
+    private: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Create without the default team edit grant. Updates preserve existing grants.'
+      ),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+  })
+  .describe('Mutation without provider-specific representations.');
+
+export const passwordsUpdateResponseShareCountMin = 0;
+
+export const passwordsUpdateResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsUpdateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Delete an owned item with a resumable provider fence.
+ */
+export const passwordsRemoveParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Change metadata without resolving private values.
+ */
+export const passwordsPatchParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsPatchHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsPatchBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('A metadata-only change never reads or writes a secret value.');
+
+export const passwordsPatchResponseShareCountMin = 0;
+
+export const passwordsPatchResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsPatchResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary List recorded activity for an authorized item.
+ */
+export const passwordsActivityParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsActivityResponseItem = zod
+  .object({
+    action: zod
+      .enum([
+        'create',
+        'update',
+        'delete',
+        'reveal',
+        'copy',
+        'share',
+        'totp_setup',
+        'totp_remove',
+        'totp_code',
+      ])
+      .describe('Only fixed event names enter the audit index.'),
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    occurredAt: zod.iso
+      .datetime({})
+      .describe('Time this activity was recorded.'),
+    userId: zod
+      .string()
+      .describe(
+        'Authenticated Macro user identity; never a provider credential.'
+      ),
+  })
+  .describe('Bounded audit entry, correlated by opaque item\/event IDs.');
+export const passwordsActivityResponse = zod.array(
+  passwordsActivityResponseItem
+);
+
+/**
+ * @summary Disclose values for an explicitly audited clipboard action.
+ */
+export const passwordsCopyParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsCopyHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCopyBody = zod
+  .object({
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        'Requested historic version, or the currently committed version.'
+      ),
+  })
+  .describe('Explicit historical version selection for protected disclosure.');
+
+export const passwordsCopyResponse = zod
+  .object({
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary List protected-value version metadata.
+ */
+export const passwordsHistoryParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsHistoryResponseItem = zod
+  .object({
+    createdAt: zod.string().describe('Resource creation timestamp.'),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Immutable provider version metadata, without historic values.');
+export const passwordsHistoryResponse = zod.array(passwordsHistoryResponseItem);
+
+/**
+ * @summary Disclose a current or historical value with normal human-session item access.
+ */
+export const passwordsRevealParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRevealHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsRevealBody = zod
+  .object({
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        'Requested historic version, or the currently committed version.'
+      ),
+  })
+  .describe('Explicit historical version selection for protected disclosure.');
+
+export const passwordsRevealResponse = zod
+  .object({
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary Read the owned item’s explicit recipient set.
+ */
+export const passwordsGrantsParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsGrantsResponseItem = zod
+  .object({
+    id: zod.string().describe('Identity of this resource within its team.'),
+    kind: zod
+      .enum(['user', 'team'])
+      .describe(
+        'Future principals can extend this without exposing agent controls in v1.'
+      ),
+    permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+  })
+  .describe('Explicit grant within a team vault.');
+export const passwordsGrantsResponse = zod.array(passwordsGrantsResponseItem);
+
+/**
+ * @summary Replace the owned item’s explicit recipient set.
+ */
+export const passwordsShareParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsShareHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsShareBody = zod
+  .object({
+    grants: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe('Identity of this resource within its team.'),
+            kind: zod
+              .enum(['user', 'team'])
+              .describe(
+                'Future principals can extend this without exposing agent controls in v1.'
+              ),
+            permission: zod
+              .enum(['view', 'edit'])
+              .describe('Grant capability.'),
+          })
+          .describe('Explicit grant within a team vault.')
+      )
+      .describe(
+        'Complete desired recipient set; an empty list revokes sharing.'
+      ),
+  })
+  .describe('Owner-requested replacement of the explicit grant set.');
+
+/**
+ * @summary Enroll or replace a verification-code seed with normal human-session edit access.
+ */
+export const passwordsSetTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsSetTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsSetTotpBody = zod
+  .object({
+    key: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+  })
+  .describe('Private seed submitted only to the verification-code provider.');
+
+/**
+ * @summary Remove a verification-code seed with normal human-session edit access.
+ */
+export const passwordsRemoveTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Resolve the current verification code with normal human-session item access.
+ */
+export const passwordsTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsTotpResponsePeriodMin = 0;
+
+export const passwordsTotpResponse = zod
+  .object({
+    code: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    period: zod
+      .number()
+      .min(passwordsTotpResponsePeriodMin)
+      .describe('Verification-code period in seconds.'),
+  })
+  .describe('Current TOTP output is confidential, just like a password.');
+
+/**
+ * @summary Read only the current account identifier with normal human view authorization.
+ */
+export const passwordsUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
+
+/**
+ * @summary Read only the current account identifier and record an explicit clipboard action.
+ */
+export const passwordsCopyUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsCopyUsernameHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCopyUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
 
 /**
  * @summary Gets the users pinned items

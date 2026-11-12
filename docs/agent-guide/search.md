@@ -70,6 +70,12 @@ full-text action. People full-text search uses the existing channel-content scop
 Name mode makes no full-text requests; explicit full-text mode retains the search
 service's validation for short queries.
 
+Contacts, agent sessions and commands list before the local cache answers a
+typed query. While it has not, Command-K and phone name search show
+**Searching…** under the listed rows, once the wait passes 300 ms. It is most
+visible right after returning to the tab, when the cache engine restarts; a
+search refused during that restart is repeated as soon as the engine is back.
+
 Email Quick Access searches cached thread subjects, sender display names, and
 sender addresses, including the thread's earlier senders after someone else
 replies. It returns one row per thread and never matches only a snippet or body.

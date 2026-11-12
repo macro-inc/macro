@@ -8,6 +8,8 @@ export type AgentSessionMentionData = {
   name: string;
   ownerId: string;
   botId: string;
+  /** The runtime (`claude-code`, `codex`, ...); only the GraphQL leg carries it. */
+  harness?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   status: AgentSessionStatus;
   createdAt: string;

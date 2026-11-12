@@ -237,11 +237,14 @@ deny = [
     "email_api_client",          # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
     "email_service",             # CRM backfill trace propagation and HTTP server span tests only (dev-dependency)
+    "email_suppression_handler", # Notification TRACE field test only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests
     "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only
+    "harnessd",                  # stdout is the harnessd protocol channel and the computer has no OTLP agent; standalone stderr logging, like macrod
+    "hosted_runtimes",           # Provisioning span propagation tests only (dev-dependency)
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
@@ -251,6 +254,7 @@ deny = [
     "notification",              # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
+    "passwords",                 # Provider credential-redaction tests only (dev-dependency)
     "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web

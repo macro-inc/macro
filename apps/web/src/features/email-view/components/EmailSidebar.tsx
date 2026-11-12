@@ -24,8 +24,6 @@ import TrayIcon from '@icon/system/regular/tray.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
-import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
-import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
@@ -46,8 +44,6 @@ import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
-// Email is personal, so the sidebar lists only the user's own tags.
-const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
 const PRIMARY_TAB_IDS = [
   'favorites',
   'drafts',
@@ -183,14 +179,7 @@ export function EmailSidebar() {
   const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const {
-    state,
-    setState,
-    setTab,
-    showTags,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useEmailView();
+  const { state, setState, setTab } = useEmailView();
 
   const tabIds = () =>
     (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
@@ -260,16 +249,6 @@ export function EmailSidebar() {
         <EmailNavigation />
 
         <EmailSavedViewsSection />
-
-        <div ref={tourTarget(EMAIL_TOUR.tags)}>
-          <SidebarTagsSection
-            activeIds={state.facets.tags ?? []}
-            onActiveIdsChange={showTags}
-            open={isSidebarSectionOpen('tags')}
-            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-            scopes={SIDEBAR_TAG_SCOPES}
-          />
-        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

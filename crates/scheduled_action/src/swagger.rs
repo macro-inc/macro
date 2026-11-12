@@ -7,8 +7,8 @@ use utoipa::OpenApi;
 use crate::inbound::axum_router::{
     __path_check_action, __path_create_action, __path_delete_action, __path_detach_action,
     __path_execute_action, __path_get_action, __path_health, __path_list_actions,
-    __path_list_history, __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
-    SetScheduledActionEnabled,
+    __path_list_history, __path_set_action_enabled, __path_set_appearance, __path_update_action,
+    ScheduledActionResponse, SetScheduledActionEnabled,
 };
 #[expect(
     unused_imports,
@@ -34,6 +34,7 @@ use crate::domain::models::{
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
+use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -50,6 +51,7 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::check_action,
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,
+        crate::inbound::axum_router::set_appearance,
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::detach_action,
         crate::inbound::axum_router::execute_action,
@@ -94,6 +96,7 @@ use model::response::EmptyResponse;
             crate::domain::code_upgrade::CodeUpgrade,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
+            EntityAppearance, AppearanceIcon, AppearanceColor,
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,

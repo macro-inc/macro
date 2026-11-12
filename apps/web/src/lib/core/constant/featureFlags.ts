@@ -154,6 +154,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
+  default: onInDev,
+});
+
 /**
  * Connect apps Macro Connect serves through it instead of Pipedream. The
  * backend reads the same PostHog key and decides per app; this side only
@@ -194,6 +201,16 @@ export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
   env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
   default: onInDev,
+});
+
+/**
+ * Macro computers: the whole computer UI (Settings → Machines, Billing,
+ * Agents). Off hides it; existing computers keep running and billing.
+ * No dev default: dev follows PostHog like the backend, which fails closed.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
 });
 
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
@@ -1015,6 +1032,14 @@ export const enableRoutineSharing = defineFlag({
   env: 'ENABLE_ROUTINE_SHARING',
 });
 
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;
@@ -1121,4 +1146,16 @@ export const enableInAppTours = defineFlag({
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
+});
+
+/**
+ * Passwords v1: the `/passwords` route and its rail and dock entries (which
+ * also need a team). The backend evaluates the same key. On only for local
+ * stacks; hosted dev and production follow the remote PostHog flag. Override
+ * locally with VITE_ENABLE_PASSWORDS=true.
+ */
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords-v1',
+  env: 'ENABLE_PASSWORDS',
+  default: LOCAL_ONLY || undefined,
 });

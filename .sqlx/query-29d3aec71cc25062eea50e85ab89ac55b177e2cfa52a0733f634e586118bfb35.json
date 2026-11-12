@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO computer_reservation\n                (id, team_id, host_id, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id,\n                 comp_reason, name, purchase_key, created_by, extra_items, provision_traceparent,\n                 expires_at, created_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "computer_size",
+            "kind": {
+              "Enum": [
+                "standard",
+                "large",
+                "xl"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "29d3aec71cc25062eea50e85ab89ac55b177e2cfa52a0733f634e586118bfb35"
+}
