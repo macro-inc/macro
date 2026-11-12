@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                login.id AS login_id,\n                c.id AS computer_id,\n                c.team_id,\n                h.id AS harness_id,\n                h.name,\n                login.signed_in_by,\n                login.signed_in_at,\n                login.expires_at,\n                login.notice_stage AS \"notice_stage: ClaudeSignInStage\",\n                login.notice_expires_at,\n                h.capabilities AS \"capabilities: Json<HarnessCapabilities>\",\n                h.capabilities_reported_at\n            FROM harness_account_logins login\n            JOIN harnesses h ON h.id = login.harness_id\n            JOIN hosted_runtime c ON c.id = h.computer_id\n            WHERE h.deleted_at IS NULL\n              AND login.provider = 'claude'\n              AND login.signed_out_at IS NULL\n            ",
+  "query": "\n            SELECT\n                login.id AS login_id,\n                c.id AS computer_id,\n                c.team_id,\n                h.id AS harness_id,\n                h.name,\n                login.signed_in_by,\n                login.signed_in_at,\n                login.expires_at,\n                login.notice_stage AS \"notice_stage: ClaudeSignInStage\",\n                login.notice_expires_at\n            FROM harness_account_logins login\n            JOIN harnesses h ON h.id = login.harness_id\n            JOIN hosted_runtime c ON c.id = h.computer_id\n            WHERE h.deleted_at IS NULL\n              AND login.provider = 'claude'\n              AND login.signed_out_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -63,16 +63,6 @@
         "ordinal": 9,
         "name": "notice_expires_at",
         "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 10,
-        "name": "capabilities: Json<HarnessCapabilities>",
-        "type_info": "Jsonb"
-      },
-      {
-        "ordinal": 11,
-        "name": "capabilities_reported_at",
-        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -88,10 +78,8 @@
       false,
       true,
       true,
-      true,
-      false,
       true
     ]
   },
-  "hash": "ee93b8afed3a8ff96520803fe941a830d0b824ab148083f5256283485047b9b0"
+  "hash": "e8637a38f94a0ce877b5a3d25676e4c19732cacc26cf5def5ea7cc487db638ea"
 }

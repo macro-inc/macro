@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO harness_account_logins\n                    (id, harness_id, provider_account_id, provider, signed_in_by)\n                VALUES ($1, $2, $3, $4, $5)\n                ",
+  "query": "\n                INSERT INTO harness_account_logins\n                    (id, harness_id, provider_account_id, provider, signed_in_by, expires_at)\n                VALUES ($1, $2, $3, $4, $5, $6)\n                ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -18,10 +18,11 @@
             }
           }
         },
-        "Text"
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": []
   },
-  "hash": "74e712ac81704ee502ff686a0ce7ab04a0631aed08dc1fe0e00b78f077c26acc"
+  "hash": "6f3d016036d3d64ce4f4ddea0a2ff010915af21bedf2f0a95868e5aa63629ca0"
 }
