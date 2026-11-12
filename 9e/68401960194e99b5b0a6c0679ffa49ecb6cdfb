@@ -1,0 +1,22 @@
+apps/web/AGENTS.md
+  s_1559dd89c30a08::t_9fd3de711ce141 480-481
+apps/web/src/features/channel/Input/tests/attach-files-action.test.tsx
+  s_1559dd89c30a08::t_9fd3de711ce141 3,16-18
+  s_1559dd89c30a08::t_787f5c8aaee655 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9e68401960194e99b5b0a6c0679ffa49ecb6cdfb",
+  "prompts": {},
+  "sessions": {
+    "s_1559dd89c30a08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0903249-a139-49ee-8629-f2fee2090d93",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
