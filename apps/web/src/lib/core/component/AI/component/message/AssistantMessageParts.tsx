@@ -80,6 +80,23 @@ const LOOKUP_TOOLS: ReadonlySet<string> = new Set([
  * Deferred user tools suspend the chat on an interactive compose UI, so they
  * must stay visible rather than being collapsed inside a tool group.
  */
+/**
+ * Whether every part is a tool lookup or its result, so the message shows
+ * nothing and must not render as an empty bubble.
+ */
+export function onlyToolLookups(parts: readonly AssistantMessagePart[]) {
+  return (
+    parts.length > 0 &&
+    parts.every(
+      (part) =>
+        (part.type === 'toolCall' ||
+          part.type === 'toolCallResponseJson' ||
+          part.type === 'toolCallErr') &&
+        LOOKUP_TOOLS.has(part.name)
+    )
+  );
+}
+
 const STANDALONE_TOOLS: ReadonlySet<string> = new Set([
   'CreateCalendarEvent',
   'DispatchCodingAgent',
