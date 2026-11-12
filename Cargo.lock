@@ -6721,6 +6721,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_channel",
  "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
