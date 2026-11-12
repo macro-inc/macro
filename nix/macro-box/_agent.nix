@@ -35,8 +35,9 @@ let
   browserCdpUrl = "http://127.0.0.1:${toString cdpPort}";
   pulseServer = "unix:${runtimeDirectory}/pulse/native";
   runtimeDirectory = "/run/user/${uid}";
-  # Where harnessd keeps the Claude sign-in token `claude` reads (#10186).
-  harnessdState = "/home/.system/harnessd";
+  # harnessd's Claude sign-in (`credential.json`), which the `claude`
+  # wrapper reads.
+  claudeSignIn = "${config.macro.box.harnessd.stateDirectory}/claude";
   # macro's own desktop is :0.
   displayNumber = 1;
   display = ":${toString displayNumber}";
@@ -121,6 +122,8 @@ let
     MUPPET_CREDENTIALS_FILE = "%d/agent.env";
     MUPPET_LAST_GOOD_FILE = lastGood;
     MUPPET_RESTART_FILE = restartFile;
+    # Bound read-only below; the runtime binds it into Claude's sandbox.
+    HARNESSD_STATE_DIRECTORY = claudeSignIn;
     MUPPET_MCP_SERVERS_JSON = builtins.toJSON mcpServers;
     # The agent's Chromium on its desktop, for muppet's browser utility.
     MUPPET_BROWSER_CDP_URL = browserCdpUrl;
@@ -152,7 +155,7 @@ let
       home
       runtimeDirectory
     ];
-    BindReadOnlyPaths = [ "-${harnessdState}" ];
+    BindReadOnlyPaths = [ claudeSignIn ];
     PrivateTmp = true;
     PrivateDevices = true;
     ProtectKernelTunables = true;
@@ -261,6 +264,12 @@ in
 
     systemd.tmpfiles.settings."20-macro-agent" = {
       ${home}.d = {
+        user = "macro";
+        group = "macro";
+        mode = "0700";
+      };
+      # Bound into the agent's unit, so it exists before the first sign-in.
+      ${claudeSignIn}.d = {
         user = "macro";
         group = "macro";
         mode = "0700";

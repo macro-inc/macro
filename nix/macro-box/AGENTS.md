@@ -94,8 +94,9 @@ PID 1 (for the dev-only DockerFleet).
 - The agent's units exist only with `macro.box.agentMode` (the
   `macro-box-agent` images), where macro has no sudo or docker.
 - `macro-agent.service` is a system unit running as `macro`, the user
-  harnessd keeps Claude's sign-in for (`/home/.system/harnessd`, bound
-  read-only). It is sandboxed: `ProtectHome=tmpfs` with only
+  harnessd keeps Claude's sign-in for. It binds that sign-in
+  (`macro.box.harnessd.stateDirectory` + `/claude`) read-only and names it
+  in `HARNESSD_STATE_DIRECTORY`; the image's `claude` wrapper reads it. It is sandboxed: `ProtectHome=tmpfs` with only
   `/home/macro/agent` (its `HOME`) and `/run/user/1000` bound, no capabilities,
   `NoNewPrivileges`, `ProtectSystem=strict`,
   `PrivateTmp` with the X socket directory bound read-only, `PrivateDevices`
@@ -227,6 +228,9 @@ The control plane, per computer:
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
+  `claude` in its unit keeps the gateway environment without a sign-in and
+  gets `CLAUDE_CODE_OAUTH_TOKEN` from a (fake) `credential.json`, which it
+  cannot write;
   three failed boots of a broken commit roll the workspace back to last-good;
   the restart marker restarts it; removing the file stops it.
 - After `packages/starter-agent/bun.lock` changes, update `outputHash` in
