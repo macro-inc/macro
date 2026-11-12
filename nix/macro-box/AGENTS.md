@@ -30,12 +30,16 @@ PID 1 (for the dev-only DockerFleet).
   `claude-agent-acp/package-lock.json` (without the SDK's per-platform Claude
   binaries); tmpfiles link it where macrod installs adapters,
   `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs npm.
-- `_agent-brain.nix` (imported by `_guest.nix`, options `macro.box.brain.*`)
-  runs the agent teammate's brain; `_brain.nix` builds it from
-  `packages/brain` (Node 24, the SDK bundled once, hash-pinned npm
-  dependencies).
-- `files/` holds the enrollment probe script, the brain's `start-brain` and
-  `git-credential-brain`, the VM test's git server and `/etc/claude-code/CLAUDE.md`;
+- `_agent.nix` (imported by `_guest.nix`, options `macro.box.agent.*`) runs
+  the agent teammate: `packages/starter-agent` on `packages/muppet`.
+  `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
+  `bun.lock` (one fixed-output fetch), with `@macro-inc/muppet` (TypeScript
+  source) and `@macro-inc/sdk` (built against those packages) beside them.
+  `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
+  pinned release.
+- `files/` holds the enrollment probe script, the agent's `start-agent`,
+  `agent-stopped` and `git-credential-agent`, the VM test's git server and
+  computer-use client, and `/etc/claude-code/CLAUDE.md`;
   `skills/` is copied into `/etc/skel/.claude/skills` and macro's home.
 - herdr is built from the `herdr` flake input (`github:herdrdev/herdr/v<version>`)
   with its own `nix/package.nix`, and its official skill
@@ -49,9 +53,16 @@ PID 1 (for the dev-only DockerFleet).
 
 - `nix build .#macro-box-incus` → `result/{metadata.tar.xz,disk.qcow2}`.
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
+- `nix build .#macro-box-agent` and `.#macro-box-agent-docker`
+  (`macro-box-agent:latest`): an agent teammate's computer, the same guest
+  with `macro.box.agentMode = true` (macro has no sudo and no docker). The
+  fleet picks them for a computer with an agent. Import the Incus one as
+  `macro-box-agent/<date>`.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
-- `nix build .#macro-brain` → the `brain` CLI with its versioned library.
+- `nix build .#macro-agent-runtime` → the agent's `node_modules` and the
+  `bun.lock` it was installed from.
+- `nix build .#macro-box-computer-use-linux` → the computer-use MCP server.
 - `nix build .#nixosConfigurations.macro-box.config.system.build.toplevel` →
   the system closure, without packing the disk.
 
@@ -76,23 +87,45 @@ PID 1 (for the dev-only DockerFleet).
 - One agent per computer. With an agent, `macrod enroll` writes
   `/var/lib/macrod/agent.env` (KEY=VALUE, one line each, 0600, owned by
   `macro`) and rewrites it on re-enrollment; without one the file is absent.
-  `macro-brain.service` runs `start-brain` as `macro` with that
-  `EnvironmentFile` (`ConditionPathExists`, after `macrod-enroll`, restarts
-  always) under `NoNewPrivileges`, `ProtectSystem=strict`,
-  `ReadWritePaths=/home/macro` and `PrivateTmp`. `macro-brain.path`
-  (`PathChanged`) runs `macro-brain-restart.service`, so writing, rewriting
-  or removing the file starts, restarts or stops the brain.
-- `start-brain` sets `BRAIN_WORKSPACE=/home/macro/agent-workspace` and
-  `BRAIN_HEALTH_PORT` (`macro.box.brain.healthPort`, 7801) and rejects either
-  in the agent environment. It requires `MACRO_REPO_URL` (HTTP(S), no
-  credentials), `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID` (`macro|email`) and
-  `MACRO_AGENT_NAME`, validates `BRAIN_PROVISION_TRACEPARENT`, clones into a
-  staging sibling on first start (a failed clone leaves nothing), points
-  `origin` at the current URL, sets git's identity and the exact-repo
-  credential helper (never the token), then execs `brain run`. The `brain`
-  wrapper sets `BRAIN_EXECUTABLE`, `BRAIN_LIBRARY_ROOT` and
-  `BRAIN_HEALTH_MINUTES=5`. The rest of the environment is
-  `packages/brain`'s config (README). Never put `PATH` or `HOME` in it.
+  `macro-agent.path` (`PathChanged` on it and on the runtime's restart
+  marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
+  writing, rewriting or removing the file starts, restarts or stops the
+  agent (`ConditionPathExists`).
+- `macro-agent.service` is a system unit running as `macro`, the user
+  harnessd keeps Claude's sign-in for (`/home/.system/harnessd`, bound
+  read-only). It is sandboxed: `ProtectHome=tmpfs` with only
+  `/home/macro/agent` (its `HOME`) and `/run/user/1000` bound, no capabilities,
+  `NoNewPrivileges` (so macro's sudo does not work), `ProtectSystem=strict`,
+  `PrivateTmp` with the X socket directory bound read-only, `PrivateDevices`
+  and `MemoryMax`. It keeps user namespaces (Chromium's sandbox) and W+X
+  memory (JITs). `KillMode=process`: calls outlive a restart.
+- agent.env is a systemd credential (`LoadCredential`), never process
+  environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
+  (`/run/credentials/macro-agent.service/agent.env`). The runtime contract
+  (env, exit codes, last-good) is in `packages/muppet`'s docs; the unit sets
+  `AGENT_WORKSPACE=/home/macro/agent/workspace`, `MUPPET_LAST_GOOD_FILE`,
+  `MUPPET_RESTART_FILE`, `MUPPET_MCP_SERVERS_JSON` (computer-use-linux on the
+  agent's display), `DISPLAY`, the user bus, and the screen's fonts, ffmpeg
+  and libstdc++ paths.
+- `start-agent run` reads `MACRO_REPO_URL` (HTTP(S), no credentials),
+  `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID` (`macro|email`) and
+  `MACRO_AGENT_NAME` from the credential file (missing or invalid: exit 78),
+  clones into a staging sibling on first start, points `origin` at the
+  current URL, sets git's identity and the exact-repo credential helper
+  (`git-credential-agent <credential file>`, never the token), links the
+  image's `node_modules` (or runs `bun install --frozen-lockfile` and links
+  muppet and the SDK when a self-edit changed `bun.lock`), then execs
+  `bun cli.ts run`. Exit 0 (stop), 75 (restart after a land) and 78
+  (configuration) are not failures; `agent-stopped` (`ExecStopPost`) counts
+  any other exit before the runtime wrote `~/agent/state/last-good` for that
+  boot's HEAD, and after `macro.box.agent.maxFailedBoots` (3) the next start
+  resets the workspace to last-good. It pushes nothing.
+- `macro-agent-screen.service` (same sandbox) runs `start-agent screen`,
+  `bun cli.ts serveScreen`: the call-share browser on its own Xvfb and
+  PulseAudio.
+- The agent's desktop for computer use is a pair of user services for
+  `macro`: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901) and
+  `macro-agent-openbox`, with AT-SPI on macro's session bus.
 - Claude signs in through Claude Code's own `/login`, in a herdr pane; its
   credentials stay in `~macro/.claude` on the data disk.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
@@ -182,14 +215,20 @@ The control plane, per computer:
   and Xvnc and Chromium's CDP port come up. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
-  Before that, the brain stays down without `agent.env`, rejects a
-  credentialed repo URL without contacting the repo, and a rewritten file
-  restarts it: it clones from an in-VM git server (provisioning traceparent
-  sent, no token or traceparent in `.git/config`), passes the library's
-  fake-event boot and retries the unreachable events stream; removing the
-  file stops it.
-- After `packages/brain/package-lock.json` changes, update `npmDepsHash` in
-  `_brain.nix` from the fetch derivation's reported `got:` hash.
+  A third VM boots the guest in agent mode: macro has no sudo or docker
+  group; the agent stays down without `agent.env`; the agent's display
+  comes up and computer-use-linux answers `tools/list` and returns a
+  screenshot PNG; the agent rejects a credentialed repo URL without
+  contacting the repo; a rewritten file restarts it, and it clones from an
+  in-VM git server, links the image's packages and runs, without its
+  credentials in its environment or the rest of macro's home in its view;
+  three failed boots of a broken commit roll the workspace back to last-good;
+  the restart marker restarts it; removing the file stops it.
+- After `packages/starter-agent/bun.lock` changes, update `outputHash` in
+  `_agent-runtime.nix` from the fetch derivation's reported `got:` hash.
+- To upgrade computer-use-linux, change `version` in
+  `_computer-use-linux.nix` and take `hash`, then `cargoHash`, from the
+  build's `got:` lines.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
