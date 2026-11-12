@@ -1039,8 +1039,11 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
+        let (admitted_channel, _permit) =
+            lifecycle::admit_channel_write(&self.pool, call_id).await?;
         let mut tx = self.pool.begin().await?;
-        let channel_id = lifecycle::channel_thread_in(&mut tx, call_id).await?;
+        let channel_id = lifecycle::channel_thread_in(tx.as_mut(), call_id).await?;
+        lifecycle::check_admitted_channel(admitted_channel, channel_id)?;
 
         let deleted = sqlx::query!(
             r#"
@@ -2241,9 +2244,12 @@ impl CallRepository for PgCallRepo {
     async fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
+    ) -> Result<Option<DeletedCallRecordStorageKeys>, CallError> {
+        let (admitted_channel, _permit) =
+            lifecycle::admit_channel_write(&self.pool, call_record_id).await?;
         let mut tx = self.pool.begin().await?;
-        let channel_id = lifecycle::channel_thread_in(&mut tx, call_record_id).await?;
+        let channel_id = lifecycle::channel_thread_in(tx.as_mut(), call_record_id).await?;
+        lifecycle::check_admitted_channel(admitted_channel, channel_id)?;
 
         let row = sqlx::query!(
             r#"

@@ -64,6 +64,7 @@ in-call chat.
   inferred from `channel_id`: past channel calls keep `call_chat`. See
   `docs/design/call-chat-in-channel.md`.
 - Archive and delete channel-thread calls with `channel_change_db_utils`'s canonical call-root append as the final SQL statement, capturing the call's own channel and discussion before deletion triggers remove them.
+- Acquire the shared channel message-write permit before the call write transaction; release the discovery lookup's connection before waiting, recheck the discussion in the transaction, and retain the permit through commit. Only typed admission failures become a safe retryable 503.
 - Declining a call on one device must stop ringing on every other device — this
   regressed once (#7092); route the decline through the shared call state, not
   a per-device signal.

@@ -22,7 +22,7 @@ use std::time::Duration;
 use axum::{
     Json, Router,
     extract::{FromRef, FromRequestParts, State},
-    http::{HeaderMap, StatusCode, header, request::Parts},
+    http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::IntoResponse,
     routing::{get, patch, post},
 };
@@ -1228,6 +1228,10 @@ impl IntoResponse for CallError {
             CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             CallError::Forbidden(_) => StatusCode::FORBIDDEN,
             CallError::Conflict(_) => StatusCode::CONFLICT,
+            CallError::Contended(_) => {
+                tracing::warn!(error=?self, "call message admission is contended");
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -1243,10 +1247,16 @@ impl IntoResponse for CallError {
             CallError::AlreadyConnected => Some("already_connected"),
             _ => None,
         };
-        (
+        let mut response = (
             status_code,
             Json(serde_json::json!({ "message": message, "code": code })),
         )
-            .into_response()
+            .into_response();
+        if matches!(self, CallError::Contended(_)) {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        }
+        response
     }
 }

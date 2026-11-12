@@ -128,4 +128,5 @@ threads, pins, recents, notifications, folders, activity.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
 - Compose activity ingestion with `service/activity/persistence.rs`'s `PgChannelActivityRepo` so timeline facts and their channel changes commit together; `timeline_activity` forwards the returned receipt's sequence on each activity.
+- Admit channel-timeline activity batches through the shared message-write gate before opening a transaction; acquire unique channel permits in sorted order and retain all through commit.
 - The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.

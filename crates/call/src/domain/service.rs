@@ -2033,11 +2033,7 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|r| r.channel_id);
 
-        let storage_keys = self
-            .repo
-            .delete_call_record(&call_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        let storage_keys = self.repo.delete_call_record(&call_id).await?;
 
         if storage_keys.is_some()
             && let Some(channel_id) = channel_id

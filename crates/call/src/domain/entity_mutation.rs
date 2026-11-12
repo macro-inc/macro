@@ -42,7 +42,9 @@ impl From<CallError> for EntityMutationErrorCode {
             | CallError::AlreadyConnected
             | CallError::RateLimited
             | CallError::Conflict(_)) => Self::conflict(rootcause::report!(error)),
-            error @ CallError::Internal(_) => Self::internal(rootcause::report!(error)),
+            error @ (CallError::Contended(_) | CallError::Internal(_)) => {
+                Self::internal(rootcause::report!(error))
+            }
         }
     }
 }

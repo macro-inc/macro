@@ -97,9 +97,30 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
         if bytes > self.limits.database_batch_bytes {
             return Err(ImportError::LimitExceeded.into());
         }
+        // The message plan already carries the target channel. Admit before
+        // taking the import fence or a pool connection, then verify the target
+        // against the authoritative fenced context before any message writes.
+        let mut admitted_channels: Vec<_> = batch
+            .messages
+            .iter()
+            .map(|message| message.channel_id)
+            .collect();
+        admitted_channels.sort_unstable();
+        admitted_channels.dedup();
+        let mut permits = Vec::with_capacity(admitted_channels.len());
+        for channel_id in &admitted_channels {
+            permits.push(
+                message_write_gate::acquire("channel", &channel_id.to_string())
+                    .await
+                    .map_err(retry)?,
+            );
+        }
         let mut tx = self.pool.begin().await.map_err(retry)?;
         let context = batches::write_context(&mut tx, &batch.lease).await?;
         let channel = context.channel.ok_or(ImportError::Unavailable)?;
+        if !batch.messages.is_empty() && !admitted_channels.contains(&channel) {
+            return Err(ImportError::Unavailable.into());
+        }
         self.authorizer
             .target_in(
                 &mut tx,

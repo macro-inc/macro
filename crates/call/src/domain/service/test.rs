@@ -2730,7 +2730,7 @@ async fn graphql_team_sharing_still_rejects_active_calls() {
 
 fn mock_delete_repo(
     record: Option<CallRecord>,
-    delete_result: anyhow::Result<Option<DeletedCallRecordStorageKeys>>,
+    delete_result: Result<Option<DeletedCallRecordStorageKeys>, CallError>,
 ) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_record_by_call_id()
@@ -2783,7 +2783,7 @@ async fn no_op_delete_call_record_does_not_publish_deleted_event() {
 async fn failed_delete_call_record_does_not_publish_deleted_event() {
     let repo = mock_delete_repo(
         Some(call_record_for_mutation()),
-        Err(anyhow::anyhow!("delete failed")),
+        Err(CallError::Internal(anyhow::anyhow!("delete failed"))),
     );
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());

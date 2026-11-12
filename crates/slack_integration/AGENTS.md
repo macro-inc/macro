@@ -47,6 +47,7 @@ export, map it onto Macro channels/messages/users, and import it as a job.
 
 ## Gotchas
 
+- `references::peek_next` supplies only an unlocked admission identity; the worker must recheck it against `next_for_job_in` under the job fence before patching a message.
 - References (channel/user mentions) are reconciled after import, not at
   parse time — see `src/domain/reference_reconciliation.rs`; don't resolve
   them inline in `slack/references.rs`.
