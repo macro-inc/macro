@@ -1,5 +1,7 @@
 use super::*;
 use ai_billing::domain::{Entitlement, PayerScope};
+use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+use hosted_runtimes::domain::rollout::{ComputerRollout, ENABLE_MACRO_COMPUTERS};
 use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
 use teams::domain::model::SeatPlan;
@@ -28,6 +30,7 @@ impl EntitlementSource for Entitlements {
 }
 struct Gateway {
     access: billing_facts::BillingAccess,
+    access_reads: Mutex<usize>,
     billing_reads: Mutex<Vec<bool>>,
     facts: Option<SubscriptionPlanFacts>,
     calls: Mutex<Vec<(String, SubscriptionScope, String)>>,
@@ -38,6 +41,7 @@ impl SubscriptionStatusGateway for Gateway {
         _: SubscriptionScope,
         _: &MacroUserIdStr<'_>,
     ) -> Result<billing_facts::BillingAccess, PlanChangeError> {
+        *self.access_reads.lock().unwrap() += 1;
         Ok(self.access.clone())
     }
 
@@ -64,9 +68,27 @@ fn user() -> MacroUserIdStr<'static> {
 fn date(value: &str) -> DateTime<Utc> {
     value.parse().unwrap()
 }
+fn rollout(enabled: bool) -> ComputerRollout {
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        user(),
+        Ok(FlagSnapshot::new([(
+            ENABLE_MACRO_COMPUTERS.into(),
+            FlagValue::Boolean(enabled),
+        )])),
+    );
+    ComputerRollout::new(flags)
+}
 fn service(
     value: Entitlement,
     change: Option<ScheduledSeatPlan>,
+) -> SubscriptionStatusService<Entitlements, Gateway> {
+    service_with_rollout(value, change, rollout(true))
+}
+fn service_with_rollout(
+    value: Entitlement,
+    change: Option<ScheduledSeatPlan>,
+    rollout: ComputerRollout,
 ) -> SubscriptionStatusService<Entitlements, Gateway> {
     SubscriptionStatusService::new(
         Entitlements {
@@ -75,6 +97,7 @@ fn service(
         },
         Gateway {
             access: billing_facts::BillingAccess::Personal,
+            access_reads: Mutex::new(0),
             billing_reads: Mutex::new(vec![]),
             facts: Some(SubscriptionPlanFacts {
                 period_end: date("2026-11-01T12:00:00Z"),
@@ -83,6 +106,7 @@ fn service(
             }),
             calls: Mutex::new(Vec::new()),
         },
+        rollout,
     )
 }
 fn downgrade(at: &str) -> Option<ScheduledSeatPlan> {
@@ -218,5 +242,22 @@ async fn ordinary_team_members_keep_renewal_without_requesting_financial_details
     let status = service.status(&user()).await.unwrap();
     assert!(status.renewal_date.is_some());
     assert!(status.billing.is_none());
+    assert_eq!(*service.gateway.billing_reads.lock().unwrap(), vec![false]);
+}
+
+#[tokio::test]
+async fn flag_off_billing_admins_keep_renewal_without_reading_the_billing_breakdown() {
+    let team_id = macro_uuid::generate_uuid_v7();
+    let mut entitlement = Entitlement::personal(user(), PlanTier::Max);
+    entitlement.scope = PayerScope::TeamMember { team_id };
+    let mut service = service_with_rollout(entitlement, None, rollout(false));
+    service.gateway.access =
+        billing_facts::BillingAccess::Team(Some(teams::domain::model::TeamRole::Owner));
+    let status = service.status(&user()).await.unwrap();
+    assert_eq!(status.renewal_date, Some(date("2026-11-01T12:00:00Z")));
+    assert!(status.billing.is_none());
+    // No team-member read, and the gateway skips computer rows and the
+    // upcoming-invoice preview.
+    assert_eq!(*service.gateway.access_reads.lock().unwrap(), 0);
     assert_eq!(*service.gateway.billing_reads.lock().unwrap(), vec![false]);
 }
