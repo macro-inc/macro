@@ -20,7 +20,10 @@ use uuid::Uuid;
 use crate::domain::{
     models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
     overview::{ActivityOverview, ActivityWindow, DayCount, EntityRank, TOP_ENTITY_LIMIT},
-    ports::{ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap},
+    ports::{
+        ActivityFeedPage, ActivityRange, ActivityReads, ActivityReceipt, ActivityRepo,
+        EntityActivityMap,
+    },
 };
 
 /// Writes activities to MacroDB.
@@ -36,40 +39,52 @@ impl PgActivityRepo {
     }
 }
 
-impl ActivityRepo for PgActivityRepo {
-    type Err = sqlx::Error;
+impl PgActivityRepo {
+    /// Insert a batch inside the caller's transaction, retaining the same
+    /// deterministic-id conflict handling as ordinary activity ingestion.
+    pub async fn insert_activities_in(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        activities: &[Activity],
+    ) -> Result<(), sqlx::Error> {
+        insert_activities(tx.as_mut(), activities).await
+    }
+}
 
-    async fn insert_activities(&self, activities: &[Activity]) -> Result<(), Self::Err> {
-        if activities.is_empty() {
-            return Ok(());
-        }
+async fn insert_activities<'e>(
+    executor: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+    activities: &[Activity],
+) -> Result<(), sqlx::Error> {
+    if activities.is_empty() {
+        return Ok(());
+    }
 
-        let mut ids = Vec::with_capacity(activities.len());
-        let mut correlations = Vec::with_capacity(activities.len());
-        let mut verbs = Vec::with_capacity(activities.len());
-        let mut actor_ids = Vec::with_capacity(activities.len());
-        let mut subject_ids = Vec::with_capacity(activities.len());
-        let mut actions = Vec::with_capacity(activities.len());
-        let mut payloads = Vec::with_capacity(activities.len());
-        let mut entity_types = Vec::with_capacity(activities.len());
-        let mut entity_ids = Vec::with_capacity(activities.len());
-        let mut occurred_ats = Vec::with_capacity(activities.len());
-        for activity in activities {
-            let (action, payload) = activity.action.to_columns();
-            ids.push(activity.id);
-            correlations.push(activity.agent_correlation_id);
-            verbs.push(activity.agent_verb.map(|verb| verb.to_string()));
-            actor_ids.push(activity.actor.as_ref().to_owned());
-            subject_ids.push(activity.subject_id.clone());
-            actions.push(action.to_owned());
-            payloads.push(payload);
-            entity_types.push(activity.entity_type.as_ref().to_owned());
-            entity_ids.push(activity.entity_id.clone());
-            occurred_ats.push(activity.occurred_at);
-        }
+    let mut ids = Vec::with_capacity(activities.len());
+    let mut correlations = Vec::with_capacity(activities.len());
+    let mut verbs = Vec::with_capacity(activities.len());
+    let mut actor_ids = Vec::with_capacity(activities.len());
+    let mut subject_ids = Vec::with_capacity(activities.len());
+    let mut actions = Vec::with_capacity(activities.len());
+    let mut payloads = Vec::with_capacity(activities.len());
+    let mut entity_types = Vec::with_capacity(activities.len());
+    let mut entity_ids = Vec::with_capacity(activities.len());
+    let mut occurred_ats = Vec::with_capacity(activities.len());
+    for activity in activities {
+        let (action, payload) = activity.action.to_columns();
+        ids.push(activity.id);
+        correlations.push(activity.agent_correlation_id);
+        verbs.push(activity.agent_verb.map(|verb| verb.to_string()));
+        actor_ids.push(activity.actor.as_ref().to_owned());
+        subject_ids.push(activity.subject_id.clone());
+        actions.push(action.to_owned());
+        payloads.push(payload);
+        entity_types.push(activity.entity_type.as_ref().to_owned());
+        entity_ids.push(activity.entity_id.clone());
+        occurred_ats.push(activity.occurred_at);
+    }
 
-        sqlx::query!(
-            r#"
+    sqlx::query!(
+        r#"
             INSERT INTO activity_events
                 (id, actor_id, subject_id, action, action_payload,
                  entity_type, entity_id, occurred_at, agent_correlation_id, agent_verb)
@@ -78,20 +93,31 @@ impl ActivityRepo for PgActivityRepo {
                 $6::text[], $7::text[], $8::timestamptz[], $9::uuid[], $10::text[])
             ON CONFLICT (id) DO NOTHING
             "#,
-            &ids,
-            &actor_ids,
-            &subject_ids,
-            &actions,
-            payloads.as_slice() as &[Option<serde_json::Value>],
-            &entity_types,
-            &entity_ids,
-            &occurred_ats,
-            correlations.as_slice() as &[Option<Uuid>],
-            verbs.as_slice() as &[Option<String>],
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        &ids,
+        &actor_ids,
+        &subject_ids,
+        &actions,
+        payloads.as_slice() as &[Option<serde_json::Value>],
+        &entity_types,
+        &entity_ids,
+        &occurred_ats,
+        correlations.as_slice() as &[Option<Uuid>],
+        verbs.as_slice() as &[Option<String>],
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+impl ActivityRepo for PgActivityRepo {
+    type Err = sqlx::Error;
+
+    async fn insert_activities(
+        &self,
+        activities: &[Activity],
+    ) -> Result<Vec<ActivityReceipt>, Self::Err> {
+        insert_activities(&self.pool, activities).await?;
+        Ok(Vec::new())
     }
 
     async fn purge_entities(&self, entities: &[(EntityType, String)]) -> Result<(), Self::Err> {
