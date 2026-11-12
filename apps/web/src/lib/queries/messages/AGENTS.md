@@ -64,12 +64,14 @@ live events that keep them current.
   stops waiting for the server read; one that arrives after the server could
   not be reached is shown too, so a channel opens offline. A refusal from the
   server (not a member, not found) is its answer and is never covered by the
-  cached page: the cached page is emptied, and a refused catch-up also drops
-  the loaded rows so the read that follows shows the refusal.
+  cached page: the cached page is emptied, and a refused catch-up or a refused
+  re-read of a loaded timeline also drops the loaded rows so the read that
+  follows shows the refusal.
 - A catch-up stops when the timeline is already at the number the server
   answered with, runs once more for a request made while it was finishing,
   and treats a changes read with no answer in 15 s as failed. A reply for a
-  thread whose first read is in flight joins it when that read lands.
+  thread whose first read is in flight makes that thread read once more
+  when the read lands; the reply itself may be older than what it returns.
 - The messages client sends a write again, twice a second apart, when the
   server answers 503 (its write guard); the id and nonce stay the same, so
   the retry cannot post twice. Reads are not retried.

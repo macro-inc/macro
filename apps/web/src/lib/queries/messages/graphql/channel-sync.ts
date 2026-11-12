@@ -260,9 +260,19 @@ async function readLatestPage(
   );
   // A timeline already on screen is being read again because it may be
   // wrong, so only the server's page will do.
-  if (loaded || STATES.get(parent.id)?.skipCache) {
-    const read = await fetchLatestChannelPage(parent.id, signal);
-    return { source: 'network', read, raced: false };
+  const state = STATES.get(parent.id);
+  if (loaded || state?.skipCache) {
+    try {
+      const read = await fetchLatestChannelPage(parent.id, signal);
+      return { source: 'network', read, raced: false };
+    } catch (error) {
+      // Rows on screen would stay there over a failed refetch; a refusal
+      // has to take them, and the cached page, away.
+      if (loaded && state && isRefusal(error)) {
+        dropRefusedChannel(host, parent, state);
+      }
+      throw error;
+    }
   }
   const cache = readCache(host, parent.id);
   const early = ANSWERED_HOSTS.has(host)
@@ -369,6 +379,7 @@ function applyChannelChanges(parent: MessageParent, changes: ChannelChanges) {
       (thread) => thread && { ...thread, root, state }
     );
   }
+  const unloadedThreads = new Set<string>();
   for (const reply of changes.replies) {
     const message = normalizeThreadReplySender(messageFromGraphql(reply));
     if (!message.thread_id) continue;
@@ -376,13 +387,16 @@ function applyChannelChanges(parent: MessageParent, changes: ChannelChanges) {
     const loaded = setThreadRepliesData(parent, threadId, (replies) =>
       upsertThreadReply(replies, message)
     );
-    if (loaded) continue;
+    if (!loaded) unloadedThreads.add(threadId);
+  }
+  for (const threadId of unloadedThreads) {
     // A thread being read for the first time may have been answered before
-    // this reply existed; the reply joins it once that read lands.
-    const firstRead = queryClient.getQueryCache().find<MessageThread>({
-      queryKey: getThreadRepliesQueryKey(parent, threadId),
-      exact: true,
-    })?.promise;
+    // this reply existed. The reply as it is now may be older than what that
+    // read returns, so the thread is read once more instead of patched.
+    const queryKey = getThreadRepliesQueryKey(parent, threadId);
+    const firstRead = queryClient
+      .getQueryCache()
+      .find<MessageThread>({ queryKey, exact: true })?.promise;
     if (!firstRead) continue;
     fireAndForget(
       (async () => {
@@ -391,9 +405,7 @@ function applyChannelChanges(parent: MessageParent, changes: ChannelChanges) {
         } catch {
           return;
         }
-        setThreadRepliesData(parent, threadId, (replies) =>
-          upsertThreadReply(replies, message)
-        );
+        await queryClient.invalidateQueries({ queryKey, exact: true });
       })(),
       SURFACE
     );

@@ -4,8 +4,12 @@
 
 import { ThrownResultError } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
-import type { MessageThread } from '@service-storage/messages';
-import { InfiniteQueryObserver, QueryClient } from '@tanstack/solid-query';
+import type { Message, MessageThread } from '@service-storage/messages';
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -42,7 +46,15 @@ import {
   resetChannelSync,
 } from '../channel-sync';
 import { entryToGraphql } from '../convert';
-import { CHANNEL, ids, messageEntry, page, root, timeline } from './fixtures';
+import {
+  CHANNEL,
+  ids,
+  messageEntry,
+  page,
+  reply,
+  root,
+  timeline,
+} from './fixtures';
 
 const HOST = {} as CacheHost;
 const LATEST_KEY = getMessageTimelineQueryKey(CHANNEL, null);
@@ -53,6 +65,7 @@ function changes(
     reset: boolean;
     hasMore: boolean;
     entries: unknown[];
+    replies: unknown[];
     removed: string[];
   }> = {}
 ) {
@@ -66,6 +79,21 @@ function changes(
     removed: [],
     ...overrides,
   };
+}
+
+/** A reply as the server's changes carry it. */
+function replyToGraphql(message: Message) {
+  const parentRoot = root('m1', 1);
+  const entry = entryToGraphql({
+    type: 'message',
+    message: {
+      ...parentRoot,
+      thread: { ...parentRoot.thread, preview: [message] },
+    },
+  });
+  if (entry.__typename !== 'GraphqlChannelMessage' || !entry.thread?.preview[0])
+    throw new Error('expected a message with a preview');
+  return entry.thread.preview[0];
 }
 
 function loadedIds() {
@@ -306,6 +334,59 @@ describe('opening a channel', () => {
     );
     const [, , written] = mocks.writeCachedLatestPage.mock.calls[0];
     expect(written.page.entries).toEqual([]);
+  });
+
+  it('drops the rows when the server refuses a timeline being read again', async () => {
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    mocks.fetchChannelChanges.mockResolvedValue(changes(1));
+    await open();
+    await caughtUpTo(1);
+    mocks.fetchLatestChannelPage.mockRejectedValue(
+      new ThrownResultError([{ code: 'FORBIDDEN', message: 'forbidden' }])
+    );
+    await open();
+    await vi.waitFor(() => expect(loadedIds()).toEqual([]));
+    await vi.waitFor(() =>
+      expect(mocks.writeCachedLatestPage).toHaveBeenCalledTimes(1)
+    );
+    const [, , written] = mocks.writeCachedLatestPage.mock.calls[0];
+    expect(written.page.entries).toEqual([]);
+  });
+
+  it('reads a thread again whose first read a changed reply arrived during', async () => {
+    mocks.readCachedLatestPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([messageEntry('m1', 1)]),
+    });
+    const threadKey = getThreadRepliesQueryKey(CHANNEL, 'm1');
+    const first = Promise.withResolvers<MessageThread>();
+    const read = vi.fn<() => Promise<MessageThread>>();
+    read.mockReturnValueOnce(first.promise);
+    const { state, thread: _summary, ...message } = root('m1', 1);
+    const thread: MessageThread = { root: message, state, replies: [] };
+    read.mockResolvedValue(thread);
+    const reading = testQueryClient.fetchQuery({
+      queryKey: threadKey,
+      queryFn: read,
+    });
+    const unsubscribe = new QueryObserver(testQueryClient, {
+      queryKey: threadKey,
+      queryFn: read,
+    }).subscribe(() => {});
+    mocks.fetchChannelChanges.mockResolvedValue(
+      changes(2, { replies: [replyToGraphql(reply('r1', 'm1', 2))] })
+    );
+    await open();
+    await caughtUpTo(2);
+    first.resolve(thread);
+    await reading;
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    unsubscribe();
   });
 
   it('reads the server page when changes cannot be read', async () => {
