@@ -175,6 +175,7 @@ impl EditorSession {
             machine,
             hostname: None,
             compatibility: Some(host),
+            code_tokens: None,
         })
     }
 }
