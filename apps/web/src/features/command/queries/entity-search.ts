@@ -35,7 +35,7 @@ const CONTACT_CATEGORIES = new Set<EntitySearchCategory | 'commands'>([
   'people',
 ]);
 
-function sameIds(previous: ReadonlySet<string>, next: ReadonlySet<string>) {
+function sameIdSet(previous: ReadonlySet<string>, next: ReadonlySet<string>) {
   if (previous.size !== next.size) return false;
 
   for (const id of next) {
@@ -121,7 +121,7 @@ export function useEntitySearch(
   const contactItemIds = createMemo(
     () => new Set(contactItems().map((item) => item.id)),
     undefined,
-    { equals: sameIds }
+    { equals: sameIdSet }
   );
   const cachedItems = (): QuickAccessItem[] => activeList()?.items() ?? [];
   const withDiscovery = <T extends CommandMenuItem>(
@@ -147,7 +147,7 @@ export function useEntitySearch(
   const teammateIds = createMemo(
     () => new Set(team.users().map((user) => user.id)),
     undefined,
-    { equals: sameIds }
+    { equals: sameIdSet }
   );
   const rankItems = <T extends CommandMenuItem>(
     items: T[],
