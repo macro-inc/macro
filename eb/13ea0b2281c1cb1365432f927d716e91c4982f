@@ -1,0 +1,3422 @@
+apps/web/src/features/agent-session-activity/core/step-label.ts
+  s_e28579a043217e::t_f72990f360f57a 1-65
+apps/marketing/src/assets/app-icons/system/regular/microphone-slash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-counter-clockwise.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/funnel.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/scripts/standaloneDev.ts
+  s_e28579a043217e::t_f72990f360f57a 2,5-36,40,44-46,48-50,81-83
+apps/marketing/src/features/marketing/components/HomepageStandaloneDemos.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 51,122,124,126,155,160,166,174-176,179
+apps/web/src/features/agent-navigation/views/agent-navigation.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-251
+apps/marketing/src/assets/icons/replacements/caldotcom.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/scripts/verifyProductPages.ts
+  s_e28579a043217e::t_f72990f360f57a 103-104,109-110,114
+apps/marketing/src/assets/icons/replacements/microsoftword.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 232,255,260
+apps/marketing/src/features/documentation/components/guide-home-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-225
+apps/marketing/seo/page-redirects.json
+  s_e28579a043217e::t_f72990f360f57a 1-728
+apps/web/src/features/channel/Thread/ThreadReplyList.tsx
+  s_e28579a043217e::t_f72990f360f57a 60-61,91-95,151
+apps/marketing/src/app/routes/RouteLegal.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-29
+apps/marketing/src/routes/posts/posts-shell.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,31-33,51,53,62,86-132,254,296,651-652,702-703
+apps/marketing/src/features/marketing/components/email/frozen/EmailThread.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/app/components/sections/MigrationPaths.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8,140,149
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskViews.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-259
+.agents/skills/sqlx-migration/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 27-29
+apps/marketing/src/features/marketing/components/homepage-feature-links.css
+  s_e28579a043217e::t_f72990f360f57a 1-33
+apps/web/src/features/channels-view/components/ChannelsMobileView.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 79-85,125,308-330,332-338
+apps/marketing/src/assets/app-icons/system/regular/speaker-high.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-aa.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/email-desktop-demo.css
+  s_e28579a043217e::t_f72990f360f57a 33
+apps/marketing/src/features/documentation/components/guide-share-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-254
+apps/web/src/features/agent-session-activity/browser-test/vite.config.ts
+  s_e28579a043217e::t_f72990f360f57a 1-44
+apps/marketing/src/assets/app-icons/system/regular/cloud.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/dots-three.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/vite.prerender.config.ts
+  s_e28579a043217e::t_f72990f360f57a 10,18,21-25
+apps/marketing/src/assets/app-icons/system/regular/pencil.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 5,16,88-89,142-194
+  s_e28579a043217e::t_9b641f95cee7fa 195
+apps/marketing/src/assets/app-icons/system/regular/caret-up.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/dots-three-vertical.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-213
+apps/marketing/src/features/marketing/components/homepage/HomepageProductPreview.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-225
+apps/web/src/features/agents-view/views/AgentSessionListItem.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,4,46-47,135-141
+apps/web/src/features/channel/Call/chat/components/CallChatBody.tsx
+  s_e28579a043217e::t_f72990f360f57a 46-48
+apps/marketing/src/assets/app-icons/system/regular/tag.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/crm/CrmHeroSidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/app/main/index.css
+  s_e28579a043217e::t_f72990f360f57a 2,156-157,166,204
+apps/marketing/src/app/routes/RouteJobs.tsx
+  s_e28579a043217e::t_f72990f360f57a 160-161,163,165,167-168,171,173-178,181-209,211-223,225-241
+apps/marketing/src/app/components/featureGraphics/TasksGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-21,3272
+apps/marketing/src/assets/app-icons/system/regular/minus.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/app/tab-layout/DesktopTabsController.tsx
+  s_e28579a043217e::t_f72990f360f57a 100-123,138-140
+apps/marketing/src/features/marketing/views/forms-page.css
+  s_e28579a043217e::t_f72990f360f57a 1-62
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/model-catalog-picker.css
+  s_e28579a043217e::t_f72990f360f57a 1-17
+apps/marketing/src/app/components/sections/ComparisonTable.tsx
+  s_e28579a043217e::t_f72990f360f57a 168,207,336,345,356,361,379,393,414
+apps/marketing/src/features/marketing/components/DemoAgentChip.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/agents/agent-workflows.css
+  s_e28579a043217e::t_f72990f360f57a 15,25
+apps/marketing/src/features/setup/components/IntegrationResults.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  s_e28579a043217e::t_f72990f360f57a 17,131,142,145
+apps/marketing/src/features/setup/components/StoryContinue.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/block-call/component/CallRecording/CallRecordingPinnedPlayer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-91
+apps/web/src/features/channel/Call/chat/components/CallChatEmptyState.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-15
+apps/docs/integrations/github.mdx
+  s_e28579a043217e::t_f72990f360f57a 13-16,25,29-49
+apps/marketing/src/features/marketing/components/comparisons/FeatureComparisons.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,78-116
+apps/marketing/src/routes/posts/PostPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 6,82-86,106-128,173
+apps/web/src/features/channel/Call/components/call-reactions.css
+  s_e28579a043217e::t_f72990f360f57a 1-19
+apps/web/src/components/app/split-layout/components/SplitLabel.tsx
+  s_e28579a043217e::t_f72990f360f57a 27,338
+apps/web/src/components/app/mobile/PillTabs.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,58-59,345-360,475-490
+apps/web/src/features/channel/Call/views/PhoneAudioOutput.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/marketing/src/features/marketing/components/HomepageInteractiveDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/comparisons/MigrationComparison.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,18,42
+.agents/skills/query-review/table-sizes.md
+  s_e28579a043217e::t_f72990f360f57a 1-39
+apps/docs/package.json
+  s_e28579a043217e::t_f72990f360f57a 7
+apps/marketing/src/features/marketing/views/ProductFormsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-249
+apps/marketing/public/video/tutorials/routines.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-551
+apps/marketing/src/assets/app-icons/system/regular/git-merge.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/README.md
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/marketing/src/assets/app-icons/system/regular/paint-bucket.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskRowMobile.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-196
+apps/web/src/features/channels-view/components/ChannelPins.tsx
+  s_e28579a043217e::t_f72990f360f57a 13,18-23
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspaceControls.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8
+apps/marketing/src/app/routes/RouteDownload.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,9-11,21-22,24-52
+apps/web/src/features/agent-session-activity/core/fold-rows.ts
+  s_e28579a043217e::t_f72990f360f57a 1-66
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-up-left.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobilePlayback.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-45
+apps/web/src/features/agent-session-activity/context/agent-activity-source.ts
+  s_e28579a043217e::t_f72990f360f57a 1-29
+apps/docs/switch-to-macro.mdx
+  s_e28579a043217e::t_f72990f360f57a 2,4,7,9,11,13-15,17,19,21,23,25-26,28,30,38,40,42,44,46,48-50,66,68,70-72,74,76,78,80
+packages/sdk/generated/cognition/types.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 57
+apps/marketing/src/features/marketing/components/tutorial-video-embed.css
+  s_e28579a043217e::t_f72990f360f57a 1-136
+apps/web/src/features/agent-navigation/core/ui-command.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-109
+apps/marketing/src/routes/posts/entries/mfs-sharing/MfsSharing.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,121,143
+  s_e28579a043217e::t_b509c66bd1744f 144
+apps/marketing/src/assets/app-icons/system/regular/trash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/primitives/recording-timeline.ts
+  s_e28579a043217e::t_f72990f360f57a 1-115
+apps/marketing/src/assets/app-icons/system/regular/git-branch.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Channel/tests/active-call-message.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 16,23-28,32-33,39
+apps/marketing/src/assets/app-icons/system/regular/user-circle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/app/app-sidebar/sidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 29-32,574-579
+apps/web/src/features/agent-session-activity/browser-test/playwright.config.ts
+  s_e28579a043217e::t_f72990f360f57a 1-32
+apps/web/src/features/channel/Call/primitives/create-call-media-settings.ts
+  s_e28579a043217e::t_f72990f360f57a 1-149
+apps/marketing/src/features/setup/components/GoogleAccountsStep.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-6
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobileActions.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-40
+apps/marketing/src/assets/app-icons/system/regular/tree-structure.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/product/tagging.mdx
+  s_e28579a043217e::t_f72990f360f57a 2-4,7-13,17-27,31-37
+apps/marketing/src/features/marketing/core/desktopDownloads.test.ts
+  s_e28579a043217e::t_f72990f360f57a 36
+apps/web/src/components/icon/system/regular/waveform.svg
+  s_e28579a043217e::t_f72990f360f57a 2-6
+apps/marketing/src/assets/app-icons/system/regular/palette.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Input/ChannelInputContainer.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,12,17-20
+apps/marketing/src/features/marketing/components/documents/DocumentReferencesDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-74
+apps/marketing/src/features/marketing/components/email/email-auto-tag-demo.css
+  s_e28579a043217e::t_f72990f360f57a 1-80
+apps/marketing/src/features/marketing/components/workspace/WorkspaceSpreadsheet.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/FeaturePage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-12,20-25,27-28,38-48,52,55-75,79,83-84,106-107,109-132,140-143,145-147,149-155,166-167,189-196
+apps/web/src/features/agents-view/components/AgentSessionPane.tsx
+  s_e28579a043217e::t_f72990f360f57a 28-29,45,55,61-81,113-114,174-179,275-279,282,320-323,327,329-332,360
+apps/marketing/src/assets/app-icons/system/regular/eye.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/email-keyboard-stage.css
+  s_e28579a043217e::t_f72990f360f57a 4-5
+apps/marketing/src/app/components/featureGraphics/DocsMarkdownScene.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 18
+CLAUDE.md
+  s_e28579a043217e::t_f72990f360f57a 41,58,117-118
+apps/web/src/features/channel/Call/components/CallMoreMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-388
+apps/marketing/start.html
+  s_e28579a043217e::t_f72990f360f57a 4,6,8,10,12-13,15-21
+apps/marketing/src/app/components/sections/HomeDesktopFeatureCarousel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/marketing/components/homepage-agent-trace.css
+  s_e28579a043217e::t_f72990f360f57a 14
+apps/marketing/src/features/marketing/components/paper/paper-chat-call.css
+  s_e28579a043217e::t_f72990f360f57a 1-41
+apps/marketing/scripts/site-search.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-71
+apps/web/src/features/channel/Call/chat/GuestCallChat.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,129
+.agents/rules/rust/db.md
+  s_e28579a043217e::t_f72990f360f57a 17-20,46-49
+apps/marketing/src/routes/posts/entries/ai-editing-agents/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,39-43
+apps/web/src/features/channel/Thread/ChannelThread.tsx
+  s_e28579a043217e::t_f72990f360f57a 436-438,459
+apps/web/src/features/agent-activity/agent-activity.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,49-50,58-63,73-76
+apps/marketing/src/features/marketing/components/channels/channel-stories.css
+  s_e28579a043217e::t_f72990f360f57a 18,20
+apps/marketing/src/features/setup/flow/shared.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/app/components/featureGraphics/CrmGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/scripts/verify-seo.ts
+  s_e28579a043217e::t_f72990f360f57a 7,28-29,31-33,35-36,42-43,137-180,280,324-331
+apps/marketing/src/features/marketing/components/email/EmailSharingDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4,6,30,130-131,139,181-211
+apps/marketing/src/features/marketing/components/feature-demo-art.css
+  s_e28579a043217e::t_f72990f360f57a 1-195
+apps/marketing/src/assets/app-icons/system/regular/download-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-italic.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/user-plus.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/views/ProductDocumentsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,6,9,23-24,44-48,59,69,77-78,84-86,90-91,96-98,100,104-106,110-111,114-120,132
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,15-16,31,33-35,41-51,56,58-59,65-75,78-87,106-118,122-123,126-129,155-188
+apps/marketing/src/features/marketing/components/crm/CrmFollowupDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/channel/Call/primitives/create-call-mini-player.ts
+  s_e28579a043217e::t_f72990f360f57a 1-358
+apps/marketing/src/features/marketing/components/HomepageConversation.tsx
+  s_e28579a043217e::t_f72990f360f57a 54,103
+apps/marketing/src/assets/app-icons/system/regular/text-b.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/core/dummy-workspace.ts
+  s_e28579a043217e::t_f72990f360f57a 126,130,185,305
+apps/marketing/src/features/marketing/core/tutorial-videos.ts
+  s_e28579a043217e::t_f72990f360f57a 4,7-127,140-143
+apps/marketing/src/features/marketing/views/workspace-feature-page.css
+  s_e28579a043217e::t_f72990f360f57a 1-46
+apps/marketing/src/routes/posts/post-reading.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,7-11,17-20,36,40-44,53-54,56-58,62-63,68-70,124-126,187-191,198-199,261,265-290
+apps/marketing/src/assets/app-icons/system/regular/circle-notch.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.agents/skills/feature-flags/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 101-108
+apps/marketing/src/assets/app-icons/share.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/scripts/verifyDemo.ts
+  s_e28579a043217e::t_f72990f360f57a 40-41,47
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-up-right.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/views/SalesPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 99
+apps/web/src/features/channel/Call/CallControls/CallMediaControls.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3,5,8-25,28,38-47,49-55,66-106,108-114,116-154,161-167,174-257,259,268-284,287-295,297-302,304-308,310-320,322-380,383-474,510,519-539
+apps/web/src/components/app/tab-layout/tests/open-in-new-tab.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-56
+.agents/rules/web/solid.md
+  s_e28579a043217e::t_f72990f360f57a 25
+.agents/rules/sdk.md
+  s_e28579a043217e::t_f72990f360f57a 26-28
+apps/marketing/src/features/marketing/components/email/frozen/EmailRows.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/workspace/WorkspaceEventDetails.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8,110
+apps/marketing/src/assets/app-icons/system/regular/caret-right.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agent-navigation/core/ui-command.ts
+  s_e28579a043217e::t_f72990f360f57a 1-115
+apps/marketing/src/assets/app-icons/system/fill/buildings-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/paper/paper-database-fields.css
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/chats-circle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/documents/DocumentStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/features/channel/Call/context/call-volume.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-16
+apps/marketing/src/assets/app-icons/system/regular/kanban.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.github/scripts/check-service-deployment-results.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-43
+apps/marketing/src/app/components/featureGraphics/ChannelsHeroGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-16
+apps/marketing/src/features/marketing/components/product-mention.css
+  s_e28579a043217e::t_f72990f360f57a 1-51
+apps/marketing/src/routes/posts/PostFaq.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/block-agent/component/session-read-hosts.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 133,138-141
+apps/marketing/src/assets/app-icons/system/regular/plugs.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/assets/logos/macro-wordmark.svg
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/web/src/components/ui/components/Tabs.docs.tsx
+  s_e28579a043217e::t_f72990f360f57a 18-22,169
+apps/marketing/src/assets/app-icons/system/regular/star.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/documents/DocumentStories.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 335,342-343
+apps/marketing/src/features/marketing/components/benefits/LinkedTasksDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-125
+apps/marketing/src/assets/app-icons/system/regular/waveform.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agent-navigation/tests/app-routes.ts
+  s_e28579a043217e::t_f72990f360f57a 1-17
+apps/marketing/src/features/marketing/core/email-demo-story.ts
+  s_e28579a043217e::t_f72990f360f57a 8,14,16,117,241
+apps/marketing/src/features/marketing/components/workspace/ChatSidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/web/src/features/channel/Call/views/MobileCallIsland.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-95
+apps/marketing/src/assets/app-icons/system/regular/link.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/app/tab-layout/open-in-new-tab.ts
+  s_e28579a043217e::t_f72990f360f57a 1-41
+apps/marketing/src/assets/app-icons/system/regular/credit-card.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_e28579a043217e::t_f72990f360f57a 1,75-83,91-95,100-111,118-134,139-164,210-218,241,275-277,294-296,298-299,309,320,346-384,390-392,421-998
+apps/docs/config/navigation.json
+  s_e28579a043217e::t_f72990f360f57a 13
+.agents/skills/query-writing/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 1-200
+apps/marketing/src/assets/app-icons/system/regular/hash-straight.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
+  s_e28579a043217e::t_f72990f360f57a 43-44,106,109
+apps/docs/concepts/mentions.mdx
+  s_e28579a043217e::t_f72990f360f57a 2,7-13,55-65
+apps/marketing/src/features/marketing/components/animateOpenSource.ts
+  s_e28579a043217e::t_f72990f360f57a 4-6,176-178
+apps/marketing/src/features/marketing/components/paper/PaperEmailSource.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-618
+apps/marketing/src/features/marketing/components/workspace/frozen/SearchPalette.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/docs/product/crm.mdx
+  s_e28579a043217e::t_f72990f360f57a 7-8,41
+apps/marketing/src/features/marketing/components/benefits/BenefitVideoPoster.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-585
+apps/marketing/src/features/marketing/components/agents/NorthwindSession.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/views/ReplaceAppsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/web/src/components/app/tab-layout/browser-test/playwright.config.ts
+  s_e28579a043217e::t_f72990f360f57a 1-39
+apps/marketing/src/features/marketing/components/SiteHeader.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 13-14,22,24,26,28-29,31-41,43,46,48-70,73-81,83-89,92,96,100,104-119
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3-4,7,9,13,15,19-20,22,25-31,34-37,39,45,47,53,55-60,62-104,107-110,117-137,140-184,186-194,196-213,215-411,413,415-416,418-420
+apps/web/src/components/icon/system/regular/picture-in-picture.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/app/routes/RouteWallOfLove.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-128
+apps/marketing/src/features/marketing/components/homepage/CrmPipelineScene.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_e28579a043217e::t_f72990f360f57a 12-13,181-190,212,392-395,398-424,426-429,435-460
+apps/marketing/src/features/marketing/components/calls/call-stories.css
+  s_e28579a043217e::t_f72990f360f57a 61,93
+apps/marketing/src/styles/body-headings.css
+  s_e28579a043217e::t_f72990f360f57a 1-35
+apps/web/src/features/block-call/component/CallRecording/CallRecordingChat.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-129
+apps/marketing/src/features/marketing/components/TutorialWallpaper.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-181
+apps/marketing/src/features/setup/components/OnboardingShell.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2,12,66-86,90-96
+apps/marketing/src/features/marketing/components/email/EmailShareStory.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-237
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_e28579a043217e::t_f72990f360f57a 27,143
+apps/web/src/features/channel/Call/components/CallReactionMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-128
+apps/marketing/src/assets/app-icons/system/fill/calendar-blank-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/guide-book-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-249
+apps/marketing/src/features/marketing/components/workspace/WorkspaceDocuments.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/web/src/features/channel/Call/CallParticipantsList.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,13-15,18-19,25,29,31,34-46,59-60,65-69,78-83,85-93,95-129,134-137,139,152,154,159,166-169,195,206-211
+apps/web/src/features/channel/Call/discussion/browser-test/overlay.vite.config.ts
+  s_e28579a043217e::t_f72990f360f57a 1-64
+apps/web/src/features/channel/Call/primitives/create-call-reactions.ts
+  s_e28579a043217e::t_f72990f360f57a 1-78
+apps/docs/product/email.mdx
+  s_e28579a043217e::t_f72990f360f57a 12-15
+  s_e28579a043217e::t_348e656feb7cf5 16-17
+apps/marketing/src/features/documentation/components/guide-db-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-210
+apps/web/src/components/app/createPreviewSelectionGuard.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 14
+apps/web/src/features/agent-navigation/views/agent-navigation.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-104
+apps/marketing/src/features/documentation/core/content.d.ts
+  s_e28579a043217e::t_f72990f360f57a 1-17
+apps/marketing/src/features/marketing/views/ProductCallsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 21,64,66,76-77,81-85,94-98,107-111,120
+apps/web/src/features/channel/Channel/ThreadList.tsx
+  s_e28579a043217e::t_f72990f360f57a 110-111,141,143-144,164-176,322-337,339-340,424-436,466-482,497-515,617,619,634,637,651,656
+apps/marketing/src/routes/posts/registry.ts
+  s_e28579a043217e::t_f72990f360f57a 44-45
+apps/web/src/components/ui/components/ToggleSwitch.tsx
+  s_e28579a043217e::t_f72990f360f57a 31-32,101
+apps/marketing/src/features/marketing/components/channels/ChannelStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 217,403,409,415,421,427,440,447,453,460,466,493,504,510,516,518,529-530,547,577,639,665
+apps/marketing/src/features/marketing/components/homepage-interactive-demo.css
+  s_e28579a043217e::t_f72990f360f57a 5,32
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-203
+apps/marketing/src/ui/components/SendButton.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/features/block-call/primitives/recording-navigation.ts
+  s_e28579a043217e::t_f72990f360f57a 1-68
+apps/marketing/src/assets/app-icons/system/regular/list-checks.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+.agents/skills/migration-review/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 1-141
+apps/web/src/features/channels-view/components/rail/ChannelFavoriteRows.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 672-729,738,778,848,911,979,1032,1067,1115
+apps/marketing/src/assets/app-icons/system/regular/text-strikethrough.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-a-underline.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/assets/app-icons/system/regular/list.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/fill/envelope-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/EmailDemoSource.tsx
+  s_e28579a043217e::t_f72990f360f57a 18,20,24,43
+apps/marketing/src/features/marketing/core/workspace-chat-fixtures.ts
+  s_e28579a043217e::t_f72990f360f57a 25,27,31,47,52,64,74,79,86,105,109,120,130,138-144,148,153,165,177,189,201,207,211,219,228,240,247,250,254,268,271,275,282,292,296,303,312,317,331,338,345,357,364,367,382,389,402,409,423,430,436,443,452,456,465,469,482,493,495,507,514,524,528,530,535,548,554,567,574,588,590,596,599,614,621,624,628,640,647,650,661,675,685,689,696,706,717,723,728,731,741,750,763,769,776,779,789,796,803,815,829,836,846,850,871,880,884,890,899,908,921,927,933,940,943,954,963,967,980,983,993,999,1006,1015,1019
+apps/web/src/features/channel/Call/primitives/create-call-audio-output.ts
+  s_e28579a043217e::t_f72990f360f57a 1-156
+apps/marketing/src/features/marketing/components/homepage/homepage-email-story.css
+  s_e28579a043217e::t_f72990f360f57a 1-38
+apps/marketing/src/app/components/featureGraphics/DocumentsGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-16,3620,3625-3626,3640-3641,3668-3669
+apps/marketing/src/features/marketing/components/pricing/SavingsCalculator.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,11-13,15-24,26,28,30,32,34,36-39,58-63,65-97,100-102,105-108,110-264,267,269,303-308,310-326,328-347,350-361
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 83,89,97,147,166-167,178,196-198,202-203,208-209,218-224,231,244,265-274,276,280-287,292,294,438-440,448-452,481-483,499-510,522,525,539-576,579-602,604-621,623,625-630,632-638,645,647,649,651,654-657,659,661-664,666,668-673,675,677,679-686,688-700,702-703,705,708-713,715,717-720,723-740,743-776,905-986
+  s_e28579a043217e::t_b535a5d42d5bb0 987
+apps/marketing/src/features/marketing/components/homepage-closing-content.css
+  s_e28579a043217e::t_f72990f360f57a 23,35
+apps/docs/product/canvas.mdx
+  s_e28579a043217e::t_f72990f360f57a 13-15
+apps/marketing/src/features/marketing/components/tasks/TaskProjectView.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/components/ui/components/ButtonGroup.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,79-80,116
+apps/marketing/src/features/marketing/components/agents/AgentWorkflowStories.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 139-141
+apps/marketing/scripts/verify-docs-redirects.ts
+  s_e28579a043217e::t_f72990f360f57a 1-204
+apps/marketing/src/assets/app-icons/system/regular/clipboard-text.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/assets/app-icons/system/regular/gear.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.agents/rules/web/architecture.md
+  s_e28579a043217e::t_f72990f360f57a 68-69,72
+apps/marketing/src/features/marketing/components/SitePageClosing.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-12
+apps/docs/product/drive.mdx
+  s_e28579a043217e::t_f72990f360f57a 45-47
+apps/marketing/src/assets/app-icons/system/regular/magnifying-glass.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/documents/DocumentProjectDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/regular/x.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Channel/UnifiedReplyInput.tsx
+  s_e28579a043217e::t_f72990f360f57a 30-32,41-71,82-83
+apps/marketing/src/features/marketing/components/reviews/ReviewPullRequest.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/components/app/split-layout/context.ts
+  s_e28579a043217e::t_f72990f360f57a 2,32
+apps/marketing/src/assets/app-icons/system/regular/tray.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/DemoBookingDialog.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/docs/product/calendar.mdx
+  s_e28579a043217e::t_f72990f360f57a 4,7,9,29-34,69-75
+apps/marketing/src/assets/app-icons/system/regular/envelope.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.agents/rules/observability.md
+  s_e28579a043217e::t_f72990f360f57a 59-60
+apps/web/src/components/app/createPreviewSelectionGuard.ts
+  s_e28579a043217e::t_f72990f360f57a 37,40-42
+apps/marketing/src/features/marketing/components/workspace/DummyWorkspace.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-23
+apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-117
+apps/marketing/src/features/marketing/components/demo-glass.css
+  s_e28579a043217e::t_f72990f360f57a 1-91
+apps/web/src/features/channel/Call/use-start-channel-call.tsx
+  s_e28579a043217e::t_f72990f360f57a 115
+apps/marketing/src/routes/posts/entries/ai-editing-agents/AiEditingAgents.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,68
+  s_e28579a043217e::t_3c5ed69051e274 69
+apps/marketing/src/features/marketing/components/agents/agent-parallel-search.css
+  s_e28579a043217e::t_f72990f360f57a 1-12
+apps/marketing/src/app/routes/RouteCrm.tsx
+  s_e28579a043217e::t_f72990f360f57a 56,70-73,76,92,94,101-102,108-112,121-125,134-138,145-149,152-156,172
+apps/marketing/src/features/marketing/core/replacement-app-costs.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-17
+apps/marketing/src/routes/posts/PostWorkspaceScenes.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-59
+apps/web/src/components/app/mobile/float-regions/float-region-state.ts
+  s_e28579a043217e::t_f72990f360f57a 5
+apps/web/src/features/block-md/comments/commentLayout.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 187-201,208,218-274
+  s_e28579a043217e::t_3ba5d5d336d74f 275
+.github/scripts/check-service-deployment-results.ts
+  s_e28579a043217e::t_f72990f360f57a 14,24
+apps/marketing/src/assets/app-icons/system/regular/house.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-down.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/hash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/reviews/ReviewHome.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-16,123,180,329
+apps/marketing/src/features/marketing/views/agents-page.css
+  s_e28579a043217e::t_f72990f360f57a 2,4,6,19
+.agents/rules/web/design-system.md
+  s_e28579a043217e::t_f72990f360f57a 59
+apps/marketing/src/assets/app-icons/system/bold/arrow-up-bold.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/guide-graphic.css
+  s_e28579a043217e::t_f72990f360f57a 1-86
+apps/marketing/vitest.config.ts
+  s_e28579a043217e::t_f72990f360f57a 7,21,25
+apps/web/src/components/app/Layout.tsx
+  s_e28579a043217e::t_f72990f360f57a 258-262,368-370
+apps/web/src/components/app/split-layout/layoutManager.ts
+  s_e28579a043217e::t_f72990f360f57a 16-17,648-653,1725-1752,1779
+  s_e28579a043217e::t_7869ce167bbbe2 1780-1781
+apps/web/src/features/channels-view/channels-view.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 70-73,189-205,401,405-406,412,414-427
+apps/marketing/src/features/marketing/components/booking-link-stories.css
+  s_e28579a043217e::t_f72990f360f57a 1-165
+apps/marketing/src/assets/app-icons/system/regular/sort-ascending.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/homepage/macro-hero.css
+  s_e28579a043217e::t_f72990f360f57a 1-16
+packages/sdk/generated/storage/sdk.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 5,933-1002
+apps/marketing/src/assets/icons/replacements/googlesheets.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/primitives/createEmailDemoGeneration.ts
+  s_e28579a043217e::t_f72990f360f57a 6,28-29,69-73
+apps/web/src/features/block-call/component/CallRecording/CallRecordingRoot.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-11
+apps/marketing/src/assets/app-icons/system/regular/wave-sine.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/tasks/TaskPaperGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-69
+apps/marketing/src/features/marketing/components/paper/paper-email-task.css
+  s_e28579a043217e::t_f72990f360f57a 1-33
+apps/marketing/src/app/components/featureGraphics/AgentThreadGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8,88,91,596,711
+apps/web/src/features/channel/Call/views/CallQuickControls.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-272
+apps/marketing/src/features/marketing/components/agents/AgentComposer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/reviews/review-fixtures.ts
+  s_e28579a043217e::t_f72990f360f57a 86-87
+apps/marketing/src/routes/posts/post-product-graphic.css
+  s_e28579a043217e::t_f72990f360f57a 1-73
+apps/web/src/features/block-call/views/CallDetailView.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-6,8,10,12,15-18,20-21,23-24,37,49,52-53,55,57,62,67,73-153,186,188,198,208,214,223,235,244-245,251,254,260,262,270,281,284,296,324-326,334-376
+apps/marketing/src/features/marketing/components/HomepageSections.tsx
+  s_e28579a043217e::t_f72990f360f57a 31,176,189-190,199,203,230,333
+apps/marketing/src/features/marketing/components/workspace/WorkspaceTasks.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/routes/posts/entries/macro-vs-linear/MacroVsLinear.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,18
+  s_e28579a043217e::t_5bda447ac84c60 19
+apps/marketing/src/features/marketing/components/homepage/MacroHero.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-28
+apps/marketing/src/features/marketing/components/benefits/benefit-page.css
+  s_e28579a043217e::t_f72990f360f57a 1-136
+apps/marketing/src/routes/posts/PostContextScenes.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-112
+apps/marketing/src/features/marketing/components/workspace-story.css
+  s_e28579a043217e::t_f72990f360f57a 5-6,51,68-72,125-130
+apps/docs/CONTRIBUTING.md
+  s_e28579a043217e::t_f72990f360f57a 16,19-20
+apps/marketing/src/assets/app-icons/system/regular/arrows-out.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/routes/posts/entries/macro-vs-notion/MacroVsNotion.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,265,289,375
+  s_e28579a043217e::t_39c4f54f3f04f1 376
+apps/web/src/features/channel/Call/chat/CallChatHistory.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,9,14-20,26,31,52,59-67,117-118,120,124-125,129,139
+apps/marketing/src/features/marketing/views/ProductChannelsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 10-12,18,20,27-28,34-35,37-39,43-47,56-57,59-61,65-69,83,95-97,124,135
+apps/web/src/components/app/mobile/browser-test/fixture.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,248-259,537-538
+  s_e28579a043217e::t_134ba10c5bbdd4 539
+apps/marketing/src/assets/app-icons/system/regular/newspaper.svg
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/marketing/src/assets/icons/replacements/raycast.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/regular/clock-clockwise.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/smiley.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 51,54,127-137
+  s_e28579a043217e::t_f3811e77dea6d4 138-140
+apps/marketing/src/features/marketing/components/DemoMentionMenu.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 77,93-95,202
+apps/marketing/src/app/components/sections/SceneAppPreview.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-9
+apps/marketing/public/video/tutorials/company-graph.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/reviews/ReviewChanges.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/primitives/transcript-timeline.ts
+  s_e28579a043217e::t_f72990f360f57a 1-49
+apps/web/src/features/block-call/component/sidepanel/CallSidePanelSections.tsx
+  s_e28579a043217e::t_f72990f360f57a 3,15-17,19-20,28-29,42-47,51,77-82,85-88,91-92,98-102,108,113-116,118-127,132-137,191,211-219,223-237,239-243,245-252,274-279
+  s_e28579a043217e::t_ac66ef4c25f705 179,244
+apps/marketing/src/features/marketing/components/agents/workflowData.ts
+  s_e28579a043217e::t_f72990f360f57a 46,49,75,112
+apps/web/src/features/channel/Call/discussion/browser-test/playwright.config.ts
+  s_e28579a043217e::t_f72990f360f57a 5,9-11,28
+apps/marketing/src/features/marketing/core/homepage-demo-content.ts
+  s_e28579a043217e::t_f72990f360f57a 17,42
+apps/marketing/package.json
+  s_e28579a043217e::t_f72990f360f57a 7,13-14,33,42,49-50
+apps/web/src/features/channel/Call/CallContext.tsx
+  s_e28579a043217e::t_f72990f360f57a 47,66,73,426-428,515-518,1248-1270,1272,1277,1281,1499,1502-1504,1507,1531-1542,1548,1552,1556,1566-1568,1571,1593-1604,1622,1625,1883-1884,1888,1892-1894,1941-1945
+.agents/skills/sqlx-query-validator/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 3,74,76-80,100-101
+apps/marketing/src/app/utils/appBaseUrl.ts
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/tasks/TaskStories.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 135,149,152,155,163,191-192,195-196,230,233,236,242,256,297,355,371,375,383-404
+apps/marketing/src/features/marketing/components/paper/paper-feature-art.css
+  s_e28579a043217e::t_f72990f360f57a 1-311
+apps/marketing/src/features/marketing/components/agents/NorthwindCollaboration.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/docs/product/routines.mdx
+  s_e28579a043217e::t_f72990f360f57a 111
+apps/marketing/src/features/documentation/components/security-badges.css
+  s_e28579a043217e::t_f72990f360f57a 1-12
+apps/web/src/features/channel/Call/chat/CallChatHistory.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 6,13-21,117-138
+  s_e28579a043217e::t_f3631468f1ed0d 139
+apps/marketing/src/features/marketing/components/reviews/githubProject.ts
+  s_e28579a043217e::t_f72990f360f57a 17
+apps/marketing/src/assets/app-icons/system/fill/sparkle-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseFields.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-258
+apps/marketing/src/assets/app-icons/system/regular/eye-slash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/demo-booking-dialog.css
+  s_e28579a043217e::t_f72990f360f57a 13
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/ProviderIcon.tsx
+  s_e28579a043217e::t_f72990f360f57a 2
+apps/web/src/components/app/mobile/browser-test/stacked-sheets.browser.e2e.ts
+  s_e28579a043217e::t_f72990f360f57a 185-198,200,202-203,205-208
+apps/web/src/features/channels-view/components/ChannelsMobileView.tsx
+  s_e28579a043217e::t_f72990f360f57a 15-16,36,44-45,47,50,54,66-71,74-76,100-101,105-118,133,187-375,400,408-412,438,440
+apps/web/src/features/channel/Call/primitives/call-fullscreen.ts
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/marketing/src/routes/posts/posts-index.css
+  s_e28579a043217e::t_f72990f360f57a 3,18,24,61,72,96-97,113
+apps/web/src/features/block-call/primitives/recording-volume.ts
+  s_e28579a043217e::t_f72990f360f57a 1-80
+apps/marketing/src/features/marketing/components/documents/document-stories.css
+  s_e28579a043217e::t_f72990f360f57a 66-71,249-251
+apps/web/src/features/channel/Call/views/CallMediaPermissionHelp.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-107
+apps/marketing/src/routes/posts/entries/mfs-sharing/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,195-199,202-205
+apps/marketing/src/features/marketing/components/HomepageSpreadsheet.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-21
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskPropertiesMobile.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-167
+apps/marketing/public/video/tutorials/forms.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/comparisons/FeatureComparisons.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 23,56,60,71,98
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.tsx
+  s_e28579a043217e::t_f72990f360f57a 5,11,25-29,39,53-74,113-122,124-192
+apps/marketing/src/assets/people/rahul-initials.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/regular/microphone.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/app/tab-layout/tests/tab-layers.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 76-78,93-96,118,202,211-212,214,217-218,221,223,228-236,241,244-245,247-257
+apps/web/src/features/channel/Call/ChannelCallButton.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3,5-6,17,20-32,34-47
+apps/web/src/features/channel/Channel/use-channel-tab-items.tsx
+  s_e28579a043217e::t_f72990f360f57a 9,27,30,36,39,80-82,85
+apps/marketing/src/assets/app-icons/system/regular/task-in-review.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepageFeatureDetails.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,19-22
+apps/marketing/src/features/marketing/components/spreadsheet-demo-data.ts
+  s_e28579a043217e::t_f72990f360f57a 23,25
+apps/web/src/features/channel/Call/livekit-loader.ts
+  s_e28579a043217e::t_f72990f360f57a 83
+apps/web/src/components/icon/system/regular/speaker-slash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-24
+apps/web/src/components/ui/components/ProgressPill.tsx
+  s_e28579a043217e::t_f72990f360f57a 12,29-31,40,48
+apps/web/src/features/agent-session-activity/browser-test/index.html
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/channel/Call/components/call-waveform.css
+  s_e28579a043217e::t_f72990f360f57a 1-53
+packages/sdk/generated/storage/types.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 3629-3632,3636,3640,3647-3650,17812-17815,17831,25083-25262
+  s_e28579a043217e::t_afcceb24a92933 25263
+apps/marketing/src/features/marketing/components/tasks/TaskStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,29,32,44,46,48,84,86,90-91,97,107,142,148,153-154,161,193,213,232-257,288,350-358,360-362
+apps/marketing/src/features/setup/components/WorkspaceTexture.tsx
+  s_e28579a043217e::t_f72990f360f57a 10,14-15,22-25
+apps/marketing/src/assets/icons/replacements/zapier.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/regular/priority-urgent.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepageUnification.tsx
+  s_e28579a043217e::t_f72990f360f57a 355
+apps/marketing/src/assets/app-icons/system/fill/lightning-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/PageOutline.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-108
+apps/marketing/src/app/routes/RouteLegal.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,6-72,75-79,82-109,111-122,125-127
+apps/web/src/features/block-call/primitives/recording-controls.ts
+  s_e28579a043217e::t_f72990f360f57a 1-44
+apps/marketing/src/assets/app-icons/system/regular/circle-dashed.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/product/skills.mdx
+  s_e28579a043217e::t_f72990f360f57a 31
+apps/marketing/src/app/routes/RouteAgents.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6,1165,1181,1197
+apps/marketing/src/features/marketing/components/documents/DocumentShareSheet.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-10,25-27,100-103,107
+apps/marketing/src/ui/components/Dropdown.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+.agents/skills/add-sdk-endpoint/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 23-28
+apps/marketing/src/features/marketing/components/HomepageWorkspaceList.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-16
+apps/marketing/src/assets/app-icons/system/regular/hand-palm.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/circle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.github/workflows/deploy_website.yml
+  s_e28579a043217e::t_f72990f360f57a 37-40,97
+apps/web/src/components/app/tab-layout/browser-test/vite.config.ts
+  s_e28579a043217e::t_f72990f360f57a 1-52
+apps/web/src/features/channel/Channel/tests/channel-detail-top-bar.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 57-60
+apps/marketing/src/features/marketing/components/email/EmailInboxDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/workspace/WorkspaceEmail.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-10
+apps/docs/support.mdx
+  s_e28579a043217e::t_f72990f360f57a 29-30
+apps/web/src/features/agent-navigation/views/agent-navigation-startup.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-65
+apps/marketing/src/assets/app-icons/system/regular/lightning.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/chat-text.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/product/replacement-app-icon.css
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/features/channel/Call/primitives/create-call-panel.ts
+  s_e28579a043217e::t_f72990f360f57a 1-64
+apps/marketing/scripts/verify-standalone.ts
+  s_e28579a043217e::t_f72990f360f57a 193-198
+apps/marketing/src/features/marketing/components/homepage/homepage-preview-light.css
+  s_e28579a043217e::t_f72990f360f57a 1-33
+apps/marketing/src/features/marketing/components/feature-demo-backdrop.css
+  s_e28579a043217e::t_f72990f360f57a 1-37
+apps/docs/changelog/introduction.mdx
+  s_e28579a043217e::t_f72990f360f57a 9
+apps/marketing/src/app/components/sections/TasksLifecycleScene.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-21,249,490,496,621
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskProperties.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-601
+apps/marketing/src/assets/app-icons/system/regular/priority-low.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/CallControls/CallControls.tsx
+  s_e28579a043217e::t_f72990f360f57a 12,52
+apps/web/src/features/channel/Call/primitives/call-speaker-detection.ts
+  s_e28579a043217e::t_f72990f360f57a 1-214
+apps/marketing/src/assets/app-icons/system/regular/check-circle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/users.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/demo-mentions.css
+  s_e28579a043217e::t_f72990f360f57a 65
+apps/marketing/src/app/routes/RoutePricing.css
+  s_e28579a043217e::t_f72990f360f57a 1-81
+apps/marketing/src/features/marketing/components/homepage-collaborative-doc.css
+  s_e28579a043217e::t_f72990f360f57a 137
+apps/marketing/src/features/marketing/components/agents/AgentParallelSearchStory.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-193
+apps/web/src/features/block-call/component/CallRecording/recording-layout.css
+  s_e28579a043217e::t_f72990f360f57a 1-96
+apps/marketing/src/features/setup/components/ConnectorIcon.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/setup/components/OnboardingTrustDetails.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/documents/DocMention.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/marketing/core/customer-love.ts
+  s_e28579a043217e::t_f72990f360f57a 1-323
+apps/marketing/src/assets/app-icons/system/regular/pencil-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/product/channels.mdx
+  s_e28579a043217e::t_f72990f360f57a 15-35
+apps/web/src/features/channel/Call/primitives/call-hotkeys.ts
+  s_e28579a043217e::t_f72990f360f57a 1-140
+apps/web/src/components/app/tab-layout/tests/tab-hotkeys.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-150
+apps/marketing/src/features/marketing/views/ProductReviewsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 55,65,72-74,80-84,93-97,106-110,112-115,119-123,131
+apps/web/src/features/agent-session-activity/browser-test/stubs.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-26
+apps/web/src/components/app/tab-layout/browser-test/same-entity.browser.e2e.ts
+  s_e28579a043217e::t_f72990f360f57a 1-51
+apps/marketing/src/assets/app-icons/system/regular/files.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/stack.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/homepage-reassurance.css
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/docs/product/agents.mdx
+  s_e28579a043217e::t_f72990f360f57a 7,83,93
+apps/marketing/src/app/components/sections/AgentsCapabilityGrid.css
+  s_e28579a043217e::t_f72990f360f57a 17
+apps/marketing/src/features/marketing/components/calls/CallRecord.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-11,47
+apps/web/src/features/channel/Call/primitives/create-call-stage.ts
+  s_e28579a043217e::t_f72990f360f57a 1-205
+apps/marketing/src/app/routes/RouteTasks.css
+  s_e28579a043217e::t_f72990f360f57a 43,50
+apps/marketing/src/assets/app-icons/system/regular/align-center-vertical-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/scripts/prerender.ts
+  s_e28579a043217e::t_f72990f360f57a 1,37,59-60,63,77-87,101-110,113-115,184-185,187,229,553,577-594
+apps/marketing/src/features/documentation/components/FeatureGuide.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-69
+apps/marketing/src/features/setup/sitePalette.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-97
+apps/marketing/src/features/marketing/components/email/email-feature-demos.css
+  s_e28579a043217e::t_f72990f360f57a 73,77,86-87,94,125
+apps/marketing/src/routes/posts/PostTaskScenes.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-68
+apps/docs/concepts/properties.mdx
+  s_e28579a043217e::t_f72990f360f57a 9-11,49
+apps/marketing/scripts/documentation.ts
+  s_e28579a043217e::t_f72990f360f57a 1-404
+apps/marketing/src/features/marketing/components/benefits/BenefitGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-478
+apps/marketing/src/assets/app-icons/system/regular/clipboard.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/docs/AGENTS.md
+  s_e28579a043217e::t_f72990f360f57a 5-7,11-20,39-41,45,48
+apps/marketing/src/features/marketing/components/workspace/workspace-companies.css
+  s_e28579a043217e::t_f72990f360f57a 18,43
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,9,14,20-23,26-27,30,38,43,50-55,60-64,66-75,83,104-110,117-126,128-141,145-148,164-168,178-183,195,197,207,227,237,240,271,276-306,308-426,429,436,438-486,488-493,495-513,515-522,524-531,533-537,539-586,588-621,623-653,655-657,659-662,664-669,672-733,735,737-738,740-753,755-757,759-770,774-778,792-866,869-870,874-916,922-954,956
+  s_e28579a043217e::t_6ab42166ed8074 771-773,779-791
+apps/web/src/components/app/split-layout/TiledSplits.tsx
+  s_e28579a043217e::t_f72990f360f57a 112
+apps/marketing/src/features/marketing/components/calendar-stories.css
+  s_e28579a043217e::t_f72990f360f57a 1-70
+apps/marketing/src/features/marketing/components/workspace/frozen/EmailReply.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/web/src/features/agent-work/views/call-work.tsx
+  s_e28579a043217e::t_f72990f360f57a 11,83-96
+apps/marketing/src/app/components/featureGraphics/ChannelsGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-13,764,779,781,783,981,1155,1190,1767,2421,3657
+.pi/agents/db-checker.md
+  s_e28579a043217e::t_f72990f360f57a 25-30,58-59
+apps/web/src/components/app/mobile/float-regions/FloatRegionHost.tsx
+  s_e28579a043217e::t_f72990f360f57a 11
+apps/web/src/features/channels-view/channels-view.tsx
+  s_e28579a043217e::t_f72990f360f57a 43-44,69,93-107,117,122,126-131,134-137,180,194-201,217
+apps/marketing/scripts/site-search.ts
+  s_e28579a043217e::t_f72990f360f57a 1-200
+apps/marketing/src/assets/app-icons/system/regular/task-in-progress.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+packages/sdk/generated/storage/index.ts
+  s_e28579a043217e::t_5ff2d816118194 4
+apps/marketing/src/features/documentation/components/feature-guide.css
+  s_e28579a043217e::t_f72990f360f57a 1-19
+apps/marketing/src/features/marketing/components/paper/PaperChatCall.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-45
+apps/marketing/src/features/marketing/core/workspace-home-feed.ts
+  s_e28579a043217e::t_f72990f360f57a 21-22,35,55,70,76
+apps/marketing/src/features/marketing/components/tasks/TaskContextDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/HomepageFeatureLinks.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-11
+apps/web/src/features/channel/Call/primitives/create-call-media-permission-help.ts
+  s_e28579a043217e::t_f72990f360f57a 1-108
+apps/marketing/src/assets/app-icons/system/regular/info.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/product/product-introduction.css
+  s_e28579a043217e::t_f72990f360f57a 1-22
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspaceSidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/web/src/components/ui/components/Tooltip.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 170-204
+apps/marketing/src/assets/app-icons/system/regular/calendar.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/setup/preview.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,46,48,53-58
+apps/marketing/src/features/setup/components/TeamSetup.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/views/calls-page.css
+  s_e28579a043217e::t_f72990f360f57a 3,5,54-56
+apps/marketing/src/features/marketing/components/tasks/taskChannelHistory.ts
+  s_e28579a043217e::t_f72990f360f57a 7-13,16-21,24-30
+apps/marketing/public/video/tutorials/unified-search.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Channel/ActiveCallMessage.tsx
+  s_e28579a043217e::t_f72990f360f57a 5-6,8-9,11-14,17-21,26-34,42,46-60,62-77
+apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-88
+apps/marketing/src/assets/app-icons/system/regular/record.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepageCrm.tsx
+  s_e28579a043217e::t_f72990f360f57a 40-41,50,101-102
+apps/web/src/components/app/tab-layout/open-in-tab-intent.ts
+  s_e28579a043217e::t_f72990f360f57a 68-81
+apps/web/src/features/agent-navigation/context/agent-arrivals.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-72
+apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-408
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-down-right.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agent-session-activity/components/activity-row.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-169
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.ts
+  s_e28579a043217e::t_f72990f360f57a 1-182
+apps/marketing/src/app/routes/partners-hero.css
+  s_e28579a043217e::t_f72990f360f57a 30,149
+apps/marketing/src/features/marketing/components/product/ProductPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-24,26,30-31,37,39,45-76,79-86,93-94,98,101-124,126-128
+apps/marketing/src/features/marketing/components/calls/CallChannel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-9
+apps/marketing/src/features/marketing/core/workspace-fixtures.ts
+  s_e28579a043217e::t_f72990f360f57a 194,202,240,258-259,266,282,290,306,402,488,497
+packages/sdk/generated/agent-harness/index.ts
+  s_e28579a043217e::t_5ff2d816118194 4
+apps/marketing/src/features/marketing/components/HomepageFeatureDetails.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 21
+apps/marketing/src/assets/app-icons/system/regular/at.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/tasks/task-stories.css
+  s_e28579a043217e::t_f72990f360f57a 24,27-28,34,37,40-47,49-52
+apps/marketing/src/features/marketing/components/product/ProductIntroduction.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-40
+apps/marketing/src/features/marketing/core/savings-calculator.ts
+  s_e28579a043217e::t_f72990f360f57a 115,123-126,130-138,164-165,173-176,178
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-424
+apps/marketing/src/features/marketing/components/calls/CallsComparison.tsx
+  s_e28579a043217e::t_f72990f360f57a 42,44
+apps/marketing/src/features/marketing/components/paper/paper-feature-graphic.css
+  s_e28579a043217e::t_f72990f360f57a 1-113
+apps/marketing/src/features/marketing/components/workspace/frozen/MessageRow.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_e28579a043217e::t_f72990f360f57a 13,52,414-423,944,1026-1040,1050-1052,1177-1179,1242-1246,1248-1252,1306-1311,1313
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_e28579a043217e::t_f72990f360f57a 64-67,199-201,205-219,228,272-275
+apps/web/src/components/app/split-layout/components/SplitFileMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 49-52,152-158,218-228,231-250,298-301,310-312,314-323,325-348,350-356,358-371,373-380,484-485
+apps/marketing/src/assets/app-icons/system/fill/phone-call-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/EmailDemos.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 64,169,264-266,356
+apps/web/src/features/channel/Call/views/ActiveCallHeader.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-88
+apps/marketing/public/video/tutorials/skills.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+.agents/skills/review/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 1-70
+apps/web/src/features/channel/Call/CallControls/CallControlsDefaultAndPanelRow.tsx
+  s_e28579a043217e::t_f72990f360f57a 3,9,12-28,30-33,36-38,40-41
+apps/marketing/src/features/marketing/components/email/email-hero.css
+  s_e28579a043217e::t_f72990f360f57a 3-6,34,37-40,46-51,53,73,77-79,90,108-109
+apps/marketing/src/features/documentation/core/page-search.ts
+  s_e28579a043217e::t_f72990f360f57a 1-76
+apps/marketing/src/assets/app-icons/system/regular/task-cancelled.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/benefits/CompanyGraphDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-61
+apps/marketing/src/app/components/sections/SectionMoreFeatures.tsx
+  s_e28579a043217e::t_f72990f360f57a 28
+apps/marketing/src/app/routes/RoutePartnerTerms.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,607-609
+apps/marketing/src/assets/app-icons/system/README.md
+  s_e28579a043217e::t_f72990f360f57a 1-15
+apps/marketing/src/features/marketing/primitives/createCrmDemoWorkspace.ts
+  s_e28579a043217e::t_f72990f360f57a 35-36,41
+apps/marketing/src/routes/posts/entries/code-reviews-report/CodeReviewsReport.css
+  s_e28579a043217e::t_f72990f360f57a 41
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskNotebook.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5,35-36,47-48,50-52,148-152,213-225,271
+apps/web/src/features/channel/Call/components/MutedForYouBadge.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-24
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_e28579a043217e::t_f72990f360f57a 15-16,36-37,54-56
+apps/marketing/src/features/marketing/components/HomepageScrollCue.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,37-40
+apps/marketing/src/assets/icons/replacements/googledrive.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/product/ReplacementAppIcon.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-96
+apps/marketing/src/assets/app-icons/system/regular/database.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/docs/AI/bring-your-own.mdx
+  s_e28579a043217e::t_f72990f360f57a 18-21
+apps/web/src/features/channel/Call/views/CallMiniPlayer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-409
+apps/marketing/src/features/marketing/components/HomepageWorkspaceCalendar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/channel/Call/ActiveCallLink.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4,6,13-16,31-39,41-59,63-66,71-74
+.agents/skills/git/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 106-117,142-148
+  s_e28579a043217e::t_036b5105a0c431 149
+apps/marketing/src/assets/app-icons/system/fill/house-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agent-navigation/primitives/arrival-motion.ts
+  s_e28579a043217e::t_f72990f360f57a 1-193
+apps/marketing/src/assets/app-icons/system/regular/git-pull-request.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/app/routes/RouteCalls.tsx
+  s_e28579a043217e::t_f72990f360f57a 319,335,351
+apps/web/src/features/block-agent/context/pending-session.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,19-22,35-41,44-50,136,499-522
+  s_e28579a043217e::t_bb493e8b76d56d 523
+apps/web/src/features/channels-view/components/ConversationsCreateMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 24,56-60,79-81
+apps/marketing/src/features/marketing/components/reviews/GithubWorkflow.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2,47-50,124,139,171-173,512-516,525
+apps/marketing/src/assets/app-icons/system/regular/priority-high.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_e28579a043217e::t_4470c7a2ddcd92 17-98,112,121,128-133,136-141,154-157,161-215,217,219-223
+  s_e28579a043217e::t_ac66ef4c25f705 216,218
+apps/web/src/features/agent-navigation/core/navigable-routes.ts
+  s_e28579a043217e::t_f72990f360f57a 1-127
+apps/web/src/components/app/tab-layout/browser-test/stand-ins/split-panel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-12
+apps/marketing/src/assets/app-icons/system/regular/table.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/workspace/DummyWorkspace.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 82,113,139-140,158-159,183,185
+apps/marketing/src/assets/app-icons/system/regular/article.svg
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/web/src/features/channel/Call/core/call-mini-player.ts
+  s_e28579a043217e::t_f72990f360f57a 1-199
+apps/marketing/src/features/documentation/views/DocumentationPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-155
+apps/marketing/public/video/tutorials/workspace-events.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/DocumentationNavigation.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-540
+.agents/rules/infra/pulumi.md
+  s_e28579a043217e::t_f72990f360f57a 24-25
+apps/marketing/src/assets/icons/replacements/lucid.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/calls/call-fixtures.ts
+  s_e28579a043217e::t_f72990f360f57a 4
+apps/marketing/src/features/setup/ImportEntityPill.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/documentation/components/page-outline.css
+  s_e28579a043217e::t_f72990f360f57a 1-16
+apps/marketing/src/features/setup/primitives.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/agent-activity/components/activity-line.tsx
+  s_e28579a043217e::t_f72990f360f57a 14-18,37-42
+apps/marketing/src/features/marketing/components/workspace/WorkspaceCalendar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/ui/components/Tooltip.tsx
+  s_e28579a043217e::t_f72990f360f57a 15,123-147,188,218,226
+apps/marketing/src/features/marketing/core/workspace-parity-fixtures.ts
+  s_e28579a043217e::t_f72990f360f57a 57,130
+apps/marketing/src/features/marketing/components/email/EmailKeyboardDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/public/video/tutorials/ai-tagging.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/docs.json
+  s_e28579a043217e::t_f72990f360f57a 39,41,47,49-52,55-63,70-73,81,129-131,134-161,165-366,370-2071,2081
+apps/marketing/src/routes/posts/entries/macro-vs-superhuman/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,38,106-111,161,173,188,202,226,250,265,267-268,278,341,343-344,456
+apps/web/src/features/block-psd/views/psd-editor.tsx
+  s_e28579a043217e::t_f72990f360f57a 306-307
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 33-36,1390-1395,1508-1515,2263-2282,3052-3080,4745-4763
+  s_e28579a043217e::t_97c43922769b9a 4764
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskMention.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/regular/arrows-out-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/email-share-story.css
+  s_e28579a043217e::t_f72990f360f57a 1-49
+apps/marketing/src/assets/app-icons/system/regular/user.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-align-left.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/app/utils/utilBaseUrl.ts
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/channel/Call/core/call-layout.ts
+  s_e28579a043217e::t_f72990f360f57a 1-87
+apps/marketing/src/assets/app-icons/system/regular/arrow-up.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/calls/CallOverlay.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8
+apps/docs/product/search.mdx
+  s_e28579a043217e::t_f72990f360f57a 2,7
+apps/marketing/src/assets/app-icons/system/regular/shapes.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/documentation-navigation.css
+  s_e28579a043217e::t_f72990f360f57a 1-87
+apps/web/src/components/app/tab-layout/browser-test/stand-ins/block-loader.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/ui/components/ComposerSurface.tsx
+  s_e28579a043217e::t_f72990f360f57a 39,41
+apps/web/src/features/channel/Call/MutedMicrophoneBadge.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3,8-10,18-20,22-39
+apps/marketing/src/features/marketing/components/documents/DocumentOrganizationDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/marketing/components/HomepageMention.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-8
+apps/marketing/src/features/marketing/components/workspace/frozen/CreatePalette.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/email/EmailShareStory.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-96
+apps/marketing/src/assets/app-icons/system/regular/folder.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/component/CallBlockAdapter.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,39-44,71-80,83
+apps/marketing/src/features/documentation/components/GuideToolGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-24
+apps/docs/account/teams.mdx
+  s_e28579a043217e::t_f72990f360f57a 11-14,22
+apps/marketing/src/assets/app-icons/system/regular/file.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/core/replacement-app-costs.ts
+  s_e28579a043217e::t_f72990f360f57a 1-40
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-317
+apps/marketing/src/features/marketing/views/replace-apps-page.css
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/marketing/src/features/marketing/components/agents/AgentTranscript.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-11,57-63,202,260-263,269-271,273-286
+apps/web/src/features/agents-view/agents-view.css
+  s_e28579a043217e::t_f72990f360f57a 2157-2162
+apps/web/src/features/block-agent/component/sidepanel/AgentSidePanelSections.tsx
+  s_e28579a043217e::t_f72990f360f57a 13-15,17,22,48,59-61,195-203
+  s_e28579a043217e::t_ed17637f0fff6c 204-206
+apps/web/src/features/agent-session-activity/views/agent-activity-section.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-219
+docs/agent-guide/calls.md
+  s_e28579a043217e::t_8662c762429283 39-146,167-220,228-251,257-258,392-397,407-413,416-426,431-438,440-452,457-460,463-467,471-477,491-543,546-548,550,560-580,586-590,592-595,598-601,629-649,712-714,734-735
+apps/marketing/src/features/setup/components/PaymentPreview.tsx
+  s_e28579a043217e::t_f72990f360f57a 2
+apps/marketing/src/features/marketing/components/workspace/WorkspaceAgents.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-4
+apps/marketing/src/assets/app-icons/system/regular/plug.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/workspace/WorkspaceHomeFeed.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/setup/components/WelcomeSteps.tsx
+  s_e28579a043217e::t_f72990f360f57a 9
+apps/marketing/src/assets/app-icons/system/regular/list-bullets.svg
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/assets/app-icons/system/regular/video-camera-slash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/corners-out.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 368-371
+apps/docs/concepts/event-system.mdx
+  s_e28579a043217e::t_f72990f360f57a 1-29
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/ModelCatalogPicker.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-5,17,171
+apps/web/src/features/block-call/component/CallTranscript.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3,5,7,10-11,14-16,18-21,23-43,45,47-51,54-66,69-81,84,86-88,92-93,95-98,100-231,235-236,238-243,247-249,251-255,257-269,272,274-280,283-291,293,296-304
+apps/marketing/src/assets/app-icons/system/regular/cloud-warning.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/assets/app-icons/system/regular/sigma.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/sparkle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/seo/legacy-docs-paths.json
+  s_e28579a043217e::t_f72990f360f57a 1-216
+apps/marketing/src/assets/app-icons/system/regular/function.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/EmailAgenticEditingDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,23,186,208
+apps/marketing/src/features/marketing/core/savings-calculator.test.ts
+  s_e28579a043217e::t_f72990f360f57a 75-95
+apps/web/src/features/block-call/core/recording-chat.ts
+  s_e28579a043217e::t_f72990f360f57a 1-25
+apps/web/src/features/block-call/primitives/recording-playback.ts
+  s_e28579a043217e::t_f72990f360f57a 1-162
+apps/marketing/src/app/components/featureGraphics/CallsGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,829
+apps/marketing/src/features/marketing/components/TutorialVideoEmbed.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-50
+apps/marketing/index.html
+  s_e28579a043217e::t_f72990f360f57a 8,10,12-13,15-21
+apps/marketing/src/assets/icons/replacements/salesforce.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/homepage/homepage-scenes.css
+  s_e28579a043217e::t_f72990f360f57a 17,29
+apps/web/src/features/block-call/primitives/recording-layout.ts
+  s_e28579a043217e::t_f72990f360f57a 1-200
+apps/marketing/src/features/marketing/components/paper/PaperEmailAccounts.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-246
+apps/marketing/src/assets/app-icons/system/regular/plus.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/workspace/WorkspaceChannel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5,43,399-401,431,439
+apps/web/src/components/app/mobile/PillTabs.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 15,56,132-188
+apps/marketing/src/features/marketing/views/WorkspaceFeaturePage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-123
+apps/marketing/src/features/marketing/components/crm/CompanyPipelineEntry.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/channel/Call/primitives/call-media-permissions.ts
+  s_e28579a043217e::t_f72990f360f57a 1-156
+apps/marketing/src/app/routes/RouteDpa.css
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/features/marketing/components/HomepageAgentTrace.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/agent-session-activity/browser-test/activity.browser.e2e.ts
+  s_e28579a043217e::t_f72990f360f57a 1-37
+apps/web/src/features/channel/Call/core/call-reactions.ts
+  s_e28579a043217e::t_f72990f360f57a 1-24
+apps/marketing/src/assets/app-icons/system/fill/chats-circle-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/public/video/tutorials/automatic-permissions.mp4
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/animateOpenSource.test.ts
+  s_e28579a043217e::t_f72990f360f57a 59,61,111-127
+apps/marketing/src/app/routes/RouteTasks.tsx
+  s_e28579a043217e::t_f72990f360f57a 11,22-32,42,82,90,92,99,103-104,108-109,111,115-120,129-130,132-139,143-148,157
+apps/marketing/src/features/marketing/components/HomepageWorkspaceTasks.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/marketing/components/email/frozen/SearchBar.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-4
+apps/web/src/components/app/side-panel/sizing.ts
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/assets/app-icons/system/regular/users-three.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/agent-navigation/primitives/apply-ui-command.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-443
+apps/web/src/features/channel/Channel/tests/thread-list-pagination.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 8-9,26-27,36-41,55-61,86,95,360-391
+  s_e28579a043217e::t_e5b1516be83e90 392
+apps/marketing/src/assets/app-icons/system/fill/play-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepageClosing.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5,9-14,17-28
+apps/web/src/features/channel/Channel/channel-tab-icons.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,18,27-30
+apps/marketing/src/features/documentation/components/SecurityBadges.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-23
+apps/web/src/features/block-md/comments/commentLayout.ts
+  s_e28579a043217e::t_f72990f360f57a 16,33-39,164-171,228,230
+apps/marketing/src/features/marketing/components/calls/CallStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-7,111
+.agents/skills/query-review/SKILL.md
+  s_e28579a043217e::t_f72990f360f57a 1-136
+apps/marketing/src/assets/app-icons/system/regular/arrow-up-right.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/pricing/savings-calculator.css
+  s_e28579a043217e::t_f72990f360f57a 1-26,31-38
+apps/web/src/features/channel/Call/components/CallReactionLayer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-67
+apps/marketing/src/assets/app-icons/system/regular/currency-dollar.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/image.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/features/marketing/components/workspace/frozen/DemoTags.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/channel/Call/discussion/browser-test/baseline.d.ts
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/product/booking-links.mdx
+  s_e28579a043217e::t_f72990f360f57a 92
+apps/marketing/src/assets/app-icons/system/regular/terminal-window.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/TutorialVideoEmbed.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-155
+apps/marketing/src/routes/posts/entries/desync-customer-story/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-37
+apps/web/src/components/app/tab-layout/tests/tab-manager.test.ts
+  s_e28579a043217e::t_f72990f360f57a 15,123-124,126,130,132,134-143,145-149
+apps/docs/product/tasks.mdx
+  s_e28579a043217e::t_f72990f360f57a 13-17,72-111
+apps/web/src/features/channel/Call/tests/livekit-js-call-controller.test.ts
+  s_e28579a043217e::t_f72990f360f57a 14-18,25-40,182-542
+  s_e28579a043217e::t_abe1de962b0ae2 543
+apps/web/src/features/agent-session-activity/browser-test/main.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-111
+apps/docs/product/docs.mdx
+  s_e28579a043217e::t_f72990f360f57a 19-20
+apps/web/src/features/block-call/component/CallRecording/CallRecordingParticipants.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,7,33,61-63,66-68,77-116
+  s_e28579a043217e::t_6e5a8a6dbb5087 117
+apps/web/native-commands.json
+  s_e28579a043217e::t_f72990f360f57a 80,88,94
+apps/web/src/components/app/tab-layout/browser-test/stand-ins/block-effect-runner.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/note-pencil.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/features/marketing/components/HomepageOpenSource.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,5-7
+apps/marketing/src/features/marketing/components/channels/ChannelStories.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 148,153,157,167,200,345,372,433,471
+apps/web/src/components/app/tab-layout/browser-test/fixture.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-113
+apps/web/src/features/channel/Call/views/call-fullscreen-host.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-95
+apps/marketing/src/app/components/featureGraphics/DocsMarkdownScene.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-15,359,443,663,1067
+apps/marketing/src/app/routes/RouteDpa.tsx
+  s_e28579a043217e::t_f72990f360f57a 12,75
+apps/web/src/components/ui/components/Tabs.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 24-28,38-42,144-148,168-172
+apps/marketing/src/features/marketing/components/HomepageEmailCompose.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3,20-21,60,104,119-120
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-40
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 5,727-734
+  s_e28579a043217e::t_64a7065cd27e49 735-742
+apps/marketing/src/assets/app-icons/system/regular/phone.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-call/primitives/transcript-scroll.ts
+  s_e28579a043217e::t_f72990f360f57a 1-170
+apps/marketing/src/features/marketing/components/HomepageBlog.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/core/homepage-demo-people.ts
+  s_e28579a043217e::t_f72990f360f57a 3-4,9-10,12,17,23,29,34-58
+apps/web/src/features/channel/Call/primitives/use-active-call-companion.ts
+  s_e28579a043217e::t_f72990f360f57a 1-54
+apps/marketing/src/assets/app-icons/system/regular/task-created.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/EmailFeatureDemos.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 243
+apps/marketing/src/routes/posts/entries/macro-vs-notion/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,108-113,282,284-285,323,325-326,414-415
+apps/web/src/components/icon/system/README.md
+  s_e28579a043217e::t_f72990f360f57a 5-9
+apps/marketing/src/features/marketing/components/HomepageCollaborativeDoc.tsx
+  s_e28579a043217e::t_f72990f360f57a 6,20-22,79-85,88-99
+apps/marketing/src/features/marketing/components/email/email-demos.css
+  s_e28579a043217e::t_f72990f360f57a 13,114
+apps/marketing/src/app/main/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,16-20,22-32,34-36
+apps/marketing/src/lib/theme/utils/themeUtils.ts
+  s_e28579a043217e::t_f72990f360f57a 2,26,43
+apps/marketing/src/app/components/graphics/AgentThreadWindow.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/assets/app-icons/system/regular/text-underline.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/upload-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/SpreadsheetRecordPreview.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/channel/Call/TrackView.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,15-16,18-19,26-30,32,38-50,53-54,61-63
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  s_e28579a043217e::t_f72990f360f57a 5,7-14,18,21,38,54-56,69-78,95-96,100-101,112,127,129-130,137,143-145,158-168
+apps/marketing/src/features/marketing/components/paper/DatabaseStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-50
+apps/marketing/src/assets/app-icons/system/regular/caret-left.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/calendar-blank.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/core/page-search.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-54
+apps/marketing/src/features/marketing/components/feature-page.css
+  s_e28579a043217e::t_f72990f360f57a 15-16,23,74-75,100-106
+apps/marketing/src/assets/app-icons/system/regular/squares-four.svg
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/web/src/components/ui/components/ProgressPill.docs.tsx
+  s_e28579a043217e::t_f72990f360f57a 4,41-51,56,64
+.github/workflows/deploy_all_services.yml
+  s_e28579a043217e::t_f72990f360f57a 337,344
+apps/web/src/features/agent-session-activity/core/step-label.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-15
+apps/marketing/src/features/documentation/components/GuideWorkspaceGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-158
+apps/marketing/src/app/components/sections/EmailTurboInbox.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/app/main/App.navigation.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-61
+apps/marketing/src/features/marketing/components/channels/ChannelWorkSurface.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/assets/app-icons/system/regular/plugs-connected.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepageSidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-15
+apps/marketing/src/features/marketing/components/SiteHeader.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4,8-11,14,16-18,20-22,24-64,80,104-107,112,114,117-131,135-143,145-151,154-156,158-164,167-169,188,194-196,198-213
+apps/marketing/src/features/marketing/components/channels/channelProject.ts
+  s_e28579a043217e::t_f72990f360f57a 13,19,26,33,39,46,53,59,66,73,80,86,93,100,106,113,124,130,138,145,153,165,167,172-174,186,194-195,217,231,237,244,253,259,268,273,287,292,298,304,311,317,324,331,338,345,351,370,376,388,394,406,412,424,430,442,448,457,461,467,474-475,478-479,485-486,495-498,501-503,505,508,511-515,518-522,525-529,533,536-538,541-545,548-553,556-561,564-568,571-576,578,580,583-586
+apps/marketing/src/assets/app-icons/system/regular/chats.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/email/EmailAutoTagDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-39
+apps/marketing/src/features/marketing/primitives/createDummyWorkspace.test.ts
+  s_e28579a043217e::t_f72990f360f57a 47,55,59-69,74,131,141
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-101
+apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,4,11-19,22-113,116-117,120-121,123,127-131,133-135,140-142,146-151,153-194,202-210,212-227,229-265,267-299,301-302,305-345
+apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  s_e28579a043217e::t_f72990f360f57a 117,210-219,332,339-345
+  s_e28579a043217e::t_39d967a687ecb8 346-348
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_e28579a043217e::t_f72990f360f57a 19,70-77,93-96
+apps/marketing/src/features/marketing/components/tasks/paper/paper-task-art.css
+  s_e28579a043217e::t_f72990f360f57a 1-185
+apps/web/src/features/agent-navigation/primitives/apply-ui-command.ts
+  s_e28579a043217e::t_f72990f360f57a 1-238
+apps/web/src/features/channel/Call/primitives/create-call-volume.ts
+  s_e28579a043217e::t_f72990f360f57a 1-31
+apps/marketing/src/assets/app-icons/system/regular/building-office.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/bell.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/setup/components/FeatureOverview.tsx
+  s_e28579a043217e::t_f72990f360f57a 2-17,30,39,48,57,66,75,84,93,121,130,139,148,157,166,175,189,201,203-209,240-241,243-245,258
+apps/marketing/scripts/standalonePreview.test.ts
+  s_e28579a043217e::t_f72990f360f57a 5,9-68
+  s_e28579a043217e::t_74d380676d22ee 69
+apps/marketing/src/features/marketing/components/site-navigation.css
+  s_e28579a043217e::t_f72990f360f57a 11,18,43,46,48-49,51-52,54,56,58,60,62,72-74,79,83,85,87,108
+apps/marketing/src/features/marketing/components/workspace/dummy-workspace.css
+  s_e28579a043217e::t_f72990f360f57a 3,25,102,121,149
+apps/marketing/scripts/capture-light-tutorial-previews.mjs
+  s_e28579a043217e::t_f72990f360f57a 1-65
+apps/marketing/scripts/page-redirects.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-62
+apps/marketing/src/features/marketing/components/FeatureDemoArt.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-46
+apps/marketing/src/routes/posts/entries/macro-vs-linear/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,17,36,46,62-64,114,116,122-127,152,157,189,196-197,205-207,217,226,228,240,252,254,292-295,299,308,313-314,316-317,328-329,335-340,342,426-427
+apps/marketing/src/app/routes/RouteEmail.tsx
+  s_e28579a043217e::t_f72990f360f57a 3,6,14-17,19,29-32,50-52,70-73,103,111,113,119-121,123-124,130-135,137-140,143-144,146-152,156-158,162,165-178,181-185,194-198,207
+apps/marketing/src/routes/posts/entries/gmail-rate-limits/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,151-159
+apps/docs/product/sharing.mdx
+  s_e28579a043217e::t_f72990f360f57a 2,7-10,49-71
+apps/marketing/src/assets/app-icons/system/fill/list-checks-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/routes/posts/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,90
+apps/marketing/src/assets/app-icons/system/regular/paper-plane-tilt.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/workspace/frozen/DetailPanel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/components/app/sidebar-next/return-to-call-button.tsx
+  s_e28579a043217e::t_f72990f360f57a 3,6,8-22,27,30-39,42-43,45,50-83,85-93,98
+apps/marketing/src/assets/app-icons/system/regular/check.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/primitives/use-call-speaking.ts
+  s_e28579a043217e::t_f72990f360f57a 1-49
+apps/web/src/features/block-agent/component/Block.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,10,17,56-76,121-122,176,179-184,194-201,210-213,237
+apps/web/src/features/block-md/component/InlinePropertyValue.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2,9,47-57,59,61,63,117-118,131,134-136,138-141
+apps/marketing/src/features/marketing/components/DemoAgentMessage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/core/workspace-features.ts
+  s_e28579a043217e::t_f72990f360f57a 1-422
+apps/web/AGENTS.md
+  s_e28579a043217e::t_f72990f360f57a 238-243,294-295,297-310,329-330,728-729,753,844,848-849,851-852,918-920,924-926,975-977,980-982,985,990-991,993-995,998,1001,1218,1355-1359,1430
+apps/marketing/src/assets/icons/replacements/README.md
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/routes/posts/PostProductGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-242
+apps/marketing/src/features/marketing/components/agents/AgentStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/components/app/side-panel/SidePanel.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 10,12-16,26-38,51,56,68-69,90-95,97-102,104-109,120-153
+  s_e28579a043217e::t_b9e704c1a4d3a8 154
+apps/web/src/components/app/split-layout/contentInstanceRegistry.ts
+  s_e28579a043217e::t_f72990f360f57a 15-16,27-30,39-40
+apps/marketing/src/features/marketing/components/documents/DocumentFrame.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-agent/ui/ToolApprovalCard.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 60-79
+apps/marketing/src/features/marketing/core/demo-email.ts
+  s_e28579a043217e::t_f72990f360f57a 33,92
+apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,24,173,178-182
+apps/marketing/src/features/marketing/components/homepage/HomepageDatabaseWorkflow.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-110
+apps/marketing/scripts/prerenderEntry.tsx
+  s_e28579a043217e::t_f72990f360f57a 6-8,95,106-109,111,115-118
+apps/marketing/src/features/marketing/components/workspace/WorkspaceCompanies.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/components/app/AppProviders.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,142-144
+apps/docs/product/calls.mdx
+  s_e28579a043217e::t_f72990f360f57a 12-13
+apps/marketing/src/app/components/sections/HomeMobileFeatureCarousel.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/app/data/featurePages.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6,25,31,37,43,49,55,61,67
+apps/marketing/src/features/marketing/components/homepage/homepage-feature-splits.css
+  s_e28579a043217e::t_f72990f360f57a 1-61
+apps/web/src/features/agent-session-activity/queries/keys.ts
+  s_e28579a043217e::t_f72990f360f57a 1-8
+apps/marketing/src/assets/app-icons/system/regular/code.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.html
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/assets/app-icons/system/regular/folder-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/DocumentationContent.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-176
+apps/web/src/features/channel/Call/LivekitJsCallController.ts
+  s_e28579a043217e::t_f72990f360f57a 21,60-61,74-81,150,161,272-278,363,373,388
+apps/marketing/src/app/routes/RouteGithub.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-11,2829,2845,3482
+apps/marketing/src/features/marketing/components/BookingLinkStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-162
+apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-78
+apps/docs/product/home.mdx
+  s_e28579a043217e::t_f72990f360f57a 89-90,113-139
+apps/marketing/src/app/components/utils/UtilWrap.tsx
+  s_e28579a043217e::t_f72990f360f57a 3
+apps/marketing/src/assets/icons/replacements/googlecalendar.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/app/components/graphics/TaskCard.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-14
+apps/marketing/src/assets/app-icons/system/regular/funnel-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/globe.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/assets/app-icons/system/regular/screencast.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+.agents/agents/db-reviewer.md
+  s_e28579a043217e::t_f72990f360f57a 1-39
+apps/marketing/src/features/marketing/components/HomepageResources.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-101
+apps/marketing/src/features/marketing/components/homepage/homepage-product-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-342
+apps/marketing/src/features/marketing/core/demo-mentions.ts
+  s_e28579a043217e::t_f72990f360f57a 22-41
+apps/web/src/features/channel/Call/tests/muted-microphone-badge.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 28
+apps/marketing/src/styles/site-icons.css
+  s_e28579a043217e::t_f72990f360f57a 1-21
+apps/marketing/src/assets/icons/replacements/make.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/assets/app-icons/system/fill/folder-simple-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/app/components/featureGraphics/EmailGraphics.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-23,983-984,1176,1632,2768,3524
+apps/marketing/src/assets/app-icons/system/regular/chat-teardrop.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/app/components/base/BaseHeader.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,10-15
+apps/marketing/src/features/marketing/components/agents/LaunchConversation.tsx
+  s_e28579a043217e::t_f72990f360f57a 37,44,55
+apps/marketing/src/features/marketing/components/paper/paper-email-source.css
+  s_e28579a043217e::t_f72990f360f57a 1-67
+apps/marketing/src/features/marketing/components/HomepageWorkspace.tsx
+  s_e28579a043217e::t_f72990f360f57a 5-20
+apps/marketing/src/features/marketing/components/CalendarStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-190
+apps/web/src/features/block-call/primitives/recording-identity.ts
+  s_e28579a043217e::t_f72990f360f57a 1-59
+apps/marketing/src/assets/app-icons/system/regular/dots-six-vertical.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/CallControls/CallSettingsMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 26-29
+apps/marketing/src/assets/app-icons/system/regular/arrow-clockwise.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+packages/sdk/generated/auth/types.gen.ts
+  s_e28579a043217e::t_5ff2d816118194 4013
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.ts
+  s_e28579a043217e::t_f72990f360f57a 1-119
+apps/marketing/src/app/components/dialogs/DialogTheme.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/web/src/features/block-call/views/CallDetailView.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 33-35,40-51
+apps/marketing/src/assets/app-icons/system/regular/arrow-right.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/paper/NotionImportGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-47
+apps/marketing/src/assets/app-icons/system/regular/file-pdf.svg
+  s_e28579a043217e::t_f72990f360f57a 1-7
+apps/marketing/src/features/marketing/components/homepage-feature-details.css
+  s_e28579a043217e::t_f72990f360f57a 1,3-6
+apps/marketing/src/features/setup/cream-preview.css
+  s_e28579a043217e::t_f72990f360f57a 2,249,308,313,456-457,486,599-664
+apps/web/src/features/channel/Call/views/ActiveCallPopover.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-139
+apps/marketing/src/assets/icons/replacements/dropbox.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/app/components/utils/UtilPlainText.tsx
+  s_e28579a043217e::t_f72990f360f57a 121,155,176-178,185-188,194,198,200,208
+apps/docs/product/forms.mdx
+  s_e28579a043217e::t_f72990f360f57a 1-40
+apps/marketing/src/app/main/App.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,14,21,40-41,44-53,59-63,98-100,141-146,151-153,162-171,228-229,282,296,309,313-318,344-348,350,367-384,399-409
+apps/marketing/src/app/routes/RoutePartners.tsx
+  s_e28579a043217e::t_f72990f360f57a 99
+apps/marketing/src/features/marketing/components/product/product-page.css
+  s_e28579a043217e::t_f72990f360f57a 8,29
+apps/web/src/components/app/side-panel/context.ts
+  s_e28579a043217e::t_f72990f360f57a 32-35,41-42,48-49
+apps/marketing/src/features/setup/components/feature-overview.css
+  s_e28579a043217e::t_f72990f360f57a 156-160
+apps/web/src/components/ui/components/Slider.docs.tsx
+  s_e28579a043217e::t_f72990f360f57a 23-26,66
+apps/web/src/features/agent-session-activity/core/fold-rows.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-60
+apps/marketing/src/features/marketing/components/FeatureDemoBackdrop.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-13
+apps/marketing/src/features/documentation/components/page-outline-labels.ts
+  s_e28579a043217e::t_f72990f360f57a 1-114
+apps/marketing/src/features/marketing/core/benefit-pages.ts
+  s_e28579a043217e::t_f72990f360f57a 1-212
+CODING.md
+  s_e28579a043217e::t_f72990f360f57a 30
+apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-108
+.github/workspace-dep-closures.json
+  s_e28579a043217e::t_f72990f360f57a 306,559,1281,1383,3805,3908,5046,7377-7378,10231,14058,14173
+apps/marketing/src/assets/app-icons/system/regular/phone-disconnect.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/check-square.svg
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/agents/AgentSession.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/assets/app-icons/system/regular/paperclip.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/homepage-sidebar.css
+  s_e28579a043217e::t_f72990f360f57a 18,32,39,55
+apps/marketing/src/assets/icons/replacements/miro.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/calls/CallStories.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 84,109-111,129,142,210,212-213,217-219,398-400
+apps/marketing/src/features/marketing/components/paper/notion-import-graphic.css
+  s_e28579a043217e::t_f72990f360f57a 1-68
+apps/marketing/src/features/setup/Homepage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6,9-14,18-19,21-35,37-41,43-70,74-85,87-105
+apps/marketing/README.md
+  s_e28579a043217e::t_f72990f360f57a 8-61,76-99,119-120,135-149,153-163,255-260,281-283,286-287,289-291,301,329-330,350-351,354-357,360,366-401,433,448,456,462-463,465,489-492,533,551-558,573-576,684-687,725-728,750-753,759,772,792,795-796,803-806,840-842,854-855,860,894-896,905,933,942-943,965-966,986-988,996,1026,1030,1032,1041,1043,1046,1050,1055-1277
+apps/docs/product/snippets.mdx
+  s_e28579a043217e::t_f72990f360f57a 7-8,17-25,29
+apps/marketing/src/assets/app-icons/system/regular/phone-call.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/task-done.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/setup/components/WorkspaceIntro.tsx
+  s_e28579a043217e::t_f72990f360f57a 4
+apps/marketing/src/features/setup/flow/ToolsStep.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/routes/posts/entries/macro-vs-clickup/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,121-126,222,243,245,264,291,304,309,311-312,325,327-328,579
+apps/marketing/scripts/verifyHomepage.ts
+  s_e28579a043217e::t_f72990f360f57a 7-10,31,33-34,39,47,65-69,76-83,96-114,135-159,161-163,165-175,177-184,187,190,200-209,211-225,227-236,242,249
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskProperties.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,181
+apps/marketing/vite.config.ts
+  s_e28579a043217e::t_f72990f360f57a 7,16,18
+apps/marketing/src/features/marketing/core/product-introductions.ts
+  s_e28579a043217e::t_f72990f360f57a 1-102
+apps/web/src/components/app/side-panel/SidePanel.tsx
+  s_e28579a043217e::t_f72990f360f57a 3,47,91-92,165-166,168-169,184,209-210,235-237,254,274,288-292,295-298,330,399,401,443,493-502,775
+apps/web/src/components/app/tab-layout/browser-test/open-in-new-tab.browser.e2e.ts
+  s_e28579a043217e::t_f72990f360f57a 1-55
+apps/web/src/components/app/tab-layout/tab-manager.ts
+  s_e28579a043217e::t_f72990f360f57a 420-429,511-515
+  s_e28579a043217e::t_6a761861d317ca 516
+apps/web/src/features/block-agent/context/pending-session.ts
+  s_e28579a043217e::t_f72990f360f57a 33,173-176,221
+apps/web/src/features/channel/Call/discussion/CallRootLine.tsx
+  s_e28579a043217e::t_f72990f360f57a 7,20-21,32-34,59,70,111,115-116,119
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskRow.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-199
+apps/web/src/components/ui/components/Slider.tsx
+  s_e28579a043217e::t_f72990f360f57a 8-10,52,58-59
+apps/marketing/scripts/documentation.test.ts
+  s_e28579a043217e::t_f72990f360f57a 1-52
+apps/marketing/src/features/marketing/components/tasks/tasks-page.css
+  s_e28579a043217e::t_f72990f360f57a 120-126
+apps/web/src/features/channels-view/components/rail/ChannelLabelNameDialog.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 15,65-69,73-75,84-85,94,192,194-197,216-217,221,228-331
+  s_e28579a043217e::t_f2bc3e72b3d4a5 332-333
+apps/marketing/src/features/marketing/components/homepage-resources.css
+  s_e28579a043217e::t_f72990f360f57a 1-24
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay-state.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-282
+apps/web/src/components/app/tab-layout/browser-test/index.html
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5,9-10,17-18,21-28,30-31,36-37,42,44-52,58-59,67
+apps/marketing/src/features/marketing/components/comparisons/feature-comparisons.css
+  s_e28579a043217e::t_f72990f360f57a 1,3-4,6-8,14-16,18-24,26-38,40-45
+apps/marketing/src/app/components/utils/util-live-editor.css
+  s_e28579a043217e::t_f72990f360f57a 1-2,5,13,17
+apps/marketing/src/features/marketing/components/agents/FolderComposerMockup.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+.agents/skills/query-review/measuring-plans.md
+  s_e28579a043217e::t_f72990f360f57a 1-153
+apps/marketing/src/assets/app-icons/system/regular/square-split-horizontal.svg
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/assets/app-icons/system/regular/buildings.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseQuery.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-135
+apps/marketing/src/assets/app-icons/system/regular/arrow-left.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/views/ProductAgentsPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2,14,20,28-31,71,73,81-82,89-93,102-106,115-119,128-129,140-143,152,171
+apps/marketing/src/assets/icons/replacements/microsoftexcel.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/email/EmailAccountsDemo.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/documentation/components/documentation.css
+  s_e28579a043217e::t_f72990f360f57a 1-58
+apps/marketing/src/features/marketing/components/product-feature-section.css
+  s_e28579a043217e::t_f72990f360f57a 1,4,6-7,16,21-22,27-28,30,33-34,37-39,57,59-61,64-66
+apps/web/src/components/ui/components/Tabs.tsx
+  s_e28579a043217e::t_f72990f360f57a 3-10,26-27,252,277-280,299-320,345-348,402-405,464-467,530-533
+apps/web/src/features/block-md/component/InlinePropertyValue.project.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 29-30
+apps/marketing/src/assets/app-icons/system/regular/caret-down.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/core/feature-comparisons.ts
+  s_e28579a043217e::t_f72990f360f57a 160-162
+apps/marketing/src/assets/app-icons/system/regular/terminal.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/workspace/CompanyRecord.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-21,100
+apps/marketing/src/features/marketing/components/workspace/frozen/PropertyValueIcon.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-9
+apps/marketing/src/assets/app-icons/system/regular/shield-check.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/routes/posts/PostsPageTail.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3-4
+apps/marketing/src/assets/app-icons/system/regular/clock.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/docs/security.mdx
+  s_e28579a043217e::t_f72990f360f57a 4,7,9,11,13,15,17,19,21
+apps/web/src/features/channel/Call/tests/call-controls.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 2,4-14,29-33,39,74-85,104-110,150-310
+apps/marketing/src/features/marketing/components/ProductMention.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-53
+apps/marketing/src/features/marketing/components/DemoPrDocument.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/web/src/features/channel/Call/components/CallWaveform.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-23
+.github/workflows/pr-ci.yml
+  s_e28579a043217e::t_f72990f360f57a 14,634
+apps/marketing/src/features/documentation/components/guide-routine-preview.css
+  s_e28579a043217e::t_f72990f360f57a 1-153
+apps/web/src/features/channel/Message/Content.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,104-109,121-123
+apps/marketing/src/app/components/graphics/AiComposeGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/features/marketing/components/email/frozen/EmailShell.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-19
+apps/marketing/src/features/marketing/components/sales/SalesCalculator.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/views/sales-page.css
+  s_e28579a043217e::t_f72990f360f57a 43
+apps/marketing/src/routes/posts/entries/macro-vs-slack/index.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,111-116,181,205,213,215-216,228,230,252,259,272,281,294,297,355
+apps/web/src/features/block-pr/views/PrDetail.tsx
+  s_e28579a043217e::t_f72990f360f57a 19,362
+apps/marketing/src/styles/site-ui.css
+  s_e28579a043217e::t_f72990f360f57a 3,182-183
+apps/marketing/src/assets/app-icons/system/fill/pause-fill.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/spinner-gap.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/homepage-workspace.css
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/paper/PaperEmailTask.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-39
+apps/marketing/src/app/components/featureGraphics/ChannelPreviewGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-14,250,268,276,278,286,308,314,327,333,342,349,363,540,546-547,553,560,571-572,577
+apps/marketing/src/app/routes/RoutePricing.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-5,8-9,11-14,18,20-59,141-142,144,237-279,305,307-355,358-359,363-375,377-410,416,420,424-471,473-494,496-497,499
+apps/web/src/features/block-call/AGENTS.md
+  s_e28579a043217e::t_f72990f360f57a 1-57
+apps/marketing/src/assets/app-icons/system/regular/lock-key.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/web/src/features/channel/Call/components/CallLiveChip.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-37
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskComposer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/app/routes/RouteWallOfLove.css
+  s_e28579a043217e::t_f72990f360f57a 1-298
+apps/marketing/src/assets/app-icons/system/regular/file-text.svg
+  s_e28579a043217e::t_f72990f360f57a 1-5
+apps/marketing/src/features/marketing/components/email/frozen/ChannelComposer.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/channel/Call/primitives/call-mini-player-selection.ts
+  s_e28579a043217e::t_f72990f360f57a 1-45
+apps/marketing/src/features/marketing/core/navigation.ts
+  s_e28579a043217e::t_f72990f360f57a 2-27,35,92-103
+  s_e28579a043217e::t_4a08292ea54ccb 104
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseFieldsMobile.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-218
+apps/marketing/src/assets/app-icons/system/regular/envelope-open.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_e28579a043217e::t_f72990f360f57a 42-45
+apps/marketing/src/features/marketing/components/homepage/macro-homepage.css
+  s_e28579a043217e::t_f72990f360f57a 1-162
+apps/web/src/components/icon/system/regular/users-slash.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/documentation/components/GuideGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-76
+apps/marketing/src/features/marketing/components/tasks/task-paper-graphic.css
+  s_e28579a043217e::t_f72990f360f57a 1-71
+apps/web/src/features/block-call/primitives/recording-video.ts
+  s_e28579a043217e::t_f72990f360f57a 1-191
+apps/web/src/features/channel/Call/CallControls/CallSharingMenu.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,3-4,8-15,19-24,59-62,67-90,104,110-112,114-118,120-127,161,164
+  s_e28579a043217e::t_4470c7a2ddcd92 134-138
+apps/marketing/src/assets/app-icons/system/regular/play.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/chat-circle.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/page-aura.css
+  s_e28579a043217e::t_f72990f360f57a 1-85
+apps/web/src/components/ui/utils/control-sizes.ts
+  s_e28579a043217e::t_f72990f360f57a 29-36,38-42
+apps/marketing/src/features/marketing/components/agents/AgentWorkflowStories.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2,152,204,823-827,831,840-841,860-861
+apps/marketing/src/features/marketing/components/reviews/review-stories.css
+  s_e28579a043217e::t_f72990f360f57a 65
+apps/marketing/src/features/setup/sitePalette.ts
+  s_e28579a043217e::t_f72990f360f57a 4-7,18,33-37,39-43,48-55
+apps/marketing/src/features/marketing/components/homepage/HomepageTiles.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-124
+apps/web/src/features/channel/Thread/types.ts
+  s_e28579a043217e::t_f72990f360f57a 93-94
+apps/marketing/src/app/components/sections/SectionBento.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-4
+apps/marketing/src/assets/app-icons/system/regular/sidebar-simple.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/app-icons/system/regular/priority-medium.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/features/marketing/components/HomepagePullRequest.tsx
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/paper/PaperChatCreate.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-386
+apps/marketing/src/features/marketing/components/reviews/ReviewPrMention.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-2
+apps/marketing/src/assets/app-icons/system/regular/pause.svg
+  s_e28579a043217e::t_f72990f360f57a 1-3
+apps/marketing/src/assets/icons/replacements/airtable.svg
+  s_e28579a043217e::t_f72990f360f57a 1
+apps/marketing/src/features/marketing/components/email/email-accounts-demo.css
+  s_e28579a043217e::t_f72990f360f57a 3,10,27-32
+apps/marketing/src/features/marketing/components/homepage/HomepageWorkflows.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-311
+apps/marketing/src/features/marketing/components/homepage-email-compose.css
+  s_e28579a043217e::t_f72990f360f57a 43
+apps/web/src/features/block-agent/ui/ToolGroup.tsx
+  s_e28579a043217e::t_f72990f360f57a 18,29-33,157,160-172
+apps/web/src/features/block-call/component/CallRecording/CallRecordingSummary.tsx
+  s_e28579a043217e::t_f72990f360f57a 1,7,9,12-15,32-45,49-53,58
+apps/marketing/src/features/marketing/components/workspace/WorkspaceSidebar.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-17
+apps/web/src/features/block-md/component/InlinePropertyValue.test.tsx
+  s_e28579a043217e::t_f72990f360f57a 41,43-45,48,54,60,62,65,69,73-77,79-88
+apps/marketing/src/features/marketing/core/desktopDownloads.ts
+  s_e28579a043217e::t_f72990f360f57a 22
+apps/marketing/src/features/marketing/views/BenefitPage.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-79
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspace.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-6
+apps/marketing/src/features/marketing/components/DemoDeployDiff.tsx
+  s_e28579a043217e::t_f72990f360f57a 18
+apps/marketing/src/features/marketing/components/paper/PaperFeatureGraphic.tsx
+  s_e28579a043217e::t_f72990f360f57a 1-52
+.sqlx/query-0681c9e1a0c3b446b2286d9e1748ae526168b7575928ce10f7d09508986572a4.json
+  s_e28579a043217e::t_f2fec790fe684b 3,48-52,61-63,75,79
+.sqlx/query-20afc51d5a5844bae80efee2d742bf5b54dd344b31fa089c966ce13f3e937152.json
+  s_e28579a043217e::t_ef41a2ad348095 3,14
+.sqlx/query-28d5f8f62902ef9fa38cfecadf0a73c19bfc6852a788863f58b35a301fb61a29.json
+  s_e28579a043217e::t_2dda0b8a6ddf33 3,16-17,22
+.sqlx/query-2adda9be3b6cfc58230c492316ac03d4b52ca0afb932c0256f6d525c111f73f1.json
+  s_e28579a043217e::t_2746c67996cdb6 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-2c91961617079ed2663dcdec5a3d8e845ef3ad62e45cf053378041581b66b5c8.json
+  s_e28579a043217e::t_6ba642dc6eafe2 3,15-19,28,33
+.sqlx/query-2ddf2a39fd51595b7d4e3e2bc3e0f9fc119bded0a08168a147d960cb26719396.json
+  s_e28579a043217e::t_c8a0a2d5d1931a 1-80
+.sqlx/query-3500068c8149dd1ba745938e54e346485052cd538a0c440fb8ec88f3b049ed7a.json
+  s_e28579a043217e::t_4843e6525e0a1d 3,11-12,17
+.sqlx/query-4ca71721be564657a8c0aa4e136bfc9c937596493228474c6ef4e8471485d66c.json
+  s_e28579a043217e::t_d53efbef26c126 3,18,23,28-32,37,42,47,52,66,76
+.sqlx/query-4e77d12e0fcb82ecd32ac01aab2fbaa5c79baa8882b92071ea4b2bfea883906c.json
+  s_e28579a043217e::t_cb6a0263b6b45b 3,18,23,28-32,37,42,47,52,59,62,69,79
+.sqlx/query-56ae3b60f3bf1d6e08012079cc7cebee77d606da4cf675c36d59685a582d68a3.json
+  s_e28579a043217e::t_674202037fcdbc 3,18,23,28-32,37,42,47,52,68,78
+.sqlx/query-8a8c624e6b80244fc08abc9c7db5110321fdf240f57481cb751b804a8f2958ca.json
+  s_e28579a043217e::t_621cf1626eb0ed 3,18,23,28-32,37,42,47,52,57,82,86
+.sqlx/query-926edb559195082d525acb942fc6e8e666203c27c2d69fe79ffe4a3631930708.json
+  s_e28579a043217e::t_5ef4deeefea291 3,25-27,36
+.sqlx/query-a7e23413a3e68e16f71238afb3970f6f6552884a177dde4e711edca3afee27aa.json
+  s_e28579a043217e::t_fc21053e6aca9e 3,20-24,35,39
+.sqlx/query-ac245a2d200ce337934a54741a47909ace3c4072031574be100285b5cf860039.json
+  s_e28579a043217e::t_81115e998a062a 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-c93d8d9bca4cfb5ed9749efa00c7061237e42f54390ef1c76b7c5ec099e054f3.json
+  s_e28579a043217e::t_efb22d5c888500 1-79
+.sqlx/query-e223304cce2b1e66b76b031e2c82ebeabfb8ccdc220082ff8e5f65b9d72271e1.json
+  s_e28579a043217e::t_086e95cd1a8271 3,18-22,32-33,39,43
+.sqlx/query-e6e9995342cc3e60900a93cecdabb9da2f9ab1ffebf98dacf60c3807be1f6925.json
+  s_e28579a043217e::t_dec04f4b3491f3 3,16-17,24
+.sqlx/query-ff48ac98391df66ae4e9c5b42b475b107d0d75dc2c1f89325d8db18ac7b56259.json
+  s_e28579a043217e::t_e8f9e84c8b71e3 3,19
+Cargo.lock
+  s_e28579a043217e::t_156a825b98ae66 248,359,375,394,527,554,899,1918,1988,2014,2335,4289,4598,4713,4861,4903,4925,8259,8870,10058,10060,12456,12459,12918,12964,12970,15585,17295,17297,17466,17468,20269,21112,21984,21996,23003,23281,23363,23403
+apps/web/src/features/block-call/CLAUDE.md
+  s_e28579a043217e::t_2f06c438fdfbbd 1
+apps/web/src/features/channels-view/components/rail/ChannelLiveCallBadge.tsx
+  s_e28579a043217e::t_4e4c73cebb0a06 1-8,10-54
+apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  s_e28579a043217e::t_8ecfbbdc600bf1 16,33-34,105-106,111-112,196-216,218-226,254-259
+apps/web/src/features/channels-view/components/rail/ChannelRailItems.tsx
+  s_e28579a043217e::t_6263e42ab8ecc5 4,19-20,24,105,123,166,187,200-202,208-217,332
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_e28579a043217e::t_5d8f6b19b949a8 17,26-30,35-40,60-87,123,284-289,291,305,311-319,322,361,376-387,390-393,400-402,421-424,513,568-570,643-709,1287-1386,1420-1454
+apps/web/src/features/channels-view/components/rail/ChannelsRail.tsx
+  s_e28579a043217e::t_360f1a773c8461 104,458-468,470,506,539-551,567-586,605,1117-1138,1141-1143,1149,1159-1162,1169-1183,1186-1197,1390,1394-1395,1397,1403
+apps/web/src/features/channels-view/components/rail/ChannelsRailContext.ts
+  s_e28579a043217e::t_020880a033baba 6-7,176-181,186-187,190-194,208,211
+apps/web/src/features/channels-view/components/rail/SmartTagDialog.test.tsx
+  s_e28579a043217e::t_a6650b357f2ba5 21-23
+apps/web/src/features/channels-view/components/rail/hooks/useChannelLabelActions.ts
+  s_e28579a043217e::t_2dbfbe1483acfa 21,25,40,47,53,61,135-207,226,228-234,237-246,269-295,297-299,301-303,306-325,327-340,342,344-358,361-390,392,398-399,403-414,419,430,445,449-453,479,499-564,576,587,620-621,624-630,656,725-727,731
+apps/web/src/features/channels-view/components/rail/hooks/useChannelSectionNotifications.ts
+  s_e28579a043217e::t_a591ad0ec12720 2,5,7,28,99-100,136-152,160,168,218-219,222-223
+apps/web/src/features/channels-view/components/rail/next/ChannelLabelRows.tsx
+  s_e28579a043217e::t_5ad7ec6b76a80e 10,12,14-15,21-23,25-26,40,42-47,50-58,60-73,77,79-101,103-104,106-109,111-132,136-139,142,144-150,156,160-171,175-180,185-342,353,369,371-384,386-394,398-399,401-411
+apps/web/src/features/channels-view/components/rail/next/ChannelMuteMenu.tsx
+  s_e28579a043217e::t_4bfad8b34ab413 1-60
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.test.ts
+  s_e28579a043217e::t_8b8a6a4dd0f9fd 2-3,39-41,311-381
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.tsx
+  s_e28579a043217e::t_0aa5146330c3a0 68,208
+apps/web/src/features/channels-view/components/rail/next/ChannelSectionHeading.tsx
+  s_e28579a043217e::t_1e4f0fde47c6c2 60,112,119-133,135-143
+apps/web/src/features/channels-view/components/rail/next/ChannelSectionMenu.tsx
+  s_e28579a043217e::t_19ba2ce5d36a6d 17,23,29,55-61,73,89-95,103,169,191-214,221,224,227
+apps/web/src/features/channels-view/components/rail/next/ExpandedChannelsRail.tsx
+  s_e28579a043217e::t_7101c3f93fe1ba 7,9,48,71,75,327,330,349-352,377,522-523,621,870,877,880
+apps/web/src/features/channels-view/components/rail/next/JoinChannelButton.tsx
+  s_e28579a043217e::t_cb324d564c2b5c 1-3,5-33
+apps/web/src/features/channels-view/components/rail/next/ResizableRailSection.tsx
+  s_e28579a043217e::t_6bd10b8642a079 21-22,50-51,165,171-175
+apps/web/src/features/channels-view/components/rail/next/SectionChannelsDialog.tsx
+  s_e28579a043217e::t_d675fe990ddbdf 2,7,15,43,45,47,51,54-55,74,99,105,108,112,130,134-138,153-157,159-173,175-177,185-213,216,222,227-253,255-259,262-263,265,268-372,379
+apps/web/src/features/channels-view/components/rail/next/SectionDialog.tsx
+  s_e28579a043217e::t_fbcd4425ec2ede 2,48,72-109,121-135,138-142,220-226,256-259,291-292,343,345,364-368
+apps/web/src/features/channels-view/components/rail/next/SectionSearchResults.tsx
+  s_e28579a043217e::t_304e85b0a13813 1-15,17-40,42,44-47,49-149
+apps/web/src/features/channels-view/components/rail/next/build-channel-rail-rows.ts
+  s_e28579a043217e::t_7790b51fde719c 65,87,95-96,116-126,131,134-137,250-260,267-283,353-363
+apps/web/src/features/channels-view/components/rail/next/channel-discovery-source.ts
+  s_e28579a043217e::t_e44486016f3534 1-139
+apps/web/src/features/channels-view/components/rail/next/channel-discovery.ts
+  s_e28579a043217e::t_b40bcccb6a4c8f 1-9
+apps/web/src/features/channels-view/components/rail/next/collapsed-unread-channels.ts
+  s_e28579a043217e::t_ba6a630b21f8f1 1-47
+apps/web/src/features/channels-view/components/rail/next/mobile/MobileSectionOptions.tsx
+  s_e28579a043217e::t_61b7b58d12aa05 1-274
+apps/web/src/features/channels-view/components/rail/next/mobile/MobileSectionsView.tsx
+  s_e28579a043217e::t_126f2d9d4b8991 1-280
+apps/web/src/features/channels-view/components/rail/next/mobile/mobile-section-tabs.ts
+  s_e28579a043217e::t_801a04782f6f58 1-49
+apps/web/src/features/channels-view/components/rail/next/mobile/use-mobile-section-actions.ts
+  s_e28579a043217e::t_6a82fd2d4f628f 1-62
+apps/web/src/features/channels-view/core/channel-label-eligibility.test.ts
+  s_e28579a043217e::t_b080b185711106 37-45
+apps/web/src/features/channels-view/core/channel-label-eligibility.ts
+  s_e28579a043217e::t_6ce50ec9b12eaf 18,21,24
+apps/web/src/features/channels-view/core/smart-tags.test.ts
+  s_e28579a043217e::t_9e9e43938c9f40 32-83
+apps/web/src/features/channels-view/core/smart-tags.ts
+  s_e28579a043217e::t_e4988b6dd75891 28-64
+apps/web/src/features/channels-view/persistence.ts
+  s_e28579a043217e::t_dd010abcd483db 101
+apps/web/src/features/channels-view/queries.test.ts
+  s_e28579a043217e::t_6756c93f1dd324 13-20,57,316-352
+apps/web/src/features/channels-view/queries/channel-search-source.test.ts
+  s_e28579a043217e::t_8155414f38e290 7,13-19,30,122-123,202-215,241,530-606
+apps/web/src/features/channels-view/queries/channel-search-source.ts
+  s_e28579a043217e::t_e16cb1d8d77471 18-19,49
+apps/web/src/features/channels-view/types.ts
+  s_e28579a043217e::t_0d44f84ae3126a 18-19
+apps/web/src/features/command/CommandMenu.tsx
+  s_e28579a043217e::t_ead155cefa4dd1 13-16,32,68,470-473,597-603,735-740,747,760-774,1064-1069
+apps/web/src/features/command/act-on-current-selection.test.ts
+  s_e28579a043217e::t_2f920a7fb0d6c4 1-59
+apps/web/src/features/command/act-on-current-selection.ts
+  s_e28579a043217e::t_83c2d0d39e1946 1-16
+apps/web/src/features/command/queries/entity-search.ts
+  s_e28579a043217e::t_5ea72375bade5b 9,135-138,148-149
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_e28579a043217e::t_d60c146393b709 585-617
+apps/web/src/features/command/rank-command-search-items.ts
+  s_e28579a043217e::t_1e2cddaa5f0a16 71-74,108-121,125,136-139
+apps/web/src/features/command/useCommandItems.contacts.test.ts
+  s_e28579a043217e::t_6e49813ce73f04 22-28
+apps/web/src/features/command/useCommandItems.test.ts
+  s_e28579a043217e::t_a3c2c0d58ded63 22-28
+apps/web/src/features/command/useCommandItems.test.tsx
+  s_e28579a043217e::t_a49b8ff468f0d1 35-41
+apps/web/src/features/drive-view/drive-folder-actions.tsx
+  s_e28579a043217e::t_71ec21ce275df1 19,89,119
+apps/web/src/features/drive-view/drive-host-actions.ts
+  s_e28579a043217e::t_4fbad5a0b2db9c 195
+apps/web/src/features/email-compose/browser-test/fixture.tsx
+  s_e28579a043217e::t_54bf84b24eed40 26,367-368
+apps/web/src/features/email-compose/browser-test/sync-status-fixture.tsx
+  s_e28579a043217e::t_10c25260e02b66 1-5,7-9,11-25,27-131
+apps/web/src/features/email-compose/browser-test/sync-status.browser.e2e.ts
+  s_e28579a043217e::t_8db255b92bfed9 1,3-5,7-14,16-20,22-119
+apps/web/src/features/email-compose/components/draft-sync-status.tsx
+  s_e28579a043217e::t_9afc7be5d9c6e5 15-18,21-28,31-57
+apps/web/src/features/email-compose/core/local-draft.ts
+  s_e28579a043217e::t_47fbf61c49f837 58-59
+apps/web/src/features/email-compose/primitives/draft-sync-status.test.ts
+  s_e28579a043217e::t_edc8fbcf55e3aa 8-11,156,164,178-192,194-206,209-235
+apps/web/src/features/email-compose/primitives/draft-sync-status.ts
+  s_e28579a043217e::t_eb4cedddc627c7 1,17-20,48-56,59-67,70-71,73,92-93,99,101,105
+apps/web/src/features/email-compose/views/draft-sync-banner.test.tsx
+  s_e28579a043217e::t_73d388bdd975f2 1-13,15,17-28,30-71,73-89
+apps/web/src/features/email-compose/views/email-compose.test.tsx
+  s_e28579a043217e::t_8b50c41e14b34b 119
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.test.tsx
+  s_e28579a043217e::t_617fcf38ac7ee0 30-47,144-189
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.tsx
+  s_e28579a043217e::t_33e0773877e385 1-5,9,17-18,21,23,25,31,34-36,40-81,83-84,86-90,92,97-98,105-107,112,114,117-126,129-135,137-140
+apps/web/src/features/favorites/FavoriteContextMenu.tsx
+  s_e28579a043217e::t_0df0585e13e0ad 5-8,62-67
+apps/web/src/features/meetings/components/meeting-copy-button.tsx
+  s_e28579a043217e::t_90cb14962e9427 4,12,40-43,50,57-62
+apps/web/src/features/meetings/context/meeting-session-owner.ts
+  s_e28579a043217e::t_69ab44637021ec 7-10,12
+apps/web/src/features/meetings/meeting-route.tsx
+  s_e28579a043217e::t_51d10f443a82aa 98,146,151-152
+apps/web/src/features/meetings/new-meeting-route.tsx
+  s_e28579a043217e::t_dbd842837a040c 91
+apps/web/src/features/meetings/primitives/meeting-session-owner.ts
+  s_e28579a043217e::t_45670756de7e4f 117-131
+apps/web/src/features/meetings/views/meeting-media-setup.tsx
+  s_e28579a043217e::t_b844bfd7315996 3,60-66
+apps/web/src/features/meetings/views/meeting-page.tsx
+  s_e28579a043217e::t_fe7500769ea6a3 21-22,54,200-201
+apps/web/src/features/next-soup/actions/make-mute-action.ts
+  s_e28579a043217e::t_2370748f9f7477 3-4,8,11,32-35,38-40,42-64,73-77,80-85,88-95,99,139-155,163
+apps/web/src/features/next-soup/actions/make-share-action.test.ts
+  s_e28579a043217e::t_be190327cbeaf5 1-105
+apps/web/src/features/next-soup/actions/make-share-action.ts
+  s_e28579a043217e::t_cd34ce92d59b27 1,4,7,9,12-13,23-32,36,41,43,45-60
+apps/web/src/features/next-soup/actions/use-entity-action-hotkeys.test.ts
+  s_e28579a043217e::t_5b57fad0d06c68 55-57
+apps/web/src/features/next-soup/actions/use-entity-action-hotkeys.ts
+  s_e28579a043217e::t_82f9d9a4d2c61b 44,131,545-571,746-749,753,763
+apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  s_e28579a043217e::t_ec46712e4183f1 536,568-580,639-645,723-735,739-755,757-759
+apps/web/src/features/notifications/components/NotificationMuteMenu.tsx
+  s_e28579a043217e::t_c06d64fe9f78c5 1-161
+apps/web/src/features/notifications/components/NotificationReadMarker.tsx
+  s_e28579a043217e::t_decc74bbf2fe11 1,7,40,44-61,155,161-174
+apps/web/src/features/notifications/core/snooze.ts
+  s_e28579a043217e::t_9f1d67b8356f93 50-53,55
+apps/web/src/features/notifications/primitives/create-message-read-visibility.ts
+  s_e28579a043217e::t_f3a22e0b4842de 1,30-32,47
+apps/web/src/features/notifications/tests/debounced-notification-read-marker.test.tsx
+  s_e28579a043217e::t_6bab9fc1b9deab 1-8,10,168-232
+apps/web/src/features/projects/components/project-row-menu.tsx
+  s_e28579a043217e::t_4762324c0c3423 6,43-44,116,136-142
+apps/web/src/features/projects/core/project-menu.test.ts
+  s_e28579a043217e::t_8f7f4d24b23857 4-10,52-62,66
+apps/web/src/features/projects/core/project-menu.ts
+  s_e28579a043217e::t_12a412d5dc292a 6,24,34-39
+apps/web/src/features/projects/views/projects-collection.tsx
+  s_e28579a043217e::t_8461f5f187fa69 29,313-315
+apps/web/src/features/property/README.md
+  s_e28579a043217e::t_fe95a67a315b81 114-119,182-191
+apps/web/src/features/property/component/EntityLinkPill.test.tsx
+  s_e28579a043217e::t_d5f5ffd70445b2 1-139
+apps/web/src/features/property/component/EntityLinkPill.tsx
+  s_e28579a043217e::t_4ea393f7eaf150 1-9,11-45,47-50,52-100
+apps/web/src/features/property/component/PropertyValuePill.tsx
+  s_e28579a043217e::t_00b9484721f033 1,8,48-52,140-154
+apps/web/src/features/property/component/SourceLinkPill.tsx
+  s_e28579a043217e::t_21549f921dd305 3,6,18-19,21-30,32-33
+apps/web/src/features/property/editors/popover/EditorPopover.tsx
+  s_e28579a043217e::t_862586b6f64261 51-55
+apps/web/src/features/property/editors/popover/EntityEditor.test.tsx
+  s_e28579a043217e::t_5cf34bbf365945 9,212-242,262-274
+apps/web/src/features/property/editors/selectors/PropertyEntitySelector.tsx
+  s_e28579a043217e::t_27e76afc5d2a6f 500-504,506,509,535,569-570
+apps/web/src/features/property/side-panel/properties/EntityCollectionProperty.tsx
+  s_e28579a043217e::t_b8259c0e81a7de 52-55,147-149,172-173,259-262,283-290,393,433-435,447
+apps/web/src/features/property/side-panel/properties/EntityPropertiesSection.tsx
+  s_e28579a043217e::t_4c9bfede917d69 389,391-401,403-407,409-413,635-640,642-648,827-830,853-857,891-892,908,919-920,955-956,983
+apps/web/src/features/property/side-panel/properties/PropertyRowActions.tsx
+  s_e28579a043217e::t_81ec86058324e1 14,19,22-23,29-40,53-55,60-64,68-73,80,83,134-135,138-139,145,148,153-187,192-199,209,227-234,243,254
+apps/web/src/features/reviews-view/components/ReviewContextMenu.tsx
+  s_e28579a043217e::t_5730aac4443949 4-7,15,17,38-46
+apps/web/src/features/reviews-view/components/ReviewsSidebar.tsx
+  s_e28579a043217e::t_5c3827dabb908e 21-24,33,108-118
+apps/web/src/features/sharing/global-share-modal/shareable-entity.ts
+  s_e28579a043217e::t_6d322a14fe0d5b 42-45
+apps/web/src/features/sharing/global-share-modal/tests/shareable-entity.test.ts
+  s_e28579a043217e::t_ac3780a1ee7a09 1,3,22-41
+apps/web/src/features/sharing/share-delivery/bulk-share.tsx
+  s_e28579a043217e::t_e1bddf5efed512 1-94
+apps/web/src/features/sharing/share-delivery/components/share-status.tsx
+  s_e28579a043217e::t_5d09356af825fc 1-119
+apps/web/src/features/sharing/share-delivery/context/share-delivery-context.ts
+  s_e28579a043217e::t_a857b114affa1d 1-8,10-16,18-20,22,24-40
+apps/web/src/features/sharing/share-delivery/core/delivery-plan.test.ts
+  s_e28579a043217e::t_4c3e8609d5f9bd 1-480
+apps/web/src/features/sharing/share-delivery/core/delivery-plan.ts
+  s_e28579a043217e::t_5847f01f5c33cd 1-386
+apps/web/src/features/sharing/share-delivery/core/share-item.test.ts
+  s_e28579a043217e::t_136338e776ee7e 1-8,10-18,20,22-30,32-199
+apps/web/src/features/sharing/share-delivery/core/share-item.ts
+  s_e28579a043217e::t_dfdd64df23c7b1 1-189
+apps/web/src/features/sharing/share-delivery/primitives/create-share-form.test.ts
+  s_e28579a043217e::t_6c58ee875b7af2 1-599
+apps/web/src/features/sharing/share-delivery/primitives/create-share-form.ts
+  s_e28579a043217e::t_d3901c3ef08343 1-350
+apps/web/src/features/sharing/share-delivery/queries/channel-access.test.ts
+  s_e28579a043217e::t_4b3c9cefa8f65a 1-337
+apps/web/src/features/sharing/share-delivery/queries/channel-access.ts
+  s_e28579a043217e::t_e93980ca18511d 1-130
+apps/web/src/features/sharing/share-delivery/share-delivery.test.ts
+  s_e28579a043217e::t_35db5893791076 1-416
+apps/web/src/features/sharing/share-delivery/share-delivery.ts
+  s_e28579a043217e::t_419874d3fbb75f 1-29,31-43,45-47,49-56,58-165
+apps/web/src/features/sharing/share-delivery/views/bulk-share-view.test.tsx
+  s_e28579a043217e::t_55cb69204d2354 1-364
+apps/web/src/features/sharing/share-delivery/views/bulk-share-view.tsx
+  s_e28579a043217e::t_0af17ed2676635 1-246
+apps/web/src/features/soup/SoupEntityActionDrawer.tsx
+  s_e28579a043217e::t_eec5dd72f32719 4-7,9,17,37-45,51-54,74-114,116-128,130
+apps/web/src/features/soup/SoupEntityActionsMenu.test.tsx
+  s_e28579a043217e::t_12ee37fd678f97 6-8,11,49-54,80-88,128-132,171-246
+apps/web/src/features/soup/SoupEntityActionsMenu.tsx
+  s_e28579a043217e::t_3edc3d3aed9055 10,74-94
+apps/web/src/features/soup/createSoupEntityActions.test.ts
+  s_e28579a043217e::t_1f0f8390d56140 6-9,11,23-24,77,81-83,108-114,143-191
+apps/web/src/features/soup/createSoupEntityActions.ts
+  s_e28579a043217e::t_0571798aa71624 45-48,57,63,72,267-270,280-289,293-294,297,307,316-335,401,559,561-566
+apps/web/src/index.css
+  s_e28579a043217e::t_3623b9161c15c3 662-665
+apps/web/src/lib/analytics/analytics.test.ts
+  s_e28579a043217e::t_c4df7fb4bc281c 17,31,47,166-191
+apps/web/src/lib/analytics/analytics.ts
+  s_e28579a043217e::t_d422f4f66212c7 11-15,21,57-61,171-182,200-201,538
+apps/web/src/lib/analytics/app-events.ts
+  s_e28579a043217e::t_7f62aa191a23a3 187-197
+apps/web/src/lib/core/agent-session/AgentSession.test.ts
+  s_e28579a043217e::t_69cf28fa46167d 31-47,186,333-373
+apps/web/src/lib/core/agent-session/AgentSession.ts
+  s_e28579a043217e::t_19f315f3b6ee6a 66,438-442,485-495
+apps/web/src/lib/core/agent-session/session-activity.test.ts
+  s_e28579a043217e::t_b7ad078150a725 1-36
+apps/web/src/lib/core/agent-session/session-activity.ts
+  s_e28579a043217e::t_46625448fc9421 1-41
+apps/web/src/lib/core/agent-session/tests/device.ts
+  s_e28579a043217e::t_fe13e005df518a 1-6,8,10,12-16,18-41
+apps/web/src/lib/core/agent-session/ui-client.test.ts
+  s_e28579a043217e::t_9fa10a6bd9c701 1-254
+apps/web/src/lib/core/agent-session/ui-client.ts
+  s_e28579a043217e::t_1f8a84cbb5cc39 1-17,19-25,27-180
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx
+  s_e28579a043217e::t_c60d1487da4e61 10,27,40-42,45
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/app-link-opener.ts
+  s_e28579a043217e::t_64556f2c9cace0 1-14
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/links.browser.e2e.ts
+  s_e28579a043217e::t_82622d1b70c140 41-42,46,50-53,85-107
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/links.tsx
+  s_e28579a043217e::t_52f200e12bc8dc 58
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/PullRequestMention.test.tsx
+  s_e28579a043217e::t_bb1ffdaa9edd4c 2,10-12,18-20,42-45,105-111,291-331
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/PullRequestMention.tsx
+  s_e28579a043217e::t_3d595c7cd9f1af 6,9,16,20,40,46,281-327,375,502
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_e28579a043217e::t_87eb0b794b7861 707-748
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_e28579a043217e::t_d3955631393935 30,154-157,719-721
+apps/web/src/lib/core/component/LexicalMarkdown/plugins/links/linksPlugin.test.ts
+  s_e28579a043217e::t_75417072a64628 257-289
+apps/web/src/lib/core/component/SendAsGroupToggle.test.tsx
+  s_e28579a043217e::t_a2cd2d3efc965a 1-42
+apps/web/src/lib/core/component/SendAsGroupToggle.tsx
+  s_e28579a043217e::t_1bc34a07969b18 1,3-41
+apps/web/src/lib/core/component/ShareComposeLayout.tsx
+  s_e28579a043217e::t_4f7b776e477a98 1-3,5-54,56-106
+apps/web/src/lib/core/component/ShareRecipientField.tsx
+  s_e28579a043217e::t_5201aa6a283be3 1-31
+apps/web/src/lib/core/component/TopBar/ShareButton.tsx
+  s_e28579a043217e::t_bde4b1ecd40db3 167,317,320
+apps/web/src/lib/core/component/TopBar/ShareDialog.tsx
+  s_e28579a043217e::t_3012966357648e 1-29
+apps/web/src/lib/core/component/TopBar/ShareDrawer.tsx
+  s_e28579a043217e::t_c777a8dfc5c172 1-3,5-7,11-16,18-36,40-44,46-51,55-60,62-70
+apps/web/src/lib/core/component/TopBar/shareModal.test.tsx
+  s_e28579a043217e::t_cca506eac0310d 15-17
+apps/web/src/lib/core/component/UserGroup.tsx
+  s_e28579a043217e::t_d1d5ef8c8df752 13-14,44-48
+apps/web/src/lib/core/component/media/background-camera-preview.tsx
+  s_e28579a043217e::t_886792c7265a38 1-41
+apps/web/src/lib/core/component/media/media-background-picker.tsx
+  s_e28579a043217e::t_9f5ad9e4efea21 4-6,8-9,12,14,16-33,84-105,107-119,123-124,126-132
+apps/web/src/lib/core/component/media/recent-background-images.tsx
+  s_e28579a043217e::t_d673019df86342 1-125
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_e28579a043217e::t_f9ed7772eaf94f 175-184,843,851-857,885-894
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_e28579a043217e::t_fb57990c5b8c89 64-66,697-706
+apps/web/src/lib/core/hotkey/tokens.ts
+  s_e28579a043217e::t_a3b920caa57be9 126-136
+apps/web/src/lib/core/hotkey/types.ts
+  s_e28579a043217e::t_b0d0a50397f6d8 96,420,429
+apps/web/src/lib/core/media/primitives/create-background-camera-preview.ts
+  s_e28579a043217e::t_db34945716b291 1-107
+apps/web/src/lib/core/media/recent-background-images.ts
+  s_e28579a043217e::t_11219cb03451bc 1-60
+apps/web/src/lib/core/media/recent-background-state.ts
+  s_e28579a043217e::t_a5c84f57412d0f 1-85
+apps/web/src/lib/core/orchestrator.test.tsx
+  s_e28579a043217e::t_37e6951622ef27 2,73-145
+apps/web/src/lib/core/orchestrator.tsx
+  s_e28579a043217e::t_d47ba005fa3728 11,45-49,104,115-118,327,329-334,340,384-386,390-391,411,418,422-426,433-437,454-455,459,476,505,514-538,542-545,547-548,555-556,558-560
+apps/web/src/lib/core/util/channels.test.ts
+  s_e28579a043217e::t_da51f9c31cd4bd 1,3,5,11,17-19,106-194
+apps/web/src/lib/core/util/channels.ts
+  s_e28579a043217e::t_0d8205d4213e59 7,28-31,60,64-65,69-73,75-76,105-108,111,113-114,117-118,120,124,126,128-131,135,139-140
+apps/web/src/lib/core/util/debounce.ts
+  s_e28579a043217e::t_6702ade7f591a9 6,26-45
+apps/web/src/lib/core/util/telemetryUrl.test.ts
+  s_e28579a043217e::t_e3362fc3aa0b4c 5,68-100
+apps/web/src/lib/core/util/telemetryUrl.ts
+  s_e28579a043217e::t_c3cded057f8f3f 4-5,7,27-38
+apps/web/src/lib/design/empty-state-call-chat.svg
+  s_e28579a043217e::t_975d58d4c0014c 1
+apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
+  s_e28579a043217e::t_0085b41a82840e 936-939
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.test.ts
+  s_e28579a043217e::t_cb66a347dfe33d 5768-5771,5831-5832,6082-6095,6097-6099,6101-6120,6132,6136-6140,6142-6143,6146,6152,6154,6156-6179,6181-6192
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.ts
+  s_e28579a043217e::t_0dd5f8ed17c420 470-471,473-476
+apps/web/src/lib/i18n/browser-test/menus.tsx
+  s_e28579a043217e::t_3ed87fb5be22e7 45
+apps/web/src/lib/i18n/locales/en.ts
+  s_e28579a043217e::t_47dd3033795e56 3,37
+apps/web/src/lib/i18n/locales/en/agent-navigation.ts
+  s_e28579a043217e::t_628e4f35131270 1-8
+apps/web/src/lib/i18n/locales/en/agent-work.ts
+  s_e28579a043217e::t_a79b1fb87e71a3 8-69
+apps/web/src/lib/i18n/locales/en/channel-sections.ts
+  s_e28579a043217e::t_75be2bbf365251 5-27,36,38,47-49
+apps/web/src/lib/i18n/locales/en/command-menu.ts
+  s_e28579a043217e::t_46d3f8233ad730 26
+apps/web/src/lib/i18n/locales/en/entity-actions.ts
+  s_e28579a043217e::t_211af61e94bc87 17,40,50-54,72-75,288
+apps/web/src/lib/i18n/locales/en/nav.ts
+  s_e28579a043217e::t_e5747005b78e6e 31,39-42
+apps/web/src/lib/i18n/locales/en/tabs.ts
+  s_e28579a043217e::t_9e24afe2f56037 8-9
+apps/web/src/lib/queries/agent-session/realtime-protocol.ts
+  s_e28579a043217e::t_0b2cd07c64bee0 7-12,40-45
+apps/web/src/lib/queries/channel-labels/channel-labels.test.tsx
+  s_e28579a043217e::t_b0e511d16995eb 37-40
+apps/web/src/lib/queries/channel-labels/channel-labels.ts
+  s_e28579a043217e::t_7737dca9a93e8a 2-5,21-28,35-36,39,41,56,62-63,81-87,109-115,122-123,126-127,131,147,157-158,186,202,217,246,262,278-286,340,352,360,375,387,401
+apps/web/src/lib/queries/channel-labels/keys.ts
+  s_e28579a043217e::t_557320d682f5cb 4-8,13-24
+apps/web/src/lib/queries/channel/by-ids.ts
+  s_e28579a043217e::t_8703f14a55ad91 9,112-117
+apps/web/src/lib/queries/channel/get-or-create-dm.ts
+  s_e28579a043217e::t_228daf9256f299 97,116-120,136-137
+apps/web/src/lib/queries/channel/tests/get-or-create-dm.test.tsx
+  s_e28579a043217e::t_fe0f2e87881931 1-87
+apps/web/src/lib/queries/email/draft-queue.test.ts
+  s_e28579a043217e::t_86e4b33f878b7f 5,23,48,101-109,605-618
+apps/web/src/lib/queries/email/draft-queue.ts
+  s_e28579a043217e::t_f69cac70f98180 370-377,418-427,429-430,439
+apps/web/src/lib/queries/email/draft-sync.fuzz.test.ts
+  s_e28579a043217e::t_240796b1c73dcb 1-299
+apps/web/src/lib/queries/email/draft-sync.scenarios.test.ts
+  s_e28579a043217e::t_96c71c5e3c04d5 1-675
+apps/web/src/lib/queries/email/local-drafts.test.ts
+  s_e28579a043217e::t_2109d83151db84 39-46,575,606,663,666-684,1040
+apps/web/src/lib/queries/email/local-drafts.ts
+  s_e28579a043217e::t_04b9ed3aa85a78 546-563,567,580,582,594-596,605
+apps/web/src/lib/queries/email/tests/draft-sync-queue.ts
+  s_e28579a043217e::t_0dde397713cbe4 1-12,14-25,27-31,33-39,41-422
+apps/web/src/lib/queries/email/tests/draft-sync-server.ts
+  s_e28579a043217e::t_158664521abb2a 1-370
+apps/web/src/lib/queries/email/tests/draft-sync-shared.ts
+  s_e28579a043217e::t_a9e77dd373d0ea 1-7
+apps/web/src/lib/queries/email/tests/draft-sync-world.ts
+  s_e28579a043217e::t_0207e057209b0d 1-735
+apps/web/src/lib/queries/messages/mutations.ts
+  s_e28579a043217e::t_725538eb534431 7,439-454
+apps/web/src/lib/queries/messages/tests/mutations.test.tsx
+  s_e28579a043217e::t_a6e18ca9804fdf 10-18,23,46-47,86,89,825-938
+apps/web/src/lib/queries/sync/use-query-sync.ts
+  s_e28579a043217e::t_db1489e5dac474 2,13,19,182-188
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_e28579a043217e::t_0b1779a6994ce8 58,77,4049-4108
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRow.ts
+  s_e28579a043217e::t_84256125763432 8,24-25
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRowAgentVerb.ts
+  s_e28579a043217e::t_54aed506eb36e2 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOf.ts
+  s_e28579a043217e::t_108a9c73235b83 8,13-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOfClientId.ts
+  s_e28579a043217e::t_d0cceefd660800 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/createAgentSessionRequest.ts
+  s_e28579a043217e::t_6eebad21145f29 14,82-87
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/createAgentSessionRequestPromptClientId.ts
+  s_e28579a043217e::t_ae91cc9075a28e 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_e28579a043217e::t_90bd02676cfe6c 11,183,197,326,476-484
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/openInApp.ts
+  s_e28579a043217e::t_9a622266ed8a97 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcome.ts
+  s_e28579a043217e::t_96d6c95c58649e 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOf.ts
+  s_e28579a043217e::t_f72760b0917a5d 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFive.ts
+  s_e28579a043217e::t_56d6e9eeadda65 1-6,8-9,11-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFiveStatus.ts
+  s_e28579a043217e::t_e9fe010dcad313 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfStatus.ts
+  s_e28579a043217e::t_05a562d824ce3f 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThree.ts
+  s_e28579a043217e::t_48d805da4cf368 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThreeStatus.ts
+  s_e28579a043217e::t_c5ac77447ceb35 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiDeclineReason.ts
+  s_e28579a043217e::t_6b1dd8b3ac6066 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiPlacement.ts
+  s_e28579a043217e::t_81e5c62b76ae2e 1-17
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e28579a043217e::t_8ae0c269e4d1cb 3520-3565,3909-3912,5737-5741,5831-5835,6972-6991,8318-8374
+apps/web/src/lib/service-clients/service-auth/client.ts
+  s_e28579a043217e::t_96761d90127100 382-385
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_e28579a043217e::t_cd86ec9d01a93c 4539-4543,4555
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_e28579a043217e::t_9ba42a338ef3ec 3949-3958
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/aiFeature.ts
+  s_e28579a043217e::t_87550ac5bd8fa7 29
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_e28579a043217e::t_abaa57adcf9c38 12138-12139,14541-14542,18730,20687-20690
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_e28579a043217e::t_4c3f0495824344 7027,7031,8269,11665,11729-11738,12024,13652,13695-13704,15409,15433-15438,15890,16613,16789-16794
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_e28579a043217e::t_394ee3a5fcad89 3556
+apps/web/src/lib/service-clients/service-connection/websocket.ts
+  s_e28579a043217e::t_dbbded87e8f292 27-28
+apps/web/src/lib/service-clients/service-storage/channel-labels.ts
+  s_e28579a043217e::t_cd8d03a79cf8e9 1-69
+apps/web/src/lib/service-clients/service-storage/client.ts
+  s_e28579a043217e::t_b97905a741fb16 31,2810-2811
+apps/web/src/lib/service-clients/service-storage/generated/schemas/channelLabel.ts
+  s_e28579a043217e::t_0873e1effbfdfe 7,14-17,20,22,26-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/channelLabelExplicitChannelIds.ts
+  s_e28579a043217e::t_acad68e041f8a8 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createChannelSectionParams.ts
+  s_e28579a043217e::t_ac12b3588cc95e 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/deleteChannelSectionParams.ts
+  s_e28579a043217e::t_af3640470da429 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_e28579a043217e::t_62e054ec2ede10 492,698,859,1908,2274,2508,2600,3146
+apps/web/src/lib/service-clients/service-storage/generated/schemas/listChannelSectionsParams.ts
+  s_e28579a043217e::t_d57854834126e7 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/previewChannelSectionParams.ts
+  s_e28579a043217e::t_398bd3deb824b2 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/setChannelSectionParams.ts
+  s_e28579a043217e::t_feefddbc8e86ec 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagChannelMatch.ts
+  s_e28579a043217e::t_0ceb0f2d33a469 7,15-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagChannelMatchIsParticipant.ts
+  s_e28579a043217e::t_1adff891dc0507 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagPreview.ts
+  s_e28579a043217e::t_dae4092be6bee9 15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateChannelSectionParams.ts
+  s_e28579a043217e::t_ce9602cebd7c62 1-14
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_e28579a043217e::t_4c260851814788 4357,4362,4367-4372,4413,4478,4483,4486-4491,4526,4585-4590,4601,4681,4686,4689-5090,5125
+apps/web/src/lib/service-clients/service-storage/graphql-mutation-retry.test.ts
+  s_e28579a043217e::t_d9773767f15bda 86-155
+apps/web/src/lib/service-clients/service-storage/graphql-mutation-retry.ts
+  s_e28579a043217e::t_e0de6c3c207a6b 2,5-32,34-58
+apps/web/src/lib/service-clients/service-storage/graphql/agent-session-activity-appended.graphql
+  s_e28579a043217e::t_cebea85391fce9 1-11
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_e28579a043217e::t_527f81bfd14668 3599-3605,25917
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_e28579a043217e::t_14797e1a9af7ed 5028-5539,31719,31733,31741,31748-31755,54499-54502,54524
+apps/web/src/lib/split-router/index.ts
+  s_e28579a043217e::t_a95694ce107d2e 58
+apps/web/src/routes/app-router-view.tsx
+  s_e28579a043217e::t_b13ca4fba6f63e 38,230-234,240,500-528
+apps/web/src/routes/routes.ts
+  s_e28579a043217e::t_9f86b54f3e851d 50-55,242-286,288,310,326,342,358,371,380,423,434,445,457,471,479,519,556,563,571,579,588,597,611,622,640,654,661,675,686,702,709,716,730,738,748,761,774,782,794,805,817,837,910,923,931,942,1011-1013
+apps/web/src/vite-env.d.ts
+  s_e28579a043217e::t_f3e639f316195e 30
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/AudioOutputSelection.kt
+  s_e28579a043217e::t_4e8cc9472094ef 1-7
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/CallPlugin.kt
+  s_e28579a043217e::t_63db642d64edec 35-36,49,75-96
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/Calls.kt
+  s_e28579a043217e::t_8c3f5e6c24956a 8,10,87-88,113-206,488-495,502,641-649
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/TelecomService.kt
+  s_e28579a043217e::t_7ff665ae4a9360 40-41,50-61,63-71
+apps/web/tauri/callkit_plugin/build.rs
+  s_e28579a043217e::t_a4355587abbfac 19-21
+apps/web/tauri/callkit_plugin/ios/Sources/CallAudioRouteController.swift
+  s_e28579a043217e::t_6868c9227b4ef1 44,95-178,182,306-310
+apps/web/tauri/callkit_plugin/ios/Sources/CallKitPlugin.swift
+  s_e28579a043217e::t_4a5244d002b2a5 27-35,62,288-316,515-517
+apps/web/tauri/callkit_plugin/ios/Sources/NativeLiveKitCallSession.swift
+  s_e28579a043217e::t_6310c9738946f0 62-73,137
+apps/web/tauri/callkit_plugin/permissions/audio-output.toml
+  s_e28579a043217e::t_312a80e9773213 1-11
+apps/web/tauri/callkit_plugin/src/android.rs
+  s_e28579a043217e::t_1c9839f86413a4 49,80,254-273
+apps/web/tauri/callkit_plugin/src/lib.rs
+  s_e28579a043217e::t_19b28faa46b196 39-41
+apps/web/tauri/src-tauri/capabilities/mobile.json
+  s_e28579a043217e::t_09b57999020267 11
+apps/web/tests/functional/whatsapp-linked.spec.ts
+  s_e28579a043217e::t_3c3f322016a3be 1436-1439
+bun.lock
+  s_e28579a043217e::t_ceb05107871e51 30,39,47,1189,1373-1374,1927-1928,1943-1944,1963-1966,2089-2090,2171-2172,2271-2272,2277-2278,2303-2304,2467-2468,2611-2614,2629-2640,2863-2864,2867-2868,2923-2924,2943-2946,2963-2964,2979-2980,3233-3234,3251-3252,3255-3256,3263-3288,3291-3294,3313-3352,3355-3366,3369-3376,3379-3380,3537-3538,3573,3681-3688,3701-3712,3959-3962,4045-4046,4109-4110,4115-4116,4253,4337-4338,4391-4392,4585-4586,4663-4664,4691-4728,4741-4742,4759-4760,4809-4810,4981-4982,4997-4998,5175-5176,5185-5186,5259-5262
+crates/activity/AGENTS.md
+  s_e28579a043217e::t_9c9e1849212fd2 66-69
+crates/activity/src/domain/announcements.rs
+  s_e28579a043217e::t_375ac8b254abff 154-175
+crates/activity/src/domain/announcements/test.rs
+  s_e28579a043217e::t_6a9201bd0f8b69 274-299
+crates/activity/src/domain/events.rs
+  s_e28579a043217e::t_447d5688a72c6c 32-34,60,81-84,109-114,126,135-136,180
+crates/activity/src/domain/events/test.rs
+  s_e28579a043217e::t_934163c276f798 48,60,74
+crates/activity/src/domain/models.rs
+  s_e28579a043217e::t_77b7d6aeb53526 423-424,500-501,522,524-526,619
+crates/activity/src/domain/realtime.rs
+  s_e28579a043217e::t_7796406c9648a5 20,141,147,152,156-161,205-213
+crates/activity/src/domain/realtime/test.rs
+  s_e28579a043217e::t_96b58c167232cf 36,55-76
+crates/activity/src/domain/service/test.rs
+  s_e28579a043217e::t_dad2756422266a 113
+crates/activity/src/inbound/kafka_consumer.rs
+  s_e28579a043217e::t_8d136ee485725d 78-83
+crates/activity/src/inbound/toolset/test.rs
+  s_e28579a043217e::t_f1fe6198711b94 128
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_e28579a043217e::t_b9afd735512886 49,61,75,78,90,126,176-179,211,228,290,427
+crates/activity/src/outbound/pg_activity_repo/agent_activity.rs
+  s_e28579a043217e::t_67f77ccbd40199 2,22-23,26-34
+crates/activity/src/outbound/pg_activity_repo/entity_history.rs
+  s_e28579a043217e::t_d61e29effc7b5b 25,31
+crates/activity/src/outbound/pg_activity_repo/team_feed.rs
+  s_e28579a043217e::t_267829c5a5fb5f 42,62
+crates/activity/src/outbound/pg_activity_repo/team_feed.sql
+  s_e28579a043217e::t_c6a17fe4bcca86 90,124,137
+crates/activity/src/outbound/pg_activity_repo/test.rs
+  s_e28579a043217e::t_546fb28903955a 12-51,1071,1085-1143
+crates/agent/src/agent_loop.rs
+  s_e28579a043217e::t_dd8cc91cf60ac5 11,13,398-412,415,427-428
+crates/agent/src/test/agent_loop/test_eager_tools.rs
+  s_e28579a043217e::t_d68e6a012861c3 5
+crates/agent/src/test/agent_loop/test_tool_search.rs
+  s_e28579a043217e::t_731a4c6fef5f05 29-32,62-66,253-272,277-354
+crates/agent/src/tool_adapter.rs
+  s_e28579a043217e::t_9c8f7bf1dc78d5 5,202-207,215,217-226,235
+crates/agent_code_mode/AGENTS.md
+  s_e28579a043217e::t_5e57bff9a22a2b 57-74
+crates/agent_code_mode/Cargo.toml
+  s_e28579a043217e::t_12139f794b6c79 29,45
+crates/agent_code_mode/SKILL.md
+  s_e28579a043217e::t_461547d56d95dd 62
+crates/agent_code_mode/src/domain.rs
+  s_e28579a043217e::t_6575a53d97503f 21-22
+crates/agent_code_mode/src/domain/models.rs
+  s_e28579a043217e::t_5bb8a51e614122 168-171
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_e28579a043217e::t_a6b367e05a9b03 986,1176
+crates/agent_code_mode/src/domain/service.rs
+  s_e28579a043217e::t_f77ecfc32006ae 364-398
+crates/agent_code_mode/src/domain/ui_commands.rs
+  s_e28579a043217e::t_fca763f3efca95 1-443
+crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json
+  s_e28579a043217e::t_4c84de87f04b1c 1-146
+crates/agent_code_mode/src/domain/ui_commands/routes.rs
+  s_e28579a043217e::t_c77e75f71ed751 1-9,11-16,18-21,23-35,38-43,46-54,57-61,64-68,70-74,77-166,169-174,177-189,192-213,216-218,221-227,230-234
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_e28579a043217e::t_2c93a673478c57 1-514
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_e28579a043217e::t_09216a672da921 3-6,35,46,54,67,101-104,154-156,228-249,471-473
+crates/agent_code_mode/src/inbound/axum_router/test.rs
+  s_e28579a043217e::t_67e60eff1014e6 1-8
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_e28579a043217e::t_3d1651433ad2b9 5
+crates/agent_correlation/AGENTS.md
+  s_e28579a043217e::t_0677948f5b337f 14-18,20,40-42
+crates/agent_correlation/Cargo.toml
+  s_e28579a043217e::t_37e2a897429ec9 20
+crates/agent_correlation/src/context.rs
+  s_e28579a043217e::t_e446ca7165e12e 3,13-15,33-37,46,48-62,66,74-77,86-87,121
+crates/agent_correlation/src/context/test.rs
+  s_e28579a043217e::t_ffe75f298404e7 1,3-24
+crates/agent_correlation/src/inbound.rs
+  s_e28579a043217e::t_4e3b1ddc1065d2 44-45,62-63,91-100,172
+crates/agent_correlation/src/inbound/test.rs
+  s_e28579a043217e::t_7aca58aef450ec 60-61,66-70,83,88,90,97-110
+crates/agent_correlation/src/lib.rs
+  s_e28579a043217e::t_c797962425f409 11-12
+crates/agent_correlation/src/verb.rs
+  s_e28579a043217e::t_9e690f1f9cc046 1-102
+crates/agent_egress/AGENTS.md
+  s_e28579a043217e::t_8e11d7982a9036 83-87
+crates/agent_egress/src/domain/approval.rs
+  s_e28579a043217e::t_1844548fc8109c 77-100,190-192
+crates/agent_egress/src/domain/approval/test.rs
+  s_e28579a043217e::t_03b753e1daa010 111,427,501-531,617,739
+crates/agent_egress/src/domain/model.rs
+  s_e28579a043217e::t_b9f21668e7860a 262-276
+crates/agent_egress/src/domain/service.rs
+  s_e28579a043217e::t_990f2f8133c312 383-389,408-411,422
+crates/agent_egress/src/domain/service/actor.rs
+  s_e28579a043217e::t_0c0d11b2a4ca23 223-224,232,234,250-252
+crates/agent_egress/src/domain/service/test.rs
+  s_e28579a043217e::t_a3eb4f59874323 1304,1461-1511
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_e28579a043217e::t_64e5cb4d355431 390-426
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_e28579a043217e::t_9e5ec07137fcac 8,37,43-46,52,66-67,111
+crates/agent_egress/src/outbound/actor_mcp/test.rs
+  s_e28579a043217e::t_d3e60d050d703b 51
+crates/agent_egress/src/outbound/custom_mcp.rs
+  s_e28579a043217e::t_fb868e75f33f76 19,40,49-55,124
+crates/agent_egress/src/outbound/custom_mcp/test.rs
+  s_e28579a043217e::t_7471bd90acf301 139,168,187,210,239,252,271-277
+crates/agent_egress/src/outbound/forwarder.rs
+  s_e28579a043217e::t_f2b69995057b95 9,17,24,26-29,37-38,46,66-67,84-86
+crates/agent_egress/src/outbound/forwarder/test.rs
+  s_e28579a043217e::t_d7bfb8d1f17804 1-67
+crates/agent_harness/AGENTS.md
+  s_e28579a043217e::t_d685d161f8697a 108-127,134-136
+crates/agent_harness/Cargo.toml
+  s_e28579a043217e::t_05adb0e88faee9 82,103
+crates/agent_harness/src/domain/model.rs
+  s_e28579a043217e::t_e97efd74f7f22b 562-564,698,715
+crates/agent_harness/src/domain/queue.rs
+  s_e28579a043217e::t_16d7e14aeb316c 31,65-66,209,222
+crates/agent_harness/src/domain/queue/test.rs
+  s_e28579a043217e::t_cccbe8fc2ff7c7 15,138
+crates/agent_harness/src/domain/service.rs
+  s_e28579a043217e::t_d15cf0c90fbe66 32-34,217-219,418,449-463
+crates/agent_harness/src/domain/service/deliver.rs
+  s_e28579a043217e::t_2e9882a2a29f7d 153,155,160,164,169,339,410
+crates/agent_harness/src/domain/service/external_replies.rs
+  s_e28579a043217e::t_25d7aee9e894dc 175,184-186
+crates/agent_harness/src/domain/service/idle.rs
+  s_e28579a043217e::t_e539041fc6516e 12,15-86,142-144,150,153-155,158-163,167-193,195,197-198,211-212,215,217-220,224,226-232,235,238-242,245,248-249,252,259,263-264
+crates/agent_harness/src/domain/service/open.rs
+  s_e28579a043217e::t_3f5bc638c240f3 607
+crates/agent_harness/src/domain/service/queue.rs
+  s_e28579a043217e::t_68e3db8bca0bdf 182-197,442,971,1101,1239,1282,1388-1395,1725,1759,1914-1919,1923,1926-1938,1947-1948
+crates/agent_harness/src/domain/service/test.rs
+  s_e28579a043217e::t_70e72ada4d67d6 570,588,649,1982,2038,2086,2158,2194,2236,2264,2300,2353,2403,2443,2456,2506,2542,2561,2618,2743,2806,2869,2906,2943,2979,3010,3042,3417,4327,4416,4593-4595,4600,4614,4645-4650,5179,5191-5251
+crates/agent_harness/src/domain/service/test/chat_reply.rs
+  s_e28579a043217e::t_37a7299c90f269 511
+crates/agent_harness/src/domain/service/test/chat_reply/conversations.rs
+  s_e28579a043217e::t_7a3fb6137e539f 145
+crates/agent_harness/src/domain/service/test/chat_reply/conversations/notifications.rs
+  s_e28579a043217e::t_73d348c8451cae 27
+crates/agent_harness/src/domain/service/test/external_mcp.rs
+  s_e28579a043217e::t_7f93a19f6b8f6b 29,91
+crates/agent_harness/src/domain/service/test/external_replies.rs
+  s_e28579a043217e::t_9f32f20f922872 272,336,626
+crates/agent_harness/src/domain/service/test/followers.rs
+  s_e28579a043217e::t_4cd64a5097ab90 40,60,69-104
+crates/agent_harness/src/domain/service/test/idle_release.rs
+  s_e28579a043217e::t_360c0cddac48ba 260-701
+crates/agent_harness/src/domain/service/test/notifications.rs
+  s_e28579a043217e::t_93a861b84a21bf 161,388
+crates/agent_harness/src/domain/service/test/permission_refresh.rs
+  s_e28579a043217e::t_89bac3da69782b 65
+crates/agent_harness/src/domain/service/test/quota.rs
+  s_e28579a043217e::t_a07162a76c7289 87,735
+crates/agent_harness/src/domain/service/test/reattach.rs
+  s_e28579a043217e::t_4500427ccad3f0 659
+crates/agent_harness/src/domain/service/test/warm.rs
+  s_e28579a043217e::t_27cd95038b6568 170-171,193,204,238-243
+crates/agent_harness/src/domain/service/warm.rs
+  s_e28579a043217e::t_ec766bf3b4a932 55,207-208,219,229,398,408
+crates/agent_harness/src/testing/helpers/containers.rs
+  s_e28579a043217e::t_ae10b170a0a7fa 219-221,325-358,541-545
+crates/agent_inmem/AGENTS.md
+  s_e28579a043217e::t_9abb55f11a57d6 24-30,89-91
+crates/agent_inmem/src/domain/agent.rs
+  s_e28579a043217e::t_835d9b1eceb759 93,1405
+crates/agent_inmem/src/domain/agent/test.rs
+  s_e28579a043217e::t_dd731fea7cf047 821,823
+crates/agent_inmem/src/domain/replay.rs
+  s_e28579a043217e::t_c20e2e7356c576 358-360
+crates/agent_inmem/src/domain/replay/test.rs
+  s_e28579a043217e::t_d693b81eb799de 733-839
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_e28579a043217e::t_a8f4828e746893 18,30,84,206,268-293
+crates/agent_inmem/src/outbound/manager/test.rs
+  s_e28579a043217e::t_f5b4e5d2ede51b 1698-1853
+crates/agent_inmem/src/outbound/rig_engine/test.rs
+  s_e28579a043217e::t_7a9619ed5d5231 506-575
+crates/agent_inmem/src/rig_engine.rs
+  s_e28579a043217e::t_cef34ca6ee0671 179-186,210-212,245-271,735,791-806,808-842
+crates/agent_preview/Cargo.toml
+  s_e28579a043217e::t_d9a2acfae11834 24
+crates/agent_session/AGENTS.md
+  s_e28579a043217e::t_52fa59f6b18b41 96-101,149-161
+crates/agent_session/Cargo.toml
+  s_e28579a043217e::t_afadec8149ca25 10,62
+crates/agent_session/src/domain/activity_summary.rs
+  s_e28579a043217e::t_903a1ee98120ed 1-457
+crates/agent_session/src/domain/activity_summary/test.rs
+  s_e28579a043217e::t_9aa6cb7b565d73 1-320
+crates/agent_session/src/domain/control.rs
+  s_e28579a043217e::t_03a9605cdb3806 9,16-18,23-39,48-50,55,63,65,68,89
+crates/agent_session/src/domain/control/test.rs
+  s_e28579a043217e::t_66f9a587805e75 40-48,64,75,104,121,140,148-199
+crates/agent_session/src/domain/mod.rs
+  s_e28579a043217e::t_c895948b919560 3-4
+crates/agent_session/src/domain/model.rs
+  s_e28579a043217e::t_d0a03646a8dabd 568-579,641-671,711-713,978-1024
+crates/agent_session/src/domain/ports.rs
+  s_e28579a043217e::t_657db5af86c577 359-363,367,373,1054-1061,1315-1317
+crates/agent_session/src/domain/routines/service.rs
+  s_e28579a043217e::t_1c600f0583b627 270,312
+crates/agent_session/src/domain/service/presentation.rs
+  s_e28579a043217e::t_3095fcf6d35061 86-87
+crates/agent_session/src/domain/updates.rs
+  s_e28579a043217e::t_b251db7a7ea11c 121-122
+crates/agent_session/src/domain/work_registration.rs
+  s_e28579a043217e::t_80ca99f5cbfbe4 23-25,591-597
+crates/agent_session/src/inbound/axum_router.rs
+  s_e28579a043217e::t_56a8c15c2ba593 546-550,1039-1063,1117,1127,1137-1138,1928-1934,2022-2026,2068,2070-2071,2138-2142,2333,2341-2364
+crates/agent_session/src/inbound/axum_router/activity.rs
+  s_e28579a043217e::t_f2000c3f8eb936 83-84,94
+crates/agent_session/src/inbound/axum_router/test.rs
+  s_e28579a043217e::t_cdfd7ec9d10df9 1129-1130,1133-1151,1155,1160-1226,1548,1680-1723
+crates/agent_session/src/inbound/axum_router/test/tool_actions.rs
+  s_e28579a043217e::t_faa0e18194805b 393-395,402-403
+crates/agent_session/src/inbound/axum_router/tool_actions.rs
+  s_e28579a043217e::t_bd7dea3eb2bfc9 68
+crates/agent_session/src/inbound/toolset/coding_agents.rs
+  s_e28579a043217e::t_99fb5a551bb601 169,172
+crates/agent_session/src/outbound/activity_summarizer.rs
+  s_e28579a043217e::t_c4de02e9a223e3 1-5,7-10,12-16,18-22,24-30,32-66,68-73,75-76
+crates/agent_session/src/outbound/activity_summarizer_prompt.md
+  s_e28579a043217e::t_1b0c985e24f4fc 1-13
+crates/agent_session/src/outbound/connection_gateway_realtime.rs
+  s_e28579a043217e::t_6976eeb8516e71 45-46,65-69,142-160,373-397
+crates/agent_session/src/outbound/mod.rs
+  s_e28579a043217e::t_34aad4c8c4ed4b 11-13
+crates/agent_session/src/outbound/notifications.rs
+  s_e28579a043217e::t_7e43a2ca4e578b 128
+crates/agent_session/src/outbound/postgres.rs
+  s_e28579a043217e::t_f854850a5e05b5 978,983-984,1011,1031-1033
+crates/agent_session/src/outbound/postgres/test.rs
+  s_e28579a043217e::t_0133fa20eec7d8 3388-3416,3467-3507,3539
+crates/agent_session/src/outbound/postgres/test/queue.rs
+  s_e28579a043217e::t_a235c74d54053b 20
+crates/agent_session/src/outbound/postgres/warm.rs
+  s_e28579a043217e::t_94c733cf6bbca1 108-109,112
+crates/agent_session_realtime/src/outbound/redis_stream/publisher.rs
+  s_e28579a043217e::t_c2364d8220d032 5-7,225-231
+crates/ai_projections/src/outbound/agent_generator.rs
+  s_e28579a043217e::t_2aae366486961c 59-60
+crates/ai_tools/AGENTS.md
+  s_e28579a043217e::t_6032e9cddb7c4f 7,16-17,47-49
+crates/ai_tools/src/build_context.rs
+  s_e28579a043217e::t_77de636be2855d 416,579,609-611
+crates/ai_tools/src/lib.rs
+  s_e28579a043217e::t_66d24d8c587bbb 168-170,293,316,436
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_e28579a043217e::t_c3d7b82280ec27 68-70,84,105,114,130,139,146-148,153
+crates/ai_tools/src/memory.rs
+  s_e28579a043217e::t_b23abd7cd254da 2,47
+crates/ai_tools/src/schemas/mod.rs
+  s_e28579a043217e::t_2ae02f4873ee8b 7
+crates/ai_tools/src/schemas/subagent.rs
+  s_e28579a043217e::t_f9a3e91df2ce59 1-2,4,6-7,12-14,17-18
+crates/ai_tools/src/search/search_service/context.rs
+  s_e28579a043217e::t_c024cd092627a9 31
+crates/ai_tools/src/search_tools.rs
+  s_e28579a043217e::t_1d42c95d503de3 29-32,42,69,128,131,147-157
+crates/ai_tools/src/search_tools/test.rs
+  s_e28579a043217e::t_8cc77e6e2a1b7a 98,121,144,155,161-202
+crates/ai_tools/src/test.rs
+  s_e28579a043217e::t_8c9741f1d6a5ae 38-63,140-141,158,177,183,240-261,425-426,757,863-865,868-870,937,1036
+crates/ai_tools/src/tool_context.rs
+  s_e28579a043217e::t_29ff463c5e12e1 2170
+crates/ai_toolset/src/caller.rs
+  s_e28579a043217e::t_64b154b8b3f063 15-17
+crates/ai_toolset/src/context.rs
+  s_e28579a043217e::t_754bd43bac96d9 1,37-40,62,86-91
+crates/ai_toolset/src/tool_search.rs
+  s_e28579a043217e::t_ff2860ee3b49a8 131-135
+crates/ai_usage/src/domain/counting.rs
+  s_e28579a043217e::t_51bf324a9a8a41 38-39,42,49,64
+crates/ai_usage/src/domain/counting/test.rs
+  s_e28579a043217e::t_985af6b1b774a2 3,17,38
+crates/ai_usage/src/domain/ports.rs
+  s_e28579a043217e::t_9fe2084016b430 19,76-77,345
+crates/anthropic/src/toolset/text_editor_code_execution.rs
+  s_e28579a043217e::t_c620dbfaa31d30 15
+crates/calendar_events/AGENTS.md
+  s_e28579a043217e::t_6b3c9bf37929f4 236-238
+crates/calendar_events/src/inbound/toolset.rs
+  s_e28579a043217e::t_5661ba4e836b5a 25,470-471,508-555
+crates/calendar_events/src/inbound/toolset/list_calendar_events.rs
+  s_e28579a043217e::t_517a2b5a72e660 18,51-56,168-169,297,301-303,310-311,313
+crates/calendar_events/src/inbound/toolset/read_calendar_event.rs
+  s_e28579a043217e::t_4391c607601567 14-17,86-91,124-128,133,168-169,195-197,264-269
+crates/calendar_events/src/inbound/toolset/test.rs
+  s_e28579a043217e::t_2198509fdf18f2 354,1364,1370-1420
+crates/calendar_events/src/inbound/toolset/test/read_calendar_event.rs
+  s_e28579a043217e::t_fea9bfc8c74f25 62,184-209
+crates/channel_bots/src/outbound/agent_loop_responder.rs
+  s_e28579a043217e::t_191849564e1215 44
+crates/channel_labels/AGENTS.md
+  s_e28579a043217e::t_23425d557ddb81 44-45,50-52
+crates/channel_labels/Cargo.toml
+  s_e28579a043217e::t_43d6243983949b 42
+crates/channel_labels/src/domain/models.rs
+  s_e28579a043217e::t_172f2365436310 48-50,60,66-69,84,86-89,178-182
+crates/channel_labels/src/domain/models/test.rs
+  s_e28579a043217e::t_696d8137048959 1-2,34-76
+crates/channel_labels/src/domain/service.rs
+  s_e28579a043217e::t_dc822e56d0a4a5 19,29-40,180,236
+crates/channel_labels/src/domain/service/test.rs
+  s_e28579a043217e::t_b523372bb911d4 77,656-715
+crates/channel_labels/src/inbound/axum_router.rs
+  s_e28579a043217e::t_a1fbdddc5669d0 120-151,480-690
+crates/channel_labels/src/lib.rs
+  s_e28579a043217e::t_e195fea1d75c9f 16-18
+crates/channel_labels/src/outbound/pg_channel_labels_repo.rs
+  s_e28579a043217e::t_c43e8006e67eca 21,27-38,67,84,102-104,114-138,140,145-147,149-151,163-164,209-217,293-301,339,344,347-351,355,359,372-380,416,482-490,528,530,532-536,546,557,572-573,579-584,587-588
+crates/channel_labels/src/outbound/pg_channel_labels_repo/test/team_channels.rs
+  s_e28579a043217e::t_0e282597b360e7 240-663
+crates/code_execution/AGENTS.md
+  s_e28579a043217e::t_ca3459ede33a6b 28-29
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_e28579a043217e::t_50c58428634901 1,89
+crates/coding_agent_worker/src/dispatch.rs
+  s_e28579a043217e::t_da3ab62ffc0a41 161,259
+crates/coding_agent_worker/src/herdr/acp_agent.rs
+  s_e28579a043217e::t_f0d19da2d36104 846-847,850-852,867,881-884
+crates/coding_agent_worker/src/outbound/agent_session.rs
+  s_e28579a043217e::t_8b2c01c81bd57b 154
+crates/coding_agent_worker/src/outbound/agent_session/test.rs
+  s_e28579a043217e::t_0a06c1286e6d4f 57
+crates/coding_agent_worker/src/tui/agent_catalog/npm_adapter.rs
+  s_e28579a043217e::t_2fc789ba0040da 132-137,141,154-205
+crates/coding_agent_worker/src/tui/agent_catalog/test.rs
+  s_e28579a043217e::t_f7e9fa3db39b73 217-257
+crates/coding_agent_worker/src/tui/quickstart/test.rs
+  s_e28579a043217e::t_bc092edd396e90 229-269
+crates/coding_agent_worker/src/tui/ui/quickstart.rs
+  s_e28579a043217e::t_a57d2fd602e4c3 5,13-15,34-46,91-94
+crates/complete_graph/AGENTS.md
+  s_e28579a043217e::t_b5d3a51d3b5626 119
+crates/complete_graph/Cargo.toml
+  s_e28579a043217e::t_d1b231d13097f4 8-9,62,76
+crates/complete_graph/src/lib.rs
+  s_e28579a043217e::t_24b1d25a3e1dea 84-87
+crates/complete_graph/src/realtime.rs
+  s_e28579a043217e::t_e5db022a755c15 4,7-8,11-16,39-96
+crates/complete_graph/src/schema.rs
+  s_e28579a043217e::t_8d646d0faf49bc 4,7,701-765
+crates/complete_graph/src/schema/test.rs
+  s_e28579a043217e::t_a656a39a81c438 25,1927-2102,2190,2793
+crates/complete_graph/src/schema/test/form_activity.rs
+  s_e28579a043217e::t_e10d1ffa6d4f7e 14
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_e28579a043217e::t_f7c9f6448ba372 9
+crates/crm/src/domain/pipeline_workflows.rs
+  s_e28579a043217e::t_fb82bb0558f540 940
+crates/crm/src/inbound/toolset/list_companies.rs
+  s_e28579a043217e::t_6749658523bf86 76
+crates/crm/src/inbound/toolset/pipelines/create_pipeline.rs
+  s_e28579a043217e::t_5bd8b84a39d760 21
+crates/email/AGENTS.md
+  s_e28579a043217e::t_678b3befe8ce6b 238-241
+crates/email/src/domain/mailbox.rs
+  s_e28579a043217e::t_8327c57651cb4d 417-419,445-447,457-458,463,469,481,704-715
+crates/email/src/domain/mailbox/lifecycle.rs
+  s_e28579a043217e::t_a91fc6d0d7ea97 10,31-44,143,147,209-232
+crates/email/src/domain/mailbox/lifecycle/test.rs
+  s_e28579a043217e::t_e3dc35f2732189 2,98-487
+crates/email/src/domain/mailbox/watches.rs
+  s_e28579a043217e::t_acee9950387c95 134-135,138-141,143-148,155-156,184,187,237,244-245,249,276,309
+crates/email/src/outbound/mailbox_pg/lifecycle.rs
+  s_e28579a043217e::t_95b413fcb18f99 318-320,324-325,330-336
+crates/email/src/outbound/mailbox_pg/lifecycle/test.rs
+  s_e28579a043217e::t_c04b06491a6798 6-9,17-69,121-367
+crates/email_api_client/src/domain/service.rs
+  s_e28579a043217e::t_2fdcce88a65234 97
+crates/email_api_client/src/domain/service/attachments.rs
+  s_e28579a043217e::t_4cc2f2ec4d7bcd 14
+crates/email_api_client/src/domain/service/blocklist.rs
+  s_e28579a043217e::t_ccb94a0ea875e6 50
+crates/email_api_client/src/domain/service/contacts.rs
+  s_e28579a043217e::t_3af7500b2d483c 15,32,58
+crates/email_api_client/src/domain/service/labels.rs
+  s_e28579a043217e::t_7604eb3aabfff3 15
+crates/email_api_client/src/domain/service/messages.rs
+  s_e28579a043217e::t_9503409c5cd1a3 17,32,47,67,83,98,229
+crates/email_api_client/src/domain/service/raw_message.rs
+  s_e28579a043217e::t_c48c5b9324c3c1 14
+crates/email_api_client/src/domain/service/send.rs
+  s_e28579a043217e::t_2462314c469010 93
+crates/email_api_client/src/domain/service/sync.rs
+  s_e28579a043217e::t_d4804f2a6aa349 14,30
+crates/feature_flags/AGENTS.md
+  s_e28579a043217e::t_60fb5de461e4f9 24-30
+crates/feature_flags/Cargo.toml
+  s_e28579a043217e::t_ec9ca2ee738b5c 8
+crates/feature_flags/README.md
+  s_e28579a043217e::t_b2f157e39ac882 39,47,61-72
+crates/feature_flags/src/outbound/posthog.rs
+  s_e28579a043217e::t_855efaa51cb7a5 4,14-26,37,49-58,94,107
+crates/feature_flags/src/outbound/posthog/test.rs
+  s_e28579a043217e::t_30aa760cb9cd26 12-18,40,74-115,226-232,240-248,258-261,267-268,286-292,307-309
+crates/folds/agent_fold/src/domain/harness/macro_inmem.rs
+  s_e28579a043217e::t_8b0ebd5e73ce3a 9
+crates/graphql_activity/AGENTS.md
+  s_e28579a043217e::t_0377ce54ed676e 25
+crates/graphql_activity/src/objects.rs
+  s_e28579a043217e::t_7b5a09d8c24769 23-26,33-34,41-44,49-50,54
+crates/graphql_activity/src/objects/test.rs
+  s_e28579a043217e::t_f5838dd0d82b20 18
+crates/graphql_activity/src/subscriptions/test.rs
+  s_e28579a043217e::t_e6cb7d880bb9e3 68
+crates/initiative/src/inbound/axum_router/test.rs
+  s_e28579a043217e::t_9205a74d571b03 878
+crates/macro_cache_client/AGENTS.md
+  s_e28579a043217e::t_70d76f3a012e4d 17-18,24-27,43-44
+crates/macro_cache_client/Cargo.toml
+  s_e28579a043217e::t_d9263a64ebc3eb 30-33
+crates/macro_cache_client/src/auth.rs
+  s_e28579a043217e::t_40fb79574680fc 1-5,20-62,94-96,102-141,145-149,152-174,212-214
+crates/macro_cache_client/src/auth/test.rs
+  s_e28579a043217e::t_9337605556a9ab 1-208
+crates/macro_db_client/AGENTS.md
+  s_e28579a043217e::t_6245764528368a 24-25,136
+crates/macro_db_client/migrations/20261105234844_agent_activity_verb.sql
+  s_e28579a043217e::t_2a149d5806c065 1-4
+crates/macro_db_client/migrations/20261109041008_agent_session_turn_prompter_client.sql
+  s_e28579a043217e::t_5258296a245af3 1-6
+crates/macro_db_client/migrations/20261110150953_add_activity_agent_session_id.sql
+  s_e28579a043217e::t_d4e8917b33ccc4 1-29
+crates/macro_db_client/migrations/20261110150954_backfill_activity_agent_session_id.sql
+  s_e28579a043217e::t_a7bbdbc9f89683 1-38
+crates/macro_db_client/migrations/20261110150955_index_activity_agent_session.sql
+  s_e28579a043217e::t_0503ae51ec0593 1-11
+crates/macro_entrypoint/src/test.rs
+  s_e28579a043217e::t_10dc7e5d623aff 185
+crates/macro_event_broker/AGENTS.md
+  s_e28579a043217e::t_6ac0fda196d48d 55
+crates/macro_event_broker/src/domain/models.rs
+  s_e28579a043217e::t_7dde784bad88d6 42-45,76,236-242,246-253
+crates/macro_event_broker/src/domain/models/test.rs
+  s_e28579a043217e::t_d4c716bcf67213 296-301,305-309,315,317,322-327,336
+crates/macro_event_broker/src/domain/ports.rs
+  s_e28579a043217e::t_927a055b2a667e 48-53
+crates/macro_event_broker/src/lib.rs
+  s_e28579a043217e::t_4f23a06be77b13 20
+crates/macro_event_broker/src/outbound/kafka_event_consumer/test.rs
+  s_e28579a043217e::t_2283455914d4f6 9-16
+crates/macro_service_urls/src/lib.rs
+  s_e28579a043217e::t_423c2c5fe96b95 604
+crates/macro_service_urls/src/test.rs
+  s_e28579a043217e::t_80a55f7b81e86a 267-270
+crates/macro_tower_layers/src/lib.rs
+  s_e28579a043217e::t_893b34ac1f8a97 111-112,119,126,133-163
+crates/macro_tower_layers/src/test.rs
+  s_e28579a043217e::t_4a4b2754a52774 408-467
+crates/mcp_client/AGENTS.md
+  s_e28579a043217e::t_51281757dcdff9 24-27,39-40,73-81
+crates/mcp_client/Cargo.toml
+  s_e28579a043217e::t_32d2d7705b641a 24,36,44
+crates/mcp_client/src/domain/models/address_policy.rs
+  s_e28579a043217e::t_dd991f994f6d82 1,3-4,9-34,37-41,44-52,54-68,70-76,79-88
+crates/mcp_client/src/domain/models/address_policy/test.rs
+  s_e28579a043217e::t_cabd79001995ab 1,3-5,7-55
+crates/mcp_client/src/domain/models/mod.rs
+  s_e28579a043217e::t_e223448bac50fe 1,9-10,18-20
+crates/mcp_client/src/domain/models/server.rs
+  s_e28579a043217e::t_5faaf87c1ddceb 2,6-7,9,13-49,55-60,66,97-104,107,113,116,119-121
+crates/mcp_client/src/domain/models/server/test.rs
+  s_e28579a043217e::t_3fb9c4f9952e8c 1-135
+crates/mcp_client/src/domain/ports.rs
+  s_e28579a043217e::t_bb5af0a234997a 1-3,5-28,68
+crates/mcp_client/src/domain/service/server_access.rs
+  s_e28579a043217e::t_b0a81c5bab73c9 15,18,88,104
+crates/mcp_client/src/domain/service/server_access/test.rs
+  s_e28579a043217e::t_58eed93c485e76 3,111,121,139,154-157
+crates/mcp_client/src/domain/service/server_directory.rs
+  s_e28579a043217e::t_51d22521e5ae12 6,8,153-154
+crates/mcp_client/src/domain/service/toolset.rs
+  s_e28579a043217e::t_20ba5e3dce4ac6 2,177-181,188,447,450
+crates/mcp_client/src/outbound/guarded_http.rs
+  s_e28579a043217e::t_507cfd42e1dbd8 1-226
+crates/mcp_client/src/outbound/guarded_http/test.rs
+  s_e28579a043217e::t_30acaae598ec81 1-179
+crates/mcp_client/src/outbound/mod.rs
+  s_e28579a043217e::t_d77d12cfee1491 3-4
+crates/mcp_client/src/outbound/oauth.rs
+  s_e28579a043217e::t_d62ba83f4be493 6-8,11,24,36,43,50-55,60,203,255
+crates/mcp_client/src/outbound/oauth/test.rs
+  s_e28579a043217e::t_1ba4c4c0435a81 182
+crates/mcp_select/src/lib.rs
+  s_e28579a043217e::t_ba56af57f3a9bf 14,208,217,231-232,235,241,286-288,291,310
+crates/mcp_select/src/test.rs
+  s_e28579a043217e::t_79b2c3a6c64d56 112-117,147-152,181,414-419,447-450
+crates/mcp_toolset/AGENTS.md
+  s_e28579a043217e::t_51e3720a7c332c 41-46
+crates/mcp_toolset/Cargo.toml
+  s_e28579a043217e::t_c00fe8ae5981cb 15,20,22-23
+crates/mcp_toolset/src/lib.rs
+  s_e28579a043217e::t_d1b65135cd41ea 22,32-37,43
+crates/mcp_toolset/src/toolset.rs
+  s_e28579a043217e::t_b5dc040bce910e 20-22,32-35,280,292-300
+crates/mcp_toolset/src/toolset/test.rs
+  s_e28579a043217e::t_650efe6a06240a 1-122
+crates/messages/src/outbound/pg_message_repo.rs
+  s_e28579a043217e::t_31c7149d76fa70 355-356,361
+crates/messages/src/outbound/pg_message_repo/test.rs
+  s_e28579a043217e::t_bb9338f5c0a012 836-866
+crates/prompt/src/code_mode.rs
+  s_e28579a043217e::t_714bc441079cac 8
+crates/prompt/src/do_not.rs
+  s_e28579a043217e::t_788fa08e914e3d 13,17-18
+crates/prompt/src/mentions.rs
+  s_e28579a043217e::t_80afaf7c834494 21
+crates/scheduled_action/AGENTS.md
+  s_e28579a043217e::t_aaffaa0fbb3923 137-140
+crates/scheduled_action/src/domain/event_runs/admission/test.rs
+  s_e28579a043217e::t_0ec021669f051e 324
+crates/scheduled_action/src/domain/ports.rs
+  s_e28579a043217e::t_19fe3ad418d992 13,140-145
+crates/scheduled_action/src/domain/service.rs
+  s_e28579a043217e::t_3e5f051ad0db88 640-644
+crates/scheduled_action/src/domain/service/test.rs
+  s_e28579a043217e::t_8176fa053a32b7 709,721-724,726-729
+crates/scheduled_action/src/domain/templates.rs
+  s_e28579a043217e::t_3549a4a81cbfaa 12,195-198
+crates/scheduled_action/src/domain/templates/test.rs
+  s_e28579a043217e::t_e77570d0ab6bad 5,314,328-333
+crates/scheduled_action/src/inbound/axum_router.rs
+  s_e28579a043217e::t_aab03f497b0f41 405-408,415
+crates/scheduled_action/src/inbound/axum_router/test.rs
+  s_e28579a043217e::t_2941313e4850eb 538,550,913,917,1114-1165
+crates/system_skills/src/configure_agent.rs
+  s_e28579a043217e::t_df050def50c25c 9
+crates/teams/AGENTS.md
+  s_e28579a043217e::t_885256d50b6642 64-67
+crates/teams/src/domain/model.rs
+  s_e28579a043217e::t_cf542258e22078 698-700
+crates/teams/src/inbound/axum_router.rs
+  s_e28579a043217e::t_734f94604fb0d4 265-270
+crates/teams/src/inbound/axum_router/create_team.rs
+  s_e28579a043217e::t_8ce444e03c6262 36
+crates/teams/src/outbound/team_repo.rs
+  s_e28579a043217e::t_e6a075d861b8cd 170-176
+crates/teams/src/outbound/team_repo/test.rs
+  s_e28579a043217e::t_07c0443a8b983d 206-265
+crates/unfurl/src/outbound/http_safety.rs
+  s_e28579a043217e::t_eca9656ac68df1 8,83,92-148,150-157,263,268,274,277,285,288,298,302,310,317,322-415
+crates/unfurl/src/outbound/reqwest_fetcher.rs
+  s_e28579a043217e::t_768dac14b62b06 61
+crates/unfurl/src/outbound/resolver.rs
+  s_e28579a043217e::t_f33078bbd62246 19,40
+crates/universal_input/src/domain/fallback.rs
+  s_e28579a043217e::t_cc33eeec26902e 95,112,125-128,131
+crates/webhook/AGENTS.md
+  s_e28579a043217e::t_a9d92f14c2f6f0 21-24
+crates/webhook/README.md
+  s_e28579a043217e::t_09f55297741d30 254-264
+crates/webhook/src/domain/blocked_address.rs
+  s_e28579a043217e::t_4b078f5fd7a8fb 1-4,6-7,9,11-17,19-83
+crates/webhook/src/domain/blocked_address/test.rs
+  s_e28579a043217e::t_b9277352c4e48e 1,3-24,26-50,52-64,66-105
+crates/webhook/src/domain/mod.rs
+  s_e28579a043217e::t_e49e439d77edb6 3-5
+crates/webhook/src/domain/service.rs
+  s_e28579a043217e::t_89b4936e1af828 7,107
+crates/webhook/src/domain/service/test.rs
+  s_e28579a043217e::t_993ded9aa34899 1032-1033
+crates/webhook/src/outbound.rs
+  s_e28579a043217e::t_c7890cfff4c423 3-4
+crates/webhook/src/outbound/address_guard.rs
+  s_e28579a043217e::t_31ecced914d3d6 1-58
+crates/webhook/src/outbound/address_guard_test.rs
+  s_e28579a043217e::t_927dcbcd81b9d0 2-13,18-35,39-48,50-57
+crates/webhook/src/outbound/http_delivery.rs
+  s_e28579a043217e::t_76088b6c35c498 63
+crates/webhook/src/outbound/http_delivery_test.rs
+  s_e28579a043217e::t_b65a7041d91b66 3,7,9-22,270-387
+crates/webhook/src/outbound/http_validator.rs
+  s_e28579a043217e::t_d779f51424f511 7,9,15-20,30-32,45-62,66-67,73,88,180-181,185,188-190,192-194,196-208,210
+crates/webhook/src/outbound/http_validator_test.rs
+  s_e28579a043217e::t_866a1b3f73bd5c 77-80,88,101
+deny.toml
+  s_e28579a043217e::t_6be9cfbe58cb98 227
+docs/CRM_EMAIL_PRIVACY.md
+  s_e28579a043217e::t_3e0d824209f9b7 91-96
+docs/agent-guide/README.md
+  s_e28579a043217e::t_6b6a21ff9d5bb9 64-106
+docs/agent-guide/ai-chat.md
+  s_e28579a043217e::t_209ccc46af222b 3-31,226-259,334-336,1107-1109,1305,1690-1694,1898-1910,1958-1960,2399-2400,2688-2689
+docs/agent-guide/channels.md
+  s_e28579a043217e::t_5b40570f4a1d63 79-81,84-85,1118-1125,1152-1153,1166-1168,1174-1177,1182-1210,1216-1219,1226-1228,1266-1365,1380-1382,1562-1575,1578-1580,1684
+docs/agent-guide/databases.md
+  s_e28579a043217e::t_11145a65004c0d 183-184
+docs/agent-guide/documents.md
+  s_e28579a043217e::t_85b69f091d221e 2444-2445,2895-2899,2901-2902
+docs/agent-guide/email.md
+  s_e28579a043217e::t_2fd48738597307 717-720,918-923
+docs/agent-guide/files.md
+  s_e28579a043217e::t_c1fdec2615a6fd 160-161
+docs/agent-guide/login.md
+  s_e28579a043217e::t_d235d7683ca43d 146-147
+docs/agent-guide/navigation.md
+  s_e28579a043217e::t_9d68fe57789a85 29-31,34-38,42-46,86-97,1086-1088,1793-1796,1847-1852,1873-1909
+docs/agent-guide/observability.md
+  s_e28579a043217e::t_dea0682966db02 69-70,132-166
+docs/agent-guide/settings.md
+  s_e28579a043217e::t_7dd21c14cb4411 107-112,153-157,172-175
+docs/agent-guide/tasks.md
+  s_e28579a043217e::t_ba743e95f7417b 106-112
+docs/architecture/agent-activity-correlation.md
+  s_e28579a043217e::t_aab3b773edfbbb 24-30,34-35,37-41
+docs/architecture/email.md
+  s_e28579a043217e::t_9d8d27e70def4b 310-318,327-350
+docs/architecture/frontend-features.md
+  s_e28579a043217e::t_0cb951e7d00ffb 590-593
+docs/development/database.md
+  s_e28579a043217e::t_231bca8e7a4923 104-110,112-113,143-149,168-169
+docs/development/infrastructure.md
+  s_e28579a043217e::t_ed3d3a3858c00a 28,188-192
+docs/development/running-locally.md
+  s_e28579a043217e::t_a9250b03fadb8f 295-298
+docs/guides/add-entity.md
+  s_e28579a043217e::t_e819ed8feec5dd 379,472-476
+docs/runbooks/ai-billing-rollout.md
+  s_e28579a043217e::t_a6e1ad6d7b7cf3 96,106
+infra/bun.lock
+  s_e28579a043217e::t_294749d2c2bca4 201-204,781-782
+infra/packages/shared/src/service_urls.ts
+  s_e28579a043217e::t_a410af43ff1deb 66-67
+infra/stacks/email-service/index.ts
+  s_e28579a043217e::t_6f9d4437e28f6d 424
+infra/stacks/email-service/pubsub_workers.ts
+  s_e28579a043217e::t_adbc9f5bc3b373 6,118,131-132
+infra/stacks/openbao/AGENTS.md
+  s_e28579a043217e::t_af4b2b28c3815b 1,3,5-7,9,11-38
+infra/stacks/openbao/CLAUDE.md
+  s_e28579a043217e::t_58b8f7617ca809 1
+infra/stacks/openbao/Pulumi.dev.yaml
+  s_e28579a043217e::t_cc0ff1899d2c47 1-2
+infra/stacks/openbao/Pulumi.yaml
+  s_e28579a043217e::t_b5cc0cdb3cdad3 1-3
+infra/stacks/openbao/README.md
+  s_e28579a043217e::t_1b4dbd157fb50b 1-153
+infra/stacks/openbao/index.ts
+  s_e28579a043217e::t_9644dc6cd0c65f 1-588
+infra/stacks/openbao/package.json
+  s_e28579a043217e::t_90c45f89cd52dc 1-7
+infra/stacks/openbao/server-config.ts
+  s_e28579a043217e::t_3cb51bb6fff4af 1-10,12-31,33-37,39-42,44-67
+infra/stacks/openbao/tsconfig.json
+  s_e28579a043217e::t_6ce6c347cd6150 1-3
+infra/stacks/website/README.md
+  s_e28579a043217e::t_dcafb03e306053 79-85,91-108
+infra/stacks/website/edge-redirects.ts
+  s_e28579a043217e::t_42380a77f984ff 1-12
+infra/stacks/website/index.ts
+  s_e28579a043217e::t_aa2e46fe08ceba 4-5,7,144-160
+infra/stacks/website/wwwRedirect/handler.js
+  s_e28579a043217e::t_b74d316da4ea63 25-57
+nix-support/node_modules-hashes.json
+  s_e28579a043217e::t_8f4dce687dabb5 3-4
+packages/code-mode-sdk/AGENTS.md
+  s_e28579a043217e::t_610232ad42487e 27-28
+packages/code-mode-sdk/scripts/catalog.ts
+  s_e28579a043217e::t_c012b190b491bb 30
+packages/code-mode-sdk/src/index.test.ts
+  s_e28579a043217e::t_79bebc7f2afc2f 11-16
+packages/code-mode-sdk/src/index.ts
+  s_e28579a043217e::t_df49ef556f2bff 8
+packages/lexical-core/AGENTS.md
+  s_e28579a043217e::t_7cc7632116d68d 42-44
+packages/lexical-core/README.md
+  s_e28579a043217e::t_bd9e4bf0643aaf 17-24
+packages/lexical-core/tests/auto-link.test.ts
+  s_e28579a043217e::t_68d643272a8bb7 130-131,139-188,304-321
+packages/lexical-core/transformers/auto-link.ts
+  s_e28579a043217e::t_1cde7e3c05941a 4,7,13-21,52-60,63,79-80,87-94,97,102-106,117-148,153
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_e28579a043217e::t_8fa7020d852638 9,23-25
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_e28579a043217e::t_55071af7fadbbb 67,193,196-198,662
+packages/sdk/AGENTS.md
+  s_e28579a043217e::t_3a3d7bd3da90f9 88-92,141,154-155,217-219
+packages/sdk/README.md
+  s_e28579a043217e::t_912b1636a32651 956-959
+packages/sdk/justfile
+  s_e28579a043217e::t_b65466a8223820 24-25
+packages/sdk/specs/agent-harness.json
+  s_e28579a043217e::t_937fb652a871bf 3520-3565,3909-3912,5737-5741,5831-5835,6972-6991,8318-8374
+packages/sdk/specs/auth.json
+  s_e28579a043217e::t_16a8129405807c 3949-3958
+packages/sdk/specs/cognition.json
+  s_e28579a043217e::t_abf68a3fccf2a2 3556
+packages/sdk/specs/storage.json
+  s_e28579a043217e::t_76fbe3c3d9dfd8 5028-5539,31719,31733,31741,31748-31755,54499-54502,54524
+packages/sdk/src/coverage/check.ts
+  s_e28579a043217e::t_6091f39d9de732 4-5,11,15,52,74-75,90-100
+packages/sdk/src/coverage/skipped.ts
+  s_e28579a043217e::t_878c4310283e6e 307-313
+packages/sdk/src/entities/channels/message.ts
+  s_e28579a043217e::t_6ececa2cd6f6d9 83-98
+packages/sdk/src/entities/crm/pipeline.ts
+  s_e28579a043217e::t_ef8bd1e80a97d6 348,392,439,588-591
+packages/sdk/src/entities/documents/create.test.ts
+  s_e28579a043217e::t_78eda434f2f1ce 1-62
+packages/sdk/src/entities/documents/document.ts
+  s_e28579a043217e::t_302986c23d681a 29,274-279,300-305,332-338
+packages/sdk/src/entities/documents/namespace.ts
+  s_e28579a043217e::t_bcdd8756aa58e1 4,147-152,179-190,243-247,286-290
+packages/sdk/src/entities/ui/app-link.ts
+  s_e28579a043217e::t_490cb63a85ddb8 1-2,4-5,7-18,20-30,32-60
+packages/sdk/src/entities/ui/namespace.ts
+  s_e28579a043217e::t_36c7ae78a3e988 1-102
+packages/sdk/src/macro.ts
+  s_e28579a043217e::t_246cf79f7459a2 40,112-118,199-201,289
+packages/sdk/src/utils/activity.test.ts
+  s_e28579a043217e::t_489e88eb07b523 2-6,9-57
+packages/sdk/src/utils/activity.ts
+  s_e28579a043217e::t_df5e07b6738df6 1-2,26-31,57-58,85-100
+packages/sdk/src/utils/options.ts
+  s_e28579a043217e::t_557c57f403e83a 1-26
+packages/sdk/src/utils/verbs.ts
+  s_e28579a043217e::t_567dcdb3163b71 1-361
+packages/sdk/tests/pipeline-entries.test.ts
+  s_e28579a043217e::t_4f34e358da3d7d 120-121,227-248
+packages/sdk/tests/ui.test.ts
+  s_e28579a043217e::t_47243615efaf43 1-2,4-7,9-120
+rules/ast-grep/rust-no-infra-in-domain.yml
+  s_e28579a043217e::t_89ba879dca0d71 10-11
+rules/ast-grep/rust-span-field-recorded-once.yml
+  s_e28579a043217e::t_f969a5457b2ca3 1-20
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_e28579a043217e::t_9377a4b9d2d0c5 32
+rules/ast-grep/ts-feature-core-pure.yml
+  s_e28579a043217e::t_05e4d1e7f5bc67 33
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_e28579a043217e::t_35322b971c2cd8 46-47
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_e28579a043217e::t_50788c56e3ef68 85-89
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_e28579a043217e::t_327fd9cd35ec07 32
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_e28579a043217e::t_89e7bfd16dc168 33
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_e28579a043217e::t_c0ea898fe546e5 46-47
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_e28579a043217e::t_2c2a9dbc354235 85-89
+services/agent_harness_service/AGENTS.md
+  s_e28579a043217e::t_5bd8f9688dc3de 41-43
+services/agent_harness_service/src/api/swagger.rs
+  s_e28579a043217e::t_682f2d0f16821e 78
+services/agent_harness_service/src/code_mode.rs
+  s_e28579a043217e::t_09c67fedb0499f 187
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_e28579a043217e::t_1f78c78dee81b3 314-317,324-326
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_e28579a043217e::t_10ede765af3d75 1-10
+services/agent_harness_service/src/code_mode/reviews.rs
+  s_e28579a043217e::t_bb2ac00f186c8d 144,172
+services/agent_harness_service/src/code_mode/ui_commands.rs
+  s_e28579a043217e::t_e6bfe449abf285 1-150
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_e28579a043217e::t_35f34720bc200e 638,855,871-877
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_e28579a043217e::t_23bbca2a4271cb 595
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_e28579a043217e::t_6c2f6928bc1f93 195
+services/agent_harness_service/src/cognition/server.rs
+  s_e28579a043217e::t_5479261d90a07b 99-100,106,393,683,728,1053
+services/agent_harness_service/src/cognition/service/database_query.rs
+  s_e28579a043217e::t_790e68083fbdaf 111,116,136-139,213
+services/agent_harness_service/src/containers.rs
+  s_e28579a043217e::t_3bb5366607bf56 302-304,312-316
+services/agent_harness_service/src/containers/test.rs
+  s_e28579a043217e::t_6f19150d562aad 357-379
+services/agent_harness_service/src/main.rs
+  s_e28579a043217e::t_690d528e60c7a5 548,553-558,568,617,628,656,772,855-878,1474-1475,1566-1582,1587-1592,1796,1877,2448-2449
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_e28579a043217e::t_3b84c5b060f5f8 175
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_e28579a043217e::t_6bc48ac2488e2d 405-408,411,425,443,580,595
+services/agent_harness_service/src/scheduling.rs
+  s_e28579a043217e::t_bedbff16ebee06 441
+services/authentication_service/AGENTS.md
+  s_e28579a043217e::t_5e7c2e7109d0f5 204-209
+services/authentication_service/Cargo.toml
+  s_e28579a043217e::t_7be2e0fa91a162 213
+services/authentication_service/src/api.rs
+  s_e28579a043217e::t_1d48616a646555 53-54
+services/authentication_service/src/api/oauth/oauth_redirect.rs
+  s_e28579a043217e::t_3095f0e12f9b83 254-255,258-273,347-351
+services/authentication_service/src/api/oauth/oauth_redirect/tests.rs
+  s_e28579a043217e::t_8f8b1f76c6f9d7 195-237
+services/authentication_service/src/api/oauth/passwordless_callback.rs
+  s_e28579a043217e::t_f0f5f972531e7a 41-43
+services/authentication_service/src/api/session/session_login.rs
+  s_e28579a043217e::t_4426af46b1348c 8,10,19-21,48-121,124,127,130,133-134,137,139-140,142-148,151,154-164
+services/authentication_service/src/api/session/session_login/test.rs
+  s_e28579a043217e::t_f616328e00a8cf 1,3-37,41-75,77,81-91,93-94,98-131,135-145
+services/authentication_service/src/api/trace_capture.rs
+  s_e28579a043217e::t_719b35039ea57b 1-5,7-8,10-13,15-23,25-58
+services/authentication_service/src/server.rs
+  s_e28579a043217e::t_84999a802b5865 259
+services/document_storage_service/AGENTS.md
+  s_e28579a043217e::t_af8311053bf6ce 19,130
+services/document_storage_service/src/api.rs
+  s_e28579a043217e::t_cf464472e4e412 302-307
+services/document_storage_service/src/api/context.rs
+  s_e28579a043217e::t_2bbc6e975f3cb1 972,980-981
+services/document_storage_service/src/api/graphql_soup.rs
+  s_e28579a043217e::t_8d3fc63c9ec220 230
+services/document_storage_service/src/api/swagger.rs
+  s_e28579a043217e::t_f783876092fe9f 511-518
+services/document_storage_service/src/server.rs
+  s_e28579a043217e::t_5256a57449df75 897,1557,2430-2436,2560,2565-2568
+services/email_service/AGENTS.md
+  s_e28579a043217e::t_1e298ff041c4b9 77-80
+services/email_service/src/api/email/settings/import_signature.rs
+  s_e28579a043217e::t_6909b106153f38 10,18-19,34-37,46-48,117-123,126-128
+services/email_service/src/api/email/settings/import_signature/gmail_images.rs
+  s_e28579a043217e::t_205c7039e3c465 1-259
+services/email_service/src/api/email/settings/import_signature/gmail_images/test.rs
+  s_e28579a043217e::t_812445080312f4 1-384
+services/email_service/src/api/email/settings/patch.rs
+  s_e28579a043217e::t_5ebb2c190d7979 93-100
+services/email_service/src/bin/backfill_outlook_snippets/process.rs
+  s_e28579a043217e::t_d54ec528272208 52
+services/email_service/src/util/process_pre_insert/sfs_map.rs
+  s_e28579a043217e::t_9f52de3fc5b9d3 13-14,16-18,20-23,25-29,33-34,36-38,42-46,48-54,59,80,88-90,132,137,140-145,157-165,167-170,175-180,199,204-209,211-213,215-219,221-223,225,229-230,233,235,237,243,251,258-260,263,271,278,286,292,315-317,323,332,349,393-395,996-1017
+services/email_service/src/util/process_pre_insert/sfs_map/public_http.rs
+  s_e28579a043217e::t_59cfa42cd71ae0 1-7,9-13,15-17,19-21,23-24,26-31,33-43,45-48,50-52,54-55,57-198
+services/email_service/src/util/process_pre_insert/sfs_map/public_http/test.rs
+  s_e28579a043217e::t_e1734493bef551 1-279
+services/email_service/src/util/process_pre_insert/sfs_map/test.rs
+  s_e28579a043217e::t_46e6238974ca3e 1-105
+services/image_proxy_service/AGENTS.md
+  s_e28579a043217e::t_bd93bfa69e014c 34-37
+services/image_proxy_service/src/api/proxy.rs
+  s_e28579a043217e::t_ccc2645d0512a7 84,95-98,123-125,151,204-213,215-242,404,410-441,446-447,449-450,505-514
+services/image_proxy_service/src/api/proxy/test.rs
+  s_e28579a043217e::t_4f2a2233a2f455 1-2,65-90,93-172,240
+services/image_proxy_service/src/api/test.rs
+  s_e28579a043217e::t_13b6f246ff33ae 115-140
+services/mcp-chatgpt-worker/AGENTS.md
+  s_e28579a043217e::t_16be62677c9d03 28
+services/mcp-chatgpt-worker/wrangler.jsonc
+  s_e28579a043217e::t_2d8f818535541c 54-55,59
+services/mcp_auth_proxy/Cargo.toml
+  s_e28579a043217e::t_a1696d37dc9fdd 39
+services/mcp_auth_proxy/README.md
+  s_e28579a043217e::t_f08bdcfc269a1b 176-185
+services/mcp_auth_proxy/src/domain.rs
+  s_e28579a043217e::t_5ea5bf166327c7 7-8
+services/mcp_auth_proxy/src/domain/access_token_clients.rs
+  s_e28579a043217e::t_a7438469a1f7f4 5,17,54-56,69,73-79
+services/mcp_auth_proxy/src/domain/access_token_clients/test.rs
+  s_e28579a043217e::t_0c6989e16f7241 73-109
+services/mcp_auth_proxy/src/domain/client_name.rs
+  s_e28579a043217e::t_da6c0d9c0cea9f 1-5,7-8,10-13,15-16,18-20,22-39,41-43,45-103
+services/mcp_auth_proxy/src/domain/client_name/test.rs
+  s_e28579a043217e::t_9e2c23e43f04f5 1-121
+services/mcp_auth_proxy/src/domain/service.rs
+  s_e28579a043217e::t_117c14c06ab234 17,54-55,363,625-632,635,1046-1048,1050-1052,1086-1088
+services/mcp_auth_proxy/src/domain/service/test.rs
+  s_e28579a043217e::t_37489262a20937 85-141,465
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_e28579a043217e::t_76663c01f07229 86-90
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_e28579a043217e::t_03ad7cf16e201d 169-189,245,262-263
+services/unfurl_service/src/http_safety.rs
+  s_e28579a043217e::t_3c0e726c09b50d 8,33,136,145-207,209-210
+services/unfurl_service/src/http_safety/resolver.rs
+  s_e28579a043217e::t_5eca36c71fcc40 7,21
+services/unfurl_service/src/http_safety/test.rs
+  s_e28579a043217e::t_7b726ccba574e8 42-44,48-51,55-56,60-62,66-69,73-78,82-87,144-231
+static_assets/schema.graphql
+  s_e28579a043217e::t_a441ad07e5505c 552-556,1699-1706,1719-1722
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_e28579a043217e::t_831e499aa25c10 1257-1273,1306-1345,1347,1349-1354,1356-1397,1405-1407,1425,1456,1458-1459
+tooling/xtask/crates/xtask_local/src/local/test.rs
+  s_e28579a043217e::t_f52b4725bbb2e5 71-132
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services.rs
+  s_e28579a043217e::t_25086b5109fd59 68,330,333-343,349
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services/test.rs
+  s_e28579a043217e::t_74e231a261a532 49-50,55-60,63-64,68,71-77,79-87,89-99,101,104,106,110-111,118,120-123
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website.rs
+  s_e28579a043217e::t_19eaa408ea860a 89-92,197
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website/test.rs
+  s_e28579a043217e::t_62127bd3bf7d8f 24-26
+tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
+  s_e28579a043217e::t_99bbd1667643f0 24,201,282
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_e28579a043217e::t_d423b2f31f8864 214
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main/test.rs
+  s_e28579a043217e::t_f9038c65baeae1 205-206,212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "eb13ea0b2281c1cb1365432f927d716e91c4982f",
+  "prompts": {},
+  "sessions": {
+    "s_e28579a043217e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "490a404d-4c83-41f2-b737-127d76ca9d95",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
