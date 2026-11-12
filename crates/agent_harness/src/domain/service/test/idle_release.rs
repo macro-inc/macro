@@ -567,3 +567,57 @@ async fn a_session_whose_row_is_gone_is_released() {
     );
     assert_eq!(service.inner.sessions.active_sessions(), 0);
 }
+
+#[tokio::test]
+async fn a_kill_switch_aimed_at_dev_leaves_prod_retrying_for_the_same_owner() {
+    use feature_flags::outbound::posthog::PostHogFeatureFlags;
+    use macro_env::Environment;
+    use wiremock::matchers::body_partial_json;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use crate::domain::service::IDLE_RELEASE_NO_RETRY_FLAG;
+    use crate::domain::service::idle::{FlaggedIdleReleaseRetry, IdleReleaseRetry as _};
+
+    let server = MockServer::start().await;
+    // PostHog's side: the switch targets the person property `environment = dev`.
+    Mock::given(body_partial_json(serde_json::json!({
+        "distinct_id": sender().as_ref(),
+        "person_properties": {"environment": "dev"},
+    })))
+    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+        "flags": {IDLE_RELEASE_NO_RETRY_FLAG: {"key": IDLE_RELEASE_NO_RETRY_FLAG, "enabled": true}},
+        "errorsWhileComputingFlags": false,
+    })))
+    .with_priority(1)
+    .mount(&server)
+    .await;
+    Mock::given(wiremock::matchers::method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "flags": {IDLE_RELEASE_NO_RETRY_FLAG: {"key": IDLE_RELEASE_NO_RETRY_FLAG, "enabled": false}},
+            "errorsWhileComputingFlags": false,
+        })))
+        .mount(&server)
+        .await;
+    let in_environment = |environment| {
+        FlaggedIdleReleaseRetry(
+            PostHogFeatureFlags::new(
+                &server.uri(),
+                "test-project-key".into(),
+                Duration::from_secs(2),
+                environment,
+            )
+            .unwrap(),
+        )
+    };
+
+    assert!(
+        in_environment(Environment::Production)
+            .retries(&sender())
+            .await
+    );
+    assert!(
+        !in_environment(Environment::Develop)
+            .retries(&sender())
+            .await
+    );
+}

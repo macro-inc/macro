@@ -100,6 +100,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 entity_registry = { path = "../entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env = { path = "../macro_env" }
 bots = { path = "../bots", default-features = false, features = ["test-utils"] }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }
 messages = { path = "../messages", features = ["test-utils"] }
