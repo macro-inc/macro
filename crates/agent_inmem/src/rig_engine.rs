@@ -69,12 +69,6 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-const CODE_MODE_MCP_TOOLS: &[&str] = &[
-    "mcp__macro_internal__ExecuteCode",
-    "mcp__macro_internal__DescribeCodeTools",
-    "mcp__macro_internal__ReadCodeDocs",
-];
-
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
 /// [`ai_tools::tools_for_agent_code_mode`].
 pub struct RigTurnEngine {
@@ -518,13 +512,7 @@ fn code_tools_listed(request: &TurnRequest) -> Result<(), AgentError> {
     else {
         return Ok(());
     };
-    let listed = request.mcp_tools.as_ref().is_some_and(|mcp| {
-        let catalog = mcp.searchable_catalog();
-        CODE_MODE_MCP_TOOLS
-            .iter()
-            .all(|name| catalog.iter().any(|tool| tool.name == *name))
-    });
-    if listed {
+    if crate::domain::mcp::has_code_mode_tools(request.mcp_tools.as_ref()) {
         Ok(())
     } else {
         tracing::error!("code-mode tools unavailable; refusing the turn");
