@@ -53,6 +53,7 @@ export function createCodeActivityRows(
           id: `${call.id}:${item.id}`,
           label: item.label,
           detail: null,
+          call: call.id,
           status:
             item.status === 'unknown' ||
             (item.status === 'running' && reply()?.stop !== null)

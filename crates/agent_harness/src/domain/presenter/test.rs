@@ -30,6 +30,7 @@ fn activity(index: u32, sealed: bool, rows: usize) -> ProjectedSegment {
                     label: "Ran".to_owned(),
                     detail: None,
                     status: ActivityStatus::Completed,
+                    call: None,
                     card: None,
                 })
                 .collect(),

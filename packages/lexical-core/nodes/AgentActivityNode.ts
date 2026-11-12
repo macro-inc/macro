@@ -46,6 +46,11 @@ export type AgentActivityRow = {
   detail?: string;
   status: AgentActivityStatus;
   /**
+   * The model's tool call this step ran inside: set on each SDK request a
+   * code execution made, absent for a call the model made itself.
+   */
+  call?: string;
+  /**
    * What the step put in front of the person. A card this version cannot
    * read is kept but not shown, so a newer server's cards never invalidate
    * the steps.
@@ -102,6 +107,7 @@ function isAgentActivityRow(value: unknown): value is AgentActivityRow {
     typeof row.id === 'string' &&
     typeof row.label === 'string' &&
     (row.detail === undefined || typeof row.detail === 'string') &&
+    (row.call === undefined || typeof row.call === 'string') &&
     isAgentActivityStatus(row.status) &&
     (row.card === undefined ||
       row.card === null ||

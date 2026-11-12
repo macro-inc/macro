@@ -74,6 +74,11 @@ pub struct ActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: ActivityStatus,
+    /// The model's tool call this step ran inside: set on each SDK request a
+    /// code execution made, absent for a call the model made itself. Counting
+    /// tool calls counts distinct calls, not rows.
+    #[serde(default)]
+    pub call: Option<String>,
     /// What the step put in front of the person, shown where it ran.
     #[serde(default)]
     pub card: Option<ActivityCard>,
@@ -292,6 +297,7 @@ fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
                     label: "Updated the plan".to_owned(),
                     detail: Some(format!("{done}/{} done", entries.len())),
                     status: ActivityStatus::Completed,
+                    call: None,
                     card: None,
                 }]
             }
@@ -411,6 +417,7 @@ fn tool_row(
         label,
         detail,
         status,
+        call: None,
         card,
     }
 }

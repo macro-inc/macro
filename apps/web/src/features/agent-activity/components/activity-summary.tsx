@@ -3,6 +3,20 @@ import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { ActivityRows, type ActivityRowView } from './activity-rows';
 
+const plural = (count: number, noun: string) =>
+  `${count} ${count === 1 ? noun : `${noun}s`}`;
+
+/**
+ * What a run did: the model's tool calls, and the SDK requests its code
+ * executions made, which are rows of their own but not calls.
+ */
+export function usedLabel(rows: readonly ActivityRowView[]): string {
+  const calls = new Set(rows.map((row) => row.call ?? row.id)).size;
+  const requests = rows.filter((row) => row.call).length;
+  const used = `Used ${plural(calls, 'tool')}`;
+  return requests > 0 ? `${used} · ${plural(requests, 'request')}` : used;
+}
+
 /**
  * A finished run of steps as one line that opens to the steps. Failed steps
  * are counted on the line, so folding the run never hides that one failed.
@@ -27,7 +41,7 @@ export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
         >
           <span>
             <TextShimmer
-              text={`Used ${count()} ${count() === 1 ? 'tool' : 'tools'}`}
+              text={usedLabel(props.rows)}
               active={running()}
             />
             <Show when={failed() > 0}>

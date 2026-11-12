@@ -286,6 +286,10 @@ pub struct AgentActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: AgentActivityStatus,
+    /// The model's tool call this step ran inside, for an SDK request a code
+    /// execution made.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call: Option<String>,
     /// What the step put in front of the person, in the session fold's card
     /// shape: a view the agent presented.
     #[serde(skip_serializing_if = "Option::is_none")]

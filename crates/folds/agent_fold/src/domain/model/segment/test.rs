@@ -102,6 +102,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 label: "Search documents".into(),
                 detail: None,
                 status: ActivityStatus::Completed,
+                call: Some("code-1".into()),
                 card: None,
             },
             ActivityRow {
@@ -109,6 +110,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 label: "Read email".into(),
                 detail: None,
                 status: ActivityStatus::Failed,
+                call: Some("code-1".into()),
                 card: None,
             },
             ActivityRow {
@@ -116,6 +118,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 label: "Create document".into(),
                 detail: None,
                 status: ActivityStatus::Interrupted,
+                call: Some("code-1".into()),
                 card: None,
             },
             ActivityRow {
@@ -123,6 +126,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
                 label: "Read email".into(),
                 detail: None,
                 status: ActivityStatus::Running,
+                call: Some("code-1".into()),
                 card: None,
             },
         ]
@@ -196,6 +200,7 @@ fn narration_work_and_answer_are_three_segments_with_the_steps_grouped() {
                 label: "Ran".to_owned(),
                 detail: Some("cargo test".to_owned()),
                 status: ActivityStatus::Completed,
+                call: None,
                 card: None,
             },
             ActivityRow {
@@ -203,6 +208,7 @@ fn narration_work_and_answer_are_three_segments_with_the_steps_grouped() {
                 label: "Read".to_owned(),
                 detail: Some("lib.rs".to_owned()),
                 status: ActivityStatus::Completed,
+                call: None,
                 card: None,
             },
         ]

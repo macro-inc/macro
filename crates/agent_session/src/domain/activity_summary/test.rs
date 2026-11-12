@@ -20,6 +20,7 @@ fn digest_keeps_the_newest_activity_rows_across_segments() {
         label: "Read".into(),
         detail: Some(format!("src/file_{id}.rs")),
         status: ActivityStatus::Completed,
+        call: None,
         card: None,
     };
     let segments = vec![
@@ -247,6 +248,7 @@ async fn the_kill_switch_stops_summaries_before_any_model_call() {
                         label: "Read".into(),
                         detail: Some("src/main.rs".into()),
                         status: ActivityStatus::Running,
+                        call: None,
                         card: None,
                     }],
                 },
@@ -305,6 +307,7 @@ async fn summaries_run_while_the_kill_switch_is_off() {
                         label: "Read".into(),
                         detail: Some("src/main.rs".into()),
                         status: ActivityStatus::Running,
+                        call: None,
                         card: None,
                     }],
                 },

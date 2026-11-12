@@ -126,6 +126,12 @@ describe('agent announcements', () => {
               rows: [
                 { id: 't1', label: 'Ran', detail: 'ls', status: 'completed' },
                 { id: 't2', label: 'Read', detail: null, status: 'completed' },
+                {
+                  id: 'code-1:1',
+                  label: 'Get contacts',
+                  call: 'code-1',
+                  status: 'completed',
+                },
               ],
             },
           ],
@@ -136,7 +142,7 @@ describe('agent announcements', () => {
     expect(response.status).toBe(200);
     const { markdown }: { markdown: string } = await response.json();
     expect(markdown).toBe(
-      'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"}],"sealed":true}</m-agent-activity>'
+      'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"},{"id":"code-1:1","label":"Get contacts","status":"completed","call":"code-1"}],"sealed":true}</m-agent-activity>'
     );
   });
   it('rejects a chat reply body it does not know', async () => {

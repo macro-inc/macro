@@ -73,6 +73,7 @@ const activityRow = z.object({
 	id: z.string(),
 	label: z.string(),
 	detail: z.string().nullish(),
+	call: z.string().nullish(),
 	status: z.enum(AGENT_ACTIVITY_STATUSES),
 	// A card this version cannot read is dropped, not the reply: the row
 	// still says what the step did.
@@ -191,6 +192,7 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
 															label: row.label,
 															status: row.status,
 															...(row.detail ? { detail: row.detail } : {}),
+															...(row.call ? { call: row.call } : {}),
 															...(row.card ? { card: row.card } : {}),
 														})),
 													},

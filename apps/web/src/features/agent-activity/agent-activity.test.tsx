@@ -122,6 +122,47 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   ]);
 });
 
+it('counts the model’s tool calls, with its code executions’ SDK requests beside them', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        {
+          id: 'code-1:1',
+          label: 'Get document text content',
+          status: 'completed',
+          call: 'code-1',
+        },
+        {
+          id: 'code-2:1',
+          label: 'Get contacts',
+          status: 'interrupted',
+          call: 'code-2',
+        },
+        {
+          id: 'code-3:1',
+          label: 'Get contacts',
+          status: 'completed',
+          call: 'code-3',
+        },
+        {
+          id: 'code-3:2',
+          label: 'Get user names with email',
+          status: 'completed',
+          call: 'code-3',
+        },
+        { id: 't1', label: 'Searched', status: 'completed' },
+      ]}
+      sealed
+    />
+  ));
+  expect(
+    view.getByRole('button', { name: 'Used 4 tools · 4 requests' })
+  ).toBeTruthy();
+});
+
 it('shows an open run as one line naming the step it is on, live from the session', () => {
   const view = render(() => (
     <AgentActivity

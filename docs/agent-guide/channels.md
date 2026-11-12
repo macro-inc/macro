@@ -223,8 +223,10 @@ at the same time take turns every two seconds. In a DM it is the typing row.
 A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
-Once a run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed), with a caret after it on hover, that opens
+Once a run closes, it folds to a `Used N tools` summary, where N counts the
+model's tool calls; SDK requests a code execution made are counted after it
+(`Used 3 tools · 130 requests`), and `· N failed` follows when a step failed.
+A caret appears after it on hover, and it opens
 to compact rows like the session's tool rows: the label, and **Failed** or
 **Interrupted** when a step did not finish.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are

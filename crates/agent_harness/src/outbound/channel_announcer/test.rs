@@ -455,6 +455,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Ran".into(),
                     detail: Some("TOKEN=private-value run-report".into()),
                     status: ActivityStatus::Completed,
+                    call: None,
                     card: None,
                 },
                 ActivityRow {
@@ -462,6 +463,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Searched".into(),
                     detail: Some("confidential acquisition".into()),
                     status: ActivityStatus::Completed,
+                    call: None,
                     card: None,
                 },
                 ActivityRow {
@@ -469,6 +471,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Fetched".into(),
                     detail: Some("https://internal.example/?token=private-value".into()),
                     status: ActivityStatus::Failed,
+                    call: None,
                     card: None,
                 },
             ],
@@ -585,6 +588,7 @@ fn a_stored_step_keeps_the_view_it_presented() {
                 label: "Present view".into(),
                 detail: Some("Launch notes".into()),
                 status: ActivityStatus::Completed,
+                call: None,
                 card: Some(ActivityCard::View { view: view.clone() }),
             }],
         },

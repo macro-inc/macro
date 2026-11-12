@@ -10,6 +10,8 @@ export type ActivityRowView = {
   id: string;
   label: string;
   status: 'running' | 'completed' | 'failed' | 'interrupted';
+  /** The model's tool call an SDK request ran inside; absent for the call itself. */
+  call?: string | null;
   /** What the step put in front of the person; see `AgentActivity`. */
   card?: unknown;
 };

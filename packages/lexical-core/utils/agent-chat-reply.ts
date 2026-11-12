@@ -120,6 +120,7 @@ function segmentMarkdown(
           label: row.label,
           status: row.status,
           ...(row.detail ? { detail: row.detail } : {}),
+          ...(row.call ? { call: row.call } : {}),
           ...(row.card ? { card: row.card } : {}),
         })),
         sealed: segment.sealed,
