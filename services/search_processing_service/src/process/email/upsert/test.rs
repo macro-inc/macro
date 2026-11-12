@@ -58,3 +58,55 @@ fn indexes_a_message_without_a_from_contact() {
     assert_eq!(args.sender, "");
     assert_eq!(args.content, "body");
 }
+
+/// Thread d205 holds one promotions message from a sender the owner marked
+/// important, so the inbox shows it as Signal. Search filters Signal and
+/// Noise on the indexed document alone, which carries the labels but not the
+/// owner's sender rules.
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../../crates/email_db_client/fixtures",
+        scripts("sync_thread_signal_flag")
+    )
+)]
+async fn a_thread_the_inbox_shows_as_signal_is_indexed_as_signal(pool: PgPool) {
+    let thread = Uuid::parse_str("00000000-0000-0000-0000-00000000d205").unwrap();
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000d506").unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    email_db_client::threads::update::recompute_signal(&mut connection, thread)
+        .await
+        .unwrap();
+    let inbox_signal: bool =
+        sqlx::query_scalar("SELECT is_signal FROM email_threads WHERE id = $1")
+            .bind(thread)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        inbox_signal,
+        "the fixture thread should be Signal in the inbox"
+    );
+    let message = email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(
+        &pool,
+        &message_id,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let document = serde_json::to_value(upsert_args(
+        message,
+        "body".into(),
+        "owner",
+        Vec::new(),
+        EpochMillis::new(0).unwrap(),
+    ))
+    .unwrap();
+
+    assert_eq!(
+        document.get("is_signal"),
+        Some(&serde_json::Value::Bool(true)),
+        "{document}"
+    );
+}
