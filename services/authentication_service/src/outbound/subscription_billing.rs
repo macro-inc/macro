@@ -78,35 +78,27 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
         user: &MacroUserIdStr<'_>,
     ) -> Result<Option<SubscriptionBillingFacts>, PlanChangeError> {
         let (access, seats, computers) = self.directory(scope, user).await?;
-        let mut provider_items = subscription.items.data.clone();
-        if subscription.items.has_more {
-            let mut params = stripe::ListSubscriptionItems::new(subscription.id.clone());
-            params.limit = Some(100);
-            params.starting_after = provider_items.last().map(|item| item.id.clone());
-            loop {
-                let page = stripe::SubscriptionItem::list(stripe, &params)
-                    .await
-                    .map_err(anyhow::Error::from)?;
-                let last = page.data.last().map(|item| item.id.clone());
-                provider_items.extend(page.data);
-                if !page.has_more {
-                    break;
-                }
-                params.starting_after =
-                    Some(last.ok_or_else(|| anyhow::anyhow!("missing subscription item cursor"))?);
-            }
-        }
+        let provider_items = if subscription.items.has_more {
+            teams::outbound::customer_repo::list_subscription_items(stripe, &subscription.id)
+                .await
+                .map_err(anyhow::Error::from)?
+        } else {
+            subscription.items.data.clone()
+        };
         let mut currency = None;
         let mut interval = None;
         let mut items = Vec::new();
         for item in provider_items {
             // A computer's own price carries its id too (schedule phases drop item metadata).
-            let computer_id = teams::outbound::customer_repo::item_computer_id(&item)
-                .and_then(|id| ComputerId::parse_uuid_str(id).ok());
+            let computer_id = teams::outbound::customer_repo::item_computer_uuid(&item)
+                .map(ComputerId::new_from_uuid);
+            // Any of these hides the whole breakdown; say which item did.
             let Some(price) = item.price else {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: item has no price");
                 return Ok(None);
             };
             let Some(fixed) = fixed_price(&price) else {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: item price is not fixed");
                 return Ok(None);
             };
             if currency
@@ -114,6 +106,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                 .is_some_and(|value| value != &fixed.currency)
                 || interval.is_some_and(|value| value != fixed.interval)
             {
+                tracing::warn!(subscription_item = %item.id, "billing breakdown dropped: items mix currencies or intervals");
                 return Ok(None);
             }
             currency = Some(fixed.currency);
