@@ -141,17 +141,7 @@ function DesktopTasksControls() {
         </Show>
       </HeaderActionGroup>
       <HeaderActionGroup label="Task view options" size="md">
-        <Show
-          when={!isSearching()}
-          fallback={
-            <span
-              class="text-xs text-ink-muted"
-              title="Search keeps its existing result ordering. Clear search to sort tasks."
-            >
-              Search order
-            </span>
-          }
-        >
+        <Show when={!isSearching()}>
           <ListSortDropdown
             grouped
             size="icon-md"

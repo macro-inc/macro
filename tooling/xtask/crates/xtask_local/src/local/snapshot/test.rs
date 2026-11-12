@@ -27,7 +27,7 @@ fn key_is_deterministic_and_port_free() {
 /// Any kickstart change other than the redirect URLs is a different init, so
 /// it must miss.
 #[test]
-fn kickstart_without_redirect_urls_keeps_everything_else() {
+fn kickstart_without_instance_urls_keeps_everything_else() {
     let doc = |urls: &[&str], lambda: &str| {
         crate::local::kickstart::build(
             urls.iter().map(|url| url.to_string()).collect(),
@@ -37,7 +37,7 @@ fn kickstart_without_redirect_urls_keeps_everything_else() {
             None,
         )
     };
-    let strip = crate::local::kickstart::without_redirect_urls;
+    let strip = crate::local::kickstart::without_instance_urls;
 
     assert_eq!(
         strip(doc(

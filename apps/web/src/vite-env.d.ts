@@ -24,6 +24,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REMINDERS?: string;
   readonly VITE_ENABLE_ENTITY_APPEARANCE?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
+  readonly VITE_ENABLE_EVENT_ROUTINES?: string;
   readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
   readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;
   readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;

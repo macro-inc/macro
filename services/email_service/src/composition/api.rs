@@ -219,7 +219,99 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             access: entity_access_service.as_ref().clone(),
         },
     );
+    let inbox_catalog = Arc::new(email::domain::mailbox::catalog::InboxCatalogService(
+        crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
+    ));
+    let signature_sfs_client = Arc::new(sfs_client.clone());
+    let backfill_jobs = Arc::new(email::domain::backfill_jobs::BackfillJobService {
+        repository: crate::outbound::backfill_jobs::PgBackfillJobs(db.clone()),
+        queue: crate::outbound::backfill_jobs::BackfillInitializationQueue(
+            sqs_client.as_ref().clone(),
+        ),
+    });
+    let mailbox_initializer = Arc::new(
+        email::domain::mailbox::initialization::MailboxInitializationService::new(
+            crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),
+            crate::outbound::mailbox_init::MicrosoftGrantSource(
+                auth_service_client.as_ref().clone(),
+            ),
+        )
+        .with_connections_enabled(config.outlook_connections_enabled),
+    );
+    let inbox_connection = Arc::new(email::domain::mailbox::connection::InboxConnectionService {
+        links: crate::outbound::inbox_connection::PgConnectionLinks {
+            db: db.clone(),
+            lookup: email::outbound::EmailPgRepo::new(db.clone()),
+        },
+        transactions: crate::outbound::inbox_connection::PgConnectionTransactions(db.clone()),
+        provider: crate::outbound::inbox_connection::GoogleConnectionProvider {
+            gmail: email_api.clone(),
+            auth: auth_service_client.clone(),
+        },
+        grants: crate::outbound::inbox_connection::GoogleConnectionGrants {
+            db: db.clone(),
+            calendar: calendar_service.clone(),
+        },
+        initializer: mailbox_initializer.clone(),
+        backfill: crate::outbound::inbox_connection::InitialConnectionBackfill {
+            jobs: backfill_jobs.clone(),
+            history: crate::outbound::inbox_connection::ConnectionHistory(db.clone()),
+            events: crate::outbound::inbox_connection::ConnectionEvents(macro_event_broker.clone()),
+        },
+        identity: crate::outbound::inbox_connection::LoginEmailIdentity,
+        failure_observer: crate::api::context::InitFailureObserver,
+    });
     Ok(ApiContext {
+        gmail_push: Arc::new(email::domain::mailbox::gmail_push::GmailPushService {
+            authentication: email::domain::mailbox::gmail_push::GooglePushAuthentication {
+                cache: crate::outbound::gmail_push::GooglePushKeyCache(redis_client.clone()),
+                source: crate::outbound::gmail_push::GooglePushKeySource(gmail_client.clone()),
+                verifier: crate::outbound::gmail_push::GooglePushTokenVerifier(
+                    gmail_client.clone(),
+                ),
+            },
+            require_authentication: cfg!(feature = "gmail_webhook_auth"),
+            inboxes: crate::outbound::gmail_push::PgPushInboxes(db.clone()),
+            queue: crate::outbound::gmail_push::GmailPushNotifications(sqs_client.as_ref().clone()),
+        }),
+        user_inbox_deletion: Arc::new(
+            email::domain::mailbox::lifecycle::InboxLifecycleService::new(
+                crate::outbound::user_deletion::PgDeletedUserInboxes(db.clone()),
+                crate::outbound::user_deletion::DeletedUserNotifications(
+                    sqs_client.as_ref().clone(),
+                ),
+            ),
+        ),
+        inbox_connection,
+        backfill_jobs,
+        calendar_disconnect: Arc::new(
+            email::domain::mailbox::calendar_disconnect::CalendarDisconnectService {
+                catalog: inbox_catalog.clone(),
+                calendar: crate::outbound::calendar_disconnect::CalendarDisconnect(
+                    calendar_mutation_service.clone(),
+                ),
+            },
+        ),
+        contacts: Arc::new(email::domain::mailbox::contacts::list::ContactListService {
+            catalog: inbox_catalog.clone(),
+            repository: crate::outbound::inbox_contacts::PgInboxContacts(db.clone()),
+        }),
+        scheduled_drafts: Arc::new(email::domain::scheduled::drafts::ScheduledDraftService {
+            repository: crate::outbound::scheduled_drafts::PgScheduledDrafts(db.clone()),
+        }),
+        signature_settings: Arc::new(
+            email::domain::signature_settings::SignatureSettingsService {
+                writer: crate::outbound::signature_settings::PgSignatureSettings(db.clone()),
+                images: crate::outbound::signature_settings::SignatureImageRehoster {
+                    db: db.clone(),
+                    sfs: signature_sfs_client,
+                },
+                provider: crate::outbound::signature_settings::GmailSignatures {
+                    email_api: email_api.clone(),
+                    gmail: gmail_client.clone(),
+                },
+            },
+        ),
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
             repository: crate::outbound::message_labels::PgMessageLabels(db.clone()),
             enqueuer: sqs_client.as_ref().clone(),
@@ -259,9 +351,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                 email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
             ),
         ),
-        inbox_catalog: Arc::new(email::domain::mailbox::catalog::InboxCatalogService(
-            crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
-        )),
+        inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(
             db.clone(),
             email_api.clone(),
@@ -331,41 +421,22 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
             access: entity_access_service.as_ref().clone(),
         }),
-        mailbox_initializer: Arc::new(
-            email::domain::mailbox::initialization::MailboxInitializationService::new(
-                crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),
-                crate::outbound::mailbox_init::MicrosoftGrantSource(
-                    auth_service_client.as_ref().clone(),
-                ),
-            )
-            .with_connections_enabled(config.outlook_connections_enabled),
-        ),
+        mailbox_initializer,
         read_receipts,
-        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
-        // calendar_service's sync kill switch rejects RSVP writes itself.
-        invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(
-            db.clone(),
-        ))),
-        db,
+        invitations: Arc::new(email::domain::invitations::InvitationService::new(
+            email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+            // calendar_service's sync kill switch rejects RSVP writes itself.
+            CalendarInvitationResolver::new(PgCalendarRepository::new(db.clone())),
+            calendar_mutation_service,
+        )),
+        correlation: agent_correlation::inbound::CorrelationState::new(db, jwt_args),
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        auth_service_client,
-        redis_client,
-        sqs_client,
-        sfs_client: Arc::new(sfs_client),
-        gmail_client: gmail_client.clone(),
-        email_api,
-        s3_client: Arc::new(s3_client),
-        dss_client: Arc::new(dss_client),
-        system_properties_service,
         authorization_state: authorization_state.clone(),
-        jwt_args,
         email_service,
         entity_access_service,
         email_thread_state,
         gmail_token_state,
-        macro_event_broker: Arc::new(macro_event_broker),
         calendar_service,
-        calendar_mutation_service,
     })
 }

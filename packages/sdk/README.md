@@ -282,6 +282,7 @@ server refuses anything but one `SELECT` that compiles, and chart columns the
 `SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
 `<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
 views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
 
 ```ts
 const question = await database.saveQuery({
@@ -626,10 +627,18 @@ kind.
 
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
-an identical retry is safe. Existing addresses cannot be replaced or cleared.
-`setCompany(company)` links or switches a known personal-provider contact to a
-Company handle in the same team. Unlinking is not supported. Both preserve
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
 identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
