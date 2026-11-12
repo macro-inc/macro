@@ -60,7 +60,7 @@ fn callers_cannot_choose_identity_or_tools() {
 
 #[test]
 fn routing_input_carries_the_latest_and_a_clipped_previous_message() {
-    let previous = "summarise Q2 revenue ".repeat(200);
+    let previous = "summarise Q2 revenue ".repeat(500);
     let request = RoutingRequest {
         latest: "now do it for Q3",
         previous: Some(&previous),
@@ -71,7 +71,7 @@ fn routing_input_carries_the_latest_and_a_clipped_previous_message() {
     assert_eq!(input["request"], json!("now do it for Q3"));
     assert_eq!(
         input["previousRequest"].as_str().unwrap().chars().count(),
-        2000
+        8000
     );
     assert!(previous.starts_with(input["previousRequest"].as_str().unwrap()));
 }

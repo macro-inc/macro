@@ -17,11 +17,8 @@ pub const MAX_PROMPT_BYTES: usize = 64 * 1024;
 /// Maximum compact JSON size of the requested output schema.
 pub const MAX_SCHEMA_BYTES: usize = 16 * 1024;
 
-/// Jev reads at most this much of the newest user message.
-const MAX_LATEST_CHARS: usize = 8000;
-/// A follow-up needs only the gist of the message before it, and the smaller
-/// cap leaves the questions more of the decision request's size limit.
-const MAX_PREVIOUS_CHARS: usize = 2000;
+/// Jev reads at most this much of each user message.
+const MAX_REQUEST_CHARS: usize = 8000;
 
 /// The user's words a turn answers, for routing what the turn loads.
 #[derive(Debug, Clone, Copy)]
@@ -37,9 +34,9 @@ impl RoutingRequest<'_> {
     /// The decision input: the newest message under `latest_key` and the one
     /// before it under `previousRequest`, each clipped.
     pub fn decision_input(&self, latest_key: &str) -> Value {
-        let mut input = serde_json::json!({ latest_key: clip(self.latest, MAX_LATEST_CHARS) });
+        let mut input = serde_json::json!({ latest_key: clip(self.latest, MAX_REQUEST_CHARS) });
         if let Some(previous) = self.previous {
-            input["previousRequest"] = clip(previous, MAX_PREVIOUS_CHARS).into();
+            input["previousRequest"] = clip(previous, MAX_REQUEST_CHARS).into();
         }
         input
     }
