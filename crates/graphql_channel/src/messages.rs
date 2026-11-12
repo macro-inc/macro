@@ -249,8 +249,9 @@ impl GraphqlChannelMessages {
         ID(self.channel_id.to_string())
     }
 
-    /// One page of the channel's timeline, oldest row first: root messages
-    /// with their thread summaries, and the facts shown between them. `seq`
+    /// One page of the channel's timeline, newest row first like a REST
+    /// page: root messages with their thread summaries, and the facts shown
+    /// between them. `seq`
     /// is read before the rows, so `changes(since: seq)` returns everything
     /// the page can lack.
     #[tracing::instrument(skip_all, fields(channel_id = %self.channel_id), err(Debug))]

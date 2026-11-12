@@ -3821,8 +3821,9 @@ type GraphqlChannelMessages {
 	"""
 	id: ID!
 	"""
-	One page of the channel's timeline, oldest row first: root messages
-	with their thread summaries, and the facts shown between them. `seq`
+	One page of the channel's timeline, newest row first like a REST
+	page: root messages with their thread summaries, and the facts shown
+	between them. `seq`
 	is read before the rows, so `changes(since: seq)` returns everything
 	the page can lack.
 	"""
@@ -4175,7 +4176,7 @@ input GraphqlChannelTimelineInput {
 }
 
 """
-One page of a channel timeline, oldest entry first.
+One page of a channel timeline, newest entry first.
 """
 type GraphqlChannelTimelinePage {
 	"""

@@ -370,7 +370,7 @@ impl From<MessageTimelineEntry> for GraphqlChannelTimelineEntry {
     }
 }
 
-/// One page of a channel timeline, oldest entry first.
+/// One page of a channel timeline, newest entry first.
 #[derive(SimpleObject, Clone, Debug)]
 #[graphql(name = "GraphqlChannelTimelinePage")]
 pub struct GraphqlChannelTimelinePage {
