@@ -287,6 +287,7 @@ fn only_a_probe_changes_the_query() {
         format!(
             include_str!("query.sql"),
             attention_source = "pending",
+            probe_skips_pending = "",
             thread_keyed = thread_keyed(AttentionKeying::ThreadScoped),
             own_work_ae = own_work("ae"),
             own_work_newer = own_work("newer"),
@@ -310,7 +311,13 @@ fn only_a_probe_changes_the_query() {
 
     let mut probe = req(ATTENTION, &link_ids, &sources);
     probe.assume_attention = true;
-    assert_ne!(build_query(&probe), normal);
+    let probe = build_query(&probe);
+    assert_ne!(probe, normal);
+    // A probe reads neither the viewer's pending notifications nor reads
+    // its candidates from them, so its cost does not grow with them.
+    assert!(probe.contains("WHERE un.user_id = $1 AND FALSE"));
+    assert!(!normal.contains("AND FALSE\n    AND un.deleted_at"));
+    assert!(!probe.contains("FROM pending\n            WHERE ($3::timestamptz"));
 }
 
 #[sqlx::test(
@@ -621,5 +628,81 @@ async fn runtime_access_notifications_are_candidates(pool: Pool<Postgres>) -> an
             ),
         ]
     );
+    Ok(())
+}
+
+/// The planner's total cost for the attention query of `request`.
+async fn planned_cost(pool: &Pool<Postgres>, request: &AttentionCandidateRequest<'_>) -> f64 {
+    let types = requested_types(request);
+    let (only_types, only_ids): (Option<Vec<&str>>, Option<Vec<&str>>) = match request.only {
+        Some(only) => (
+            Some(only.iter().map(|e| e.entity_type.into()).collect()),
+            Some(only.iter().map(|e| e.entity_id.as_ref()).collect()),
+        ),
+        None => (None, None),
+    };
+    let plan: serde_json::Value = sqlx::QueryBuilder::<Postgres>::new(format!(
+        "EXPLAIN (FORMAT JSON) {}",
+        build_query(request)
+    ))
+    .build_query_scalar()
+    .bind(request.user_id.as_ref())
+    .bind(&types)
+    .bind(None::<chrono::DateTime<chrono::Utc>>)
+    .bind(None::<String>)
+    .bind(request.link_ids)
+    .bind(request.limit as i64)
+    .bind(Vec::<&str>::new())
+    .bind(Vec::<&str>::new())
+    .bind(request.own_work)
+    .bind(only_types)
+    .bind(only_ids)
+    .persistent(false)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    plan[0]["Plan"]["Total Cost"].as_f64().unwrap()
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_probe_costs_the_same_however_many_notifications_are_pending(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A viewer with a large inbox: 50,000 pending notifications.
+    sqlx::query!(
+        "WITH n AS (
+            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender)
+            SELECT gen_random_uuid(), 'document_mention', gen_random_uuid()::text, 'document', 'test'
+            FROM generate_series(1, 50000)
+            RETURNING id, event_item_id
+        )
+        INSERT INTO user_notification (user_id, notification_id, state, event_item_type, event_item_id, notification_event_type)
+        SELECT $1, id, 'unseen', 'document', event_item_id, 'document_mention' FROM n",
+        USER_1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::Document.with_entity_string(DOC_F.to_string())];
+    let mut probe = req(ATTENTION, &link_ids, &sources);
+    probe.only = Some(&only);
+    probe.assume_attention = true;
+    let mut page = req(ATTENTION, &link_ids, &sources);
+    page.only = Some(&only);
+
+    // Postgres JIT-compiles a query planned above `jit_above_cost` (100,000
+    // by default), which costs a probe hundreds of milliseconds. A probe
+    // never reads the pending notifications, so it stays far below it; a
+    // normal page, which reads them all, does not.
+    let probe_cost = planned_cost(&pool, &probe).await;
+    let page_cost = planned_cost(&pool, &page).await;
+    assert!(probe_cost < 1_000.0, "probe planned at {probe_cost}");
+    assert!(page_cost > 10_000.0, "page planned at {page_cost}");
     Ok(())
 }

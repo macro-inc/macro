@@ -89,7 +89,7 @@ pending AS MATERIALIZED (
         WHERE n.id = un.notification_id
         OFFSET 0
     ) notified
-    WHERE un.user_id = $1
+    WHERE un.user_id = $1{probe_skips_pending}
     AND un.deleted_at IS NULL
     AND un.state <> 'done'
     AND un.created_at >= COALESCE(
