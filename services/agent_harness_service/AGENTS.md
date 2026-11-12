@@ -54,7 +54,7 @@ Pulumi stacks; they do not host extra agent processes.
   workers; the library also exports their OpenAPI document. Chat turns and
   projections pick their tools per user with `ai_tools::ChatToolsets`: code
   mode behind `ai-chat-code-mode`, run by a `UserCodeModeService` on the
-  sessions' executor that `main.rs` hands to `cognition::build`.
+  chat's own executor budget (8 running, 16 queued) that `main.rs` hands to `cognition::build`.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
