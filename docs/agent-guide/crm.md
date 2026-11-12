@@ -626,8 +626,12 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. Vendor, brand
-and bulk-sender filters still apply. Turning the filter back on stops future
+never enable sync or enroll a mailbox. In the contact company picker, Next
+options (or PageDown on desktop) appends later browse or search pages to the
+visible companies. The control shows loading and page failures with retry, and
+disappears at the end of the results. Selecting a company keeps singleton
+replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
+apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain
