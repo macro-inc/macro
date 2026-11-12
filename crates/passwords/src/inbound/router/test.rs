@@ -784,3 +784,4 @@ async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_muta
 }
 
 mod admission;
+mod capabilities;

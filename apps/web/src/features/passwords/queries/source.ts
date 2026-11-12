@@ -49,6 +49,13 @@ function folder(dto: FolderDto): PasswordFolder {
   return { id: dto.id, name: dto.name, parentId: dto.parentId ?? null };
 }
 
+/**
+ * Busy retries outlast one vault write holding the team lock (about a second
+ * under load): the jittered waits add up to between 1.5 and 4.5 seconds.
+ */
+const BUSY_RETRIES = 4;
+const BUSY_BACKOFF_MS = 200;
+
 function failure(codes: readonly (string | undefined)[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
   return 'failed';
@@ -113,17 +120,18 @@ export function createPasswordSource(
             },
           }
         );
+        // A response for a viewer that has since changed is dropped, busy or not.
+        if (!isCurrent()) return err('failed' as const);
         if (
           response.isErr() &&
-          retries < 2 &&
+          retries < BUSY_RETRIES &&
           response.error.some(
             (error) => error.code === PasswordErrorCode.vault_busy
           )
         ) {
-          await sleep(100 * 2 ** retries * (0.5 + Math.random()));
+          await sleep(BUSY_BACKOFF_MS * 2 ** retries * (0.5 + Math.random()));
           continue;
         }
-        if (!isCurrent()) return err('failed' as const);
         return response.mapErr((errors) =>
           failure(errors.map((error) => error.code))
         );

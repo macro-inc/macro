@@ -15281,6 +15281,10 @@ export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api' | 
  */
 export type PasswordItemMetadata = PasswordItemFields & {
     /**
+     * Whether this caller may edit item fields or verification-code enrollment now.
+     */
+    canEdit: boolean;
+    /**
      * Whether this caller may change grants or delete the team item now.
      */
     canManage: boolean;
@@ -17201,6 +17205,12 @@ export type RowId = string;
  * A write to a table's rows.
  */
 export type RowsChange = {
+    /**
+     * The new rows' ids, minted by the client (UUIDv7), one per row in
+     * order, so later ops of the request and a retry can name them;
+     * left out, the server mints them.
+     */
+    ids?: Array<string>;
     kind: 'insert';
     /**
      * One entry per new row: the cells it starts with. Columns left out
@@ -21037,6 +21047,12 @@ export type TakenId = {
      */
     id: string;
     kind: 'view';
+} | {
+    /**
+     * A row's.
+     */
+    id: string;
+    kind: 'row';
 };
 
 /**

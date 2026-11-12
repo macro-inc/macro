@@ -8,10 +8,17 @@ import {
   type PasswordValues,
 } from '../core/types';
 
-export function createFakePasswordSource(): PasswordSource {
-  let items: PasswordItem[] = [];
+/** An item the fake starts with, such as one the viewer may only view. */
+export type FakeSeed = { item: PasswordItem; values: PasswordValues };
+
+export function createFakePasswordSource(
+  seed: FakeSeed[] = []
+): PasswordSource {
+  let items: PasswordItem[] = seed.map((entry) => entry.item);
   let folders: PasswordFolder[] = [];
-  const values = new Map<string, PasswordValues>();
+  const values = new Map<string, PasswordValues>(
+    seed.map((entry) => [entry.item.id, entry.values])
+  );
   const grants = new Map<string, PasswordGrant[]>();
   return {
     async list() {
@@ -38,6 +45,7 @@ export function createFakePasswordSource(): PasswordSource {
           ? (items.find((item) => item.id === id)?.sharedWithTeam ?? true)
           : !draft.private,
         canManage: true,
+        canEdit: true,
         version: (version ?? 0) + 1,
         hasTotp: false,
         createdAt: timestamp,

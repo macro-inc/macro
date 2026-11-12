@@ -1,3 +1,5 @@
+use tower::ServiceExt;
+
 use super::*;
 use url::Url;
 
@@ -62,9 +64,113 @@ fn test_allows_octet_stream_content_type() {
 }
 
 #[test]
+fn test_allows_image_content_types_and_aliases() {
+    for content_type in [
+        "image/x-png",
+        "image/x-ms-bmp",
+        "image/jpg",
+        "image/pjpeg",
+        "image/apng",
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/tiff",
+        "image/heic",
+        "image/heif",
+        "image/jxl",
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+        "image/svg+xml",
+        "image/svg+xml; charset=utf-8",
+        "IMAGE/PNG",
+    ] {
+        assert!(is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
 fn test_rejects_non_image_content_types() {
-    assert!(!is_allowed_content_type("text/html"));
-    assert!(!is_allowed_content_type("application/json"));
+    for content_type in [
+        "text/html",
+        "text/html; charset=utf-8",
+        "application/json",
+        "application/xhtml+xml",
+        "text/xml",
+        "image/x-xbitmap",
+        "image/",
+    ] {
+        assert!(!is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
+fn test_unsupported_media_type_is_415() {
+    let response = ProxyError::UnsupportedMediaType("text/html".into()).into_response();
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
+
+const SVG_WITH_SCRIPT: &str =
+    r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>"#;
+
+async fn send_through_sandbox(response: fn() -> Response) -> Response {
+    let router: Router =
+        with_sandbox_headers(Router::new().route("/", get(move || async move { response() })));
+    router
+        .oneshot(axum::http::Request::get("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+fn assert_sandboxed(response: &Response) {
+    let headers = response.headers();
+    assert_eq!(headers["x-content-type-options"], "nosniff");
+    assert_eq!(
+        headers["content-security-policy"],
+        "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    );
+}
+
+#[tokio::test]
+async fn test_svg_with_script_is_sandboxed_attachment() {
+    let response = send_through_sandbox(|| {
+        image_response("image/svg+xml", Body::from(SVG_WITH_SCRIPT)).unwrap()
+    })
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_sandboxed(&response);
+    let headers = response.headers();
+    assert_eq!(headers["content-type"], "image/svg+xml");
+    assert_eq!(headers["content-disposition"], "attachment");
+    assert!(
+        headers["content-security-policy"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .any(|directive| directive.trim() == "sandbox")
+    );
+}
+
+#[tokio::test]
+async fn test_raster_response_is_sandboxed_inline() {
+    let response =
+        send_through_sandbox(|| image_response("image/png", Body::empty()).unwrap()).await;
+
+    assert_sandboxed(&response);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    assert!(response.headers().get("content-disposition").is_none());
+}
+
+#[tokio::test]
+async fn test_error_response_is_sandboxed() {
+    let response = send_through_sandbox(|| {
+        ProxyError::UnsupportedMediaType("text/html".into()).into_response()
+    })
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert_sandboxed(&response);
 }
 
 #[test]
@@ -132,7 +238,7 @@ fn test_is_private_ip_public() {
 fn test_is_retryable_without_ua() {
     // UA-rejection symptoms — worth a no-UA retry.
     assert!(ProxyError::UpstreamStatus(StatusCode::FORBIDDEN).is_retryable_without_ua());
-    assert!(ProxyError::NotAnImage("text/html".into()).is_retryable_without_ua());
+    assert!(ProxyError::UnsupportedMediaType("text/html".into()).is_retryable_without_ua());
     // Not UA-related — retrying without a UA wouldn't help.
     assert!(!ProxyError::UpstreamTimeout("timed out".into()).is_retryable_without_ua());
     assert!(!ProxyError::UpstreamConnect("refused".into()).is_retryable_without_ua());
@@ -260,9 +366,9 @@ async fn proxy_error_contract_preserves_status_body_and_content_type() {
             "upstream returned status 500 Internal Server Error",
         ),
         (
-            ProxyError::NotAnImage("text/html".into()),
+            ProxyError::UnsupportedMediaType("text/html".into()),
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "upstream content-type is not an image: text/html",
+            "upstream content-type is not a supported image: text/html",
         ),
         (
             ProxyError::ImageTooLarge {
@@ -407,6 +513,6 @@ fn generic_proxy_preserves_upstream_mime_header_and_missing_type_fallback() {
             .unwrap(),
     );
     assert!(
-        matches!(extract_content_type(&response), Err(ProxyError::NotAnImage(content_type)) if content_type == "text/html")
+        matches!(extract_content_type(&response), Err(ProxyError::UnsupportedMediaType(content_type)) if content_type == "text/html")
     );
 }

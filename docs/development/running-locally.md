@@ -307,12 +307,25 @@ across instances) debugging containers:
   Prometheus behind it. Rust services export spans and `tracing` events over
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
-  `--traces jaeger|datadog`, or disable with `--traces off`.
+  `--traces jaeger|datadog`, or disable with `--traces off`. A running
+  collector is reused as-is and never recreated, so other stacks keep their
+  network attachments to it; to pick up a changed compose definition, run
+  `docker rm -f macro-lgtm-1` and start a stack again.
 - **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
   protocol on http://localhost:9222, for agents driving the app (the
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
   `.cursor/mcp.json` points at it). Watch what an agent is doing live at
   http://localhost:6080/vnc.html.
+
+Older local-tool builds can recreate the shared LGTM collector and drop other
+stacks' network attachments. For a static frontend refresh, reuse the
+complete recorded binary set with `just stack update --frontend --binaries-dir
+<recorded-dir> --instance <name>` to avoid backend builds and collector startup.
+`--traces off` also skips collector startup, but omits automatic backend OTLP
+wiring and disables Vite browser telemetry. When collecting trace proof, preserve
+explicit backend and browser exporter settings and connect the existing collector
+to the instance's services network with the `otel-collector` alias, without
+restarting it.
 
 See `.agents/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.

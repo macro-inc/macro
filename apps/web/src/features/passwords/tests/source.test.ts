@@ -135,30 +135,149 @@ it('preserves cookie refresh for an expired session and keeps ordinary permissio
 
 it('bounds busy retries with jittered exponential backoff and records their count without credential values', async () => {
   vi.useFakeTimers();
-  vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(1);
-  const started = Date.now();
-  const attempts: number[] = [];
+  const busy = async () =>
+    new Response(JSON.stringify({ code: PasswordErrorCode.vault_busy }), {
+      status: 409,
+    });
+  // The shortest and longest jitter bound the total wait at 1.5 and 4.5 seconds.
+  for (const [jitter, expected] of [
+    [0, [0, 100, 300, 700, 1500]],
+    [1, [0, 300, 900, 2100, 4500]],
+  ] as const) {
+    mocks.fetch.mockReset();
+    mocks.attributes.mockReset();
+    vi.spyOn(Math, 'random').mockReturnValue(jitter);
+    const started = Date.now();
+    const attempts: number[] = [];
+    mocks.fetch.mockImplementation(async () => {
+      attempts.push(Date.now() - started);
+      return busy();
+    });
+    const pending = createPasswordSource('team', CURRENT).reveal('item');
+    await vi.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+    expect(result.isErr() && result.error).toBe('failed');
+    expect(attempts).toEqual(expected);
+    expect(
+      mocks.attributes.mock.calls
+        .filter(([name]) => name === 'retry.count')
+        .map(([, value]) => value)
+    ).toEqual([0, 1, 2, 3, 4]);
+  }
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  expect(JSON.stringify(mocks.attributes.mock.calls)).not.toContain(
+    'synthetic-secret'
+  );
+});
+
+it('succeeds after three busy answers within the retry budget', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  for (let attempt = 0; attempt < 3; attempt++)
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: PasswordErrorCode.vault_busy }), {
+        status: 409,
+      })
+    );
+  mocks.fetch.mockResolvedValueOnce(
+    new Response(JSON.stringify(disclosed), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+  const pending = createPasswordSource('team', CURRENT).reveal('item');
+  await vi.advanceTimersByTimeAsync(1000);
+  expect((await pending).isOk()).toBe(true);
+  expect(mocks.fetch).toHaveBeenCalledTimes(4);
+});
+
+it('sends nothing more once the viewer changes during a busy backoff', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  let answered: (() => void) | undefined;
+  const firstAnswer = new Promise<void>((resolve) => {
+    answered = resolve;
+  });
   mocks.fetch.mockImplementation(async () => {
-    attempts.push(Date.now() - started);
+    answered?.();
     return new Response(
       JSON.stringify({ code: PasswordErrorCode.vault_busy }),
       { status: 409 }
     );
   });
-  const pending = createPasswordSource('team', CURRENT).reveal('item');
-  await vi.advanceTimersByTimeAsync(1000);
+  const viewer = new AbortController();
+  let current = true;
+  const pending = createPasswordSource('team', {
+    isCurrent: () => current,
+    signal: viewer.signal,
+  }).save(
+    undefined,
+    undefined,
+    {
+      name: 'Credential',
+      kind: 'login',
+      url: '',
+      folderId: null,
+      favorite: false,
+      private: false,
+      values: {
+        username: '',
+        password: 'synthetic-secret',
+        notes: '',
+        fields: [],
+      },
+    },
+    '019a0000-0000-7000-8000-000000000002'
+  );
+  await firstAnswer;
+  // The account changes while the first retry is waiting.
+  current = false;
+  viewer.abort();
+  await vi.advanceTimersByTimeAsync(5000);
   const result = await pending;
   expect(result.isErr() && result.error).toBe('failed');
-  expect(attempts).toEqual([0, 50, 350]);
-  expect(
-    mocks.attributes.mock.calls
-      .filter(([name]) => name === 'retry.count')
-      .map(([, value]) => value)
-  ).toEqual([0, 1, 2]);
-  expect(mocks.refresh).not.toHaveBeenCalled();
-  expect(JSON.stringify(mocks.attributes.mock.calls)).not.toContain(
-    'synthetic-secret'
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+});
+
+it('drops a busy answer that arrives after the viewer changed without waiting out a backoff', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  let answer: ((response: Response) => void) | undefined;
+  let sent: (() => void) | undefined;
+  const requested = new Promise<void>((resolve) => {
+    sent = resolve;
+  });
+  mocks.fetch.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+        sent?.();
+      })
   );
+  let current = true;
+  let settled = false;
+  const source = createPasswordSource('team', {
+    isCurrent: () => current,
+    signal: new AbortController().signal,
+  });
+  const pending = (async () => {
+    const result = await source.reveal('item');
+    settled = true;
+    return result;
+  })();
+  await requested;
+  current = false;
+  answer?.(
+    new Response(JSON.stringify({ code: PasswordErrorCode.vault_busy }), {
+      status: 409,
+    })
+  );
+  // No timer advances: a retiring viewer never sits through the backoff.
+  await vi.advanceTimersByTimeAsync(0);
+  expect(settled).toBe(true);
+  const result = await pending;
+  expect(result.isErr() && result.error).toBe('failed');
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
 });
 
 it('retries contention successfully with the same payload but never retries a revision conflict', async () => {
@@ -178,6 +297,7 @@ it('retries contention successfully with the same payload but never retries a re
     shareCount: 0,
     sharedWithTeam: true,
     canManage: true,
+    canEdit: true,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     lastUsedAt: null,
@@ -256,6 +376,7 @@ it('chooses team or private sharing only when an item is created', async () => {
     shareCount: 0,
     sharedWithTeam: false,
     canManage: true,
+    canEdit: true,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     lastUsedAt: null,

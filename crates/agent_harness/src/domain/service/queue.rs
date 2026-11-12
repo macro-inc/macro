@@ -179,6 +179,22 @@ where
     }
 }
 
+/// How long a worker waits for a command before it tries to release its
+/// session, after `backoffs` tries that replayed the log and kept the session,
+/// or failed ([`IdleRelease::backs_off`](super::idle::IdleRelease::backs_off)).
+/// A session that stays unreleasable (its log rebuilds differently) is
+/// checked again at `timeout`, twice it, four times it, then every sixteen
+/// times it: each check reads and replays the session's whole log.
+pub(super) fn idle_wait(timeout: std::time::Duration, backoffs: u32) -> std::time::Duration {
+    let factor = match backoffs {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        _ => 16,
+    };
+    timeout.saturating_mul(factor)
+}
+
 /// Remove the worker's own entry, if its channel is still the session's and
 /// holds nothing. Answers whether it did, in which case the worker exits.
 ///
@@ -952,8 +968,7 @@ where
                 // would leak them for the life of the process. The published
                 // empty snapshot is the viewers' goodbye.
                 self.busy.clear(session_id);
-                self.queues.drop_session(session_id);
-                self.hydrated.remove(&session_id);
+                self.forget_queue(session_id);
                 self.publish_queue(session_id).await;
                 match identity {
                     Ok(identity) => {
@@ -1368,6 +1383,14 @@ where
         self.reload_queue(session_id).await?;
         self.hydrated.insert(session_id);
         Ok(())
+    }
+
+    /// Forget this process's working copy of the session's queue and its
+    /// `hydrated` mark, which only change together: the next command reloads
+    /// the durable queue.
+    pub(super) fn forget_queue(&self, session_id: AgentSessionId) {
+        self.queues.drop_session(session_id);
+        self.hydrated.remove(&session_id);
     }
 
     /// Load the durable queue the first time this process handles the session,
@@ -1888,15 +1911,31 @@ pub(super) async fn run_session_worker<
     Notifier: AgentSessionNotifier,
 {
     let mut deleted = false;
+    // Releases tried since the session's last command that left something
+    // held here.
+    let mut attempts: u32 = 0;
+    // Of those, the ones that replayed the log or failed: what the wait
+    // before the next try grows with.
+    let mut backoffs: u32 = 0;
     loop {
         let queued = tokio::select! {
             queued = receiver.recv() => queued,
-            () = tokio::time::sleep(inner.worker_idle_timeout) => {
+            () = tokio::time::sleep(idle_wait(inner.worker_idle_timeout, backoffs)) => {
                 // Before retiring, while commands for the session still queue
                 // behind this worker rather than racing it on a new one.
-                inner.release_idle(session_id).await;
-                if retire_worker(&workers, session_id, &own, &receiver) {
-                    return;
+                let outcome = inner.release_idle(session_id, attempts).await;
+                // A session still held stays with its worker, or nothing
+                // would ever try again before its next command, unless the
+                // kill switch turns retries off.
+                if outcome.holds_nothing() || !inner.retries_idle_release(session_id).await {
+                    if retire_worker(&workers, session_id, &own, &receiver) {
+                        return;
+                    }
+                } else {
+                    attempts = attempts.saturating_add(1);
+                    if outcome.backs_off() {
+                        backoffs = backoffs.saturating_add(1);
+                    }
                 }
                 continue;
             }
@@ -1905,6 +1944,8 @@ pub(super) async fn run_session_worker<
         let Some(queued) = queued else {
             return;
         };
+        attempts = 0;
+        backoffs = 0;
         let QueuedCommand {
             command,
             completed,

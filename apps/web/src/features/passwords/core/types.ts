@@ -21,6 +21,11 @@ export type PasswordItem = {
   sharedWithTeam: boolean;
   /** The viewer may share, move or delete it (its creator or a team admin). */
   canManage: boolean;
+  /**
+   * The viewer may change it: its name, values and verification code. Granted
+   * separately from `canManage`, so a view-only grantee can reveal but not edit.
+   */
+  canEdit: boolean;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;

@@ -23,6 +23,7 @@ import { err } from 'neverthrow';
 import {
   createEffect,
   createSignal,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -172,13 +173,15 @@ function ItemPane(props: {
                   }
                 />
               </Show>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => fireAndForget(props.vault.edit(), 'passwords')}
-              >
-                {t('passwords.edit')}
-              </Button>
+              <Show when={props.item.canEdit}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fireAndForget(props.vault.edit(), 'passwords')}
+                >
+                  {t('passwords.edit')}
+                </Button>
+              </Show>
               <Dropdown placement="bottom-end">
                 <Dropdown.Trigger
                   variant="ghost"
@@ -411,6 +414,17 @@ function loadLogo(source: ReturnType<typeof usePasswords>['source']) {
 }
 
 /**
+ * The touch list header (pills). Like the shell's own Content, it goes away
+ * while a detail replaces the list on phones; a tablet split keeps it.
+ */
+function ListChrome(props: { children: JSX.Element }) {
+  const shell = useViewShell();
+  return (
+    <Show when={shell.detail.placement() !== 'replace'}>{props.children}</Show>
+  );
+}
+
+/**
  * The floating New on touch layouts. Phones hide it while a detail replaces
  * the list; tablets keep the detail beside the list, so it stays.
  */
@@ -493,6 +507,8 @@ export function VaultView(props: {
     setEditingFolder(next);
   };
   const editing = editingFolder;
+  /** A name field chosen in the header menu, opened when the menu closes. */
+  let headerEditor: FolderEditing | undefined;
   const [mobileFolders, setMobileFolders] = createSignal(false);
   const [leave, setLeave] = createSignal<(allow: boolean) => void>();
   const [now, setNow] = createSignal(Date.now());
@@ -657,17 +673,28 @@ export function VaultView(props: {
                       >
                         <DotsThreeIcon class="size-4" />
                       </Dropdown.Trigger>
-                      <Dropdown.Content class="min-w-48 max-w-[calc(100vw-2rem)]">
+                      <Dropdown.Content
+                        class="min-w-48 max-w-[calc(100vw-2rem)]"
+                        onCloseAutoFocus={(event) => {
+                          // A name field opens only once the menu's focus trap
+                          // has gone, so it keeps the focus it takes on mount.
+                          const editor = headerEditor;
+                          headerEditor = undefined;
+                          if (!editor) return;
+                          event.preventDefault();
+                          setEditing(editor);
+                        }}
+                      >
                         <FolderActionItems
-                          onSubfolder={() =>
-                            setEditing({
+                          onSubfolder={() => {
+                            headerEditor = {
                               kind: 'create',
                               parentId: folder().id,
-                            })
-                          }
-                          onRename={() =>
-                            setEditing({ kind: 'rename', id: folder().id })
-                          }
+                            };
+                          }}
+                          onRename={() => {
+                            headerEditor = { kind: 'rename', id: folder().id };
+                          }}
                           onMove={() =>
                             setEditing({ kind: 'move', id: folder().id })
                           }
@@ -713,24 +740,26 @@ export function VaultView(props: {
                   : collectionTitle(vault)}
               </ViewSidebar.Title>
             </ViewShell.TopBar>
-            <ViewShell.Header>
-              <div class="flex min-w-0 flex-col gap-1">
-                <div class="h-10 min-w-0 flex-1">
-                  <PillTabs
-                    scrollable
-                    class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-                    contentClass="px-(--mobile-chrome-gutter)"
-                    items={mobileTabs()}
-                    value={mobileTab()}
-                    onChange={(tab) =>
-                      tab === 'folders'
-                        ? setMobileFolders(true)
-                        : selectFilter(tab)
-                    }
-                  />
+            <ListChrome>
+              <ViewShell.Header>
+                <div class="flex min-w-0 flex-col gap-1">
+                  <div class="h-10 min-w-0 flex-1">
+                    <PillTabs
+                      scrollable
+                      class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+                      contentClass="px-(--mobile-chrome-gutter)"
+                      items={mobileTabs()}
+                      value={mobileTab()}
+                      onChange={(tab) =>
+                        tab === 'folders'
+                          ? setMobileFolders(true)
+                          : selectFilter(tab)
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
-            </ViewShell.Header>
+              </ViewShell.Header>
+            </ListChrome>
             <MobileNew
               hasSelection={!!selection()}
               onCreate={create}
@@ -788,21 +817,23 @@ export function VaultView(props: {
           </ViewShell.Content>
         </ViewShell.Main>
         <ViewShell.Detail class="border-l border-edge-muted">
+          {/* Keyed: a pane gets its own value, never a getter over the Match
+              accessor, which throws a stale read once the selection moves on. */}
           <Switch>
-            <Match when={selectedDraftKey()}>
+            <Match when={selectedDraftKey()} keyed>
               {(key) => (
                 <NewDraftPane
                   vault={vault}
-                  draftKey={key()}
+                  draftKey={key}
                   onBack={() => vault.select(undefined)}
                 />
               )}
             </Match>
-            <Match when={vault.selected()}>
+            <Match when={vault.selected()} keyed>
               {(item) => (
                 <ItemPane
                   vault={vault}
-                  item={item()}
+                  item={item}
                   now={now()}
                   onBack={() => vault.select(undefined)}
                 />

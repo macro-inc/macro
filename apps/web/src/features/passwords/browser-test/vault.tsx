@@ -11,7 +11,36 @@ import { VaultView } from '../views/vault-view';
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture root');
-const source = createFakePasswordSource();
+// Shared with the viewer for viewing only: revealable, never editable.
+const source = createFakePasswordSource([
+  {
+    item: {
+      id: '019a0000-0000-7000-8000-0000000000aa',
+      teamId: 'fixture-team',
+      name: 'View-only login',
+      kind: 'login',
+      url: null,
+      folderId: null,
+      favorite: false,
+      version: 1,
+      hasTotp: false,
+      shared: true,
+      shareCount: 1,
+      sharedWithTeam: false,
+      canManage: false,
+      canEdit: false,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      lastUsedAt: null,
+    },
+    values: {
+      username: 'viewer-account',
+      password: 'view-only-secret',
+      notes: '',
+      fields: [],
+    },
+  },
+]);
 const View = () => (
   <QueryClientProvider
     client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}

@@ -72,8 +72,11 @@ must enforce that bound and synchronized clocks with JWT leeway disabled.
 Items belong to the team; `Record.user_id` records the immutable creator. New items
 include a team Edit grant unless `private=true`. Updates preserve grants; sharing
 replaces grants explicitly. Current human team administrators can view, edit,
-delete and change access to private items after their creator leaves. `canManage`
-and `sharedWithTeam` are actor-specific response fields, never stored authority.
+delete and change access to private items after their creator leaves. `canManage`,
+`canEdit` and `sharedWithTeam` are actor-specific response fields, never stored
+authority. `canEdit` reflects current edit grants or administrator access; a view-only
+recipient can reveal/copy but cannot edit fields or verification-code enrollment.
+Edit recipients can edit without creator/administrator grant-management privileges.
 Private means no team grant; direct recipients and administrators may retain access.
 
 Membership removal and account deletion do not erase items, transfer creators or

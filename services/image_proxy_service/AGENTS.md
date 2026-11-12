@@ -38,6 +38,10 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
   disabled environment proxies, and trace propagation.
 - Never bypass either DNS guard; both paths must reject internal addresses at
   connection time as well as before each redirect hop.
+- Serve only image types (`ALLOWED_MEDIA_TYPES`). Every `/proxy` response
+  gets `nosniff` and a sandboxing CSP from `sandbox_headers`, and SVG is also
+  sent as an attachment: an SVG opened from this origin would otherwise run its
+  script here. Never drop those headers or add document types like HTML.
 
 ## Related
 

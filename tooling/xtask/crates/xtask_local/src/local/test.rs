@@ -85,3 +85,65 @@ fn durable_bake_covers_every_repository_built_local_image() {
         ["proxy", "mailpit", "static_file_cdn"]
     );
 }
+
+#[test]
+fn a_running_global_collector_is_reused_not_recreated() {
+    assert_eq!(
+        collector_action(Some("macro-lgtm-1 macro lgtm"), "lgtm"),
+        CollectorAction::Reuse("macro-lgtm-1".to_string())
+    );
+}
+
+#[test]
+fn a_collector_from_another_project_or_backend_is_replaced() {
+    // An instance named `lgtm` has the same-looking container name.
+    assert_eq!(
+        collector_action(Some("macro-lgtm-lgtm-1 macro-lgtm lgtm"), "lgtm"),
+        CollectorAction::Replace("macro-lgtm-lgtm-1".to_string())
+    );
+    assert_eq!(
+        collector_action(Some("macro-jaeger-1 macro jaeger"), "lgtm"),
+        CollectorAction::Replace("macro-jaeger-1".to_string())
+    );
+    // Not a compose container at all.
+    assert_eq!(
+        collector_action(Some("otel  "), "lgtm"),
+        CollectorAction::Replace("otel".to_string())
+    );
+}
+
+#[test]
+fn a_free_port_starts_the_collector() {
+    assert_eq!(collector_action(None, "lgtm"), CollectorAction::Start);
+}
+
+#[test]
+fn only_the_container_binding_host_port_4318_holds_the_collector_port() {
+    // `publish=4318` also matches an instance mapping container port 4318 to
+    // another host port; Docker lists it first when it is newer.
+    let ps = "macro-other-otel-1\tmacro-other\totel\t0.0.0.0:14318->4318/tcp, [::]:14318->4318/tcp\n\
+              macro-lgtm-1\tmacro\tlgtm\t0.0.0.0:3001->3000/tcp, 0.0.0.0:4317-4318->4317-4318/tcp, [::]:4317-4318->4317-4318/tcp, 4040/tcp\n";
+    assert_eq!(
+        pick_otlp_port_holder(ps).as_deref(),
+        Some("macro-lgtm-1 macro lgtm")
+    );
+
+    assert_eq!(
+        pick_otlp_port_holder("macro-jaeger-1\tmacro\tjaeger\t127.0.0.1:4318->4318/tcp\n")
+            .as_deref(),
+        Some("macro-jaeger-1 macro jaeger")
+    );
+    assert_eq!(
+        pick_otlp_port_holder("collector\t\t\t:::4318->4318/tcp\n").as_deref(),
+        Some("collector  ")
+    );
+
+    // Nothing binds host 4318: remove nothing.
+    assert_eq!(
+        pick_otlp_port_holder(
+            "macro-other-otel-1\tmacro-other\totel\t0.0.0.0:14318->4318/tcp, 4318/tcp\n"
+        ),
+        None
+    );
+    assert_eq!(pick_otlp_port_holder(""), None);
+}

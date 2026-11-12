@@ -117,7 +117,8 @@ test('entries are written and read by field name and handle, never by column id'
     { record: acme, set: { Stage: 'Demo', Revenue: 1000, Owner: null } },
     { record: { email: 'sam@globex.test' }, set: { Tags: ['a', 'b'] } },
   ]);
-  expect(requests[0]?.body).toEqual({
+  expect(requests[0]?.path).toBe('/crm/pipelines/sales');
+  expect(requests[1]?.body).toEqual({
     entries: [
       {
         recordId: 'acme',
@@ -222,4 +223,26 @@ test('entries are written and read by field name and handle, never by column id'
   expect(
     requests.filter((request) => request.path === '/crm/pipelines/sales'),
   ).toHaveLength(1);
+});
+
+test('a write reads the pipeline first, so a failed read writes nothing', async () => {
+  const requests: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(`${request.method} ${new URL(request.url).pathname}`);
+      return Response.json({ message: 'unavailable' }, { status: 503 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'token',
+    hosts: { storage: 'https://storage.test' },
+  });
+  const pipeline = macro.crm.pipelines.byId('sales');
+
+  await expect(
+    pipeline.addRecords([{ set: { Name: 'Site' } }]),
+  ).rejects.toThrow();
+  expect(requests).toEqual(['GET /crm/pipelines/sales']);
 });

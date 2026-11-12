@@ -24,13 +24,17 @@ New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
 API credential, Verification code, or Folder. Each kind's form and detail label
 the shared username, password, website and notes values for that kind (Card:
 Cardholder and Card number; API credential: Endpoint, Key and Secret; Identity
-and Card start with labeled custom fields such as Expires or Email). A new item
+and Card start with labeled custom fields such as Expires or Email; those
+template fields type in the clear, while secret ones such as Security code and
+fields you add stay masked). A new item
 appears as a Draft row at the top of the list. New items belong to the team
 and are shared with it by default; the form's Shared with team / Private
 control leaves out the team grant (team admins and people it is shared with
 still have access). The list labels each item Team or Private. Share changes sharing afterwards. Share,
 Delete item and dragging into folders appear only for items the viewer can
-manage (their creator or a team admin). Drafts and in-place edits stay
+manage (their creator or a team admin). Edit and Add verification code
+appear only for items the viewer can edit; a view-only share can still reveal
+and copy. Drafts and in-place edits stay
 in memory while you select other items, start other kinds, lock, switch apps or
 hide the tab; Discard or a successful Save ends them. Leaving the view with
 drafts asks Keep editing or Discard and leave. Name is required and websites

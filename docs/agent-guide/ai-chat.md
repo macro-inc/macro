@@ -233,21 +233,25 @@ that side while the other panes glide aside; with reduced motion it only fades
 in. Your pane stays active and a composer you were typing in keeps its caret.
 A toast reads **Opened by <agent>** with **Undo**, which slides the pane back
 out and restores the layout; if the pane has unsaved changes and you keep
-them, it stays on screen and **Undo** is offered again. On the phone apps the
-pane pushes onto the stack. An item already on screen, including a list view
-such as Tasks, is left as it is. When there is no room for another split (a
-narrow window, a phone browser), nothing is replaced: the toast says the agent
-wants to open something and offers **Open**. An item an agent opened is not
-marked read until you click or type in its pane, and Undo doesn't mark it
-read either.
+them, it stays on screen and **Undo** is offered again. An item already on
+screen, including a list view such as Tasks, is left as it is. When there is
+no room for another split (a narrow window), nothing is replaced: the toast
+says the agent wants to open something and offers **Open**. An item an agent
+opened is not marked read until you click or type in its pane, and Undo
+doesn't mark it read either.
 
 Only the tab you typed in opens the item, not a tab duplicated or opened from
 it. Only prompts typed in the agent composer carry the tab, including the first
 prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
-item in its reply instead. Routes are closed to agents unless they opt in
-(`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
-composing mail and debug views are refused on the server and again in the tab.
+item in its reply instead. Agents never open anything on mobile, flag or not:
+in the iOS and Android apps (iPad included) and in a touch browser on a phone,
+held either way, a prompt carries no tab, so the agent links the item, and the
+tab ignores any `ui_command` frame. A phone is a touch screen whose short side
+is under 640px, so a phone turned sideways stays off. Routes are closed to
+agents unless they opt in (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`),
+so settings, calls, composing mail and debug views are refused on the server
+and again in the tab.
 
 To verify, ask an agent "create a short document called Launch plan, then open
 it next to this chat", watch the pane arrive, press **Undo**, and repeat with a
@@ -327,7 +331,9 @@ horizontal overflow.
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
 decoded. An optional project ID places the file in a folder the caller can edit.
-Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+Use `CreateDocument` (in code mode, `macro.documents.create`,
+`createSpreadsheet` and `upload`) for generated text and native Macro
+spreadsheets. Agents with
 code execution should construct the base64 argument from the original bytes;
 the tool cannot access an agent's local path or download a URL.
 
@@ -1279,7 +1285,8 @@ server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-pro
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
 code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning). Code mode has a smaller direct toolset:
+to the direct tools and logs a warning; for owners with the
+`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1296,7 +1303,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps, subagents,
+tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
@@ -1327,10 +1334,13 @@ defaults to `[]` when omitted. Loops, early breaks and bounded parallel
 promises are supported. Preserve the user's source filters, source IDs, errors,
 and coverage limits; stopping a paginated iterator does not prove exhaustiveness.
 
-Code execution hides program source and raw returned JSON. Observed SDK operations
-use the same **Calling N tools** peek window as ordinary consecutive tool calls:
-each request is its own compact row (label plus status), live runs open the
-five-row scrolling window, and settled runs collapse to the count. There is no
+The transcript never shows that code mode exists: no program, source, raw
+returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
+of its turn segment and shows only its observed SDK operations, each a compact
+row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
+`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group with
+a program never opens on its own, so a step that failed and was recovered from
+shows only in the expanded list. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1411,7 +1421,8 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools. Supported
+one, turns fall back to the direct tools, or fail for owners with the
+`ai-session-code-mode-only` flag. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1827,8 +1838,9 @@ drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
 Tool runs keep one group from their first call. Historical runs start collapsed;
-live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
-tools** without flashing a list. Ongoing work opens a scrollable window of at
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Used N
+tools** without flashing a list. Ongoing work (except a run with an `ExecuteCode`
+program) opens a scrollable window of at
 most five compact rows. The window follows unfinished calls first, keeping slow
 work visible even when later calls finish, until you scroll or interact with it;
 scrolling back to the bottom resumes following. An automatically opened window
@@ -1837,8 +1849,7 @@ before collapsing smoothly. These delays are shared by the group, never queued
 per call, and do not delay answer text or tool execution. Manually opening,
 closing, or interacting with a group overrides automatic collapse. Subagents
 and tools requiring user input remain outside these groups so they stay visible
-during other tool bursts. Nested agent activity and code-mode SDK operations each
-use the same peek window.
+during other tool bursts. Nested agent activity uses the same peek window.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1889,13 +1900,28 @@ at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
 in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
+While a turn runs tool calls, the server words them as one live status line
+("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+pushes it to every viewer (`agent_session_activity`). It replaces the
+**Using N tools** label of the run the turn is in: one with a call in flight,
+or the newest run while the agent thinks between calls. The count stays beside it,
+and the caret still opens the raw calls; a settled run reads **Used N tools**.
+It also replaces the
+open activity line of an agent reply in a channel, and shows under a working
+session's row in the Agents list. It is
+throttled per turn (every 4s for the first 10 lines, then every 15s, at most
+120), never stored, and cleared when the turn ends; a surface opened mid-turn
+shows its usual label until the next line arrives. Sessions owned by no person
+get no line, and the PostHog flag `disable-agent-activity-summary` turns lines
+off for an owner.
+
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
 trailing thought at the end of a message stays outside the tool group so live
 reasoning stays visible; thoughts followed by prose stay inside the group.
 Only the newest turn can be live: once the composer stops showing the
-agent as working, every Thinking label, **Calling N tools** row, shimmering
+agent as working, every Thinking label, **Using N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
@@ -2377,7 +2403,8 @@ The built-in **Configure Agent** skill walks an agent through changing another
 agent's instructions or settings on the user's behalf. `ListAgents` returns every
 agent the user can manage with its current instructions, runtime, model, channel
 scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
-patches only the fields it is given. A selected MCP app slug must be a real
+patches only the fields it is given. Code mode hides both; the skill there
+uses `macro.agents.list()` and `Agent.update()` in `ExecuteCode`. A selected MCP app slug must be a real
 Pipedream app; an invented slug is rejected and the agent is left unchanged.
 Instructions are replaced whole, so the skill
 has the agent edit the current text and send the complete result. Changes reach
@@ -2665,8 +2692,8 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` identifies available agents and
-`CreateAgentSession` starts a conversation with the chosen agent. Use
+`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
+mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain

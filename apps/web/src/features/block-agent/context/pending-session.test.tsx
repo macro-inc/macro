@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import type { FoldInput } from '@core/agent-fold/client';
+import { holdMobile, MOBILE_DEVICES } from '@core/agent-session/tests/device';
 import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import type {
   AgentSessionLogEntryDto,
@@ -40,6 +41,13 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     },
   };
 });
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
 }));
@@ -498,6 +506,20 @@ describe('first prompt on the create', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
   });
+
+  it.each(MOBILE_DEVICES)(
+    'names no tab for a first prompt typed on $on',
+    async (mobile) => {
+      flags.agentNavigation = true;
+      holdMobile(device, mobile);
+      startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+      await settle();
+
+      const [request] = harness.create.mock.calls[0];
+      expect(request.prompt).toBe('Open the plan');
+      expect(request).not.toHaveProperty('promptClientId');
+    }
+  );
 
   it("keeps an effort's first prompt for after the session is configured", async () => {
     const id = startPendingSession({

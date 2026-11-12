@@ -267,7 +267,8 @@ export function createVault() {
   /** Open the selected item for in-place editing; needs a fresh reveal. */
   async function edit() {
     const item = selected();
-    if (!item) return;
+    // The server refuses the write too; never open an edit it would reject.
+    if (!item?.canEdit) return;
     const key = editKey(item.id);
     if (state.drafts[key]) return;
     const generation = ++requestGeneration;

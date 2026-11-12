@@ -5,9 +5,9 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Dropdown, Input } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, Index, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { KIND_LAYOUTS, type PasswordSlot } from '../core/kinds';
+import { isSecretField, KIND_LAYOUTS, type PasswordSlot } from '../core/kinds';
 import {
   folderPath,
   type PasswordDraft,
@@ -162,7 +162,9 @@ export function ItemForm(props: {
           </Field>
         )}
       </For>
-      <For each={props.draft.values.fields}>
+      {/* Index, not For: each keystroke replaces the field object, and a
+          reference-keyed row would remount and drop focus. */}
+      <Index each={props.draft.values.fields}>
         {(field, index) => (
           <div class="flex flex-col gap-1.5">
             <div class="flex items-center gap-1">
@@ -172,9 +174,9 @@ export function ItemForm(props: {
                 class="min-w-0 flex-1 px-0 text-xs text-ink-muted"
                 aria-label={t('passwords.fieldLabel')}
                 placeholder={t('passwords.fieldLabel')}
-                value={field.label}
+                value={field().label}
                 onInput={(event) =>
-                  setField(index(), { label: event.currentTarget.value })
+                  setField(index, { label: event.currentTarget.value })
                 }
               />
               <Button
@@ -188,7 +190,7 @@ export function ItemForm(props: {
                     values: {
                       ...props.draft.values,
                       fields: props.draft.values.fields.filter(
-                        (_, position) => position !== index()
+                        (_, position) => position !== index
                       ),
                     },
                   })
@@ -198,17 +200,23 @@ export function ItemForm(props: {
               </Button>
             </div>
             <Input
-              type="password"
+              type={
+                isSecretField(props.draft.kind, field().label, (template) =>
+                  t(`passwords.field_${template}`)
+                )
+                  ? 'password'
+                  : 'text'
+              }
               autocomplete="off"
-              aria-label={field.label || t('passwords.fieldValue')}
-              value={field.value}
+              aria-label={field().label || t('passwords.fieldValue')}
+              value={field().value}
               onInput={(event) =>
-                setField(index(), { value: event.currentTarget.value })
+                setField(index, { value: event.currentTarget.value })
               }
             />
           </div>
         )}
-      </For>
+      </Index>
       <Show when={showTotp() && !props.hasTotp}>
         <Field
           label={t('passwords.totp')}

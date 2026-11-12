@@ -6,8 +6,9 @@
  * new pane slides in from the side it lands on while the panes it pushes
  * glide to their new places (FLIP on `transform`). Undo plays the same path
  * backwards. Widths still change at once: only position and opacity move.
- * Reduced motion keeps a short fade and no movement. Phones push the pane
- * onto the stack, which has its own slide.
+ * Reduced motion keeps a short fade and no movement. A stacked layout (the
+ * native apps, where agent navigation is off today) pushes the pane onto the
+ * stack, which has its own slide.
  */
 
 import type { PaneId } from '@app/lib/split-router';
