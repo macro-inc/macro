@@ -25,6 +25,10 @@ vi.mock('@components/app/Layout', () => ({
   PageContent: (props: { children: unknown }) => props.children,
 }));
 vi.mock('@ui', () => ({ ImperativeDialogHost: () => null }));
+vi.mock('@components/app/tab-layout/DesktopTabsController', () => ({
+  DesktopTabsController: () => null,
+  NO_SPLITS_TAB_HOST: {},
+}));
 
 afterEach(() => {
   cleanup();
