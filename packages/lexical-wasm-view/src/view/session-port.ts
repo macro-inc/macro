@@ -514,6 +514,32 @@ export class SessionPort implements EditorPort {
       admitEntry
     );
   }
+  /** Synchronous Edit-admitted application for callers that must settle in
+   *  their own task (AI edit onOps). A busy, closed or unauthorized session
+   *  settles or throws before the factory runs; nothing is queued. */
+  inputNowIfSessionEdit(
+    factory: () => ProgrammaticApplicationInput,
+    options?: ProgrammaticApplicationAdmissionOptions
+  ): InputSettlement {
+    this.assertRootAdmission();
+    const admitEntry = options?.admit;
+    if (options !== undefined && typeof admitEntry !== 'function')
+      throw new TypeError('Entry admission requires a callback');
+    let settled: InputSettlement | undefined;
+    this.enqueueSettled(
+      factory,
+      options,
+      () => this.effectiveAccess() === Access.Edit,
+      admitEntry,
+      true,
+      (result) => {
+        settled = result;
+      }
+    );
+    if (settled === undefined)
+      throw new Error('Synchronous application input did not settle');
+    return settled;
+  }
   private settleInput(
     editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
     eventOrOptions?:
@@ -523,6 +549,32 @@ export class SessionPort implements EditorPort {
     admit?: () => boolean,
     admitEntry?: () => boolean
   ): Promise<InputSettlement> {
+    let resolve!: (result: InputSettlement) => void;
+    const pending = new Promise<InputSettlement>((complete) => {
+      resolve = complete;
+    });
+    this.enqueueSettled(
+      editor,
+      eventOrOptions,
+      admit,
+      admitEntry,
+      false,
+      resolve
+    );
+    return pending;
+  }
+  private enqueueSettled(
+    editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
+    eventOrOptions:
+      | KeyboardEvent
+      | ProgrammaticApplicationOptions
+      | ProgrammaticApplicationAdmissionOptions
+      | undefined,
+    admit: (() => boolean) | undefined,
+    admitEntry: (() => boolean) | undefined,
+    synchronousEntry: boolean,
+    resolve: (result: InputSettlement) => void
+  ): void {
     this.assertRootAdmission();
     const run = this.executor.runSettled;
     if (!run) throw new Error('Per-input executor settlement is unavailable');
@@ -607,7 +659,7 @@ export class SessionPort implements EditorPort {
     const operation =
       typeof editor === 'function'
         ? {
-            synchronous: false,
+            synchronous: synchronousEntry,
             call: () => {
               if (observation) {
                 if (
@@ -698,10 +750,6 @@ export class SessionPort implements EditorPort {
             },
           }
         : this.prepareInput(editor, event);
-    let resolve!: (result: InputSettlement) => void;
-    const pending = new Promise<InputSettlement>((complete) => {
-      resolve = complete;
-    });
     try {
       run.call(
         this.executor,
@@ -796,7 +844,6 @@ export class SessionPort implements EditorPort {
       }
       throw error;
     }
-    return pending;
   }
   /** Current native authority, independent of local editability and initial config. */
   effectiveAccess(): Access {
