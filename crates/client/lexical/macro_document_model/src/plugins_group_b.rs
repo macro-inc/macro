@@ -10,6 +10,9 @@ mod checklist;
 mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
+mod creation_await_actions;
+#[cfg(test)]
+mod creation_await_actions_test;
 mod database_query_actions;
 mod date_mention_actions;
 mod decorator_actions;
@@ -124,6 +127,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = agent_session_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
     let builder = gif_insert::register(builder);
+    let builder = creation_await_actions::register(builder);
     let builder = title_handoff::register(builder);
     pinned_properties::register(builder)
 }
@@ -200,6 +204,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = decorator_content_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = creation_await_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = diff::decode(name, json, generation)? {
