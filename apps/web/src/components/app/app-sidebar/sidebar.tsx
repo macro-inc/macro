@@ -8,6 +8,7 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { useEnabledProviders } from '@app/features/external-view/provider-flags';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
@@ -37,7 +38,6 @@ import {
   ENABLE_CALLS,
   enableCrm,
   enableTasksReviews,
-  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -241,7 +241,7 @@ export const GoToHotkeys = () => {
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const notificationsEnabled = useUnifiedNotificationsFlag();
-  const external = useFeatureFlag(enableWhatsappLinked);
+  const externalProviders = useEnabledProviders();
   const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
@@ -250,7 +250,7 @@ export const GoToHotkeys = () => {
       recentViewEnabled(),
       reviews().enabled,
       notificationsEnabled(),
-      external().enabled,
+      externalProviders().providers.length > 0,
       crm().enabled
     )
   );
