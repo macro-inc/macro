@@ -25,7 +25,7 @@ and the traps. To add a whole service, follow the
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
-`web-app-preview`). The project name is usually the directory name. It matters:
+`web-app-preview`, `openbao`). The project name is usually the directory name. It matters:
 Doppler, `services-config.json`, and the nix `serviceName` all key on it.
 
 ### Stack references
@@ -141,6 +141,7 @@ Run it locally with `nix build --no-link .#code-mode-assets`.
 | DynamoDB | `ServiceDynamoDBTable` (least privilege), not `DynamoDBTable` (`dynamodb:*`) | `packages/service/src/dynamodb.ts` |
 | Bucket | `createBucketV2` | `packages/resources/src/resources/bucket.ts` |
 | Datadog monitor | `infra/stacks/monitoring` (prod only, manual deploy) | `monitoring/monitors/ai-editing.ts` |
+| Stateful single-task service reachable only inside the VPC | Own internal ALB + ACM certificate (never the public gateway), EFS volume, AWS Backup | `openbao/index.ts` |
 
 When you add a prod queue or bucket, also add it to the local catalog in
 `tooling/xtask/crates/xtask_local/src/local/resources.rs`; Pulumi does not create
@@ -185,8 +186,8 @@ Both deploy-all and single-service workflows use this helper. Download paths and
 build/deployment failure gates remain attempt-scoped.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, `observability` and a few
-  others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability`, `openbao` and a
+  few others are manual.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.
