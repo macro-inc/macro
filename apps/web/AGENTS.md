@@ -479,6 +479,8 @@ native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
+The desktop app's channel picker carries no `accept` filter
+(`channelFilePickerAccept`): in the macOS app a filtered picker attached nothing.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
