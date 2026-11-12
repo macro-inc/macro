@@ -59,6 +59,8 @@ let
     pkgs.pulseaudio
     pkgs.ffmpeg-headless
     ffmpegX11grab
+    # Secrets put a value on :1's clipboard.
+    pkgs.xclip
     # For the runtime to run capability scripts and Claude's tools with the
     # credentials directory masked (`bwrap --tmpfs /run/credentials`).
     pkgs.bubblewrap
@@ -95,8 +97,21 @@ let
   agentStopped = pkgs.writeShellApplication {
     name = "agent-stopped";
     runtimeInputs = [ pkgs.coreutils ];
+    # It uses only some of the shared variables.
+    excludeShellChecks = [ "SC2034" ];
     text = scriptVariables + builtins.readFile ./files/agent-stopped;
   };
+
+  # GNOME's interface settings with toolkit-accessibility on by default:
+  # computer-use-linux reads Chromium's AT-SPI tree only when that key, or
+  # the AT-SPI bus's IsEnabled (which the bus launcher derives from it), says
+  # accessibility is on. There is no dconf, so the default is the value.
+  accessibilitySettings = pkgs.runCommand "agent-accessibility-settings" { nativeBuildInputs = [ pkgs.glib ]; } ''
+    mkdir -p $out
+    cp ${pkgs.glib.getSchemaPath pkgs.gsettings-desktop-schemas}/*.xml $out/
+    printf '[org.gnome.desktop.interface]\ntoolkit-accessibility=true\n' > $out/90_macro-agent.gschema.override
+    glib-compile-schemas --strict $out
+  '';
 
   # Stdio MCP servers the runtime adds to its Claude Code query.
   mcpServers = {
@@ -110,6 +125,7 @@ let
         DBUS_SESSION_BUS_ADDRESS = "unix:path=${runtimeDirectory}/bus";
         # The agent's desktop is plain X11 under Openbox.
         COMPUTER_USE_LINUX_SCREENSHOT_BACKEND = "x11";
+        GSETTINGS_SCHEMA_DIR = accessibilitySettings;
       };
     };
   };
@@ -332,6 +348,11 @@ in
         ExecStart = "${lib.getExe' config.systemd.package "systemctl"} restart --no-block macro-agent.service";
       };
     };
+
+    # macro's user units, the D-Bus-activated AT-SPI bus launcher among
+    # them, read accessibility from these settings. Added to the system
+    # schemas, not in place of them.
+    systemd.user.settings.Manager.DefaultEnvironment = "GSETTINGS_SCHEMA_DIR=${accessibilitySettings}";
 
     # The agent's own desktop for computer use, beside macro's :0.
     systemd.user.services.macro-agent-display =

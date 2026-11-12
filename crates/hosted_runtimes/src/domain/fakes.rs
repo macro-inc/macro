@@ -3,6 +3,7 @@
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -92,6 +93,37 @@ pub struct FakeRepo {
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
+    /// The agent teammate each computer was bought for.
+    pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+}
+
+impl crate::domain::agent::ComputerAgents for FakeRepo {
+    type Error = std::convert::Infallible;
+
+    async fn agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, Self::Error> {
+        Ok(self.agents.lock().unwrap().get(&computer).cloned())
+    }
+
+    async fn computer_for_agent(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ComputerId>, Self::Error> {
+        let computers = self.computers.lock().unwrap();
+        Ok(self
+            .agents
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(id, linked)| {
+                linked.as_ref() == agent.as_ref()
+                    && computers.get(id).is_some_and(|c| c.team_id == team_id)
+            })
+            .map(|(id, _)| *id))
+    }
 }
 
 impl FakeRepo {
@@ -758,5 +790,27 @@ pub fn scripted_process<Err: Send + 'static>(
         stdin: Box::pin(stdin),
         stdout: Box::pin(stdout),
         exit: Box::pin(async move { Ok(program.await.unwrap()) }),
+    }
+}
+
+/// A fixture enrollment for `computer_id`, carrying an agent when `agent`.
+pub fn enrollment(computer_id: ComputerId, agent: bool) -> crate::domain::enrollment::Enrollment {
+    crate::domain::enrollment::Enrollment {
+        computer_id,
+        generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
+        pairing_id: crate::domain::ids::PairingId::new_from_uuid(Uuid::from_u128(1)),
+        device_secret: crate::domain::enrollment::DeviceSecret::new(
+            "fixture-pairing-value".to_owned(),
+        ),
+        name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
+        deployment: deployment(),
+        traceparent: None,
+        agent: agent.then(|| crate::domain::agent::AgentEnrollment {
+            agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+                "macro|agent@example.com".to_owned(),
+            )
+            .unwrap(),
+            env: crate::domain::agent::AgentEnv::default(),
+        }),
     }
 }

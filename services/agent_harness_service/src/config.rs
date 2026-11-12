@@ -498,6 +498,7 @@ pub struct IncusFleetSettings {
     pub computers_control_plane_id: String,
     pub computers_host_name: String,
     pub computers_image: String,
+    pub computers_agent_image: String,
     pub computers_host_reserve_gb: u32,
     pub computers_oversell_factor: u32,
     pub computers_incus_request_timeout_secs: u64,
@@ -521,6 +522,7 @@ pub struct DockerFleetSettings {
     pub computers_control_plane_id: String,
     pub computers_host_name: String,
     pub computers_image: String,
+    pub computers_agent_image: String,
     pub computers_host_reserve_gb: u32,
     pub computers_oversell_factor: u32,
     pub computers_docker_network: String,
@@ -537,6 +539,7 @@ impl IncusFleetSettings {
             ),
             ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
             ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
             (
                 "COMPUTERS_INCUS_PROFILE",
                 self.computers_incus_profile.as_str(),
@@ -581,6 +584,7 @@ impl DockerFleetSettings {
             ),
             ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
             ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
             (
                 "COMPUTERS_DOCKER_NETWORK",
                 self.computers_docker_network.as_str(),

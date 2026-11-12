@@ -72,7 +72,7 @@ struct HostReadiness {
 
 impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
 where
-    Repo: ComputerRepo,
+    Repo: ComputerRepo + crate::domain::agent::ComputerAgents,
     Machines: Fleet,
     Registry: Harnesses,
     Time: Clock,
@@ -649,7 +649,10 @@ where
                 (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
             );
             // A convenience: the span records a failure, and setup carries on.
-            self.create_default_agent(&computer, harness_id).await.ok();
+            // An agent teammate's computer is the agent's; it gets no coding agent.
+            self.create_default_agent_unless_teammate(&computer, harness_id)
+                .await
+                .ok();
         }
         // The pairing is claimed, so the code is useless; remove it anyway.
         self.fleet
@@ -669,6 +672,26 @@ where
         fields(computer_id = %computer.id, team_id = %computer.team_id, harness_id = %harness_id, outcome = tracing::field::Empty),
         err
     )]
+    /// The default coding agent, on computers bought without an agent teammate.
+    async fn create_default_agent_unless_teammate(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<(), ComputerError> {
+        if self
+            .repo
+            .agent_of(computer.id)
+            .await
+            .map_err(internal)?
+            .is_some()
+        {
+            tracing::info!(computer_id = %computer.id, "an agent teammate's computer gets no default coding agent");
+            return Ok(());
+        }
+        self.create_default_agent(computer, harness_id).await?;
+        Ok(())
+    }
+
     async fn create_default_agent(
         &self,
         computer: &Computer,

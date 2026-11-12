@@ -49,7 +49,7 @@ reject unavailable purchases in the domain before reserving capacity. Map
 `BillingError::NotAvailable` to 503 on the team computer routes;
 keep missing subscription and unsupported billing intervals distinct.
 
-Require image, host reserve and oversell factor for either enabled fleet;
+Require both images, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
 See [the required variable list](../development/running-locally.md#macro-computers).
@@ -244,6 +244,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   exposed as `ComputerStatus.defaultAgentId` (it can name a since-deleted agent).
   It never runs again, so a deleted or rebound agent stays gone; a failure is
   recorded on the `computer.default_agent` span and enrollment carries on.
+  A computer bought for an agent teammate (`ComputerAgents::agent_of`) gets no
+  coding agent: it is the teammate's.
 - **Agents go with the computer**: `Harnesses::revoke(&Computer)` (the
   `RevokeHarness` effect of release and retention expiry) deletes the harness,
   then every agent bound to it, inside the one effect. The harness delete locks
@@ -279,7 +281,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   still deletes its data volume) and revokes its harness, without removing
   billing again. Missing stop/destroy are idempotent successes.
 - **Reprovision**: `InstanceLost` recreates the guest from the fleet's
-  configured image with a fresh pairing for the same harness, on the data
+  configured image for it (the agent image for an agent computer) with a fresh pairing for the same harness, on the data
   disk the lost guest left (homes, Claude login and Docker data survive).
   The new enrollment generation makes `macrod enroll` run again: it claims
   the new pairing and replaces only the enrollment marker and credential.
@@ -293,7 +295,13 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   behind a destroyed computer.
 - **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
   `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
-  get. `hosted_runtime.image` records the image each computer was created
+  get, `COMPUTERS_AGENT_IMAGE` the agent-mode build of the same guest
+  (`macro-box-agent/<version>`, `macro-box-agent:<tag>`) for agent teammates'
+  computers. Both are required; there is no fallback to the regular image.
+  Fleets hold them as `image::GuestImages` and pick with
+  `GuestImages::for_enrollment`: the agent image when the enrollment carries
+  an agent, so a recreated agent computer stays on it. An existing guest
+  keeps the image it records. `hosted_runtime.image` records the image each computer was created
   from (`Fleet::create` returns it, stamped as `user.macro.image` /
   `macro.image` on the guest). Updating running computers to a new image is
   not built yet; it will be a fleet-wide rollout, not a per-computer API.

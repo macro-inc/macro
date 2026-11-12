@@ -540,12 +540,16 @@ authentication_service and agent_harness_service; set them only to override.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_AGENT_IMAGE` (agent teammates' computers),
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
 Local orchestration supplies reserve `7` GB and oversell factor `3` for both
-fleets. The Docker image is `macro-box:latest`; for Incus set
-`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
-(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
-xtask fails when it is unset.
+fleets. The Docker images are `macro-box:latest` and `macro-box-agent:latest`
+(`run_local` builds and loads both: `.#macro-box-docker` and
+`.#macro-box-agent-docker`); for Incus set
+`COMPUTERS_INCUS_IMAGE` and `COMPUTERS_INCUS_AGENT_IMAGE` to the versioned
+aliases imported on `runtime-dev-1` (`macro-box/<version>` and
+`macro-box-agent/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when either is unset.
 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
@@ -629,7 +633,8 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 ### Incus on runtime-dev-1
 
 ```bash
-COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
+COMPUTERS_INCUS_IMAGE=macro-box/<version> COMPUTERS_INCUS_AGENT_IMAGE=macro-box-agent/<version> \
+  just run_local --instance computers --computers-incus
 ```
 
 Both the devbox and runtime must be logged into the same Tailscale tailnet.
