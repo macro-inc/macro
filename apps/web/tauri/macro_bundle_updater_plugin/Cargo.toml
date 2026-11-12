@@ -24,6 +24,7 @@ uuid = { version = "1.18.1", features = ["v4"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.5"
+objc2-foundation = { version = "0.2.2", default-features = false, features = ["std", "NSError", "NSString", "NSURL", "NSValue"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

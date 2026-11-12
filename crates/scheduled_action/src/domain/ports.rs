@@ -2,15 +2,16 @@ use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
-    InProgressExecution, ListedAction, RunHistory, ScheduledAction, ScheduledActionUpdate,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, RunCaller, RunHistory,
+    RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
 use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -125,6 +126,58 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// Sub-routines: the routines a routine's runs created, and the run in
+/// progress a new one would belong to.
+pub trait SubRoutines: Send + Sync + 'static {
+    /// `routine`'s run in progress, if it has one.
+    fn running_run(
+        &self,
+        routine: &Uuid,
+    ) -> impl Future<Output = Result<Option<RunningRun>>> + Send;
+
+    /// The run in progress whose Ask AI step opened agent session `session`:
+    /// a run's id is also the id of the session it opens.
+    fn running_run_of_session(
+        &self,
+        session: &Uuid,
+    ) -> impl Future<Output = Result<Option<RunningRun>>> + Send;
+
+    /// `parent`'s sub-routines, oldest first: every active one, and the
+    /// newest finished one-time ones, which accumulate without bound.
+    fn children(&self, parent: &Uuid) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// The active sub-routines of `parents`, oldest first: every one except
+    /// finished one-time ones.
+    fn active_children(
+        &self,
+        parents: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// The rows among `ids` that are top-level routines. Missing ids omitted.
+    fn top_level_by_ids(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// `parent`'s sub-routine created under `key`, if there is one.
+    fn child_by_key(
+        &self,
+        parent: &Uuid,
+        key: &SubRoutineKey,
+    ) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+
+    /// Make a sub-routine a top-level routine: it forgets its parent, the run
+    /// that created it and its key. `None` when it has no parent.
+    fn detach(&self, id: &Uuid) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+
+    /// The sub-routines of `parent` that `runs` created, each with its run.
+    fn created_by_runs(
+        &self,
+        parent: &Uuid,
+        runs: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<(Uuid, CreatedRoutine)>>> + Send;
+}
+
 /// Lists routines a caller can access for read-only clients.
 ///
 /// The list includes cron and event triggers and orders them by `(created_at, id)`.
@@ -137,8 +190,12 @@ pub trait ScheduledActionReadService: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
-    /// Read a routine by its unguessable ID for an authenticated viewer.
-    fn get_action(&self, id: Uuid) -> impl Future<Output = Result<ScheduledAction>> + Send;
+    /// The routine a receipt names, when the receipt's user owns it; anyone
+    /// else gets `ActionPolicyError::NotFound`, as run history does.
+    fn get_action<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Delete all of a user's actions before account deletion, including disabled
     /// and claimed actions. Repeating a completed cleanup succeeds.
@@ -158,11 +215,46 @@ pub trait ScheduledActionService: Send + Sync + 'static {
 
     /// Records `principal.owner()`. A non-user owner is `OwnerNotUserError`
     /// before validation and before any write. `BotForUser` records the user.
+    /// Always a top-level routine.
     fn create_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// [`Self::create_action`] for a request whose credential may come from
+    /// a routine's run. A create that `caller` proves comes from a run in
+    /// progress makes a sub-routine of that routine (of its parent, when it
+    /// is a sub-routine itself), refused with `TooManySubRoutines` at the
+    /// cap. With `key`, the parent's sub-routine already created under that
+    /// key is updated instead; a key outside a run is `KeyOutsideRun`.
+    fn create_action_from(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        caller: RunCaller,
+        key: Option<SubRoutineKey>,
+    ) -> impl Future<Output = Result<SavedAction>> + Send;
+
+    /// Make the receipt's sub-routine a top-level routine that no longer
+    /// follows its parent. `NotSubRoutine` when it has no parent.
+    fn detach_action(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// What saving `input` as `principal`'s routine would find wrong, and the
+    /// routine as it would be stored, without saving anything. A check made
+    /// by a routine draft's session (`correlation`, the code-mode invocation
+    /// the request's credential names) is kept as that draft's answer, with
+    /// the items it says it `created` for the routine.
+    fn check_action(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        created: Vec<super::models::CreatedItem>,
+        correlation: Option<Uuid>,
+    ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
     /// `create_action` for a routine activated from `template_id`, recorded
     /// as given: callers check that the template exists.
@@ -173,13 +265,24 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Actions `user_id` can access. Legacy clients see cron actions only;
-    /// backend clients opt into events. ID-based operations and workers must
-    /// never authorize through this list.
+    /// `create_action` for a routine saved from routine suggestion
+    /// `suggestion_id`, recorded as given: it only marks that suggestion
+    /// taken for the routine's owner.
+    fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// Actions `user_id` can access, within `scope`. Legacy clients see cron
+    /// actions only; backend clients opt into events. ID-based operations and
+    /// workers must never authorize through this list.
     fn get_actions(
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
+        scope: ListScope,
     ) -> impl Future<Output = Result<Vec<ListedAction>>> + Send;
 
     fn update_action(
@@ -206,20 +309,38 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 
+    /// The routine's finished runs, newest first, each with the routines it
+    /// created that still follow it.
     fn get_execution_records(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+    ) -> impl Future<Output = Result<Vec<ListedRun>>> + Send;
 
-    /// Starter routines whose step is code, to offer when a routine is
-    /// created; none on hosts where code can't be saved.
-    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+    /// Macro's catalog routines with schedules in `timezone`, without code
+    /// steps on hosts where code can't be saved.
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry>;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+}
+
+/// A create's result: a new routine, or the sub-routine its key already named.
+#[derive(Debug, Clone)]
+pub enum SavedAction {
+    Created(ScheduledAction),
+    /// The parent's sub-routine under the same key, updated in place.
+    Updated(ScheduledAction),
+}
+
+impl SavedAction {
+    pub fn into_action(self) -> ScheduledAction {
+        match self {
+            Self::Created(action) | Self::Updated(action) => action,
+        }
+    }
 }
 
 /// AI that drafts routines and their steps from people's words.
@@ -235,34 +356,120 @@ pub trait RoutineDraftService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
 }
 
-/// The model that drafts routines.
-pub trait DraftModel: Send + Sync + 'static {
-    /// One answer in `completion.schema`'s shape, billed to `owner`; `None`
-    /// when the model gave none, e.g. it failed, timed out or broke the
-    /// schema.
-    fn complete(
+/// What a routine suggestion was, for the log of a routine saved from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SuggestionOrigin {
+    /// `for_you` (AI's) or `macro` (a template).
+    pub from: &'static str,
+    /// `catalog` or `routine`.
+    pub kind: &'static str,
+    /// The surface it belongs to most.
+    pub surface: Option<&'static str>,
+}
+
+/// Finds what a suggestion was. Object-safe, so the scheduled action service
+/// need not know the suggestion store's type.
+#[async_trait::async_trait]
+pub trait SuggestionOrigins: Send + Sync + 'static {
+    /// What suggestion `suggestion`, made to `owner`, was, if it is one.
+    async fn origin(
         &self,
         owner: &MacroUserIdStr<'static>,
-        completion: DraftCompletion<'_>,
-    ) -> impl Future<Output = Option<serde_json::Value>> + Send;
+        suggestion: Uuid,
+    ) -> Result<Option<SuggestionOrigin>>;
 }
 
-/// One request to the drafting model.
-#[derive(Debug, Clone, Copy)]
-pub struct DraftCompletion<'a> {
-    /// What the model is told before the request.
-    pub instructions: &'a str,
-    /// The person's words, or what to fix.
-    pub prompt: &'a str,
-    pub schema: &'a OutputSchema,
+/// Where a draft's session hands its routine back: one row per draft,
+/// keyed by the draft session's id, so the drafter reads what the session
+/// checked whichever replicas each ran on. Object-safe: the drafter and the
+/// check share one erased store.
+#[async_trait::async_trait]
+pub trait DraftHandBacks: Send + Sync + 'static {
+    /// Start a draft whose session is `session`, run as `agent` for `owner`.
+    async fn begin(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
+    ) -> Result<()>;
+
+    /// Keep `check` as the routine `session`'s draft hands back, and add
+    /// `created` to what it created, if `session` is a draft `owner`
+    /// started. Whether it was.
+    async fn record(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        check: &super::models::RoutineCheck,
+        created: &[super::models::CreatedItem],
+    ) -> Result<bool>;
+
+    /// The draft's latest check, and how many checks it made.
+    async fn handed_back(&self, session: Uuid) -> Result<HandedBack>;
+
+    /// Forget the draft.
+    async fn finish(&self, session: Uuid) -> Result<()>;
+
+    /// Drafts started before `before`, oldest first, at most `limit`.
+    async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
 }
 
-/// A JSON schema the model's answer must match.
+/// What a draft's session handed back so far.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HandedBack {
+    /// Its latest check; `None` before its first.
+    pub check: Option<super::models::RoutineCheck>,
+    /// Its latest check that passed, kept even when a later one failed.
+    pub passed: Option<super::models::RoutineCheck>,
+    /// How many checks it made.
+    pub checks: u32,
+    /// What it said it created for the routine, across its checks.
+    pub created: Vec<super::models::CreatedItem>,
+}
+
+/// A draft left behind, for the sweep.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OutputSchema {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub schema: serde_json::Value,
+pub struct StaleDraft {
+    pub session: Uuid,
+    pub owner: MacroUserIdStr<'static>,
+    pub agent: bot_id::BotId,
+}
+
+/// What an agent session's programs created, from the activity recorded for
+/// its code-mode invocations. Written asynchronously, so a read right after
+/// a creation can miss it. Object-safe so the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait SessionCreations: Send + Sync + 'static {
+    /// Items `session` created, as its activity records them so far.
+    async fn created_by(&self, session: Uuid) -> Result<Vec<super::models::CreatedItem>>;
+}
+
+/// A host that records no session activity.
+pub struct NoSessionCreations;
+
+#[async_trait::async_trait]
+impl SessionCreations for NoSessionCreations {
+    async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
+        Ok(Vec::new())
+    }
+}
+
+/// The agent session a code-mode request came from, by the invocation its
+/// credential names. Object-safe for the same reason.
+#[async_trait::async_trait]
+pub trait RequestSessions: Send + Sync + 'static {
+    /// The session behind `correlation`, if it still exists.
+    async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>>;
+}
+
+/// No code-mode requests reach this host.
+pub struct NoRequestSessions;
+
+#[async_trait::async_trait]
+impl RequestSessions for NoRequestSessions {
+    async fn session_of(&self, _correlation: Uuid) -> Result<Option<Uuid>> {
+        Ok(None)
+    }
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.
@@ -530,6 +737,11 @@ pub struct CodeRun<'a> {
     pub steps: &'a serde_json::Value,
     /// Answer every write with an empty result instead of sending it.
     pub dry_run: bool,
+    /// Who its writes are attributed to.
+    pub acts_as: routine_program::CodeIdentity,
+    /// The routine it belongs to, stamped on its credential so its writes
+    /// never trigger routines.
+    pub routine_id: macro_uuid::Uuid,
 }
 
 /// What one code step did.
@@ -764,6 +976,8 @@ pub struct FinishedRoutineRun {
     pub owner: MacroUserIdStr<'static>,
     pub routine_id: Uuid,
     pub routine_name: String,
+    /// The name of the routine it follows, when it is a sub-routine.
+    pub parent_name: Option<String>,
     pub trigger: RunTrigger,
     pub target: RunTarget,
     pub end: RunEnd,

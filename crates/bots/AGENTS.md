@@ -15,6 +15,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
   `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
 
 ## Scope
@@ -44,6 +46,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Agent create/update/patch must persist `has_agent = true` atomically with
   configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).

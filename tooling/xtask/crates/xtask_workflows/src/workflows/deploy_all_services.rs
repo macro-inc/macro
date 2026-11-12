@@ -200,6 +200,7 @@ fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
             max_parallel: None,
         })
         .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_cache())
 }
@@ -456,37 +457,14 @@ fn deployment_summary() -> Job {
             "deploy-services".to_string(),
         ])
         .cond(Expression::new("always()"))
+        .add_step(steps::checkout_v4())
+        .add_step(steps::setup_bun_pinned())
         .add_step(check_deployment_results())
 }
 
 fn check_deployment_results() -> Step<Run> {
-    Step::new("Check deployment results").run(indoc::indoc! {r#"
-        if [[ "${{ needs.setup.result }}" == "failure" ]]; then
-          echo "❌ Deployment setup failed"
-          exit 1
-        elif [[ "${{ needs.setup.result }}" == "skipped" ]]; then
-          echo "⏭️ Deployment setup was skipped"
-        elif [[ "${{ needs.warm-binaries.result }}" == "failure" || "${{ needs.warm-lambdas.result }}" == "failure" ]]; then
-          echo "❌ Warming shared deps onto a sticky disk failed"
-          exit 1
-        elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
-          echo "❌ One or more service binary builds failed"
-          exit 1
-        elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
-          echo "❌ One or more Lambda artifact builds failed"
-          exit 1
-        elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
-          echo "❌ Database migrations failed"
-          exit 1
-        elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
-          echo "❌ One or more service deployments failed"
-          exit 1
-        elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
-          echo "⏭️ No services to deploy"
-        else
-          echo "✅ All service deployments completed successfully for $ENVIRONMENT environment"
-        fi
-    "#})
-    .shell("bash")
-    .add_env(Env::new("ENVIRONMENT", "${{ inputs.environment }}"))
+    Step::new("Check deployment results")
+        .run("bun .github/scripts/check-service-deployment-results.ts")
+        .shell("bash")
+        .add_env(("DEPLOYMENT_NEEDS", "${{ toJson(needs) }}"))
 }

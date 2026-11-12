@@ -1,3 +1,4 @@
+import { deferredGate } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -7,12 +8,15 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import type {
   EmailConnectivity,
   EmailDraftStorage,
 } from '../context/compose-capabilities';
 import type { DraftSyncViewState } from '../core/local-draft';
+
+// Local storage that restarts is back within seconds nearly every time and
+// retries itself, so the composer says nothing until it has clearly stalled.
+const SYNC_STALL_NOTICE_MS = 15_000;
 
 /** Recovery reads only metadata; file blobs are restored once when opening a draft. */
 export function createDraftSyncStatus(options: {
@@ -39,20 +43,34 @@ export function createDraftSyncStatus(options: {
     saved.state === 'ready' || saved.state === 'refreshing'
       ? saved.latest?.local
       : undefined;
-  const deletePending = () =>
-    local()?.status === 'delete-failed' ||
-    (local()?.status === 'deleting' &&
-      (!local()?.queuedAttemptId ||
-        local()?.queuedAttemptId !== local()?.latestAttemptId));
-  // Saving is silent online. Offline, edits wait on this device.
-  const offlineState = (): DraftSyncViewState | undefined => {
+  // A discard still on its way to the server is not a failure.
+  const discardFailed = () => local()?.status === 'delete-failed';
+  const availability = () => options.drafts.syncAvailability?.() ?? 'ready';
+  // One restart moves between these two states with every attempt.
+  const restarting = createMemo(
+    () => availability() === 'unavailable' || availability() === 'recovering'
+  );
+  const stalled = deferredGate(restarting, SYNC_STALL_NOTICE_MS);
+  // Saving is silent. Edits that cannot reach the server yet wait on this
+  // device, which is worth saying only offline or once a restart has stalled.
+  const waitingState = (): DraftSyncViewState | undefined => {
     const draft = local();
     if (!draft || draft.acknowledgedRevision >= draft.revision) return;
-    if (!options.connectivity.looksOffline()) return;
+    if (options.connectivity.looksOffline())
+      return {
+        message: 'Saved on this device; waiting to sync',
+        detail: 'Changes stay on this device until you are back online.',
+        failed: false,
+        canKeepEditing: false,
+      };
+
+    if (!restarting() || !stalled()) return;
     return {
       message: 'Saved on this device; waiting to sync',
-      detail: 'Changes stay on this device until you are back online.',
+      detail:
+        'Changes stay on this device until draft synchronization resumes.',
       failed: false,
+      action: availability() === 'unavailable' ? 'retry' : undefined,
       canKeepEditing: false,
     };
   };
@@ -70,32 +88,21 @@ export function createDraftSyncStatus(options: {
       };
     const failed =
       disk === 'failed' ||
-      ['failed', 'unconfirmed', 'delete-failed'].includes(
-        draft?.status ?? ''
-      ) ||
-      deletePending();
-    const availability = options.drafts.syncAvailability?.() ?? 'ready';
-    if (disk !== 'failed' && availability !== 'ready') {
+      ['failed', 'unconfirmed', 'delete-failed'].includes(draft?.status ?? '');
+    // Only a reload brings this storage back, so the user has to act.
+    if (disk !== 'failed' && availability() === 'recovery-required') {
       return {
         message: draft
           ? 'Saved on this device; waiting to sync'
           : 'Draft synchronization unavailable',
         detail:
-          availability === 'recovering'
-            ? 'Reconnecting to saved changes…'
-            : availability === 'recovery-required'
-              ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
-              : 'Reconnect or retry to resume draft synchronization.',
+          'Queued changes are preserved. Update or reload Macro to recover local storage.',
         failed: true,
-        action: match(availability)
-          .with('unavailable', () => 'retry' as const)
-          .with('recovery-required', () => 'reload' as const)
-          .with('recovering', () => undefined)
-          .exhaustive(),
+        action: 'reload',
         canKeepEditing: false,
       };
     }
-    if (!failed) return offlineState();
+    if (!failed) return waitingState();
     return {
       message:
         disk === 'failed'
@@ -104,7 +111,7 @@ export function createDraftSyncStatus(options: {
       detail:
         disk === 'failed'
           ? 'Keep this editor open until saving succeeds.'
-          : deletePending()
+          : discardFailed()
             ? 'Discard could not be confirmed.'
             : draft?.status === 'unconfirmed'
               ? 'The last save could not be confirmed.'
@@ -112,8 +119,8 @@ export function createDraftSyncStatus(options: {
                 ? 'The server could not save this draft.'
                 : undefined,
       failed,
-      action: deletePending() ? 'retry-discard' : 'retry',
-      canKeepEditing: deletePending(),
+      action: discardFailed() ? 'retry-discard' : 'retry',
+      canKeepEditing: discardFailed(),
     };
   });
   const run = async (action: () => Promise<unknown>) => {
@@ -145,7 +152,7 @@ export function createDraftSyncStatus(options: {
             ? async () => {
                 await refetch();
               }
-            : deletePending()
+            : discardFailed()
               ? options.discard
               : options.retry
         ),

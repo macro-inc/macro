@@ -1,9 +1,9 @@
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Envelope from '@phosphor/envelope.svg';
-import Link from '@phosphor/link.svg';
-import Users from '@phosphor/users-three.svg';
+import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import Link from '@icon/system/regular/link.svg';
+import Users from '@icon/system/regular/users-three.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { demoMailAccounts } from '../../../core/demo-email';

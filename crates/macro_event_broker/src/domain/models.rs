@@ -25,7 +25,8 @@ pub trait TopicEvent: Serialize + DeserializeOwned + Send + Sync {
 ///
 /// The envelope carries broker-agnostic information that is useful to downstream
 /// consumers. The topic-specific event enum is flattened so the wire shape stays:
-/// `event_id`, `schema_version`, `event_type`, and `metadata`.
+/// `event_id`, `schema_version`, `event_type`, and `metadata`, plus
+/// `agent_correlation_id` and `routine_id` only when set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event<E> {
     /// Unique identifier for this event instance.
@@ -33,6 +34,15 @@ pub struct Event<E> {
     /// Accepted originating code-mode invocation, retained across delivery.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_correlation_id: Option<Uuid>,
+    /// Routine whose run caused this event, from the signed token of the
+    /// request that produced it; consumers use it to keep routines from
+    /// triggering themselves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine_id: Option<Uuid>,
+    /// Display verb supplied with a validated code-mode invocation. Kept raw
+    /// so an older consumer accepts a future vocabulary value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_verb: Option<String>,
     /// Version of the event payload schema.
     pub schema_version: u8,
     /// Topic-specific event variant and strongly typed metadata.
@@ -62,6 +72,8 @@ impl<E: TopicEvent> Event<E> {
         Self {
             event_id,
             agent_correlation_id: agent_correlation::context::current(),
+            routine_id: agent_correlation::context::current_routine(),
+            agent_verb: agent_correlation::context::current_verb().map(|verb| verb.to_string()),
             schema_version,
             event,
         }
@@ -221,9 +233,24 @@ macro_rules! declare_topics {
                     $(Self::$event(event) => $crate::MacroEvent::event(event).agent_correlation_id,)+
                 }
             }
+
+            /// The display verb of the originating invocation, if any.
+            pub fn agent_verb(&self) -> Option<$crate::AgentVerb> {
+                match self {
+                    $(Self::$event(event) => $crate::MacroEvent::event(event).agent_verb.as_deref().and_then(|verb| verb.parse().ok()),)+
+                }
+            }
         }
 
         impl $crate::MacroEventCollection for $collection {
+            fn agent_correlation_id(&self) -> Option<$crate::EventUuid> {
+                self.agent_correlation_id()
+            }
+
+            fn agent_verb(&self) -> Option<$crate::AgentVerb> {
+                self.agent_verb()
+            }
+
             fn decode<T: $crate::MessageParts>(
                 message: &T,
             ) -> Result<Self, $crate::EventBrokerError> {

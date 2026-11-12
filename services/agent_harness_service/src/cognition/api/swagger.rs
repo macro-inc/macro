@@ -29,7 +29,9 @@ use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
-use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
+use memory::inbound::axum_router::{
+    self as memory_api, MemoryErrorBody, MemoryResponse, UpdateExplicitMemoryRequest,
+};
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
@@ -101,8 +103,14 @@ use utoipa::OpenApi;
             image_generation_api::generate_image_handler,
             web_search::inbound::axum_router::search_handler,
             web_search::inbound::axum_router::fetch_handler,
+            skills::inbound::axum_router::list_skills_handler,
+            skills::inbound::axum_router::read_skill_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
+            memory_api::get_explicit_memory_handler,
+            memory_api::update_explicit_memory_handler,
+            memory_api::get_user_activity_handler,
+            activity::inbound::axum_router::read_activity_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,
             import_api::discover_handler,
@@ -229,11 +237,27 @@ use utoipa::OpenApi;
                 web_search::domain::models::WebFetch,
                 web_search::domain::models::WebFetchResponse,
                 web_search::inbound::axum_router::WebErrorBody,
+                skills::inbound::axum_router::SkillsMatchType,
+                skills::inbound::axum_router::SkillListing,
+                skills::inbound::axum_router::SkillsResponse,
+                skills::inbound::axum_router::SkillContentResponse,
+                skills::inbound::axum_router::SkillErrorBody,
                 agent::structured_output::DynamicSchema,
 
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+                UpdateExplicitMemoryRequest,
+                memory::domain::models::ExplicitMemory,
+                memory::domain::models::MemoryEdit,
+                memory::domain::models::ActivityReports,
+                memory::domain::models::Activity,
+                memory::domain::models::Granularity,
+                // Activity
+                activity::inbound::toolset::ReadActivityResponse,
+                activity::inbound::toolset::ToolActivityEvent,
+                activity::inbound::toolset::ToolActivityAction,
+                activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline
                 ListDatabaseSyncsResponse,

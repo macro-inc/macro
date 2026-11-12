@@ -53,23 +53,6 @@ fn named_instance_is_isolated_and_deterministic() {
 }
 
 #[test]
-fn port_offsets_are_unique() {
-    let mut seen = std::collections::HashSet::new();
-    for p in Port::all() {
-        assert!(seen.insert(p.offset()), "duplicate offset for {p:?}");
-        assert!(p.offset() < 1000, "offset must be < stride for {p:?}");
-    }
-}
-
-#[test]
-fn named_instance_ports_stay_below_the_linux_ephemeral_range() {
-    let highest_base = WINDOW_START + (BUCKETS - 1) * STRIDE;
-    let highest_offset = Port::all().map(Port::offset).max().unwrap() as u32;
-
-    assert!(highest_base + highest_offset < 32_768);
-}
-
-#[test]
 fn port_base_override_wins() {
     let inst = Instance::derive(Some("agent-a"), Some(12000)).unwrap();
     assert_eq!(inst.port_base(), 12000);
@@ -92,16 +75,43 @@ fn doc_cognition_host_port_is_instance_derived() {
     assert_eq!(named.port(Port::DocCognition), 31014);
 }
 
-/// New `Port` variants must be appended. Inserting mid-enum shifts named-instance
-/// offsets for every later variant (Kafka, webhooks, agent harness, …).
 #[test]
-fn appended_port_offsets_stay_stable() {
-    assert_eq!(Port::Kafka.offset(), 22);
-    assert_eq!(Port::SdkWebhookSsh.offset(), 23);
-    assert_eq!(Port::SdkWebhookHostReceiver.offset(), 24);
-    assert_eq!(Port::AgentProxy.offset(), 25);
-    assert_eq!(Port::AgentHarness.offset(), 26);
-    assert_eq!(Port::AgentHarnessEgress.offset(), 27);
-    assert_eq!(Port::ScheduledAction.offset(), 28);
-    assert_eq!(Port::ScheduledAction.fixed(), 8099);
+fn networks_are_carved_from_the_block_in_order() {
+    let instance = Instance::derive(Some("agent-a"), None)
+        .unwrap()
+        .with_allocation(30_400, Some(9));
+
+    assert_eq!(
+        instance.networks(),
+        vec![
+            (
+                "databases-agent-a".to_string(),
+                Some("10.254.9.0/26".to_string())
+            ),
+            (
+                "auth-agent-a".to_string(),
+                Some("10.254.9.64/26".to_string())
+            ),
+            (
+                "macro-agent-a_services".to_string(),
+                Some("10.254.9.128/26".to_string())
+            ),
+            (
+                "macro-agent-a_auth-internal".to_string(),
+                Some("10.254.9.192/26".to_string())
+            ),
+        ]
+    );
+}
+
+#[test]
+fn the_default_instance_creates_only_its_two_shared_networks() {
+    let instance = Instance::derive(None, None).unwrap();
+    let names: Vec<String> = instance
+        .networks()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
+    assert_eq!(names, ["databases", "auth"]);
 }

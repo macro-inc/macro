@@ -41,7 +41,7 @@ impl AgentResponder for AgentLoopResponder {
             self.toolset.clone();
 
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChannelBot, user_id);
-        // Carry the feature on the context so tool-spawned subagents attribute to it.
+        // Carry the feature on the context so AI calls made by tools are attributed to it.
         let mut tool_context = (*self.tool_context).clone();
         tool_context.usage_context = usage_ctx.clone();
         let mut session = self

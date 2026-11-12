@@ -1,5 +1,7 @@
 //! Durable publication of email backfill outbox rows.
 
+mod crm;
+
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, FinalizeBackfillPayload, JobScopedPayload,
 };
@@ -24,18 +26,24 @@ struct EmailCompletionOutboxRow {
     email_link_id: Option<Uuid>,
 }
 
-/// Continuously publish email backfill init and completion outbox rows to
-/// the email backfill queue.
+/// Continuously publish email backfill init/completion and CRM contribution
+/// outbox requests to the email backfill queue.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
-/// idempotent by backfill job id.
+/// idempotent within its job or CRM contact scope.
 #[tracing::instrument(skip(db, sqs))]
 pub async fn run(db: PgPool, sqs: SQS, cancellation_token: tokio_util::sync::CancellationToken) {
     loop {
         if cancellation_token.is_cancelled() {
             return;
         }
+        crm::drain(&db, &sqs)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to publish CRM consent backfill");
+            })
+            .ok();
         drain_email_init(&db, &sqs)
             .await
             .inspect_err(|error| {

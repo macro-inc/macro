@@ -205,11 +205,20 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             "ReadContent"
                 | "ReadMetadata"
                 | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -220,6 +229,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
@@ -229,6 +243,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.email.sendConfirmed runs the tool itself.
                 | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"
@@ -237,6 +252,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadChannelThread"
                 | "RenameChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
@@ -246,6 +263,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
                 // macro.calendar.booking.
                 | "ReadBookingSettings"
                 | "UpdateBookingSettings"
@@ -259,6 +278,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
@@ -266,6 +287,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
                 // macro.documents.upload(), which sends the bytes through Macro.
@@ -286,7 +311,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.list() and macro.agentSessions.createManaged.
+                // macro.agents.coding() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
                 // macro.connectedApps.discover and .addServer.
@@ -319,6 +344,13 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // document.copy(), database.duplicate() and project.rename().
                 | "DuplicateItem"
                 | "RenameItem"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadActivity"
+                | "ReadInitiativeActivity"
                 // Document.readPresentation, editPresentation and copyPresentation.
                 | "ReadPresentation"
                 | "EditPresentation"
@@ -329,6 +361,41 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadDesign"
                 | "ReadPhotoshopDocument"
                 | "ReadIllustratorDocument"
+                // macro.documents.create(), createSpreadsheet(), createCanvas()
+                // and upload(); macro.tasks.create().
+                | "CreateDocument"
+                // Document.updateSharePermissions() and Project.updateSharePermissions().
+                | "UpdateSharing"
+                // Database.saveQuery() and DatabaseTable.saveQuery().
+                | "SaveDatabaseQuery"
+                // macro.crm: companyById(), createCompany(), createContact()
+                // and importCompaniesCsv().
+                | "GetCompany"
+                | "CreateCompany"
+                | "CreateContact"
+                | "ImportCompaniesCsv"
+                // macro.crm.pipelines and CrmPipeline. CreatePipeline stays:
+                // the SDK's create() takes no stages or fields.
+                | "ListPipelines"
+                | "FindPipelineEntries"
+                | "AddToPipeline"
+                | "UpdatePipelineEntries"
+                | "RemoveFromPipeline"
+                | "EditPipeline"
+                | "ImportPipelineCsv"
+                | "ExportPipelineCsv"
+                // macro.initiatives and Initiative.update() and delete().
+                | "ListInitiatives"
+                | "CreateInitiative"
+                | "UpdateInitiative"
+                | "UpdateInitiativeSharing"
+                | "DeleteInitiative"
+                // macro.agents.list() and Agent.update(). ListAgentUpdates
+                // stays: its result renders the cards the user answers on.
+                // CreateAgentSession stays: createManaged refuses a prompt for
+                // an agent that runs on its operator's machine.
+                | "ListAgents"
+                | "ConfigureAgent"
         )
 }
 
