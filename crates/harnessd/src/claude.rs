@@ -47,10 +47,12 @@ pub struct ClaudeConfig {
     pub pending_lifetime: Duration,
     /// The terminal's width: wide, so the URL barely wraps.
     pub columns: u16,
+    /// The terminal's height.
     pub rows: u16,
 }
 
 impl ClaudeConfig {
+    /// The defaults for `program`, storing credentials in `state_directory`.
     pub fn new(program: PathBuf, state_directory: PathBuf) -> Self {
         Self {
             program,
@@ -65,6 +67,8 @@ impl ClaudeConfig {
     }
 }
 
+/// Claude Code's sign-in on this computer: `claude setup-token` in a PTY
+/// while one is pending, and the stored credential.
 pub struct ClaudeAuth {
     config: ClaudeConfig,
     credentials: CredentialStore,
@@ -91,6 +95,7 @@ impl PendingSignIn {
 }
 
 impl ClaudeAuth {
+    /// An adapter with no sign-in pending.
     pub fn new(config: ClaudeConfig) -> Self {
         let credentials = CredentialStore::new(&config.state_directory);
         Self {
