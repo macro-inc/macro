@@ -77,11 +77,17 @@ impl<Session: WhatsAppSession> PictureChecks<Session> {
             if !connected {
                 return;
             }
+            // A disconnect during the warmup starts it over after the
+            // reconnect, so the login burst always gets the full wait.
             if !warm {
-                tokio::select! {
+                let dropped = tokio::select! {
                     () = stop.cancelled() => return,
                     () = self.fenced.cancelled() => return,
-                    () = tokio::time::sleep(self.pacing.warmup) => {}
+                    () = tokio::time::sleep(self.pacing.warmup) => false,
+                    _ = self.connected.wait_for(|connected| !*connected) => true,
+                };
+                if dropped {
+                    continue;
                 }
                 warm = true;
             }
@@ -182,7 +188,7 @@ impl<Session: WhatsAppSession> PictureChecks<Session> {
             }
             match self
                 .sessions
-                .complete_picture_check(self.scope, &check.jid, &answer)
+                .complete_picture_check(self.scope, check, &answer)
                 .await
             {
                 Err(report) if matches!(report.current_context(), ExternalChatError::Fenced) => {

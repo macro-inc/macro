@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use tracing::Instrument;
 use whatsapp_linked::domain::events::{PictureAnswer, PictureCheck};
-use whatsapp_linked::domain::models::PICTURE_LIMIT_BYTES;
+use whatsapp_linked::domain::models::{PICTURE_LIMIT_BYTES, PICTURE_MIME_LIMIT_BYTES};
 use whatsmeow::types::Jid;
 use whatsmeow::user::GetProfilePictureParams;
 use whatsmeow::{Client, ClientError};
@@ -70,46 +70,76 @@ pub(super) async fn profile_picture(
                 mime,
             }
         }
-        Err(outcome) => {
-            span.record("outcome", outcome);
-            PictureAnswer::Failed
+        Err(failure) => {
+            span.record("outcome", failure.as_str());
+            match failure {
+                // The picture host throttling the account is WhatsApp's
+                // rate limit too: pause like a 429 on the query.
+                DownloadFailure::RateLimited => PictureAnswer::RateLimited,
+                DownloadFailure::Timeout
+                | DownloadFailure::HttpError
+                | DownloadFailure::NotAnImage
+                | DownloadFailure::TooLarge => PictureAnswer::Failed,
+            }
         }
     }
 }
 
-/// The image and its type, or why it was refused.
-async fn download(http: &reqwest::Client, url: &str) -> Result<(Vec<u8>, String), &'static str> {
+/// Why a picture download was refused, as `whatsapp.picture.download`
+/// records it.
+#[derive(Debug, Clone, Copy)]
+enum DownloadFailure {
+    RateLimited,
+    Timeout,
+    HttpError,
+    NotAnImage,
+    TooLarge,
+}
+
+impl DownloadFailure {
+    fn as_str(self) -> &'static str {
+        match self {
+            DownloadFailure::RateLimited => "rate_limited",
+            DownloadFailure::Timeout => "timeout",
+            DownloadFailure::HttpError => "http_error",
+            DownloadFailure::NotAnImage => "not_an_image",
+            DownloadFailure::TooLarge => "too_large",
+        }
+    }
+}
+
+impl From<reqwest::Error> for DownloadFailure {
+    fn from(error: reqwest::Error) -> Self {
+        if error.status() == Some(reqwest::StatusCode::TOO_MANY_REQUESTS) {
+            DownloadFailure::RateLimited
+        } else if error.is_timeout() {
+            DownloadFailure::Timeout
+        } else {
+            DownloadFailure::HttpError
+        }
+    }
+}
+
+/// The image and its type.
+async fn download(http: &reqwest::Client, url: &str) -> Result<(Vec<u8>, String), DownloadFailure> {
     let mut response = http
         .get(url)
         .send()
         .await
-        .and_then(|response| response.error_for_status())
-        .map_err(|error| {
-            if error.is_timeout() {
-                "timeout"
-            } else {
-                "http_error"
-            }
-        })?;
+        .and_then(|response| response.error_for_status())?;
     let mime = response
         .headers()
         .get("content-type")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split(';').next())
         .map(str::trim)
-        .filter(|mime| mime.starts_with("image/") && mime.len() <= 64)
-        .ok_or("not_an_image")?
+        .filter(|mime| mime.starts_with("image/") && mime.len() <= PICTURE_MIME_LIMIT_BYTES)
+        .ok_or(DownloadFailure::NotAnImage)?
         .to_owned();
     let mut bytes = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|error| {
-        if error.is_timeout() {
-            "timeout"
-        } else {
-            "http_error"
-        }
-    })? {
+    while let Some(chunk) = response.chunk().await? {
         if bytes.len() + chunk.len() > PICTURE_LIMIT_BYTES {
-            return Err("too_large");
+            return Err(DownloadFailure::TooLarge);
         }
         bytes.extend_from_slice(&chunk);
     }

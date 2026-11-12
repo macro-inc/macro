@@ -174,7 +174,7 @@ pub(super) async fn claim_picture_checks_in(
             SELECT jid FROM whatsapp_profile_picture
             WHERE account_id = $1 AND state <> 'staged' AND retry_at <= now()
             ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)
-        RETURNING p.jid,
+        RETURNING p.jid, p.retry_at AS claim,
             CASE WHEN p.state = 'ready' THEN p.picture_id END AS existing_id,
             CASE WHEN p.jid NOT LIKE '%@g.us' THEN (
                 SELECT c.remote_id FROM external_chat c
@@ -205,6 +205,7 @@ pub(super) async fn claim_picture_checks_in(
             jid: row.jid,
             existing_id: row.existing_id,
             common_group: row.common_group,
+            claim: row.claim,
         })
         .collect())
 }
@@ -212,13 +213,18 @@ pub(super) async fn claim_picture_checks_in(
 pub(super) async fn complete_picture_check_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
-    jid: &str,
+    check: &PictureCheck,
     answer: &PictureAnswer,
 ) -> ExternalChatResult<()> {
+    // Every change to a row in between (a removal, another picture, consent
+    // ending, a newer claim) moves its retry time, so a row still at the
+    // claim's time is the one this answer is about.
+    let jid = check.jid.as_str();
     let Some(stored) = sqlx::query_scalar!(
-        "SELECT static_file_id FROM whatsapp_profile_picture WHERE account_id = $1 AND jid = $2 AND state <> 'staged' FOR UPDATE",
+        "SELECT static_file_id FROM whatsapp_profile_picture WHERE account_id = $1 AND jid = $2 AND state <> 'staged' AND retry_at = $3 FOR UPDATE",
         account.id,
-        jid
+        jid,
+        check.claim
     )
     .fetch_optional(&mut **tx)
     .await
@@ -410,7 +416,8 @@ impl PictureRepository for PgWhatsAppRepository {
             r#"UPDATE whatsapp_profile_picture p SET state = 'ready', static_file_id = $4, staged = NULL, mime = NULL,
                 attempts = 0, retry_at = now() + make_interval(days => $5) + random() * make_interval(days => $6)
             FROM whatsapp_linked_account a
-            WHERE a.id = p.account_id AND p.account_id = $1 AND p.jid = $2 AND p.state = 'staged' AND p.picture_id = $3
+            WHERE a.id = p.account_id AND p.account_id = $1 AND p.jid = $2 AND p.picture_id = $3
+                AND (p.state = 'staged' OR (p.state = 'ready' AND p.static_file_id = $4))
             RETURNING a.user_id"#,
             account,
             jid,

@@ -64,19 +64,15 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
     let mut checks = session.claim_picture_checks(alice, 10).await.unwrap();
     checks.sort_by(|a, b| a.jid.cmp(&b.jid));
     assert_eq!(
-        checks,
-        vec![
-            PictureCheck {
-                jid: GROUP.to_owned(),
-                existing_id: None,
-                common_group: None,
-            },
-            PictureCheck {
-                jid: CUSTOMER_JID.to_owned(),
-                existing_id: None,
-                common_group: Some(GROUP.to_owned()),
-            },
-        ]
+        checks
+            .iter()
+            .map(|check| (
+                check.jid.as_str(),
+                check.existing_id.as_deref(),
+                check.common_group.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        [(GROUP, None, None), (CUSTOMER_JID, None, Some(GROUP))]
     );
     assert!(
         session
@@ -90,7 +86,7 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
     session
         .complete_picture_check(
             alice,
-            CUSTOMER_JID,
+            &checks[1],
             &PictureAnswer::Picture {
                 id: "1700000001".to_owned(),
                 bytes: b"jpeg bytes".to_vec(),
@@ -100,7 +96,7 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
         .await
         .unwrap();
     session
-        .complete_picture_check(alice, GROUP, &PictureAnswer::NotSet)
+        .complete_picture_check(alice, &checks[0], &PictureAnswer::NotSet)
         .await
         .unwrap();
 
@@ -163,18 +159,22 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
         )
         .await
         .unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     assert_eq!(
-        session.claim_picture_checks(alice, 10).await.unwrap(),
-        vec![PictureCheck {
-            jid: CUSTOMER_JID.to_owned(),
-            existing_id: Some("1700000001".to_owned()),
-            common_group: Some(GROUP.to_owned()),
-        }]
+        checks
+            .iter()
+            .map(|check| (
+                check.jid.as_str(),
+                check.existing_id.as_deref(),
+                check.common_group.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        [(CUSTOMER_JID, Some("1700000001"), Some(GROUP))]
     );
     session
         .complete_picture_check(
             alice,
-            CUSTOMER_JID,
+            &checks[0],
             &PictureAnswer::Picture {
                 id: "1700000002".to_owned(),
                 bytes: b"new jpeg".to_vec(),
@@ -198,9 +198,9 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
         .picture_changed(alice, &[CUSTOMER_JID.to_owned()], Some("1700000003"))
         .await
         .unwrap();
-    session.claim_picture_checks(alice, 10).await.unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     session
-        .complete_picture_check(alice, CUSTOMER_JID, &PictureAnswer::Hidden)
+        .complete_picture_check(alice, &checks[0], &PictureAnswer::Hidden)
         .await
         .unwrap();
     assert_eq!(
@@ -213,11 +213,11 @@ async fn the_owner_tracks_the_added_group_and_new_senders_once_and_stores_what_i
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_picture_that_moved_on_during_import_is_never_stored(pool: PgPool) {
     let (_, session, repository, _, alice, _) = adopted(&pool).await;
-    session.claim_picture_checks(alice, 10).await.unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     session
         .complete_picture_check(
             alice,
-            GROUP,
+            &checks[0],
             &PictureAnswer::Picture {
                 id: "1700000001".to_owned(),
                 bytes: b"group jpeg".to_vec(),
@@ -328,11 +328,11 @@ async fn checks_stop_when_the_hourly_or_daily_budget_is_spent(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_picture_whose_import_failed_is_never_offered_as_unchanged(pool: PgPool) {
     let (_, session, repository, _, alice, _) = adopted(&pool).await;
-    session.claim_picture_checks(alice, 10).await.unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     session
         .complete_picture_check(
             alice,
-            GROUP,
+            &checks[0],
             &PictureAnswer::Picture {
                 id: "1700000001".to_owned(),
                 bytes: b"first logo".to_vec(),
@@ -355,11 +355,11 @@ async fn a_picture_whose_import_failed_is_never_offered_as_unchanged(pool: PgPoo
         .picture_changed(alice, &[GROUP.to_owned()], Some("1700000002"))
         .await
         .unwrap();
-    session.claim_picture_checks(alice, 10).await.unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     session
         .complete_picture_check(
             alice,
-            GROUP,
+            &checks[0],
             &PictureAnswer::Picture {
                 id: "1700000002".to_owned(),
                 bytes: b"second logo".to_vec(),
@@ -382,13 +382,13 @@ async fn a_picture_whose_import_failed_is_never_offered_as_unchanged(pool: PgPoo
     .await
     .unwrap();
 
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     assert_eq!(
-        session.claim_picture_checks(alice, 10).await.unwrap(),
-        vec![PictureCheck {
-            jid: GROUP.to_owned(),
-            existing_id: None,
-            common_group: None,
-        }],
+        checks
+            .iter()
+            .map(|check| (check.jid.as_str(), check.existing_id.as_deref()))
+            .collect::<Vec<_>>(),
+        [(GROUP, None)],
         "the stored file is the first picture, so the second's id must not be offered"
     );
     assert_eq!(
@@ -406,11 +406,11 @@ async fn a_picture_whose_import_failed_is_never_offered_as_unchanged(pool: PgPoo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn ending_consent_drops_what_the_account_saw_and_checks_again(pool: PgPool) {
     let (linked, session, repository, _, alice, _) = adopted(&pool).await;
-    session.claim_picture_checks(alice, 10).await.unwrap();
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
     session
         .complete_picture_check(
             alice,
-            GROUP,
+            &checks[0],
             &PictureAnswer::Picture {
                 id: "1700000001".to_owned(),
                 bytes: b"group logo".to_vec(),
@@ -448,4 +448,78 @@ async fn ending_consent_drops_what_the_account_saw_and_checks_again(pool: PgPool
         "a relink, perhaps with another number, sees for itself"
     );
     assert_eq!(released_files(&pool).await, vec![file]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_answer_overtaken_by_a_removal_is_dropped(pool: PgPool) {
+    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
+
+    // The group's picture is removed while its download is in flight.
+    session
+        .picture_changed(alice, &[GROUP.to_owned()], None)
+        .await
+        .unwrap();
+    session
+        .complete_picture_check(
+            alice,
+            &checks[0],
+            &PictureAnswer::Picture {
+                id: "1700000001".to_owned(),
+                bytes: b"removed logo".to_vec(),
+                mime: "image/png".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![(GROUP.to_owned(), "none".to_owned(), None, None)],
+        "the removed picture is never staged"
+    );
+    assert!(repository.staged_pictures(10).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn storing_the_same_file_again_keeps_it(pool: PgPool) {
+    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
+    session
+        .complete_picture_check(
+            alice,
+            &checks[0],
+            &PictureAnswer::Picture {
+                id: "1700000001".to_owned(),
+                bytes: b"group logo".to_vec(),
+                mime: "image/png".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    repository.staged_pictures(10).await.unwrap();
+    let file = Uuid::now_v7();
+    for _ in 0..2 {
+        assert!(
+            repository
+                .picture_stored(alice.account_id, GROUP, "1700000001", file)
+                .await
+                .unwrap(),
+            "a retried store of the stored file succeeds"
+        );
+    }
+
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![(
+            GROUP.to_owned(),
+            "ready".to_owned(),
+            Some("1700000001".to_owned()),
+            Some(file)
+        )]
+    );
+    assert!(
+        released_files(&pool).await.is_empty(),
+        "the stored file is never queued for deletion"
+    );
 }
