@@ -12,7 +12,7 @@ export function ComputerSizePicker(props: {
 }) {
   return (
     <fieldset class="flex min-w-0 flex-col gap-2">
-      <legend class="sr-only">Computer size</legend>
+      <legend class="sr-only">{t('computers.sizeLegend')}</legend>
       <For each={props.offers}>
         {(offer) => (
           <ChoiceRow

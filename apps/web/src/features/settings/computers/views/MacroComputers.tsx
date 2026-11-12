@@ -5,7 +5,7 @@ import { enableMacroComputers } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -47,16 +47,13 @@ import {
 import { ReleaseComputerDialog } from '../components/release-computer-dialog';
 import {
   canTogglePower,
+  computerFailureMessage,
   formatComputerDate,
   formatQuote,
 } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
-
-function failureMessage(error: unknown, fallback: string): string {
-  return (error instanceof ThrownResultError && error.message) || fallback;
-}
 
 /** Opens Billing, where a trialing team ends its trial and subscribes. */
 function TrialBillingButton() {
@@ -216,7 +213,7 @@ function ManagedComputerRow(props: {
       await power.mutateAsync({ computerId: props.computer.id, on });
     } catch (error) {
       toast.failure(
-        failureMessage(
+        computerFailureMessage(
           error,
           on ? t('computers.powerOnFailed') : t('computers.powerOffFailed')
         )
@@ -258,7 +255,7 @@ function ManagedComputerRow(props: {
           : t('computers.cancelAtPeriodEnd', { name: props.computer.name })
       );
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.cancelFailed')));
+      toast.failure(computerFailureMessage(error, t('computers.cancelFailed')));
     }
   };
   const keep = async () => {
@@ -266,7 +263,7 @@ function ManagedComputerRow(props: {
       await undoCancel.mutateAsync(props.computer.id);
       toast.success(t('computers.keeping', { name: props.computer.name }));
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.keepFailed')));
+      toast.failure(computerFailureMessage(error, t('computers.keepFailed')));
     }
   };
 
@@ -283,7 +280,9 @@ function ManagedComputerRow(props: {
       await restore.mutateAsync(props.computer.id);
       toast.success(t('computers.restored', { name: props.computer.name }));
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.restoreFailed')));
+      toast.failure(
+        computerFailureMessage(error, t('computers.restoreFailed'))
+      );
     }
   };
 
@@ -291,7 +290,7 @@ function ManagedComputerRow(props: {
     try {
       await retry.mutateAsync(props.computer.id);
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.retryFailed')));
+      toast.failure(computerFailureMessage(error, t('computers.retryFailed')));
     }
   };
 
@@ -462,7 +461,9 @@ export function MacroComputers(props: {
       setReleasing(undefined);
       toast.success(t('computers.released', { name: computer.name }));
     } catch (error) {
-      setReleaseError(failureMessage(error, t('computers.releaseFailed')));
+      setReleaseError(
+        computerFailureMessage(error, t('computers.releaseFailed'))
+      );
     }
   };
 
