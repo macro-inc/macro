@@ -655,11 +655,13 @@ export const enableSoupGroupBy = defineFlag({
   default: onInDev,
 });
 
-// Persist soup filters, predicates and tabs across reloads. PostHog controls
-// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+// Persist soup filters, predicates and tabs across reloads. On for local
+// stacks; PostHog controls it everywhere else, dev.macro.com included, and
+// VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
 export const enableSoupFilterPersistence = defineFlag({
   key: 'enable-soup-filter-persistence',
   env: 'ENABLE_SOUP_FILTER_PERSISTENCE',
+  default: LOCAL_ONLY || undefined,
 });
 
 export const enableTaskDuplicates = defineFlag({
@@ -690,6 +692,9 @@ export const enableInboxNotifiedSort = defineFlag({
 export const enableGraphqlSoup = defineFlag({
   key: 'enable-graphql-soup',
   env: 'ENABLE_GRAPHQL_SOUP',
+  // On for local stacks; PostHog decides everywhere else, so it can still
+  // switch GraphQL Soup off on dev.macro.com without a rebuild.
+  default: LOCAL_ONLY || undefined,
 });
 
 /** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
