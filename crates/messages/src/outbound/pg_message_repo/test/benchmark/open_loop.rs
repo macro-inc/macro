@@ -3,13 +3,13 @@
 use super::*;
 use tokio::sync::Semaphore;
 
-const CONNECTIONS: usize = 16;
+pub(super) const CONNECTIONS: usize = 16;
 
 #[derive(Clone, Copy)]
-struct Request {
-    id: Uuid,
-    channel_id: Uuid,
-    operation: Operation,
+pub(super) struct Request {
+    pub(super) id: Uuid,
+    pub(super) channel_id: Uuid,
+    pub(super) operation: Operation,
 }
 
 #[derive(Clone, Copy)]
@@ -56,7 +56,7 @@ impl MixedMeasurements {
     }
 }
 
-async fn mixed_requests(
+pub(super) async fn mixed_requests(
     repo: &PgMessageRepository,
     channels: &[Uuid],
     count: usize,

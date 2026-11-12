@@ -7,8 +7,10 @@
 //! boundaries. Main measurements disable query logging; the separate ignored
 //! commit-phase diagnostic explicitly enables it and is not a baseline result.
 
+mod bounded;
 mod delayed;
 mod open_loop;
+mod pool_isolation;
 
 use super::*;
 use sqlx::ConnectOptions;
@@ -33,6 +35,44 @@ enum Operation {
     Edit,
     React,
     Delete,
+}
+
+#[derive(Default)]
+struct FailureCounts {
+    acquire_timeout: usize,
+    lock_unavailable: usize,
+    query_cancelled: usize,
+    deadlock: usize,
+    other: usize,
+}
+
+impl FailureCounts {
+    fn record(&mut self, error: &MessageError) {
+        let sqlx_error = match error {
+            MessageError::Repository(report) | MessageError::Contended(report) => {
+                report.downcast_current_context::<sqlx::Error>()
+            }
+            _ => None,
+        };
+        match sqlx_error {
+            Some(sqlx::Error::PoolTimedOut) => self.acquire_timeout += 1,
+            Some(sqlx::Error::Database(error)) => match error.code().as_deref() {
+                Some("55P03") => self.lock_unavailable += 1,
+                Some("57014") => self.query_cancelled += 1,
+                Some("40P01") => self.deadlock += 1,
+                _ => self.other += 1,
+            },
+            _ => self.other += 1,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.acquire_timeout
+            + self.lock_unavailable
+            + self.query_cancelled
+            + self.deadlock
+            + self.other
+    }
 }
 
 struct Measurements {

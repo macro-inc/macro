@@ -1,4 +1,12 @@
-# Repository write latency
+# Historical repository write latency
+
+Historical source snapshot: `before` is pinned to `354da677b5`; `after` is
+the pre-timeout implementation at `5743b47a10`. All numbers in this report
+predate both the discarded per-lock limits and the total statement deadline.
+They are retained as baseline evidence, not current deadline measurements.
+Reproduce them only with the original source and benchmark harness in a separate
+checkout. Current below-ceiling and shared-pool evidence uses the result-recording
+runners described in [README.md](README.md).
 
 Measured on a dedicated local PostgreSQL 18.4 server with synchronous commit and fsync enabled. Database files were on tmpfs; the host was shared with other worktrees, so these are not isolated-host or production-capacity measurements. Old and new repository methods ran back to back on the same database. `SQLX_OFFLINE` was unset. This worktree’s compilation, query-plan jobs and other validation work were idle during each timed run. Setup, warmup and cleanup are outside measured batches.
 
