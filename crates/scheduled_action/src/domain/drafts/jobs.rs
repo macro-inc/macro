@@ -29,7 +29,8 @@ use utoipa::ToSchema;
 use super::progress::{DraftJobProgress, DraftMilestone, DraftProgress};
 use super::{
     DRAFT_TIMEOUT, Draft, DraftContext, DraftCreated, DraftRequest, Drafting, INTERRUPTED,
-    RoutineDrafts, SWEEP_BATCH, clean_up, draft_span, failed, finish, stale_action, stop,
+    RoutineDrafts, SWEEP_BATCH, TIMED_OUT, clean_up, draft_span, failed, finish, stale_action,
+    stop,
 };
 use crate::domain::ports::{
     DraftJobStore, RoutineCode, RoutineDraftJobService, RoutineDraftUpdates, StaleDraft,
@@ -44,9 +45,12 @@ pub const ROUTINE_DRAFT_UPDATE_MESSAGE_TYPE: &str = "routine_draft_update";
 pub const MAX_DRAFTING: u32 = 3;
 /// Jobs a list shows.
 pub const LISTED: u16 = 20;
+/// How long a job's drafter may run: its draft takes [`DRAFT_TIMEOUT`], and
+/// one still going after this is stopped and its job failed as timed out.
+pub const JOB_LIMIT: Duration = DRAFT_TIMEOUT.saturating_add(Duration::from_secs(60));
 /// How long after it started a job still drafting has surely lost its
-/// drafter: its whole draft takes [`DRAFT_TIMEOUT`].
-pub const INTERRUPTED_AFTER: Duration = DRAFT_TIMEOUT.saturating_add(Duration::from_secs(60));
+/// drafter: a live drafter finishes its job within [`JOB_LIMIT`].
+pub const INTERRUPTED_AFTER: Duration = JOB_LIMIT.saturating_add(Duration::from_secs(60));
 /// How long a finished job waits to be opened before the sweep deletes it.
 pub const FINISHED_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 /// How many times a job's result is written before it is given up.
@@ -430,8 +434,18 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                 )
                 .await
         };
+        // A drafter stuck past its own timeout still finishes its job:
+        // dropping it stops its session.
+        let limited = async {
+            tokio::time::timeout(JOB_LIMIT, drafting)
+                .await
+                .unwrap_or_else(|_| {
+                    tracing::warn!("a routine draft ran past its limit; failing it as timed out");
+                    Ok(Some(failed(TIMED_OUT)))
+                })
+        };
         let (outcome, progress) = tokio::join!(
-            drafting,
+            limited,
             write_progress(store.as_ref(), updates.as_ref(), &owner, id, watching)
         );
         let action = drafts.action(&owner, session);

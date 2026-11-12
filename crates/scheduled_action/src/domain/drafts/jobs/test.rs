@@ -10,7 +10,7 @@ use super::super::test::{
     BUG_REPORTS, Gate, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
     drafts, message_posted, owner, plain, routine,
 };
-use super::super::{ACTIVITY_SETTLE, InvalidDraft, POLL};
+use super::super::{ACTIVITY_SETTLE, InvalidDraft, POLL, TIMED_OUT};
 use super::*;
 use crate::domain::code_check::test::Checker;
 use crate::domain::drafts::progress::DraftStage;
@@ -746,6 +746,43 @@ async fn a_result_whose_write_fails_once_is_kept() {
         replica.published.of(job.id).last().unwrap().state,
         DraftUpdateState::Ready
     );
+}
+
+/// A drafter that never ends is stopped at [`JOB_LIMIT`] and its job failed
+/// as timed out, long before the sweep would take it for dead.
+#[tokio::test(start_paused = true)]
+async fn a_drafter_that_never_ends_is_failed_at_its_limit() {
+    let rows = Arc::new(Rows {
+        stalls: true.into(),
+        ..Rows::default()
+    });
+    let sessions = hangs(&rows);
+    let replica = Replica::new(&rows, &sessions);
+    let started = tokio::time::Instant::now();
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+
+    tokio::time::timeout(INTERRUPTED_AFTER, replica.settled())
+        .await
+        .expect("the drafter outlived the sweep's cutoff");
+
+    assert!(
+        started.elapsed() >= JOB_LIMIT && started.elapsed() < JOB_LIMIT + POLL,
+        "{:?}",
+        started.elapsed()
+    );
+    let timed_out = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(&timed_out.state, DraftJobState::Failed { message, .. } if message == TIMED_OUT),
+        "{timed_out:?}"
+    );
+    assert_eq!(
+        replica.published.of(job.id).last().unwrap().state,
+        DraftUpdateState::Failed
+    );
+    // Stopped, and kept with its row until it is opened.
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+    assert!(sessions.deleted.lock().unwrap().is_empty());
 }
 
 /// A host that stops ends its drafts within the shutdown's time, failed as

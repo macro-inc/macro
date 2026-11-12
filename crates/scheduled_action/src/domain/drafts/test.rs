@@ -31,6 +31,8 @@ pub(super) struct Rows {
     pub(super) finished: Mutex<Vec<Uuid>>,
     /// How many writes of a job's result fail before one succeeds.
     pub(super) failing_results: std::sync::atomic::AtomicU8,
+    /// Whether reading a draft's row never answers.
+    pub(super) stalls: std::sync::atomic::AtomicBool,
 }
 
 /// A background draft's part of its row.
@@ -88,6 +90,9 @@ impl DraftHandBacks for Rows {
     }
 
     async fn handed_back(&self, session: Uuid) -> Result<HandedBack> {
+        if self.stalls.load(std::sync::atomic::Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
         let cancelled = self
             .jobs
             .lock()
