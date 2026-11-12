@@ -640,6 +640,7 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
@@ -1491,6 +1492,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "genai_telemetry",
  "lazy_static",
  "macro_env_var",
  "macro_user_id",
@@ -6503,6 +6505,7 @@ dependencies = [
  "axum-extra",
  "backoff",
  "bytes",
+ "genai_telemetry",
  "infer 0.19.0",
  "macro_authorization",
  "macro_env_var",
@@ -7800,6 +7803,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "genai_telemetry",
  "workspace-hack",
 ]
 
@@ -8801,6 +8805,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde_json",
+ "strum 0.27.2",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -10737,6 +10742,7 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "entity_registry",
+ "genai_telemetry",
  "image",
  "lexical_client",
  "macro_authorization",
@@ -10918,6 +10924,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lazy-regex",
  "macro_user_id",
+ "models_databases",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",
@@ -10926,6 +10933,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -20241,6 +20249,7 @@ dependencies = [
  "connection_gateway_client",
  "embedding",
  "futures",
+ "genai_telemetry",
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
