@@ -695,7 +695,7 @@ async fn drive_turn(
             loaded_skills,
         )
     };
-    // Carry the feature on the context so AI calls tools make attribute to it,
+    // Carry the feature on the context so AI calls made by tools are attributed to it,
     // and record whatever the tools spend as part of this session.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();

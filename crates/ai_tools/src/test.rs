@@ -44,9 +44,17 @@ fn no_host_offers_the_removed_subagent_tool() {
     ] {
         let tools = tools_for(host);
         assert!(!tools.toolset.tools.contains_key("Subagent"), "{host:?}");
-        assert!(!tools.deferred.iter().any(|tool| tool.name == "Subagent"), "{host:?}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == "Subagent"),
+            "{host:?}"
+        );
     }
-    assert!(!tools_for_agent_code_mode().toolset.tools.contains_key("Subagent"));
+    assert!(
+        !tools_for_agent_code_mode()
+            .toolset
+            .tools
+            .contains_key("Subagent")
+    );
     assert!(!EAGER_TOOLS.contains(&"Subagent"));
 }
 
@@ -392,16 +400,8 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
             );
         }
     }
-    assert!(
-        base_toolset()
-            .tools
-            .contains_key("ReadPhotoshopDocument")
-    );
-    assert!(
-        base_toolset()
-            .tools
-            .contains_key("ReadIllustratorDocument")
-    );
+    assert!(base_toolset().tools.contains_key("ReadPhotoshopDocument"));
+    assert!(base_toolset().tools.contains_key("ReadIllustratorDocument"));
 }
 
 /// Document answers get the one SQL tool, not a read-only twin: the access

@@ -1,9 +1,9 @@
 //! The removed `Subagent` tool, kept so saved chats that called it still render.
 use ai_toolset::schema::PhantomTool;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[schemars(title = "Subagent")]
 pub struct Subagent {
     pub task: String,

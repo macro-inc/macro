@@ -329,6 +329,10 @@
   },
   "redirects": [
     {
+      "source": "/AI/mcp/tools/subagent",
+      "destination": "/AI/mcp/tools"
+    },
+    {
       "source": "/product/inbox",
       "destination": "/product/home"
     },
