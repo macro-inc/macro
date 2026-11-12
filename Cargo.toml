@@ -121,6 +121,7 @@ members = [
   "crates/maybe_send",
   "crates/memory",
   "crates/messages",
+  "crates/message_write_gate",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
