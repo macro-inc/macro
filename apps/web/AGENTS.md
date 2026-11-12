@@ -947,7 +947,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
-  operation rows only; never show the program or code-mode wording.
+  operation rows only; never show the program or code-mode wording. A live
+  tool group's header is the shared `ActivityLine` (`block-agent/ui`), the one
+  a channel reply's open run uses; never add a second working line or a
+  scrolling peek window beside it.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
