@@ -1,8 +1,6 @@
-import {
-  type HtmlRenderDecoratorProps,
-  HtmlRenderNode,
-} from '@macro-inc/lexical-core';
+import { HtmlRenderNode } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
+import type { HtmlRenderUIProps } from '../component/decorator/HtmlRender';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
   createNativeDecoratorAdapter,
@@ -15,23 +13,22 @@ export function createNativeFastHTMLDecoratorViews<
 >(context: NativeDecoratorContext<Host>): Pick<MacroDecorators, 'html-render'> {
   const bind = createNativeDecoratorAdapter(context);
   return {
-    'html-render': bind<HtmlRenderDecoratorProps>(
-      HtmlRenderNode,
-      (node, context) => {
-        const value = node.props();
-        if (
-          typeof value.html !== 'string' ||
-          (value.adaptColors !== undefined &&
-            typeof value.adaptColors !== 'boolean')
-        )
-          throw new Error('Invalid HTML render payload');
-        return {
-          html: value.html,
-          adaptColors: value.adaptColors,
-          key: String(node.key),
-          theme: context.theme,
-        };
-      }
-    ),
+    'html-render': bind<HtmlRenderUIProps>(HtmlRenderNode, (node, context) => {
+      const { html, adaptColors } = node.props();
+      // Source keeps a stored null hint and treats it like an omitted one.
+      if (
+        typeof html !== 'string' ||
+        (adaptColors !== undefined &&
+          adaptColors !== null &&
+          typeof adaptColors !== 'boolean')
+      )
+        throw new Error('Invalid HTML render payload');
+      return {
+        html,
+        adaptColors,
+        key: String(node.key),
+        theme: context.theme,
+      };
+    }),
   };
 }
