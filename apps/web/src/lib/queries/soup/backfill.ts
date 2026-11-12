@@ -88,6 +88,8 @@ export type SoupBackfillParams = {
 /** Backfills the entities used most often by Quick Access and primary views. */
 export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'core-entities',
+  // Quick Access waits on this lane, and every other lane waits behind it.
+  pageDelayMs: 250,
   input: {
     limit: PAGE_LIMIT,
     expand: true,
