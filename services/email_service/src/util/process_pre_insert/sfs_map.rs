@@ -9,13 +9,11 @@ use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::time::Duration;
 use url::Url;
 
+mod public_http;
+
 pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
-const REQUEST_TIMEOUT_SECONDS: u64 = 15;
-const CONNECT_TIMEOUT_SECONDS: u64 = 5;
-const MAX_REDIRECTS: usize = 5;
 
 /// Where [`rehost_html_images`] reads an image's bytes from.
 pub trait ImageSource: Sync {
@@ -241,9 +239,7 @@ async fn cache_images(
             futures.push(async move {
                 // In a real scenario, pass base_url and email_mime_parts here
                 let image_data = images.fetch(&source_url).await.ok().flatten()?;
-                let sfs_url = upload_to_sfs(sfs_client, &source_url, image_data)
-                    .await
-                    .ok()?;
+                let sfs_url = upload_to_sfs(sfs_client, image_data).await.ok()?;
                 Some((source_url, sfs_url))
             });
         }
@@ -277,66 +273,58 @@ pub async fn fetch_and_upload_to_sfs(
         None => return Ok(None),
     };
 
-    let sfs_url = upload_to_sfs(sfs_client, original_url_str, image_data).await?;
+    let sfs_url = upload_to_sfs(sfs_client, image_data).await?;
 
     Ok(Some((original_url_str.to_string(), sfs_url)))
 }
 
 // fetches image data from the given URL, returning None for non-HTTP(S) or unparseable URLs
-#[tracing::instrument(skip(original_url_str))]
+#[tracing::instrument(
+    skip(original_url_str),
+    fields(host = tracing::field::Empty),
+    err(level = "warn")
+)]
 async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
-    let url_to_fetch = match Url::parse(original_url_str) {
-        Ok(mut url) => {
-            if url.scheme() != "http" && url.scheme() != "https" {
-                tracing::warn!("Skipping URL with non-HTTP(S) scheme: {}", original_url_str);
-                return Ok(None);
-            }
-            url.set_fragment(None); // normalizing
-            url
-        }
-        Err(_) => {
-            tracing::warn!("Skipping non-URL for SFS storage: {}", original_url_str);
-            return Ok(None);
-        }
+    let Ok(mut url_to_fetch) = Url::parse(original_url_str) else {
+        tracing::warn!("Skipping non-URL for SFS storage");
+        return Ok(None);
     };
+    if url_to_fetch.scheme() != "http" && url_to_fetch.scheme() != "https" {
+        tracing::warn!(
+            scheme = url_to_fetch.scheme(),
+            "Skipping URL with non-HTTP(S) scheme"
+        );
+        return Ok(None);
+    }
+    url_to_fetch.set_fragment(None); // normalizing
 
-    // use safe defaults to prevent timeouts/redirect trolling
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECONDS))
-        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
-        .redirect(reqwest::redirect::Policy::limited(MAX_REDIRECTS))
-        .build()
-        .context("failed to build reqwest client")?;
+    // Logs and errors name only the host: query strings can carry secrets.
+    let host = url_to_fetch.host_str().unwrap_or_default().to_string();
+    tracing::Span::current().record("host", host.as_str());
 
+    if !public_http::is_fetchable(&url_to_fetch) {
+        bail!("Refusing to fetch image from {host}: not a public address");
+    }
+
+    let client = public_http::public_image_client()?;
     let response = match client.get(url_to_fetch.as_str()).send().await {
         Ok(response) => response,
         Err(e) => {
+            // reqwest errors print the full URL; keep only the host.
+            let e = e.without_url();
             let error_chain = build_error_chain(&e);
             if e.is_timeout() {
-                anyhow::bail!(
-                    "Timeout fetching URL: {} - Full error: {}",
-                    original_url_str,
-                    error_chain
-                );
+                bail!("Timeout fetching image from {host} - Full error: {error_chain}");
             } else if e.is_connect() {
-                anyhow::bail!(
-                    "Connection error for URL: {} - Full error: {}",
-                    original_url_str,
-                    error_chain
-                );
+                bail!("Connection error for image from {host} - Full error: {error_chain}");
             }
-            anyhow::bail!(
-                "Network error fetching URL: {} - Full error: {}",
-                original_url_str,
-                error_chain
-            );
+            bail!("Network error fetching image from {host} - Full error: {error_chain}");
         }
     };
 
     if !response.status().is_success() {
         bail!(
-            "Remote server returned error for {}: HTTP {}",
-            original_url_str,
+            "Remote server returned error for image from {host}: HTTP {}",
             response.status()
         );
     }
@@ -344,23 +332,19 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     if let Some(content_length) = response.content_length()
         && content_length > MAX_IMAGE_SIZE_BYTES as u64
     {
-        bail!(
-            "Image at {} is too large (Content-Length: {} bytes)",
-            original_url_str,
-            content_length
-        );
+        bail!("Image from {host} is too large (Content-Length: {content_length} bytes)");
     }
 
     // Stream response data with a hard cap
     let mut image_data_stream = response.bytes_stream();
     let mut image_data_bytes = BytesMut::new();
     while let Some(chunk_result) = image_data_stream.next().await {
-        let chunk = chunk_result.context("Failed to read chunk from image stream")?;
+        let chunk = chunk_result
+            .map_err(reqwest::Error::without_url)
+            .context("Failed to read chunk from image stream")?;
         if (image_data_bytes.len() + chunk.len()) > MAX_IMAGE_SIZE_BYTES {
             bail!(
-                "Image at {} is too large (exceeded {} bytes during streaming)",
-                original_url_str,
-                MAX_IMAGE_SIZE_BYTES
+                "Image from {host} is too large (exceeded {MAX_IMAGE_SIZE_BYTES} bytes during streaming)"
             );
         }
         image_data_bytes.extend_from_slice(&chunk);
@@ -368,33 +352,28 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     let image_data = image_data_bytes.freeze();
 
     if image_data.is_empty() {
-        bail!("Fetched empty image data from {}", original_url_str);
+        bail!("Fetched empty image data from {host}");
     }
 
     Ok(Some(image_data))
 }
 
 // validates image data and uploads it to SFS, returning the new SFS URL
-#[tracing::instrument(skip(sfs_client, original_url_str, image_data))]
+#[tracing::instrument(skip(sfs_client, image_data))]
 async fn upload_to_sfs(
     sfs_client: StaticFileServiceClient,
-    original_url_str: &str,
     image_data: Bytes,
 ) -> anyhow::Result<String> {
     let inferred_type = match infer::get(&image_data) {
         Some(t) => t,
         None => {
-            bail!("Could not determine image type for {}", original_url_str);
+            bail!("Could not determine image type");
         }
     };
 
     let validated_content_type = inferred_type.mime_type();
     if !validated_content_type.starts_with("image/") {
-        bail!(
-            "Image type '{}' from {} is not allowed.",
-            validated_content_type,
-            original_url_str
-        );
+        bail!("Image type '{validated_content_type}' is not allowed.");
     }
 
     let sfs_info = sfs_client
