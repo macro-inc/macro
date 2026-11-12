@@ -17,7 +17,7 @@ use rmcp::transport::auth::AuthError;
 use crate::domain::models::{McpServerRecord, StoredCredentials};
 use crate::domain::ports::McpServerStore;
 use crate::domain::service::PersistingCredentialStore;
-use crate::guarded_http::McpHttp;
+use crate::outbound::guarded_http::McpHttp;
 
 #[cfg(test)]
 mod test;

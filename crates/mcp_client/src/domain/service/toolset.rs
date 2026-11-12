@@ -1,6 +1,6 @@
 use crate::domain::models::{CallToolResultExt, Error, MacroUserIdStr, McpServer, McpServerRecord};
 use crate::domain::ports::{McpConnector, McpServerStore};
-use crate::guarded_http::McpHttp;
+use crate::outbound::guarded_http::McpHttp;
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
     ToolResult, ToolSet, ToolSetError,

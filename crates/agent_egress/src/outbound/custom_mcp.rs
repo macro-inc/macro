@@ -16,7 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::models::McpServerRecord;
 use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::{ServerAccess, server_access};
-use mcp_client::guarded_http::McpHttp;
+use mcp_client::outbound::guarded_http::McpHttp;
 use std::sync::Arc;
 use url::Url;
 

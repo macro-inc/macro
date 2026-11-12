@@ -446,5 +446,5 @@ async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
 }
 
 fn local_http() -> McpHttp {
-    McpHttp::new(mcp_client::guarded_http::AddressPolicy::AnyAddress).unwrap()
+    McpHttp::new(mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress).unwrap()
 }

@@ -6,7 +6,7 @@
 //! like a decision.
 
 use http_body_util::{BodyDataStream, BodyExt};
-use mcp_client::guarded_http::{self, AddressPolicy};
+use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{BoxError, ProxyRequest, ProxyResponse};

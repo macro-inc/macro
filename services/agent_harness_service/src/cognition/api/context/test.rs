@@ -869,7 +869,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     Arc::new(api_context)
 }
 
-fn local_mcp_http() -> mcp_client::guarded_http::McpHttp {
-    mcp_client::guarded_http::McpHttp::new(mcp_client::guarded_http::AddressPolicy::AnyAddress)
-        .unwrap()
+fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
+    mcp_client::outbound::guarded_http::McpHttp::new(
+        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+    )
+    .unwrap()
 }

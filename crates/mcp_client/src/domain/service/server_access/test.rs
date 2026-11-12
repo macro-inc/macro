@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::MacroUserIdStr;
-use crate::guarded_http::AddressPolicy;
+use crate::outbound::guarded_http::AddressPolicy;
 use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::OAuthTokenResponse;
 

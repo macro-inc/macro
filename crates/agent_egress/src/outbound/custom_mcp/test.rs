@@ -269,7 +269,9 @@ async fn every_other_destination_delegates_to_the_inner_resolver() {
     );
 }
 
-fn local_http() -> mcp_client::guarded_http::McpHttp {
-    mcp_client::guarded_http::McpHttp::new(mcp_client::guarded_http::AddressPolicy::AnyAddress)
-        .unwrap()
+fn local_http() -> mcp_client::outbound::guarded_http::McpHttp {
+    mcp_client::outbound::guarded_http::McpHttp::new(
+        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+    )
+    .unwrap()
 }

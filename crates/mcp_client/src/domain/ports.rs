@@ -1,5 +1,5 @@
 use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
-use crate::guarded_http::McpHttp;
+use crate::outbound::guarded_http::McpHttp;
 use std::sync::Arc;
 
 /// Port for persisting MCP server records, keyed by user.

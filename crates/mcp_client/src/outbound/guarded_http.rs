@@ -261,7 +261,7 @@ fn screen(
 
 /// Whether `address` is public unicast. IPv6 that wraps an IPv4 address
 /// (mapped, compatible, NAT64) is judged as that IPv4 address.
-fn is_public(address: IpAddr) -> bool {
+pub(crate) fn is_public(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(v4) => is_public_v4(v4),
         IpAddr::V6(v6) => match embedded_v4(v6) {

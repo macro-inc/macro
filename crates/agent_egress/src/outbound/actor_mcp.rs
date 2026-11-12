@@ -5,7 +5,7 @@ use crate::domain::{
     ports::ActorMcpTransport,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::guarded_http::{self, AddressPolicy};
+use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::{ServiceExt, model::ClientConfig, transport::StreamableHttpClientTransport};
 use serde_json::Value;

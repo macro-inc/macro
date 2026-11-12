@@ -1,7 +1,7 @@
 use super::consts::MCP_CLIENT_NAME;
 use crate::domain::ports::{McpConnector, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
-use crate::guarded_http::McpHttp;
+use crate::outbound::guarded_http::McpHttp;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientConfig, Implementation};

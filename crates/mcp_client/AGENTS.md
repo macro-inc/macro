@@ -34,7 +34,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
   OAuth callback.
 - `src/inbound/toolset.rs`: the `ConnectMcpServer` AI tool, wired through
   `ai_tools` where the MCP credentials key is configured.
-- `src/guarded_http.rs`: `McpHttp`, the address-guarded clients every
+- `src/outbound/guarded_http.rs`: `McpHttp`, the address-guarded clients every
   connection to a user's server goes through (`agent_egress` reuses them).
 - `src/outbound/`: `oauth.rs` (RMCP-backed OAuth), `pg_server_repo.rs`
   (Postgres server store), `redis_state_store.rs` (OAuth state).
@@ -68,15 +68,15 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
   server config in Postgres (`pg_server_repo.rs`) — a server record surviving
   doesn't mean its OAuth state did.
 - `ServerDirectory`'s public-destination check for agent-added servers judges
-  hostnames by name only. The real guard is `src/guarded_http.rs`: every
-  connection to a stored server (transport, OAuth discovery, registration,
-  token refresh) goes through `McpHttp`, which refuses non-public addresses
-  on the address actually connected to, ignores system proxies, and follows
-  only same-origin 307/308 transport redirects. Build `McpHttp` once at
-  startup in each composition root from `AddressPolicy::for_environment`; only `Local` reaches
-  loopback and private addresses. Never dial a stored server with
-  `reqwest::Client::new()`, `StreamableHttpClientTransport::from_uri`, or
-  `AuthorizationManager::new`.
+  hostnames by name only. The real guard is `src/outbound/guarded_http.rs`:
+  every connection to a stored server (transport, OAuth discovery,
+  registration, token refresh) goes through `McpHttp`, which refuses
+  non-public addresses on the address actually connected to, ignores system
+  proxies, and follows only same-origin 307/308 transport redirects. Build
+  `McpHttp` once at startup in each composition root from
+  `AddressPolicy::for_environment`; only `Local` reaches loopback and private
+  addresses. Never dial a stored server with `reqwest::Client::new()`,
+  `StreamableHttpClientTransport::from_uri`, or `AuthorizationManager::new`.
 
 ## Related
 

@@ -11,7 +11,7 @@ use ai_toolset::{
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::McpToolSet;
-use mcp_client::guarded_http::McpHttp;
+use mcp_client::outbound::guarded_http::McpHttp;
 use pipedream_mcp::domain::ports::{ConnectionStore, McpConnection};
 use pipedream_mcp::domain::service::PipedreamToolSet;
 use std::collections::HashSet;
