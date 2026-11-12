@@ -21,6 +21,9 @@ export type CrmContact = {
   updatedAt: string;
 };
 
+/** What an email edit does with the address it names. */
+export type ContactEmailChange = 'add' | 'remove' | 'primary';
+
 /** Every address of a contact, primary first, whichever source loaded it. */
 export function contactEmails(
   contact: Pick<CrmContact, 'email' | 'emails'>

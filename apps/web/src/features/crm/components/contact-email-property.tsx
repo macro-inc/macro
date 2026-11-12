@@ -8,9 +8,8 @@ import { propertyPillClasses } from '@property/extractors/property-pill-classes'
 import { useSearchInputFocus } from '@property/utils';
 import { Badge, Button, Dialog, Dropdown, Input, Tooltip } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import type { ContactEmailChange } from '../core/contact';
 import { contactPropertyTouchTarget } from './contact-property-styles';
-
-export type ContactEmailChange = 'add' | 'remove' | 'primary';
 
 type ChangeEmail = (email: string, change: ContactEmailChange) => Promise<void>;
 
@@ -116,12 +115,16 @@ function ContactEmailAddress(props: {
   /** The address that ties the contact to its company cannot be removed. */
   linksCompany: boolean;
   change: ChangeEmail;
-  errorMessage(error: unknown): string;
+  errorMessage(error: unknown, change: ContactEmailChange): string;
   /** Where focus goes once this address is gone. */
   focusAfterRemoval(): void;
 }) {
   const [open, setOpen] = createSignal(false);
-  const request = createEmailChange(props.change, props.errorMessage);
+  // The kind of the change in flight, so its rejection reads correctly.
+  let requested: ContactEmailChange = 'remove';
+  const request = createEmailChange(props.change, (error) =>
+    props.errorMessage(error, requested)
+  );
   let triggerElement: HTMLButtonElement | undefined;
   // Focus starts on the first action so Enter and Tab work without a pointer.
   const [firstAction, setFirstAction] = createSignal<HTMLButtonElement>();
@@ -134,6 +137,7 @@ function ContactEmailAddress(props: {
     if (!next && !isTouchDevice()) triggerElement?.focus();
   };
   const run = async (kind: 'remove' | 'primary') => {
+    requested = kind;
     if (!(await request.run(props.email, kind))) return;
     setOpen(false);
     if (isTouchDevice()) return;
@@ -379,7 +383,7 @@ export function ContactEmailProperty(props: {
               primary={email === props.primary}
               linksCompany={email === props.companyEmail}
               change={props.change}
-              errorMessage={(error) => props.errorMessage(error, 'remove')}
+              errorMessage={props.errorMessage}
               focusAfterRemoval={() => addElement?.focus()}
             />
           </Show>

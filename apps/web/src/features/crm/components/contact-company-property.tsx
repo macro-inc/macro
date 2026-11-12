@@ -32,11 +32,12 @@ export function ContactCompanyProperty(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<string | null>(null);
-  // The last save requested, so Retry repeats a removal as a removal.
+  // The last save requested: Retry repeats a link or switch, never a removal.
   const [attempt, setAttempt] = createSignal<{ companyId: string | null }>();
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let triggerElement: HTMLButtonElement | undefined;
+  let valueElement: HTMLSpanElement | undefined;
   let active = true;
   onCleanup(() => {
     active = false;
@@ -64,7 +65,12 @@ export function ContactCompanyProperty(props: {
       await props.save(companyId);
       if (active) {
         setOpen(false);
-        if (!isTouchDevice()) triggerElement?.focus();
+        // A removal can leave a read-only value where the trigger was.
+        if (!isTouchDevice())
+          (triggerElement?.isConnected
+            ? triggerElement
+            : valueElement
+          )?.focus();
       }
     } catch (cause) {
       if (active) setError(props.errorMessage(cause));
@@ -201,7 +207,13 @@ export function ContactCompanyProperty(props: {
             label={props.lockedReason ?? ''}
             disabled={!props.lockedReason}
           >
-            <Badge variant="ghost" size="sm" class="min-w-0 shrink">
+            <Badge
+              ref={valueElement}
+              tabIndex={-1}
+              variant="ghost"
+              size="sm"
+              class="min-w-0 shrink focus-visible:ring-2 focus-visible:ring-accent/20"
+            >
               <BuildingsIcon class="size-3 shrink-0" />
               <span class="truncate">
                 {props.companyName ??

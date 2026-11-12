@@ -5,7 +5,7 @@ import { prepareCrmContactEdit } from '@service-storage/crm-contact-edit';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { useMutation } from '@tanstack/solid-query';
-import type { CrmContact } from '../core/contact';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 import {
   contactEditDetailsFilter,
   sameContactIdentity,
@@ -147,9 +147,6 @@ export async function editContact(
     return contact;
   });
 }
-
-/** What an email edit does with the address it names. */
-export type ContactEmailChange = 'add' | 'remove' | 'primary';
 
 export function useSetContactEmailMutation(deps: CrmRecordDependencies) {
   return useMutation(

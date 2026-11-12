@@ -191,6 +191,9 @@ export const storageServiceClient = {
   },
   async addContactEmail({ contactId, email }) {
     const address = email.trim().toLowerCase();
+    // A server that predates the address list has no such route.
+    if (params.has('legacy'))
+      return err([{ code: 'NOT_FOUND', message: 'No route' }]);
     if (!(await save()) || takenByAnother(contactId, address))
       return err([{ code: 'CONFLICT', message: 'Save rejected' }]);
     return commit(contactId, (contact) => ({

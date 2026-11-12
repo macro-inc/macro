@@ -621,4 +621,20 @@ test('a server without the address list keeps addresses and company read-only', 
       name: /Email options for|Add email|Change contact company|Remove company/,
     })
   ).toHaveCount(0);
+
+  // A blank contact can still add its first address there.
+  await page.goto('/?legacy&empty');
+  await page
+    .getByRole('button', { name: 'Add email', exact: true })
+    .first()
+    .click();
+  const input = page.getByRole('textbox', { name: 'Email', exact: true });
+  await input.fill('first@example.org');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(input).toBeHidden();
+  expect(
+    await page.evaluate(
+      () => window.archiveFixture.snapshot().contacts[0].email
+    )
+  ).toBe('first@example.org');
 });

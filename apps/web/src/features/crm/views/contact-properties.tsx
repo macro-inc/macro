@@ -43,10 +43,13 @@ export function ContactEmailField(props: { contact: CrmContact }) {
               : editError(error)
           }
           change={async (email, change) => {
+            // Without the address list only a blank contact can add, and the
+            // primary route is the one every server has for that.
+            const listed = props.contact.emails !== undefined;
             await mutation.mutateAsync({
               contact: props.contact,
               email,
-              change,
+              change: change === 'add' && !listed ? 'primary' : change,
             });
           }}
         />
