@@ -22,7 +22,7 @@ inbound = [
   "ports",
 ]
 outbound = ["dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
-ports = ["dep:tokio"]
+ports = []
 
 [dependencies]
 async-stripe = { workspace = true, default-features = false }
@@ -47,7 +47,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["io-util", "rt", "sync"] }
 tokio-retry = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }

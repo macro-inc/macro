@@ -39,9 +39,6 @@ export function InviteAgentForm(props: {
   offers: readonly SizeOffer[] | undefined;
   offersFailed: boolean;
   onRetryOffers: () => void;
-  /** The size a Notify me request is in flight for. */
-  notifyPending?: ComputerSize;
-  onNotify: (size: ComputerSize) => void;
   /** The voice catalog; without it the agent gets its template's voice. */
   voices?: VoicePickerSource;
   /** Stores the picture and resolves to its URL. */
@@ -292,9 +289,7 @@ export function InviteAgentForm(props: {
                 <ComputerSizePicker
                   offers={offers()}
                   selected={size()}
-                  notifyPending={props.notifyPending}
                   onSelect={setChosenSize}
-                  onNotify={props.onNotify}
                 />
               )}
             </Show>

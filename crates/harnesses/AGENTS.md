@@ -75,24 +75,23 @@ before acting"); paired machines keep it off until their owner turns it on.
   team the runtime is shared with (take it out of service). Provider
   accounts (`domain::account_logins`): `provider_accounts` is one account at an
   `AgentProvider` (only `Claude`; new providers widen the CHECK), keyed by the
-  provider's own id (Claude: `oauthAccount.accountUuid`), shared by every
+  provider's id (Claude: harnessd's fingerprint of its setup-token
+  credential, which names no account), shared by every
   machine signed in to it. `harness_account_logins` is one sign-in on a
   machine: `record_account_login` (trusted) applies an `AccountLoginChange`
-  once macrod confirmed it, in one transaction: a sign-in upserts the account,
-  signs out the provider's active login and inserts a new row; a sign-out
+  from harnessd's status, in one transaction: a sign-in on the active login's
+  own account only moves its `expires_at`; any other sign-in upserts the
+  account, signs out the provider's active login and inserts a new row (its
+  signer may be NULL for a sign-in made on the machine itself); a sign-out
   stamps `signed_out_at`, so history stays as signed-out rows. At most one
   active login per provider per machine (partial unique index). `claude_mode`
   is derived (an active `claude` login means `own_account`), never stored.
-  Capability reports on the active login's account update its `expires_at`
-  and the account's display fields. The control plane's Claude sign-in
+  The control plane's Claude sign-in
   notices go to the login's signer (`signed_in_by`, NULL once deleted).
 - `patch_harness` lets managers change the name and permission bypass while
-  preserving computer identity, capabilities, and Claude billing mode.
-- Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
-  `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
-  stamping `capabilities_reported_at`,
-  and `computer_id` (set only for Macro computers; unique among live rows).
-  The authenticated harness may replace only its own report.
+  preserving computer identity and Claude billing mode.
+- Harness rows carry `computer_id` (set only for Macro computers; unique
+  among live rows).
 
 ## Recipes
 
@@ -130,4 +129,4 @@ before acting"); paired machines keep it off until their owner turns it on.
 
 - New hosted-registration and metadata persistence failures use typed adapter errors with rootcause reports; existing repository callers retain their error contract.
 
-- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and provider account logins.
+- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists provider account logins.

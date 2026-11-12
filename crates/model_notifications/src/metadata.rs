@@ -9,7 +9,7 @@ pub use access_request::{
 pub use agent_sign_in::{AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
-pub use harnesses::domain::account_logins::AgentProvider;
+pub use harnessd_protocol::AgentProvider;
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };

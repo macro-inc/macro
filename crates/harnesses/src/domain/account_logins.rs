@@ -6,57 +6,16 @@
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Who an agent's account belongs to: the Postgres `agent_provider` enum of
-/// `provider_accounts.provider` and `harness_account_logins.provider`. New
-/// providers add a value there.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    strum::AsRefStr,
-    strum::EnumString,
-)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
-#[cfg_attr(
-    feature = "outbound",
-    sqlx(type_name = "agent_provider", rename_all = "snake_case")
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum AgentProvider {
-    /// An Anthropic Claude account, for Claude Code.
-    Claude,
-}
-
-impl AgentProvider {
-    /// The agent's name as people see it, e.g. in a notification title.
-    pub fn display_name(self) -> &'static str {
-        match self {
-            Self::Claude => "Claude",
-        }
-    }
-}
+pub use harnessd_protocol::AgentProvider;
 
 /// What a provider reports about an account at sign-in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderAccountIdentity {
-    /// The provider's own account id (Claude: `oauthAccount.accountUuid`).
+    /// The account's id at the provider (Claude: the fingerprint harnessd
+    /// reports for its credential).
     pub external_account_id: String,
-    /// The account's email address, for display.
-    pub display_email: Option<String>,
-    /// The account's organization, for display.
-    pub display_org: Option<String>,
-    /// The account's plan, e.g. `max`.
-    pub plan: Option<String>,
 }
 
 /// An account at a provider, shared by every machine it is signed in on.
@@ -92,15 +51,19 @@ pub struct HarnessAccountLogin {
 /// A confirmed change to a machine's login at a provider.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccountLoginChange {
-    /// `signed_in_by` signed `account` in through Macro. Any active login
-    /// for the provider on the machine is signed out first.
+    /// The machine is signed in to `account`. On the active login's own
+    /// account only its expiry moves; otherwise any active login for the
+    /// provider is signed out and a new one starts.
     SignedIn {
         /// The provider.
         provider: AgentProvider,
         /// The account the machine reported.
         account: ProviderAccountIdentity,
-        /// The person whose request completed the sign-in.
-        signed_in_by: MacroUserIdStr<'static>,
+        /// When the machine's credential stops working.
+        expires_at: Option<DateTime<Utc>>,
+        /// The person whose request completed the sign-in; `None` when the
+        /// machine reported a sign-in nobody made through Macro.
+        signed_in_by: Option<MacroUserIdStr<'static>>,
     },
     /// The provider's active login on the machine was signed out.
     SignedOut {

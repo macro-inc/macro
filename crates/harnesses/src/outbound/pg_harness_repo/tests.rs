@@ -706,13 +706,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     );
     assert_eq!(row.computer_id, Some(computer_id));
     assert_eq!(
-        row.capabilities,
-        HarnessCapabilities {
-            screen: false,
-            claude: None
-        }
-    );
-    assert_eq!(
         repo.computer_harness(computer_id).await.unwrap(),
         Some(harness_id)
     );
@@ -721,18 +714,12 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         Some(computer_id)
     );
 
-    repo.set_capabilities(
+    repo.record_account_login(
         harness_id,
-        HarnessCapabilities {
-            screen: true,
-            claude: None,
-        },
+        claude_sign_in("sha256:computer", "2027-01-01T00:00:00Z", Some(caller())),
     )
     .await
     .unwrap();
-    repo.record_account_login(harness_id, claude_sign_in(caller()))
-        .await
-        .unwrap();
     let renamed = repo
         .update_harness(
             harness_id,
@@ -753,13 +740,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         }
     );
     assert_eq!(renamed.computer_id, Some(computer_id));
-    assert_eq!(
-        renamed.capabilities,
-        HarnessCapabilities {
-            screen: true,
-            claude: None
-        }
-    );
     assert_eq!(renamed.claude_mode, ClaudeMode::OwnAccount);
 
     // A retry keeps the pairing and harness and takes the new secret.
@@ -973,75 +953,6 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         .await
         .unwrap(),
         HostedPairingUpsert::Created
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn capabilities_replace_the_previous_report(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool.clone());
-    // The sign-in below names its signer, a real user.
-    insert_user(&pool, OWNER_ID).await;
-    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, owner_user_id, created_by)
-        VALUES ($1, 'mine', $2, $2)
-        "#,
-        harness_id.as_uuid(),
-        OWNER_ID,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let fresh = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(
-        fresh.capabilities,
-        HarnessCapabilities {
-            screen: false,
-            claude: None
-        }
-    );
-    assert_eq!(fresh.computer_id, None);
-
-    let capabilities = HarnessCapabilities {
-        screen: true,
-        claude: Some(harnesses_claude_account()),
-    };
-    assert!(
-        repo.set_capabilities(harness_id, capabilities.clone())
-            .await
-            .unwrap()
-    );
-    let reported = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(reported.capabilities, capabilities);
-    assert_eq!(reported.claude_mode, ClaudeMode::MacroCredits);
-    assert!(
-        repo.record_account_login(harness_id, claude_sign_in(caller()))
-            .await
-            .unwrap()
-    );
-    assert_eq!(
-        repo.get_harness(harness_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .claude_mode,
-        ClaudeMode::OwnAccount
-    );
-
-    assert!(repo.delete_harness(harness_id).await.unwrap());
-    assert!(
-        !repo
-            .set_capabilities(
-                harness_id,
-                HarnessCapabilities {
-                    screen: false,
-                    claude: None
-                }
-            )
-            .await
-            .unwrap()
     );
 }
 
@@ -1283,25 +1194,17 @@ async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
     );
 }
 
-fn harnesses_claude_account() -> crate::domain::models::ClaudeAccount {
-    crate::domain::models::ClaudeAccount::SignedIn {
-        account_id: "acct-team".to_owned(),
-        account: Some("team@example.com".to_owned()),
-        organization: Some("Acme".to_owned()),
-        plan: Some("max".to_owned()),
-        expires_at: Some("2027-01-01T00:00:00Z".parse().unwrap()),
-    }
-}
-
-fn claude_sign_in(signed_in_by: MacroUserIdStr<'static>) -> AccountLoginChange {
+fn claude_sign_in(
+    credential_id: &str,
+    expires_at: &str,
+    signed_in_by: Option<MacroUserIdStr<'static>>,
+) -> AccountLoginChange {
     AccountLoginChange::SignedIn {
         provider: AgentProvider::Claude,
         account: ProviderAccountIdentity {
-            external_account_id: "acct-team".to_owned(),
-            display_email: Some("team@example.com".to_owned()),
-            display_org: Some("Acme".to_owned()),
-            plan: Some("pro".to_owned()),
+            external_account_id: credential_id.to_owned(),
         },
+        expires_at: Some(expires_at.parse().unwrap()),
         signed_in_by,
     }
 }
@@ -1329,9 +1232,16 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
     let teammate = MacroUserIdStr::try_from(TEAMMATE_ID.to_owned()).unwrap();
 
     assert!(
-        repo.record_account_login(mine, claude_sign_in(teammate.clone()))
-            .await
-            .unwrap()
+        repo.record_account_login(
+            mine,
+            claude_sign_in(
+                "sha256:first",
+                "2027-01-01T00:00:00Z",
+                Some(teammate.clone())
+            )
+        )
+        .await
+        .unwrap()
     );
     let first = repo
         .active_account_login(mine, AgentProvider::Claude)
@@ -1339,22 +1249,21 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         .unwrap()
         .unwrap();
     assert_eq!(first.signed_in_by, Some(teammate.clone()));
-    assert_eq!(first.account.identity.external_account_id, "acct-team");
-    assert_eq!(first.account.identity.plan.as_deref(), Some("pro"));
-    assert_eq!(first.expires_at, None);
+    assert_eq!(first.account.identity.external_account_id, "sha256:first");
+    assert_eq!(
+        first.expires_at,
+        Some("2027-01-01T00:00:00Z".parse().unwrap())
+    );
     assert_eq!(
         repo.get_harness(mine).await.unwrap().unwrap().claude_mode,
         ClaudeMode::OwnAccount
     );
 
-    // A report on that account carries its expiry and current details.
+    // The machine reporting the same credential again moves only its expiry.
     assert!(
-        repo.set_capabilities(
+        repo.record_account_login(
             mine,
-            HarnessCapabilities {
-                screen: true,
-                claude: Some(harnesses_claude_account()),
-            },
+            claude_sign_in("sha256:first", "2027-06-01T00:00:00Z", None)
         )
         .await
         .unwrap()
@@ -1364,17 +1273,21 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(reported.id, first.id);
+    assert_eq!(reported.signed_in_by, Some(teammate.clone()));
     assert_eq!(
         reported.expires_at,
-        Some("2027-01-01T00:00:00Z".parse().unwrap())
+        Some("2027-06-01T00:00:00Z".parse().unwrap())
     );
-    assert_eq!(reported.account.identity.plan.as_deref(), Some("max"));
 
-    // Signing in again starts a new login; the old one stays as history.
+    // A new credential starts a new login; the old one stays as history.
     assert!(
-        repo.record_account_login(mine, claude_sign_in(caller()))
-            .await
-            .unwrap()
+        repo.record_account_login(
+            mine,
+            claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
+        )
+        .await
+        .unwrap()
     );
     let second = repo
         .active_account_login(mine, AgentProvider::Claude)
@@ -1383,12 +1296,18 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         .unwrap();
     assert_ne!(second.id, first.id);
     assert_eq!(second.signed_in_by, Some(caller()));
-    assert_eq!(second.expires_at, None);
+    assert_eq!(
+        second.expires_at,
+        Some("2027-02-01T00:00:00Z".parse().unwrap())
+    );
     // The same account on another machine is the same provider account.
     assert!(
-        repo.record_account_login(spare, claude_sign_in(caller()))
-            .await
-            .unwrap()
+        repo.record_account_login(
+            spare,
+            claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
+        )
+        .await
+        .unwrap()
     );
     let elsewhere = repo
         .active_account_login(spare, AgentProvider::Claude)
@@ -1429,52 +1348,12 @@ async fn each_claude_sign_in_is_a_login_and_one_account_spans_machines(pool: PgP
         !repo
             .record_account_login(
                 HarnessId::new_from_uuid(Uuid::new_v4()),
-                claude_sign_in(caller())
+                claude_sign_in("sha256:second", "2027-02-01T00:00:00Z", Some(caller()))
             )
             .await
             .unwrap(),
         "an unknown harness records nothing"
     );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn capabilities_record_when_they_were_reported(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool.clone());
-    let harness_id = HarnessId::new_from_uuid(Uuid::new_v4());
-    sqlx::query!(
-        r#"
-        INSERT INTO harnesses (id, name, owner_user_id, created_by)
-        VALUES ($1, 'mine', $2, $2)
-        "#,
-        harness_id.as_uuid(),
-        OWNER_ID,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let before = Utc::now();
-
-    assert!(
-        repo.set_capabilities(
-            harness_id,
-            HarnessCapabilities {
-                screen: true,
-                claude: None
-            }
-        )
-        .await
-        .unwrap()
-    );
-
-    let reported_at = sqlx::query_scalar!(
-        "SELECT capabilities_reported_at FROM harnesses WHERE id = $1",
-        harness_id.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap()
-    .unwrap();
-    assert!(reported_at >= before);
 }
 
 /// Binds a new agent owned by `owner` to `harness`, returning its id.

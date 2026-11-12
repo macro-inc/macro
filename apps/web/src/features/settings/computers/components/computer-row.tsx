@@ -24,7 +24,8 @@ export type ComputerClaudeState =
   | { kind: 'unset' }
   | { kind: 'loading' }
   | { kind: 'credits' }
-  | { kind: 'account'; account?: string };
+  /** The computer's own Claude sign-in; `expired` once it stopped working. */
+  | { kind: 'account'; expired: boolean };
 
 /** The row's one action, when it has one. */
 export type ComputerPrimaryAction = {
@@ -35,9 +36,9 @@ export type ComputerPrimaryAction = {
 function claudeText(claude: ComputerClaudeState): string | undefined {
   if (claude.kind === 'credits') return t('computers.claudeCredits');
   if (claude.kind === 'loading' || claude.kind === 'unset') return undefined;
-  return claude.account
-    ? t('computers.claudeOwnAccountAs', { account: claude.account })
-    : t('computers.claudeNotSignedIn');
+  return claude.expired
+    ? t('computers.claudeNotSignedIn')
+    : t('computers.claudeSignedIn');
 }
 
 /**

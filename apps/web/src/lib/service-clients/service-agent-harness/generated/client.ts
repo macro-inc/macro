@@ -4562,8 +4562,8 @@ export const startClaudeSignIn = async (
 };
 
 /**
- * @summary Cancel the pending setup-token process. Its terminal completion releases
-the original request's account lease, including on another replica.
+ * @summary Cancel the computer's waiting sign-in, including one a completion is
+still finishing.
  */
 export type cancelClaudeSignInResponse204 = {
   data: void;
@@ -4734,7 +4734,7 @@ export const completeClaudeSignIn = async (
 };
 
 /**
- * @summary Forget the computer's Claude account and return it to Macro credits.
+ * @summary Forget the computer's Claude credential and return it to Macro credits.
  */
 export type claudeSignOutResponse200 = {
   data: ClaudeModeResponse;

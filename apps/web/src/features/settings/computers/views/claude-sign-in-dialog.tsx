@@ -30,10 +30,9 @@ export function ClaudeSignInDialog(props: {
       <ActionDialogShell class="h-auto">
         <ClaudeSignInFlow
           harnessId={props.harnessId}
-          onSignedIn={(account) => {
+          onSignedIn={() => {
             props.onClose();
-            if (account)
-              toast.success(t('computers.claudeConnectedAs', { account }));
+            toast.success(t('computers.claudeSignedIn'));
           }}
           onUseCredits={() => fireAndForget(useCredits(), 'computer-claude')}
         />

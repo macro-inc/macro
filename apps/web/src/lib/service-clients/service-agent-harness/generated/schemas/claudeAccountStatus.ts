@@ -4,26 +4,19 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ClaudeAccountStatusEmail } from './claudeAccountStatusEmail';
 import type { ClaudeAccountStatusExpiresAt } from './claudeAccountStatusExpiresAt';
-import type { ClaudeAccountStatusOrganization } from './claudeAccountStatusOrganization';
-import type { ClaudeAccountStatusPlan } from './claudeAccountStatusPlan';
 import type { ClaudeAccountStatusSignedInBy } from './claudeAccountStatusSignedInBy';
 
 /**
- * A computer's active Claude login.
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+no account, so there is no email or plan to show.
  */
 export interface ClaudeAccountStatus {
-  /** The account's email address, when Claude reports one. */
-  email?: ClaudeAccountStatusEmail;
-  /** When the sign-in stops refreshing, as the computer last reported it. */
+  /** When the credential stops working, as the computer last reported it. */
   expiresAt?: ClaudeAccountStatusExpiresAt;
-  /** The account's organization, when Claude reports one. */
-  organization?: ClaudeAccountStatusOrganization;
-  /** The account's plan, e.g. `max`. */
-  plan?: ClaudeAccountStatusPlan;
   /** When it was signed in. */
   signedInAt: string;
-  /** Who signed it in through Macro; absent once that user is deleted. */
+  /** Who signed it in through Macro; absent once that user is deleted or
+when it was signed in on the computer itself. */
   signedInBy?: ClaudeAccountStatusSignedInBy;
 }

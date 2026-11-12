@@ -806,8 +806,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Cancel the pending setup-token process. Its terminal completion releases
-     * the original request's account lease, including on another replica.
+     * Cancel the computer's waiting sign-in, including one a completion is
+     * still finishing.
      */
     public cancelClaudeSignIn<ThrowOnError extends boolean = false>(options: Options<CancelClaudeSignInData, ThrowOnError>): RequestResult<CancelClaudeSignInResponses, CancelClaudeSignInErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CancelClaudeSignInResponses, CancelClaudeSignInErrors, ThrowOnError>({ url: '/harnesses/{harness_id}/claude-sign-in/cancel', ...options });
@@ -828,7 +828,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Forget the computer's Claude account and return it to Macro credits.
+     * Forget the computer's Claude credential and return it to Macro credits.
      */
     public claudeSignOut<ThrowOnError extends boolean = false>(options: Options<ClaudeSignOutData, ThrowOnError>): RequestResult<ClaudeSignOutResponses, ClaudeSignOutErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ClaudeSignOutResponses, ClaudeSignOutErrors, ThrowOnError>({ url: '/harnesses/{harness_id}/claude-sign-out', ...options });

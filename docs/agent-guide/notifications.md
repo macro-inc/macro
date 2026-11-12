@@ -373,13 +373,13 @@ Desktop channel and AI composers use an `Attach files` paperclip that opens the 
 agent (`claude` for now) and warn the person who signed a team computer in to
 it, plus the team's owner and
 admins, that the sign-in expires soon (three days out), expires today (its last
-day), or expired (passed, or Claude rejected it). They name the computer and
+day), or expired (passed). They name the computer and
 open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
 the paste-the-code flow; see the
 [Macro computers walkthrough](settings.md#macro-computers). To check one
-without waiting days, set the computer's `harnesses.capabilities` report to
-`{"claude": {"status": "signed_out"}}` with a fresh `capabilities_reported_at`
-on a local stack: the notice arrives within a minute.
+without waiting days, set the computer's active `harness_account_logins` row's
+`expires_at` to within three days on a local stack: the notice arrives within a
+minute.
 
 ## Notification sounds
 

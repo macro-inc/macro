@@ -17,7 +17,7 @@ use super::*;
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{ControlPlaneId, HostRegistration, NewReservation};
-use crate::domain::ports::{DefaultAgent, HostedPairing};
+use crate::domain::ports::{DefaultAgent, GuestProcess, HostedPairing};
 use crate::domain::size::ComputerSize;
 
 const HARNESS: HarnessId =
@@ -184,6 +184,18 @@ impl Fleet for FakeFleet {
             reserve_gb: 7,
             oversell_factor: 3,
         })
+    }
+
+    async fn exec(
+        &self,
+        id: ComputerId,
+        argv: &[&str],
+    ) -> Result<GuestProcess<FakeFleetError>, FakeFleetError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("exec {id} {}", argv.join(" ")));
+        Ok(crate::domain::fakes::scripted_process(|_| (Vec::new(), 0)))
     }
 }
 

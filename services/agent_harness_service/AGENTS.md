@@ -106,32 +106,29 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a rejected code returns 422 with `code: "invalid_code"`),
-  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (same manage rights
-  and rollout gate; interrupts an active start or completion and waits for
-  its account-mode reconciliation and lease release before answering),
-  `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
-  written to the harness row on macrod's confirmation; a shared 180-second
-  account-change lease covers the command and mode write, preventing opposing
-  requests from persisting out of order; concurrent requests get 409; terminal
-  responses release the lease after the mode write, and failed or dropped
-  requests schedule owner-checked cleanup instead of waiting for expiry;
-  abandoned sign-in requests cancel macrod before releasing their lease;
-  completion and its mode write run in a tracked task so a dropped HTTP waiter
-  still reconciles any token macrod already committed),
-  and `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights).
-  A completed sign-in records its caller as the signer; sign-out clears it.
+  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (interrupts a start or
+  completion), `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
+  `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
+  The account has a signer, sign-in time and expiry, never an email or plan:
+  Claude's setup-token credential names no account. Each route runs in a
+  tracked task, so a completion whose caller left still records its signer.
+- `src/computers/harnessd.rs`: `Harnessd` runs one `harnessd_protocol`
+  request per `Fleet::exec(computer, ["harnessd"])` (request on stdin, one
+  answer line on stdout) and writes the computer's Claude login rows from
+  harnessd's status, under a per-computer Postgres advisory lock held from the
+  command through the status read to the write; the cancel goes straight
+  through so it can interrupt a completion holding the lock. The
+  `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
+  same lock, and `sign_in_ahead.rs` refreshes on connect and then starts a
+  sign-in when setup is unfinished or the credential expired. Spans:
+  `computer.harnessd.command`/`.refresh`/`.refresh_all`.
 - `src/computers/claude_expiry.rs`: the ports of the operator's
   `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers'
   active Claude logins (signer, `expires_at` and last notice from
-  `harness_account_logins`, capabilities and report time from the harness, the
-  team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
+  `harness_account_logins`, the team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
-- `src/computers/control.rs`: commands reach macrod as `computerControl`
-  runtime messages; when the runtime is on another replica they cross Redis
-  (`agent-harness.computer-control`: claim with `SET NX`, ack within 3 s or
-  409, then the answer). Spans: `computer_control.request`/`.execute`.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever the harness can run code, every client but ChatGPT
   gets only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`

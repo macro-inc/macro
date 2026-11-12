@@ -1,4 +1,4 @@
-# The Macro computer guest as a NixOS module: macrod, Claude Code, herdr,
+# The Macro computer guest as a NixOS module: macrod, harnessd, Claude Code, herdr,
 # Chromium on an Xvnc display, Docker and nix-ld. `_image.nix` adds the Incus
 # VM image on top; `_vm-test.nix` boots this module alone.
 {
@@ -17,6 +17,15 @@ let
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
+  # harnessd's state: the agents' credentials. On the data disk when there
+  # is one, so a sign-in survives image updates.
+  harnessdState = if cfg.dataDisk == null then "/var/lib/harnessd" else "/home/.system/harnessd";
+  harnessdSocket = "/run/harnessd/harnessd.sock";
+  claude = import ./_claude-wrapper.nix {
+    inherit pkgs;
+    inherit (cfg) claudeCode;
+    credential = "${cfg.harnessd.stateDirectory}/claude/credential.json";
+  };
   herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
@@ -89,6 +98,20 @@ in
     macrod = lib.mkOption {
       type = lib.types.package;
       description = "The macrod package.";
+    };
+    harnessd.package = lib.mkOption {
+      type = lib.types.package;
+      description = "The harnessd package: agent sign-ins.";
+    };
+    harnessd.stateDirectory = lib.mkOption {
+      type = lib.types.path;
+      readOnly = true;
+      default = harnessdState;
+      description = ''
+        Where harnessd keeps the agents' credentials (`claude/credential.json`
+        for Claude): `/home/.system/harnessd` on the data disk, else
+        `/var/lib/harnessd`.
+      '';
     };
     claudeCode = lib.mkOption {
       type = lib.types.package;
@@ -203,6 +226,9 @@ in
 
     systemd.tmpfiles.settings."10-macro-box" = {
       ${persistentMacrodState}.d.mode = "0755";
+      ${cfg.harnessd.stateDirectory}.d = macroOwner // {
+        mode = "0700";
+      };
       ${workspace}.d = macroDirectory;
       "${home}/.config".d = macroDirectory;
       "${home}/.config/chromium".d = macroDirectory;
@@ -225,7 +251,10 @@ in
 
     environment.systemPackages = [
       cfg.macrod
-      cfg.claudeCode
+      cfg.harnessd.package
+      # The pinned Claude Code behind the credential wrapper; harnessd runs
+      # the unwrapped one.
+      claude
       cfg.chromeDevtoolsMcp
       herdr
     ]
@@ -396,6 +425,25 @@ in
         RestartSec = 1;
         RestartSteps = 5;
         RestartMaxDelaySec = 30;
+      };
+    };
+
+    # Owns each agent's sign-in; the control plane runs `harnessd` (the
+    # client) through the fleet's exec. See crates/harnessd/AGENTS.md.
+    systemd.services.harnessd = {
+      description = "Agent sign-ins on this computer";
+      wantedBy = [ "multi-user.target" ];
+      path = systemPath;
+      environment.HOME = home;
+      unitConfig.StartLimitIntervalSec = 0;
+      serviceConfig = {
+        User = "macro";
+        Group = "macro";
+        RuntimeDirectory = "harnessd";
+        RuntimeDirectoryMode = "0700";
+        ExecStart = "${lib.getExe' cfg.harnessd.package "harnessd"} serve --socket ${harnessdSocket} --state-dir ${cfg.harnessd.stateDirectory} --claude ${lib.getExe' cfg.claudeCode "claude"}";
+        Restart = "always";
+        RestartSec = 1;
       };
     };
 

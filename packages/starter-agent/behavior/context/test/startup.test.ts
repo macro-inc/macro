@@ -141,14 +141,15 @@ describe('startup', () => {
 });
 
 describe('sandbox', () => {
-  test('under systemd credentials, children run in bubblewrap with the credentials hidden', () => {
+  const hosted = {
+    AGENT_WORKSPACE: '/w',
+    MUPPET_CREDENTIALS_FILE: '/run/credentials/macro-agent.service/agent.env',
+    CREDENTIALS_DIRECTORY: '/run/credentials/macro-agent.service',
+  };
+
+  test("under systemd credentials, children run in bubblewrap with the credentials hidden and harnessd's state read-only", () => {
     const started = startup(
-      {
-        AGENT_WORKSPACE: '/w',
-        MUPPET_CREDENTIALS_FILE:
-          '/run/credentials/macro-agent.service/agent.env',
-        CREDENTIALS_DIRECTORY: '/run/credentials/macro-agent.service',
-      },
+      { ...hosted, HARNESSD_STATE_DIRECTORY: '/home/.system/harnessd/claude' },
       reserved
     );
     expect(started.kind === 'configured' && started.value.sandbox).toEqual([
@@ -158,8 +159,18 @@ describe('sandbox', () => {
       '/',
       '--tmpfs',
       '/run/credentials/macro-agent.service',
+      '--ro-bind',
+      '/home/.system/harnessd/claude',
+      '/home/.system/harnessd/claude',
       '--',
     ]);
+  });
+
+  test("on a computer, harnessd's state directory must be named, or the agent doesn't start", () => {
+    expect(startup(hosted, reserved)).toEqual({
+      kind: 'invalid',
+      message: 'HARNESSD_STATE_DIRECTORY is not set',
+    });
   });
 });
 

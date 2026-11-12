@@ -4,14 +4,11 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ClaudeSignedInAccount } from './claudeSignedInAccount';
 
 /**
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
  */
 export interface ClaudeSignedIn {
-  /** The Claude account's email address, when Claude reports one. */
-  account?: ClaudeSignedInAccount;
   /** Always `true`. */
   signedIn: boolean;
 }

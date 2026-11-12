@@ -4548,6 +4548,11 @@ export type createTeamResponse403 = {
   status: 403;
 };
 
+export type createTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type createTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4559,6 +4564,7 @@ export type createTeamResponseSuccess = createTeamResponse200 & {
 export type createTeamResponseError = (
   | createTeamResponse400
   | createTeamResponse403
+  | createTeamResponse409
   | createTeamResponse500
 ) & {
   headers: Headers;
