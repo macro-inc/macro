@@ -65,11 +65,18 @@
 }
 .homepage-feature-end { position: relative; margin-top: 0; padding: clamp(72px, 12svh, 140px) 0 56px; }
 .homepage-closing-rule { position: absolute; top: 0; left: 0; width: 100%; margin: 0; border: 0; border-top: 1px solid var(--color-edge-muted); }
-.homepage-closing-signup { display: flex; justify-content: center; }
-.homepage-closing-signup .feature-page-cta { width: 180px; min-height: 48px; font-size: 16px; }
-@media (max-width: 699px) {
-  .homepage-closing-signup .feature-page-cta { width: 100%; max-width: 420px; min-height: 60px; font-size: 20px; }
+/* The closing Sign Up is the header pill at three times its size, or as large
+   as the column allows. `--u` is one header pixel at that scale. */
+.homepage-closing-signup { display: flex; justify-content: center; container-type: inline-size; }
+.homepage-closing-signup .feature-page-cta {
+  --u: min(3px, (100cqw - 48px) / 172);
+  gap: calc(16 * var(--u)); width: auto; min-width: calc(172 * var(--u)); min-height: calc(56 * var(--u));
+  padding: calc(12 * var(--u)) calc(22 * var(--u));
+  box-shadow: inset 0 var(--u) 0 #fff, inset 0 calc(-2 * var(--u)) calc(2 * var(--u)) #00000018, 0 var(--u) 0 #ffffff26, 0 calc(10 * var(--u)) calc(24 * var(--u)) calc(-12 * var(--u)) #0008;
+  font-size: calc(16 * var(--u)); line-height: calc(24 * var(--u));
 }
+.homepage-closing-signup .feature-page-cta::after { padding: var(--u); }
+.homepage-closing-signup .feature-page-cta svg { width: calc(24 * var(--u)); height: calc(24 * var(--u)); }
 @media(max-width: 699px) { .homepage-sections-inner { width: calc(100% - 36px); } .homepage-feature { padding: 40px 0; } .homepage-conversation { gap: 24px; margin-bottom: 32px; font-size: 15px; } .homepage-message { max-width: 92%; } }
 @media (max-width: 699px) {
   #documents { padding-bottom: 20px; }
