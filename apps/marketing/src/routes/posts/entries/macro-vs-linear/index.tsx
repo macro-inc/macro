@@ -304,10 +304,10 @@ export default function MacroVsLinearPost() {
         <hr class="post-section-rule" aria-hidden="true" />
         <h2>Linked to GitHub, both ways</h2>
         <p>
-          For engineering work, Rox Tasks link to GitHub bidirectionally and
-          to the agents working on them. Click the GitHub pill to jump from a
-          task to its pull request, or the other way around, all opening in a
-          split inside Rox so you never leave your workspace.
+          For engineering work, Rox Tasks link to GitHub bidirectionally and to
+          the agents working on them. Click the GitHub pill to jump from a task
+          to its pull request, or the other way around, all opening in a split
+          inside Rox so you never leave your workspace.
         </p>
         <p>The task and its pull request stay connected:</p>
         <PostProductGraphic kind="task-github" />

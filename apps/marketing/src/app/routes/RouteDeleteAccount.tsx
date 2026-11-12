@@ -52,9 +52,5 @@ export const RouteDeleteAccount: Component = () => {
     path: '/delete-account',
   });
 
-  return (
-    <>
-      <UtilPlainText content={content} lists />
-    </>
-  );
+  return <UtilPlainText content={content} lists />;
 };

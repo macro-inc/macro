@@ -91,11 +91,11 @@ const partnerFaq: FaqItem[] = [
     q: 'Is our workspace data secure?',
     a: (
       <>
-        Yes. Open source means the Rox application code is available to
-        inspect. It does not make your workspace public. Data in your Rox
-        account, including your team&apos;s email, documents, messages, and
-        other workspace content, remains private and secure. For more
-        information on security in Rox please visit our{' '}
+        Yes. Open source means the Rox application code is available to inspect.
+        It does not make your workspace public. Data in your Rox account,
+        including your team&apos;s email, documents, messages, and other
+        workspace content, remains private and secure. For more information on
+        security in Rox please visit our{' '}
         <a href="/docs/security" target="_blank" rel="noreferrer">
           docs page
         </a>

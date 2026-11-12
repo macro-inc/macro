@@ -25,11 +25,10 @@ const faqItems = [
     q: 'Which email accounts can I connect?',
     a: (
       <>
-        Rox supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail or Superhuman alongside Rox. Rox
-        connects directly to your Gmail account, so you don’t need to stop using
-        another email client. See the{' '}
-        <a href="/email#guide">email setup guide</a>.
+        Rox supports Gmail and Google Workspace. Connect an account in Settings
+        and keep using Gmail or Superhuman alongside Rox. Rox connects directly
+        to your Gmail account, so you don’t need to stop using another email
+        client. See the <a href="/email#guide">email setup guide</a>.
       </>
     ),
   },

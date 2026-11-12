@@ -371,9 +371,5 @@ export const RoutePrivacy: Component = () => {
     path: '/privacy',
   });
 
-  return (
-    <>
-      <UtilPlainText content={content} />
-    </>
-  );
+  return <UtilPlainText content={content} />;
 };

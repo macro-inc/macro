@@ -340,8 +340,8 @@ export default function MacroVsSuperhumanPost() {
         </p>
         <PostProductGraphic kind="email-thread" />
         <p class="mvn-figcaption">
-          The current Rox Email reader, with the conversation and reply
-          controls together.
+          The current Rox Email reader, with the conversation and reply controls
+          together.
         </p>
 
         <h2>Rox vs. Superhuman pricing comparison</h2>

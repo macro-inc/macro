@@ -603,9 +603,5 @@ export const RoutePartnerTerms: Component = () => {
     path: '/partners/terms',
   });
 
-  return (
-    <>
-      <UtilPlainText content={content} lists />
-    </>
-  );
+  return <UtilPlainText content={content} lists />;
 };

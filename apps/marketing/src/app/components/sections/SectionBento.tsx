@@ -136,41 +136,31 @@ function BentoItem(props: {
         </div>
       </div>
       <Show when={!breakpoint() || open()}>
-        <>
-          <p
-            style={{
-              'line-height': '1.5',
-              color: 'var(--c4)',
-              'font-size': isCompact()
-                ? '15px'
-                : breakpoint()
-                  ? '17px'
-                  : '18px',
-              margin: '0',
-              'min-height': '0',
-              'align-self': 'start',
-              'padding-right': breakpoint() ? '0' : '28px',
-            }}
-          >
-            {props.body}
-          </p>
-          <A
-            href={props.href}
-            style={{
-              color: 'var(--a0)',
-              'font-size': isCompact()
-                ? '14px'
-                : breakpoint()
-                  ? '16px'
-                  : '17px',
-              'font-weight': '500',
-              'line-height': '1',
-              'text-decoration': 'none',
-            }}
-          >
-            Read why
-          </A>
-        </>
+        <p
+          style={{
+            'line-height': '1.5',
+            color: 'var(--c4)',
+            'font-size': isCompact() ? '15px' : breakpoint() ? '17px' : '18px',
+            margin: '0',
+            'min-height': '0',
+            'align-self': 'start',
+            'padding-right': breakpoint() ? '0' : '28px',
+          }}
+        >
+          {props.body}
+        </p>
+        <A
+          href={props.href}
+          style={{
+            color: 'var(--a0)',
+            'font-size': isCompact() ? '14px' : breakpoint() ? '16px' : '17px',
+            'font-weight': '500',
+            'line-height': '1',
+            'text-decoration': 'none',
+          }}
+        >
+          Read why
+        </A>
       </Show>
     </div>
   );

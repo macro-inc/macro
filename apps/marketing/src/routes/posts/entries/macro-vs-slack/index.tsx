@@ -199,15 +199,15 @@ export default function MacroVsSlackPost() {
         <h2>Rox Chat tightly integrates with engineering tasks</h2>
         <p>
           If you read our{' '}
-          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>,
-          you'll see me talk about how tightly channels are integrated with
-          Rox Tasks. This has been really helpful for our engineering team
-          staying on track without needing a dedicated PM keeping track of
-          everything — which works well with our culture of agency and no
-          micromanaging. We no longer have to "stay on top" of everybody,
-          because everybody is creating tasks and marking them complete (or it
-          happens automatically with the GitHub integration) without me having
-          to prod them to keep things updated.
+          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>, you'll
+          see me talk about how tightly channels are integrated with Rox Tasks.
+          This has been really helpful for our engineering team staying on track
+          without needing a dedicated PM keeping track of everything — which
+          works well with our culture of agency and no micromanaging. We no
+          longer have to "stay on top" of everybody, because everybody is
+          creating tasks and marking them complete (or it happens automatically
+          with the GitHub integration) without me having to prod them to keep
+          things updated.
         </p>
         <PostProductGraphic kind="task-context" />
         <p class="mvn-figcaption">

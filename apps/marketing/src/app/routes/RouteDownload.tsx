@@ -42,8 +42,8 @@ export function RouteDownload() {
           </p>
           <h2 id="desktop">Desktop</h2>
           <p>
-            The Rox desktop app is coming soon for macOS and Linux. Use the
-            web app in the meantime.
+            The Rox desktop app is coming soon for macOS and Linux. Use the web
+            app in the meantime.
           </p>
           <p>
             For self-hosting, see the{' '}

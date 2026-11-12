@@ -21,9 +21,5 @@ export const RouteLegal: Component = () => {
       "Macro's terms of service, privacy policy, data processing agreement, partner terms, and account deletion information.",
     path: '/legal',
   });
-  return (
-    <>
-      <UtilPlainText content={content} lists />
-    </>
-  );
+  return <UtilPlainText content={content} lists />;
 };

@@ -231,9 +231,5 @@ export const RouteTerms: Component = () => {
     path: '/terms',
   });
 
-  return (
-    <>
-      <UtilPlainText content={content} />
-    </>
-  );
+  return <UtilPlainText content={content} />;
 };
