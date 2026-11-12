@@ -16,6 +16,8 @@ the gateway `/email` prefix.
 - `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
   `calendar_disconnect.rs`, and `signature_settings.rs`: adapters for the five
   inbox-scoped use cases; handlers delegate to their email-domain services.
+  `outbound/signature_settings/gmail_images.rs` performs mailbox/public image reads;
+  source selection and retry handling stay in the signature domain service.
 - `src/outbound/gmail_push.rs` and `user_deletion.rs`: adapters for domain-owned
   Gmail push authentication/intake and deleted-user inbox removal. The webhook
   auth feature is selected once in composition; handlers only extract and render.

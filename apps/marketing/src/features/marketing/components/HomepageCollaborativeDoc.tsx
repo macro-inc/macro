@@ -3,6 +3,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  Show,
   untrack,
 } from 'solid-js';
 import {
@@ -16,7 +17,9 @@ import { HomepageVersionHistory } from './HomepageVersionHistory';
 import './homepage-collaborative-doc.css';
 
 /** One playhead drives both Julia's edits and the document history. */
-export default function HomepageCollaborativeDoc() {
+export default function HomepageCollaborativeDoc(
+  props: { showHistory?: boolean } = {}
+) {
   const [time, setTime] = createSignal(REST_T);
   const [playing, setPlaying] = createSignal(false);
   const [foreground, setForeground] = createSignal(true);
@@ -73,19 +76,27 @@ export default function HomepageCollaborativeDoc() {
       onPointerDown={takeOver}
       onKeyDown={takeOver}
     >
-      <DocsGraphicFrame label="Julia's document edits. Use the version history slider below to move backward or forward through the changes.">
+      <DocsGraphicFrame
+        label={
+          props.showHistory === false
+            ? 'Julia types and edits the Website launch plan, including people and document mentions.'
+            : "Julia's document edits. Use the version history slider below to move backward or forward through the changes."
+        }
+      >
         <DocsMarkdownScene t={time} />
       </DocsGraphicFrame>
-      <div class="homepage-doc-timeline">
-        <HomepageVersionHistory
-          position={time() / REST_T}
-          onPause={takeOver}
-          onSeek={(position) => {
-            takeOver();
-            setTime(position * REST_T);
-          }}
-        />
-      </div>
+      <Show when={props.showHistory !== false}>
+        <div class="homepage-doc-timeline">
+          <HomepageVersionHistory
+            position={time() / REST_T}
+            onPause={takeOver}
+            onSeek={(position) => {
+              takeOver();
+              setTime(position * REST_T);
+            }}
+          />
+        </div>
+      </Show>
     </div>
   );
 }

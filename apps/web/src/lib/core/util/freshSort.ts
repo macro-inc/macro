@@ -188,6 +188,13 @@ function namesEveryParticipant(normalizedName: string, term: string): boolean {
   );
 }
 
+function containsEveryTerm(normalizedText: string, term: string): boolean {
+  return term
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .every((word) => normalizedText.includes(word));
+}
+
 function calculateNameMatchRank(
   normalizedName: string,
   term: string,
@@ -360,9 +367,17 @@ export function createFreshSearch<T>({
     const term = trimmedQuery;
     const getNameMatchRank = (item: T) => {
       const name = normalizeNameText(getDisplayName(item));
-      const nameRank = finalConfig.rankNameMatchesFirst
+      let nameRank = finalConfig.rankNameMatchesFirst
         ? calculateNameMatchRank(name, term, isPersonItem(item))
         : 0;
+      // Letters scattered across a row match as a subsequence. Such a row
+      // never outranks one that contains the typed words themselves.
+      if (
+        finalConfig.rankNameMatchesFirst &&
+        nameRank === 0 &&
+        !containsEveryTerm(normalizeNameText(getName(item)), term)
+      )
+        nameRank = -1;
       const namesParticipants =
         finalConfig.commaSeparatedChannelMatch &&
         isChannelItem(item) &&

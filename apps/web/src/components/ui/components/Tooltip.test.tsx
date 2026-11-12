@@ -167,3 +167,38 @@ describe('Tooltip touch behavior', () => {
     expect(trigger.isConnected).toBe(true);
   });
 });
+
+it('keeps owned tooltip portals inside the fullscreen element', async () => {
+  device.isTouch = () => false;
+  let root!: HTMLDivElement;
+  let fullscreen: Element | null = null;
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    get: () => fullscreen,
+  });
+  try {
+    render(() => (
+      <div ref={root}>
+        <Tooltip.Root open>
+          <Tooltip.Trigger>Trigger</Tooltip.Trigger>
+          <Tooltip.Portal>
+            <span data-testid="fullscreen-tip">Tooltip</span>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </div>
+    ));
+    expect(root.contains(screen.getByTestId('fullscreen-tip'))).toBe(false);
+    fullscreen = root;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    await waitFor(() =>
+      expect(root.contains(screen.getByTestId('fullscreen-tip'))).toBe(true)
+    );
+    fullscreen = null;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    await waitFor(() =>
+      expect(root.contains(screen.getByTestId('fullscreen-tip'))).toBe(false)
+    );
+  } finally {
+    Reflect.deleteProperty(document, 'fullscreenElement');
+  }
+});
