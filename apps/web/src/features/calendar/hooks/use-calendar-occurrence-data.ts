@@ -56,7 +56,7 @@ export function useCalendarOccurrenceData(
   const events = createMemo(() => {
     if (
       !isRangeSupported() ||
-      !occurrencesQuery.isSuccess ||
+      occurrencesQuery.isPending ||
       options.sourcesReady?.() === false
     )
       return [];

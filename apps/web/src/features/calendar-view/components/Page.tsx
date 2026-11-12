@@ -59,7 +59,6 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import {
   calendarFocusTargetId,
@@ -142,7 +141,6 @@ function CalendarPageDataStatus(props: {
   data: CalendarOccurrenceData;
   changingView: boolean;
   grid: CalendarGridHandle;
-  holdingTimeChange: boolean;
   onLoadingBlockingChange: (blocking: boolean) => void;
 }) {
   const isRangeUnavailable = createMemo(() => {
@@ -152,15 +150,12 @@ function CalendarPageDataStatus(props: {
 
   const retry = () =>
     fireAndForget(
-      props.holdingTimeChange
-        ? syncCalendarOccurrences({ retryUnreadable: true })
-        : props.data.occurrencesQuery.refetch(),
+      syncCalendarOccurrences({ retryUnreadable: true }),
       'calendar-view'
     );
   const hasLoadError = () =>
     props.data.occurrencesQuery.isError ||
-    (props.holdingTimeChange &&
-      props.data.occurrencesQuery.isSuccess &&
+    (props.data.occurrencesQuery.isSuccess &&
       props.data.occurrencesQuery.data?.partial === true);
   const showLoading = () =>
     !isRangeUnavailable() &&
@@ -176,27 +171,13 @@ function CalendarPageDataStatus(props: {
         disabled={isRangeUnavailable() || hasLoadError()}
         onBlockingChange={props.onLoadingBlockingChange}
       />
-      <Show when={props.holdingTimeChange && !hasLoadError()}>
-        <div
-          role="status"
-          class="absolute bottom-3 right-3 z-20 flex items-center gap-3 rounded-xl border border-edge-muted bg-surface p-3 shadow-sm"
-        >
-          <span class="text-sm text-ink-muted">
-            Event saved. Refreshing calendar…
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={props.data.occurrencesQuery.isFetching}
-            onClick={retry}
-          >
-            Retry
-          </Button>
-        </div>
-      </Show>
       <Show when={!isRangeUnavailable() && hasLoadError()}>
         <div
-          class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
+          class={
+            props.data.visibleEvents().length > 0
+              ? 'absolute bottom-3 right-3 z-20 rounded-xl border border-edge-muted bg-surface p-3 shadow-sm'
+              : 'absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center'
+          }
           aria-live="polite"
         >
           <div class="flex max-w-sm flex-col items-center gap-3">
@@ -258,10 +239,6 @@ export function Page(props: {
   const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
     !renderedHiddenSourceIds().has(sourceId);
-  const [occurrenceRefresh, setOccurrenceRefresh] = createStore({
-    started: 0,
-    completed: 0,
-  });
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
@@ -270,15 +247,6 @@ export function Page(props: {
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
       refetchOnWindowFocus: isActive(),
-      onRefresh: (phase) => {
-        if (phase === 'started')
-          setOccurrenceRefresh('started', (revision) => revision + 1);
-        else
-          setOccurrenceRefresh(
-            'completed',
-            untrack(() => occurrenceRefresh.started)
-          );
-      },
     }),
   });
   const teamOoo = useTeamOooEvents({
@@ -295,8 +263,6 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const timeChange = createEventTimeChange({
     active: isActive,
-    refreshStatus: () => occurrenceRefresh,
-    eventsById,
     save: (args) => updateEventTime.mutateAsync(args),
     onError: (error) => {
       if (isGuestEditRefused(error)) {
@@ -401,7 +367,6 @@ export function Page(props: {
             eventsById={eventsById}
             grid={grid}
             onLoadingBlockingChange={setLoadingDecorationBlocking}
-            holdingTimeChange={timeChange.refreshing()}
           />
         )}
       </CalendarGrid>
@@ -439,7 +404,6 @@ function CalendarPageHost(props: {
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
   onLoadingBlockingChange: (blocking: boolean) => void;
-  holdingTimeChange: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -535,7 +499,6 @@ function CalendarPageHost(props: {
         changingView={isActive() && pager.isChangingView()}
         grid={props.grid}
         onLoadingBlockingChange={props.onLoadingBlockingChange}
-        holdingTimeChange={props.holdingTimeChange}
       />
     </>
   );

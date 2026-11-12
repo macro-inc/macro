@@ -1,3 +1,5 @@
+import type { EventApi } from '@fullcalendar/core';
+import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from '../components/composer/create-calendar-event-form-controller';
@@ -5,6 +7,7 @@ import {
   calendarEventToEditorInitialValues,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
+import { createEventTimeChange } from '../primitives/create-event-time-change';
 import { type CalendarEvent, DEFAULT_GUEST_POLICY } from '../types';
 import { useEventEditor } from './use-event-editor';
 
@@ -1545,6 +1548,54 @@ describe('guest permissions', () => {
     });
     try {
       expect(editor.guestPolicyEditable()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+});
+
+describe('optimistic grid saves', () => {
+  it('accepts another move while saving and never reverts the newer move on an older failure', async () => {
+    const first = Promise.withResolvers<void>();
+    const second = Promise.withResolvers<void>();
+    const reverted = vi.fn();
+    const failed = vi.fn();
+    const save = vi.fn((args: UpdateCalendarEventArgs) => {
+      args.onOptimistic?.();
+      return save.mock.calls.length === 1 ? first.promise : second.promise;
+    });
+    const { change, dispose } = createRoot((dispose) => ({
+      change: createEventTimeChange({
+        active: () => true,
+        save,
+        onError: failed,
+      }),
+      dispose,
+    }));
+    const event = {
+      ...savedEvent,
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+      recurrenceId: savedEvent.occurrenceKey,
+      seriesTime: values.time,
+    };
+    const moved = {
+      start: new Date('2026-09-22T15:00:00Z'),
+      end: new Date('2026-09-22T16:00:00Z'),
+      allDay: false,
+    } as EventApi;
+    try {
+      await change.handle({ event: moved, revert: reverted }, event);
+      const savingFirst = change.confirm();
+      expect(change.pending()).toBe(false);
+      await change.handle({ event: moved, revert: reverted }, event);
+      expect(change.choosing()).toBe(true);
+      const savingSecond = change.confirm();
+      first.reject(new Error('Refused'));
+      await savingFirst;
+      expect(failed).toHaveBeenCalledOnce();
+      expect(reverted).not.toHaveBeenCalled();
+      second.resolve();
+      await savingSecond;
     } finally {
       dispose();
     }

@@ -182,11 +182,10 @@ export function calendarEventTimeUpdate(
       'Moving all events is not supported for this repeat pattern. Choose This event.'
     );
   }
-  const recurrenceChanged = recurrenceLines.some(
-    (line, index) => line !== event.recurrenceLines[index]
-  );
   return {
     ...target,
-    patch: { time: updated, ...(recurrenceChanged ? { recurrenceLines } : {}) },
+    // Keep the complete desired rule with the absolute master time. A queued
+    // edit must not depend on an earlier optimistic weekday move succeeding.
+    patch: { time: updated, recurrenceLines },
   };
 }

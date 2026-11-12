@@ -2,7 +2,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CalendarEvent } from '../types';
 import {
@@ -20,72 +20,69 @@ interface PendingTimeChange {
   span: Span;
 }
 
-/** Owns the grid's optimistic move until scope selection and persistence settle. */
+/** Owns the grid preview until scope selection hands it to the shared cache. */
 export function createEventTimeChange(options: {
   active: Accessor<boolean>;
   save: (args: UpdateCalendarEventArgs) => Promise<unknown>;
   onError: (error: unknown) => void;
-  refreshStatus?: Accessor<{ started: number; completed: number }>;
-  eventsById?: Accessor<ReadonlyMap<string, CalendarEvent>>;
 }) {
   const [state, setState] = createStore<{
-    phase: 'idle' | 'choosing' | 'saving' | 'refreshing';
+    phase: 'idle' | 'choosing' | 'installing';
     scope: CalendarUpdateScope;
-    refreshStarted: number;
     change?: PendingTimeChange;
-  }>({ phase: 'idle', scope: 'this_event', refreshStarted: 0 });
+  }>({ phase: 'idle', scope: 'this_event' });
   let disposed = false;
 
-  function finish(outcome: 'success' | 'cancelled' | 'error') {
-    const change = state.change;
-    if (!change) return;
-    if (!disposed && outcome !== 'success') change.revert();
-    change.span.setAttr('calendar.update.scope', state.scope);
+  function release(change: PendingTimeChange) {
+    if (!disposed && state.change === change) {
+      setState({ phase: 'idle', change: undefined });
+    }
+  }
+
+  function finish(
+    change: PendingTimeChange,
+    outcome: 'success' | 'cancelled' | 'error'
+  ) {
     change.span.setAttr('calendar.time_change.outcome', outcome);
     change.span.end();
-    setState({ phase: 'idle', change: undefined });
+    release(change);
   }
 
   function cancel() {
-    if (state.phase === 'choosing') finish('cancelled');
+    const change = state.change;
+    if (!change || state.phase !== 'choosing') return;
+    change.revert();
+    finish(change, 'cancelled');
   }
 
   async function confirm() {
     const change = state.change;
     if (!change || state.phase !== 'choosing') return;
     if (!options.active()) {
-      finish('cancelled');
+      cancel();
       return;
     }
     const scope = state.scope;
-    setState('phase', 'saving');
+    setState('phase', 'installing');
     change.span.setAttr('calendar.update.scope', scope);
-    let writeAccepted = false;
+    let installed = false;
     try {
       const args = calendarEventTimeUpdate(change.event, change.time, scope);
       await options.save({
         ...args,
         parentSpan: change.span,
-        onWriteAccepted: () => {
-          writeAccepted = true;
-          if (disposed) {
-            finish('success');
-          } else if (options.refreshStatus) {
-            setState({
-              phase: 'refreshing',
-              refreshStarted: options.refreshStatus().started,
-            });
-          }
+        onOptimistic: () => {
+          installed = true;
+          release(change);
         },
       });
-      if (!options.refreshStatus) finish('success');
+      finish(change, 'success');
     } catch (error) {
-      if (writeAccepted) {
-        change.span.error('Calendar refresh failed after saving');
-        return;
-      }
+      // Once installed, the shared cache rolls back just this write. An old
+      // FullCalendar revert would also undo a newer drag on the same event.
+      if (!installed && !disposed) change.revert();
       change.span.error('Calendar time change failed');
-      finish('error');
+      finish(change, 'error');
       if (!disposed) options.onError(error);
     }
   }
@@ -124,40 +121,8 @@ export function createEventTimeChange(options: {
     }
   }
 
-  // Release the imperative grid preview only for a successful read that began
-  // after acceptance. A skipped refresh, failed read, or optimistic write is
-  // not proof that the occurrence data has caught up.
-  createEffect(
-    on(
-      () =>
-        [options.refreshStatus?.().completed, options.eventsById?.()] as const,
-      ([completed, events]) => {
-        if (
-          state.phase === 'refreshing' &&
-          completed !== undefined &&
-          completed > state.refreshStarted
-        ) {
-          const change = state.change;
-          const current = change && events?.get(change.event.id);
-          if (change && current) {
-            const time = change.time;
-            const matches =
-              time.kind === 'timed'
-                ? Date.parse(current.start) === Date.parse(time.startsAt) &&
-                  Date.parse(current.end) === Date.parse(time.endsAt)
-                : current.start === time.startDate &&
-                  current.end === time.endDate;
-            if (!matches) return;
-          }
-          finish('success');
-        }
-      }
-    )
-  );
-
   onCleanup(() => {
-    if (state.phase === 'choosing') finish('cancelled');
-    if (state.phase === 'refreshing') finish('success');
+    cancel();
     disposed = true;
   });
 
@@ -177,7 +142,6 @@ export function createEventTimeChange(options: {
   return {
     allEventsUnavailableReason,
     pending: () => state.phase !== 'idle',
-    refreshing: () => state.phase === 'refreshing',
     choosing: () => state.phase === 'choosing',
     scope: () => state.scope,
     setScope: (scope: CalendarUpdateScope) => setState('scope', scope),

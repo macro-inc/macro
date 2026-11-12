@@ -505,17 +505,15 @@ switches the open details.
 
 Editable recurring events can also be dragged and resized in the grid. The
 `Save repeating event` dialog keeps the dropped position visible until Save or
-Cancel. After Save, the preview stays in place until an occurrence read started
-after save acceptance succeeds. Failed or superseded refreshes keep the preview;
-a later successful refresh releases it. A failed or incomplete refresh shows
-`Calendar unavailable` with the existing Retry action; partial cache results do
-not count as a refreshed viewport. While waiting, `Event saved. Refreshing
-calendar…` also offers Retry, which reruns calendar sync before reading the view.
-Saved previews belong to the visible range; a successful read of another range
-releases the preview rather than retaining the old range's frozen grid.
-`This event` changes only the selected occurrence and leaves the cached series
-master time untouched; Cancel, Escape, and failed saves restore the original
-position. `All events`, when available, applies
+Cancel. After Save, cached occurrences update immediately and the grid stays
+editable while the provider saves and refreshes. Successive edits to one event
+save in order; other events remain independent. Failed saves remove only their
+own optimistic change without undoing newer edits. A failed or incomplete
+refresh retains the projected events and offers Retry without blocking the
+rest of the grid. `This event` changes only the selected occurrence and leaves
+the cached series master time untouched; Cancel and Escape restore the original
+position before saving.
+`All events`, when available, applies
 the start and duration changes relative to the series master, not the selected
 occurrence's date. Daily and weekly rules keep their weekdays and week boundaries
 in step with date moves. Existing time exceptions, ambiguous daylight-saving
