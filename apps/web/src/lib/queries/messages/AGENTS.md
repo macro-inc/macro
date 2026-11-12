@@ -48,4 +48,9 @@ live events that keep them current.
   is pending, so an optimistic row is never stored.
 - A timeline already loaded is never replaced from the cache: a refetch reads
   the server.
+- A cache that has not answered within its head start (0.5 s before its first
+  answer, 2 s after) no longer delays the open: the server's page is asked for
+  and whichever answers first is shown. A cached page that wins cancels the
+  server read; one that arrives after a failed server read is shown too, so a
+  channel opens offline.
 - Threads, `messagesByIds` and message resolution still read REST.

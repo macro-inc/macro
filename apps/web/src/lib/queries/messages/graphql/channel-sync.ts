@@ -44,6 +44,7 @@ import {
   fetchChannelChanges,
   fetchChannelPage,
   fetchLatestChannelPage,
+  type LatestChannelPage,
   readCachedLatestPage,
   writeCachedLatestPage,
 } from './source';
@@ -107,27 +108,95 @@ export function resetChannelSync() {
   STATES.clear();
 }
 
+type CachedLatestPage = NonNullable<
+  Awaited<ReturnType<typeof readCachedLatestPage>>
+>;
+
+/** The cached page once the cache answers; a miss or an unreadable cache is `undefined`. */
 async function readCache(
   host: CacheHost,
   channelId: string
-): Promise<Awaited<ReturnType<typeof readCachedLatestPage>>> {
-  const read = (async () => {
+): Promise<CachedLatestPage | undefined> {
+  try {
     const page = await readCachedLatestPage(host, channelId);
     ANSWERED_HOSTS.add(host);
-    return page;
-  })();
-  try {
-    const cached = await withinCacheHeadStart(
-      read,
-      ANSWERED_HOSTS.has(host)
-        ? ANSWERED_CACHE_HEAD_START_MS
-        : UNANSWERED_CACHE_HEAD_START_MS
-    );
-    return cached === 'not-ready' ? undefined : cached;
+    return page && page.page.entries.length > 0 ? page : undefined;
   } catch {
     // An unreadable cache is a miss: the network read replaces what it holds.
     return undefined;
   }
+}
+
+type LatestPageRead =
+  | { source: 'cache'; read: CachedLatestPage }
+  | { source: 'network'; read: LatestChannelPage };
+
+/**
+ * The server's page, unless the cache answers with one first. A cache that is
+ * still starting loses to a fast network and wins on a slow or absent one.
+ */
+async function raceCacheWithNetwork(
+  cache: Promise<CachedLatestPage | undefined>,
+  channelId: string,
+  signal?: AbortSignal
+): Promise<LatestPageRead> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const network = fetchLatestChannelPage(channelId, controller.signal);
+  const fromNetwork = async (): Promise<LatestPageRead> => {
+    try {
+      return { source: 'network', read: await network };
+    } catch (error) {
+      // Offline or failing: the cached page is still better than nothing.
+      const cached = await cache;
+      if (!cached || signal?.aborted) throw error;
+      return { source: 'cache', read: cached };
+    }
+  };
+  const fromCache = async (): Promise<LatestPageRead> => {
+    const cached = await cache;
+    return cached ? { source: 'cache', read: cached } : fromNetwork();
+  };
+  try {
+    const winner = await Promise.race([fromCache(), fromNetwork()]);
+    // The cached page is on screen; its catch-up brings what the server has.
+    if (winner.source === 'cache') controller.abort();
+    return winner;
+  } finally {
+    signal?.removeEventListener('abort', abort);
+  }
+}
+
+async function readLatestPage(
+  host: CacheHost,
+  parent: MessageParent,
+  signal?: AbortSignal
+): Promise<LatestPageRead & { raced: boolean }> {
+  const loaded = queryClient.getQueryData<MessageTimelineData>(
+    getMessageTimelineQueryKey(parent, null)
+  );
+  // A timeline already on screen is being read again because it may be
+  // wrong, so only the server's page will do.
+  if (loaded || STATES.get(parent.id)?.skipCache) {
+    const read = await fetchLatestChannelPage(parent.id, signal);
+    return { source: 'network', read, raced: false };
+  }
+  const cache = readCache(host, parent.id);
+  const early = await withinCacheHeadStart(
+    cache,
+    ANSWERED_HOSTS.has(host)
+      ? ANSWERED_CACHE_HEAD_START_MS
+      : UNANSWERED_CACHE_HEAD_START_MS
+  );
+  signal?.throwIfAborted();
+  if (early === 'not-ready') {
+    const winner = await raceCacheWithNetwork(cache, parent.id, signal);
+    return { ...winner, raced: true };
+  }
+  if (early) return { source: 'cache', read: early, raced: false };
+  const read = await fetchLatestChannelPage(parent.id, signal);
+  return { source: 'network', read, raced: false };
 }
 
 async function loadLatestPage(
@@ -137,27 +206,16 @@ async function loadLatestPage(
 ): Promise<MessageTimelinePage> {
   return Telemetry.span('channel.timeline_load', async (span) => {
     span.setAttr('channel.id', parent.id);
-    const loaded = queryClient.getQueryData<MessageTimelineData>(
-      getMessageTimelineQueryKey(parent, null)
-    );
-    // A timeline already on screen is being read again because it may be
-    // wrong, so only the server's page will do.
-    if (!loaded && !STATES.get(parent.id)?.skipCache) {
-      const cached = await readCache(host, parent.id);
-      signal?.throwIfAborted();
-      if (cached && cached.page.entries.length > 0) {
-        span.setAttr('channel.timeline.source', 'cache');
-        span.setAttr('channel.timeline.entries', cached.page.entries.length);
-        track(parent.id, cached.seq, cached.userId);
-        fireAndForget(catchUpChannel(host, parent), SURFACE);
-        return normalizeMessageTimelinePageSenders(cached.page);
-      }
+    const { source, read, raced } = await readLatestPage(host, parent, signal);
+    signal?.throwIfAborted();
+    span.setAttr('channel.timeline.source', source);
+    span.setAttr('channel.timeline.cache_raced', raced);
+    span.setAttr('channel.timeline.entries', read.page.entries.length);
+    track(parent.id, read.seq, read.userId);
+    if (source === 'cache') {
+      fireAndForget(catchUpChannel(host, parent), SURFACE);
     }
-    const latest = await fetchLatestChannelPage(parent.id, signal);
-    span.setAttr('channel.timeline.source', 'network');
-    span.setAttr('channel.timeline.entries', latest.page.entries.length);
-    track(parent.id, latest.seq, latest.userId);
-    return normalizeMessageTimelinePageSenders(latest.page);
+    return normalizeMessageTimelinePageSenders(read.page);
   });
 }
 

@@ -248,6 +248,81 @@ describe('opening a channel', () => {
   });
 });
 
+describe('opening a channel while the cache is still starting', () => {
+  const CACHED = {
+    seq: 7,
+    userId: 'user',
+    page: page([messageEntry('m1', 1)]),
+  };
+  const SERVER = {
+    seq: 9,
+    userId: 'user',
+    page: page([messageEntry('m2', 2), messageEntry('m1', 1)]),
+  };
+
+  // Longer than the head start of a cache that has answered before, which
+  // the shared test host has by the time these run.
+  const SLOW = 2_500;
+
+  function after<T>(ms: number, value: T): Promise<T> {
+    return new Promise((resolve) => setTimeout(() => resolve(value), ms));
+  }
+
+  it('shows the server page when it arrives first', async () => {
+    vi.useFakeTimers();
+    mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
+    mocks.fetchLatestChannelPage.mockReturnValue(after(100, SERVER));
+    const opened = open();
+    await vi.advanceTimersByTimeAsync(2_200);
+    await opened;
+    expect(loadedIds()).toEqual([['m2', 'm1']]);
+    expect(channelSyncSeq(CHANNEL.id)).toBe(9);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.fetchChannelChanges).not.toHaveBeenCalled();
+  });
+
+  it('opens from the cached page when it answers before the server', async () => {
+    vi.useFakeTimers();
+    mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
+    mocks.fetchLatestChannelPage.mockImplementation(
+      (_id: string, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        })
+    );
+    mocks.fetchChannelChanges.mockResolvedValue(changes(7));
+    const opened = open();
+    await vi.advanceTimersByTimeAsync(3_000);
+    await opened;
+    expect(loadedIds()).toEqual([['m1']]);
+    expect(channelSyncSeq(CHANNEL.id)).toBe(7);
+    expect(mocks.fetchChannelChanges).toHaveBeenCalledWith(CHANNEL.id, 7);
+    // The server read it no longer waits for is cancelled.
+    const [, signal] = mocks.fetchLatestChannelPage.mock.calls[0];
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('opens from the cached page when the server cannot be reached', async () => {
+    vi.useFakeTimers();
+    mocks.readCachedLatestPage.mockReturnValue(after(SLOW, CACHED));
+    mocks.fetchLatestChannelPage.mockRejectedValue(new Error('offline'));
+    mocks.fetchChannelChanges.mockRejectedValue(new Error('offline'));
+    const opened = open();
+    await vi.advanceTimersByTimeAsync(3_000);
+    await opened;
+    expect(loadedIds()).toEqual([['m1']]);
+  });
+
+  it('fails when neither the cache nor the server has the page', async () => {
+    vi.useFakeTimers();
+    mocks.readCachedLatestPage.mockReturnValue(after(SLOW, undefined));
+    mocks.fetchLatestChannelPage.mockRejectedValue(new Error('offline'));
+    const opened = open().catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(await opened).toBeInstanceOf(Error);
+  });
+});
+
 describe('pages other than the latest', () => {
   it('reads cursor pages and around pages from the server', async () => {
     mocks.fetchChannelPage.mockResolvedValue({ seq: 1, page: page([]) });
