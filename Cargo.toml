@@ -5,6 +5,7 @@ exclude = ["vendor"]
 
 members = [
   "crates/passwords",
+  "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",

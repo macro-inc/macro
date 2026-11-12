@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT snapshot FROM stripe_objects WHERE id = $1 AND kind = 'subscription'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2b73b06fdf57bee2802b1519a5d38b1c1f15158367e6fbbcaf23b257602a58e3"
+}

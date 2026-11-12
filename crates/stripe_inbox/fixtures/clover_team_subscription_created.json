@@ -1,0 +1,64 @@
+{
+  "id": "evt_1TeamCreated",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1800000000,
+  "livemode": false,
+  "type": "customer.subscription.created",
+  "data": {
+    "object": {
+      "id": "sub_1Team",
+      "object": "subscription",
+      "customer": {"id": "cus_Owner", "object": "customer"},
+      "status": "trialing",
+      "created": 1800000000,
+      "currency": "usd",
+      "metadata": {
+        "team_id": "0195d6b1-7a8f-7c3e-9a51-2a2b3c4d5e6f",
+        "owner_id": "macro|owner@example.com"
+      },
+      "items": {
+        "object": "list",
+        "has_more": true,
+        "data": [
+          {
+            "id": "si_Seats",
+            "object": "subscription_item",
+            "quantity": 3,
+            "current_period_start": 1800000000,
+            "current_period_end": 1802678400,
+            "metadata": {},
+            "price": {
+              "id": "price_premium",
+              "object": "price",
+              "product": "prod_Premium",
+              "unit_amount": 4000,
+              "currency": "usd",
+              "type": "recurring",
+              "recurring": {"interval": "month", "interval_count": 1},
+              "metadata": {}
+            }
+          },
+          {
+            "id": "si_Computer",
+            "object": "subscription_item",
+            "quantity": 1,
+            "current_period_start": 1800000000,
+            "current_period_end": 1802678400,
+            "metadata": {"computer_id": "0195d6b1-7a8f-7c3e-9a51-000000000001"},
+            "price": {
+              "id": "price_computer",
+              "object": "price",
+              "product": "prod_Computer",
+              "unit_amount": 5000,
+              "currency": "usd",
+              "type": "recurring",
+              "recurring": {"interval": "month", "interval_count": 1},
+              "metadata": {}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

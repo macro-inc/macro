@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO stripe_audit_mismatch (id, run_id, kind, object_id, stripe_value, macro_value)\n            SELECT finding.id, $2, finding.kind::stripe_audit_mismatch_kind, finding.object_id,\n                NULLIF(finding.stripe_value, 'null'::jsonb), NULLIF(finding.macro_value, 'null'::jsonb)\n            FROM UNNEST($1::uuid[], $3::text[], $4::text[], $5::jsonb[], $6::jsonb[])\n                AS finding(id, kind, object_id, stripe_value, macro_value)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "JsonbArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48fc87c4ac801aabd3231bc908ba9059f30a3f9ad70a8a7ed338fdf778734456"
+}

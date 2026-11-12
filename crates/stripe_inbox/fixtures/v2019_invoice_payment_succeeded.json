@@ -1,0 +1,34 @@
+{
+  "id": "evt_1InvoicePaid2019",
+  "object": "event",
+  "api_version": "2019-12-03",
+  "created": 1800000020,
+  "livemode": false,
+  "type": "invoice.payment_succeeded",
+  "data": {
+    "object": {
+      "id": "in_1Renewal",
+      "object": "invoice",
+      "customer": "cus_Personal",
+      "subscription": "sub_1Personal",
+      "status": "paid",
+      "billing_reason": "subscription_cycle",
+      "metadata": {},
+      "lines": {
+        "object": "list",
+        "has_more": false,
+        "data": [
+          {
+            "id": "sli_1",
+            "object": "line_item",
+            "subscription_item": "si_Seat",
+            "proration": false,
+            "price": {"id": "price_max", "object": "price"},
+            "plan": {"id": "price_max", "object": "plan"},
+            "period": {"start": 1800000000, "end": 1802678400}
+          }
+        ]
+      }
+    }
+  }
+}

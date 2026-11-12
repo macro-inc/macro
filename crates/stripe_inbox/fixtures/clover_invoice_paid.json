@@ -1,0 +1,38 @@
+{
+  "id": "evt_1InvoicePaidClover",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1800000020,
+  "livemode": false,
+  "type": "invoice.paid",
+  "data": {
+    "object": {
+      "id": "in_1Renewal",
+      "object": "invoice",
+      "customer": "cus_Personal",
+      "status": "paid",
+      "billing_reason": "subscription_cycle",
+      "metadata": {},
+      "parent": {
+        "type": "subscription_details",
+        "subscription_details": {"subscription": "sub_1Personal", "metadata": {}}
+      },
+      "lines": {
+        "object": "list",
+        "has_more": false,
+        "data": [
+          {
+            "id": "il_1",
+            "object": "line_item",
+            "parent": {
+              "type": "subscription_item_details",
+              "subscription_item_details": {"subscription_item": "si_Seat", "proration": false}
+            },
+            "pricing": {"type": "price_details", "price_details": {"price": "price_max", "product": "prod_Max"}},
+            "period": {"start": 1800000000, "end": 1802678400}
+          }
+        ]
+      }
+    }
+  }
+}
