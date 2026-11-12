@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Runs a wasm package build, or restores its output when nothing the package is
-# built from has changed: first from WASM_PKG_CACHE_DIR on the node's cache
-# volume, then from Namespace's HTTP cache, which every node reads. Without
-# WASM_PKG_CACHE_DIR it only runs the build, so local `just build-*` behaves as
-# before. Only PR check jobs set it; deploys always build.
+# built from has changed: first from WASM_PKG_CACHE_DIR, then, when
+# WASM_PKG_HTTP_CACHE=1, from Namespace's HTTP cache, which every node reads.
+# Without WASM_PKG_CACHE_DIR it only runs the build, so local `just build-*`
+# behaves as before.
+#
+# PR check jobs keep WASM_PKG_CACHE_DIR on the node's cache volume and opt into
+# the HTTP cache. Deploy builds keep it in a GitHub Actions cache that only
+# branch runs write, and leave the HTTP cache off: PR jobs can write it.
 #
 # wasm-cache-key.ts computes the key from the package's workspace dependency
 # closure (.github/workspace-dep-closures.json), its slice of Cargo.lock, the
@@ -58,7 +62,8 @@ fi
 # The HTTP cache uses the remote sccache credentials the job configured; forks
 # have none. PR jobs write it, as they write the cache volume.
 remote=""
-if [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ] && [ -n "${SCCACHE_WEBDAV_TOKEN:-}" ]; then
+if [ "${WASM_PKG_HTTP_CACHE:-}" = 1 ] && [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ] \
+  && [ -n "${SCCACHE_WEBDAV_TOKEN:-}" ]; then
   remote="$SCCACHE_WEBDAV_ENDPOINT/wasm-pkg/$package-$key.tar.zst"
 fi
 

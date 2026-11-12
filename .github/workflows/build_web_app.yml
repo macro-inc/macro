@@ -19,6 +19,7 @@ jobs:
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     env:
       CI: 'true'
+      WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs-deploy
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -73,6 +74,45 @@ jobs:
         fi
     - name: Start sccache server
       run: sccache --start-server
+    - id: restore-wasm
+      name: Restore wasm packages
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae
+      with:
+        path: /home/runner/.cache/wasm-pkgs-deploy
+        key: deploy-wasm-pkgs-v1-${{ github.sha }}
+        restore-keys: deploy-wasm-pkgs-v1-
+      continue-on-error: true
+    - id: wasm
+      name: Build wasm packages
+      run: |
+        set -euo pipefail
+        # Build the wasm packages, reusing unchanged ones from WASM_PKG_CACHE_DIR, then
+        # keep only the packages this build used and name the set for the cache save.
+        # A package reused or stored here is newer than `started`
+        # (apps/web/scripts/cached-wasm-build.sh touches it), so older entries belong
+        # to builds of other inputs and would only grow the saved cache.
+        # Entries come back from the Actions cache with the mtimes of the run that saved
+        # them. Mark them current first, so cached-wasm-build.sh's pruning of week-old
+        # entries cannot remove one before this build has looked it up.
+        find "$WASM_PKG_CACHE_DIR" -mindepth 1 -maxdepth 1 -exec touch {} + 2>/dev/null || true
+        started="$(mktemp)"
+        just build-wasm
+        find "$WASM_PKG_CACHE_DIR" -mindepth 1 -maxdepth 1 \( -name '.tmp-*' -o ! -newer "$started" \) \
+          -exec rm -rf {} +
+        rm -f "$started"
+        # Entry names hold each package's input key, so the same set gets the same name
+        # and an unchanged set is not saved again.
+        packages="$(find "$WASM_PKG_CACHE_DIR" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)"
+        printf '%s\n' "$packages"
+        echo "key=deploy-wasm-pkgs-v1-$(printf '%s\n' "$packages" | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
+      working-directory: apps/web
+    - name: Save wasm packages
+      if: steps.wasm.outputs.key != steps.restore-wasm.outputs.cache-matched-key
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae
+      with:
+        path: /home/runner/.cache/wasm-pkgs-deploy
+        key: ${{ steps.wasm.outputs.key }}
+      continue-on-error: true
     - name: Build
       run: just build-${{ inputs.environment }}
       env:
