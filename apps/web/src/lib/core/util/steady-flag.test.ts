@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSteadyFlag } from './steady-flag';
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 function setup() {
   const [source, setSource] = createSignal(false);
@@ -59,5 +62,33 @@ it('shows for at least the hold time once it has appeared', async () => {
   expect(flag.steady()).toBe(true);
   await vi.advanceTimersByTimeAsync(100);
   expect(flag.steady()).toBe(false);
+  flag.dispose();
+});
+
+// The overdue timer fires before the task that carries the answer: the delay
+// elapsed on the clock while nothing could run.
+function blockThreadPastDelay() {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1_300);
+  return vi.advanceTimersByTimeAsync(300);
+}
+
+it('stays off when the thread was blocked past the delay and the answer was already waiting', async () => {
+  const flag = setup();
+  flag.setSource(true);
+  await blockThreadPastDelay();
+  expect(flag.steady()).toBe(false);
+  flag.setSource(false);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(flag.steady()).toBe(false);
+  flag.dispose();
+});
+
+it('still turns on after a blocked thread when the source stays on', async () => {
+  const flag = setup();
+  flag.setSource(true);
+  await blockThreadPastDelay();
+  expect(flag.steady()).toBe(false);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(flag.steady()).toBe(true);
   flag.dispose();
 });
