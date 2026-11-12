@@ -1290,3 +1290,158 @@ async fn staging_rejects_a_key_owned_by_another_item_even_without_the_precheck()
         .await
         .unwrap();
 }
+
+/// Approve the agent's pending request with Edit and return its request id.
+async fn approved_request(vault: &Vault, item: ItemId) -> Uuid {
+    let Requested::Pending(state) = vault
+        .service
+        .request_access(
+            call(),
+            item,
+            Ok(AccessRequestBody {
+                permission: Permission::Edit,
+            }),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected a pending request");
+    };
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+    let request = state.request_id.unwrap();
+    vault
+        .service
+        .resolve(
+            &admin,
+            TEAM,
+            item,
+            request,
+            Ok(ResolveRequest::Approve {
+                revision: state.revision,
+                permission: Permission::Edit,
+            }),
+        )
+        .await
+        .unwrap();
+    request
+}
+
+#[tokio::test]
+async fn an_update_cannot_reuse_a_request_id_as_its_operation() {
+    let vault = vault();
+    let item = insert(
+        &vault,
+        1,
+        HUMAN,
+        ItemKind::Login,
+        vec![team_edit()],
+        values("u", "p"),
+    );
+    let request = approved_request(&vault, item).await;
+    let reused = vault
+        .service
+        .update(
+            call(),
+            item,
+            serde_json::from_value(serde_json::json!({
+                "operationId": request,
+                "expectedVersion": 1,
+                "secretPatch": {"kind": "login", "password": "new"},
+            }))
+            .map_err(|_| AgentError::Invalid),
+        )
+        .await;
+    assert!(matches!(reused, Err(AgentError::Conflict)));
+    assert_eq!(
+        vault
+            .provider
+            .stored
+            .lock()
+            .unwrap()
+            .get(&item.0)
+            .unwrap()
+            .0,
+        1
+    );
+    assert!(vault.items.staged.lock().unwrap().is_empty());
+
+    // An ordinary update of the same item still succeeds and retries cleanly.
+    let operation = Uuid::now_v7();
+    let patch = || {
+        serde_json::from_value::<AgentPatchItem>(serde_json::json!({
+            "operationId": operation,
+            "expectedVersion": 1,
+            "secretPatch": {"kind": "login", "password": "new"},
+        }))
+        .map_err(|_| AgentError::Invalid)
+    };
+    assert_eq!(
+        vault
+            .service
+            .update(call(), item, patch())
+            .await
+            .unwrap()
+            .version,
+        2
+    );
+    assert_eq!(
+        vault
+            .service
+            .update(call(), item, patch())
+            .await
+            .unwrap()
+            .version,
+        2
+    );
+}
+
+#[tokio::test]
+async fn a_verification_seed_cannot_reuse_a_request_id_as_its_operation() {
+    let vault = vault();
+    let item = creator_login(&vault, 1);
+    // Revoke the creator grant so the agent must request, then approve Edit.
+    let admin = Actor {
+        user_id: user(ADMIN),
+    };
+    vault
+        .service
+        .revoke(
+            &admin,
+            TEAM,
+            item,
+            Ok(user(AGENT)),
+            Ok(RevokeBody {
+                expected_permission_revision: 0,
+                scope: RevokeScope::GrantAndApproval,
+            }),
+        )
+        .await
+        .unwrap();
+    let request = approved_request(&vault, item).await;
+    let before = vault.provider.calls.load(Ordering::SeqCst);
+    let enrollments = vault.items.enrollments.lock().unwrap().len();
+    let reused = vault
+        .service
+        .set_totp(call(), item, set_totp_body(request))
+        .await;
+    assert!(matches!(reused, Err(AgentError::Conflict)));
+    assert_eq!(vault.provider.calls.load(Ordering::SeqCst), before);
+    assert_eq!(vault.items.enrollments.lock().unwrap().len(), enrollments);
+
+    // A fresh operation still enrolls, and its retry is an idempotent replay.
+    let operation = Uuid::now_v7();
+    vault
+        .service
+        .set_totp(call(), item, set_totp_body(operation))
+        .await
+        .unwrap();
+    let seeded = vault.provider.calls.load(Ordering::SeqCst);
+    vault
+        .service
+        .set_totp(call(), item, set_totp_body(operation))
+        .await
+        .unwrap();
+    assert_eq!(vault.provider.calls.load(Ordering::SeqCst), seeded);
+}

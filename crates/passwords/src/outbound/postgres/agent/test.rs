@@ -381,3 +381,101 @@ async fn a_deferred_event_yields_to_due_events(pool: PgPool) {
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].id, events[1].id);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn staging_refuses_an_operation_id_already_naming_an_audit_entry(pool: PgPool) {
+    let (repository, owner, record) = folder_fixture(pool.clone()).await;
+    let team = record.metadata.team_id;
+    let agent = account(&pool, "macro|agent@example.test", true).await;
+    let pending = request(&record, &agent, LIMITS);
+    let reused = pending.request_id;
+    let RequestOutcome::Created(created) = repository.request(pending).await.expect("request")
+    else {
+        panic!("expected a new request");
+    };
+    let mut granted = record.clone();
+    granted.grants.push(Grant {
+        kind: GranteeKind::Agent,
+        id: agent.to_string(),
+        permission: Permission::Edit,
+    });
+    let stored = created.request.expect("pending");
+    repository
+        .transition(AccessTransition {
+            record: granted,
+            agent: agent.clone(),
+            approved: true,
+            expected: Expected::Request {
+                id: stored.id,
+                revision: stored.revision,
+            },
+            request_status: Some(StoredRequestStatus::Approved),
+            permission_changed: true,
+            reviewer: owner.user_id.clone(),
+            action: AgentAction::AgentAccessApprove,
+        })
+        .await
+        .expect("approve");
+    let current = repository
+        .get(team, record.metadata.id)
+        .await
+        .expect("item");
+    let mut next = current.clone();
+    next.metadata.version = 2;
+    let update = IntentAgent {
+        agent: agent.clone(),
+        wake: crate::domain::agent::WakeId(Uuid::now_v7()),
+        action: AgentAction::AgentUpdate,
+    };
+
+    // The request id is taken by the request's audit entry: conflict, no intent.
+    let staged = AgentRepository::stage(&repository, reused, &next, &update).await;
+    assert!(matches!(staged, Err(Error::Conflict)));
+    let intents = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_write_intents WHERE operation_id=$1",
+        reused
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("intents");
+    assert_eq!(intents, 0);
+
+    // Enrollment staging refuses the same id and inserts nothing.
+    let totp = IntentAgent {
+        action: AgentAction::AgentTotpSetup,
+        ..update.clone()
+    };
+    let enrolled = AgentRepository::stage_totp(
+        &repository,
+        team,
+        record.metadata.id,
+        TotpKeyId(reused),
+        &totp,
+    )
+    .await;
+    assert!(matches!(enrolled, Err(Error::Conflict)));
+    let enrollments = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$2",
+        team.0,
+        reused
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("enrollments");
+    assert_eq!(enrollments, 0);
+
+    // The original request audit is preserved, and a fresh id still stages.
+    let audit = sqlx::query_scalar!(
+        "SELECT action FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3",
+        team.0,
+        record.metadata.id.0,
+        reused
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("request audit");
+    assert_eq!(audit, "agent_access_request");
+    AgentRepository::stage(&repository, Uuid::now_v7(), &next, &update)
+        .await
+        .expect("fresh operation stages");
+}

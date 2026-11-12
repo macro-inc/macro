@@ -204,14 +204,18 @@ impl AgentRepository for PgRepository {
         }
         // An update is published only while the agent still holds a usable Edit
         // grant: its Agent Edit grant and creator attribution or standing approval.
+        // Its operation id must not already name an enrollment or any other audit
+        // entry of the item, so its own audit can never be silently dropped; only
+        // this agent's replay of the same update passes.
         if publisher.action == AgentAction::AgentUpdate {
             let edit_grant =
                 serde_json::json!([{"kind":"agent","id":agent.as_ref(),"permission":"edit"}]);
-            let authorized = sqlx::query_scalar!(
+            let fence = sqlx::query!(
                 r#"SELECT EXISTS(SELECT 1 FROM password_item_entities item WHERE item.team_id=$1 AND item.id=$2 AND NOT item.deleting AND item.deleted_at IS NULL AND item.grants @> $3
                     AND (item.user_id=$4 OR EXISTS(SELECT 1 FROM password_agent_access access WHERE access.team_id=item.team_id AND access.item_id=item.id AND access.agent_user_id=$4 AND access.approved_by IS NOT NULL))
-                    FOR KEY SHARE OF item)
-                    AND NOT EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$5) AS "authorized!""#,
+                    FOR KEY SHARE OF item) AS "authorized!",
+                    NOT EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$5)
+                    AND NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$5 AND NOT (action='agent_update' AND user_id=$4)) AS "identity_free!""#,
                 record.metadata.team_id.0,
                 record.metadata.id.0,
                 edit_grant,
@@ -221,9 +225,15 @@ impl AgentRepository for PgRepository {
             .fetch_one(&mut *transaction)
             .await
             .map_err(database_error)?;
-            if !authorized {
+            // Authority first, so an unauthorized caller learns nothing about
+            // which operation ids are taken.
+            if !fence.authorized {
                 tracing::Span::current().record("outcome", "authority_revoked");
                 return Err(Error::Forbidden);
+            }
+            if !fence.identity_free {
+                tracing::Span::current().record("outcome", "operation_conflict");
+                return Err(Error::Conflict);
             }
         }
         let action = action_text(publisher.action)?;
@@ -686,7 +696,8 @@ impl AgentRepository for PgRepository {
         // A new generation, or this same agent's own pending setup of this item
         // (whose original wake is kept). Any other existing key is a conflict, so
         // a stale caller can never proceed to overwrite another enrollment's seed.
-        let staged = sqlx::query!("INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after,agent_user_id,wake_id) VALUES($1,$2,$3,'pending',now()+interval '180 seconds',$4,$5) ON CONFLICT(team_id,key_id) DO UPDATE SET key_id=password_totp_enrollments.key_id WHERE password_totp_enrollments.item_id=excluded.item_id AND password_totp_enrollments.state='pending' AND password_totp_enrollments.agent_user_id=excluded.agent_user_id",team.0,item.0,key.0,publisher.agent.as_ref(),publisher.wake.0).execute(&self.pool).await.map_err(database_error)?;
+        // A key already naming another audit entry of the item is refused too.
+        let staged = sqlx::query!(r#"INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after,agent_user_id,wake_id) SELECT $1,$2,$3,'pending',now()+interval '180 seconds',$4,$5 WHERE NOT EXISTS(SELECT 1 FROM password_activity WHERE team_id=$1 AND item_id=$2 AND id=$3 AND NOT (action='agent_totp_setup' AND user_id=$4)) ON CONFLICT(team_id,key_id) DO UPDATE SET key_id=password_totp_enrollments.key_id WHERE password_totp_enrollments.item_id=excluded.item_id AND password_totp_enrollments.state='pending' AND password_totp_enrollments.agent_user_id=excluded.agent_user_id"#,team.0,item.0,key.0,publisher.agent.as_ref(),publisher.wake.0).execute(&self.pool).await.map_err(database_error)?;
         if staged.rows_affected() != 1 {
             return Err(Error::Conflict);
         }

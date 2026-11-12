@@ -79,6 +79,19 @@ pub struct FakeAgents {
     /// Events whose delivery failed and was postponed.
     pub deferred: Mutex<Vec<Uuid>>,
 }
+impl FakeAgents {
+    /// Whether `id` already names an audit entry of the item other than this
+    /// publisher's own entry for the same action.
+    fn audit_identity_taken(&self, item: ItemId, id: Uuid, publisher: &IntentAgent) -> bool {
+        self.audits.lock().unwrap().iter().any(|audit| {
+            audit.item == item
+                && audit.event_id == id
+                && !(audit.action == publisher.action
+                    && audit.actor.as_ref() == publisher.agent.as_ref())
+        })
+    }
+}
+
 #[async_trait]
 impl AgentRepository for FakeAgents {
     async fn stage(
@@ -96,6 +109,11 @@ impl AgentRepository for FakeAgents {
             .contains(publisher.agent.as_ref())
         {
             return Err(Error::NotFound);
+        }
+        if publisher.action == crate::domain::agent::AgentAction::AgentUpdate
+            && self.audit_identity_taken(record.metadata.id, operation, publisher)
+        {
+            return Err(Error::Conflict);
         }
         let mut staged = self.items.staged.lock().unwrap();
         let mut publishers = self.publishers.lock().unwrap();
@@ -119,6 +137,9 @@ impl AgentRepository for FakeAgents {
         key: TotpKeyId,
         publisher: &IntentAgent,
     ) -> Result<(), Error> {
+        if self.audit_identity_taken(item, key.0, publisher) {
+            return Err(Error::Conflict);
+        }
         let existing = self
             .items
             .enrollments
