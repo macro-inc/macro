@@ -146,6 +146,7 @@ agent's service.
 | `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land; the image restarts the service. |
 | `MUPPET_MCP_SERVERS_JSON` | no | Stdio MCP servers for every wake (`{name: {command, args?, env?}}`). |
 | `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
+| `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
 
 `agent.env` holds `MACRO_API_KEY`, `MACRO_GATEWAY`, the `OVERRIDE_*` service
