@@ -439,8 +439,9 @@ and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })
 omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
-`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
-question, or tool approval, plus sessions running with no activity for 20
+`ListAgentUpdates` (in code mode, `macro.agentSessions.updates()`, presented
+as an `agentUpdates` view): your non-archived coding sessions waiting on a
+permission, question, or tool approval, plus sessions running with no activity for 20
 minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;
 agents cannot answer for you. To send a coding agent instructions the chat uses
@@ -467,6 +468,8 @@ the shimmer.
   **Agents** in the sidebar opens the same roster as the composer’s
   **Create agent** action. **Connections** manages MCP integrations (including
   app authentication and disconnection), also available under Settings → Integrations.
+  Every agent composer's **+** button, including a session opened in a split,
+  lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
@@ -1909,11 +1912,15 @@ in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
-("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+("Searching your workspace…", "Reading your emails…") with a cheap model and
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Using N tools** label of the run the turn is in: one with a call in flight,
-or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls; a settled run reads **Used N tools**.
+or the newest run while the agent thinks between calls. The line carries no
+count (the server drops a trailing "(N)" the model adds), and it is the turn's
+only working indicator: no separate working row shows under it. Without a line,
+the indicator is the group's own **Using N tools** while a call runs, or a single
+**Working** row between calls. The caret still opens the raw calls; a
+settled run reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is

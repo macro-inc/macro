@@ -284,6 +284,8 @@ Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
 follows stored option order; Priority puts urgent tasks first. Missing values
 stay last. Property-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
+While searching, the desktop header hides Sort (leaving Group in its island) and
+the mobile drawer omits its Sort section.
 Boards group the loaded search results as before, without complete counts or grouped-search requests.
 
 **Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
@@ -546,7 +548,8 @@ start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
 A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
-**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+**Status**, **Priority**, or the active due-date sort label; during a text search it
+shows **Move here**. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
