@@ -140,3 +140,14 @@ describe('ToolGroup', () => {
     expect(view.queryByTestId('call')).toBeNull();
   });
 });
+
+it('shows the live line without a count beside it', () => {
+  const view = render(() => (
+    <ToolGroup count={6} active summary="Searching your workspace…">
+      <div />
+    </ToolGroup>
+  ));
+  const title = view.getByRole('button').textContent ?? '';
+  expect(title).toContain('Searching your workspace…');
+  expect(title).not.toMatch(/\d/);
+});

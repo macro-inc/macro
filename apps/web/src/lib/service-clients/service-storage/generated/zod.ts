@@ -7550,6 +7550,18 @@ export const createCrmCompanyResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -7563,7 +7575,13 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -7585,7 +7603,7 @@ export const createCrmCompanyResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -7821,6 +7839,18 @@ export const getCompanyResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -7834,7 +7864,13 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -7856,7 +7892,7 @@ export const getCompanyResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -7935,6 +7971,18 @@ export const listCompanyContactsParams = zod.object({
 
 export const listCompanyContactsResponseItem = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -7948,7 +7996,13 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -7970,7 +8024,7 @@ export const listCompanyContactsResponseItem = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -8011,6 +8065,18 @@ export const createCrmContactBody = zod
 
 export const createCrmContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -8024,7 +8090,13 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -8046,7 +8118,7 @@ export const createCrmContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -8145,6 +8217,18 @@ export const searchContactsResponse = zod
       .array(
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -8158,7 +8242,13 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -8180,7 +8270,7 @@ export const searchContactsResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -8214,6 +8304,18 @@ export const createCrmTeamContactBody = zod
 
 export const createCrmTeamContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -8227,7 +8329,13 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -8249,7 +8357,7 @@ export const createCrmTeamContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -8279,6 +8387,18 @@ export const getContactByEmailResponse = zod
         zod.null(),
         zod
           .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
             companyId: zod
               .uuid()
               .nullish()
@@ -8292,7 +8412,13 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe(
-                "The contact's email address; absent for contacts added by name\nalone."
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
               ),
             firstInteraction: zod.iso
               .datetime({})
@@ -8314,7 +8440,7 @@ export const getContactByEmailResponse = zod
               .boolean()
               .optional()
               .describe(
-                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
               ),
             updatedAt: zod.iso
               .datetime({})
@@ -8341,6 +8467,18 @@ export const getContactParams = zod.object({
 
 export const getContactResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -8354,7 +8492,13 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -8376,7 +8520,7 @@ export const getContactResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -8395,16 +8539,24 @@ export const setCrmContactCompanyParams = zod.object({
 
 export const setCrmContactCompanyBody = zod
   .object({
-    companyId: zod
-      .uuid()
-      .describe(
-        'Destination company in the same team. Unlinking is not supported.'
-      ),
+    companyId: zod.uuid().describe('Destination company in the same team.'),
   })
   .describe('Link or switch a contact with a known personal-provider email.');
 
 export const setCrmContactCompanyResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -8418,7 +8570,13 @@ export const setCrmContactCompanyResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -8440,7 +8598,80 @@ export const setCrmContactCompanyResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Remove a contact's company link. A contact with an address on one of its
+company's domains cannot be unlinked. Idempotent.
+ */
+export const unlinkCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const unlinkCrmContactCompanyResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -8461,12 +8692,26 @@ export const setCrmContactEmailBody = zod
   .object({
     email: zod
       .string()
-      .describe('The address to add. An identical retry is accepted.'),
+      .describe(
+        'The address to make primary. It is added when the contact does not\nhold it yet. An identical retry is accepted.'
+      ),
   })
-  .describe('Add a missing contact email. Existing addresses are read-only.');
+  .describe("Choose a contact's primary email.");
 
 export const setCrmContactEmailResponse = zod
   .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
     companyId: zod
       .uuid()
       .nullish()
@@ -8480,7 +8725,13 @@ export const setCrmContactEmailResponse = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address; absent for contacts added by name\nalone."
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
       ),
     firstInteraction: zod.iso
       .datetime({})
@@ -8502,7 +8753,179 @@ export const setCrmContactEmailResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Add an address to a contact. It must not belong to another contact in the
+team, and becomes the primary only when the contact has none. Idempotent.
+ */
+export const addCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const addCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
+
+export const addCrmContactEmailResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Remove an address from a contact. Nothing else is deleted: the contact
+stops showing that address's email history. Removing the primary promotes
+the oldest address left. The last address on a domain of the contact's
+company cannot be removed while the contact is linked to it. Idempotent.
+ */
+export const removeCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const removeCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
+
+export const removeCrmContactEmailResponse = zod
+  .object({
+    companyDomain: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+      ),
+    companyDomainEmails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+      ),
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's primary email address; absent for contacts added by\nname alone."
+      ),
+    emails: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
       ),
     updatedAt: zod.iso
       .datetime({})
@@ -79554,6 +79977,75 @@ export const uploadExtractFolderHandlerResponse = zod.object({
       presignedUrl: zod.string(),
       requestId: zod.string(),
     })
+    .describe('Data to be returned'),
+  error: zod.boolean().describe('Indicates if an error occurred'),
+});
+
+/**
+ * @summary Where the caller's folder upload stands, so the uploader can follow it to
+the end even when a websocket update is missed.
+ */
+export const getUploadExtractStatusHandlerParams = zod.object({
+  request_id: zod.string().describe('The upload request id'),
+});
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin = 0;
+
+export const getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin = 0;
+
+export const getUploadExtractStatusHandlerResponse = zod.object({
+  data: zod
+    .object({
+      progress: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              filesFailed: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesFailedMin
+                )
+                .describe('Files that could not be stored.'),
+              filesStored: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesStoredMin
+                )
+                .describe('Files stored successfully.'),
+              filesTotal: zod
+                .number()
+                .min(
+                  getUploadExtractStatusHandlerResponseDataProgressFilesTotalMin
+                )
+                .describe('Files the folder holds.'),
+            })
+            .describe(
+              'Files of an extracted folder moved into storage so far.'
+            ),
+        ])
+        .optional(),
+      projectId: zod
+        .string()
+        .nullish()
+        .describe('The uploaded folder, once it exists.'),
+      status: zod
+        .enum([
+          'pending',
+          'uploaded',
+          'processing',
+          'partially_completed',
+          'completed',
+          'failed',
+          'unknown',
+        ])
+        .describe('The upload status of the folder'),
+    })
+    .describe(
+      'Where a folder upload stands, for the uploader to follow it to the end.'
+    )
     .describe('Data to be returned'),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
