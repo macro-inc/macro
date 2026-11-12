@@ -70,7 +70,8 @@ export type ChatDetail = {
     attachmentBytes: number;
     attachmentTypes: string[];
     editSeconds: number;
-    mutations: ('reaction' | 'edit' | 'delete')[];
+    /** `remove_reaction`: a person may hold several reactions, removed one by one. */
+    mutations: ('reaction' | 'remove_reaction' | 'edit' | 'delete')[];
     /** Messages start threads and sends can reply in one. */
     threads: boolean;
   };
@@ -129,6 +130,8 @@ export type ChatSend =
       thread?: string;
     }
   | { kind: 'reaction'; messageId: string; emoji: string }
+  /** Removes one of the viewer's reactions where they may hold several. */
+  | { kind: 'unreact'; messageId: string; emoji: string }
   | { kind: 'edit'; messageId: string; text: string }
   | { kind: 'delete'; messageId: string };
 

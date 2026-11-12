@@ -909,6 +909,31 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
         )
         .await
         .unwrap();
+
+    // WhatsApp keeps one reaction per person, so it offers no removal of one
+    // emoji; an empty reaction removes it instead.
+    let remove_one = linked
+        .chats
+        .send_reply(
+            &receipt::<MessageWrite>(BOB, binding.id),
+            &SendReply {
+                idempotency_key: Uuid::now_v7(),
+                message: ReplyContent::Mutation {
+                    message_id: question,
+                    operation: Mutation::RemoveReaction,
+                    text: Some("👍".into()),
+                },
+                reply_to: None,
+                thread: None,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        remove_one.current_context(),
+        ExternalChatError::Invalid(_)
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -10085,7 +10085,7 @@ export type ExternalChatMessages = {
 /**
  * Deliberate operations on an existing message.
  */
-export type ExternalChatMutation = 'reaction' | 'edit' | 'delete';
+export type ExternalChatMutation = 'reaction' | 'remove_reaction' | 'edit' | 'delete';
 
 /**
  * Someone in an external chat; Macro access is a separate grant.

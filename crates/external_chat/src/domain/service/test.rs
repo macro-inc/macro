@@ -89,6 +89,11 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
             operation: Mutation::Delete,
             text: None,
         },
+        ReplyContent::Mutation {
+            message_id: message,
+            operation: Mutation::RemoveReaction,
+            text: Some("🎉".into()),
+        },
     ];
     for content in valid {
         validate_request(
@@ -119,6 +124,17 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
         ReplyContent::Mutation {
             message_id: message,
             operation: Mutation::Edit,
+            text: None,
+        },
+        // Removing a reaction names the emoji.
+        ReplyContent::Mutation {
+            message_id: message,
+            operation: Mutation::RemoveReaction,
+            text: Some(String::new()),
+        },
+        ReplyContent::Mutation {
+            message_id: message,
+            operation: Mutation::RemoveReaction,
             text: None,
         },
     ];

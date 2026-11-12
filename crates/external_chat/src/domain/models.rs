@@ -182,8 +182,13 @@ pub const BACKFILL_MAX_AGE_DAYS: i64 = 90;
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schema", schema(as = ExternalChatMutation))]
 pub enum Mutation {
-    /// Add, replace or remove the caller's reaction.
+    /// React with an emoji. Where a person holds one reaction (no
+    /// [`Mutation::RemoveReaction`] in [`Capabilities::mutations`]) it
+    /// replaces theirs, and an empty emoji removes it; elsewhere it adds one.
     Reaction,
+    /// Remove one of the caller's reactions, named by its emoji. A provider
+    /// that offers it lets a person hold several reactions on a message.
+    RemoveReaction,
     /// Edit the caller's own recent message.
     Edit,
     /// Delete the caller's own recent message for everyone.

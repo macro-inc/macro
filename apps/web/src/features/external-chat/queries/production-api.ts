@@ -100,6 +100,12 @@ function content(request: ChatSend): ExternalChatReplyContent {
       operation: 'reaction' as const,
       text: emoji,
     }))
+    .with({ kind: 'unreact' }, ({ messageId, emoji }) => ({
+      type: 'mutation' as const,
+      messageId,
+      operation: 'remove_reaction' as const,
+      text: emoji,
+    }))
     .with({ kind: 'edit' }, ({ messageId, text }) => ({
       type: 'mutation' as const,
       messageId,

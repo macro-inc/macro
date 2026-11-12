@@ -314,6 +314,33 @@ describe('sending to an external chat', () => {
     );
     state.dispose();
   });
+
+  it('adds and removes one emoji at a time where a person may hold several', async () => {
+    const state = mountConversation(
+      createFakeChat({
+        chat: {
+          ...chat,
+          limits: {
+            ...chat.limits,
+            mutations: ['reaction', 'remove_reaction', 'edit', 'delete'],
+          },
+        },
+      })
+    );
+    // 👍 is the viewer's: clicking it removes only that one.
+    await state.conversation.react(messages[0], '👍');
+    expect(state.fake.capabilities.send).toHaveBeenLastCalledWith(
+      { kind: 'unreact', messageId: 'message-1', emoji: '👍' },
+      expect.any(String)
+    );
+    // A new emoji is added beside it, not instead of it.
+    await state.conversation.react(messages[0], '🎉');
+    expect(state.fake.capabilities.send).toHaveBeenLastCalledWith(
+      { kind: 'reaction', messageId: 'message-1', emoji: '🎉' },
+      expect.any(String)
+    );
+    state.dispose();
+  });
 });
 
 describe('reading an external chat', () => {

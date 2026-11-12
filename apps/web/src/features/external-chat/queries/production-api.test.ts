@@ -359,6 +359,21 @@ it('preserves the deliberate send key and maps quotes and reactions without a ch
     },
     replyTo: null,
   });
+  await externalChatApi.send(
+    'chat-id',
+    { kind: 'unreact', messageId: 'message-id', emoji: '🎉' },
+    'unreact-key'
+  );
+  expect(client.send).toHaveBeenLastCalledWith('chat-id', {
+    idempotencyKey: 'unreact-key',
+    message: {
+      type: 'mutation',
+      messageId: 'message-id',
+      operation: 'remove_reaction',
+      text: '🎉',
+    },
+    replyTo: null,
+  });
 });
 
 it('tells refusals from unknown outcomes and keeps the reason DSS gave', async () => {

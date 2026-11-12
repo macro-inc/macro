@@ -454,8 +454,24 @@ export function createConversation(
     reply: (message: ChatMessage) => setTarget({ kind: 'reply', message }),
     edit: (message: ChatMessage) => setTarget({ kind: 'edit', message }),
     cancelTarget: () => setTarget(undefined),
-    /** Toggles the viewer's one reaction on a message. */
+    /**
+     * Toggles one of the viewer's reactions. Where a person may hold several
+     * (`remove_reaction`), an emoji of theirs is removed alone and another is
+     * added; elsewhere their one reaction is replaced or cleared.
+     */
     react: (message: ChatMessage, emoji: string) => {
+      const several =
+        source.chat.data?.limits.mutations.includes('remove_reaction') ?? false;
+      if (several) {
+        const held = message.reactions.some(
+          (reaction) => reaction.mine && reaction.emoji === emoji
+        );
+        return change({
+          kind: held ? 'unreact' : 'reaction',
+          messageId: message.id,
+          emoji,
+        });
+      }
       const mine = message.reactions.find((reaction) => reaction.mine);
       return change({
         kind: 'reaction',
