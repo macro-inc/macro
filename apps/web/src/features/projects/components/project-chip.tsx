@@ -1,5 +1,7 @@
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Show } from 'solid-js';
+import { AppearanceGlyph } from '../../entity-appearance/components/appearance-glyph';
+import { appearanceColor } from '../../entity-appearance/core/appearance';
 import type { TaskProjectReference } from '../core/project';
 
 export function ProjectChip(props: {
@@ -30,7 +32,17 @@ export function ProjectChip(props: {
             props.onOpen(project().id, event);
           }}
         >
-          <ProjectIcon class="size-3 shrink-0" />
+          <span
+            class="size-3 shrink-0"
+            style={{
+              color: appearanceColor(project().appearance?.color),
+              'container-type': 'inline-size',
+            }}
+          >
+            <AppearanceGlyph appearance={project().appearance}>
+              <ProjectIcon class="size-full" />
+            </AppearanceGlyph>
+          </span>
           <span class="truncate">{project().name}</span>
         </button>
       )}

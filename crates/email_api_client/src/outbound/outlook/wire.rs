@@ -18,6 +18,7 @@ pub(super) struct Folder {
     pub display_name: String,
     #[serde(default)]
     pub child_folder_count: u32,
+    pub total_item_count: Option<u32>,
     #[serde(default)]
     pub single_value_extended_properties: Vec<serde_json::Value>,
 }

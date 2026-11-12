@@ -777,6 +777,11 @@ where
         self.3.clone()
     }
 
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
+    }
+
     /// User-visible display name.
     async fn display_name(&self) -> Option<String> {
         Some(self.0.name.clone())
@@ -1048,6 +1053,11 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
     /// Opaque cache projection metadata, unavailable for this entity variant.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
         None
+    }
+
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
     }
 
     /// User-visible project name.
@@ -2844,12 +2854,17 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
 
     /// Hydrate an updated entity through the existing viewer-scoped Soup service.
     /// Missing items are logged and omitted; service failures remain errors.
-    /// Neither outcome is interpreted as a deletion.
+    /// Neither outcome is interpreted as a deletion. Entity kinds Soup does not
+    /// represent, such as databases, have no record to patch and are omitted.
     pub async fn hydrate_updated(
         user_id: MacroUserIdStr<'static>,
         entity: Entity<'static>,
         loader: Option<&SoupItemDataLoader>,
     ) -> async_graphql::Result<Option<Self>> {
+        if GraphqlSoupEntityType::try_new(entity.entity_type).is_none() {
+            return Ok(None);
+        }
+
         let loader = loader.ok_or_else(|| {
             async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
         })?;

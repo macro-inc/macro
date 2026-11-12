@@ -8,7 +8,7 @@ use entity_registry_db_utils::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model_entity::EntityType;
+use model_entity::{EntityAppearance, EntityType};
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -84,6 +84,7 @@ struct ActionRow {
     event_activated_at: Option<DateTime<Utc>>,
     run_visibility: String,
     template_id: Option<Uuid>,
+    appearance: Option<sqlx::types::Json<EntityAppearance>>,
     suggestion_id: Option<Uuid>,
     description: String,
     parent_id: Option<Uuid>,
@@ -146,6 +147,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
             configuration_revision: ConfigurationRevision::try_from(row.configuration_revision)?,
             event_activated_at: row.event_activated_at,
             template_id: row.template_id,
+            appearance: row.appearance.map(|value| value.0).unwrap_or_default(),
             suggestion_id: row.suggestion_id,
             description: row.description,
             sub_routine,
@@ -219,14 +221,15 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             INSERT INTO scheduled_action
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
-                 run_visibility, template_id, suggestion_id, description,
+                 run_visibility, template_id, appearance, suggestion_id, description,
                  parent_id, created_by_run_id, child_key, paused_by_parent)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                    $19, $20, $21, $22)
+                    $19, $20, $21, $22, $23)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
-                   description, parent_id, created_by_run_id, child_key, paused_by_parent
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                      appearance AS "appearance: _", suggestion_id, description,
+                      parent_id, created_by_run_id, child_key, paused_by_parent
             "#,
             id,
             owner,
@@ -244,6 +247,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             trigger.trigger_config,
             <&str>::from(action.run_visibility),
             action.template_id,
+            sqlx::types::Json(&action.appearance) as _,
             action.suggestion_id,
             action.description,
             link.map(|link| link.parent_id),
@@ -297,7 +301,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE owner = $1
@@ -315,7 +319,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,
-                   configuration_revision, event_activated_at, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE id = ANY($1)
@@ -333,7 +337,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE id = $1
@@ -353,7 +357,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL
@@ -412,7 +416,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
               )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent
             "#,
             action.name,
@@ -442,6 +446,37 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         ScheduledAction::try_from(row)
     }
 
+    async fn set_appearance(
+        &self,
+        change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<EntityAppearance>> {
+        let mut tx = self.pool.begin().await?;
+        let previous = sqlx::query_scalar!(
+            "SELECT appearance FROM scheduled_action WHERE id = $1 FOR UPDATE",
+            change.id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ActionPolicyError::NotFound)?;
+        let previous: EntityAppearance = previous
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default();
+        let Some(activity) = change.activity(&previous) else {
+            return Ok(None);
+        };
+        sqlx::query!(
+            "UPDATE scheduled_action SET appearance = $2 WHERE id = $1",
+            change.id,
+            serde_json::to_value(&change.appearance)?,
+        )
+        .execute(&mut *tx)
+        .await?;
+        activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
+        tx.commit().await?;
+        Ok(Some(previous))
+    }
+
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         // A routine's sub-routines go with it. The foreign key would cascade
@@ -460,6 +495,13 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             .await
             .context("failed to delete scheduled action grants")?;
 
+        if !deleted.is_empty() {
+            let entities: Vec<_> = deleted
+                .iter()
+                .map(|deleted| (EntityType::ScheduledAction, deleted.to_string()))
+                .collect();
+            activity::outbound::pg_activity_repo::purge_entities(&mut *tx, &entities).await?;
+        }
         for deleted in deleted {
             if deleted != *id {
                 entity_access_db_utils::delete_entity_access_rows(
