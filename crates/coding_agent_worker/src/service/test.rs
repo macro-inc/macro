@@ -107,6 +107,62 @@ fn reconfigures_without_dropping_credentials() {
 }
 
 #[test]
+fn reconfiguring_drops_settings_older_releases_wrote() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    let workspace = directory.path().join("workspace");
+    std::fs::write(
+        &path,
+        format!(
+            r#"[identity]
+name = "laptop"
+allow_permission_bypass = true
+
+[server]
+port = 8080
+
+[credentials]
+harness_id = "{harness_id}"
+token = "mhns_test_secret"
+scope = "personal"
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "{workspace}"
+"#,
+            harness_id = HarnessId::TEST_A,
+            workspace = workspace.display(),
+        ),
+    )
+    .expect("write old config");
+    assert!(Config::load(&path).is_err());
+
+    configure(
+        &path,
+        &ServiceOptions {
+            config: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace.clone()),
+        },
+        Some(agent_catalog::custom("hermes acp").expect("custom agent")),
+    )
+    .expect("reconfigure an old config");
+
+    let config = Config::load(&path).expect("load migrated config");
+    assert_eq!(
+        config.credentials,
+        Some(HarnessCredentials {
+            harness_id: HarnessId::TEST_A,
+            token: "mhns_test_secret".to_owned(),
+        })
+    );
+    assert_eq!(config.workspace.path, workspace);
+}
+
+#[test]
 fn creating_a_config_requires_an_agent() {
     let directory = tempfile::tempdir().expect("temp dir");
     let path = directory.path().join("macrod.toml");

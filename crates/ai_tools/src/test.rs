@@ -253,6 +253,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "ImportPipelineCsv",
         "ExportPipelineCsv",
         "ListInitiatives",
+        "ReadInitiative",
         "CreateInitiative",
         "UpdateInitiative",
         "UpdateInitiativeSharing",
