@@ -322,10 +322,16 @@ async fn token_check_treats_a_failing_github_as_unavailable() {
 
 #[tokio::test]
 async fn token_check_treats_an_unreachable_github_as_unavailable() {
-    let address = TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap();
+    // Keep the port for the whole test, hanging up on every connection. A port
+    // freed before the request can be taken by another test's server, which
+    // would answer this request and lose that test its first response.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((connection, _)) = listener.accept().await {
+            drop(connection);
+        }
+    });
     let client = GithubOauthImpl::with_api_base_url(format!("http://{address}"));
 
     let error = client.is_access_token_expired("token").await.unwrap_err();

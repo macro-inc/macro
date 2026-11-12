@@ -167,6 +167,9 @@ export function useEntitySearch(
     isLoadingEntities: () =>
       (!!activeList()?.isLoading() && activeList()?.items().length === 0) ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
+    // Rows from other sources can be listed before the cache has answered a
+    // typed query, so its documents are still to come.
+    isSearchingEntities: () => hasQuery() && !!activeList()?.isSearching?.(),
     pagination: {
       windowKey: () => {
         if (

@@ -1,7 +1,9 @@
 /** Short labels keyed to heading IDs, or step text when the ID is generated. */
 export const pageOutlineLabels: Record<string, string> = {
   'email-accounts-title': 'Unified Inbox',
+  'email-providers-title': 'Google and Outlook',
   'auto-tags-title': 'Email tags',
+  'email-routines-title': 'Email routines',
   'email-sharing-title': 'Collaboration',
   'email-crm-title': 'CRM integration',
   'email-to-task-title': 'Email to tasks',
@@ -37,8 +39,10 @@ export const pageOutlineLabels: Record<string, string> = {
   'coding-agents-title': 'Coding agents',
   'review-inbox-title': 'GitHub inbox',
   'spreadsheets-workspace-title': 'Linked cells',
-  'spreadsheets-detail-1-title': 'Excel compatibility',
-  'spreadsheets-detail-2-title': 'Formulas and charts',
+  'spreadsheets-detail-1-title': 'Agentic editing',
+  'spreadsheets-detail-2-title': 'CRM integration',
+  'spreadsheets-detail-3-title': 'Formulas and charts',
+  'spreadsheets-detail-4-title': 'Excel compatibility',
   'databases-workspace-title': 'Columns and mentions',
   'databases-detail-1-title': 'Database views',
   'databases-detail-2-title': 'Agentic editing',

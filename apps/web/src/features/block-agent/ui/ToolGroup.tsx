@@ -22,13 +22,14 @@ import { TextShimmer } from './TextShimmer';
 
 export interface ToolGroupProps {
   count: number;
-  /** A call in the run is still in flight: reads "Calling" and shimmers. */
+  /** A call in the run is still in flight: reads "Using" and shimmers. */
   active: boolean;
   /** Child position of the first running call, so later results cannot bury it. */
   activeIndex?: number;
   /**
    * The session's live one-line status over these calls, shown in place of
-   * the title while the turn is in this run; the count stays beside it.
+   * the title while the turn is in this run. It is the turn's one working
+   * indicator, so it carries no count.
    */
   summary?: string;
   defaultOpen?: boolean;
@@ -145,8 +146,10 @@ export function ToolGroup(props: ToolGroupProps) {
     props.onOpenChange?.(open);
   };
   const contentId = createUniqueId();
-  const title = () =>
-    `${props.active ? 'Calling' : 'Called'} ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`;
+  const title = () => {
+    if (props.active && props.count === 0) return 'Working';
+    return `${props.active ? 'Using' : 'Used'} ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`;
+  };
 
   return (
     <div class="min-w-0 text-sm leading-6 text-ink-extra-muted">
@@ -162,12 +165,9 @@ export function ToolGroup(props: ToolGroupProps) {
           fallback={<TextShimmer text={title()} active={props.active} />}
         >
           {(summary) => (
-            <>
-              <span class="min-w-0 truncate">
-                <TextShimmer text={summary()} active />
-              </span>
-              <span class="shrink-0 text-xs tabular-nums">{props.count}</span>
-            </>
+            <span class="min-w-0 truncate">
+              <TextShimmer text={summary()} active />
+            </span>
           )}
         </Show>
         <DisclosureCaret open={expanded()} />

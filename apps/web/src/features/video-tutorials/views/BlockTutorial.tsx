@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -101,17 +101,18 @@ function Entry(props: {
 }
 
 /**
- * The block's tutorial, if it has one and this isn't a phone. Phones never
- * show tutorials, so on them no entry, dialog or video mounts.
+ * The block's tutorial, if it has one and this isn't a touch device. Phones,
+ * tablets and the native apps never show tutorials, so on them no entry,
+ * dialog or video mounts.
  */
 function availableTutorial(id: TutorialId): Tutorial | undefined {
-  if (isMobile()) return undefined;
+  if (isTouchDevice()) return undefined;
   return TUTORIALS[id];
 }
 
 /**
  * A block's "Learn how to use" row, pinned at the top of its main list. Renders
- * nothing until the block's video exists in the catalog, on phones, or once
+ * nothing until the block's video exists in the catalog, on touch devices, or once
  * dismissed.
  */
 export function TutorialRow(props: { tutorial: TutorialId }) {

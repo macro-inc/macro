@@ -24,6 +24,17 @@ fn guest_identity_is_distinct_and_round_trips() {
 }
 
 #[test]
+fn anonymous_participant_is_display_only() {
+    let sender = ChannelSender::new_from_participant(Uuid::now_v7());
+    assert!(!sender.is_guest());
+    assert!(sender.as_user().is_none());
+    assert!(sender.as_bot().is_none());
+    let value = serde_json::to_string(&sender).unwrap();
+    let decoded: ChannelSender<'static> = serde_json::from_str(&value).unwrap();
+    assert_eq!(decoded, sender);
+}
+
+#[test]
 fn sender_round_trips_user_storage_string() {
     let sender = ChannelSender::parse_from_str("macro|alice@example.com").unwrap();
 

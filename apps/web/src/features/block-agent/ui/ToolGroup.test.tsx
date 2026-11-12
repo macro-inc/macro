@@ -47,7 +47,7 @@ function mount(overrides?: { active?: boolean; defaultOpen?: boolean }) {
 describe('ToolGroup', () => {
   it('starts historical groups collapsed with just the count', () => {
     const view = mount();
-    expect(view.getByRole('button').textContent).toContain('Called 3 tools');
+    expect(view.getByRole('button').textContent).toContain('Used 3 tools');
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
       'false'
     );
@@ -63,11 +63,11 @@ describe('ToolGroup', () => {
     const first = view.getAllByTestId('call')[0];
     view.setActive(true);
     view.setCalls((calls) => [...calls, 'Search']);
-    expect(view.getByRole('button').textContent).toContain('Calling 4 tools');
+    expect(view.getByRole('button').textContent).toContain('Using 4 tools');
     expect(view.getAllByTestId('call')[0]).toBe(first);
     view.setActive(false);
     vi.advanceTimersByTime(2000);
-    expect(view.getByRole('button').textContent).toContain('Called 4 tools');
+    expect(view.getByRole('button').textContent).toContain('Used 4 tools');
     expect(view.getAllByTestId('call')).toHaveLength(4);
     expect(view.getAllByTestId('call')[0]).toBe(first);
     view.getByRole('button').click();
@@ -76,7 +76,7 @@ describe('ToolGroup', () => {
 
   it('leaves automatic opening to its owner', () => {
     const view = mount({ active: true });
-    expect(view.getByRole('button').textContent).toContain('Calling 3 tools');
+    expect(view.getByRole('button').textContent).toContain('Using 3 tools');
     vi.advanceTimersByTime(2000);
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
       'false'
@@ -139,4 +139,15 @@ describe('ToolGroup', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(view.queryByTestId('call')).toBeNull();
   });
+});
+
+it('shows the live line without a count beside it', () => {
+  const view = render(() => (
+    <ToolGroup count={6} active summary="Searching your workspace…">
+      <div />
+    </ToolGroup>
+  ));
+  const title = view.getByRole('button').textContent ?? '';
+  expect(title).toContain('Searching your workspace…');
+  expect(title).not.toMatch(/\d/);
 });

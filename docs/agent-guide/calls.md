@@ -2,7 +2,7 @@
 
 ## Calls — `/app/calls`
 
-The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits below the touch inset, outside the virtualized rows.
+The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
 On desktop a collapsible sidebar starts with the shared outlined `New` button,
 with `Search calls` immediately left of collapse. Search reveals its field above
@@ -40,6 +40,40 @@ search, returns to the list. Shift+Enter and Open in new split open the recordin
 in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Calls
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
+
+### Join and leave sounds
+
+Browser calls play a clear two-note ascending chime when you or another
+participant joins, and a descending chime when someone deliberately leaves.
+Both last under half a second. Joining an occupied call plays only your own
+join chime. Reconnects and recovery rejoins stay silent.
+
+**Settings → Notifications → Sounds → Call sounds** is on by default, independent
+of the notification-sounds switch. Join and Leave preview buttons play the fixed
+cues. The shared volume slider and quiet-hours schedule apply. Guest browser
+calls use the default settings because they have no signed-in device profile.
+
+Call cues follow the speaker selected in the call controls; notification sounds
+and settings previews still use the system-default output. Mouse, touch, Enter,
+and Space activation unlock audio, including when enabling sounds. A browser
+that cannot resume audio promptly drops the cue rather than replaying it on a
+later click.
+
+`Call/primitives/call-sounds.ts` exchanges explicit visit announcements over the
+room's reliable data channel; RTC roster changes never make sounds. Announcements
+are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
+sessions do not announce departures or joins. Native channel calls need a bridge
+extension before they can send or play these cues. Do not infer a leave from a
+missing participant, because recovery uses the same RTC removal events.
+
+To verify, join one browser call from two participants. Check each self join,
+the first participant hearing the second join, and both sides of a deliberate
+leave. Rejoin deliberately, then interrupt and restore the second connection:
+recovery must not play a leave or another join. Turn Call sounds off on one
+participant and confirm the other participant still hears announcements.
+Also select a non-default call speaker and check that both cues play there,
+while notification previews stay on the default output. After reloading, join
+with Enter or Space to check keyboard-only audio activation.
 
 ### Saved call detail
 
@@ -252,14 +286,16 @@ This is presentation only: nothing posts top-level from the panel. A popup count
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 
-People connected to the call get no notification from its thread, mentions included; they stay
-followers, so later replies reach them after they leave. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only;
-its contents require channel read access. Deleting a record leaves the thread in the channel.
+Channel members connected to the call are notified of its thread's messages like followers, so a
+message sent in the call chat pops up for everyone else on the call, even before they post in it.
+The call's root accepts replies and nothing else: no edit, delete or reactions. On a call's record
+the chat is read-only; its contents require channel read access. Deleting a record leaves the thread
+in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
-that no notification reaches the person in the call, and that ending the call updates the row.
+that a message sent in the call chat notifies the other person in the call, and that ending the
+call updates the row.
 
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
@@ -343,6 +379,8 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+A level meter under the preview lights as the microphone picks up sound
+(`Speak to test your mic`); muting it empties the meter and shows `Mic is off`.
 Shared-link setup shows the people currently connected, with avatars, names, and
 an attendee count. It refreshes every 15 seconds while setup is open; guests see
 this only for standalone links. Empty calls show `No one else is here yet`; a
@@ -386,6 +424,28 @@ Guest access is limited to the call room and its live text discussion; joining d
 anonymous access to saved transcripts and recordings. Guest names are preserved in
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
+
+Live call discussion follows the call's stored type: a channel thread opens the
+channel call panel, while `call_chat` opens the call's own chat. Quick and
+scheduled calls use `call_chat` for both signed-in participants and guests.
+Guests can send text, quote replies, react, and edit or delete their own
+messages in the same chat as signed-in participants.
+Deleting the first call-chat message leaves later replies and the chat available.
+The guest composer is the shared `ChannelInput`: its text posts and quoted
+replies appear in the same `MessageThread` as signed-in messages. Guests cannot
+add mentions, attachments, or anchors. A guest's reactions and edits appear to
+signed-in participants; a guest can edit or delete only their own messages.
+Quoted account messages show the sender's profile name on both sides. Guest
+responses carry opaque participant IDs, while signed-in quotes retain normal
+account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
+deletes; the changes should appear live. Closing and reopening the chat refreshes
+the thread.
+A guest never receives Macro markup for things they cannot open. Have a signed-in
+participant send a quote reply, a pasted message link, a document mention, and a
+person mention: the guest sees the quote rendered and each reference as plain
+text with its name (a person as `@name`), never raw `<m-…>` text or a **No
+Access** chip. Web links stay clickable. On desktop the guest composer has no `+`
+menu; on phones `+` opens text formatting only.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
@@ -551,6 +611,8 @@ avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
 hover it on desktop or tap it on touch to open the profile card; guests use
 the shared avatar fallback.
+Signed-out meeting guests see initials for all participants, including account
+participants, without account profile-picture requests.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.

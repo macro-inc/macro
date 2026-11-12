@@ -5,6 +5,7 @@ import {
   entityDiscussionVerb,
   isEntityDiscussionEvent,
 } from '@notifications/entity-discussion';
+import { getNotificationAction } from '@notifications/notification-metadata';
 import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
@@ -26,6 +27,19 @@ import {
 interface NotificationDescriptionProps {
   notification?: Notification;
   stack?: NotificationStack;
+}
+
+/** The verb for one notification. A Claude sign-in names its stage, with the
+ *  same words its push and toast use. */
+function actionFor(
+  notification: Notification | undefined,
+  type: NotificationType
+): string {
+  const metadata = notification?.notification_metadata;
+  if (isEntityDiscussionEvent(metadata)) return entityDiscussionVerb(metadata);
+  if (notification && metadata?.tag === 'agent_sign_in_expiry')
+    return getNotificationAction(notification);
+  return getActionVerb(type);
 }
 
 /**
@@ -136,11 +150,8 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
-      const metadata = (props.notification ?? props.stack?.notifications[0])
-        ?.notification_metadata;
-      const action = isEntityDiscussionEvent(metadata)
-        ? entityDiscussionVerb(metadata)
-        : getActionVerb(type);
+      const single = props.notification ?? props.stack?.notifications[0];
+      const action = actionFor(single, type);
       if (sender && type !== 'ai_response') {
         return `${sender} ${action}`;
       }

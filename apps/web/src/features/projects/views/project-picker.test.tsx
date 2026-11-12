@@ -26,7 +26,14 @@ vi.mock('../context/projects-context', () => ({
   useProjectsContext: () => ({
     createCollectionSource: () => ({
       rows: () => [
-        { project: { id: 'editable', name: 'Editable', access: 'edit' } },
+        {
+          project: {
+            id: 'editable',
+            name: 'Editable',
+            access: 'edit',
+            appearance: { icon: { kind: 'emoji', value: '🚀' }, color: null },
+          },
+        },
         { project: { id: 'readonly', name: 'Read only', access: 'view' } },
       ],
       loading: () => false,
@@ -46,6 +53,7 @@ it('lists only projects the user can add tasks to', () => {
   render(() => <ProjectPicker taskIds={['task']} onClose={() => {}} />);
   expect(screen.getByText('No project')).toBeTruthy();
   expect(screen.getByText('Editable')).toBeTruthy();
+  expect(screen.getByText('🚀')).toBeTruthy();
   expect(screen.queryByText('Read only')).toBeNull();
 });
 
