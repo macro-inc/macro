@@ -1,0 +1,35 @@
+# Channel message writes. Each returns the written message and the channel
+# change sequence number the write took, null when it repeated a write that
+# already happened. The device cache's mutation queue sends them, so a write
+# typed offline reaches the server once, in order, after a reload too.
+
+fragment ChannelMessageWriteFields on GraphqlChannelMessageWrite {
+	message {
+		...ChannelMessageFields
+	}
+	seq
+}
+
+mutation PostChannelMessage($input: GraphqlChannelPostMessageInput!) {
+	postChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation EditChannelMessage($input: GraphqlChannelEditMessageInput!) {
+	editChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation DeleteChannelMessage($input: GraphqlChannelDeleteMessageInput!) {
+	deleteChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}
+
+mutation ReactToChannelMessage($input: GraphqlChannelReactInput!) {
+	reactToChannelMessage(input: $input) {
+		...ChannelMessageWriteFields
+	}
+}

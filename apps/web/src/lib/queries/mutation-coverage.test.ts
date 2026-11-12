@@ -59,6 +59,14 @@ const policies = {
     'authoritative: form, database, and preview caches refresh after success',
   TrashForm: 'authoritative: form list membership refreshes after success',
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
+  PostChannelMessage:
+    'custom: the timeline holds the optimistic row; the queue only delivers',
+  EditChannelMessage:
+    'custom: the timeline holds the optimistic edit; the queue only delivers',
+  DeleteChannelMessage:
+    'custom: the timeline holds the optimistic delete; the queue only delivers',
+  ReactToChannelMessage:
+    'custom: the timeline holds the optimistic reaction; the queue only delivers',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',
   UndoWorkFeedItemsDone:
