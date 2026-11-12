@@ -38,6 +38,9 @@ pub const FAST_SUMMARIES: u8 = 10;
 pub const SLOW_INTERVAL: Duration = Duration::from_secs(15);
 /// Model calls one turn may make; the line keeps its last summary after.
 pub const MAX_SUMMARIES_PER_TURN: u8 = 120;
+/// Longest a turn's closing clear may hold shutdown; viewers clear a
+/// settled turn's line themselves too.
+const CLEAR_TIMEOUT: Duration = Duration::from_secs(5);
 /// Newest steps the model is shown.
 const MAX_DIGEST_STEPS: usize = 10;
 /// The PostHog flag that turns summaries off. Unset, unreadable or without a
@@ -297,7 +300,7 @@ async fn run_turn<R, Rt, S, Flags>(
     let admitted = |outcome: &'static str| {
         tracing::Span::current().record("agent.activity.admission", outcome);
     };
-    let usage = async {
+    let setup = async {
         let session = repo
             .get(id)
             .await
@@ -335,8 +338,12 @@ async fn run_turn<R, Rt, S, Flags>(
                 .with_entity(Some(id.as_uuid()))
                 .with_agent_session(Some(id.as_uuid())),
         ))
-    }
-    .await;
+    };
+    // Shutdown waits on this task, so a stalled lookup must not hold it.
+    let usage = tokio::select! {
+        () = ended.cancelled() => return,
+        usage = setup => usage,
+    };
     let usage = match usage {
         Ok(Some(usage)) => usage,
         Ok(None) => return,
@@ -400,15 +407,19 @@ async fn run_turn<R, Rt, S, Flags>(
     // are told it is over, so none carries it into the next turn.
     ended.cancelled().await;
     if published {
-        let _ = realtime
-            .publish_activity_summarized(AgentSessionActivitySummarized {
-                agent_session_id: id,
-                text: None,
-            })
-            .await
-            .inspect_err(|error| {
+        let clear = realtime.publish_activity_summarized(AgentSessionActivitySummarized {
+            agent_session_id: id,
+            text: None,
+        });
+        match tokio::time::timeout(CLEAR_TIMEOUT, clear).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
                 tracing::warn!(error = ?error, %id, "failed to clear agent activity summary");
-            });
+            }
+            Err(_) => {
+                tracing::warn!(%id, "timed out clearing agent activity summary");
+            }
+        }
     }
 }
 
