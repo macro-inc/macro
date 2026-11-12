@@ -12,6 +12,7 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
+import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -74,6 +75,9 @@ type SelectedConversation = {
   conversation: AgentConversationTarget;
   activeConversationId: string;
 };
+
+/** Entry-state slice holding the composer request whose draft was seeded. */
+const SEEDED_COMPOSER_REQUEST = 'agents.seededComposerRequest';
 
 function LoadingComposer() {
   return (
@@ -200,6 +204,16 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     // The preflight page stays mounted when navigating through management.
     composerFocus?.();
   };
+  // A composer request's draft seeds the composer once. Its entry keeps the
+  // request, so Back, Forward and resuming this view deliver it again; the
+  // entry records the seeded request so a sent draft does not come back.
+  const [seededRequest, setSeededRequest] = useEntryState<string | undefined>(
+    SEEDED_COMPOSER_REQUEST,
+    { default: undefined }
+  );
+  const wasSeeded = (request: string) =>
+    request === seededRequest() ||
+    request === panel.handle.currentEntryState()?.[SEEDED_COMPOSER_REQUEST];
   // A launcher navigation can target this already-mounted workspace.
   createEffect(
     on(
@@ -210,14 +224,16 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           : undefined;
       },
       (request) => {
-        if (!request) return;
+        if (typeof request !== 'string' || !request) return;
         const content = panel.handle.content();
         if (
+          !wasSeeded(request) &&
           content.type === 'component' &&
           typeof content.params?.draft === 'string' &&
           content.params.draft.length > 0
         )
           persistedDraft.setDraft(content.params.draft);
+        setSeededRequest(request);
         showComposer();
       }
     )
