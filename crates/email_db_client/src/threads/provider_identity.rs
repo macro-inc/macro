@@ -98,6 +98,6 @@ pub async fn reconcile_sent_thread(
         .await?;
     }
     super::update::update_thread_metadata(tx, original, link_id).await?;
-    super::update::sync_thread_calendar_flag(tx, original).await?;
+    super::update::sync_thread_attachment_flags(tx, original).await?;
     Ok(canonical)
 }

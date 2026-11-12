@@ -1,5 +1,7 @@
 import 'fake-indexeddb/auto';
 import { File as NodeFile } from 'node:buffer';
+import { createDraftPersistence } from '@app/features/email-compose/primitives/draft-persistence';
+import { createDraftSession } from '@app/features/email-compose/primitives/draft-session';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   ClaimedMutation,
@@ -34,6 +36,14 @@ vi.mock('@core/mobile/nativeStagedUpload', () => ({
   getNativeStagedUpload: stagedUpload,
 }));
 let runtime: typeof import('./local-drafts');
+/** A save the working copy accepts; it refuses one only while being discarded. */
+const beginSave = async (
+  draft: Parameters<typeof runtime.beginDraftAttempt>[0]
+) => {
+  const attempt = await runtime.beginDraftAttempt(draft, 'save');
+  if (!attempt) throw new Error('The working copy is being discarded');
+  return attempt;
+};
 const input = (subject = 'Draft') => ({
   draft: { subject },
   clientHandles: { draftId: 'local', threadId: 'thread' },
@@ -58,6 +68,10 @@ const claimed = (
   operationName: 'SaveEmailDraft',
   superseded: false,
   variables: { input: { draftId: 'local' } },
+});
+const discard = (attempt: ClaimedMutation['clientMetadata']) => ({
+  ...claimed(attempt),
+  operationName: 'DeleteEmailDraft',
 });
 const success = {
   data: {
@@ -327,6 +341,46 @@ describe('draft queue recovery', () => {
     ).toBe(false);
     expect(await runtime.readLocalDraft('local')).toBeUndefined();
   });
+  it('does not fail a working copy whose save lost to its own send', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const saving = await runtime.beginDraftAttempt(draft, 'save');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.beforeMutationAttempt!(claimed(saving));
+    // The send is approved while that save is on the wire.
+    await runtime.persistLocalEmailSend(
+      {
+        uuid: 'send',
+        dispatchVersion: 2,
+        phase: 'pending',
+        locallyCancelled: false,
+        metadata: {
+          kind: 'email-send-v1',
+          payload: {
+            draft: {
+              draftId: 'local',
+              threadDbId: 'thread',
+              senderLinkId: 'inbox',
+              senderEmail: 'sender@example.test',
+              subject: 'Frozen',
+              optimisticBodyHtml: null,
+            },
+            input: {
+              attempt: { attemptId: 'send', linkId: 'inbox' },
+              message: { draftId: 'local', subject: 'Frozen' },
+              attachmentIds: [],
+              forwardedAttachmentIds: [],
+            },
+          },
+        },
+      },
+      true
+    );
+    await lifecycle.onMutationAttemptResult!(claimed(saving), failure, false);
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'queued',
+      errorCode: undefined,
+    });
+  });
   it('reports caught storage failures and recovery with lifecycle context, without draft content', async () => {
     const error = new DOMException('Storage unavailable', 'UnknownError');
     vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(
@@ -402,6 +456,43 @@ describe('draft queue recovery', () => {
       content: { subject: 'Other tab edited' },
     });
   });
+  it('refuses a first write from an editor that never opened the working copy', async () => {
+    const editor = () =>
+      createDraftPersistence({
+        session: createDraftSession({
+          draftId: 'server-draft',
+          threadId: 'thread',
+          persistence: 'committed',
+        }),
+        drafts: {
+          saveDraft: vi.fn(),
+          deleteDraft: vi.fn(),
+          saveLocalDraft: runtime.saveLocalDraft,
+        },
+        attachments: { upload: vi.fn() },
+        mintThreadHandle: false,
+        onAlreadySent: vi.fn(),
+      });
+    // Both open the draft before either writes, so neither has a working copy.
+    const first = editor();
+    const second = editor();
+    await first.saveLocally({
+      draft: { subject: 'First editor text' },
+      attachments: [],
+      edit: 1,
+    });
+
+    await expect(
+      second.saveLocally({
+        draft: { subject: 'Second editor text' },
+        attachments: [],
+        edit: 1,
+      })
+    ).rejects.toThrow('changed while saving');
+    expect(await runtime.readLocalDraft('server-draft')).toMatchObject({
+      content: { subject: 'First editor text' },
+    });
+  });
   it('rejects an older snapshot whose file copy finishes after a newer save', async () => {
     await runtime.saveLocalDraft(input('Original'));
     const started = Promise.withResolvers<void>();
@@ -436,6 +527,7 @@ describe('draft queue recovery', () => {
     await lifecycle.onMutationAttemptResult!(claimed(saving), success, false);
     const saved = (await runtime.readLocalDraft('server'))!;
     const deleting = await runtime.beginDraftAttempt(saved, 'delete');
+    await runtime.markDraftAttemptQueued(deleting);
     await lifecycle.onMutationAttemptResult!(
       claimed(deleting),
       { data: { deleteEmailDraft: { deleted: true } } } as OperationResult,
@@ -480,7 +572,7 @@ describe('draft queue recovery', () => {
   });
   it('defers recovery without a session and reconciles once signed in', async () => {
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     const lifecycle = runtime.localDraftQueueLifecycle(host);
     for (const user of [undefined, { authenticated: false, id: '' }]) {
@@ -511,7 +603,7 @@ describe('draft queue recovery', () => {
   });
   it('marks an abandoned queued intent recoverable after restart', async () => {
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     await runtime.localDraftQueueLifecycle(host).prepareMutationQueue!();
     expect((await runtime.readLocalDraft('local'))?.status).toBe('unconfirmed');
@@ -519,11 +611,11 @@ describe('draft queue recovery', () => {
   it('does not let an old save overwrite a newer discard intent', async () => {
     const draft = await runtime.saveLocalDraft(input());
     const saving = await runtime.beginDraftAttempt(draft, 'save');
-    await runtime.beginDraftAttempt(draft, 'delete');
-    await runtime.localDraftQueueLifecycle(host).onMutationAttemptResult!(
-      claimed(saving),
-      success,
-      false
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.onMutationAttemptResult!(claimed(saving), success, false);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
     );
     expect(await runtime.readLocalDraft('local')).toMatchObject({
       status: 'deleting',
@@ -531,17 +623,166 @@ describe('draft queue recovery', () => {
       acknowledgedRevision: draft.revision,
     });
   });
+  it('keeps a draft listed and editable until the queue admits its discard', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    expect(await runtime.listLocalDrafts()).toMatchObject([
+      { status: 'dirty', revision: draft.revision },
+    ]);
+    await runtime.saveLocalDraft(input('Edited while the discard waited'));
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'dirty',
+      content: { subject: 'Edited while the discard waited' },
+    });
+  });
+  it('hands an admitted discard to the queue and removes the copy once it commits', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    await expect(runtime.saveLocalDraft(input('Too late'))).rejects.toThrow();
+    // A lease that expired is claimed and admitted again.
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+    await lifecycle.onMutationAttemptResult!(
+      discard(deleting),
+      { data: { deleteEmailDraft: { deleted: true } } } as OperationResult,
+      false
+    );
+    expect(await runtime.listLocalDrafts()).toEqual([]);
+  });
+  it('keeps a discard when a save of the same revision arrives after it', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    // A closed composer's last flush: no edit came after the discard.
+    expect(await runtime.beginDraftAttempt(draft, 'save')).toBeUndefined();
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(true);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    expect(await runtime.beginDraftAttempt(draft, 'save')).toBeUndefined();
+  });
+  it('lets an edit withdraw a discard the queue has not admitted', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const edited = await runtime.saveLocalDraft({
+      ...input('Typed after discarding'),
+      expectedGeneration: draft.generation,
+      expectedRevision: draft.revision,
+    });
+    expect(await runtime.beginDraftAttempt(edited, 'save')).toBeDefined();
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('dirty');
+  });
+  it('returns a discard an older build never enqueued to its editor', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const owner = await runtime.localDraftStore.activate('owner');
+    await runtime.localDraftStore.update(owner, draft.key, (current) => ({
+      ...current,
+      latestAttemptId: 'interrupted-delete',
+      status: 'deleting',
+    }));
+    await runtime.localDraftQueueLifecycle(host).prepareMutationQueue!();
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'dirty',
+      latestAttemptId: undefined,
+    });
+    await runtime.saveLocalDraft(input('Editable again'));
+  });
+  it('admits a queued discard an older build began', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const owner = await runtime.localDraftStore.activate('owner');
+    await runtime.localDraftStore.update(owner, draft.key, (current) => ({
+      ...current,
+      deleteAttemptId: undefined,
+      latestAttemptId: deleting.id,
+      status: 'deleting',
+    }));
+    queue.push({ ...discard(deleting), optimisticData: {} });
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.prepareMutationQueue!();
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+  });
+  it('keeps a failure with a discard the queue could never admit', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    await runtime.localDraftQueueLifecycle(host).onMutationAttemptResult!(
+      discard(deleting),
+      {
+        error: {
+          graphQLErrors: [{ extensions: { code: 'LOCAL_RECOVERY_FAILED' } }],
+        },
+      } as unknown as OperationResult,
+      false
+    );
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'delete-failed',
+      errorCode: 'LOCAL_RECOVERY_FAILED',
+      deleteAttemptId: undefined,
+    });
+    // The copy stays editable, and a late replay cannot discard it.
+    await runtime.saveLocalDraft(input('Kept'));
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+  });
+  it('reports a rejected discard without draft content', async () => {
+    // The module registry is reset per test; spy on the runtime's instance.
+    const { Telemetry } = await import('@macro-inc/observability');
+    const warn = vi.spyOn(Telemetry, 'warn').mockImplementation(() => {});
+    const draft = await runtime.saveLocalDraft(input('Private subject'));
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.beforeMutationAttempt!(discard(deleting));
+    await lifecycle.onMutationAttemptResult!(discard(deleting), failure, false);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe(
+      'delete-failed'
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        'email_draft.sync_failed',
+        {
+          'email_draft.draft_id': 'local',
+          'email_draft.status': 'delete-failed',
+          'email_draft.cause': 'attempt-rejected',
+          'email_draft.error_code': 'INVALID',
+        },
+      ],
+    ]);
+  });
   it('keeps edits after an abandoned delete and refuses its late replay', async () => {
     const draft = await runtime.saveLocalDraft(input());
     const deleting = await runtime.beginDraftAttempt(draft, 'delete');
     await runtime.abandonDraftDelete(deleting);
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      false
+    );
     await runtime.saveLocalDraft(input('Kept edit'));
-    const replay = { ...claimed(deleting), operationName: 'DeleteEmailDraft' };
-    expect(
-      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
-        replay
-      )
-    ).toBe(false);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      false
+    );
     expect(await runtime.readLocalDraft('local')).toMatchObject({
       status: 'dirty',
       content: { subject: 'Kept edit' },
@@ -796,7 +1037,7 @@ describe('draft queue recovery', () => {
     const lifecycle = runtime.localDraftQueueLifecycle(host);
     await lifecycle.prepareMutationQueue!();
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     await lifecycle.onMutationAttemptResult!(
       claimed(undefined),

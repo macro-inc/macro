@@ -6,7 +6,9 @@ import {
   describeInboxCard,
   describeInboxRow,
   describeStackItem,
+  groupChatId,
   inboxCardKind,
+  isGroupChatRow,
 } from './describe-row';
 
 const taskAssigned = {
@@ -46,7 +48,6 @@ const row = (
   content: {
     entity: { type: 'task', id: 'task-a', name: 'Task' } as never,
     notifications: [notification],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -81,6 +82,65 @@ describe('describeInboxRow', () => {
 
   it('names no author for an actor kind this build doesn’t know', () => {
     expect(action({ kind: 'other' })).toBe('assigned you a task');
+  });
+
+  it('says a runtime request asks to use the machine', () => {
+    const request = {
+      id: 'n-3',
+      entity_type: 'harness',
+      entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+      sender_id: 'macro|ana@example.com',
+      notification_metadata: {
+        tag: 'entity_access_requested',
+        content: {
+          requestId: 'r-1',
+          revision: 1,
+          entityName: 'Render box',
+          accessLevel: 'edit',
+        },
+      },
+    } as unknown as UnifiedNotification;
+    expect(
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, request),
+        names
+      )
+    ).toEqual({ action: 'Ana requested to use', subject: 'Render box' });
+  });
+
+  it('says who removed runtime access and which agents stopped', () => {
+    const removal = (agents: string[]) =>
+      ({
+        id: 'n-4',
+        entity_type: 'harness',
+        entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+        sender_id: 'macro|ana@example.com',
+        notification_metadata: {
+          tag: 'runtime_access_removed',
+          content: {
+            runtimeName: 'Render box',
+            agents: agents.map((name, index) => ({
+              botId: `b-${index}`,
+              name,
+            })),
+          },
+        },
+      }) as unknown as UnifiedNotification;
+    const describe = (agents: string[]) =>
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, removal(agents)),
+        names
+      );
+    expect(describe(['Scout'])).toEqual({
+      action: 'Ana removed your access to Render box',
+      subject: 'Scout has stopped.',
+    });
+    expect(describe(['Scout', 'Atlas']).subject).toBe(
+      'Scout and Atlas have stopped.'
+    );
+    expect(describe(['Scout', 'Atlas', 'Iris']).subject).toBe(
+      'Scout and 2 others have stopped.'
+    );
   });
 
   it('names an outside sender from the notification', () => {
@@ -122,7 +182,6 @@ const stack = (
   content: {
     entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
     notifications,
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -297,6 +356,64 @@ describe('describeInboxCard', () => {
       body: 'Sam: Message 0',
     });
     expect(itemsOf(row).map((item) => item.text)).toContain('Message 3');
+  });
+
+  it('shows a group chat stack the chat and who wrote its newest line', () => {
+    const row = stack(
+      'channel_messages',
+      ['Sam', 'Noor', 'Mara'].map((sender, index) =>
+        sent(String(index), 'channel_message_send', sender, {
+          channelType: 'private',
+          // Named for its sender, so it lists the reader and not the sender.
+          channelName: 'Ana, Leo, Mara, Noor, Reader',
+          messageContent: `Message ${index}`,
+        })
+      )
+    );
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'Ana, Leo, Mara, Noor, Sam',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Ana, Leo and 3 others',
+      what: undefined,
+      body: 'Sam: Message 0',
+    });
+    expect(isGroupChatRow(row)).toBe(true);
+  });
+
+  it('shows a named group chat its name, even for one message', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_send', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'remote',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'remote',
+      what: undefined,
+      body: 'Sam: Working from home',
+    });
+    expect(groupChatId(row)).toBe('entity');
+  });
+
+  it('keeps a reaction in a group chat about the person', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    expect(isGroupChatRow(row)).toBe(false);
+    expect(groupChatId(row)).toBeUndefined();
   });
 
   it('shows a direct message stack the person and the newest message', () => {

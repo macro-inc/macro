@@ -90,7 +90,7 @@ where
     }
 
     /// Checks sent mail for a stable delivery identifier without sending again.
-    #[tracing::instrument(skip(self, message_id), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    #[tracing::instrument(skip(self, message_id), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn find_sent_message(
         &self,
         link_id: Uuid,

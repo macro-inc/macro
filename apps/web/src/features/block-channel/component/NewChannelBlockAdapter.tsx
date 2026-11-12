@@ -8,6 +8,7 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { AgentDmRuntimeStatus } from '@app/features/runtime-sharing/views/AgentDmRuntimeStatus';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -55,6 +56,15 @@ import {
 import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import {
+  isPendingDirectMessageId,
+  pendingDirectMessageRecipient,
+} from '@channel/primitives/pending-direct-messages';
+import {
+  PendingDirectMessage,
+  PendingDirectMessageTitle,
+} from '@channel/views/pending-direct-message';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -88,7 +98,6 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
@@ -99,11 +108,13 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
   useContext,
 } from 'solid-js';
+import { ActiveCallHeader } from '../../channel/Call/views/ActiveCallHeader';
 import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
@@ -144,7 +155,6 @@ function NewTop(props: { channelId: string }) {
   const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
-  const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const isActivePhoneCall = () =>
     isMobile() && activeTab() === 'call' && call.isInThisChannel();
   const participants = () =>
@@ -197,8 +207,16 @@ function NewTop(props: { channelId: string }) {
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label: tab.value === 'call' ? <CallTabLabel /> : tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value],
+      label:
+        tab.value === 'call' ? (
+          <CallTabLabel channelId={props.channelId} />
+        ) : (
+          tab.label
+        ),
+      icon:
+        tab.value === 'call' && tab.icon
+          ? tab.icon
+          : CHANNEL_TAB_ICONS[tab.value],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),
@@ -283,6 +301,7 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
           {/* Only header islands receive taps on touch screens. */}
@@ -310,18 +329,20 @@ function NewTop(props: { channelId: string }) {
         when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
       >
         <SplitHeaderRight>
-          <HeaderIsland
-            class={cn(
-              'px-1',
-              // Call in progress: tint the whole island, matching the call
-              // button's `success` variant.
-              !!activeCallQuery.data &&
-                'bg-success ring-success [&_button]:text-surface'
-            )}
-          >
+          <HeaderIsland class="px-1">
             <div class="flex items-center gap-1.5">
               <ChannelCallButton channelId={props.channelId} />
             </div>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={call.isInThisChannel() && !isActivePhoneCall()}>
+        <SplitHeaderRight>
+          <HeaderIsland>
+            <ActiveCallHeader
+              channelId={props.channelId}
+              link={activeTab() === 'call'}
+            />
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>
@@ -330,7 +351,44 @@ function NewTop(props: { channelId: string }) {
   );
 }
 
+/** A DM its first message will create, opened as a block (touch layouts). */
+function PendingDirectMessageBlock(props: { pendingId: string }) {
+  const panel = useSplitPanelOrThrow();
+  const recipientId = pendingDirectMessageRecipient(props.pendingId);
+  // A temporary id this tab didn't open (a reload, a restored layout) has no
+  // conversation behind it.
+  if (!recipientId) {
+    onMount(() => panel.handle.close());
+    return null;
+  }
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <HeaderIsland class="shrink">
+          <PendingDirectMessageTitle
+            pendingId={props.pendingId}
+            recipientId={recipientId}
+          />
+        </HeaderIsland>
+      </SplitHeaderLeft>
+      <PendingDirectMessage
+        pendingId={props.pendingId}
+        recipientId={recipientId}
+      />
+    </>
+  );
+}
+
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
+  const blockId = useBlockId();
+  if (isPendingDirectMessageId(blockId)) {
+    return <PendingDirectMessageBlock pendingId={blockId} />;
+  }
+  return <ChannelBlockAdapter {...props} />;
+}
+
+function ChannelBlockAdapter(props: BlockChannelProps) {
   // Every other block gets its hotkey scope from `BlockContainer`, which the
   // channel block does not render — so set `blockHotkeyScopeSignal` here or
   // `useBlockEntityCommands` would register nothing at all. Commands go on
@@ -344,6 +402,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
+  // An inline preview (the Notifications list's) focuses the composer when a
+  // click or Enter opened it, and hands Esc back to that list.
+  const preview = useMaybePreviewPanel();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
   useBlockEntityCommands({
@@ -603,7 +664,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                 <Suspense fallback={<ChannelLoading />}>
                   <TraceFlow name="channel.messages.view">
                     <ChannelMessages
-                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                      autofocus={
+                        (canAutofocusSplitContent && !navigatedFromJK()) ||
+                        (preview?.focusRequest() ?? 0) > 0
+                      }
+                      composerFocusRequest={preview?.focusRequest()}
+                      onEscapeToList={preview?.onEscapeToList}
                     />
                   </TraceFlow>
                 </Suspense>

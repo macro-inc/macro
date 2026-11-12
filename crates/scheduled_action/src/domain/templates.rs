@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -25,8 +25,8 @@ use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionS
 #[cfg(test)]
 mod test;
 
-/// Longest description a template can carry.
-pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
+/// Longest description a template can carry, as for a routine.
+pub use super::models::MAX_DESCRIPTION_CHARS;
 /// Most variables a template can mark.
 pub const MAX_VARIABLES: usize = 100;
 /// PostHog rollout shared with the web app; missing or failed evaluations stay off.
@@ -91,7 +91,7 @@ pub struct RoutineTemplate {
     pub name: String,
     pub description: String,
     pub trigger: ActionTrigger,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
     /// Routines activated from this template, including stopped ones.
@@ -128,12 +128,18 @@ impl ShareRoutineTemplate {
         if self.variables.len() > MAX_VARIABLES {
             return Err(TemplateInputError::TooManyVariables.into());
         }
+        // Writing as its owner is the owner's choice alone; whoever activates
+        // the template starts attributed to the agent and opts in themselves.
+        let mut task = action.task.clone();
+        if let Value::Object(fields) = &mut task {
+            fields.remove("dangerously_operate_as_user");
+        }
         Ok(TemplateSnapshot {
             action_id,
             name: action.name.clone(),
             description: self.description.trim().to_owned(),
             trigger: action.trigger.clone(),
-            task: action.task.clone(),
+            task,
             variables: self.variables,
         })
     }
@@ -186,21 +192,10 @@ impl<Actions: ScheduledActionService, Templates, Flags>
         &self,
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(Uuid, ScheduledAction)> {
-        if receipt.entity().entity_type != EntityType::ScheduledAction {
-            anyhow::bail!("scheduled action receipt has the wrong entity type");
-        }
-        let id = receipt
-            .entity()
-            .entity_id
-            .parse::<Uuid>()
-            .map_err(|_| ActionPolicyError::NotFound)?;
-        let action = self.actions.get_action(id).await?;
-        let owned = receipt
-            .acting_user_id()
-            .is_some_and(|user| action.owner.is_user(user));
-        if !owned {
-            return Err(ActionPolicyError::NotFound.into());
-        }
+        let action = self.actions.get_action(receipt).await?;
+        let Some(id) = action.id else {
+            anyhow::bail!("stored scheduled action has no id");
+        };
         Ok((id, action))
     }
 }

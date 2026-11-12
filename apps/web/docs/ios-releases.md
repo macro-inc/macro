@@ -14,7 +14,10 @@ release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
-`tauri/macro_bundle_updater_plugin`), but native code — anything under
+`tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
+Application Support directory so storage pressure cannot purge them; the
+updater ignores legacy cache contents (see
+`tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
 depends on new native code must therefore only reach native builds that have
 it, and users on older native builds must be pushed to update instead of
@@ -32,9 +35,10 @@ icon and app-name branding are Android-only.
 ## The flow for a PR with breaking native changes
 
 1. **`iOS Native Check`**, a job of the web app PR checks
-   (`.github/workflows/web-app-check-main.yml`), runs on every PR against
-   `main`. The required `Web App Status Check` depends on it, so no branch
-   ruleset change is needed. If the PR touches the iOS native code (see
+   (`.github/workflows/web-app-check-main.yml`), runs whenever CI runs on a PR
+   against `main` (the `run-ci` label). The required `CI gate` status depends
+   on it, so no branch ruleset change is needed. The release starts only
+   after CI has run on the head. If the PR touches the iOS native code (see
    "What counts as native code" below) it requires:
    - the iOS release numbers to be bumped relative to `main`, and
    - Apple to have **approved** that exact version + build (held for
@@ -97,13 +101,15 @@ icon and app-name branding are Android-only.
    (`.github/workflows/ios-release-watch.yml`, every 30 minutes) notices: for
    each open PR labeled `ios-update` it asks App Store Connect whether Apple
    approved the version + build at the PR head and, when it did, re-runs the
-   PR's failed `iOS Native Check` job and comments. The
-   gate turns green on its own and the PR merges if auto-merge is on.
+   failed jobs of the PR's latest `PR CI` run and comments. It also checks
+   the latest standalone web workflow run on that same head, so failed checks
+   from before the CI migration get refreshed even when a newer `PR CI` run
+   passes. The gate turns green on its own and the PR merges if auto-merge is on.
    (Re-running the job by hand works too. The watcher stops after two
-   automatic re-runs — counted by its own comments on the PR — so a check
+   automatic re-runs per run — counted by its own comments on the PR — so a check
    failing for another reason doesn't retry forever, and GitHub refuses to
-   re-run runs older than 30 days: after a review that long, push a commit to
-   get a fresh run.)
+   re-run runs older than 30 days: after a review that long, add the `run-ci`
+   label to get a fresh run.)
 5. The next prod deploy (`.github/workflows/release-production.yml`) ships
    the web bundle, then releases the App Store version:
    - The web build (`just build-prod`) reads both platform floors from
@@ -310,8 +316,7 @@ production OTLP proxy
 
 - **Labels**: create `ios-update` and `skip-ios-update`.
 - **Branch protection**: nothing to do — the gate is a job of the web app PR
-  checks, and the already-required `Web App Status Check` fails when it
-  fails.
+  checks, and the already-required `CI gate` status fails when it fails.
 - **Doppler project `ios-release`, config `prd`** (same shape as
   `macos-release/prd`, which the desktop notarization uses; that key has only
   the Developer role, which cannot submit for review, hence a separate key):

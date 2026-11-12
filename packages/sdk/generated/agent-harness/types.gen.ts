@@ -10,6 +10,53 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * One activity row on the wire — the realtime projection of an inserted
+ * `activity_events` row.
+ */
+export type ActivityWireRow = {
+    /**
+     * The stored action tag.
+     */
+    action: string;
+    /**
+     * The stored action payload, if any.
+     */
+    action_payload?: unknown;
+    /**
+     * Who mechanically acted, as a principal string (`macro|…` / `bot|…`).
+     */
+    actor_id: string;
+    /**
+     * Originating code-mode invocation, absent on older events.
+     */
+    agent_correlation_id?: string | null;
+    /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
+     * The entity acted on.
+     */
+    entity_id: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entity_type: EntityType;
+    /**
+     * The stored activity id.
+     */
+    id: string;
+    /**
+     * When it happened.
+     */
+    occurred_at: string;
+    /**
+     * Whose activity this is (a principal string).
+     */
+    subject_id: string;
+};
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -42,6 +89,49 @@ export type AgentAction = (AgentPromptAction & {
  * not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * Stable chronological resume position.
+ */
+export type AgentActivityCursor = {
+    /**
+     * Tie-breaking activity identity.
+     */
+    id: string;
+    /**
+     * Last stored event time.
+     */
+    occurredAt: string;
+};
+
+/**
+ * One page of the activity caused by this session.
+ */
+export type AgentActivityPage = {
+    /**
+     * Original activity rows, also retained in the affected entities' histories.
+     */
+    activities: Array<ActivityWireRow>;
+    nextCursor?: null | AgentActivityCursor;
+};
+
+/**
+ * An agent acting for a person.
+ */
+export type AgentActor = {
+    /**
+     * The agent.
+     */
+    bot: BotId;
+    /**
+     * Where the agent's own work came from.
+     */
+    lineage: Lineage;
+    /**
+     * The person it acts for.
+     */
+    on_behalf_of: MacroUserIdStr;
+};
 
 /**
  * Type-specific state for one agent session setting.
@@ -584,6 +674,11 @@ export type AgentSessionResponse = {
      */
     name: string;
     /**
+     * What opened the session: who or what started it, and what it is about.
+     * `unknown` when nothing recorded it.
+     */
+    origin?: TriggerOrigin;
+    /**
      * The exact message that invoked the bot, if any.
      */
     originatingMessageId?: string | null;
@@ -649,6 +744,69 @@ export type AgentSetModelAction = {
      * The model slug the agent should switch to.
      */
     model: string;
+};
+
+/**
+ * One pending interaction, or one stalled session.
+ */
+export type AgentUpdate = {
+    /**
+     * The runtime the session runs on.
+     */
+    harness: string;
+    /**
+     * What the session is waiting for.
+     */
+    kind: AgentUpdateKind;
+    /**
+     * The choices a permission request offers; empty for other kinds.
+     */
+    options: Array<string>;
+    /**
+     * The session's pull request, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The session.
+     */
+    sessionId: string;
+    /**
+     * The session's name.
+     */
+    sessionName: string;
+    /**
+     * When the request was made, or the session's last activity.
+     */
+    since: string;
+    /**
+     * What is asked, or why the session looks stalled, in at most 240 characters.
+     */
+    summary: string;
+};
+
+/**
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+ * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+ * activity for over 20 minutes.
+ */
+export type AgentUpdateKind = 'permission' | 'elicitation' | 'tool_approval' | 'stalled';
+
+/**
+ * Bounded results; truncation means older qualifying sessions were not folded.
+ */
+export type AgentUpdates = {
+    /**
+     * One entry per pending request or stalled session, newest session activity first.
+     */
+    items: Array<AgentUpdate>;
+    /**
+     * Whether qualifying sessions beyond the 25 most recent were left out.
+     */
+    truncated: boolean;
+    /**
+     * Says what was left out, when truncated.
+     */
+    truncationNotice?: string | null;
 };
 
 /**
@@ -776,6 +934,22 @@ export type CalendarSuggestions = {
 };
 
 /**
+ * Call one tool of a connected app.
+ */
+export type CallConnectedTool = {
+    /**
+     * The tool's arguments, matching its input schema.
+     */
+    arguments?: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    tool: string;
+};
+
+/**
  * Call search supports speakers, channels and attendance status.
  */
 export type CallSearchSuggestions = {
@@ -796,6 +970,19 @@ export type CallSearchSuggestions = {
      */
     status?: string | null;
 };
+
+/**
+ * Who did something that opened a session.
+ */
+export type Caller = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | (AgentActor & {
+    type: 'agent';
+});
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -983,6 +1170,46 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * Information used to choose a coding persona for a task.
+ */
+export type CodingAgent = {
+    /**
+     * What the persona is intended to do.
+     */
+    description?: string | null;
+    /**
+     * Runtime configured for the persona.
+     */
+    harness: string;
+    /**
+     * Persona id to pass to dispatch.
+     */
+    id: string;
+    /**
+     * Saved guidance describing the persona's repositories and specialties.
+     */
+    instructions: string;
+    /**
+     * Persona's configured default model, absent when the provider chooses it.
+     */
+    model?: string | null;
+    /**
+     * User-facing persona name.
+     */
+    name: string;
+};
+
+/**
+ * The coding agents the caller can start a session as right now.
+ */
+export type CodingAgentsResponse = {
+    /**
+     * Available coding personas, built-in ones such as Cursor first.
+     */
+    agents: Array<CodingAgent>;
+};
+
+/**
  * Request or response body for the caller's coding preferences.
  */
 export type CodingPreferencesBody = {
@@ -997,6 +1224,158 @@ export type CodingPreferencesBody = {
 };
 
 /**
+ * Add a custom MCP server to the user's connections.
+ */
+export type ConnectMcpServer = {
+    /**
+     * Display name for the server.
+     */
+    serverName: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
+ * Response from [`ConnectMcpServer`].
+ */
+export type ConnectMcpServerResponse = {
+    /**
+     * Whether the user already had this server before the call.
+     */
+    alreadyConnected: boolean;
+    /**
+     * Whether the server holds the user's sign-in.
+     */
+    authenticated: boolean;
+    /**
+     * Whether the server's tools are turned on.
+     */
+    enabled: boolean;
+    /**
+     * The server's display name.
+     */
+    serverName: string;
+    /**
+     * What happened and what the user still has to do.
+     */
+    summary: string;
+    /**
+     * The server's URL.
+     */
+    url: string;
+};
+
+/**
+ * A connected app the session's agent may use.
+ */
+export type ConnectedApp = {
+    /**
+     * The app's slug, or its custom server key.
+     */
+    key: string;
+    /**
+     * Which store the app comes from.
+     */
+    kind: ConnectedAppKind;
+    /**
+     * Display name, e.g. `Slack` or the owner's name for a custom server.
+     */
+    name: string;
+};
+
+/**
+ * Which store a connected app comes from.
+ */
+export type ConnectedAppKind = 'app' | 'custom';
+
+/**
+ * One tool a connected app serves.
+ */
+export type ConnectedTool = {
+    /**
+     * What the server says the tool does.
+     */
+    description?: string | null;
+    /**
+     * JSON Schema for the tool's arguments.
+     */
+    inputSchema: {
+        [key: string]: unknown;
+    };
+    /**
+     * The tool's name on its server.
+     */
+    name: string;
+};
+
+/**
+ * One tool found by a search across the agent's connected apps.
+ */
+export type ConnectedToolMatch = {
+    /**
+     * The app serving the tool.
+     */
+    app: ConnectedApp;
+    /**
+     * The tool.
+     */
+    tool: ConnectedTool;
+};
+
+/**
+ * A connected tool's answer: MCP's `CallToolResult`.
+ */
+export type ConnectedToolResult = {
+    /**
+     * MCP content blocks, e.g. `{type: "text", text}`.
+     */
+    content: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * The tool failed, or could not run; `content` says why.
+     */
+    isError: boolean;
+    /**
+     * Structured output, for tools that declare an output schema.
+     */
+    structuredContent?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+/**
+ * The best matches across the agent's connected apps, and the apps whose
+ * tools could not be listed, which the search did not cover.
+ */
+export type ConnectedToolSearch = {
+    /**
+     * At most [`MAX_TOOL_MATCHES`] tools, best first.
+     */
+    matches: Array<ConnectedToolMatch>;
+    /**
+     * Apps whose tools could not be listed.
+     */
+    unsearched: Array<ConnectedApp>;
+};
+
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export type ConnectorTool = {
+    /**
+     * What the action supports.
+     */
+    description: string;
+    /**
+     * Upstream tool name.
+     */
+    name: string;
+};
+
+/**
  * Request body for a control operation on a live session.
  *
  * A wrapper around the operation rather than the bare enum so that fields
@@ -1008,6 +1387,12 @@ export type CodingPreferencesBody = {
  */
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
+    /**
+     * The app tab the person typed this in (a UUID the tab keeps for its
+     * lifetime), so what the turn opens in the app reaches that tab only.
+     * Only a person's own request may send it; a runtime's is refused.
+     */
+    clientId?: string | null;
     /**
      * Why the agent is being asked. Only a runtime forwarding a triggered
      * prompt may send it; a user's request carrying it is refused.
@@ -1120,6 +1505,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -1234,6 +1627,90 @@ export type DiscoverAgentCapabilitiesResponse = {
 };
 
 /**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export type DiscoverConnectorsResponse = {
+    /**
+     * Include verbatim only if an advertised tool supports the requested task.
+     */
+    connect_markup?: string | null;
+    /**
+     * Catalog or capability results.
+     */
+    result: DiscoveryResult;
+};
+
+/**
+ * A verified app identity from the directory.
+ */
+export type DiscoveredApp = {
+    /**
+     * Exact identity to inspect or connect.
+     */
+    app_slug: string;
+    /**
+     * Directory description; inspect tools to verify specific capabilities.
+     */
+    description?: string | null;
+    /**
+     * Human-readable app name.
+     */
+    name: string;
+};
+
+/**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest = {
+    operation: 'search';
+    /**
+     * App name, e.g. "Notion" or "Linear", not a task description.
+     */
+    query: string;
+} | {
+    /**
+     * Exact app slug from search results.
+     */
+    app_slug: string;
+    operation: 'inspect';
+};
+
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult = {
+    /**
+     * Matching apps.
+     */
+    apps: Array<DiscoveredApp>;
+    /**
+     * Narrow the app name if this is true.
+     */
+    more_results: boolean;
+    operation: 'search';
+} | {
+    /**
+     * App from the directory.
+     */
+    app: DiscoveredApp;
+    /**
+     * Whether this caller has an enabled connection. For an app that
+     * connects through its own MCP server, that connection is checked
+     * there, not in Pipedream.
+     */
+    connected: boolean;
+    operation: 'inspect';
+    /**
+     * Advertised tools. Use SearchTools after connecting to load them.
+     */
+    tools: Array<ConnectorTool>;
+    /**
+     * True when some advertised tools were omitted.
+     */
+    tools_truncated: boolean;
+};
+
+/**
  * A validated document identifier. Historical document ids need not be UUIDs.
  */
 export type DocumentId = string;
@@ -1333,6 +1810,11 @@ export type EmailSuggestions = {
      */
     subject?: string | null;
 };
+
+/**
+ * The type of an entity in Macro
+ */
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -1579,9 +2061,54 @@ export type IntentScore = {
 };
 
 /**
+ * Where an acting agent's work came from.
+ */
+export type Lineage = {
+    /**
+     * The first non-agent cause of its work.
+     */
+    root: Root;
+    /**
+     * The acting session.
+     */
+    session: string;
+    type: 'session';
+} | {
+    type: 'unattributed';
+};
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
+ * The task to link a session to.
+ */
+export type LinkTaskRequest = {
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
+
+/**
+ * The task a session is now linked to.
+ */
+export type LinkedTaskResponse = {
+    /**
+     * The session's pull request, now linked to the task, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * Put this in the pull request description so GitHub activity reaches the task.
+     */
+    reference: string;
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
 
 /**
  * HTTP request selecting one provider to probe.
@@ -1642,6 +2169,8 @@ export type LogFrameDto = {
      */
     direction: LogDirectionDto;
 };
+
+export type MacroUserIdStr = string;
 
 /**
  * The entity whose permissions and lifecycle govern a message.
@@ -1729,6 +2258,26 @@ export type NoteSuggestions = {
      * Suggested note, task, or event title.
      */
     title?: string | null;
+};
+
+/**
+ * Open an item in the prompting person's app tab.
+ */
+export type OpenInApp = {
+    /**
+     * The running execution asking; it must belong to the session's
+     * current turn.
+     */
+    executionId: ExecutionId;
+    /**
+     * An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:
+     * what follows `/app` in a Macro link. Never an origin.
+     */
+    path: string;
+    /**
+     * Where to put it; beside the agent by default.
+     */
+    placement?: UiPlacement;
 };
 
 /**
@@ -2155,6 +2704,39 @@ export type ReviewRecord = {
 };
 
 /**
+ * The first non-agent cause. An agent cannot be one, so a chain always ends
+ * at a person or a routine.
+ */
+export type Root = {
+    type: 'person';
+    /**
+     * Who.
+     */
+    user: MacroUserIdStr;
+} | {
+    /**
+     * The routine.
+     */
+    routine: string;
+    type: 'routine';
+};
+
+/**
+ * What made a routine fire.
+ */
+export type RoutineCause = {
+    type: 'scheduled';
+} | {
+    type: 'manual';
+} | {
+    /**
+     * The event.
+     */
+    event_id: string;
+    type: 'event';
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -2394,6 +2976,108 @@ export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' 
  */
 export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
 
+/**
+ * What opened a session.
+ */
+export type TriggerOrigin = {
+    /**
+     * Who posted it.
+     */
+    by: Caller;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'mentioned';
+} | {
+    /**
+     * Who wrote.
+     */
+    by: MacroUserIdStr;
+    /**
+     * The message.
+     */
+    message_id: string;
+    origin: 'conversation';
+} | {
+    /**
+     * Who assigned it.
+     */
+    by: Caller;
+    origin: 'task_assigned';
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who added the task to the project.
+     */
+    by: Caller;
+    origin: 'project_inherited';
+    /**
+     * The project.
+     */
+    project: string;
+    /**
+     * The task.
+     */
+    task: string;
+} | {
+    /**
+     * Who opened it.
+     */
+    by: MacroUserIdStr;
+    origin: 'requested';
+} | {
+    /**
+     * The user whose authority the work runs under.
+     */
+    on_behalf_of: MacroUserIdStr;
+    origin: 'dispatched';
+} | {
+    /**
+     * What made it fire.
+     */
+    firing: RoutineCause;
+    origin: 'routine';
+    /**
+     * The routine.
+     */
+    routine: string;
+} | {
+    origin: 'unknown';
+};
+
+/**
+ * What happened to a command.
+ */
+export type UiCommandOutcome = {
+    /**
+     * The command's id, as the tab sees it.
+     */
+    commandId: string;
+    status: 'sent';
+} | {
+    status: 'no_client';
+} | {
+    /**
+     * Why.
+     */
+    reason: UiDeclineReason;
+    status: 'declined';
+};
+
+/**
+ * Why a command was not sent.
+ */
+export type UiDeclineReason = 'turned_off' | 'not_allowed_route' | 'rate_limited';
+
+/**
+ * Where the opened item goes. Neither replaces what the person is reading.
+ */
+export type UiPlacement = 'beside-agent' | 'new';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2451,6 +3135,28 @@ export type WithAgentSessionId = {
      * The session id.
      */
     id: string;
+};
+
+/**
+ * One account's active registration of one session as its work.
+ */
+export type WorkRegistrationResponse = {
+    /**
+     * The account whose work this is.
+     */
+    accountId: string;
+    /**
+     * The session registered.
+     */
+    agentSessionId: string;
+    /**
+     * The registration.
+     */
+    id: string;
+    /**
+     * When the account registered it.
+     */
+    registeredAt: string;
 };
 
 export type GetAgentAutoArchivePreferencesData = {
@@ -2514,7 +3220,7 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -2739,7 +3445,7 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -2965,6 +3671,26 @@ export type PreviewAgentSessionsResponses = {
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
 
+export type ListAgentSessionUpdatesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/updates';
+};
+
+export type ListAgentSessionUpdatesErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentSessionUpdatesError = ListAgentSessionUpdatesErrors[keyof ListAgentSessionUpdatesErrors];
+
+export type ListAgentSessionUpdatesResponses = {
+    200: AgentUpdates;
+};
+
+export type ListAgentSessionUpdatesResponse = ListAgentSessionUpdatesResponses[keyof ListAgentSessionUpdatesResponses];
+
 export type WarmAgentSessionHandlerData = {
     body: WarmAgentSessionRequest;
     path?: never;
@@ -3034,6 +3760,44 @@ export type GetAgentSessionResponses = {
 };
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type GetAgentSessionActivityData = {
+    body?: never;
+    path: {
+        session_id: string;
+    };
+    query?: {
+        /**
+         * Restrict activity to one code-mode invocation within this session.
+         */
+        agentCorrelationId?: string | null;
+        /**
+         * Cursor timestamp from the previous page.
+         */
+        beforeAt?: string | null;
+        /**
+         * Cursor activity ID from the previous page.
+         */
+        beforeId?: string | null;
+        /**
+         * Page size, from 1 to 100; defaults to 50.
+         */
+        limit?: number | null;
+    };
+    url: '/agent-sessions/{session_id}/activity';
+};
+
+export type GetAgentSessionActivityErrors = {
+    400: unknown;
+    401: unknown;
+    403: unknown;
+};
+
+export type GetAgentSessionActivityResponses = {
+    200: AgentActivityPage;
+};
+
+export type GetAgentSessionActivityResponse = GetAgentSessionActivityResponses[keyof GetAgentSessionActivityResponses];
 
 export type ReportAgentSessionAppConnectedData = {
     body: AppConnectedRequest;
@@ -3262,6 +4026,153 @@ export type GetCodeExecutionResponses = {
 };
 
 export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
+
+export type ListExecutionConnectedAppsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        /**
+         * A running execution of the session's current turn
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps';
+};
+
+export type ListExecutionConnectedAppsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListExecutionConnectedAppsResponses = {
+    200: Array<ConnectedApp>;
+};
+
+export type ListExecutionConnectedAppsResponse = ListExecutionConnectedAppsResponses[keyof ListExecutionConnectedAppsResponses];
+
+export type DiscoverConnectedAppsData = {
+    body: DiscoveryRequest;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover';
+};
+
+export type DiscoverConnectedAppsErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type DiscoverConnectedAppsResponses = {
+    200: DiscoverConnectorsResponse;
+};
+
+export type DiscoverConnectedAppsResponse = DiscoverConnectedAppsResponses[keyof DiscoverConnectedAppsResponses];
+
+export type AddConnectedMcpServerData = {
+    body: ConnectMcpServer;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers';
+};
+
+export type AddConnectedMcpServerErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type AddConnectedMcpServerResponses = {
+    200: ConnectMcpServerResponse;
+};
+
+export type AddConnectedMcpServerResponse = AddConnectedMcpServerResponses[keyof AddConnectedMcpServerResponses];
+
+export type SearchConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query: {
+        /**
+         * Keywords matched against tool names and descriptions, e.g. `linear issue`.
+         */
+        query: string;
+    };
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools';
+};
+
+export type SearchConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type SearchConnectedAppToolsResponses = {
+    200: ConnectedToolSearch;
+};
+
+export type SearchConnectedAppToolsResponse = SearchConnectedAppToolsResponses[keyof SearchConnectedAppToolsResponses];
+
+export type CallConnectedAppToolData = {
+    body: CallConnectedTool;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/calls';
+};
+
+export type CallConnectedAppToolErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type CallConnectedAppToolResponses = {
+    200: ConnectedToolResult;
+};
+
+export type CallConnectedAppToolResponse = CallConnectedAppToolResponses[keyof CallConnectedAppToolResponses];
+
+export type ListConnectedAppToolsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+        kind: ConnectedAppKind;
+        /**
+         * The app's slug or custom server key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools';
+};
+
+export type ListConnectedAppToolsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListConnectedAppToolsResponses = {
+    200: Array<ConnectedTool>;
+};
+
+export type ListConnectedAppToolsResponse = ListConnectedAppToolsResponses[keyof ListConnectedAppToolsResponses];
 
 export type ListExecutionReviewsData = {
     body?: never;
@@ -3761,6 +4672,34 @@ export type PutAgentSessionSandboxSizeResponses = {
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
 
+export type LinkAgentSessionTaskData = {
+    body: LinkTaskRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/task';
+};
+
+export type LinkAgentSessionTaskErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type LinkAgentSessionTaskError = LinkAgentSessionTaskErrors[keyof LinkAgentSessionTaskErrors];
+
+export type LinkAgentSessionTaskResponses = {
+    200: LinkedTaskResponse;
+};
+
+export type LinkAgentSessionTaskResponse = LinkAgentSessionTaskResponses[keyof LinkAgentSessionTaskResponses];
+
 export type AnswerAgentSessionToolApprovalData = {
     body: AnswerToolApprovalRequest;
     path: {
@@ -3803,6 +4742,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
+export type OpenInAppData = {
+    body: OpenInApp;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/ui-commands';
+};
+
+export type OpenInAppErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type OpenInAppResponses = {
+    200: UiCommandOutcome;
+};
+
+export type OpenInAppResponse = OpenInAppResponses[keyof OpenInAppResponses];
+
 export type PresentSessionViewData = {
     body: PresentView;
     path: {
@@ -3822,6 +4781,108 @@ export type PresentSessionViewResponses = {
 };
 
 export type PresentSessionViewResponse = PresentSessionViewResponses[keyof PresentSessionViewResponses];
+
+export type UnregisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type UnregisterAgentSessionWorkErrors = {
+    401: string;
+    500: string;
+};
+
+export type UnregisterAgentSessionWorkError = UnregisterAgentSessionWorkErrors[keyof UnregisterAgentSessionWorkErrors];
+
+export type UnregisterAgentSessionWorkResponses = {
+    /**
+     * The caller has no active registration of the session
+     */
+    204: void;
+};
+
+export type UnregisterAgentSessionWorkResponse = UnregisterAgentSessionWorkResponses[keyof UnregisterAgentSessionWorkResponses];
+
+export type RegisterAgentSessionWorkData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/work-registration';
+};
+
+export type RegisterAgentSessionWorkErrors = {
+    401: string;
+    403: string;
+    409: string;
+    500: string;
+};
+
+export type RegisterAgentSessionWorkError = RegisterAgentSessionWorkErrors[keyof RegisterAgentSessionWorkErrors];
+
+export type RegisterAgentSessionWorkResponses = {
+    200: WorkRegistrationResponse;
+};
+
+export type RegisterAgentSessionWorkResponse = RegisterAgentSessionWorkResponses[keyof RegisterAgentSessionWorkResponses];
+
+export type ListAgentWorkRegistrationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-work-registrations';
+};
+
+export type ListAgentWorkRegistrationsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentWorkRegistrationsError = ListAgentWorkRegistrationsErrors[keyof ListAgentWorkRegistrationsErrors];
+
+export type ListAgentWorkRegistrationsResponses = {
+    200: Array<WorkRegistrationResponse>;
+};
+
+export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
+
+export type ListCodingAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/coding-agents';
+};
+
+export type ListCodingAgentsErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The personas or their runtime connections could not be read
+     */
+    500: unknown;
+};
+
+export type ListCodingAgentsResponses = {
+    /**
+     * The caller's available coding agents
+     */
+    200: CodingAgentsResponse;
+};
+
+export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

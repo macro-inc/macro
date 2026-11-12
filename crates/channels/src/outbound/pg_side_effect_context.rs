@@ -124,10 +124,22 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
                     .ok()
                     .map(|id| id.into_owned())
             });
+        // Failing to read this must notify people rather than lose it for them.
+        let connected_call_participants = get_connected_call_participants(&self.pool, thread_id)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    %thread_id,
+                    "failed to read who is connected to the thread's call"
+                );
+            })
+            .unwrap_or_default();
 
         Ok(ThreadNotificationContext {
             participants,
             parent_sender_id,
+            connected_call_participants,
         })
     }
 
@@ -197,7 +209,7 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
         r#"
         SELECT sender_id
         FROM comms_messages
-        WHERE id = $1
+        WHERE id = $1 AND kind = 'message'
         ORDER BY created_at ASC
         "#,
         message_id,
@@ -214,12 +226,39 @@ async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::R
         SELECT COUNT(id) AS "count!"
         FROM comms_messages
         WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
+          AND kind = 'message'
         "#,
         channel_id,
     )
     .fetch_one(pool)
     .await?;
     Ok(count)
+}
+
+async fn get_connected_call_participants(
+    pool: &PgPool,
+    thread_id: Uuid,
+) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+    let rows = sqlx::query_as!(
+        UserIdRow,
+        r#"
+        SELECT cp.user_id AS "user_id!"
+        FROM comms_messages root
+        JOIN call_participants cp ON cp.call_id = root.id
+        WHERE root.id = $1 AND root.kind = 'call_root' AND cp.left_at IS NULL
+        "#,
+        thread_id,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            MacroUserIdStr::parse_from_str(&row.user_id)
+                .ok()
+                .map(MacroUserIdStr::into_owned)
+        })
+        .collect())
 }
 
 async fn get_channel_participants_for_thread_id(
@@ -236,6 +275,7 @@ async fn get_channel_participants_for_thread_id(
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
+              AND m.kind = 'message'
               AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id

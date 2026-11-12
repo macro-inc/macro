@@ -53,8 +53,6 @@ export default {
     projectBadge: 'Projet',
     newProject: 'Nouveau projet',
     contentAlreadyOpen: 'Contenu déjà ouvert',
-    unableToOpenConversation:
-      'Impossible d’ouvrir la conversation. Veuillez réessayer.',
     mobileSearchPlaceholder: 'Rechercher…',
     closeSearch: 'Fermer la recherche',
     searchFullTextFor: 'Recherche en texte intégral de « {{query}} »',
@@ -795,7 +793,7 @@ export default {
     tabMobileApp: 'App mobile',
     tabTags: 'Tags',
     tabIntegrations: 'Intégrations',
-    tabRuntimes: 'Runtimes',
+    tabRuntimes: 'Machines',
     tabMcpServer: 'Serveur MCP',
     tabApiKeys: 'Clés API',
     tabBots: 'Bots',

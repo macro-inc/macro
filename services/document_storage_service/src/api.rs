@@ -49,9 +49,17 @@ mod threads;
 // auth based constants
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let sync_sessions = state.sync_sessions.clone();
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        state.db.clone(),
+        state.jwt_validation_args.clone(),
+    );
     let app = api_router(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -199,7 +207,11 @@ fn api_router(state: ApiContext) -> Router {
                                 if !uri.contains("/upload") {
                                     return next.run(req).await;
                                 }
-                                tokio::task::spawn(next.run(req)).await.unwrap()
+                                tokio::task::spawn(agent_correlation::context::capture(
+                                    next.run(req),
+                                ))
+                                .await
+                                .unwrap()
                             }
                             _ => next.run(req).await,
                         }
@@ -288,6 +300,18 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/channel-sections",
+            channel_labels::inbound::axum_router::channel_sections_router(
+                state.channel_sections_state.clone(),
+            ),
+        )
+        .nest(
+            "/account-managers",
+            account_manager::inbound::axum_router::account_manager_router(
+                state.account_manager_state.clone(),
+            ),
+        )
+        .nest(
             "/user-api-keys",
             user_api_key::inbound::axum_router::user_api_key_router(
                 state.user_api_key_state.clone(),
@@ -319,7 +343,12 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/initiatives",
-            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone())
+                .merge(
+                    initiative::inbound::axum_router::initiative_activity_router(
+                        state.initiative_activity_state.clone(),
+                    ),
+                ),
         )
         .nest(
             "/databases",
@@ -377,10 +406,14 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
-                "/pipelines",
-                crm::inbound::pipelines::router(state.pipeline_state.clone()),
-            ),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone())
+                .nest(
+                    "/pipelines",
+                    crm::inbound::pipelines::router(state.pipeline_state.clone()),
+                )
+                .merge(crm::inbound::pipeline_workflows::router(
+                    state.pipeline_workflow_state.clone(),
+                )),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(

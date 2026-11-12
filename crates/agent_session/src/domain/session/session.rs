@@ -162,6 +162,24 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
+    /// Whether the connection has nothing open: live, with no turn, held
+    /// elicitation, permission request or queued action. Only such a
+    /// connection may be released without telling anyone, because nothing
+    /// is waiting on it.
+    pub fn is_idle(&self) -> bool {
+        matches!(
+            self.phase,
+            SessionPhase::Live {
+                elicitation: None,
+                ..
+            }
+        ) && self.in_flight_turn.is_none()
+            && self.outstanding_permissions.is_empty()
+            && self.pending.is_empty()
+            && !self.reload_required
+            && !self.mcp_refresh_required
+    }
+
     /// Current phase.
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
@@ -213,6 +231,10 @@ impl<Token> SessionMachine<Token> {
                 effects
             }
             Input::ReplaceMcpServers(servers) => self.on_mcp_servers_replaced(servers),
+            Input::SetPermissionPolicy(policy) => {
+                self.permission_policy = policy;
+                vec![]
+            }
             Input::Closed(reason) => self.on_closed(reason),
         }
     }

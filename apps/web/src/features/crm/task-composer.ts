@@ -35,13 +35,6 @@ export function crmTaskComposerContext(
   }
   return {
     key: record ? `crm:${record.type}:${record.id}` : 'crm',
-    visiblePropertyIds: [
-      SYSTEM_PROPERTY_IDS.COMPANIES,
-      SYSTEM_PROPERTY_IDS.CONTACTS,
-      SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      SYSTEM_PROPERTY_IDS.DUE_DATE,
-      SYSTEM_PROPERTY_IDS.PRIORITY,
-    ],
     initialPropertyValues,
   };
 }

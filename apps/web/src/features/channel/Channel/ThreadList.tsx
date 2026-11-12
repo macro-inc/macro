@@ -114,6 +114,8 @@ type ThreadListProps = {
    * the pointer instead of carrying it away.
    */
   holdOnDisclosure?: boolean;
+  /** Keep a tall thread's reading gap through responsive width changes. */
+  preserveReflowGap?: boolean;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -144,7 +146,10 @@ export function ThreadList(props: ThreadListProps) {
     const keys = [...props.keys()];
     return (index: number) => keys[index];
   });
+  let trackReadingGap = false;
   const scrollIntent = createScrollIntentTracker(() => {
+    trackReadingGap = true;
+    cancelReflow();
     lifecycle.send('user-scroll');
     props.onUserNavigation?.();
   });
@@ -164,6 +169,19 @@ export function ThreadList(props: ThreadListProps) {
   let nearTopKey: string | undefined;
   let nearBottomFired = false;
   let previousScrollOffset = snapshot?.scrollOffset ?? 0;
+  let readingGap = snapshot?.isNearBottom === false ? undefined : 0;
+  let observedWidth = 0;
+  let reflowFrame: number | undefined;
+  let reflowing = false;
+  let hiddenForReflow = false;
+  function cancelReflow() {
+    reflowing = false;
+    if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+    reflowFrame = undefined;
+  }
+  onCleanup(() => {
+    if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+  });
   let explicitScrollDownDistance = 0;
   let releaseNavigation: void | (() => void);
   // Rows that mounted or moved in the current tick, measured together.
@@ -309,10 +327,25 @@ export function ThreadList(props: ThreadListProps) {
     // A restored snapshot or a newly remounted message can have a different
     // height. The default sync path returns cached sizes, exposing the old
     // layout until ResizeObserver fires. Read mounted rows before first paint.
-    measureElement: (element, entry, instance) =>
-      entry
+    measureElement: (element, entry, instance) => {
+      const unmeasured =
+        element.offsetWidth === 0 || element.offsetHeight === 0;
+      const hiddenViewport = !scrollEl()?.clientHeight;
+      if (props.preserveReflowGap && (unmeasured || hiddenViewport)) {
+        const index = Number(element.getAttribute('data-index'));
+        const key = instance.options.getItemKey(index);
+        return (
+          instance.itemSizeCache.get(key) ??
+          instance.measurementsCache[index]?.size ??
+          BASE_ITEM_SIZE
+        );
+      }
+      if (props.preserveReflowGap)
+        return batchHeights.get(element) ?? element.offsetHeight;
+      return entry
         ? measureElement(element, entry, instance)
-        : (batchHeights.get(element) ?? element.offsetHeight),
+        : (batchHeights.get(element) ?? element.offsetHeight);
+    },
     // Apply row and composer measurements before paint. Deferring them to the
     // next frame exposes stale geometry and can lose the end anchor on send.
     useAnimationFrameWithResizeObserver: false,
@@ -400,6 +433,19 @@ export function ThreadList(props: ThreadListProps) {
           writingScroll ||
           (programmaticOffset !== undefined &&
             Math.abs(offset - programmaticOffset) < 1.5);
+        const tracking = trackReadingGap || readingGap === undefined;
+        const visible =
+          element && element.clientWidth > 0 && element.clientHeight > 0;
+        const stableWidth = visible && element.clientWidth === observedWidth;
+        const canReadGap = props.preserveReflowGap && tracking && !reflowing;
+        if (canReadGap && stableWidth) {
+          const gap = Math.max(
+            0,
+            element.scrollHeight - element.clientHeight - offset
+          );
+          readingGap = gap <= NEAR_BOTTOM_THRESHOLD ? 0 : gap;
+        }
+        if (!isScrolling) trackReadingGap = false;
         programmaticOffset = undefined;
         if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
         const logicalOffset =
@@ -439,6 +485,23 @@ export function ThreadList(props: ThreadListProps) {
     observeElementRect: (instance, callback) =>
       observeElementRect(instance, (rect) => {
         const previousHeight = instance.scrollRect?.height ?? 0;
+        const visible = rect.width > 0 && rect.height > 0;
+        const widthChanged =
+          visible &&
+          observedWidth > 0 &&
+          (hiddenForReflow || observedWidth !== rect.width);
+        if (visible) {
+          observedWidth = rect.width;
+          hiddenForReflow = false;
+        } else if (props.preserveReflowGap && observedWidth > 0) {
+          hiddenForReflow = true;
+          trackReadingGap = false;
+          reflowing = false;
+          if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+        }
+        const preserveGap = props.preserveReflowGap && readingGap !== undefined;
+        if (preserveGap && lifecycle.isReady() && widthChanged)
+          reflowing = true;
         const wasAtEnd =
           instance.getTotalSize() -
             previousHeight -
@@ -457,6 +520,25 @@ export function ThreadList(props: ThreadListProps) {
         ) {
           scrollCompensation?.finish();
           instance.scrollToEnd();
+        }
+        if (props.preserveReflowGap && reflowing) {
+          if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+          reflowFrame = requestAnimationFrame(() => {
+            reflowFrame = requestAnimationFrame(() => {
+              reflowFrame = undefined;
+              if (lifecycle.isDisposed()) return;
+              instance.scrollToOffset(
+                Math.max(
+                  0,
+                  instance.getTotalSize() -
+                    (instance.scrollRect?.height ?? 0) -
+                    (readingGap ?? 0)
+                ),
+                { align: 'start', behavior: 'auto' }
+              );
+              reflowing = false;
+            });
+          });
         }
       }),
     onChange: (instance) => {
@@ -559,7 +641,9 @@ export function ThreadList(props: ThreadListProps) {
   ): boolean => {
     const index = props.keys().indexOf(id);
     if (index < 0) return false;
+    cancelReflow();
     scrollCompensation?.finish();
+    readingGap = undefined;
     virtualizer.scrollToIndex(index, { align });
     scheduleScrollState();
     return true;
@@ -574,9 +658,11 @@ export function ThreadList(props: ThreadListProps) {
     requestLayoutUpdate: scheduleScrollState,
     scrollToLatest: (behavior) => {
       if (!canNavigate() || !props.keys().length) return false;
+      cancelReflow();
       lifecycle.send('navigate');
       setHolding(false);
       scrollCompensation?.finish();
+      readingGap = 0;
       virtualizer.scrollToEnd({ behavior });
       scheduleScrollState();
       return true;
@@ -591,11 +677,13 @@ export function ThreadList(props: ThreadListProps) {
     scrollToElement: (targetElement) => {
       const el = scrollEl();
       if (!canNavigate() || !el || !el.contains(targetElement)) return false;
+      cancelReflow();
       lifecycle.send('navigate');
       setHolding(false);
       scrollCompensation?.finish();
       // Both rects come from the same committed layout, including short-list
       // bottom alignment and floating chrome. No stale estimate is involved.
+      readingGap = undefined;
       const targetRect = targetElement.getBoundingClientRect();
       const scrollRect = el.getBoundingClientRect();
       const { start, end } = insets();

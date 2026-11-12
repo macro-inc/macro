@@ -53,7 +53,6 @@ github = { path = "../github", default-features = false, features = [
 ] }
 feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev" }
-kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { path = "../mcp_client" }
@@ -74,11 +73,13 @@ messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rand = { workspace = true }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 serde_json = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
   "macros",
@@ -99,6 +100,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 entity_registry = { path = "../entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env = { path = "../macro_env" }
 bots = { path = "../bots", default-features = false, features = ["test-utils"] }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }
 messages = { path = "../messages", features = ["test-utils"] }
@@ -108,7 +110,6 @@ dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
-mockall = { workspace = true }
 model_user = { path = "../model_user" }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }

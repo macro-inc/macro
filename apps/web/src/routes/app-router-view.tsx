@@ -35,7 +35,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { lazy } from 'solid-js';
+import { type JSX, lazy } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
@@ -59,6 +59,7 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsCalendarRouteView,
   NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
@@ -66,7 +67,6 @@ import {
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
-  RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
   TasksDetailRouteView,
@@ -85,6 +85,7 @@ import {
   WelcomePage,
 } from './pages';
 import {
+  accountManagerRoute,
   activityRoute,
   agentChatsRoute,
   agentSetupDoneRoute,
@@ -111,10 +112,14 @@ import {
   crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
   crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -146,6 +151,7 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
   prDetailRoute,
@@ -177,6 +183,10 @@ import {
   withMeetingShell,
 } from './shells';
 
+const AccountManagerPage = lazyNamed(
+  () => import('@app/features/account-manager/account-manager-page'),
+  'AccountManagerPage'
+);
 const AgentSetupPage = lazyNamed(
   () => import('@app/features/agent-setup/agent-setup-page'),
   'AgentSetupPage'
@@ -217,34 +227,17 @@ function debugView(componentId: string) {
   });
 }
 
-export function AppRouterView() {
+/**
+ * The app's routes, as `<SplitRouter.Route>` elements; read once by the
+ * router, and by tests that need the real route table.
+ */
+export function appRouteElements(): JSX.Element {
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
   ));
 
   return (
-    <Router
-      history={(routes) =>
-        useSolidRouterHistory({
-          base: ROUTER_BASE,
-          mode: isTauri() ? 'hash' : 'path',
-          transformPath: (path) =>
-            upgradeLegacyPath(routes, transformShortIdInUrlPathname(path)),
-        })
-      }
-      paneStore={createMemoryPaneStore()}
-      policy={createAppPanePolicy({
-        manager: globalSplitManager,
-        toContent: splitContentFromLocation,
-        defaultLocation: () => ({
-          route: paneRoute({ id: 'view-home', params: {} }),
-        }),
-        stacked: isNativeMobilePlatform,
-      })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
-      globalSearch={['referral_code']}
-      defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
-    >
+    <>
       <Route definition={baseRoute} component={BasePathComponent} />
       <Route definition={publicRoute} component={FocusedShell}>
         <Route
@@ -268,6 +261,10 @@ export function AppRouterView() {
         <Route definition={taskSlugRoute} component={TaskSlugPage} />
         <Route definition={signupRoute} component={SignupPage} />
         <Route definition={agentSignupRoute} component={AgentSignup} />
+        <Route
+          definition={accountManagerRoute}
+          component={AccountManagerPage}
+        />
         <Route definition={agentSetupRoute} component={AgentSetupPage} />
         <Route
           definition={agentSetupDoneRoute}
@@ -335,7 +332,8 @@ export function AppRouterView() {
         <Route definition={settingsRoute} component={SettingsRouteView} />
         <Route
           definition={routineCreateRoute}
-          component={RoutineCreateRouteView}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
         />
         <Route
           definition={routineDetailRoute}
@@ -386,7 +384,12 @@ export function AppRouterView() {
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}
-        />
+        >
+          <Route
+            definition={notificationsCalendarRoute}
+            component={NotificationsCalendarRouteView}
+          />
+        </Route>
         <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}
@@ -476,11 +479,15 @@ export function AppRouterView() {
             <Route definition={crmPipelineRecordRoute} />
             <Route definition={crmPipelineRecordItemRoute} />
             <Route definition={crmPipelineRecordFileItemRoute} />
+            <Route definition={crmPipelineRetiredDatabaseRoute} />
+            <Route definition={crmPipelineRetiredRecordDatabasesRoute} />
           </Route>
           <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
           <Route definition={crmRecordItemRoute} />
           <Route definition={crmRecordFileItemRoute} />
+          <Route definition={crmRetiredDatabaseRoute} />
+          <Route definition={crmRetiredRecordDatabasesRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />
@@ -490,6 +497,35 @@ export function AppRouterView() {
         <Route definition={legacyContentRoute} />
         <Route definition={notFoundRoute} component={NotFound} />
       </Route>
+    </>
+  );
+}
+
+export function AppRouterView() {
+  return (
+    <Router
+      history={(routes) =>
+        useSolidRouterHistory({
+          base: ROUTER_BASE,
+          mode: isTauri() ? 'hash' : 'path',
+          transformPath: (path) =>
+            upgradeLegacyPath(routes, transformShortIdInUrlPathname(path)),
+        })
+      }
+      paneStore={createMemoryPaneStore()}
+      policy={createAppPanePolicy({
+        manager: globalSplitManager,
+        toContent: splitContentFromLocation,
+        defaultLocation: () => ({
+          route: paneRoute({ id: 'view-home', params: {} }),
+        }),
+        stacked: isNativeMobilePlatform,
+      })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      globalSearch={['referral_code']}
+      defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
+    >
+      {appRouteElements()}
     </Router>
   );
 }

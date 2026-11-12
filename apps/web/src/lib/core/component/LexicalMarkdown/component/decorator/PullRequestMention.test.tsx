@@ -1,5 +1,5 @@
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { LexicalCommand } from 'lexical';
 import { createSignal, type JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,10 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   openExternalUrl: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastFailure: vi.fn(),
+  writeText: vi.fn<(text: string) => Promise<void>>(),
 }));
 
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: mocks.openWithSplit }),
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: mocks.toastSuccess, failure: mocks.toastFailure },
 }));
 vi.mock('@core/util/url', () => ({
   openExternalUrl: mocks.openExternalUrl,
@@ -33,7 +39,10 @@ vi.mock('../../context/LexicalWrapperContext', async () => {
 
 import { KEY_ENTER_COMMAND } from 'lexical';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { PullRequestMention } from './PullRequestMention';
+import {
+  PullRequestMention,
+  PullRequestPreviewCard,
+} from './PullRequestMention';
 
 const title = 'feat(text-paste): smart paste for GitHub pull request URLs';
 const url = 'https://github.com/macro-inc/macro/pull/7956';
@@ -93,6 +102,13 @@ beforeEach(() => {
   setGithubLinkStatus('linked');
   mocks.openWithSplit.mockReset();
   mocks.openExternalUrl.mockReset();
+  mocks.toastSuccess.mockReset();
+  mocks.toastFailure.mockReset();
+  mocks.writeText.mockReset();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: mocks.writeText },
+  });
 });
 
 describe('pull request mention face', () => {
@@ -270,5 +286,46 @@ describe('pull request mention face', () => {
     expect(enterHandler?.(null)).toBe(true);
     expect(mocks.openExternalUrl).toHaveBeenCalledWith(url);
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+});
+
+describe('pull request preview card', () => {
+  it('goes to the pull request on GitHub', () => {
+    setResolved(pullRequest);
+    render(() => <PullRequestPreviewCard id={pullRequest.id} />);
+    const link = screen.getByRole('link', { name: 'Open on GitHub' });
+    expect(link.getAttribute('href')).toBe(url);
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('copies the GitHub link and confirms it', async () => {
+    mocks.writeText.mockResolvedValue(undefined);
+    setResolved(pullRequest);
+    render(() => <PullRequestPreviewCard id={pullRequest.id} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy GitHub Link' }));
+
+    await waitFor(() =>
+      expect(mocks.toastSuccess).toHaveBeenCalledWith(
+        'GitHub link copied to clipboard'
+      )
+    );
+    expect(mocks.writeText).toHaveBeenCalledWith(url);
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('reports a copy the clipboard refuses', async () => {
+    mocks.writeText.mockRejectedValue(new Error('denied'));
+    setResolved(pullRequest);
+    render(() => <PullRequestPreviewCard id={pullRequest.id} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy GitHub Link' }));
+
+    await waitFor(() =>
+      expect(mocks.toastFailure).toHaveBeenCalledWith(
+        'Could not copy GitHub link'
+      )
+    );
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
 });

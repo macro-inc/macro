@@ -10,7 +10,6 @@ use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_
 #[cfg(test)]
 mod test;
 
-pub mod ai_operations;
 mod build_context;
 pub mod crm_csv_files;
 mod deferred;
@@ -27,7 +26,6 @@ pub mod search;
 mod search_tools;
 mod self_knowledge;
 pub mod serde_utils;
-mod subagent;
 mod tool_context;
 pub mod user_tool_review;
 
@@ -62,14 +60,13 @@ use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
-use subagent::{Subagent, SubagentContext};
 use teams::inbound::toolset::team_toolset;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
     build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
-    build_tool_service_context_from_env,
+    build_tool_service_context_from_env, build_web_search_provider_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
@@ -168,9 +165,9 @@ impl ToolSchemaGenerator for ToolSetWithPrompt {
     }
 }
 
-/// Toolset available to subagents — everything except email and the Subagent
-/// tool itself (subagents cannot create subagents).
-pub(crate) fn subagent_toolset() -> AiToolSet {
+/// The tools every host shares, before host-specific email, calendar and
+/// discovery tools are added.
+pub(crate) fn base_toolset() -> AiToolSet {
     AsyncToolCollection::new()
         .add_toolset(search_toolset())
         .add_tool::<SelfKnowledge, ToolServiceContext>()
@@ -203,6 +200,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
+        .add_subtoolset::<web_search::inbound::toolset::WebToolContext>(
+            web_search::inbound::toolset::web_toolset(),
+        )
 }
 
 /// The host a toolset is assembled for.
@@ -266,7 +266,6 @@ pub const EAGER_TOOLS: &[&str] = &[
     "SelfKnowledge",
     "SendChannelMessage",
     "ShareWithChannel",
-    "Subagent",
     "TextEditorCodeExecution",
     "WebFetch",
     "WebSearch",
@@ -291,7 +290,7 @@ pub fn code_mode_tools() -> Arc<AiToolSet> {
 }
 
 fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
-    let toolset = subagent_toolset()
+    let toolset = base_toolset()
         .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
@@ -314,8 +313,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
-        .add_tool::<Subagent, SubagentContext>();
+        .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset());
     // Only Macro's own agents connect servers for the user.
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => {
@@ -435,6 +433,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
             ToolEntityAccessService,
         >())
         .merge(&read::read_thread())
+        .merge(&schemas::subagent::subagent())
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }
