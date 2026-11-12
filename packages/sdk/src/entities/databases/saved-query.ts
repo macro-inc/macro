@@ -47,7 +47,10 @@ export type SavedQueryDisplay =
   | { mode: 'scalar' | 'table' }
   | { mode: SavedQueryChartMode; chart: SavedQueryChart };
 
-/** Options for {@link Database.saveQuery} and {@link DatabaseTable.saveQuery}. */
+/**
+ * Options for {@link DatabaseNamespace.saveQuery}, {@link Database.saveQuery}
+ * and {@link DatabaseTable.saveQuery}.
+ */
 export type SaveQueryOptions = {
   /** One `SELECT`, exactly as it ran with `query`. */
   sql: string;
@@ -220,7 +223,7 @@ export class SavedQuery {
    */
   static async save(
     client: MacroClient,
-    scope: { database: Database; table?: DatabaseTable },
+    scope: { database?: Database; table?: DatabaseTable },
     options: SaveQueryOptions,
   ): Promise<SavedQuery> {
     const title = checkTitle(options.title);
@@ -235,7 +238,7 @@ export class SavedQuery {
       await client.storage.saveDatabaseQuery({
         body: {
           definition: { version: 1, query: options.sql },
-          databaseId: scope.database.id,
+          ...(scope.database ? { databaseId: scope.database.id } : {}),
           ...(presentation.chart
             ? {
                 chart: {

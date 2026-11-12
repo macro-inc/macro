@@ -371,7 +371,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateDocument"
                 // Document.updateSharePermissions() and Project.updateSharePermissions().
                 | "UpdateSharing"
-                // Database.saveQuery() and DatabaseTable.saveQuery().
+                // macro.databases.saveQuery(), Database.saveQuery() and
+                // DatabaseTable.saveQuery().
                 | "SaveDatabaseQuery"
                 // macro.crm: companyById(), createCompany(), createContact()
                 // and importCompaniesCsv().
