@@ -46,7 +46,7 @@ the scan does not retain the replacement migration's exclusive table lock.
 
 ## Recipes
 
-- Add a column or table: `sqlx migrate add --source crates/macro_db_client/migrations <name>`
+- Add a column or table: `sqlx migrate add --timestamp --source crates/macro_db_client/migrations <name>`
   → edit the generated SQL file(s) → the module in `src/<area>.rs`
   (or `src/<area>/`) → `nix develop --command just prepare_db`.
 - Add a query to an existing table: the module in `src/<area>.rs` → its tests

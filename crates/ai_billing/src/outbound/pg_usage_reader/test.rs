@@ -832,7 +832,7 @@ async fn deepseek_cache_migration_resolves_missing_cost_without_repricing_known_
     assert_eq!(before[0].used_cents, 100);
 
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20261110150953_complete_deepseek_cache_pricing.sql"
+        "../../../../macro_db_client/migrations/20261112214911_complete_deepseek_cache_pricing.sql"
     ))
     .execute(&pool)
     .await
@@ -844,7 +844,7 @@ async fn deepseek_cache_migration_resolves_missing_cost_without_repricing_known_
     assert_eq!(after[0].used_cents, 131);
     // Applying the migration again neither reprices known rows nor doubles usage.
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20261110150953_complete_deepseek_cache_pricing.sql"
+        "../../../../macro_db_client/migrations/20261112214911_complete_deepseek_cache_pricing.sql"
     ))
     .execute(&pool)
     .await

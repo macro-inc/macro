@@ -93,13 +93,16 @@ compatible with the service code currently deployed, not just the code in its PR
    For MacroDB, from the root:
 
    ```bash
-   sqlx migrate add --source crates/macro_db_client/migrations <descriptive_name>
+   sqlx migrate add --timestamp --source crates/macro_db_client/migrations <descriptive_name>
    ```
 
    Edit the generated file. For another migration directory, use its `--source`
    or run `sqlx migrate add` from its owning crate. Never invent/copy timestamp
    prefixes. If SQLx is unavailable, use the pinned Nix shell or report the blocker;
    do not fabricate a migration filename.
+
+   Pass `--timestamp` explicitly: adjacent existing versions make SQLx infer
+   sequential numbering, which can collide across branches.
 
 2. **Use compile-time checked queries** (`query!`, `query_as!`, `query_scalar!`,
    `query_file!`) by default. Dynamic SQL is only for genuinely dynamic queries;

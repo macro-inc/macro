@@ -18,10 +18,11 @@ Use the SQLx CLI to create migration files instead of manually creating timestam
 4. Run the SQLx CLI from `crates/macro_db_client` folder:
 
    ```bash
-   cargo sqlx migrate add name_of_migration
+   cargo sqlx migrate add --timestamp name_of_migration
    ```
 
    Replace `name_of_migration` with the actual snake_case migration name.
+   Pass `--timestamp` explicitly so adjacent existing versions do not trigger sequential numbering and collide across branches.
 5. Do not manually add timestamps or hand-create migration filenames; `sqlx migrate add` generates the correct timestamped file.
 6. After the command succeeds, read the generated migration file and add the requested SQL changes there.
 7. If `sqlx` is not installed or not on `PATH`, stop and tell the user to install `sqlx-cli` rather than manually creating the migration file.
