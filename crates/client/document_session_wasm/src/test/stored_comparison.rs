@@ -47,6 +47,7 @@ fn stored_comparison_query_is_opt_in_and_preserves_pending_output(
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let before = session.surface().state().to_json()?;
     let output = session.machine.output.clone();

@@ -411,6 +411,7 @@ fn actual_read_queries_and_registration_metadata_preserve_historical_receipt() {
     let mut session = EditorSession {
         machine,
         hostname: None,
+        code_tokens: None,
     };
     session.serialized_state().expect("actual serializedState");
     session.saved_state().expect("actual savedState");
