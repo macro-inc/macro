@@ -16,7 +16,7 @@ It runs on a local stack against the live model, one draft at a time.
 | `judge.ts` | The blind model judge and its rubric. |
 | `trace.ts` | Reading a draft's trace from Tempo and splitting its time into phases. |
 | `report.ts` | Summaries and the win, loss or noise verdict. |
-| `setup.ts`, `stack.ts` | Seeding, due dates and databases; the stack, sign-in, the lock, which build answers. |
+| `setup.ts`, `stack.ts` | Seeding, indexing it for search, due dates and databases; the stack, sign-in, the lock, which build answers. |
 | `drafts.ts` | The command line. |
 
 ## What it measures
@@ -44,17 +44,25 @@ draft on a busy machine can be told apart.
 - *Mechanical checks* on the draft: the trigger (days, time, event), the items
   it uses by id or by a knob naming them, none of their look-alikes, the step
   kind, nothing created that it doesn't use, and leaving out a name with no
-  match or two matches.
+  match or two matches. In the `bare` arm asking the person instead is right
+  for those two cases, if the question names the item (`asking` in
+  `cases.ts`).
 - *Run check*: the drafted routine is saved, fired once with a made-up trigger
   (a seeded person posts, a task changes status or is created, or it is run
   now) and its effect is read from the stack's database: the message it
-  posted, the task it made, what its run returned.
+  posted in the seeded channels, the task it made, its own notifications,
+  what its run returned. A run whose condition wasn't met did nothing.
 - *Judge*: a model that sees only the request and the routine, with a glossary
   of the ids in it, grades it 1 to 5 (`RUBRIC` in `judge.ts`); 4 or 5 is a
   draft the person would keep.
 
 The headline quality number is the share of drafts that pass every mechanical
-and run check. The judge is a second opinion: `calibrate` measures how often it
+and run check.
+
+A draft the eval itself couldn't finish (a dropped connection, a harness
+restarting) is tried once more after ten seconds. A second failure is recorded
+as an error: it fails quality, is left out of the timing, and the summary
+counts it under `errors`. The judge is a second opinion: `calibrate` measures how often it
 agrees with grades given by hand.
 
 ## Run it
@@ -66,7 +74,12 @@ harness newer than its schema answers 500 on routine save and list, so the run
 checks and the `bare` arm fail. It must save event routines
 (`EVENT_ROUTINES_ENABLED`): with them off every event-triggered draft's check
 fails, so `run` stops before drafting. A debug-build document storage service
-needs `RUST_MIN_STACK=8388608` or it dies on database queries.
+needs `RUST_MIN_STACK=8388608` or it dies on database queries. The seed CLI
+writes rows straight to the database, so search never hears of them: `seed`,
+and every run when name search can't find a seeded document or project,
+backfills the seeded workspace through the stack's
+`search_processing_service`. Without it every by-name lookup of a document or
+project fails, as it wouldn't for a real person.
 
 ```bash
 B=crates/scheduled_action/bench
@@ -78,7 +91,8 @@ nix develop --command bun $B/drafts.ts run --label main --arm bare  --rounds 3 -
 `--cases a,b` runs some cases, `--model` picks the drafting model (default
 `anthropic/claude-sonnet-5-5`, what paid users draft on), `--no-run-checks`
 and `--no-judge` skip those (a run check holds the stack for up to four
-minutes), `--append` adds rounds to a results file, and `TEMPO_URL` (default
+minutes), `--append` keeps a results file: it first fills the drafts missing
+from the rounds it has, then adds `--rounds` more. And `TEMPO_URL` (default
 `http://localhost:3200`) is where traces are read. Seed again when the seed
 is more than a few days old: requests read "this week" and "due today".
 
@@ -91,7 +105,9 @@ databases, documents, tasks and messages nobody seeded are removed.
 
 The model's speed drifts over a day by more than most changes save, so builds
 are compared on interleaved rounds. `ab` swaps the stack's harness between two
-builds (A then B, then B then A, ...), holding the stack for each segment:
+builds (A then B, then B then A, ...), holding the stack for each segment,
+and puts back the harness the stack ran before when it ends. Run again with the
+same `--dir` and it fills the gaps a stopped run left:
 
 ```bash
 mkdir -p ~/.cache/routines-eval/bin/mine && cp -l target/debug/agent_harness_service ~/.cache/routines-eval/bin/mine/   # keep the build still
