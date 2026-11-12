@@ -467,9 +467,13 @@ export interface NormalizedCacheExchangeOptions {
   /**
    * Decides whether a failed optimistic mutation remains queued. The caller
    * receives a `queued` disposition; `true` retains the optimistic layer for
-   * a later background attempt. Defaults to `false`.
+   * a later background attempt. Defaults to `false`. `mutation` is the claimed
+   * attempt, with the server failures counted before it.
    */
-  shouldRetryMutation?: (error: CombinedError) => boolean | Promise<boolean>;
+  shouldRetryMutation?: (
+    error: CombinedError,
+    mutation?: ClaimedMutation
+  ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
 }

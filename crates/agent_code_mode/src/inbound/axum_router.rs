@@ -151,6 +151,9 @@ impl IntoResponse for CodeExecutionApiError {
                 (StatusCode::CONFLICT, "review changed; reload before acting").into_response()
             }
             CodeModeError::Invalid(message) => (StatusCode::BAD_REQUEST, message).into_response(),
+            error @ CodeModeError::ConnectedAppUnreachable => {
+                (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
+            }
             error => {
                 tracing::error!(error = ?error, "code execution read failed");
                 (
@@ -465,3 +468,6 @@ pub async fn search_connected_app_tools<
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
+
+#[cfg(test)]
+mod test;
