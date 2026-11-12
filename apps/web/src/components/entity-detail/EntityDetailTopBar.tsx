@@ -22,7 +22,7 @@ export function EntityDetailTopBar(
     /** Collapses while `compact`, so the title keeps its room. */
     navigation?: (compact: Accessor<boolean>) => JSX.Element;
     titleMenu?: JSX.Element;
-    mobileTitle?: JSX.Element;
+    mobileTitle?: () => JSX.Element;
   }>
 ) {
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
@@ -30,6 +30,8 @@ export function EntityDetailTopBar(
   const compact = createMemo(
     () => (size.width ?? Infinity) < COMPACT_NAVIGATION_WIDTH
   );
+  const replacesPhoneNavigation = () =>
+    isMobile() && Boolean(props.mobileTitle);
   return (
     <ViewShell.TopBar
       ref={setTopBar}
@@ -39,7 +41,7 @@ export function EntityDetailTopBar(
       )}
     >
       <Show
-        when={isMobile() && props.mobileTitle}
+        when={replacesPhoneNavigation()}
         fallback={
           <ViewBreadcrumbs.Outlet
             aria-label="Task location"
@@ -49,9 +51,9 @@ export function EntityDetailTopBar(
           </ViewBreadcrumbs.Outlet>
         }
       >
-        {props.mobileTitle}
+        {props.mobileTitle?.()}
       </Show>
-      <Show when={!isMobile()}>
+      <Show when={!replacesPhoneNavigation()}>
         <Show when={props.navigation}>
           {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
         </Show>

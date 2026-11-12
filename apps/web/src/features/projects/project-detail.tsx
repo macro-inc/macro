@@ -24,14 +24,18 @@ import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import RenameIcon from '@icon/system/regular/note-pencil.svg';
+import ShareIcon from '@icon/system/regular/share-network.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { Dropdown, Tabs } from '@ui';
+import { cn, Dropdown, Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
@@ -234,14 +238,26 @@ function ProjectTitleMenu(props: {
             <CaretDownIcon class="size-4 shrink-0" />
           </Dropdown.Trigger>
           <Dropdown.Content class="min-w-60">
-            <Dropdown.Item onSelect={() => props.onSectionChange('overview')}>
+            <Dropdown.Item
+              class={cn(
+                'h-12 text-base',
+                props.section === 'overview' && 'text-accent'
+              )}
+              onSelect={() => props.onSectionChange('overview')}
+            >
               <SquaresFourIcon class="size-5" />
               {t('tabs.project-overview')}
               <Show when={props.section === 'overview'}>
                 <CheckIcon class="ml-auto size-4" />
               </Show>
             </Dropdown.Item>
-            <Dropdown.Item onSelect={() => props.onSectionChange('tasks')}>
+            <Dropdown.Item
+              class={cn(
+                'h-12 text-base',
+                props.section === 'tasks' && 'text-accent'
+              )}
+              onSelect={() => props.onSectionChange('tasks')}
+            >
               <span class="size-5">
                 <EntityIcon targetType="task" size="xs" />
               </span>
@@ -251,10 +267,12 @@ function ProjectTitleMenu(props: {
               </Show>
             </Dropdown.Item>
             <Dropdown.Separator />
-            <Dropdown.Item onSelect={props.onShare}>
+            <Dropdown.Item class="h-12 text-base" onSelect={props.onShare}>
+              <ShareIcon class="size-5" />
               {t('entityActions.share')}
             </Dropdown.Item>
             <Dropdown.Item
+              class="h-12 text-base"
               onSelect={() =>
                 fireAndForget(
                   copyLink.executeByBlock(props.project.id, 'initiative'),
@@ -262,10 +280,15 @@ function ProjectTitleMenu(props: {
                 )
               }
             >
+              <LinkIcon class="size-5" />
               {t('entityActions.copyLink')}
             </Dropdown.Item>
             <Show when={canEditProject(props.project)}>
-              <Dropdown.Item onSelect={() => setRenaming(true)}>
+              <Dropdown.Item
+                class="h-12 text-base"
+                onSelect={() => setRenaming(true)}
+              >
+                <RenameIcon class="size-5" />
                 {t('entityActions.rename')}
               </Dropdown.Item>
             </Show>
@@ -331,7 +354,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
       <EntityDetailTopBar
-        mobileTitle={
+        mobileTitle={() => (
           <Show when={source.project()}>
             {(project) => (
               <ProjectTitleMenu
@@ -349,7 +372,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
               />
             )}
           </Show>
-        }
+        )}
         titleMenu={
           <Show when={source.project()}>
             {(project) => (
@@ -391,7 +414,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           />
         )}
       >
-        <Show when={source.project()}>
+        <Show when={!isMobile() && source.project()}>
           {(project) => (
             <ShareTrigger
               onClick={openShare}
