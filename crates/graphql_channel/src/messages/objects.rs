@@ -348,6 +348,7 @@ impl From<TimelineActivity> for GraphqlChannelTimelineActivity {
 
 /// One row of a channel timeline.
 #[derive(Union, Clone, Debug)]
+#[allow(clippy::large_enum_variant)] // Most rows are messages; boxing them would allocate per row.
 #[graphql(name = "GraphqlChannelTimelineEntry")]
 pub enum GraphqlChannelTimelineEntry {
     /// A root message, with its thread and call.
