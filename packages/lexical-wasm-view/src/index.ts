@@ -38,6 +38,7 @@ export type {
   EditorPort,
   NativeEnterPort,
   NativeEscapePort,
+  ProgrammaticApplicationAdmissionOptions,
   ProgrammaticApplicationInput,
   ProgrammaticApplicationOptions,
   TextFromView,

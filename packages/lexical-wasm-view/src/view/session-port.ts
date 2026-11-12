@@ -36,6 +36,7 @@ import type {
   InputSettlement,
   NativeEnterPort,
   NativeEscapePort,
+  ProgrammaticApplicationAdmissionOptions,
   ProgrammaticApplicationInput,
   ProgrammaticApplicationOptions,
   TextFromView,
@@ -427,18 +428,25 @@ export class SessionPort implements EditorPort {
   }
   /** Authority refusal is a settled cancellation, independent of UI editability. */
   inputSettledIfSessionEdit(
-    factory: () => ProgrammaticApplicationInput
+    factory: () => ProgrammaticApplicationInput,
+    options?: ProgrammaticApplicationAdmissionOptions
   ): Promise<InputSettlement> {
+    this.assertRootAdmission();
+    const admitEntry = options?.admit;
+    if (options !== undefined && typeof admitEntry !== 'function')
+      throw new TypeError('Entry admission requires a callback');
     return this.settleInput(
       factory,
       undefined,
-      () => this.effectiveAccess() === Access.Edit
+      () => this.effectiveAccess() === Access.Edit,
+      admitEntry
     );
   }
   private settleInput(
     editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
     eventOrOptions?: KeyboardEvent | ProgrammaticApplicationOptions,
-    admit?: () => boolean
+    admit?: () => boolean,
+    admitEntry?: () => boolean
   ): Promise<InputSettlement> {
     this.assertRootAdmission();
     const run = this.executor.runSettled;
@@ -503,6 +511,7 @@ export class SessionPort implements EditorPort {
       },
       {
         admit,
+        admitEntry,
         synchronous: operation.synchronous,
         after: after
           ? (flags) => after(Boolean(flags & FLAG_HANDLED))

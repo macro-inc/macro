@@ -331,3 +331,119 @@ test('an accepted conditional entry runs before queued close while later closing
     runtime.root.remove();
   }
 });
+
+test('queued entry cancels after its caller retires before materialization', async () => {
+  const runtime = mount();
+  const session = runtime.executor.session;
+  const input = vi.spyOn(session, 'input');
+  const authority = vi.spyOn(session, 'effectiveAccess');
+  let alive = true;
+  const admit = vi.fn(() => alive);
+  const factory = vi.fn(() => missingEquation(runtime));
+  let pending: Promise<unknown> | undefined;
+  try {
+    runtime.executor.run(() => {
+      pending = runtime.port.inputSettledIfSessionEdit(factory, { admit });
+      alive = false;
+      return session.authorization(
+        true,
+        true,
+        true,
+        runtime.executor.now(),
+        Date.now()
+      );
+    });
+    expect(await pending).toEqual({
+      status: 'cancelled',
+      reason: 'entry-admission',
+    });
+    expect(authority).toHaveBeenCalledTimes(1);
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(factory).not.toHaveBeenCalled();
+    expect(input).not.toHaveBeenCalled();
+    alive = true;
+    runtime.view.setEditable(false);
+    expect(
+      await runtime.port.inputSettledIfSessionEdit(factory, { admit })
+    ).toEqual({ status: 'success', handled: false });
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(input).toHaveBeenCalledTimes(1);
+  } finally {
+    input.mockRestore();
+    authority.mockRestore();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('conditional options capture the predicate once and authority refusal skips it', async () => {
+  const runtime = mount();
+  const session = runtime.executor.session;
+  let reads = 0;
+  const admit = vi.fn(() => true);
+  const factory = vi.fn(() => missingEquation(runtime));
+  const authority = vi.spyOn(session, 'effectiveAccess');
+  let pending: Promise<unknown> | undefined;
+  try {
+    runtime.executor.run(() => {
+      pending = runtime.port.inputSettledIfSessionEdit(factory, {
+        get admit() {
+          reads++;
+          return admit;
+        },
+      });
+      expect(reads).toBe(1);
+      return session.authorization(
+        true,
+        false,
+        false,
+        runtime.executor.now(),
+        Date.now()
+      );
+    });
+    expect(await pending).toEqual({
+      status: 'cancelled',
+      reason: 'session-access',
+    });
+    expect(reads).toBe(1);
+    expect(authority).toHaveBeenCalledTimes(1);
+    expect(admit).not.toHaveBeenCalled();
+    expect(factory).not.toHaveBeenCalled();
+  } finally {
+    authority.mockRestore();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('queued caller predicate is captured once despite later option mutation', async () => {
+  const runtime = mount();
+  let reads = 0;
+  const admit = vi.fn(() => true);
+  const factory = vi.fn(() => missingEquation(runtime));
+  const options = {
+    get admit() {
+      reads++;
+      return admit;
+    },
+  };
+  let pending: Promise<unknown> | undefined;
+  try {
+    runtime.executor.run(() => {
+      pending = runtime.port.inputSettledIfSessionEdit(factory, options);
+      Object.defineProperty(options, 'admit', {
+        value: () => {
+          throw new Error('Must use captured predicate');
+        },
+      });
+      return runtime.executor.session.tick(runtime.executor.now(), Date.now());
+    });
+    expect(await pending).toEqual({ status: 'success', handled: false });
+    expect(reads).toBe(1);
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(factory).toHaveBeenCalledTimes(1);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});

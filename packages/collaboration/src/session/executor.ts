@@ -48,7 +48,11 @@ export type ExecutorSettlement =
   | { readonly status: 'error'; readonly error: unknown }
   | {
       readonly status: 'cancelled';
-      readonly reason: 'closed' | 'closing' | 'session-access';
+      readonly reason:
+        | 'closed'
+        | 'closing'
+        | 'session-access'
+        | 'entry-admission';
     };
 
 /** Consumer-owned deferred errors may be associated only with this real entry. */
@@ -65,6 +69,8 @@ export interface SettledRunOptions {
   readonly after?: (flags: number) => void;
   /** Check current session authority in this queue turn before materialization. */
   readonly admit?: () => boolean;
+  /** Caller validity, checked after authority and before materialization. */
+  readonly admitEntry?: () => boolean;
 }
 interface SettledEntry {
   started: boolean;
@@ -74,8 +80,10 @@ interface SettledEntry {
   exception?: ExecutorFailure;
   reported?: ExecutorFailure;
   native?: ExecutorFailure;
-  cancelled?: boolean;
+  cancelled?: 'session-access' | 'entry-admission';
   readonly admit?: () => boolean;
+  /** Caller validity, checked after authority and before materialization. */
+  readonly admitEntry?: () => boolean;
   readonly completion: ExecutorCompletion;
   readonly notify: (result: ExecutorSettlement) => void;
 }
@@ -331,6 +339,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       delivered: false,
       notify,
       admit: options.admit,
+      admitEntry: options.admitEntry,
       completion: {
         get running() {
           return entry.running;
@@ -378,9 +387,23 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       ? () => {
           entry.running = true;
           try {
-            if (entry.admit && !entry.admit()) {
-              entry.cancelled = true;
-              return;
+            if (entry.admit) {
+              const admitted = entry.admit();
+              if (typeof admitted !== 'boolean')
+                throw new TypeError('Session admission must return a boolean');
+              if (!admitted) {
+                entry.cancelled = 'session-access';
+                return;
+              }
+            }
+            if (entry.admitEntry) {
+              const admitted = entry.admitEntry();
+              if (typeof admitted !== 'boolean')
+                throw new TypeError('Entry admission must return a boolean');
+              if (!admitted) {
+                entry.cancelled = 'entry-admission';
+                return;
+              }
             }
             execute();
           } catch (error) {
@@ -443,7 +466,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         (!attributed ? drainFailure : undefined);
       settlement.delivered = true;
       const result: ExecutorSettlement = settlement.cancelled
-        ? { status: 'cancelled', reason: 'session-access' }
+        ? { status: 'cancelled', reason: settlement.cancelled }
         : own
           ? { status: 'error', error: own.error }
           : settlement.flags === undefined

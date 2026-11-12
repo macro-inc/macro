@@ -23,6 +23,11 @@ export interface ProgrammaticApplicationOptions {
   readonly after: (handled: boolean) => void;
 }
 
+/** Caller-owned validity checked in the authorized queued entry. */
+export interface ProgrammaticApplicationAdmissionOptions {
+  readonly admit: () => boolean;
+}
+
 export interface NativeEnterPort {
   register(
     listener: (event: KeyboardEvent | null) => boolean,
@@ -67,7 +72,11 @@ export type InputSettlement =
   | { readonly status: 'error'; readonly error: unknown }
   | {
       readonly status: 'cancelled';
-      readonly reason: 'closed' | 'closing' | 'session-access';
+      readonly reason:
+        | 'closed'
+        | 'closing'
+        | 'session-access'
+        | 'entry-admission';
     };
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
@@ -116,7 +125,8 @@ export interface EditorPort {
   ): Promise<InputSettlement>;
   /** Current native Edit authority is checked before the queued factory runs. */
   inputSettledIfSessionEdit?(
-    factory: () => ProgrammaticApplicationInput
+    factory: () => ProgrammaticApplicationInput,
+    options?: ProgrammaticApplicationAdmissionOptions
   ): Promise<InputSettlement>;
   setState(json: string): void;
   initialize(): void;

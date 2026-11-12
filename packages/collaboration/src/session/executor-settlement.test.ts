@@ -302,6 +302,7 @@ test('close failure cancels only never-started accepted settlements at the final
   const results: ExecutorSettlement[] = [];
   let called = false;
   let admissionReads = 0;
+  let callerReads = 0;
   expect(() =>
     executor.run(() => {
       executor.run(() => {
@@ -321,6 +322,10 @@ test('close failure cancels only never-started accepted settlements at the final
             admissionReads++;
             return true;
           },
+          admitEntry() {
+            callerReads++;
+            return true;
+          },
         }
       );
       return executor.session.tick(executor.now(), Date.now());
@@ -330,6 +335,7 @@ test('close failure cancels only never-started accepted settlements at the final
   await expect(closing).rejects.toBe(second);
   expect(called).toBe(false);
   expect(admissionReads).toBe(0);
+  expect(callerReads).toBe(0);
   expect(results).toEqual([{ status: 'cancelled', reason: 'closed' }]);
 });
 
@@ -445,3 +451,144 @@ test('cancelled admission still drains unlocked cleanup and preserves its cancel
     await executor.close();
   }
 });
+
+test('caller cancellation preserves exact reason through unrelated unlocked drain failure', async () => {
+  const cause = { reason: 'entry cleanup' };
+  const order: string[] = [];
+  let armed = false;
+  let executor: SessionExecutor<EditorSession>;
+  executor = setup({
+    view: { apply() {} },
+    beforeConsume() {
+      if (armed) order.push('consume');
+    },
+    afterDrain() {
+      if (!armed) return;
+      armed = false;
+      order.push('drain');
+      executor.runSync(() => executor.session.tick(executor.now(), Date.now()));
+      throw cause;
+    },
+  });
+  const results: ExecutorSettlement[] = [];
+  try {
+    armed = true;
+    const options = {
+      admit: () => {
+        order.push('authority');
+        return true;
+      },
+      admitEntry: () => {
+        order.push('caller');
+        return false;
+      },
+      after() {
+        order.push('after');
+      },
+    };
+    expect(() =>
+      executor.runSettled(
+        () => {
+          throw new Error('Cancelled call must not run');
+        },
+        (result) => {
+          order.push('notify');
+          results.push(result);
+        },
+        options
+      )
+    ).toThrow(cause);
+    expect(order).toEqual(['authority', 'caller', 'drain', 'notify']);
+    expect(results).toEqual([
+      { status: 'cancelled', reason: 'entry-admission' },
+    ]);
+  } finally {
+    armed = false;
+    await executor.close();
+  }
+});
+
+const invalidThenable = Object.defineProperty({}, 'then', {
+  get() {
+    throw new Error('Must not inspect then');
+  },
+});
+for (const value of [
+  undefined,
+  null,
+  {},
+  Promise.resolve(true),
+  invalidThenable,
+]) {
+  test(`caller admission rejects non-boolean ${Object.prototype.toString.call(value)} without materialization`, async () => {
+    const executor = setup();
+    const results: ExecutorSettlement[] = [];
+    let calls = 0;
+    const options = { admitEntry: () => true };
+    Object.defineProperty(options, 'admitEntry', { value: () => value });
+    try {
+      expect(() =>
+        executor.runSettled(
+          () => {
+            calls++;
+            return executor.session.tick(executor.now(), Date.now());
+          },
+          (result) => results.push(result),
+          options
+        )
+      ).toThrow(TypeError);
+      expect(calls).toBe(0);
+      expect(results).toHaveLength(1);
+      const result = results[0];
+      expect(result?.status).toBe('error');
+      if (result?.status !== 'error')
+        throw new Error('Expected invalid-return error');
+      expect(result.error).toBeInstanceOf(TypeError);
+    } finally {
+      await executor.close();
+    }
+  });
+}
+
+for (const cause of [undefined, null, { reason: 'caller predicate' }]) {
+  test(`caller predicate preserves opaque ${String(cause)} and remaining FIFO`, async () => {
+    const executor = setup();
+    const results: ExecutorSettlement[] = [];
+    const order: string[] = [];
+    const options = {
+      admitEntry() {
+        order.push('predicate');
+        throw cause;
+      },
+    };
+    let caught: { error: unknown } | undefined;
+    try {
+      try {
+        executor.run(() => {
+          executor.runSettled(
+            () => {
+              throw new Error('Failed predicate factory must not run');
+            },
+            (result) => results.push(result),
+            options
+          );
+          executor.run(() => {
+            order.push('remaining');
+            return executor.session.tick(executor.now(), Date.now());
+          });
+          return executor.session.tick(executor.now(), Date.now());
+        });
+      } catch (error) {
+        caught = { error };
+      }
+      expect(caught).toBeDefined();
+      expect(caught?.error).toBe(cause);
+      expect(results).toEqual([{ status: 'error', error: cause }]);
+      expect(order).toEqual(['predicate']);
+      executor.run(() => executor.session.tick(executor.now(), Date.now()));
+      expect(order).toEqual(['predicate', 'remaining']);
+    } finally {
+      await executor.close();
+    }
+  });
+}
