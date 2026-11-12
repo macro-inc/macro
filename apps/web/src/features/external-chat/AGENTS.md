@@ -34,8 +34,13 @@ belong to `features/external-view`. Architecture:
 - `queries/`: generated wire decoding, write-failure classification and
   production source construction (spans live here).
 - `external-chat.tsx`: app host and generic ShareModal.
-- `external-chat-entry.tsx`: flag gate (`enable-whatsapp-linked`) for routed
-  and restored panes.
+- `external-chat-entry.tsx`: flag gate (any provider's flag,
+  `features/external-view/provider-flags.ts`) for routed and restored panes.
+- `views/external-chat-thread.tsx`: a root's thread, inline under it like a
+  channel thread (`Thread.CollapsedIndicator`, `Thread.RepliesContainer`), with
+  its own composer; only where `limits.threads`. Replies come from
+  `ExternalChatCapabilities.thread` (a query under the timeline's key);
+  `conversation.submit(draft, root)` sends in the thread.
 - `lib/queries/external-chats`: isolated query keys, reads, share permissions
   and the `external_chat_changed` gateway sync (`sync.ts`: `{scope:'chats'}`
   refreshes the lists, `{scope:'chat', chatId}` one open chat).
