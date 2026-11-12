@@ -1,4 +1,4 @@
-import BuildingOffice from '@phosphor/building-office.svg';
+import BuildingOffice from '@icon/system/regular/building-office.svg';
 import { createEffect, createSignal, For, type JSX, on, Show } from 'solid-js';
 import type { WorkspaceView } from '../../core/dummy-workspace';
 import { homepagePeople } from '../../core/homepage-demo-people';
