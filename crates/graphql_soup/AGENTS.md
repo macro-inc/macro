@@ -11,6 +11,7 @@ viewer pattern), which apply to every type defined here.
 ## Gotchas
 
 - `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
+- Document and initiative `appearance` fields carry entity-owned JSON overrides; the shared Soup reads supply them without changing sort timestamps.
 
 - `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
   email threads through entity-access view receipts, the rule the REST thread
@@ -32,3 +33,4 @@ viewer pattern), which apply to every type defined here.
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
 - External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.
+- `SoupPatch::hydrate_updated` omits kinds without a `GraphqlSoupEntityType` (databases, forms, external chats), so a committed mutation on them returns empty effects, not a GraphQL error.

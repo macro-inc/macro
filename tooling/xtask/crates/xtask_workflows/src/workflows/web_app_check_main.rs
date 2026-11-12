@@ -93,7 +93,8 @@ fn typescript() -> Job {
         ))
         .name("Typecheck")
         .runs_on(mid_web_runner())
-        .add_step(checkout("Checkout Repo", false))
+        // Entity icon permanence checks compare every committed name list.
+        .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
@@ -110,7 +111,7 @@ fn typescript() -> Job {
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
+const TYPECHECKS: [(&str, &str, &str); 12] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -129,6 +130,11 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check",
+    ),
+    (
+        "Check Observability Package",
+        "packages/observability",
+        "bun run type-check && bun run test",
     ),
     (
         "Check Lexical Service Types",

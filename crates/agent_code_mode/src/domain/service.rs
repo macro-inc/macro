@@ -250,7 +250,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReactToChannelMessage"
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
+                // Message.context().
+                | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
                 // macro.channels.dm() and macro.channels.private().
                 | "OpenDirectMessage"
@@ -311,9 +315,12 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.coding() and macro.agentSessions.createManaged.
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                | "CreateAgentSession"
                 // macro.connectedApps.discover and .addServer.
                 | "DiscoverConnectors"
                 | "ConnectMcpServer"
@@ -385,15 +392,16 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ImportPipelineCsv"
                 | "ExportPipelineCsv"
                 // macro.initiatives and Initiative.update() and delete().
+                // ReadInitiative: initiatives.byId() detail, description() and
+                // properties through properties.bulkEntityProperties().
                 | "ListInitiatives"
+                | "ReadInitiative"
                 | "CreateInitiative"
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
                 | "DeleteInitiative"
                 // macro.agents.list() and Agent.update(). ListAgentUpdates
                 // stays: its result renders the cards the user answers on.
-                // CreateAgentSession stays: createManaged refuses a prompt for
-                // an agent that runs on its operator's machine.
                 | "ListAgents"
                 | "ConfigureAgent"
         )

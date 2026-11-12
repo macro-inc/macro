@@ -64,6 +64,8 @@ impl From<ConfigurationRevision> for i64 {
 
 /// A fresh token for each execution, including cron/manual claims. Release and
 /// finalization must compare it, so an expired worker cannot release a new run.
+/// It is also the run's id: its history record and the agent session its Ask
+/// AI step opens take it, so it is an identifier, never a secret.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Uuid", into = "Uuid")]
 pub struct ClaimToken(Uuid);

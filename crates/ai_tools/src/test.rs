@@ -204,7 +204,11 @@ fn code_mode_runs_confirmed_actions_through_the_sdk_instead_of_the_tools() {
 fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     let tools = tools_for_agent_code_mode();
     let prompt = tools.prompt.to_string();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+    for name in [
+        "ListCodingAgents",
+        "DispatchCodingAgent",
+        "CreateAgentSession",
+    ] {
         assert!(!tools.toolset.tools.contains_key(name), "{name}");
         assert!(
             !tools.deferred.iter().any(|tool| tool.name == name),
@@ -252,7 +256,10 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "EditPipeline",
         "ImportPipelineCsv",
         "ExportPipelineCsv",
+        "ReadChannelMessageContext",
+        "ShareWithChannel",
         "ListInitiatives",
+        "ReadInitiative",
         "CreateInitiative",
         "UpdateInitiative",
         "UpdateInitiativeSharing",
@@ -861,13 +868,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     // The SDK cannot show the model a render, create a pipeline with its
-    // stages and fields, render the answer cards for agent updates, or prompt
-    // an agent that runs on its operator's machine.
+    // stages and fields, or render the answer cards for agent updates.
     for name in [
         "RenderCanvas",
         "CreatePipeline",
         "ListAgentUpdates",
-        "CreateAgentSession",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",

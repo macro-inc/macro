@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM team_user WHERE team_id=$1 AND user_id=$2 AND team_role IN ('owner','admin')) AS \"admin!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admin!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1760b160dd211a807ddbcf33e0df3f853d2537ab716fc8f2483f0c77bb7b6c86"
+}

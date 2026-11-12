@@ -4263,6 +4263,10 @@
             "format": "int32",
             "description": "Generation from the last loaded draft; legacy clients begin at zero."
           },
+          "from": {
+            "type": ["string", "null"],
+            "description": "The address to send from: the selected inbox's own address or one of\nits verified Gmail send-as aliases, which sends under the alias's\ndisplay name. Omit it to send from the inbox's own address."
+          },
           "headers_json": {
             "oneOf": [
               {

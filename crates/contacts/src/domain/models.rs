@@ -6,5 +6,7 @@ pub mod graph;
 pub mod messages;
 /// Validated limits, cursors, and pages for bounded directory reads.
 pub mod page;
+/// Ranked people search over the viewer's contacts and current team.
+pub mod people;
 /// Bounded search text and exact lookup requests.
 pub mod query;

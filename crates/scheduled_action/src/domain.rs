@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod catalog;
 pub mod code_check;
 pub mod code_upgrade;

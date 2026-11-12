@@ -26,6 +26,13 @@ The pinned OTLP exporter-base patch adds explicit fetch injection to its browser
 transport. It preserves the upstream serializers, retry, timeout, batching and
 keepalive rules. The injected fetch takes precedence over global fetch discovery.
 
+Node and Bun processes, such as agent teammates, use `createNodeTracingProvider`
+from `@macro-inc/observability/node` as their `tracingProvider`. It registers an
+async context manager, so a span's context follows its awaits, and exports to
+`tracesUrl`. A span hands on its trace context only after enablement settles:
+await `Telemetry.flush()` once after `Telemetry.init` before relying on
+`span.traceparent()`.
+
 Run `bun run test` and `bun run type-check` here. `bun run test:browser` exercises
 the real browser exporters against a local CORS collector, including startup
 recordings, trace/log delivery, retries, cookie omission and CORS refusal. Set

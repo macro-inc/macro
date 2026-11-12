@@ -669,6 +669,12 @@ async fn maps_typed_errors_and_sanitizes_internal_failures() {
             StatusCode::CONFLICT,
         ),
         (
+            anyhow::Error::from(ActionPolicyError::InvalidAppearance(
+                "Choose a single emoji".into(),
+            )),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             anyhow::Error::from(AlreadyRunningError {
                 action_id: macro_uuid::generate_uuid_v7(),
             }),

@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
@@ -138,7 +139,10 @@ export function RoutineEditor(props: {
   runCount?: number;
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
+  identityIcon?: JSX.Element;
   feedback?: JSX.Element;
+  /** The routines this routine's runs created; absent when it created none. */
+  created?: JSX.Element;
   /** Above the sections, for what the owner has to act on first. */
   notice?: JSX.Element;
 }) {
@@ -173,13 +177,16 @@ export function RoutineEditor(props: {
       <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
         {(item) => (
           <div class="flex min-w-0 items-center">
+            {props.identityIcon}
             <ViewBreadcrumbs.Button
               class="gap-1.5"
               isActive={item.isActive()}
               onClick={item.onSelect}
               tooltip={breadcrumbName()}
             >
-              <ClockIcon class="size-3 shrink-0" />
+              <Show when={!props.identityIcon}>
+                <ClockIcon class="size-3 shrink-0" />
+              </Show>
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>
@@ -360,6 +367,16 @@ export function RoutineEditor(props: {
                 {(settings) => (
                   <RoutineSection label="Runs & notifications">
                     <RoutineSurface>{settings()}</RoutineSurface>
+                  </RoutineSection>
+                )}
+              </Show>
+              <Show when={props.created}>
+                {(created) => (
+                  <RoutineSection
+                    label={t('subRoutines.sectionTitle')}
+                    aside={t('subRoutines.sectionAside')}
+                  >
+                    {created()}
                   </RoutineSection>
                 )}
               </Show>

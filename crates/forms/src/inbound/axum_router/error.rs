@@ -178,6 +178,10 @@ impl IntoResponse for FormsApiError {
                     ..body(FormErrorCode::InvalidLayout, message)
                 },
             ),
+            FormError::InvalidAppearance(_) => (
+                StatusCode::BAD_REQUEST,
+                body(FormErrorCode::InvalidAppearance, message),
+            ),
             FormError::InvalidName(_) => (
                 StatusCode::BAD_REQUEST,
                 body(FormErrorCode::InvalidName, message),
