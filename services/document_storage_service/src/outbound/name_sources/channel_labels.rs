@@ -1,6 +1,6 @@
 //! Channel labels: the labels the `/channel-labels` route lists for the
-//! viewer (the team's when on a team, else their own), read once and kept
-//! when a name contains a needle.
+//! viewer (the team's when on a team, else their own), read once by name
+//! alone and kept when a name contains a needle.
 
 use std::sync::Arc;
 
@@ -46,7 +46,11 @@ impl<S: ChannelLabelsService> NameSource for ChannelLabelNames<S> {
         let receipt =
             ChannelLabelsReceipt::from_access(viewer.user.clone(), viewer.team.clone(), None)
                 .map_err(internal)?;
-        let labels = self.service.list_labels(&receipt).await.map_err(internal)?;
+        let labels = self
+            .service
+            .list_label_names(&receipt)
+            .await
+            .map_err(internal)?;
         tracing::Span::current().record("listed", labels.len());
 
         Ok(labels

@@ -94,6 +94,15 @@ pub struct ChannelLabel {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A label's id and name, without its channels: what a name lookup needs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelLabelName {
+    /// Stable label id.
+    pub id: Uuid,
+    /// Display name, unique within the scope (case-insensitive).
+    pub name: String,
+}
+
 /// The authorized scope's labels in manual order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

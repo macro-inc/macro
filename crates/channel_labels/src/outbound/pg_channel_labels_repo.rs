@@ -9,8 +9,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsScope, LabelWriteOutcome, SetChannelLabelOutcome,
-    SmartTagChannelMatch, SmartTagPreview,
+    ChannelLabel, ChannelLabelName, ChannelLabelRule, ChannelLabelsScope, LabelWriteOutcome,
+    SetChannelLabelOutcome, SmartTagChannelMatch, SmartTagPreview,
 };
 use crate::domain::ports::ChannelLabelsRepo;
 
@@ -179,6 +179,25 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         viewer: &MacroUserIdStr<'_>,
     ) -> Result<Vec<ChannelLabel>, Self::Err> {
         self.load_labels(scope, None, viewer).await
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn list_label_names(
+        &self,
+        scope: &ChannelLabelsScope,
+    ) -> Result<Vec<ChannelLabelName>, Self::Err> {
+        Ok(sqlx::query_as!(
+            ChannelLabelName,
+            r#"
+            SELECT id, name
+            FROM channel_label
+            WHERE scope_key = $1
+            ORDER BY sort_order, created_at, id
+            "#,
+            scope.key(),
+        )
+        .fetch_all(&self.pool)
+        .await?)
     }
 
     #[tracing::instrument(skip_all, err)]

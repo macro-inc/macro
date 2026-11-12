@@ -6,9 +6,9 @@ mod test;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt, LabelWriteOutcome,
-    MAX_LABEL_NAME_LEN, MAX_SMART_TAG_PATTERN_LEN, NewChannelLabel, SetChannelLabelOutcome,
-    SmartTagPreview,
+    ChannelLabel, ChannelLabelName, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt,
+    LabelWriteOutcome, MAX_LABEL_NAME_LEN, MAX_SMART_TAG_PATTERN_LEN, NewChannelLabel,
+    SetChannelLabelOutcome, SmartTagPreview,
 };
 use crate::domain::ports::{ChannelLabelsRepo, ChannelLabelsService};
 
@@ -132,6 +132,18 @@ where
         Ok(self
             .repo
             .list_labels(receipt.scope(), receipt.user_id())
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn list_label_names(
+        &self,
+        receipt: &ChannelLabelsReceipt,
+    ) -> Result<Vec<ChannelLabelName>, ChannelLabelsError> {
+        Ok(self
+            .repo
+            .list_label_names(receipt.scope())
             .await
             .map_err(anyhow::Error::from)?)
     }

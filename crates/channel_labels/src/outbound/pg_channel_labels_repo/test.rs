@@ -165,6 +165,18 @@ async fn create_appends_in_order_and_rejects_duplicate_names(pool: PgPool) {
         listed.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(),
         ["Enterprise", "SMB"]
     );
+
+    let names = repo
+        .list_label_names(&ChannelLabelsScope::Team(team_id))
+        .await
+        .expect("label names should list");
+    assert_eq!(
+        names
+            .iter()
+            .map(|l| (l.id, l.name.as_str()))
+            .collect::<Vec<_>>(),
+        [(first.id, "Enterprise"), (second.id, "SMB")]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -191,6 +203,12 @@ async fn labels_are_team_scoped(pool: PgPool) {
         repo.list_labels(&ChannelLabelsScope::Team(team_b), &user(USER_B))
             .await
             .expect("labels should list")
+            .is_empty()
+    );
+    assert!(
+        repo.list_label_names(&ChannelLabelsScope::Team(team_b))
+            .await
+            .expect("label names should list")
             .is_empty()
     );
     assert_eq!(
