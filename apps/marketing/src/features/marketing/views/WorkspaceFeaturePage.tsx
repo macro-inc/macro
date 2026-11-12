@@ -5,9 +5,9 @@ import { BookingLinkStories } from '../components/BookingLinkStories';
 import { CalendarStories } from '../components/CalendarStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import HomepageProductPreview from '../components/homepage/HomepageProductPreview';
 import { DatabaseStories } from '../components/paper/DatabaseStories';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
+import { SpreadsheetStories } from '../components/spreadsheets/SpreadsheetStories';
 import { workspaceFeatures } from '../core/workspace-features';
 import './workspace-feature-page.css';
 
@@ -36,27 +36,27 @@ export default function WorkspaceFeaturePage() {
           when={slug() === 'calendar'}
           fallback={
             <Show
-              when={slug() === 'databases'}
+              when={slug() === 'spreadsheets'}
               fallback={
-                <>
-                  <Show
-                    when={slug() === 'booking-links'}
-                    fallback={
-                      <FeaturePageSection
-                        id={`${slug()}-workspace`}
-                        title={feature().heading}
-                        description={feature().detail}
-                        demo={{
-                          tone: feature().tone,
-                          glassFrame: slug() !== 'spreadsheets',
-                          message: feature().message
-                            ? { person: 'julia', text: feature().message }
-                            : undefined,
-                        }}
-                      >
-                        <Show
-                          when={slug() === 'spreadsheets'}
-                          fallback={
+                <Show
+                  when={slug() === 'databases'}
+                  fallback={
+                    <>
+                      <Show
+                        when={slug() === 'booking-links'}
+                        fallback={
+                          <FeaturePageSection
+                            id={`${slug()}-workspace`}
+                            title={feature().heading}
+                            description={feature().detail}
+                            demo={{
+                              tone: feature().tone,
+                              glassFrame: true,
+                              message: feature().message
+                                ? { person: 'julia', text: feature().message }
+                                : undefined,
+                            }}
+                          >
                             <div
                               class="workspace-feature-scene glass"
                               data-feature={slug()}
@@ -78,30 +78,28 @@ export default function WorkspaceFeaturePage() {
                                 </For>
                               </div>
                             </div>
-                          }
-                        >
-                          <div class="workspace-feature-preview">
-                            <HomepageProductPreview kind="spreadsheet" />
-                          </div>
-                        </Show>
-                      </FeaturePageSection>
-                    }
-                  >
-                    <BookingLinkStories />
-                  </Show>
-                  <For each={feature().sections}>
-                    {(section, index) => (
-                      <FeaturePageSection
-                        id={`${slug()}-detail-${index() + 1}`}
-                        title={section.title}
-                        description={section.description}
-                      />
-                    )}
-                  </For>
-                </>
+                          </FeaturePageSection>
+                        }
+                      >
+                        <BookingLinkStories />
+                      </Show>
+                      <For each={feature().sections}>
+                        {(section, index) => (
+                          <FeaturePageSection
+                            id={`${slug()}-detail-${index() + 1}`}
+                            title={section.title}
+                            description={section.description}
+                          />
+                        )}
+                      </For>
+                    </>
+                  }
+                >
+                  <DatabaseStories />
+                </Show>
               }
             >
-              <DatabaseStories />
+              <SpreadsheetStories />
             </Show>
           }
         >
