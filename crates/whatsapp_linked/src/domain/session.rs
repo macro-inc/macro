@@ -339,7 +339,7 @@ impl SessionService {
     pub async fn complete_picture_check(
         &self,
         scope: SessionScope,
-        jid: &str,
+        check: &PictureCheck,
         answer: &PictureAnswer,
     ) -> ExternalChatResult<()> {
         let unstorable = matches!(answer, PictureAnswer::Picture { id, bytes, mime }
@@ -353,7 +353,7 @@ impl SessionService {
             answer
         };
         self.repository
-            .complete_picture_check(scope, jid, answer)
+            .complete_picture_check(scope, check, answer)
             .await
     }
 

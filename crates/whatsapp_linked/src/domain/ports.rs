@@ -395,13 +395,15 @@ pub trait SessionRepository: Send + Sync {
         limit: i64,
     ) -> ExternalChatResult<Vec<PictureCheck>>;
 
-    /// Record WhatsApp's answer and schedule the next check: a new picture is
-    /// staged for DSS; hidden and not set drop the stored picture; an
-    /// unchanged one is kept. Failures back off and give up after a few.
+    /// Record WhatsApp's answer to a claimed check and schedule the next one:
+    /// a new picture is staged for DSS; hidden and not set drop the stored
+    /// picture; an unchanged one is kept. Failures back off and give up after
+    /// a few. Ignored when the claim was overtaken (the picture was removed
+    /// or changed again, or consent ended) or the account is not connected.
     async fn complete_picture_check(
         &self,
         scope: SessionScope,
-        jid: &str,
+        check: &PictureCheck,
         answer: &PictureAnswer,
     ) -> ExternalChatResult<()>;
 
@@ -481,7 +483,8 @@ pub trait PictureRepository: Send + Sync {
     /// The staged picture is stored as `static_file_id`. Returns false, and
     /// queues the new file for deletion, when the row moved on meanwhile
     /// (another picture, removed, or the account went away). The file it
-    /// replaces is queued for deletion. Signals the owner's chats.
+    /// replaces is queued for deletion. Repeating a call that succeeded is a
+    /// success that changes nothing. Signals the owner's chats.
     async fn picture_stored(
         &self,
         account: Uuid,

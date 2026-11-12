@@ -552,12 +552,15 @@ impl SessionRepository for PgWhatsAppRepository {
     async fn complete_picture_check(
         &self,
         scope: SessionScope,
-        jid: &str,
+        check: &PictureCheck,
         answer: &PictureAnswer,
     ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
-        pictures::complete_picture_check_in(&mut tx, &account, jid, answer).await?;
+        if account.state != AccountState::Connected {
+            return Ok(());
+        }
+        pictures::complete_picture_check_in(&mut tx, &account, check, answer).await?;
         tx.commit().await.map_err(failure)
     }
 

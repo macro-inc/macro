@@ -511,6 +511,10 @@ pub struct PictureCheck {
     /// An added group the account shares with this person, which WhatsApp
     /// expects for people who are not contacts.
     pub common_group: Option<String>,
+    /// When the claim's hold ends; it identifies the claim, so an answer
+    /// that a removal, a newer change or the end of consent overtook is
+    /// dropped.
+    pub claim: DateTime<Utc>,
 }
 
 /// What WhatsApp answered about a profile picture.

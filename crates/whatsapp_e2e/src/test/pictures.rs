@@ -198,6 +198,20 @@ async fn pictures_of_an_added_group_and_its_people_follow_whatsapp(pool: PgPool)
     let third_id = world
         .whatsapp
         .set_picture(&world.group, b"new logo".to_vec(), "image/png");
+    // The runner has stored the notification (the staged row is due again)
+    // and woken the check loop, which finds the budget spent.
+    wait_picture(
+        &world,
+        &group,
+        |row| row.state == "due",
+        "the change notification makes the group's picture due",
+    )
+    .await;
+    assert_eq!(
+        world.whatsapp.picture_queries(),
+        queries,
+        "the woken loop asks nothing while the budget is spent"
+    );
     let freed_at = sqlx::query_scalar!(
         r#"WITH freed AS (DELETE FROM whatsapp_picture_query WHERE account_id = $1)
         SELECT now() AS "now!""#,
