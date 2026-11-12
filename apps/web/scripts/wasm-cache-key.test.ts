@@ -220,16 +220,25 @@ describe('the closure map', () => {
   it('has a wasm closure for every package the justfile builds', () => {
     const repo = resolve(import.meta.dirname, '../../..');
     const justfile = readFileSync(join(repo, 'apps/web/justfile'), 'utf8');
-    const packages = [...justfile.matchAll(/scripts\/cached-wasm-build\.sh (\S+)/g)].map(
-      (match) => match[1]
-    );
+    // Every recipe line that runs the script; comments name it too.
+    const runs = justfile
+      .split('\n')
+      .filter(
+        (line) =>
+          line.includes('cached-wasm-build.sh') &&
+          !line.trimStart().startsWith('#')
+      );
     const { wasm_closures } = JSON.parse(
       readFileSync(join(repo, '.github/workspace-dep-closures.json'), 'utf8')
     ) as { wasm_closures: Record<string, string[]> };
 
-    expect(packages.length).toBeGreaterThan(0);
-    for (const name of packages) {
-      expect(wasm_closures[name]?.length ?? 0, name).toBeGreaterThan(0);
+    expect(runs.length).toBeGreaterThan(0);
+    for (const line of runs) {
+      const name = /^[ \t]+scripts\/cached-wasm-build\.sh (\S+) /.exec(
+        line
+      )?.[1];
+      expect(name, line).toBeDefined();
+      expect(wasm_closures[name ?? '']?.length ?? 0, name).toBeGreaterThan(0);
     }
   });
 });
