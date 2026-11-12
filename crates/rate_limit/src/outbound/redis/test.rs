@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use crate::{
-    RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult, RateLimitServiceImpl,
-    TokenBucketConfig, TokenBucketPort, TokenBucketResult, domain::ports::RateLimitService,
-    outbound::redis::RedisRateLimitAdapter,
+    RateBudgetPort, RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult,
+    RateLimitServiceImpl, TokenBucketConfig, TokenBucketPort, TokenBucketResult,
+    domain::ports::RateLimitService, outbound::redis::RedisRateLimitAdapter,
 };
 
 fn redis_client() -> redis::Client {
@@ -555,4 +555,63 @@ async fn concurrent_takes_share_the_managers_one_connection() {
         "the takes ran on another connection: {}",
         named[0]
     );
+}
+
+#[tokio::test]
+async fn spend_adds_the_whole_cost_or_none_of_it() {
+    let adapter = adapter();
+    let key = unique_key("spend");
+    let config = RateLimitConfig {
+        max_count: 10,
+        window: Duration::from_secs(30),
+    };
+
+    assert_eq!(
+        adapter
+            .spend(key.clone(), config.clone(), 7)
+            .await
+            .unwrap()
+            .unwrap(),
+        7
+    );
+
+    // Four more would pass the limit: refused, and nothing is counted.
+    let exceeded = adapter
+        .spend(key.clone(), config.clone(), 4)
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(exceeded.current_count, 7);
+    assert_eq!(exceeded.max_count, 10);
+    assert!(!exceeded.retry_after.is_zero());
+    assert!(exceeded.retry_after <= config.window);
+
+    // Three still fit, and fill it exactly.
+    assert_eq!(
+        adapter
+            .spend(key.clone(), config.clone(), 3)
+            .await
+            .unwrap()
+            .unwrap(),
+        10
+    );
+    assert!(adapter.spend(key, config, 1).await.unwrap().is_err());
+}
+
+#[tokio::test]
+async fn a_spend_larger_than_the_limit_never_fits() {
+    let adapter = adapter();
+    let config = RateLimitConfig {
+        max_count: 10,
+        window: Duration::from_secs(30),
+    };
+
+    let exceeded = adapter
+        .spend(unique_key("spend_too_large"), config.clone(), 11)
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(exceeded.current_count, 0);
+    // No window is open yet, so the wait is a whole one.
+    assert_eq!(exceeded.retry_after, config.window);
 }
