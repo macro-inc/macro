@@ -11,6 +11,7 @@ fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {
             name: id.into(),
             role,
             has_children: false,
+            total_items: None,
         })
         .collect();
     for (is_draft, destination) in [(true, "drafts"), (false, "inbox")] {

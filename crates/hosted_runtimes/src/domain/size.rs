@@ -33,6 +33,17 @@ pub enum ComputerSize {
     Xl,
 }
 
+impl ComputerSize {
+    /// The name people see, as Settings shows it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Large => "Large",
+            Self::Xl => "XL",
+        }
+    }
+}
+
 /// Immutable resources sold with a computer. One unit is 8 GiB or 4 vCPUs,
 /// whichever requires more units, rounding each resource up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

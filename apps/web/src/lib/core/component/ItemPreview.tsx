@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -128,7 +129,18 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     return (
       <Show
         when={targetType() === 'task'}
-        fallback={<EntityIcon targetType={targetType()} {...localProps} />}
+        fallback={
+          <EntityIcon
+            targetType={targetType()}
+            appearance={
+              isAccessiblePreviewItem(item()) &&
+              supportsEntityAppearance(item())
+                ? item().appearance
+                : undefined
+            }
+            {...localProps}
+          />
+        }
       >
         <TaskStatusIcon
           {...localProps}

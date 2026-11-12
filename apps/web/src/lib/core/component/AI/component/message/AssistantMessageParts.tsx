@@ -64,6 +64,17 @@ type RenderItem =
     };
 
 /**
+ * The agent looking up its own tools. People never see that it works in
+ * code, so these are not steps: no row, no count, no preview.
+ */
+const LOOKUP_TOOLS: ReadonlySet<string> = new Set([
+  'DescribeCodeTools',
+  'ReadCodeDocs',
+  'SearchTools',
+  'LoadTools',
+]);
+
+/**
  * Tools rendered outside the standard grouped activity chrome own their full
  * presentation. The dashboard renders as a full-bleed view, not a tool row.
  * Deferred user tools suspend the chat on an interactive compose UI, so they
@@ -224,6 +235,7 @@ export function AssistantMessageParts(props: {
     keyedParts().orderedKeys.forEach((key, index) => {
       const part = keyedParts().partsByKey.get(key);
       if (!part) return;
+      if (part.type === 'toolCall' && LOOKUP_TOOLS.has(part.name)) return;
 
       // Standalone tools (e.g. the dashboard, or SendEmail's interactive
       // compose UI) break out of the tool group and render on their own.
@@ -393,6 +405,7 @@ export function AssistantMessageParts(props: {
       if (part.type === 'mcpToolCall') {
         return part.display_name ?? `${part.service} / ${part.name}`;
       }
+      if (part.name === 'ExecuteCode') return 'Working in your workspace';
       return part.name;
     });
 

@@ -732,3 +732,13 @@ it('never opens an edit on an item the viewer may only view', async () => {
   await vault.reveal();
   expect(vault.values()?.password).toBe('private-value');
 });
+
+it('a folder the vault fails to create reports false and leaves no item failure behind', async () => {
+  const source = createFakePasswordSource();
+  source.createFolder = async () => err('failed');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.folders.isPending).toBe(false));
+  expect(await vault.createFolder('Engineering', null)).toBe(false);
+  expect(vault.failure()).toBeUndefined();
+  expect(vault.loadedFolders()).toEqual([]);
+});
