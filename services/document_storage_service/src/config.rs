@@ -67,6 +67,12 @@ env_vars! {
 }
 
 maybe_env_vars! {
+    /// Passwords vault endpoint; provision together with issuer and signing key.
+    pub struct OpenbaoAddress;
+    /// Issuer accepted by the namespace-scoped OpenBao JWT role.
+    pub struct PasswordsJwtIssuer;
+    /// PEM RSA key minting short-lived team-bound OpenBao service JWTs.
+    pub struct PasswordsJwtSigningKey;
     /// Rollout gate for entities owned by bots or teams.
     pub struct EnableNonUserOwners;
     /// Optional name of the LiveKit agent to dispatch for call transcription.
@@ -96,6 +102,9 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    pub openbao_address: OpenbaoAddress,
+    pub passwords_jwt_issuer: PasswordsJwtIssuer,
+    pub passwords_jwt_signing_key: PasswordsJwtSigningKey,
     /// Required PostHog project key for backend feature flags.
     pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)

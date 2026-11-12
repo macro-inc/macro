@@ -268,7 +268,10 @@ fn mcp_chatgpt_service_url_defaults_are_bases_without_a_trailing_slash() {
                 Environment::Develop,
                 "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
             ),
-            (Environment::Production, "https://mcp-chatgpt.macro.com"),
+            (
+                Environment::Production,
+                "https://mcp-chatgpt-worker.macroverse.workers.dev",
+            ),
         ] {
             let url = McpChatgptServiceUrl::new_for_environment(environment).unwrap();
             assert_eq!(url.as_str(), expected);

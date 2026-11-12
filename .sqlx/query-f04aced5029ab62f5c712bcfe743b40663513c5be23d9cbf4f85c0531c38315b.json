@@ -1,0 +1,130 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, team_id, host_id, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, name,\n                   purchase_key, created_by, extra_items, provision_traceparent, expires_at, created_at\n            FROM computer_reservation WHERE created_at <= $1 ORDER BY created_at LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "host_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "size: ComputerSize",
+        "type_info": {
+          "Custom": {
+            "name": "computer_size",
+            "kind": {
+              "Enum": [
+                "standard",
+                "large",
+                "xl"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "memory_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "disk_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "catalog_entry",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "comp_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "purchase_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "extra_items",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "provision_traceparent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f04aced5029ab62f5c712bcfe743b40663513c5be23d9cbf4f85c0531c38315b"
+}

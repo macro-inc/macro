@@ -57,7 +57,8 @@ function createProjectReadGate() {
   return () => flag().enabled;
 }
 
-function createProjectsContext() {
+/** The production capabilities, for hosts outside the Projects view. */
+export function createProjectsContext() {
   const userId = useUserId();
   return createProjectSources(
     initiativeClient,
