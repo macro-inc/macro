@@ -1,6 +1,8 @@
 //! Normalized GraphQL cache engine (Phase 1: pure, native-tested core).
 //!
 //! Design doc: `apps/web/docs/graphql-normalized-cache-plan.md`.
+//!
+//! Bench: a comment change that only the cache WASM key sees.
 
 pub mod calendar;
 pub mod codec;
