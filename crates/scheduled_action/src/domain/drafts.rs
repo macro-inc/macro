@@ -445,7 +445,11 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     }
 
     /// Who a draft's session belongs to, for the session operations.
-    fn action(&self, owner: &MacroUserIdStr<'static>, session: AgentSessionId) -> RoutineSessionAction {
+    fn action(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> RoutineSessionAction {
         RoutineSessionAction {
             owner: owner.clone(),
             bot_id: self.agent.bot,

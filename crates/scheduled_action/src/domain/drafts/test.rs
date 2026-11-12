@@ -118,7 +118,9 @@ impl DraftHandBacks for Rows {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(session, (_, _, _, started))| *started < before && !jobs.contains_key(session))
+            .filter(|(session, (_, _, _, started))| {
+                *started < before && !jobs.contains_key(session)
+            })
             .map(|(session, (owner, agent, _, _))| StaleDraft {
                 session: *session,
                 owner: owner.clone(),
@@ -130,7 +132,8 @@ impl DraftHandBacks for Rows {
 
 /// What the draft's session does with its prompt: the routines it checks,
 /// in order, written from the prompt, each with what it says it created.
-pub(super) type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + Send + Sync>;
+pub(super) type Turn =
+    Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + Send + Sync>;
 
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
@@ -281,7 +284,10 @@ impl SessionCreations for Recorded {
     }
 }
 
-pub(super) fn drafts(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> RoutineDrafts<Checker, Sessions> {
+pub(super) fn drafts(
+    rows: &Arc<Rows>,
+    sessions: &Arc<Sessions>,
+) -> RoutineDrafts<Checker, Sessions> {
     RoutineDrafts::new(
         Arc::new(Checker::default()),
         Arc::clone(sessions),

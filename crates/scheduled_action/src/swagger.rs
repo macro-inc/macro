@@ -14,15 +14,14 @@ use crate::inbound::axum_router::{
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
-use crate::inbound::draft_router::__path_draft_routine;
+use crate::inbound::draft_job_router::{
+    __path_discard_draft_job, __path_get_draft_job, __path_list_draft_jobs, __path_start_draft_job,
+};
 #[expect(
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
-use crate::inbound::draft_job_router::{
-    __path_discard_draft_job, __path_get_draft_job, __path_list_draft_jobs,
-    __path_start_draft_job,
-};
+use crate::inbound::draft_router::__path_draft_routine;
 #[expect(
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"

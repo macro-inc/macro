@@ -150,10 +150,7 @@ fn stale_draft(session: Uuid, owner: String, agent: Uuid) -> Option<StaleDraft> 
 }
 
 /// A job as its row keeps it; parts this build can't read read as empty.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one argument per column read"
-)]
+#[expect(clippy::too_many_arguments, reason = "one argument per column read")]
 fn stored_job(
     session: Uuid,
     request: Option<serde_json::Value>,
@@ -187,8 +184,7 @@ fn read_progress(progress: Option<serde_json::Value>) -> DraftJobProgress {
 impl DraftJobStore for PgDraftHandBacks {
     async fn begin_job(&self, job: &NewDraftJob) -> Result<bool> {
         let request = serde_json::to_value(&job.request).context("encode a draft's request")?;
-        let progress =
-            serde_json::to_value(&job.progress).context("encode a draft's progress")?;
+        let progress = serde_json::to_value(&job.progress).context("encode a draft's progress")?;
         let began = sqlx::query!(
             r#"
             INSERT INTO scheduled_action_draft
@@ -337,7 +333,11 @@ impl DraftJobStore for PgDraftHandBacks {
             .collect())
     }
 
-    async fn job(&self, owner: &MacroUserIdStr<'static>, session: Uuid) -> Result<Option<DraftJob>> {
+    async fn job(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> Result<Option<DraftJob>> {
         let row = sqlx::query!(
             r#"
             SELECT session_id, request, progress, created_at, state, result, finished_at

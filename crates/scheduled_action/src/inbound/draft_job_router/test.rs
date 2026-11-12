@@ -62,10 +62,7 @@ impl RoutineDraftJobService for Jobs {
             created_at: Utc::now(),
             state: DraftJobState::Drafting,
         };
-        self.0
-            .lock()
-            .unwrap()
-            .insert(job.id, (owner, job.clone()));
+        self.0.lock().unwrap().insert(job.id, (owner, job.clone()));
         Ok(job)
     }
 
@@ -160,7 +157,10 @@ async fn starts_lists_reads_and_discards_the_callers_drafts() {
     .await;
     assert_eq!(status, StatusCode::ACCEPTED);
     assert_eq!(job["state"], "drafting");
-    assert_eq!(job["request"], json!({ "kind": "routine", "description": "label invoices" }));
+    assert_eq!(
+        job["request"],
+        json!({ "kind": "routine", "description": "label invoices" })
+    );
     assert_eq!(job["progress"], json!({ "stage": "started" }));
     let one = format!("{JOBS}/{}", job["id"].as_str().unwrap());
     // Sent again, the start answers with the same job.
@@ -236,7 +236,10 @@ async fn refuses_what_it_cannot_start_like_the_blocking_route() {
 
     for (body, status) in [
         (start(" "), StatusCode::BAD_REQUEST),
-        (json!({ "draft": { "type": "poem" } }), StatusCode::BAD_REQUEST),
+        (
+            json!({ "draft": { "type": "poem" } }),
+            StatusCode::BAD_REQUEST,
+        ),
         // A start needs the client's id for it.
         (body("label invoices"), StatusCode::BAD_REQUEST),
         (start("busy"), StatusCode::SERVICE_UNAVAILABLE),
@@ -276,7 +279,10 @@ async fn its_paths_live_beside_the_routine_routes() {
     let (status, job) = request(&app, "POST", JOBS, "owner", start("label invoices")).await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let one = format!("{JOBS}/{}", job["id"].as_str().unwrap());
-    assert_eq!(request(&app, "GET", &one, "owner", Value::Null).await.1, job);
+    assert_eq!(
+        request(&app, "GET", &one, "owner", Value::Null).await.1,
+        job
+    );
     assert_eq!(
         request(&app, "GET", JOBS, "owner", Value::Null).await.1,
         json!([job])
@@ -290,7 +296,10 @@ async fn its_paths_live_beside_the_routine_routes() {
         body("label invoices"),
     )
     .await;
-    assert_eq!((status, &draft["outcome"]), (StatusCode::OK, &json!("failed")));
+    assert_eq!(
+        (status, &draft["outcome"]),
+        (StatusCode::OK, &json!("failed"))
+    );
     // And a routine id is still a routine's.
     let (status, _) = request(
         &app,

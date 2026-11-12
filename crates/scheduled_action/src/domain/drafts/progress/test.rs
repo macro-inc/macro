@@ -14,8 +14,10 @@ fn check(ok: bool, failing: Vec<CheckedStepProblems>) -> RoutineCheck {
         steps: failing,
         routine: ActionConfiguration {
             name: " Bug tasks ".into(),
-            trigger: serde_json::from_value(json!({ "type": "once", "at": "2030-01-01T00:00:00Z" }))
-                .unwrap(),
+            trigger: serde_json::from_value(
+                json!({ "type": "once", "at": "2030-01-01T00:00:00Z" }),
+            )
+            .unwrap(),
             kind: ActionKind::Agent,
             task: json!({ "steps": [
                 { "type": "code", "title": "Make a task ", "source": "secret code" },

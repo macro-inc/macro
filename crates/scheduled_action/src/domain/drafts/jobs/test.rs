@@ -107,7 +107,11 @@ impl DraftJobStore for Rows {
         Ok(jobs)
     }
 
-    async fn job(&self, owner: &MacroUserIdStr<'static>, session: Uuid) -> Result<Option<DraftJob>> {
+    async fn job(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> Result<Option<DraftJob>> {
         let mine = self
             .drafts
             .lock()
@@ -172,9 +176,7 @@ impl DraftJobStore for Rows {
     }
 
     async fn abandoned(&self, before: DateTime<Utc>, _limit: u16) -> Result<Vec<StaleDraft>> {
-        Ok(self.matching(|job, started| {
-            job.phase == DraftJobPhase::Cancelled && started < before
-        }))
+        Ok(self.matching(|job, started| job.phase == DraftJobPhase::Cancelled && started < before))
     }
 
     async fn expired(&self, before: DateTime<Utc>, _limit: u16) -> Result<Vec<StaleDraft>> {
@@ -508,8 +510,14 @@ async fn a_start_sent_again_answers_with_the_same_job() {
     let other = Replica::new(&rows, &sessions);
     let client_id = macro_uuid::generate_uuid_v7();
 
-    let job = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
-    let again = other.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let job = replica
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
+    let again = other
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
 
     assert_eq!(again.id, job.id);
     assert_eq!(again.state, DraftJobState::Drafting);
@@ -517,9 +525,15 @@ async fn a_start_sent_again_answers_with_the_same_job() {
     assert_eq!(rows.jobs.lock().unwrap().len(), 1);
 
     replica.settled().await;
-    let ready = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let ready = replica
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
     assert_eq!(ready.id, job.id);
-    assert!(matches!(ready.state, DraftJobState::Ready { .. }), "{ready:?}");
+    assert!(
+        matches!(ready.state, DraftJobState::Ready { .. }),
+        "{ready:?}"
+    );
     assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
 
     // Someone else's start with the same id is theirs.
@@ -531,7 +545,10 @@ async fn a_start_sent_again_answers_with_the_same_job() {
     assert_ne!(theirs.id, job.id);
 
     replica.jobs.discard(owner(), job.id).await.unwrap();
-    let fresh = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let fresh = replica
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
     assert_ne!(fresh.id, job.id);
 }
 
@@ -545,15 +562,18 @@ async fn a_start_sent_again_at_the_limit_finds_its_job() {
         replica.start(routine(BUG_REPORTS)).await.unwrap();
     }
     let client_id = macro_uuid::generate_uuid_v7();
-    let job = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let job = replica
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
 
-    let again = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let again = replica
+        .start_as(client_id, routine(BUG_REPORTS))
+        .await
+        .unwrap();
 
     assert_eq!(again.id, job.id);
-    assert_eq!(
-        sessions.prepared.lock().unwrap().len() as u32,
-        MAX_DRAFTING
-    );
+    assert_eq!(sessions.prepared.lock().unwrap().len() as u32, MAX_DRAFTING);
 }
 
 /// A cancel on any replica marks the row; the drafter, wherever it runs,
@@ -577,7 +597,11 @@ async fn a_cancel_from_another_replica_stops_the_drafter() {
         DraftUpdateState::Removed
     );
     sessions.deletes.notified().await;
-    assert!(cancelled_at.elapsed() <= POLL, "{:?}", cancelled_at.elapsed());
+    assert!(
+        cancelled_at.elapsed() <= POLL,
+        "{:?}",
+        cancelled_at.elapsed()
+    );
     let session = AgentSessionId::new_from_uuid(job.id);
     assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
     assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
@@ -636,30 +660,36 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     let rows = Arc::new(Rows::default());
     let sessions = hangs(&rows);
     let replica = Replica::new(&rows, &sessions);
-    let begin = |phase: DraftJobPhase, started: chrono::Duration, finished: Option<chrono::Duration>| {
-        let session = macro_uuid::generate_uuid_v7();
-        let now = Utc::now();
-        rows.drafts.lock().unwrap().insert(
-            session,
-            (owner(), bot_id::MACRO_NEW_BOT_ID, Default::default(), now - started),
-        );
-        rows.jobs.lock().unwrap().insert(
-            session,
-            JobRow {
-                client_id: macro_uuid::generate_uuid_v7(),
-                phase,
-                request: DraftAsked::default(),
-                progress: DraftJobProgress {
-                    stage: DraftStage::Writing,
-                    ..Default::default()
+    let begin =
+        |phase: DraftJobPhase, started: chrono::Duration, finished: Option<chrono::Duration>| {
+            let session = macro_uuid::generate_uuid_v7();
+            let now = Utc::now();
+            rows.drafts.lock().unwrap().insert(
+                session,
+                (
+                    owner(),
+                    bot_id::MACRO_NEW_BOT_ID,
+                    Default::default(),
+                    now - started,
+                ),
+            );
+            rows.jobs.lock().unwrap().insert(
+                session,
+                JobRow {
+                    client_id: macro_uuid::generate_uuid_v7(),
+                    phase,
+                    request: DraftAsked::default(),
+                    progress: DraftJobProgress {
+                        stage: DraftStage::Writing,
+                        ..Default::default()
+                    },
+                    result: finished.map(|_| failed("no")),
+                    finished_at: finished.map(|ago| now - ago),
+                    traceparent: Some(TRACEPARENT.into()),
                 },
-                result: finished.map(|_| failed("no")),
-                finished_at: finished.map(|ago| now - ago),
-                traceparent: Some(TRACEPARENT.into()),
-            },
-        );
-        session
-    };
+            );
+            session
+        };
     let minutes = chrono::Duration::minutes;
     let days = chrono::Duration::days;
     let died = begin(DraftJobPhase::Drafting, minutes(10), None);
@@ -695,7 +725,12 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     assert_eq!(rows.phase(abandoned), None);
     assert!(rows.drafts.lock().unwrap().contains_key(&waited));
     let ids = |calls: &Mutex<Vec<AgentSessionId>>| {
-        let mut ids: Vec<Uuid> = calls.lock().unwrap().iter().map(|id| id.as_uuid()).collect();
+        let mut ids: Vec<Uuid> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_uuid())
+            .collect();
         ids.sort();
         ids
     };
@@ -707,10 +742,7 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     assert_eq!(ids(&sessions.deleted), deleted);
 
     // The blocking sweep leaves background drafts alone.
-    assert_eq!(
-        Arc::new(drafts(&rows, &sessions)).sweep().await.unwrap(),
-        1
-    );
+    assert_eq!(Arc::new(drafts(&rows, &sessions)).sweep().await.unwrap(), 1);
     assert_eq!(rows.phase(unopened), Some(DraftJobPhase::Ready));
     assert_eq!(rows.phase(died), Some(DraftJobPhase::Failed));
 }
@@ -728,7 +760,10 @@ async fn a_refused_admission_is_an_error_and_leaves_nothing() {
 
     let error = replica.start(routine(BUG_REPORTS)).await.unwrap_err();
 
-    assert!(error.downcast_ref::<AiAdmissionError>().is_some(), "{error:?}");
+    assert!(
+        error.downcast_ref::<AiAdmissionError>().is_some(),
+        "{error:?}"
+    );
     assert!(rows.drafts.lock().unwrap().is_empty());
     assert!(rows.jobs.lock().unwrap().is_empty());
     assert!(replica.jobs.jobs(owner()).await.unwrap().is_empty());

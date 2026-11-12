@@ -194,12 +194,10 @@ async fn the_blocking_sweep_skips_background_drafts(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE scheduled_action_draft SET created_at = now() - interval '1 hour'"
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query!("UPDATE scheduled_action_draft SET created_at = now() - interval '1 hour'")
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let stale = drafts
         .stale(Utc::now() - chrono::Duration::minutes(10), 10)
@@ -344,7 +342,10 @@ mod jobs {
         let finished = begin(&drafts, &owner()).await;
         drafts.finish_job(finished, &failed("no")).await.unwrap();
 
-        assert_eq!(drafts.cancel_job(&stranger(), drafting).await.unwrap(), None);
+        assert_eq!(
+            drafts.cancel_job(&stranger(), drafting).await.unwrap(),
+            None
+        );
         let cancelled = drafts.cancel_job(&owner(), drafting).await.unwrap();
         assert_eq!(
             cancelled,
@@ -383,30 +384,43 @@ mod jobs {
         let client_id = macro_uuid::generate_uuid_v7();
         let first = macro_uuid::generate_uuid_v7();
         assert!(begin_as(&drafts, &owner(), first, client_id).await);
-        assert_eq!(drafts.started(&owner(), client_id).await.unwrap().unwrap().id, first);
+        assert_eq!(
+            drafts
+                .started(&owner(), client_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            first
+        );
 
         let again = macro_uuid::generate_uuid_v7();
         assert!(!begin_as(&drafts, &owner(), again, client_id).await);
-        let rows = sqlx::query_scalar!(
-            r#"SELECT count(*) AS "count!" FROM scheduled_action_draft"#
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let rows =
+            sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM scheduled_action_draft"#)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(rows, 1);
         // Finished, it is still the start's job.
         drafts.finish_job(first, &failed("no")).await.unwrap();
         assert!(!begin_as(&drafts, &owner(), again, client_id).await);
-        assert_eq!(drafts.started(&owner(), client_id).await.unwrap().unwrap().id, first);
+        assert_eq!(
+            drafts
+                .started(&owner(), client_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            first
+        );
         // The same id from someone else is theirs.
         assert_eq!(drafts.started(&stranger(), client_id).await.unwrap(), None);
         assert!(begin_as(&drafts, &stranger(), again, client_id).await);
         // Cancelled, the id starts afresh.
         drafts.cancel_job(&owner(), first).await.unwrap();
         assert_eq!(drafts.started(&owner(), client_id).await.unwrap(), None);
-        assert!(
-            begin_as(&drafts, &owner(), macro_uuid::generate_uuid_v7(), client_id).await
-        );
+        assert!(begin_as(&drafts, &owner(), macro_uuid::generate_uuid_v7(), client_id).await);
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -455,12 +469,21 @@ mod jobs {
             drafts.finish_job(died, &failed("late")).await.unwrap(),
             Finished::Gone
         );
-        assert!(drafts.interrupt(cutoff, &failed("stopped"), 10).await.unwrap().is_empty());
+        assert!(
+            drafts
+                .interrupt(cutoff, &failed("stopped"), 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             drafts.job(&owner(), running).await.unwrap().unwrap().state,
             DraftJobState::Drafting
         );
-        assert_eq!(drafts.abandoned(cutoff, 10).await.unwrap(), [stale(abandoned)]);
+        assert_eq!(
+            drafts.abandoned(cutoff, 10).await.unwrap(),
+            [stale(abandoned)]
+        );
         assert_eq!(
             drafts
                 .expired(Utc::now() - chrono::Duration::days(7), 10)
