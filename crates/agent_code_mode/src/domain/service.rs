@@ -573,17 +573,11 @@ pub(super) fn settle(
                     )
                 };
             }
-            if let Some(object) = value.as_object_mut()
-                && object.contains_key("data")
-                && object
-                    .keys()
-                    .all(|key| matches!(key.as_str(), "data" | "images"))
-            {
-                object.insert("reviews".into(), serde_json::json!([]));
-            }
+            // Omitted reviews default to empty, but only on a result that is
+            // otherwise valid; a rejected result is saved as returned.
             let valid = value.as_object().is_some_and(|object| {
                 object.contains_key("data")
-                    && object.get("reviews").is_some_and(|references| {
+                    && object.get("reviews").is_none_or(|references| {
                         serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
                             .is_ok()
                     })
@@ -595,6 +589,11 @@ pub(super) fn settle(
                         .keys()
                         .all(|key| matches!(key.as_str(), "data" | "reviews" | "images"))
             });
+            if valid && let Some(object) = value.as_object_mut() {
+                object
+                    .entry("reviews")
+                    .or_insert_with(|| serde_json::json!([]));
+            }
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
