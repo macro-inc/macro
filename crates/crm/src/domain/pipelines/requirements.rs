@@ -375,7 +375,7 @@ fn validate_batch(
                 _ => {}
             },
             DatabaseOp::Rows { change, .. } => match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     for (row_index, cells) in rows.iter().enumerate() {
                         let mut draft = Draft {
                             cells: HashMap::new(),

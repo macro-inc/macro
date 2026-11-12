@@ -41,6 +41,47 @@ fn instance(
     }
 }
 
+fn alias(name: &str) -> ImageSource {
+    ImageSource {
+        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(name).unwrap()),
+        remote: None,
+    }
+}
+
+fn images(regular: &str, agent: &str) -> GuestImages<ImageSource> {
+    GuestImages {
+        regular: alias(regular),
+        agent: alias(agent),
+    }
+}
+
+#[test]
+fn an_agent_computer_is_created_and_recorded_from_the_agent_image() {
+    let images = images("macro-box/2026-11-10", "macro-box-agent/2026-11-10")
+        .try_map(IncusImage::new)
+        .unwrap();
+    for (agent, expected) in [
+        (true, "macro-box-agent/2026-11-10"),
+        (false, "macro-box/2026-11-10"),
+    ] {
+        let image = images.for_enrollment(&crate::domain::fakes::enrollment(COMPUTER_ID, agent));
+        let config = instance_config(
+            &ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            "2026-11-05T10:00:00Z".parse().unwrap(),
+            COMPUTER_ID,
+            &image.name,
+            ComputerResources {
+                vcpus: crate::domain::size::Vcpus::new(4),
+                memory_gib: crate::domain::size::MemoryGib::new(8),
+                disk_gib: crate::domain::size::DiskGib::new(100),
+            },
+            "{}",
+        );
+        assert_eq!(image.source, alias(expected));
+        assert_eq!(config[IMAGE_KEY], expected);
+    }
+}
+
 #[test]
 fn instance_names_start_with_a_letter_and_fit_a_hostname_label() {
     assert_eq!(
@@ -58,12 +99,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         reserve_gb: 4,
         oversell_factor: 3,
         shutdown_grace: Duration::from_secs(60),
-        image: ImageSource {
-            reference: ImageReference::Alias(
-                incus_client::ImageAlias::try_new("macro-box/2026-11-10").unwrap(),
-            ),
-            remote: None,
-        },
+        images: images("macro-box/2026-11-10", "macro-box-agent/2026-11-10"),
         profile: ProfileName::try_new("macro-box").unwrap(),
         storage_pool: StoragePoolName::try_new("default").unwrap(),
     };
@@ -109,7 +145,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
     };
     let body = instance_body(
         &config,
-        &GuestImage::try_new("macro-box/2026-11-10").unwrap(),
+        &IncusImage::new(config.images.regular.clone()).unwrap(),
         &computer,
         r#"{"x":1}"#,
         "2026-11-05T10:00:00Z".parse().unwrap(),
@@ -167,14 +203,17 @@ fn recorded_limits_and_units_survive_catalog_changes() {
 #[test]
 fn a_remote_image_names_its_server_and_protocol() {
     let config = IncusFleetConfig {
-        image: ImageSource {
-            reference: ImageReference::Alias(
-                incus_client::ImageAlias::try_new("ubuntu/24.04").unwrap(),
-            ),
-            remote: Some(ImageRemote {
-                server: "https://images.linuxcontainers.org".to_owned(),
-                protocol: ImageProtocol::Simplestreams,
-            }),
+        images: GuestImages {
+            regular: ImageSource {
+                reference: ImageReference::Alias(
+                    incus_client::ImageAlias::try_new("ubuntu/24.04").unwrap(),
+                ),
+                remote: Some(ImageRemote {
+                    server: "https://images.linuxcontainers.org".to_owned(),
+                    protocol: ImageProtocol::Simplestreams,
+                }),
+            },
+            agent: alias("ubuntu-agent/24.04"),
         },
         endpoint: endpoint(),
         host_name: "test-host".to_owned(),
@@ -214,7 +253,7 @@ fn a_remote_image_names_its_server_and_protocol() {
     };
     let body = instance_body(
         &config,
-        &GuestImage::try_new("ubuntu/24.04").unwrap(),
+        &IncusImage::new(config.images.regular.clone()).unwrap(),
         &computer,
         "{}",
         "2026-11-05T10:00:00Z".parse().unwrap(),

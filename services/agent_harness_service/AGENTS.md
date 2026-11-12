@@ -91,7 +91,9 @@ Pulumi stacks; they do not host extra agent processes.
   unfinished leases. See hosted_runtimes' AGENTS.md for redeploy grace,
   bounded effect execution, and hard-kill recovery.
   `COMPUTERS_IMAGE` names the versioned image new computers are created
-  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
+  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag;
+  `COMPUTERS_AGENT_IMAGE` the agent-mode one agent teammates' computers get
+  (`macro-box-agent/2026-11-10`, `macro-box-agent:latest`). Each
   computer records its own image; updates go through hosted_runtimes' image
   update routes, never by changing this value for existing computers.
   HostedHarnesses pairing records the buyer as the harness owner, but the
@@ -187,7 +189,10 @@ Pulumi stacks; they do not host extra agent processes.
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
-  (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
+  (`src/scheduling/routine_run_notifications.rs`), which names a
+  sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
+  scheduler the code-mode invocation lookup so a routine an Ask AI step's
+  session creates becomes its run's sub-routine. AI drafts routines
   (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
   in-process Macro agent on the person's Ask AI model, admitted and billed
   as their agent session usage; `scheduling.rs` composes the drafter, its
@@ -300,7 +305,7 @@ Read the stable identity from Doppler in deployed environments; local stacks
 explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
-An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
+An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_AGENT_IMAGE`, `COMPUTERS_HOST_NAME`,
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`. Docker additionally
 requires `COMPUTERS_DOCKER_MEMORY_GB`, network and enrollment directory. Incus
 requires its endpoint and mTLS material, `COMPUTERS_INCUS_PROFILE`,

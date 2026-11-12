@@ -16,9 +16,13 @@ mkdir -p "$HOME" "$root/bin"
 # The repository URL must be HTTP(S); git reads it from a local bare repo instead.
 git config --global url."file://$root/remote.git".insteadOf https://git.test/agent.git
 git config --global init.defaultBranch main
-# The build sandbox has no /usr/bin/env: name this bash by its path.
+# The build sandbox has no /usr/bin/env: name this bash by its path. The
+# runtime's run is recorded; \`bun -e\` (start-agent reads package.json with
+# it) goes to the real bun.
+real_bun=$(command -v bun)
 cat >"$root/bin/bun" <<EOF
 #!$(command -v bash)
+[[ \$1 == -e ]] && exec "$real_bun" "\$@"
 echo "\$*" >>"$root/bun.ran"
 EOF
 chmod +x "$root/bin/bun"
@@ -96,6 +100,24 @@ echo 3 >"$root/case/state/failures"
 : >"$root/bun.ran"
 check 'B7 the rolled-back agent boots on the image lock' start
 check 'B7 with the image lock' cmp -s "$root/case/workspace/bun.lock" "$root/case/runtime/bun.lock"
+
+fresh
+start
+ws checkout -q main
+echo '{"name":"agent","scripts":{"check":"bun test"},"dependencies":{"zod":"4.4.3"}}' >"$root/case/workspace/package.json"
+ws commit -qam 'self-edit: a check script'
+echo 'lock v2' >"$root/case/runtime/bun.lock"
+: >"$root/bun.ran"
+check 'B7a a package.json changed only outside its dependencies boots on the image lock' start
+check 'B7a with the image lock' cmp -s "$root/case/workspace/bun.lock" "$root/case/runtime/bun.lock"
+
+fresh
+start
+ws checkout -q main
+echo '{"name":"agent","dependencies":{"zod":"4.4.3"},"devDependencies":{"typescript":"5.9.3"}}' >"$root/case/workspace/package.json"
+ws commit -qam 'self-edit: a dev dependency'
+echo 'lock v2' >"$root/case/runtime/bun.lock"
+check 'B7a a changed devDependencies still fails the boot' bash -c "! MUPPET_CREDENTIALS_FILE='$root/case/agent.env' bash '$root/case/start-agent' run 2>/dev/null"
 
 # --- B8: a rollback survives the runtime's next pull --rebase -----------------
 fresh

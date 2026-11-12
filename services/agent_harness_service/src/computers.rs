@@ -5,6 +5,7 @@
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
 use hosted_runtimes::domain::ids::{ComputerId, PairingId};
+use hosted_runtimes::domain::image::GuestImages;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -92,12 +93,16 @@ pub(crate) async fn operator(
                 )?,
                 reserve_gb: settings.computers_host_reserve_gb,
                 oversell_factor: settings.computers_oversell_factor,
-                image: ImageSource {
-                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(
-                        &settings.computers_image,
-                    )?),
-                    remote: None,
-                },
+                images: GuestImages {
+                    regular: &settings.computers_image,
+                    agent: &settings.computers_agent_image,
+                }
+                .try_map(|alias| {
+                    Ok::<_, incus_client::InvalidName>(ImageSource {
+                        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
+                        remote: None,
+                    })
+                })?,
                 profile: incus_client::ProfileName::try_new(
                     &settings.computers_incus_profile.clone(),
                 )?,
@@ -114,9 +119,11 @@ pub(crate) async fn operator(
                     control_plane_id: ControlPlaneId::parse(
                         settings.computers_control_plane_id.clone(),
                     )?,
-                    image: hosted_runtimes::domain::image::GuestImage::try_new(
-                        &settings.computers_image,
-                    )?,
+                    images: GuestImages {
+                        regular: settings.computers_image.as_str(),
+                        agent: settings.computers_agent_image.as_str(),
+                    }
+                    .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
                     network: settings.computers_docker_network.clone(),
                     enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
                     host_name: settings.computers_host_name.clone(),

@@ -51,6 +51,7 @@ pub(crate) fn insert(catalog: &Catalog, query: &InsertQuery) -> Result<DatabaseO
                         .collect()
                 })
                 .collect::<Result<_, RunError>>()?,
+            ids: None,
         },
     })
 }
