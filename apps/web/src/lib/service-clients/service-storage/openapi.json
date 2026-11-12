@@ -11131,6 +11131,87 @@
         }
       }
     },
+    "/databases/{id}/appearance": {
+      "put": {
+        "tags": ["databases"],
+        "summary": "Replace a database's icon and color without changing its content timestamp.",
+        "operationId": "set_database_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases/{id}/awareness": {
       "put": {
         "tags": ["databases"],
@@ -14383,6 +14464,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/appearance": {
+      "put": {
+        "tags": ["document"],
+        "summary": "Replace a document's presentation overrides without editing its content.",
+        "operationId": "set_document_appearance",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -19028,6 +19158,87 @@
         }
       }
     },
+    "/forms/{id}/appearance": {
+      "put": {
+        "tags": ["forms"],
+        "summary": "Replace a form's icon and color without changing its content timestamp.",
+        "operationId": "set_form_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/forms/{id}/collaboration": {
       "post": {
         "tags": ["forms"],
@@ -20323,8 +20534,7 @@
             "description": "Pairing ID",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/PairingId"
             }
           }
         ],
@@ -21709,6 +21919,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/appearance": {
+      "put": {
+        "tags": ["initiative"],
+        "summary": "Replace a project's appearance without changing content timestamps.",
+        "operationId": "set_initiative_appearance",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -29786,6 +30045,59 @@
           "USER"
         ]
       },
+      "AppearanceColor": {
+        "type": "string",
+        "description": "Named tint keys from the shared tag color palette.",
+        "enum": [
+          "gray",
+          "red",
+          "tomato",
+          "orange",
+          "amber",
+          "yellow",
+          "green",
+          "teal",
+          "blue",
+          "indigo",
+          "purple",
+          "pink"
+        ]
+      },
+      "AppearanceIcon": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A stable name from Macro's original, distinct icon catalog.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["macro"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Catalog name without the SVG extension."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A single native emoji, including skin-tone and joined sequences.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["emoji"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Unicode emoji text, not markup or a URL."
+              }
+            }
+          }
+        ],
+        "description": "The source of an entity's custom icon."
+      },
       "AppliedOps": {
         "type": "object",
         "description": "What a committed batch answers: a result per op, and the journal's change\nfor each table version it produced.",
@@ -32783,6 +33095,10 @@
           "owner_id"
         ],
         "properties": {
+          "auto_join_team": {
+            "type": "boolean",
+            "description": "Whether members of the channel's team join it automatically."
+          },
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
@@ -33863,6 +34179,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -34806,6 +35127,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "ComputerId": {
+        "type": "string"
       },
       "ConferenceProvider": {
         "type": "string",
@@ -36378,8 +36702,7 @@
             "description": "When the pairing expires."
           },
           "pairing_id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/PairingId",
             "description": "Pairing id used to poll for the claim."
           },
           "poll_interval_seconds": {
@@ -36794,6 +37117,17 @@
           "project_id"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -37779,6 +38113,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides; absent values use type defaults."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38006,6 +38351,17 @@
         "type": "object",
         "required": ["document_id", "document_name", "owner"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "document_id": {
             "type": "string",
             "description": "The document id"
@@ -38128,6 +38484,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38477,6 +38844,13 @@
                 "description": "The authenticated user who performed the update; `None` for\nunauthenticated or internal callers."
               }
             ]
+          },
+          "appearance_change": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/EntityAppearance"
+            },
+            "description": "Previous and new presentation overrides, in that order; no content edit occurred."
           },
           "document_id": {
             "type": "string",
@@ -41984,6 +42358,35 @@
           }
         }
       },
+      "EntityAppearance": {
+        "type": "object",
+        "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceColor",
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
+              }
+            ]
+          },
+          "icon": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceIcon",
+                "description": "A custom Macro glyph or a native emoji."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EntityFilters": {
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
@@ -45012,6 +45415,17 @@
             "type": "boolean",
             "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
           },
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
@@ -45195,6 +45609,7 @@
           "invalidLayout",
           "invalidName",
           "invalidSharing",
+          "invalidAppearance",
           "tallyHidden",
           "invalidBranding",
           "conflict",
@@ -47190,6 +47605,21 @@
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
           },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for, derived from whether\nit has an active Claude login. Only meaningful for Macro computers."
+          },
+          "computer_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerId",
+                "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+              }
+            ]
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -47953,6 +48383,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -48161,6 +48602,17 @@
         "description": "List-row view of an initiative.",
         "required": ["id", "name", "updatedAt"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -51191,6 +51643,9 @@
             "description": "Harness display name the daemon asked for."
           }
         }
+      },
+      "PairingId": {
+        "type": "string"
       },
       "ParaPatch": {
         "type": "object",
@@ -56425,6 +56880,25 @@
           }
         }
       },
+      "SoupAgentDmProfile": {
+        "type": "object",
+        "description": "The persona of a viewer's private conversation with an agent.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Persona avatar, when supplied."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Persona id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona display name."
+          }
+        }
+      },
       "SoupAgentSession_SoupPropertiesField": {
         "allOf": [
           {
@@ -56981,6 +57455,17 @@
           {
             "type": "object",
             "properties": {
+              "agent_dm": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SoupAgentDmProfile",
+                    "description": "Persona identity when this is the viewer's private agent DM."
+                  }
+                ]
+              },
               "interacted_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -57545,6 +58030,17 @@
               "updatedAt"
             ],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "branchedFromId": {
                 "type": ["string", "null"],
                 "format": "uuid",
@@ -57873,6 +58369,17 @@
             "type": "object",
             "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time",

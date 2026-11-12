@@ -10,7 +10,9 @@ stack generator owns the container, instance volumes, and generated credentials.
 - `README.md`: startup, credentials, provisioning, and provider checks.
 - `local.hcl`: storage, listener, seal, request timeout, and redacted audit device.
 - `start.sh`: one-time seal key generation and initialization; restarts reuse both.
-- `bootstrap.py`: idempotent team namespace, mounts, policy, and JWT role setup.
+- `bootstrap.py`: local entrypoint and its loopback-only origin guard. The
+  namespace, mount, policy, and JWT role setup lives in
+  `../../openbao/openbao_provisioning.py`, which the hosted dev provisioning shares.
 - `../../../tooling/xtask/crates/xtask_local/src/local/gen_compose.rs`: container
   and named-volume wiring; `local_env.rs` owns the service JWT signing identity.
 

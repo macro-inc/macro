@@ -7,11 +7,11 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { t } from '@app/lib/i18n';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
 import { Entity, MultiSelectCheckbox } from '@entity';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
@@ -150,7 +150,13 @@ export function ProjectRow(props: {
         </Show>
       </div>
       <span class="flex min-w-0 flex-1 items-center gap-1.5">
-        <ProjectIcon class="size-4 shrink-0 text-ink-muted" />
+        <EntityIcon
+          targetType="initiative"
+          appearance={props.row.project.appearance}
+          size="xs"
+          theme="monochrome"
+          class="text-ink-muted"
+        />
         <span class="min-w-0 truncate">{props.row.project.name}</span>
       </span>
     </div>

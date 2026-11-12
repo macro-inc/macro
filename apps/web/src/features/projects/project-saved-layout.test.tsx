@@ -59,6 +59,9 @@ vi.mock('@service-storage/initiative', () => ({ initiativeClient: {} }));
 vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
   TasksCreateAction: () => null,
 }));
+vi.mock('../entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => () => {},
+}));
 vi.mock('./project-share', () => ({ ProjectShareLauncher: () => null }));
 vi.mock('./views/project-assignment', () => ({
   ProjectAssignment: () => null,
