@@ -140,6 +140,9 @@ impl WasmStep<'_> {
         command
             .arg("-c")
             .arg(include_str!("../scripts/deploy_build_wasm.sh"))
+            // CI's dev shell sets BASH_ENV, which puts the real tools back in
+            // front of the stubs.
+            .env_remove("BASH_ENV")
             .env(
                 "PATH",
                 format!(
