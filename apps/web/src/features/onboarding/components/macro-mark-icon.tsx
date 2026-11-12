@@ -1,4 +1,4 @@
-import MacroMarkIcon from '@icon/macro-logo.svg';
+import MacroMarkSvg from '@icon/macro-logo.svg';
 import type { JSX } from 'solid-js';
 
 export function MacroMarkIcon(props: {
@@ -6,10 +6,6 @@ export function MacroMarkIcon(props: {
   class?: string;
 }) {
   return (
-    <MacroMarkIcon
-      aria-hidden="true"
-      class={props.class}
-      style={props.style}
-    />
+    <MacroMarkSvg aria-hidden="true" class={props.class} style={props.style} />
   );
 }

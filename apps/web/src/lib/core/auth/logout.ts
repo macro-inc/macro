@@ -53,6 +53,7 @@ const unauthenticatedUserInfo: UserInfoData = {
   aiDataConsent: false,
   referralCode: '',
   createdAt: undefined,
+  handle: undefined,
 };
 
 export function clearLocalAuthSession(

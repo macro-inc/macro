@@ -40,7 +40,7 @@ test('connects GitHub natively, then hands its import to the agent', async ({
   await dialog.getByRole('button', { name: 'Import from GitHub' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('status', { name: 'Agent handoff' })).toHaveText(
-    'Import my most recent issues and tasks from GitHub into Macro tasks.'
+    'Import my most recent issues and tasks from GitHub into Rox tasks.'
   );
 });
 
@@ -72,7 +72,7 @@ test('hands Slack channels to the agent or history to the archive upload', async
   await dialog.getByRole('button', { name: 'Import from Slack' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('status', { name: 'Agent handoff' })).toHaveText(
-    'Import my most recent channels from Slack into Macro channels.'
+    'Import my most recent channels from Slack into Rox channels.'
   );
   await open();
   await dialog.getByRole('button', { name: /Import with history/ }).click();

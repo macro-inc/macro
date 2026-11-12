@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
-import { reconnectScopes } from '@core/email-link/consent';
+import { isExternalEmailLink, reconnectScopes } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
@@ -28,9 +28,9 @@ export function GmailReauthenticationPrompt() {
 
   useKeyedPersistentToasts({
     items: () =>
-      (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
-        (link) => link.needs_reauth
-      ),
+      (linksQuery.isSuccess ? linksQuery.data.links : [])
+        .filter(isExternalEmailLink)
+        .filter((link) => link.needs_reauth),
     key: (link) => link.id,
     toast: (link, dismiss) => ({
       title:

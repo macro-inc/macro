@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import RoxLogo from '@core/component/RoxLogo';
 import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
@@ -45,7 +44,7 @@ function DemoFallback() {
   return (
     <div class="flex items-center justify-center h-full">
       <div class="w-full m-12 opacity-10 max-w-80">
-        <RoxLogo class="fill-ink" />
+        <LogoIcon class="fill-ink" />
       </div>
     </div>
   );

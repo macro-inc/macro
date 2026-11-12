@@ -26,7 +26,9 @@ export async function verifyHomepage(directory: string): Promise<void> {
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch();
+    browser = await chromium.launch({
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    });
     const origin = `http://127.0.0.1:${server.port}`;
     await verifyDemo(browser, origin);
     // Light mode renders the cream palette (src/features/setup/sitePalette.ts).

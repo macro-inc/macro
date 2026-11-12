@@ -4,7 +4,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
-import { useAddInboxFlow } from '@core/email-link';
+import { useAddInboxFlow, useEmailLinks } from '@core/email-link';
 import { idToDisplayName } from '@core/user/util';
 import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';

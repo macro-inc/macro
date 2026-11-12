@@ -25,13 +25,15 @@ export function LoginCard(props: {
                 'var(--onboarding-intro-shadow, inset .5px .5px 1px #ffffff1c, inset -.5px -.5px 1px #0008, 0 1px 1px #131313, 0 4px 10px #0005)',
             }}
           >
-            <MacroMarkIcon class="h-[22px] w-8" />
+            <MacroMarkIcon class="size-10" />
           </div>
           <h1
             tabindex="-1"
             class="mt-8 font-[Roboto_Slab_Variable] text-[30px] font-[315] leading-[1.2] tracking-[-.025em] outline-none [text-wrap:balance] sm:text-[36px]"
           >
-            {props.agentSignup ? 'Sign up as an agent' : `Welcome to ${displayName}`}
+            {props.agentSignup
+              ? 'Sign up as an agent'
+              : `Welcome to ${displayName}`}
           </h1>
           <p class="mt-4 font-[Inter_Variable] text-sm leading-6 text-ink-muted sm:text-[15px]">
             {props.agentSignup

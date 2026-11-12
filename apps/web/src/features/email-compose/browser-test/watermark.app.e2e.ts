@@ -54,9 +54,7 @@ async function gapBelowReply(page: Page) {
 }
 
 async function expectWatermarkAfterReply(page: Page) {
-  await expect(page.locator('[data-watermark]')).toHaveText(
-    '-- Sent with Rox'
-  );
+  await expect(page.locator('[data-watermark]')).toHaveText('-- Sent with Rox');
   await expect.poll(() => gapBelowReply(page)).toBeGreaterThanOrEqual(0);
 }
 
