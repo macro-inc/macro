@@ -1,4 +1,6 @@
 import { throwOnErr } from '@core/util/result';
+import { statusError } from '@core/util/safeFetch';
+import { sleep } from '@core/util/sleep';
 import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
@@ -85,16 +87,38 @@ function path(parent: MessageParent) {
   return `/messages/${parent.type}/${encodeURIComponent(parent.id)}`;
 }
 
+/**
+ * The write guard's refusal: too many writes to one channel were waiting, and
+ * nothing was written. It is the only 503 the message routes answer.
+ */
+const BUSY = statusError(503);
+/** The refusal asks for a retry after a second; a burst clears in less. */
+const BUSY_RETRY_MS = 1_000;
+const BUSY_RETRIES = 2;
+
 async function request<T extends object>(
   url: string,
   method = 'GET',
   body?: unknown
 ): Promise<T> {
-  return throwOnErr(() =>
-    dssFetch<T>(url, {
-      method,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+  const init = {
+    method,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  };
+  let result = await dssFetch<T>(url, init);
+  for (let retry = 0; retry < BUSY_RETRIES && isBusy(result); retry += 1) {
+    await sleep(BUSY_RETRY_MS);
+    result = await dssFetch<T>(url, init);
+  }
+  return throwOnErr(() => Promise.resolve(result));
+}
+
+function isBusy(result: Awaited<ReturnType<typeof dssFetch>>): boolean {
+  return (
+    result.isErr() &&
+    result.error.some(
+      (error) => error.code === BUSY.code && error.message === BUSY.message
+    )
   );
 }
 
