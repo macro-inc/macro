@@ -223,7 +223,7 @@ export function useUndoCancelComputerMutation() {
   }));
 }
 
-/** Bills a released computer again while its disk is still retained. */
+/** Sets a failed computer up again; billing is untouched. */
 export function useRetryComputerMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -233,6 +233,7 @@ export function useRetryComputerMutation() {
   }));
 }
 
+/** Bills a released computer again while its disk is still retained. */
 export function useRestoreComputerMutation() {
   return useMutation(() => ({
     gcTime: 0,
