@@ -242,7 +242,8 @@ marked read until you click or type in its pane, and Undo doesn't mark it
 read either.
 
 Only the tab you typed in opens the item, not a tab duplicated or opened from
-it. Only prompts typed in the agent composer carry the tab: channel and DM
+it. Only prompts typed in the agent composer carry the tab, including the first
+prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
 item in its reply instead. Routes are closed to agents unless they opt in
 (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,

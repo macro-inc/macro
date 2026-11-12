@@ -28,10 +28,6 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
-import {
-  enableAgentNavigation,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   AgentSessionLogUnavailable,
@@ -67,7 +63,7 @@ import {
 import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
 import { publishSessionTurn } from './session-turn';
-import { uiClientId } from './ui-client';
+import { typedInClientId } from './ui-client';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -492,9 +488,9 @@ export class AgentSession {
    */
   private typedIn(action: AgentAction): { clientId?: string } {
     if (action.type !== 'prompt') return {};
-    if (!isFeatureEnabled(enableAgentNavigation)) return {};
 
-    return { clientId: uiClientId() };
+    const clientId = typedInClientId();
+    return clientId ? { clientId } : {};
   }
 
   /**
