@@ -822,9 +822,10 @@ team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
 need a team: without one the page shows nothing about them. The flag follows
 PostHog in every environment unless explicitly overridden locally. With the
-flag off, the computer UI is hidden (Machines, Billing, Agents and settings
-search show nothing about computers), while existing computers keep running and
-billing. Turning the flag off is a sales kill switch, not a way to manage
+flag off, the computer UI is hidden (the Macro computers section, Billing,
+Agents and settings search show nothing about computers; a team owner or admin
+still sees an existing computer under Your machines as an ordinary machine
+they can rename), while existing computers keep running and billing. Turning the flag off is a sales kill switch, not a way to manage
 computers. Team purchase and offers return 403 when the rollout is off,
 missing or unavailable. If the environment has no computer prices configured,
 offers and purchases answer 503 with `computers are not available in
