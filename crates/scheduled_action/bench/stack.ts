@@ -2,7 +2,7 @@
 // as a seeded person, an SDK client for them, and a lock so one draft at a
 // time runs on it, whichever worker started it.
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir, loadavg } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -160,10 +160,14 @@ const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // Another user's process is alive too.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 };
+
+/** A lock file is written as soon as it's made, so one still empty after this was left by a crash. */
+const UNWRITTEN_MS = 30_000;
 
 /**
  * Holds the instance while `work` runs, waiting for any other eval's draft
@@ -178,29 +182,41 @@ export async function exclusive<T>(instance: string, label: string, work: () => 
   const path = join(LOCK_DIR, `${instance}.lock`);
   let waited = false;
   for (;;) {
+    let fd: number | undefined;
     try {
-      const fd = openSync(path, 'wx');
-      writeSync(fd, JSON.stringify({ pid: process.pid, label, since: new Date().toISOString() }));
-      closeSync(fd);
-      break;
-    } catch {
-      let raw = '';
-      let holder: { pid?: number; label?: string } = {};
-      try {
-        raw = readFileSync(path, 'utf8');
-        holder = JSON.parse(raw);
-      } catch {}
-      if (holder.pid && !alive(holder.pid)) {
-        // Only the dead holder's file: another waiter may have taken the lock since.
-        try {
-          if (readFileSync(path, 'utf8') === raw) unlinkSync(path);
-        } catch {}
-        continue;
-      }
-      if (!waited) console.log(`waiting for ${holder.label ?? 'another eval'} (pid ${holder.pid}) on ${instance}`);
-      waited = true;
-      await Bun.sleep(1000);
+      fd = openSync(path, 'wx');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     }
+    if (fd !== undefined) {
+      try {
+        writeSync(fd, JSON.stringify({ pid: process.pid, label, since: new Date().toISOString() }));
+      } catch (error) {
+        unlinkSync(path);
+        throw error;
+      } finally {
+        closeSync(fd);
+      }
+      break;
+    }
+    let raw = '';
+    let holder: { pid?: number; label?: string } = {};
+    let age = 0;
+    try {
+      age = Date.now() - statSync(path).mtimeMs;
+      raw = readFileSync(path, 'utf8');
+      holder = JSON.parse(raw);
+    } catch {}
+    if ((holder.pid && !alive(holder.pid)) || (!holder.pid && age > UNWRITTEN_MS)) {
+      // Only the dead holder's file: another waiter may have taken the lock since.
+      try {
+        if (readFileSync(path, 'utf8') === raw) unlinkSync(path);
+      } catch {}
+      continue;
+    }
+    if (!waited) console.log(`waiting for ${holder.label ?? 'another eval'} (pid ${holder.pid}) on ${instance}`);
+    waited = true;
+    await Bun.sleep(1000);
   }
   holding.add(instance);
   try {
