@@ -70,8 +70,7 @@ fn channel_list_conversion_keeps_the_agent_dm_persona_and_auto_join() {
                 auto_join_team: true,
                 created_at: chrono::DateTime::<chrono::Utc>::default(),
                 updated_at: chrono::DateTime::<chrono::Utc>::default(),
-                owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string())
-                    .unwrap(),
+                owner_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
             },
             participants: Vec::new(),
             is_participant: true,
