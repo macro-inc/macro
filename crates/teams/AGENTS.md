@@ -29,7 +29,33 @@ event contract (schema, sanitization, delivery semantics).
   sender or `team_invite_link.created_by`). Billing implements it in
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
-  deletion side effects (owned-entity transfer, seat release).
+  deletion side effects (owned-entity transfer, seat release). Team deletion
+  calls `OwnedEntityCleanup::release_computers` after the purge and before
+  cancelling the subscription, so computers leave through their own lifecycle.
+- `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
+  (Macro computers) on the team subscription. Each computer bills ONE item at
+  a price of its own (`create_computer_price` copies the catalog price; Stripe
+  refuses two items of one price) carrying `computer_id` in item and price
+  metadata, so items are matched by computer, never by price or count.
+  `remove_team_subscription_item` treats an item or subscription already gone
+  as `ItemRemoval::AlreadyGone`; `settle_subscription_item_change` ends an
+  unknown outcome for good (`abandoned` receipts are never sent again). One Stripe update per
+  change set, under the team billing lock, invoiced now with
+  `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
+  idempotent by key (`subscription_item_change` durable requests/receipts plus
+  an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
+  Replay the receipt before resolving current subscription/prices. A change
+  left pending is settled by the next holder of the subscription guard (applied
+  iff its provider marker landed, else `abandoned`), so it never wedges seat,
+  plan or computer changes. One younger than `PENDING_SETTLE_AFTER` (5 min)
+  may still be in flight at Stripe, so the guard refuses with
+  `ItemChangeInFlight` instead of settling it. A trialing subscription never
+  gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact
+  request, including scheduled updates. Settling a key with no receipt writes
+  an `abandoned` one on the team's subscription, fencing a send still on its
+  way. Removing a computer's item archives its own price. Retain
+  receipts after subscription/team deletion to prevent delayed duplicate charges.
+  Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
@@ -69,6 +95,9 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Carry async-stripe's `stripe::PriceId` through generic item changes; validate
+  once at configuration/provider boundaries.
+
 - A user is on at most one team, enforced only by the `team_owner_id_unique`
   and `team_user_user_id_unique` constraints. `create_team` maps either
   violation to `CreateTeamError::AlreadyOnTeam` (409); a new insert path into
@@ -98,6 +127,10 @@ event contract (schema, sanitization, delivery semantics).
   without a separate acceptance. Existing accounts accept like any other invite.
   Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
 
+## Billing identifiers
+
+- Use `stripe::PriceId` for seat price configuration, item quantity changes, and price lookups; its parse accepts any string, so callers validate configured ids before building `SeatPrices`.
+
 ## Checks
 
 - `cargo test -p teams` (`SQLX_OFFLINE` unset).
@@ -109,3 +142,15 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+- Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
+
+- `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.
+
+## Team vault cleanup
+
+- Run `OwnedEntityCleanup::prepare_team_deletion` before census and ordinary cleanup;
+  namespace failures stop before entity, session, subscription or team deletion.
+  Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
+- Keep membership removal and rollback unchanged: vault items belong to the team,
+  retain their creator, and lose departing members through current membership checks.
