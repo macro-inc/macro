@@ -131,10 +131,32 @@ function crons(trigger: unknown): { fields: string[]; timezone?: string }[] {
   return out;
 }
 
+/** A zone's UTC offset at `at`, or undefined for a zone that isn't one. */
+function offset(zone: string, at: Date): string | undefined {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+      .formatToParts(at)
+      .find((part) => part.type === 'timeZoneName')?.value;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether a schedule's zone keeps the person's clock, winter and summer: `US/Eastern` does for `America/New_York`. */
+function sameClock(zone: string | undefined, timezone: string): boolean {
+  if (zone === undefined) return false;
+  const year = new Date().getUTCFullYear();
+  return [0, 6].every((month) => {
+    const at = new Date(Date.UTC(year, month, 15));
+    const theirs = offset(zone, at);
+    return theirs !== undefined && theirs === offset(timezone, at);
+  });
+}
+
 /** The cron schedules that run in the person's time zone: 8:30 in UTC isn't their 8:30. */
 const schedules = (trigger: unknown, timezone: string) =>
   crons(trigger)
-    .filter((cron) => cron.timezone === timezone)
+    .filter((cron) => sameClock(cron.timezone, timezone))
     .map((cron) => cron.fields);
 
 // The scheduler's cron numbers days from 1 = Sunday.
@@ -268,10 +290,21 @@ const notPerson = (keys: string[]): Expectation => ({
   holds: (draft, { ids }) => keys.every((key) => !names(draft, key, ids)),
 });
 
-/** A code step's source holding `name` as a whole string, to look up when it runs. */
+/**
+ * A code step's source holding `name` as a whole string, to look up when it
+ * runs; `name` is a pattern, so `jordan(?:[ ._-]\w+)?` also catches "Jordan Lee".
+ */
 const sourceNames = (draft: DraftResult, name: string) =>
   allSteps(draft).some((step) =>
     new RegExp(`(["'\`])[#@]?${name}\\1`, 'i').test(String((step as { source?: unknown } | null)?.source ?? '')),
+  );
+
+/** Whether some knob's value starts with the word `name`: "Jordan", or a guess at which one, "Jordan Lee". */
+const knobStarts = (draft: DraftResult, name: string) =>
+  allSteps(draft).some((step) =>
+    ((step as { knobs?: { value?: unknown }[] } | undefined)?.knobs ?? []).some(
+      (knob) => typeof knob.value === 'string' && new RegExp(`^${name}\\b`, 'i').test(plain(knob.value)),
+    ),
   );
 
 const watches = (...events: string[]): Expectation => ({
@@ -541,11 +574,11 @@ export const CASES: Case[] = [
       at(10, 0, ['THU']),
       {
         says: 'leaves Jordan, who has two matches, for the person to pick',
-        // Neither Jordan's id or email, nor the name to look up when it runs.
+        // Neither Jordan's id or email, nor the name, or a full name, to look up when it runs.
         holds: (draft, context) =>
           notPerson(['jordan-lee', 'jordan-patel']).holds(draft, context) &&
-          !knobNamed(draft, 'jordan') &&
-          !sourceNames(draft, 'jordan'),
+          !knobStarts(draft, 'jordan') &&
+          !sourceNames(draft, 'jordan(?:[ ._-]\\w+)?'),
       },
       nothingUnused,
     ],
