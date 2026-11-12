@@ -21,10 +21,15 @@ ready; native menus and anchored comments also require their view installers.
 In the native body, type `/checklist`, choose Checklist, and type a label. Check
 heading, list, code and divider choices; `/table` opens the size picker. Image
 and Video open the shared all-media file dialog, and Math opens the retained
-equation menu in a plain document. GIF, Link, Task, Document, Query and Database
-stay hidden until their document-owned request callbacks are installed. Verify
-that closing the document retires its menu registrations without affecting a
-newly opened editor.
+equation menu in a plain document. Task and Document open the shared creation
+popover. Submit each kind, exercise Create More and failure, and check that the
+Await placeholder appears only for its originating peer before the created
+mention replaces it. Reopen the document and compare the saved mention. Close
+the document while creation is pending and confirm retained callbacks cannot
+write into a newly opened editor. GIF, Link, Query and Database stay hidden
+until their document-owned request callbacks are installed. Verify that closing
+the document retires its menu registrations without affecting a newly opened
+editor.
 
 Switch the body read-only and try paste, cut, drop and composition input: the
 model must stay unchanged while selecting and copying remain available. Unlock

@@ -57,6 +57,7 @@ import {
   createNativeVideoDecoratorViews,
 } from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
+import { createNativeCreationComposerController } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-creation';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { registerNativeTitleHandoffKeys } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-title-handoff';
 import {
@@ -415,6 +416,8 @@ export default function RustMarkdownEditor(props: {
                 try {
                   if (abort.signal.aborted)
                     throw new Error('Editor open cancelled');
+                  const creation = createNativeCreationComposerController(view);
+                  overlayLifecycle.add(creation.dispose);
                   const installed = installNativeMarkdownOverlays(view, {
                     canEdit,
                     formatting: formatting.Overlay,
@@ -436,6 +439,7 @@ export default function RustMarkdownEditor(props: {
                         openFileDialog: (kind) =>
                           imageUploads.openFileDialog(kind),
                         requestEquation: () => equationContext.requestCreate(),
+                        requestCreation: creation.requestCreation,
                       },
                     },
                     tags: {
