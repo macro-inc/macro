@@ -11,7 +11,8 @@ Saved execution retries must match both actor selection and original
 turn, so a later requester cannot inherit an earlier execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
-MCP, SDK documentation selection, saved execution records, and durable review
+MCP and for channel-mention bots (`MentionCodeMode`, `MentionExecutionCredentials`,
+the wire contract in `src/user_executions.rs`), SDK documentation selection, saved execution records, and durable review
 stacks. Process isolation belongs to
 `crates/code_execution`; session presentation belongs to `crates/agent_session`.
 

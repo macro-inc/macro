@@ -100,6 +100,10 @@ threads, pins, recents, notifications, folders, activity.
   evaluation has a 300 ms timeout and keeps the call's own chat on failure.
 - The same flag client evaluates `enable-programmatic-calls` per caller for the
   explicit call start, join, and leave routes; failures disable those routes.
+  It also evaluates `ai-channel-bot-code-mode` for the mentioning user of each
+  bot mention (`channel_bots::outbound::code_mode`); failures keep the direct
+  tools. Code-mode programs run on the agent harness through
+  `HarnessUserExecutions` with the internal key.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 

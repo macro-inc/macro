@@ -1,10 +1,9 @@
 //! Client for the harness's internal user-execution route, for hosts with no
 //! Deno runtime of their own.
 
-use crate::domain::{CodeModeError, UserExecutionReceipt};
-use crate::inbound::internal_user_executions::{
-    MentionContext, USER_EXECUTIONS_PATH, UserExecutionCommand, UserExecutionFailure,
-};
+use crate::domain::{CodeModeError, MentionCodeMode, MentionContext, UserExecutionReceipt};
+use crate::user_executions::{USER_EXECUTIONS_PATH, UserExecutionCommand, UserExecutionFailure};
+use async_trait::async_trait;
 use code_execution::domain::ExecuteRequest;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -60,16 +59,18 @@ impl HarnessUserExecutions {
             internal_key,
         })
     }
+}
 
-    /// Run `request` as `user` for `mention`. Cancelling hangs up, which
-    /// stops the program on the harness; completed API writes stand.
+#[async_trait]
+impl MentionCodeMode for HarnessUserExecutions {
+    /// Cancelling hangs up, which stops the program on the harness.
     #[tracing::instrument(
         name = "code_mode.harness_user_execution",
         skip_all,
         fields(message_id = %mention.message_id),
         err
     )]
-    pub async fn execute(
+    async fn execute(
         &self,
         user: &MacroUserIdStr<'static>,
         mention: &MentionContext,
@@ -104,12 +105,15 @@ impl HarnessUserExecutions {
             () = cancel.cancelled() => return Err(CodeModeError::Unavailable),
         };
         if status.is_success() {
-            return serde_json::from_slice(&body).map_err(|_| CodeModeError::Unavailable);
+            return serde_json::from_slice(&body).map_err(|error| {
+                tracing::warn!(error = ?error, "harness user execution receipt undecodable");
+                CodeModeError::Unavailable
+            });
         }
         // Only a failure envelope that agrees with its status is trusted.
         Err(
             match serde_json::from_slice::<UserExecutionFailure>(&body) {
-                Ok(failure) if failure.status() == status => failure.into(),
+                Ok(failure) if failure.status().as_u16() == status.as_u16() => failure.into(),
                 _ => {
                     tracing::warn!(status = status.as_u16(), "harness user execution refused");
                     CodeModeError::Unavailable
@@ -121,11 +125,10 @@ impl HarnessUserExecutions {
 
 async fn bounded_body(mut response: reqwest::Response) -> Result<Vec<u8>, CodeModeError> {
     let mut body = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| CodeModeError::Unavailable)?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(|error| {
+        tracing::warn!(error = ?error.without_url(), "harness user execution body unreadable");
+        CodeModeError::Unavailable
+    })? {
         if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
             return Err(CodeModeError::Unavailable);
         }

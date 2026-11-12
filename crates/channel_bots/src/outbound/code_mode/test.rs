@@ -59,6 +59,22 @@ async fn the_flag_on_enables_code_mode() {
     );
 }
 
+/// Programs never reach it: these tests stop before any program runs.
+struct NeverRuns;
+
+#[async_trait]
+impl MentionCodeMode for NeverRuns {
+    async fn execute(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &MentionContext,
+        _: ExecuteRequest,
+        _: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError> {
+        panic!("no program should run in this test");
+    }
+}
+
 struct Fixed(bool);
 
 #[async_trait]
@@ -73,7 +89,7 @@ fn modes(gate: Option<bool>) -> ToolModes {
     match gate {
         Some(enabled) => modes.with_code_mode(ChannelBotCodeMode {
             tools: ai_tools::tools_for_channel_bot_code_mode(),
-            executions: HarnessUserExecutions::new("http://harness.invalid", "key").unwrap(),
+            executions: Arc::new(NeverRuns),
             gate: Arc::new(Fixed(enabled)),
         }),
         None => modes,
@@ -122,39 +138,4 @@ async fn code_tools_with_the_flag_on() {
     assert!(names.iter().any(|name| name == "RenderCanvas"));
     assert!(tools.system_prompt.contains("Code Mode"));
     assert!(!tools.system_prompt.contains("execution.views.present"));
-}
-
-#[tokio::test]
-async fn programs_refuse_a_caller_other_than_macro_ai() {
-    let code_mode = MentionCodeMode {
-        executions: HarnessUserExecutions::new("http://harness.invalid", "key").unwrap(),
-        mention: MentionContext {
-            message_id: uuid::Uuid::from_u128(1),
-            root_id: uuid::Uuid::from_u128(2),
-        },
-    };
-    let program = || ExecuteRequest {
-        source: "export async function main() { return {data: 1}; }".into(),
-        timeout_ms: 1000,
-    };
-    for (caller, session) in [
-        (ToolCaller::ApiKey, None),
-        (
-            ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
-            Some(uuid::Uuid::from_u128(3)),
-        ),
-    ] {
-        let error = code_mode
-            .execute(
-                &user(),
-                &caller,
-                session,
-                program(),
-                CancellationToken::new(),
-            )
-            .await
-            .err()
-            .unwrap();
-        assert!(matches!(error, CodeModeError::Forbidden));
-    }
 }

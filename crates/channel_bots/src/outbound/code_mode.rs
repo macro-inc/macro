@@ -1,15 +1,16 @@
 //! Code mode for channel-mention replies, behind a per-user PostHog flag.
 //!
-//! The bot's programs run on the agent harness (the only host with a Deno
-//! runtime) through its internal user-execution route, as the mentioning user
-//! and attributed to Macro AI: the same identity the bot's direct tools use.
+//! The bot's programs run through a [`MentionCodeMode`] (in production, the
+//! agent harness's internal user-execution route, the only host with a Deno
+//! runtime) as the mentioning user, attributed to Macro AI: the same identity
+//! the bot's direct tools use.
 
 use std::sync::Arc;
 
-use agent_code_mode::domain::{CodeModeError, UserCodeMode, UserExecutionReceipt};
-use agent_code_mode::inbound::internal_user_executions::MentionContext;
+use agent_code_mode::domain::{
+    CodeModeError, MentionCodeMode, MentionContext, UserCodeMode, UserExecutionReceipt,
+};
 use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
-use agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions;
 use ai_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallFuture, ToolCaller,
@@ -59,7 +60,7 @@ pub struct ChannelBotCodeMode {
     /// The filtered direct tools and the code-mode prompt.
     pub tools: ToolSetWithPrompt,
     /// The harness route programs run on.
-    pub executions: HarnessUserExecutions,
+    pub executions: Arc<dyn MentionCodeMode>,
     /// Who gets code mode.
     pub gate: Arc<dyn CodeModeGate>,
 }
@@ -83,7 +84,7 @@ struct CodeTools {
     direct: Arc<AiToolSet>,
     prompt: Arc<str>,
     user_tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
-    executions: HarnessUserExecutions,
+    executions: Arc<dyn MentionCodeMode>,
     gate: Arc<dyn CodeModeGate>,
 }
 
@@ -128,7 +129,7 @@ impl ToolModes {
                 direct: code.direct.clone(),
                 code: code.user_tools.clone(),
                 context: UserCodeModeToolContext {
-                    service: Arc::new(MentionCodeMode {
+                    service: Arc::new(MentionPrograms {
                         executions: code.executions.clone(),
                         mention: MentionContext {
                             message_id: mention.message_id,
@@ -152,27 +153,24 @@ fn system_prompt(tools: &ToolSetWithPrompt) -> Arc<str> {
     format!("{}\n{}", tools.prompt, prompt::channel_mention::PROMPT).into()
 }
 
-/// One mention's programs, run on the harness for that mention's user.
-struct MentionCodeMode {
-    executions: HarnessUserExecutions,
+/// One mention's programs, run for that mention's user. The caller and
+/// session the tools pass are the ones [`ToolModes::for_reply`] bound
+/// (Macro AI, none); the harness credentials them itself.
+struct MentionPrograms {
+    executions: Arc<dyn MentionCodeMode>,
     mention: MentionContext,
 }
 
 #[async_trait]
-impl UserCodeMode for MentionCodeMode {
+impl UserCodeMode for MentionPrograms {
     async fn execute(
         &self,
         user: &MacroUserIdStr<'static>,
-        caller: &ToolCaller,
-        session: Option<uuid::Uuid>,
+        _caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
-        // The harness always runs as Macro AI with no session; refuse anything
-        // that asked for more rather than silently dropping it.
-        if *caller != ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID) || session.is_some() {
-            return Err(CodeModeError::Forbidden);
-        }
         self.executions
             .execute(user, &self.mention, request, cancel)
             .await

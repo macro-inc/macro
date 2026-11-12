@@ -1783,14 +1783,14 @@ async fn run() -> anyhow::Result<()> {
             agent_code_mode::inbound::internal_user_executions::user_executions_router(
                 agent_code_mode::inbound::internal_user_executions::UserExecutionsState::new(
                     Arc::new(channel_bots.clone()),
-                    Arc::new(code_mode::MentionRunCredentials::new(
-                        MacroApiTokenSigner::new(
+                    Arc::new(code_mode::MentionRunCredentials {
+                        signer: MacroApiTokenSigner::new(
                             pool.clone(),
                             config.macro_api_token_issuer.as_ref(),
                             config.macro_api_token_private_secret_key.as_ref(),
                         ),
-                        code_mode::sdk_endpoints()?,
-                    )),
+                        endpoints: code_mode::sdk_endpoints()?,
+                    }),
                     MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
                 ),
             )

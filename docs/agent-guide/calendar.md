@@ -487,7 +487,8 @@ The AI's `CreateCalendarEvent` composer (chat, agent sessions, channel review ca
 offers the same selector under the same quick-calls flag; `Macro call` there maps to
 the tool's `addMacroCall`, and the call is created when the tool executes, before the
 event is written, so the single invitation already carries the link. The MCP server
-and channel bot accept `addMacroCall` directly. `addMacroCall` and `addGoogleMeet`
+and the channel bot's direct tools accept `addMacroCall` directly; in code mode
+the channel bot creates events through `calendar.createConfirmed`. `addMacroCall` and `addGoogleMeet`
 are mutually exclusive, and out-of-office entries accept neither.
 
 The sidebar's `Calendars` section folds each connected account into a collapsible

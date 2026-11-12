@@ -130,22 +130,13 @@ impl UserExecutionCredentials for UserRunCredentials {
 
 /// Credentials for a channel-mention bot's program: the mentioning user's
 /// access attributed to Macro AI, as the bot's direct tools act, signed with
-/// the mention so email refuses its sends. Email's host is also left out of
-/// the run's network allowlist.
+/// the mention so email sends and credential minting refuse it. (Its hosts
+/// keep email's: deployed services share one gateway origin, so leaving the
+/// host out would not narrow Deno's network allowlist.)
 pub struct MentionRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub endpoints: SdkEndpoints,
 }
-
-impl MentionRunCredentials {
-    pub fn new(signer: MacroApiTokenSigner, mut endpoints: SdkEndpoints) -> Self {
-        endpoints.hosts.remove(EMAIL_HOST);
-        Self { signer, endpoints }
-    }
-}
-
-/// The SDK host name for the email service.
-const EMAIL_HOST: &str = "email";
 
 #[async_trait]
 impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredentials {

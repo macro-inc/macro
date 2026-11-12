@@ -35,7 +35,9 @@ decides whether to trigger, authorizes, and delivers a reply.
 ## Boundaries
 
 - Depends on: `bots`, `channels`, `calendar_events` (time zones), `lexical_client`,
-  `messages`, `prompt`, `ai_tools`/`ai_toolset`, `ai_usage`/`ai_billing`.
+  `messages`, `prompt`, `ai_tools`/`ai_toolset`, `ai_usage`/`ai_billing`,
+  `agent_code_mode` (the `MentionCodeMode` port and user code tools),
+  `code_execution`, `cognition`, `feature_flags`.
 - Used by: `services/document_storage_service`, its composition root.
 
 ## Recipes

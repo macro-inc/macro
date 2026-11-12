@@ -897,6 +897,8 @@ async fn run_server() -> anyhow::Result<()> {
         config.environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    // One flag client for every per-user rollout here, including mention replies.
+    let rollout_flags = flags.clone();
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
             flags.clone(),
@@ -904,7 +906,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1600,19 +1602,15 @@ async fn run_server() -> anyhow::Result<()> {
     // with `ai-channel-bot-code-mode`; everyone else keeps the direct tools.
     let channel_bot_code_mode = channel_bots::outbound::code_mode::ChannelBotCodeMode {
         tools: ai_tools::tools_for_channel_bot_code_mode(),
-        executions: agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
-            macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
-            config.internal_api_key.as_ref(),
-        )
-        .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
-        gate: Arc::new(channel_bots::outbound::code_mode::FlaggedCodeMode(
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                config.posthog_api_key.as_ref().to_owned(),
-                Duration::from_secs(3),
-                config.environment,
+        executions: Arc::new(
+            agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
+                macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
+                config.internal_api_key.as_ref(),
             )
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?,
+            .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
+        ),
+        gate: Arc::new(channel_bots::outbound::code_mode::FlaggedCodeMode(
+            rollout_flags.clone(),
         )),
     };
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(

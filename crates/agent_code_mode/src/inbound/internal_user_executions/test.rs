@@ -99,11 +99,10 @@ impl ProgramExecutor for Spy {
         environment: RunEnvironment,
         _: CancellationToken,
     ) -> code_execution::domain::Outcome {
-        self.ran.lock().unwrap().push((
-            environment.token,
-            request.source,
-            request.timeout_ms,
-        ));
+        self.ran
+            .lock()
+            .unwrap()
+            .push((environment.token, request.source, request.timeout_ms));
         code_execution::domain::Outcome::Succeeded {
             value: json!({"data": 1}),
         }
