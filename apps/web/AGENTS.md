@@ -79,8 +79,10 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
 further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers keep a replaceable window with explicit paging. A
-window key names the page or growing list on screen, never a refresh of it. Reset
+to a bound; property pickers use explicit paging, and query-backed pages append
+to the visible options. Thread/generic pickers advance their browsed-email and
+server-search pages alongside Quick Access; explicit user rosters stay capped.
+A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
@@ -230,14 +232,17 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
-and nudge to the minimum height, and closing hands the column back:
+and nudge to the minimum height, closing hands the column back, and a document
+keeps its reading position as the splits beside it close (WebKit has no CSS
+scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
 
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
-own instance and keeps its own state, and reopening within a tab reuses it:
+own instance and keeps its own state, and reopening within a tab reuses it. The
+same suite checks that a menu's Open in new tab opens a new active tab:
 `bunx playwright test --config src/components/app/tab-layout/browser-test/playwright.config.ts`.
 
 Desktop app switches open the requested list in the target split when the
@@ -245,6 +250,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+
+Links in database text and URL cells open without editing the cell, on desktop
+and touch, while the rest of the cell still edits:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
@@ -303,6 +312,8 @@ verify wrapped-thread reading gaps, drafts, fullscreen navigation, and local-vol
 indicators across call surfaces. Verify call-panel changes in the full call host
 with screenshots; list signed-in call checks separately instead of blocking on
 authentication.
+Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; place avatar microphone-mute badges at bottom-right and personal-volume mute badges at bottom-left, with each bounded to half the avatar width so both stay visible. Verify these in the full call host.
+Keep participant-volume popovers limited to the slider and volume readout, and render inline mute statuses as bare icons so tile labels retain their height.
 New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
@@ -321,7 +332,8 @@ Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
-RSVP scope and the delete confirmation over event details) have a backend-free
+RSVP scope and the delete confirmation over event details), and event details
+and the Share drawer over the page, have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
@@ -341,6 +353,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+Collapsible document sections (the real heading-folds plugin and its gutter
+controls) have a backend-free desktop/tablet/phone regression: placement in
+the 24px phone gutter, hover and touch visibility, nested folds, reload, and
+Mod+Enter:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/misc/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -566,6 +584,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Group chats in the notifications inbox
+
+A group chat's message row shows the chat (its picture or the channel kind)
+and its name, with the sender in the body, never whoever wrote last as the
+row's author; unnamed group chats shorten to two names and a count
+(`features/channel/group-chat-name.ts`). The backend-free desktop/phone
+regression is
+`bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element
@@ -677,6 +704,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   completion after a code has been consumed. New address/back/send attempts must
   verify anew. Keep admission closed until cleanup succeeds; serialize login behind every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
+  `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
+  task/contact/mixed/thread/generic source pagination on desktop and touch.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -719,6 +748,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
+- Show email draft sync failure UI (the composer banner, a failure toast, a **Not synced** row) only when the user has to act: the server refused the write for good, or local storage needs a reload. A write that is in flight, queued, superseded by its own send, or failing in a way that can be retried stays silent and retries itself first; a false alarm costs more trust than a late one.
+- Email draft sync is tested whole in `src/lib/queries/email/draft-sync.scenarios.test.ts` and `draft-sync.fuzz.test.ts`, over the simulated server and queue in `tests/draft-sync-world.ts`. Add a scenario with every change to draft saving, discarding or sending, and run `bunx vitest run src/lib/queries/email/draft-sync` from `apps/web`. A fuzz failure prints a seed and path; replay it with `EMAIL_DRAFT_FUZZ_SEED` and `EMAIL_DRAFT_FUZZ_PATH`, and run more sessions with `EMAIL_DRAFT_FUZZ_RUNS`. The banner itself is covered in a browser by `bunx playwright test --config src/features/email-compose/browser-test/playwright.config.ts sync-status.browser.e2e.ts`.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
@@ -736,12 +767,23 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
+  and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, send one `purchaseKey`
+  per Buy dialog on every retry (202 `confirming` is success), offer no power,
+  billing or release while `purchasing`, confirm Restore before billing again,
+  and release only after the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
 - Label the notification permission toast **Enable notifications** on every
   platform, and keep the desktop and Android Enable actions on the native
   notification provider.
+- Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with icon-free mute and unmute actions, matching mobile drill-in choices, and no separate Snooze notifications row.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
   Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
@@ -822,7 +864,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history. Keep tabbed filter snapshots in the same entry slices with `split-layout/tabbed-entry-persistence.ts`, not a separate session store; capture the outgoing entry before switching tabs.
-- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
+- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
@@ -832,18 +874,19 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
-- Reserve the safe area plus the category row above mobile Search, and only the safe area above Channels; their hidden split headers must not add another blank strip.
+- Reserve the safe area plus the category row above mobile Search, and only the safe area above flag-off Channels; let the flagged Channels header own its top inset without reserving it again in the list.
 - Follow [mobile layout and chrome](../../.agents/rules/web/mobile.md#layout-and-chrome) for full-frame views and record tabs; verify their first controls below the navigation with a nonzero safe area on phones and tablets.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
+- Agent-opened panes (`features/agent-navigation`) open with `router.open` beside the agent's pane and never replace one; keep the person's active pane and focused element, the Undo toast, and the read hold (`useReadsHeldByAgentArrival` in read markers) when changing split opening, read markers or `TiledSplits` (its `data-split-pane` attribute drives the arrival motion). Undo keeps the read hold until the pane is gone, and plays the departure back when a leave guard keeps the pane. The tab id (`core/agent-session/ui-client.ts`) lives in sessionStorage, which a duplicated tab copies, so live pages compare ids over a BroadcastChannel and the one that took it later mints its own; the app shell takes it at startup. Agent navigation never runs on mobile: `agentNavigationRunsHere()` there is the one predicate that keeps the tab id off prompts, the id and its channel from starting, and the frame handler idle.
 - Routes are closed to agents (`macro.ui.open`) unless they set `info: OPEN_TO_AGENTS` in `routes/routes.ts`; open one only when showing it has no side effect (no call joins, auth or OAuth callbacks, prefilled composers, credential settings, debug views), then run `UPDATE_AGENT_ROUTE_TABLE=1 bun run test -- src/features/agent-navigation` so the server's copy in `agent_code_mode` matches.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
-- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
-- Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
+- Keep flag-off mobile Channels on its Recent feed; with `enable-chat-sidebar-sections`, reuse Home rows and horizontally scrolling favorite pins, with All, Direct messages, and personal/shared section tabs in `rail/next/mobile/`.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
-- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
+- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer. It mounts a task after the frame that follows the navigation, behind a blank of the collapsed composer's height (`--mobile-chrome-button-size`): Agents becomes the foreground view inside the tap, and the composer's first mount would otherwise hold that tap for longer than the view takes.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
   sidebar title and compact in list controls; retain each view's creation
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
@@ -862,8 +905,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
-  Session `ExecuteCode` activity uses the same Calling N tools peek window as
-  ordinary consecutive tool calls.
+  Session `ExecuteCode` calls join their segment's tool group as their SDK
+  operation rows only; never show the program or code-mode wording.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -962,30 +1005,33 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the shared desktop `Open in new split` action and its mobile/capacity guards.
   Rail splits open at latest before notifications load; only rows that stand
   for a notification (Home, Inbox) wait for it to choose a target.
-- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
+- Gate the Chat redesign on desktop and phone with `enable-chat-sidebar-sections`; wait for its result and restore the original rail and Recent phone feed when off.
+  Compose phone section navigation with the shared `PillTabs` after Favorites and before the conversation list, include the pills in the list's measured header offset, retain scrolling and active-pill visibility, and use dock Search instead of a separate Chat search control. Open custom-section settings by long-pressing its pill, not a separate more button; reuse grouped mobile filter sections and options in the settings drawer.
+  Show Unread only as an always-visible toggle in the phone section drawer; omit Display and Unread when collapsed because phone sections do not collapse.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering. Keep every joined public/private channel in All channels regardless of custom-section assignments.
-  Keep resize and reorder grips keyboard-accessible; reveal bare reorder grips only on header hover or keyboard focus, keep them fixed in the left gutter without shifting section names, and include them within the drag highlight. Allow dragging from the whole heading while preserving normal collapse clicks and excluding action buttons. Preserve personal section heights/order, edge-scroll the sidebar while resizing and compensate resize drags for scrolling, disable stack scroll anchoring only during resizing, and route list navigation through the sectioned renderer's scroll handle. Scroll keyboard targets immediately without animation, keeping two rows of context on either side, clamped to the viewport.
-  Cap section heights at measured list content and available pane space; keep each list independently scrollable, hide resize grips for two or fewer items, and default Favorites and DMs to four rows. Let All channels use the sidebar scroll area at full content height while last and not manually resized; cap it when another section follows without discarding its saved height. Use TanStack Virtual for the redesigned section stack, channel rows, and search results; snapshot its index-reconciled rows before keying by identity, and retain focused rows and drag sources.
-  Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
+  Hide section drag-handle icons; retain whole-heading drag-to-reorder and an icon-free reorder control in an out-of-flow wrapper revealed on keyboard focus without increasing header height. Preserve normal collapse clicks and exclude action buttons from dragging. Keep personal section order and route list navigation through the sectioned renderer's scroll handle, scrolling immediately with two rows of context clamped to the viewport.
+  Default sections to their natural content height and the shared sidebar scroll area, ignoring saved heights without clearing them. Gate vertical resizing on `enable-chat-sidebar-section-resize`, off by default including development; when enabled, preserve personal heights, pane/content caps, independent scrolling, four-row Favorites/DM defaults, keyboard resize controls, edge-scroll compensation, and resize-only scroll-anchor suppression. Use TanStack Virtual for the section stack, channel rows, and search results; refresh nested row offsets from each section's measured start and size, not only total stack height, snapshot index-reconciled rows before keying by identity, and retain focused rows and drag sources.
+  Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag; size the sidebar's New dropdown to its trigger width.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent section rows by 8px; style empty states like saved views with a padded, bordered surface and secondary actions, without the extra row indentation. Keep unsectioned search results unindented.
-  Reuse shared collapsible section headers and their hidden-caret behavior without leading section icons; keep Shared beside the name before the caret, replacing its badge with a users icon below 256px of section width. Use short, separate tooltips for names and sharing; apply focus backgrounds across the full header row and omit trailing header padding.
+  Reuse shared collapsible section headers and their hidden-caret behavior without leading section icons; show people and funnel icons after shared and name-matched section names. Keep short name/sharing tooltips, full-row focus backgrounds, and no trailing header padding.
   Space sections with the stack's 2px flex gap, not header padding; wrap each section's header and content in one drop surface, show blocked drops with a not-allowed cursor and borderless explanation, omit rejection overlays while section data is pending, and keep Gantt's shared drag auto-scroll and wheel scrolling available while dragging.
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible during section hydration and refetches; key virtualized rows by stable IDs so data updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep legacy `/channel-labels` and flagged `/channel-sections` queries in separate account-scoped caches; invalidate both after shared-storage writes and refetch authoritative memberships rather than patching explicit picks as effective membership.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
-  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; explain team visibility and team-only channels in hover/tap-accessible sharing help, show the warning-colored Team channels only hint only while sharing is on, keep collapse on the header and style deletion as destructive. Editing can change sharing only after complete membership eligibility checks; preserve section identity, confirm unsharing, and reconcile both scope caches after success.
-  Offer Add channels on manual-section headers and empty states; keep the picker scoped to eligible joined channels, explain scope and assignment moves in concise helper text, and leave smart membership rule-driven.
-  Place the smart rule Input below Name contains; show a match count with hover/focus channel preview, and keep preview queries reactive to the selected scope without briefly reporting pending matches as empty.
+  Create flagged sections in the shared section dialog after the initiating menu closes, append them before All channels without re-sorting existing sections, and reveal the new heading; use the same dialog for Edit section instead of separate rename and rule editors. Keep Only me/current-team visibility as exclusive checkbox choices. Pass the verified current team ID to desktop and phone sharing even when the team has no sections. Preserve the original dialogs when the sidebar flag is off, section identity during scope changes, complete membership eligibility checks, and one unsharing confirmation.
+  Offer Add channels on editable manual custom-section headers and empty states through a height-bounded anchored picker with a full-width top search, scrollable results, and no visible title or description; retain joined-channel eligibility. Give empty sections a short explanation and adjacent primary/secondary actions, hiding editing actions without verified access. On phones, stack the shared selection body in `PickerSheet`, keep search focus while choosing, and apply only on Done.
+  Combine section name and name-rule editing in Edit section on desktop and phone; show Name contains, a live match preview and count, and dimmed unjoined matches. Warn before replacing existing hand-picked channels and label the save action Replace channel list. Keep manual picks and name rules exclusive, block manual additions to rule sections, and keep preview queries reactive to the selected scope without reporting pending matches as empty.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged. Retain pointer hit-testing coordinates until the drag sensor finishes so intervening scroll updates cannot discard a valid drop.
-  Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
+  Share section click and context menu controls with menu-local loading boundaries; use DropdownMenu.Content for click-menu roots and keep Mark all as read scoped to complete membership. Hide unavailable section edits and scope transfers. Name the personal filter submenu Display, retain trailing sort checks, and keep Unread only and default-on Unread when collapsed switches open when toggled. Supplement off-page unread rows only in collapsed groups whose Unread when collapsed preference is enabled; preserve expanded groups' page order.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
   Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, including custom-section assignments and preserving participant checks; Favorites targets channel favorites only. Use the bulk item-preference endpoints and shared snooze picker, applying confirmed changes to the cache once and preserving successful chunks on partial failure.
-  Use checkbox items in Add to section to toggle membership within each scope without changing the other scope.
+  Use checkbox items in Add to section to toggle explicit membership within each scope without changing the other scope; show rule-only matches checked and read-only.
   Carry team IDs into channel entities and require a matching team for new shared-section assignments; preserve server-authorized membership display while metadata hydrates.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
@@ -1375,6 +1421,38 @@ phone, and tablet, and checks Space playback on opening and reopening the viewer
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
+## Macro computers
+
+### Claude access
+
+Computer rows show the Claude mode (`Signed in with Claude` on the computer's
+own account, never its email) from `claude-mode` for managers, and the harness list's derived
+`claude_mode` for other members. Sign-in is a dialog
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
+claude.ai control stays a plain `target="_blank"` link; never open it after an
+await. The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/settings/computers`.
+
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+null breakdown keeps the existing plan and computers UI. With the flag off the
+backend returns no breakdown and the page shows only the plan.
+
+Reuse `PriceBreakdown` for Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
+
+### Capacity
+
+Computer offers expose `soldOut` availability. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.
+
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
 - Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
@@ -1386,6 +1464,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 
 ### Agent result task lists
 
@@ -1406,7 +1485,9 @@ away leaves focus where the user put it. The backend-free regression is
 ### Assignee people scope
 
 Use only the current team roster and available agents for new Assignee selections.
-Keep existing selected outsiders visible and removable, without contact discovery.
+Keep initially selected outsiders visible and removable, and allow them to be
+re-added during the same editing session without contact discovery. Once the
+editor closes without them, they cannot be added again unless they join the team.
 Reuse the existing selected-first ordering at opening and keep row positions
 stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
 Preserve each picker’s existing placeholder, sizing, and row styling.
@@ -1414,6 +1495,7 @@ Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
 people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
+Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
 ### Sidebar tag dragging
 
@@ -1513,3 +1595,18 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+### Passwords
+
+The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
+source; the rail and phone dock show it only for team members (flag and team).
+Keep field values and drafts outside query caches and browser storage; drafts
+live in the vault primitive's in-memory store, and lock, blur and hidden tabs
+only conceal revealed values, never drafts. The vault is keyed by account,
+sign-in session and team: a scope change remounts it and aborts its requests,
+so drafts and late responses never cross viewers. Load and copy usernames
+through their field-scoped endpoints, and derive sharing counts from metadata.
+Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
+rather than feature-local chrome. The responsive vault fixture is exercised with
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
+See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
