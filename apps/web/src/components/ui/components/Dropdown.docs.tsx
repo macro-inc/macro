@@ -74,7 +74,7 @@ export default defineDoc({
       id: 'multiselect',
       title: 'Multiselect filters',
       description:
-        'Checkbox or Space toggles and stays open. Row or Enter adds and closes. Shift-click, Shift+Enter, or Only selects just one and stays open. Only is always visible on touch.',
+        'Clicking a row or its checkbox, or Space, toggles and stays open. Enter adds and closes. Shift-click, Shift+Enter, or Only selects just one and stays open. Only is always visible on touch.',
       render: MultiselectDemo,
     },
     {

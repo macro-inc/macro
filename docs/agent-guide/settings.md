@@ -104,6 +104,12 @@ editing resumes without a conversion prompt.
 With Gmail and Outlook inboxes connected, confirm only Gmail offers import
 (including Gmail accounts on a custom domain), while both support HTML and Rich
 text editing. Empty Outlook signatures must not suggest Gmail import.
+Gmail keeps images pasted into its signature editor from a message as
+`mail.google.com` URLs only that mailbox's session can load; import reads them
+from the inbox's own mailbox (the message, or for sent mail its thread) through
+the Gmail API and rehosts them. An image the mailbox doesn't hold still shows
+the image import error; a rate-limited or transient Gmail read failure shows
+the generic "try again" error instead.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
@@ -126,16 +132,13 @@ pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
 
 ### Notification permission prompt
 
-After onboarding, an eligible desktop app user sees **Enable Desktop
-Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The Android app
-says **Enable Notifications** and requests the Android notification permission
-through the same native provider. The web prompt says **Enable Browser
-Notifications** and uses browser permissions.
-**Enable** is its only action; closing the prompt (its corner **Close** on
-desktop, a swipe on phones) counts as a decline and stops it returning on the
-next load. It waits in the same region as other prompts, one card at a time. On
-phones it stays under open sheets and their pickers.
+After onboarding, eligible desktop, Android, and web users see **Enable
+notifications**. Select **Enable** to request permission through the native
+notification provider on desktop and Android, or browser permissions on the web;
+macOS uses its system permission dialog. **Not now** dismisses the prompt and
+stops it returning on the next load, as does swiping it away on phones. It appears
+with other persistent prompts; on phones it stays under open sheets and their
+pickers.
 
 ### Notification snoozes
 
@@ -147,10 +150,11 @@ under **Muted items**, with **Snooze instead** to replace one with a timed pause
 The Chat detail pane also supplies these commands for its current channel or DM;
 focus the conversation before opening the command menu.
 
-To snooze an entity, right-click its row (long-press on mobile) and choose
-**Snooze notifications…**, or select/open the entity and search for that command
-in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
-Use arrow keys and Enter, click a preset, or type a future date/time such as
+To mute an entity, right-click its row (long-press on mobile) and choose
+**Mute notifications**. Select **Until I turn it off**, a timed preset, or
+**Custom…** to open the searchable time picker. Multi-selection applies the choice
+to all selected items. Cmd/Ctrl+K retains **Snooze notifications** as a direct
+shortcut to that picker. Use arrow keys and Enter, click a preset, or type a future date/time such as
 `2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
 preset resumes on Monday at 9 AM. The picker displays the exact local date and
 time before saving. Escape closes the picker; before choosing a time, it makes
@@ -165,9 +169,10 @@ save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
-On phones, long-press opens the entity actions drawer. The snooze time picker
-uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
-with larger touch targets and tap instructions. Swipe the preset list when the
+On phones, long-press opens the entity actions drawer. Mute opens the same
+choices in a drill-in page; Back returns without changing notifications.
+The custom time picker uses the same responsive `Dialog`, width, and
+`CommandMenuShell` as Cmd/Ctrl+K, with larger touch targets and tap instructions. Swipe the preset list when the
 viewport is short. In **More views → Settings → Notifications**, item names and
 deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
 returns to the settings sheet. Start new snoozes from an entity's actions or
@@ -195,16 +200,28 @@ starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
 the same billing and channel effects as an emailed invite; users already on
-another team are told to leave it first. Team admins and owners also see
-**Reset link** (the old link stops working and a new one is copied) and
-**Turn off**, each behind a confirmation. Anyone who may invite can copy the
+another team are told to leave it first. Team admins and owners also get a
+settings (gear) menu beside **Copy link** with **Reset link** (the old link
+stops working and a new one is copied) and **Turn off**, each behind a
+confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before; **Invite as agent** invites every address in the dialog as an agent,
-and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
-[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
+as before. The dialog no longer offers agent invites; send them with
+`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
+After a person invite sends, the dialog's second step, **Let them know it's
+coming**, lists the addresses and offers **Copy invite link** (creating the
+first link when there is none) and **Done**. **Team → Members** also shows **Copy invite link** beside **Invite**,
+and onboarding's team confirmation asks a creator who just invited teammates
+to send them the link too.
+A signed-out invitee who opens an emailed or link invite is sent to
+`/app/login?redirect=/team-invite?…`; once signed in or signed up (including
+desktop Google sign-in, whose `macro:///login` callback carries the redirect)
+they return to the invite before onboarding, so they join first and onboarding
+opens on the team. Channel invites (`/channel-invite`) also open before
+onboarding. Other `?redirect=` deep links, such as meetings, return there after
+sign-in, or after onboarding for a new account.
 An unanswered invite gets up to two reminder emails, with subjects starting
 **Reminder:**, 3 days after the last email and 4 days after that. Invites more
 than 14 days old, already-members, and invites whose sender left the team get none.
@@ -229,7 +246,8 @@ page. The main page has a profile shortcut and the same grouped Team, Blocks, Pe
 and Developer sections as desktop, plus enabled admin settings. Search finds
 individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. `API Keys` is desktop-only and has no row here.
+previous scroll position. `API Keys` is desktop-only and has no row here; `Account Managers` has one, so
+access can be revoked from a phone.
 **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
 menu opened inside the sheet leaves the sheet itself open. Opening Settings again
@@ -242,10 +260,11 @@ like any other rail item, and Shift-click opens it in a new split.
 `/app/settings/<tab>` opens it as the only split with the app rail still
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
-**Search settings** field, the grouped section pills, and a team action pinned
-to the bottom: **Invite your team** (opens the invite dialog; hidden for members
-when the team limits invites to admins) or, with no team, **Create a team**
-(opens the create-team dialog). Unlike other views, it cannot be hidden at
+**Search settings** field, a team action at the top of the list (hidden while
+searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
+hidden for members when the team limits invites to admins) or, with no team,
+**Create a team** (opens the create-team dialog), then the grouped section
+pills. Unlike other views, it cannot be hidden at
 desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
 nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
 navigation** (or `Cmd .`), which starts closed. Escape closes a
@@ -308,7 +327,7 @@ Left nav (feature and platform gates still apply):
   sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
-- **Developer**: Runtimes, MCP server, API Keys, Bots.
+- **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
@@ -341,7 +360,10 @@ Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
 retains theme search, editing, copying, custom theme creation, and importing
-themes from the clipboard.
+themes from the clipboard. The pencil beside a theme pill opens the inline theme
+editor under that row: a custom theme is edited in place, a default theme opens
+as a `<name> copy` fork. `features/settings/Appearance.test.tsx` covers opening
+it for both default themes, whose hex grays once crashed the editor's color pickers.
 
 The default Macro Dark theme uses a neutral `#0E0E0E` outer background and
 `#121212` inset content panels. The app rail follows the outer background;
@@ -412,7 +434,7 @@ language has loaded, PostHog stores it on the person as `interface_language`
 `interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
-`agent-connections` aliases Integrations, and `harness` aliases Runtimes.
+`agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
 `Usage` appears directly above Billing, including for Free accounts. In
 production, the `enable-ai-usage-billing` PostHog flag controls activation. While
@@ -576,8 +598,8 @@ trialing team, which ends the trial and bills Max for a new cycle today.
 Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
-once enabled, a `Stages` section for the company Stage options that new pipelines
+scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
@@ -634,7 +656,7 @@ dot sits beside the name.
   the connector import dialog.
 - **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
   **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
-  Hermes; opens Runtimes within Integrations and follows the Runtimes
+  Hermes; opens Machines within Integrations and follows the Machines
   availability gate; Back returns to Integrations).
 - Installed catalog apps and custom MCP servers, with their More menus.
 - The catalog: every Pipedream app not yet connected, tagged with its directory
@@ -699,7 +721,7 @@ have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
 custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
-Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
+Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
 featured or offered in the Connections catalog. Settings → Integrations lists
 Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
 available when `pipedream-mcp` is disabled.
@@ -741,9 +763,15 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. Each row under Connected runtimes shows its name, Private/Team, connection, an `Allow bypassing permission requests` switch (confirmation on enable; applies from each session's next turn) and `Rename` / `Remove` actions. A runtime's name and bypass are set only here, and its Private/Team access only at approval; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns on that switch for the new runtime. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Pending requests`, at the top and only while any wait, lists teammates' requests to use machines the viewer owns (`<person> requested to use <machine>`, with `Deny` and `Approve`) and the viewer's own requests on teammates' machines (`Your access: Requested`, whose `Requested` button cancels); the `Machines` entry in the settings sidebar and the phone settings sheet shows how many incoming requests wait. `Your machines` lists every machine the viewer owns, offline ones included. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. These notifications are filed under the machine and listed in Notifications (Access); clicking the row opens what its newest notification opens. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
-the same live model discovery and retains its existing save action.
+the same live model discovery and retains its existing save action. Beside it,
+the composer's speedometer effort control (the bottom sheet on touch) offers the
+selected default model's own effort stops and saves on change; it is hidden for a
+model with fewer than two stops. Changing the default model clears the saved
+effort, and a saved effort the model no longer offers shows, and starts
+sessions on, the model's default. New Cursor sessions on the default model start
+on the saved effort; an effort picked in the composer still overrides it.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
 as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,

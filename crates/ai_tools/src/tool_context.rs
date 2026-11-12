@@ -976,6 +976,45 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,
@@ -1457,6 +1496,7 @@ pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
     projects::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
     projects::domain::ports::UnavailableProjectSearchIndexer,
+    projects::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1494,6 +1534,7 @@ pub fn build_project_tool_context(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
         projects::domain::ports::UnavailableProjectSearchIndexer,
+        projects::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );
@@ -2062,6 +2103,7 @@ pub struct ToolServiceContext {
     pub activity_tool_context: ToolActivityToolContext,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    #[from_ref(skip)]
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     /// Shared cognition-backed generation and decisions, attributed per request.
     pub cognition_tool_context: ToolCognitionToolContext,
@@ -2176,6 +2218,15 @@ impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContex
             )),
             entity: context.usage_context.entity,
         }
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolImageGenerationToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .image_generation_tool_context
+            .clone()
+            .with_agent_session(context.usage_context.agent_session_id)
     }
 }
 

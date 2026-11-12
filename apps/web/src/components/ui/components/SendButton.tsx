@@ -33,6 +33,9 @@ export function SendButton(props: SendButtonProps) {
   return (
     <Button
       variant="primary"
+      // Send sits inside a composer that already frames it; a raised edge
+      // reads as a stray border around the solid (or disabled) circle.
+      finish="flat"
       size="icon-md"
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}

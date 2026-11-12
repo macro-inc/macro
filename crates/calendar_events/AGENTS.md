@@ -233,6 +233,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   it does in a snapshot. Search rows apply the same rule, but a row stays on
   the hit instead of resolving to the viewer's copy, so there a snapshot does
   not count as holding the meeting.
+- `ListCalendarEvents` and `ReadCalendarEvent` return `startLocal` and `endLocal`,
+  the times spelled out with their weekdays in the user's primary calendar zone
+  (`local_time_fields`), because models misname the weekday of an ISO date.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's
@@ -298,13 +301,19 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   only guard against a guess. UpdateCalendarEvent and DeleteCalendarEvent check
   every call; the update, invite-guests and delete routes check agent runs and
   any request naming `inbox` through `CalendarCopyConfirmation`, answering 409
-  `copy_choice_required`. An agent run is a token with `agent_id` (in-app code
-  mode) or a request carrying `x-macro-code-execution`, which
+  `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
+  is a token with `agent_id` (in-app code mode) or a request carrying
+  `x-macro-code-execution`, which
   `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
   public MCP clients' included. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
+- The create route refuses an agent run (403 `confirmation_required`): a
+  program creates through a session review (`CreateCalendarEvent`) or the
+  harness's `POST /cognition/calendar/events/create-confirmed`
+  (`CreateConfirmedCalendarEvent`, the SDK's `calendar.createConfirmed`),
+  never an event the user has not seen.
 - No provider field says whose calendar it is. An inbox syncs every calendar
   its account can see under its own address, and Google gives `accessRole`
   `owner` to anyone with manage rights, on a colleague's primary calendar too;
@@ -370,7 +379,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   page membership stays so later tombstones resolve. The round still finishes
   as a clean sync. The warning `skipping an Outlook event Macro cannot read`
   and the `calendar.outlook_sync` span carry `calendar_id`,
-  `provider_event_id` and `rejected_field`. Discovery does not fail on a
+  `provider_event_id` and `rejected_field`. A series imports without an
+  occurrence the adapter cannot read (`OutlookEventRefresh::Refreshed`'s
+  `skipped`), warning `skipping an Outlook occurrence Macro cannot read` with
+  its `occurrence_id`, and the span adds `skipped_occurrences`. A secondary
+  calendar has no v1.0 delta, so each of its rounds lists and reads every
+  event again. A delta round lists only changes, so it also reads again the
+  members with no stored copy that an older `READER_REVISION` read (stamped
+  in `calendar_outlook_members.reader_revision`, NULL from builds before
+  it; a member found with a stored copy is stamped instead): a parser fix brings skipped events back without anyone touching
+  them, and a skip costs no read until the event changes or the revision
+  rises. Discovery does not fail on a
   mailbox time zone Macro cannot map to IANA either: `OutlookDiscovery`
   stores the account's calendars with no `time_zone`, which every reader
   treats as unknown, as it does a Google calendar's zone it cannot read

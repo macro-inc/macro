@@ -6,6 +6,7 @@ use crate::domain::models::{
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
+use crate::outbound::guarded_http::McpHttp;
 use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::{
     AuthorizationManager, AuthorizationMetadata, CredentialStore as _, InMemoryCredentialStore,
@@ -18,6 +19,7 @@ pub struct OAuthService<S, R> {
     server_store: S,
     state_store: R,
     client_metadata: OAuthClientMetadata,
+    http: McpHttp,
     #[cfg(feature = "providers")]
     pre_registered: PreRegisteredProviders,
 }
@@ -29,23 +31,31 @@ impl<S, R> OAuthService<S, R> {
         server_store: S,
         state_store: R,
         client_metadata: OAuthClientMetadata,
+        http: McpHttp,
         pre_registered: PreRegisteredProviders,
     ) -> Self {
         Self {
             server_store,
             state_store,
             client_metadata,
+            http,
             pre_registered,
         }
     }
 
     /// Create a new OAuth service without pre-registered providers.
     #[cfg(not(feature = "providers"))]
-    pub fn new(server_store: S, state_store: R, client_metadata: OAuthClientMetadata) -> Self {
+    pub fn new(
+        server_store: S,
+        state_store: R,
+        client_metadata: OAuthClientMetadata,
+        http: McpHttp,
+    ) -> Self {
         Self {
             server_store,
             state_store,
             client_metadata,
+            http,
         }
     }
 }
@@ -188,8 +198,8 @@ where
         server_url: &str,
         server_name: &str,
     ) -> anyhow::Result<String> {
-        let mut auth_manager = AuthorizationManager::new(server_url).await?;
-        let metadata = auth_manager.discover_metadata().await?;
+        let mut auth_manager = self.http.authorization_manager(server_url).await?;
+        let metadata = auth_manager.resolve_metadata().await?.metadata;
         let supports_client_metadata = supports_client_id_metadata(&metadata);
         auth_manager.set_metadata(metadata);
 
@@ -240,8 +250,8 @@ where
             .await?
             .ok_or_else(|| anyhow::anyhow!("no pending authorization for state"))?;
 
-        let mut auth_manager = AuthorizationManager::new(&pending.server_url).await?;
-        let metadata = auth_manager.discover_metadata().await?;
+        let mut auth_manager = self.http.authorization_manager(&pending.server_url).await?;
+        let metadata = auth_manager.resolve_metadata().await?.metadata;
         auth_manager.set_metadata(metadata);
 
         let pkce_state = StoredAuthorizationState::new(

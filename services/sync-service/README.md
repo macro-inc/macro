@@ -33,6 +33,10 @@ When a client updates a document via a WebSocket message, we apply the update to
 Unfortunately, query params are the best way to authenticate a websocket connection. Since we use tls, query params should be encrypted in transit.
 the `sync-service` will verify the jwt and ensure that the user has the correct permissions to access the document.
 
+Document grants may also carry signed `agent_correlation_id` attribution. The
+worker preserves it through editor metadata and pending activity batches so
+separate code-mode invocations remain distinct, without changing permissions.
+
 HTTP routes use Axum `FromRequestParts` extractors to authenticate before the
 handler runs. Document view/edit/admin routes declare their minimum grant;
 atomic state/update routes require an exact signed document grant, and internal

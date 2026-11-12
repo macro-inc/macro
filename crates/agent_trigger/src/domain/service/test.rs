@@ -71,6 +71,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: false,
+        stopped_reason: None,
     }
 }
 
@@ -108,6 +109,7 @@ fn message(mentions: Vec<SimpleMention>) -> MessagePostedMetadata {
 
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,
@@ -141,6 +143,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
 /// A session rooted at the test message's thread.
 fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         thread_id: Some(Uuid::from_u128(3)),
         originating_message_id: Some(Uuid::from_u128(3)),
         ..session(id, bot_id)

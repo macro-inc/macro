@@ -53,8 +53,9 @@ export interface SimilarTask {
 }
 
 /**
- * A Macro task: a document with sub-type `task`. Inherits the full document
- * surface ({@link Document.rename}, move, delete, restore, content, events)
+ * A Macro task: a document with sub-type `task`, so every `Document` method
+ * works on it, including `content` and `edit` for its body. Inherits the full
+ * document surface ({@link Document.rename}, move, delete, restore, events)
  * and adds task-specific state.
  */
 export class Task extends Document {
@@ -177,6 +178,8 @@ export class Task extends Document {
   /**
    * Whether the task is completed (its Status property is "Completed");
    * `undefined` if the document is not a task.
+   *
+   * @readonly
    */
   async completed(): Promise<boolean | undefined> {
     const { subType } = await this.detail.get();
@@ -191,7 +194,11 @@ export class Task extends Document {
     );
   }
 
-  /** The task's URL in the Macro web app. */
+  /**
+   * The task's URL in the Macro web app.
+   *
+   * @readonly
+   */
   override webUrl(): string {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }

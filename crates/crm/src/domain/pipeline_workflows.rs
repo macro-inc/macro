@@ -1,5 +1,6 @@
 //! Pipeline use cases addressed the way people talk about a pipeline: entries
-//! by the company or contact they track, fields by name, stages by label.
+//! by the company or contact they track, fields by name, stages by label. A
+//! generic pipeline tracks no record, so its entries are addressed by id.
 //!
 //! Each workflow resolves those names against the pipeline's current schema,
 //! then reads and writes through [`PipelineService`], so the pipeline's
@@ -47,7 +48,9 @@ pub use models::{
 };
 pub use records::PipelineRecord;
 
-use entries::{entry_view, field_values, option_counts, record_id, totals, value_of};
+use entries::{
+    entry_view, field_values, matches_search, option_counts, record_id, totals, value_of,
+};
 use ops::{STAGE_FIELD, add_field, add_options, cells, select_field};
 
 /// Pipeline workflows for a viewer, who may be an agent acting for a user.
@@ -66,9 +69,9 @@ pub trait PipelineWorkflowService: Send + Sync + 'static {
         query: EntryQuery,
     ) -> impl Future<Output = Result<FoundEntries, WorkflowError>> + Send;
 
-    /// Entries of every pipeline the viewer can see whose company or contact
-    /// matches `search`, at most `limit` per pipeline; pipelines without a
-    /// match are left out.
+    /// Entries of every pipeline the viewer can see whose company or contact,
+    /// or in a generic pipeline text field, matches `search`, at most `limit`
+    /// per pipeline; pipelines without a match are left out.
     fn search_entries(
         &self,
         viewer: &Viewer,
@@ -84,7 +87,8 @@ pub trait PipelineWorkflowService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RecordEntries>, WorkflowError>> + Send;
 
     /// Add entries; a record already in the pipeline is added again only
-    /// when `allow_duplicates`.
+    /// when `allow_duplicates`. A generic pipeline's entries name no record,
+    /// so each is a new row.
     fn add(
         &self,
         viewer: &Viewer,
@@ -202,7 +206,12 @@ where
         overview: &PipelineOverview,
         rows: &[&StorageRow],
     ) -> Result<HashMap<Uuid, PipelineRecord>, WorkflowError> {
-        let record_field = overview.record_field();
+        let (Some(record_type), Some(record_field)) = (
+            overview.pipeline.pipeline.record_type,
+            overview.record_field(),
+        ) else {
+            return Ok(HashMap::new());
+        };
         let ids: Vec<Uuid> = rows
             .iter()
             .filter_map(|row| record_id(row.cells.get(&record_field.id)))
@@ -213,7 +222,7 @@ where
             self.crm.as_ref(),
             team,
             viewer.user_id.as_ref(),
-            overview.pipeline.pipeline.record_type,
+            record_type,
             &ids,
         )
         .await?)
@@ -290,6 +299,127 @@ where
             .collect()
     }
 
+    /// The rows `additions` insert into a tracked pipeline, and the entries of
+    /// records already in it that are not added again.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one private step of `add`, sharing what it has already read"
+    )]
+    async fn tracked_inserts(
+        &self,
+        viewer: &Viewer,
+        view: &EntityAccessReceipt<ViewAccessLevel>,
+        overview: &PipelineOverview,
+        record_type: PipelineRecordType,
+        team: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        additions: Vec<EntryAddition>,
+        allow_duplicates: bool,
+    ) -> Result<(Vec<Vec<CellWrite>>, Vec<RowId>), WorkflowError> {
+        let record_field = overview
+            .record_field()
+            .ok_or_else(|| {
+                WorkflowError::Invalid(format!(
+                    "Pipeline \"{}\" has lost its record field.",
+                    overview.pipeline.pipeline.name
+                ))
+            })?
+            .id;
+        let mut resolved = Vec::with_capacity(additions.len());
+        for addition in additions {
+            let id = match &addition.record {
+                None => {
+                    return Err(WorkflowError::Invalid(
+                        "Give each entry exactly one of recordId or email.".into(),
+                    ));
+                }
+                Some(RecordTarget::Id(id)) => *id,
+                Some(RecordTarget::Email(email)) => {
+                    let team = team.ok_or(WorkflowError::NoTeam)?;
+                    let contact = self
+                        .crm
+                        .get_contact_by_email(team, email)
+                        .await?
+                        .ok_or_else(|| {
+                            WorkflowError::Invalid(format!(
+                                "No contact in the team's CRM has the email {email}."
+                            ))
+                        })?;
+                    match record_type {
+                        PipelineRecordType::Company => contact.company_id.ok_or_else(|| {
+                            WorkflowError::Invalid(format!(
+                                "The contact with the email {email} has no company."
+                            ))
+                        })?,
+                        PipelineRecordType::Contact => contact.id,
+                    }
+                }
+            };
+            self.access
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    &viewer.user_id,
+                    None,
+                    &id.to_string(),
+                    match record_type {
+                        PipelineRecordType::Company => EntityType::CrmCompany,
+                        PipelineRecordType::Contact => EntityType::CrmContact,
+                    },
+                )
+                .await
+                .map_err(|error| match error {
+                    AccessError::NotFound(_)
+                    | AccessError::Unauthorized
+                    | AccessError::UnauthorizedWithMessage(_)
+                    | AccessError::BadRequest(_) => WorkflowError::Invalid(match record_type {
+                        PipelineRecordType::Company => format!(
+                            "{id} is not a CRM company the user can see. Find company ids with \
+                             ListCompanies, or add a company by one of its contacts' email."
+                        ),
+                        PipelineRecordType::Contact => format!(
+                            "{id} is not a CRM contact the user can see. Add a contact by its \
+                             email address."
+                        ),
+                    }),
+                    other => other.into(),
+                })?;
+            let cells = cells(overview, &addition.set, viewer)?;
+            resolved.push((id, cells));
+        }
+
+        let ids: Vec<Uuid> = resolved.iter().map(|(id, _)| *id).collect();
+        let mut present: HashMap<Uuid, RowId> = HashMap::new();
+        for reference in self.pipelines.record_rows(view.clone(), &ids).await? {
+            present
+                .entry(reference.record_id)
+                .or_insert(reference.row_id);
+        }
+        let mut seen = HashSet::new();
+        let mut already = Vec::new();
+        let mut inserts = Vec::new();
+        for (id, mut cells) in resolved {
+            if !allow_duplicates {
+                if !seen.insert(id) {
+                    continue;
+                }
+                if let Some(row) = present.get(&id) {
+                    already.push(*row);
+                    continue;
+                }
+            }
+            cells.insert(
+                0,
+                CellWrite {
+                    column: record_field,
+                    value: CellValue::Entities(vec![EntityRef {
+                        entity_type: record_type.entity_kind(),
+                        entity_id: id.to_string(),
+                    }]),
+                },
+            );
+            inserts.push(cells);
+        }
+        Ok((inserts, already))
+    }
+
     /// Apply `ops` as the viewer, with the table's version after the write.
     async fn apply(
         &self,
@@ -317,6 +447,28 @@ where
             .next_back();
         Ok((applied.results, version))
     }
+}
+
+/// The rows `additions` insert into a generic pipeline: free-form, so each
+/// names only its fields and is always a new row.
+fn generic_inserts(
+    overview: &PipelineOverview,
+    additions: &[EntryAddition],
+    viewer: &Viewer,
+) -> Result<Vec<Vec<CellWrite>>, WorkflowError> {
+    let name = &overview.pipeline.pipeline.name;
+    additions
+        .iter()
+        .map(|addition| {
+            if addition.record.is_some() {
+                return Err(WorkflowError::Invalid(format!(
+                    "Pipeline \"{name}\" tracks no companies or contacts. Leave out recordId and \
+                     email, and fill in its fields with `set`."
+                )));
+            }
+            cells(overview, &addition.set, viewer)
+        })
+        .collect()
 }
 
 impl<Pipelines, Crm, Access> PipelineWorkflowService
@@ -367,11 +519,11 @@ where
             .transpose()?;
 
         let (rows, complete) = self.scan(&receipt).await?;
-        let record_field = overview.record_field();
+        let record_field = overview.record_field().map(|field| field.id);
         let wanted_records: HashSet<Uuid> = query.records.iter().copied().collect();
         let mut matched = Vec::new();
         for row in &rows {
-            let tracked = record_id(row.cells.get(&record_field.id));
+            let tracked = record_field.and_then(|id| record_id(row.cells.get(&id)));
             if !wanted_records.is_empty() && !tracked.is_some_and(|id| wanted_records.contains(&id))
             {
                 continue;
@@ -401,7 +553,7 @@ where
                 query
                     .search
                     .as_deref()
-                    .is_none_or(|search| entry.record.matches(search))
+                    .is_none_or(|search| matches_search(entry, search))
             })
             .collect();
         let counts = option_counts(&overview, &entries);
@@ -486,10 +638,12 @@ where
                     .collect();
                 let view = PipelineEntryView {
                     entry_id: entry.row_id,
-                    record: named
-                        .get(&entry.record_id)
-                        .cloned()
-                        .unwrap_or_else(|| PipelineRecord::unnamed(entry.record_id)),
+                    record: Some(
+                        named
+                            .get(&entry.record_id)
+                            .cloned()
+                            .unwrap_or_else(|| PipelineRecord::unnamed(entry.record_id)),
+                    ),
                     fields: field_values(&fields, &entry.cells),
                 };
                 match found
@@ -517,103 +671,28 @@ where
     ) -> Result<AddedEntries, WorkflowError> {
         if additions.is_empty() {
             return Err(WorkflowError::Invalid(
-                "Name at least one company or contact to add.".into(),
+                "Name at least one entry to add.".into(),
             ));
         }
         let receipt = self.receipt::<EditAccessLevel>(viewer, pipeline).await?;
         let view = receipt.clone().try_into_requirement::<ViewAccessLevel>()?;
         let overview = self.overview(&view).await?;
-        let record_type = overview.pipeline.pipeline.record_type;
         let team = self.team(viewer).await?;
-
-        let mut resolved = Vec::with_capacity(additions.len());
-        for addition in additions {
-            let id = match &addition.record {
-                RecordTarget::Id(id) => *id,
-                RecordTarget::Email(email) => {
-                    let team = team.as_ref().ok_or(WorkflowError::NoTeam)?;
-                    let contact = self
-                        .crm
-                        .get_contact_by_email(team, email)
-                        .await?
-                        .ok_or_else(|| {
-                            WorkflowError::Invalid(format!(
-                                "No contact in the team's CRM has the email {email}."
-                            ))
-                        })?;
-                    match record_type {
-                        PipelineRecordType::Company => contact.company_id.ok_or_else(|| {
-                            WorkflowError::Invalid(format!(
-                                "The contact with the email {email} has no company."
-                            ))
-                        })?,
-                        PipelineRecordType::Contact => contact.id,
-                    }
-                }
-            };
-            self.access
-                .generate_entity_access_receipt::<ViewAccessLevel>(
-                    &viewer.user_id,
-                    None,
-                    &id.to_string(),
-                    match record_type {
-                        PipelineRecordType::Company => EntityType::CrmCompany,
-                        PipelineRecordType::Contact => EntityType::CrmContact,
-                    },
+        let (inserts, already) = match overview.pipeline.pipeline.record_type {
+            Some(record_type) => {
+                self.tracked_inserts(
+                    viewer,
+                    &view,
+                    &overview,
+                    record_type,
+                    team.as_ref(),
+                    additions,
+                    allow_duplicates,
                 )
-                .await
-                .map_err(|error| match error {
-                    AccessError::NotFound(_)
-                    | AccessError::Unauthorized
-                    | AccessError::UnauthorizedWithMessage(_)
-                    | AccessError::BadRequest(_) => WorkflowError::Invalid(match record_type {
-                        PipelineRecordType::Company => format!(
-                            "{id} is not a CRM company the user can see. Find company ids with \
-                             ListCompanies, or add a company by one of its contacts' email."
-                        ),
-                        PipelineRecordType::Contact => format!(
-                            "{id} is not a CRM contact the user can see. Add a contact by its \
-                             email address."
-                        ),
-                    }),
-                    other => other.into(),
-                })?;
-            let cells = cells(&overview, &addition.set, viewer)?;
-            resolved.push((id, cells));
-        }
-
-        let ids: Vec<Uuid> = resolved.iter().map(|(id, _)| *id).collect();
-        let mut present: HashMap<Uuid, RowId> = HashMap::new();
-        for reference in self.pipelines.record_rows(view.clone(), &ids).await? {
-            present
-                .entry(reference.record_id)
-                .or_insert(reference.row_id);
-        }
-        let mut seen = HashSet::new();
-        let mut already = Vec::new();
-        let mut inserts = Vec::new();
-        for (id, mut cells) in resolved {
-            if !allow_duplicates {
-                if !seen.insert(id) {
-                    continue;
-                }
-                if let Some(row) = present.get(&id) {
-                    already.push(*row);
-                    continue;
-                }
+                .await?
             }
-            cells.insert(
-                0,
-                CellWrite {
-                    column: overview.record_field().id,
-                    value: CellValue::Entities(vec![EntityRef {
-                        entity_type: overview.record_kind(),
-                        entity_id: id.to_string(),
-                    }]),
-                },
-            );
-            inserts.push(cells);
-        }
+            None => (generic_inserts(&overview, &additions, viewer)?, Vec::new()),
+        };
 
         let (added, version) = if inserts.is_empty() {
             (Vec::new(), None)
@@ -729,14 +808,16 @@ where
                         .unwrap_or_default()
                 };
                 let (old, new) = (cells_of(&before), cells_of(&after));
-                let record = record_id(new.get(&overview.record_field().id))
-                    .map(|id| {
-                        records
-                            .get(&id)
-                            .cloned()
-                            .unwrap_or_else(|| PipelineRecord::unnamed(id))
-                    })
-                    .unwrap_or_else(|| PipelineRecord::unnamed(Uuid::nil()));
+                let record = overview.record_field().map(|field| {
+                    record_id(new.get(&field.id))
+                        .map(|id| {
+                            records
+                                .get(&id)
+                                .cloned()
+                                .unwrap_or_else(|| PipelineRecord::unnamed(id))
+                        })
+                        .unwrap_or_else(|| PipelineRecord::unnamed(Uuid::nil()))
+                });
                 let changes = update
                     .set
                     .iter()
@@ -829,7 +910,16 @@ where
             return Ok(overview);
         }
         let mut ops = Vec::new();
-        if !input.stages.is_empty() {
+        if !input.stages.is_empty() && input.record_type.is_none() {
+            ops.push(add_field(
+                &overview,
+                &NewField {
+                    name: STAGE_FIELD.to_owned(),
+                    kind: NewFieldKind::Select,
+                    options: input.stages.clone(),
+                },
+            )?);
+        } else if !input.stages.is_empty() {
             let stage = overview.field(STAGE_FIELD)?;
             ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
                 table: overview.pipeline.pipeline.table_id,
@@ -847,7 +937,7 @@ where
             .map_err(|error| {
                 WorkflowError::Invalid(format!(
                     "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Change them with EditPipeline.",
+                     could not set its stages and fields: {error}. Edit the pipeline to change them.",
                     overview.pipeline.pipeline.name
                 ))
             })?;

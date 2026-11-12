@@ -65,7 +65,11 @@ export class ExternalChatSend extends MacroEntity<ExternalChatSendProgress> {
     id ? ExternalChatMessage.byId(this.client, this.chat, id) : undefined,
   );
 
-  /** Inspect the original intent for reconciliation; never resubmit an unknown outcome automatically. */
+  /**
+   * Inspect the original intent for reconciliation; never resubmit an unknown outcome automatically.
+   *
+   * @readonly
+   */
   async request(): Promise<{
     idempotencyKey: string;
     message: ExternalChatContent;
@@ -107,7 +111,11 @@ export class ExternalChatSend extends MacroEntity<ExternalChatSendProgress> {
     };
   }
 
-  /** Fetch current delivery state without retrying or submitting the message. */
+  /**
+   * Fetch current delivery state without retrying or submitting the message.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

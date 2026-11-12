@@ -16,7 +16,6 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
-import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -24,35 +23,23 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
 import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
-import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
 import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
 import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
 import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
-import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
 import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
 import type { UpsertProjectionRequest } from './generated/schemas/upsertProjectionRequest';
-import type * as toolTypes from './generated/tools/tool.ts';
-
-type ToolCallArgs = {
-  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'call'>['data'];
-};
-type ToolResponseArgs = {
-  [K in toolTypes.ToolName]: toolTypes.NamedTool<K, 'response'>['data'];
-};
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
 type WithChatId = { chat_id: string };
-type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
 function dcsFetch(
@@ -190,28 +177,6 @@ export const cognitionApiServiceClient = {
       })
     ).map(() => ({ success: true }));
   },
-  async copyChat(args: WithChatId & WithName) {
-    const { chat_id, name } = args;
-    return (
-      await dcsFetch<StringIDResponse>(`/chats/${chat_id}/copy`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name,
-        }),
-      })
-    ).map((result) => result);
-  },
-  async createChat(args: CreateChatRequest) {
-    return (
-      await dcsFetch<StringIDResponse>(`/chats`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: args.name,
-          projectId: args.projectId,
-        }),
-      })
-    ).map((result) => result);
-  },
   async deleteChat(args: WithChatId) {
     const { chat_id } = args;
     const result = await dcsFetch(`/chats/${chat_id}`, {
@@ -286,88 +251,6 @@ export const cognitionApiServiceClient = {
       })
     ).map((result) => result);
   },
-  /** Update a tool call's arguments (validates against tool schema server-side). */
-  async updateToolCall<T extends keyof ToolCallArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    args: ToolCallArgs[T];
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/update`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-        args: args.args,
-      }),
-    });
-  },
-
-  /** Update a tool response. */
-  async updateToolResponse<T extends keyof ToolResponseArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    response: ToolResponseArgs[T];
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/response/update`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-        response: args.response,
-      }),
-    });
-  },
-
-  /** Execute a pending tool call, optionally with updated arguments. */
-  async callTool<T extends keyof ToolCallArgs>(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-    args?: ToolCallArgs[T];
-  }) {
-    return (
-      await dcsFetch<{ result: unknown }>(`/chats/${args.chat_id}/tool/call`, {
-        method: 'POST',
-        body: JSON.stringify({
-          messageId: args.messageId,
-          toolCallId: args.toolCallId,
-          args: args.args,
-        }),
-      })
-    ).map((result) => result.result);
-  },
-
-  /** Reject a pending tool call. */
-  async rejectToolCall(args: {
-    chat_id: string;
-    messageId: string;
-    toolCallId: string;
-  }) {
-    return await dcsFetch(`/chats/${args.chat_id}/tool/reject`, {
-      method: 'POST',
-      body: JSON.stringify({
-        messageId: args.messageId,
-        toolCallId: args.toolCallId,
-      }),
-    });
-  },
-
-  /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
-  async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
-    return (
-      await fetchWithToken<
-        SendChatMessageResponse,
-        typeof AI_USAGE_LIMIT_ERROR
-      >(`${dcsHost}/stream/chat/message`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-        errorResponseHandler: aiUsageErrorResponseHandler,
-      })
-    ).map((result) => result);
-  },
-
   /** Stops an in-flight AI chat stream. The streaming task persists whatever
    * the user has already seen and emits StreamEnd. */
   async stopChatStream(args: StopChatStreamRequest) {

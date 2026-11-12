@@ -5,6 +5,8 @@ const TEAMMATE_ID: &str = "macro|teammate@example.com";
 /// A teammate's edit, as ingestion records it.
 fn teammates_edit(id: u128) -> activity::ActivityRecord {
     activity::ActivityRecord {
+        agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(MacroUserIdStr::parse_from_str(TEAMMATE_ID).unwrap()),
         subject_id: TEAMMATE_ID.to_owned(),

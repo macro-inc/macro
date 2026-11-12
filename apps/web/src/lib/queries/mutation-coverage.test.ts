@@ -20,6 +20,8 @@ const policies = {
     'authoritative: revision and sharing need server confirmation',
   DeleteSavedView:
     'authoritative: revision-checked deletion and collection revalidation',
+  ReorderSavedViews:
+    'authoritative: per-viewer order; revalidate the ordered cursor chain',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
@@ -63,6 +65,10 @@ const policies = {
     'authoritative: the server returns the restored feed entries',
   MarkNotificationInboxRowsDone:
     'custom: inbox rows stay hidden until the server removes them',
+  ClearNotificationInbox:
+    'custom: cleared rows stay hidden until the server removes them',
+  MarkNotificationInboxNotificationDone:
+    'custom: the notification stays hidden until the server returns its row',
   UndoNotificationInboxRowsDone:
     'authoritative: the server returns the restored inbox entries',
   MarkNotificationInboxRowsSeen:

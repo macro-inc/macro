@@ -12,17 +12,22 @@ use std::{
 };
 
 use super::{
-    access_token_clients::AccessTokenClients,
+    access_token_clients::{AccessTokenClients, client_label},
     browser_binding::BrowserBinding,
     client_name::{ClientName, ReservedClientName},
     models::{
-        AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        ClientRegistrationResponse, ConsentPrompt, IssuedAuthorizationCode, PendingAuthorization,
-        RefreshToken, RefreshTokenBinding, RegisteredClient, RevocationRequest, TokenRequest,
-        TokenResponse, UserConsent,
+        AccessToken, AuthorizationStart, AuthorizeRequest, CallbackRequest, ClientDelivery,
+        ClientRegistrationRequest, ClientRegistrationResponse, CodeDelivery, ConsentPrompt,
+        EmailCodeRequest, EmailSignInStep, IssuedAuthorizationCode, PendingAuthorization,
+        RefreshToken, RefreshTokenBinding, RegisteredClient, RevocationRequest, SignInMethod,
+        TokenRequest, TokenResponse, UpstreamLogin, UpstreamTokens, UserConsent,
     },
-    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
+    ports::{
+        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, MacroApiTokenMinter,
+        OAuthProvider, RefreshTokenBindingStore, UpstreamGrantError,
+    },
     redirect_uri::{RedirectTrust, RedirectUriPolicy},
+    resource::{McpResource, McpResources},
 };
 
 pub(crate) const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
@@ -71,13 +76,39 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
         browser: BrowserBinding,
         consent: UserConsent,
     ) -> impl Future<Output = Result<AuthorizationStart, StartAuthorizationError>> + Send;
+    /// Returns whether the user may carry the callback URL to the client
+    /// themselves, because the client may be on another machine.
+    fn allows_manual_delivery(&self, redirect_uri: &str) -> bool;
     /// Completes the upstream callback in the browser that started the flow
-    /// and returns the client redirect URL.
+    /// and returns the client callback URL.
     fn complete_callback(
         &self,
         params: CallbackRequest,
         browser: Option<BrowserBinding>,
-    ) -> impl Future<Output = Result<String, CompleteCallbackError>> + Send;
+    ) -> impl Future<Output = Result<ClientDelivery, CompleteCallbackError>> + Send;
+    /// Checks that an email sign-in session is live and belongs to `browser`.
+    fn check_email_sign_in(
+        &self,
+        session_id: &str,
+        browser: &BrowserBinding,
+    ) -> impl Future<Output = Result<(), EmailSignInError>> + Send;
+    /// Emails a sign-in code for a session, or names the single sign-on the
+    /// address needs instead.
+    fn request_email_code(
+        &self,
+        session_id: &str,
+        email: &str,
+        browser: &BrowserBinding,
+    ) -> impl Future<Output = Result<EmailSignInStep, EmailSignInError>> + Send;
+    /// Redeems an emailed code and completes the session. A wrong code leaves
+    /// the session live, so the user can try again.
+    fn verify_email_code(
+        &self,
+        session_id: &str,
+        email: &str,
+        code: &str,
+        browser: &BrowserBinding,
+    ) -> impl Future<Output = Result<ClientDelivery, EmailSignInError>> + Send;
     /// Exchanges a broker-issued code or refresh token for bearer credentials.
     fn exchange_token(
         &self,
@@ -100,6 +131,12 @@ pub trait InflightAuthStore: Send + Sync {
         session_id: &str,
         pending: PendingAuthorization,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Returns a live pending authorization flow without consuming it.
+    fn find_pending(
+        &self,
+        session_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<PendingAuthorization>>> + Send;
 
     /// Removes and returns a pending authorization flow, if present.
     fn take_pending(
@@ -138,20 +175,12 @@ pub struct McpAuthProxyServiceDeps<I> {
     pub refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
     /// Upstream OAuth provider the broker fronts.
     pub oauth_provider: Arc<dyn OAuthProvider>,
-}
-
-/// Streamable HTTP resource URL advertised in protected-resource metadata.
-///
-/// MCP clients require a `resource` field. When `MCP_PUBLIC_URL` is an origin
-/// (the current Doppler value), append `/mcp`. When it already ends in `/mcp`
-/// (a later gateway cutover), do not append again.
-fn mcp_resource_url(public_url: &str) -> String {
-    let base = public_url.trim_end_matches('/');
-    if base.ends_with("/mcp") {
-        base.to_owned()
-    } else {
-        format!("{base}/mcp")
-    }
+    /// Sends and redeems emailed sign-in codes.
+    pub email_codes: Arc<dyn EmailCodeProvider>,
+    /// The MCP servers tokens may be issued for.
+    pub resources: McpResources,
+    /// Mints the tokens of the resources that call Macro's APIs directly.
+    pub macro_api_tokens: Arc<dyn MacroApiTokenMinter>,
 }
 
 /// Domain service backing the MCP OAuth broker.
@@ -161,8 +190,11 @@ pub struct McpAuthProxyServiceImpl<I> {
     refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
     access_token_clients: AccessTokenClients,
     oauth_provider: Arc<dyn OAuthProvider>,
+    email_codes: Arc<dyn EmailCodeProvider>,
     redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
+    resources: McpResources,
+    macro_api_tokens: Arc<dyn MacroApiTokenMinter>,
 }
 
 impl<I> Clone for McpAuthProxyServiceImpl<I> {
@@ -173,8 +205,11 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
             refresh_token_bindings: Arc::clone(&self.refresh_token_bindings),
             access_token_clients: self.access_token_clients.clone(),
             oauth_provider: Arc::clone(&self.oauth_provider),
+            email_codes: Arc::clone(&self.email_codes),
             redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
+            resources: self.resources.clone(),
+            macro_api_tokens: Arc::clone(&self.macro_api_tokens),
         }
     }
 }
@@ -192,6 +227,9 @@ where
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
+            email_codes,
+            resources,
+            macro_api_tokens,
         } = deps;
 
         Self {
@@ -203,9 +241,83 @@ where
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
+            email_codes,
             redirect_uri_policy,
             public_url,
+            resources,
+            macro_api_tokens,
         }
+    }
+
+    /// Issues the broker code for upstream tokens and returns the client
+    /// callback URL carrying it.
+    async fn issue_code(
+        &self,
+        pending: PendingAuthorization,
+        tokens: UpstreamTokens,
+    ) -> anyhow::Result<ClientDelivery> {
+        // The client may sit on the broker code for up to `AUTHORIZATION_CODE_TTL`
+        // before redeeming it, so record when the upstream token actually expires
+        // and count down from that at token exchange rather than replaying a stale
+        // `expires_in`.
+        let access_token_expires_at = SystemTime::now()
+            .checked_add(Duration::from_secs(tokens.expires_in))
+            .ok_or_else(|| {
+                anyhow::anyhow!("upstream expires_in {} is out of range", tokens.expires_in)
+            })?;
+
+        let issued_code = uuid::Uuid::new_v4().to_string();
+        self.inflight_auth
+            .insert_issued(
+                &issued_code,
+                IssuedAuthorizationCode {
+                    client_id: pending.client_id,
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    code_challenge: pending.code_challenge,
+                    redirect_uri: pending.client_redirect_uri.clone(),
+                    access_token_expires_at,
+                },
+            )
+            .await?;
+
+        Ok(ClientDelivery {
+            url: append_query_params(
+                &pending.client_redirect_uri,
+                &[("code", issued_code), ("state", pending.client_state)],
+            ),
+            method: pending.delivery,
+        })
+    }
+
+    /// The live pending flow behind an email sign-in, provided this browser
+    /// started it. The flow stays pending: only a redeemed code consumes it.
+    async fn email_sign_in_session(
+        &self,
+        session_id: &str,
+        browser: &BrowserBinding,
+    ) -> Result<PendingAuthorization, EmailSignInError> {
+        let pending = self
+            .inflight_auth
+            .find_pending(session_id)
+            .await
+            .map_err(EmailSignInError::InflightStore)?
+            .ok_or(EmailSignInError::UnknownOrExpiredSession)?;
+
+        let started_in_this_browser = pending
+            .browser_binding_digest
+            .as_deref()
+            .is_some_and(|digest| browser.matches_digest(digest));
+        if !started_in_this_browser {
+            tracing::warn!(
+                %session_id,
+                client_id = %pending.client_id,
+                "email sign-in submitted from a browser that did not start the flow"
+            );
+            return Err(EmailSignInError::DifferentBrowser);
+        }
+
+        Ok(pending)
     }
 
     /// The record of which client each issued access token went to, for the
@@ -230,6 +342,40 @@ where
             });
     }
 
+    /// The access token `resource` is given for an upstream one, and the
+    /// seconds it is valid for: the upstream token itself, or a Macro API
+    /// token signed with the client's name, which may expire sooner.
+    async fn access_token_for(
+        &self,
+        resource: McpResource,
+        upstream: AccessToken,
+        client_id: &str,
+        expires_in: u64,
+    ) -> Result<(AccessToken, u64), TokenExchangeError> {
+        match resource {
+            McpResource::Harness => Ok((upstream, expires_in)),
+            McpResource::Chatgpt => {
+                let client_name = self
+                    .client_registrations
+                    .find_client(client_id)
+                    .await
+                    .map_err(TokenExchangeError::ClientRegistrationStore)?
+                    .and_then(|client| client_label(&client.client_name));
+
+                let minted = self
+                    .macro_api_tokens
+                    .mint(
+                        &upstream,
+                        client_name.as_deref(),
+                        Duration::from_secs(expires_in),
+                    )
+                    .await
+                    .map_err(TokenExchangeError::MintAccessToken)?;
+                Ok((minted.token, minted.lifetime.as_secs()))
+            }
+        }
+    }
+
     /// Refreshes an upstream token for the client the refresh token belongs to.
     ///
     /// A public client has no credential to present, so the binding recorded
@@ -239,6 +385,7 @@ where
     async fn refresh_token_exchange(
         &self,
         params: TokenRequest,
+        resource: McpResource,
     ) -> Result<TokenResponse, TokenExchangeError> {
         let client_id = params
             .client_id
@@ -279,7 +426,28 @@ where
             .oauth_provider
             .refresh_access_token(&refresh_token)
             .await
-            .map_err(TokenExchangeError::RefreshFailed)?;
+            .map_err(|error| {
+                if let UpstreamGrantError::InvalidGrant { .. } = error {
+                    tracing::warn!(
+                        %client_id,
+                        grant_id = %binding.grant_id,
+                        %error,
+                        "upstream refused the refresh token; the client must authorize again"
+                    );
+                } else {
+                    tracing::error!(
+                        %client_id,
+                        grant_id = %binding.grant_id,
+                        %error,
+                        "upstream refresh token exchange failed"
+                    );
+                }
+                TokenExchangeError::RefreshFailed(error)
+            })?;
+        // Before rebinding, so a failed mint leaves the presented token bound.
+        let (access_token, expires_in) = self
+            .access_token_for(resource, tokens.access_token, &client_id, tokens.expires_in)
+            .await?;
 
         let rotated_digest = refresh_token_digest(&tokens.refresh_token);
         // The upstream token is already issued at this point. A binding write
@@ -295,7 +463,7 @@ where
             })
             .is_ok();
 
-        self.bind_access_token(tokens.access_token.as_str(), &binding)
+        self.bind_access_token(access_token.as_str(), &binding)
             .await;
 
         if rebound && rotated_digest != presented_digest {
@@ -312,16 +480,17 @@ where
         }
 
         Ok(TokenResponse {
-            access_token: tokens.access_token,
+            access_token,
             refresh_token: tokens.refresh_token,
             token_type: "Bearer",
-            expires_in: tokens.expires_in,
+            expires_in,
         })
     }
 
     async fn exchange_authorization_code_token(
         &self,
         params: TokenRequest,
+        resource: McpResource,
     ) -> Result<TokenResponse, TokenExchangeError> {
         // Read the client id before consuming the code, so a malformed request
         // does not spend a code that is still good.
@@ -370,6 +539,15 @@ where
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
+        let (access_token, expires_in) = self
+            .access_token_for(
+                resource,
+                issued.access_token,
+                &issued.client_id,
+                seconds_until(issued.access_token_expires_at),
+            )
+            .await?;
+
         let binding = RefreshTokenBinding {
             client_id: issued.client_id,
             grant_id: uuid::Uuid::new_v4().to_string(),
@@ -378,14 +556,14 @@ where
             .bind(&refresh_token_digest(&issued.refresh_token), &binding)
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
-        self.bind_access_token(issued.access_token.as_str(), &binding)
+        self.bind_access_token(access_token.as_str(), &binding)
             .await;
 
         Ok(TokenResponse {
-            access_token: issued.access_token,
+            access_token,
             refresh_token: issued.refresh_token,
             token_type: "Bearer",
-            expires_in: seconds_until(issued.access_token_expires_at),
+            expires_in,
         })
     }
 }
@@ -416,7 +594,7 @@ where
         tracing::debug!("oauth-protected-resource metadata requested");
         let base = &self.public_url;
         serde_json::json!({
-            "resource": mcp_resource_url(base),
+            "resource": self.resources.harness(),
             "authorization_server": base,
             "authorization_servers": [base],
         })
@@ -522,7 +700,19 @@ where
                 return Err(StartAuthorizationError::UnregisteredRedirectUri);
             }
 
-            if trust == RedirectTrust::RequiresConsent {
+            let delivery = params.delivery.unwrap_or_default();
+            if delivery == CodeDelivery::Manual
+                && !service
+                    .redirect_uri_policy
+                    .allows_manual_delivery(&params.redirect_uri)
+            {
+                return Err(StartAuthorizationError::ManualDeliveryUnavailable);
+            }
+
+            // A loopback redirect is trusted because the code stays on the
+            // user's machine. Showing it for them to carry elsewhere gives that
+            // up, so the user approves it like any other destination.
+            if trust == RedirectTrust::RequiresConsent || delivery == CodeDelivery::Manual {
                 let redirect_host = redirect_host(&params.redirect_uri)
                     .ok_or(StartAuthorizationError::InvalidRedirectUri)?;
 
@@ -535,6 +725,7 @@ where
                     return Ok(AuthorizationStart::ConsentRequired(ConsentPrompt {
                         client_name: consent_client_name(&client.client_name),
                         redirect_host,
+                        delivery,
                     }));
                 }
 
@@ -547,7 +738,13 @@ where
 
             let session_id = uuid::Uuid::new_v4().to_string();
             let sign_in = params.sign_in.unwrap_or_default();
-            tracing::info!(%session_id, client_id = %client.client_id, "starting OAuth authorize flow");
+            tracing::info!(
+                %session_id,
+                client_id = %client.client_id,
+                %sign_in,
+                %delivery,
+                "starting OAuth authorize flow"
+            );
 
             service
                 .inflight_auth
@@ -559,21 +756,35 @@ where
                         client_state: params.state,
                         client_redirect_uri: params.redirect_uri,
                         browser_binding_digest: Some(browser.digest()),
+                        delivery,
                     },
                 )
                 .await
                 .map_err(StartAuthorizationError::InflightStore)?;
 
+            let login = match sign_in {
+                SignInMethod::Email => {
+                    return Ok(AuthorizationStart::EmailSignIn { session_id });
+                }
+                SignInMethod::Google => UpstreamLogin::Google,
+                SignInMethod::Login => UpstreamLogin::LoginPage,
+            };
+
             service
                 .oauth_provider
-                .construct_authorize_url(&session_id, sign_in)
+                .construct_authorize_url(&session_id, login)
                 .map(AuthorizationStart::SignIn)
                 .map_err(StartAuthorizationError::ConstructAuthorizeUrl)
         }
     }
 
-    /// Completes the upstream OAuth callback and returns the redirect URL for
-    /// the MCP client callback.
+    fn allows_manual_delivery(&self, redirect_uri: &str) -> bool {
+        self.redirect_uri_policy
+            .allows_manual_delivery(redirect_uri)
+    }
+
+    /// Completes the upstream OAuth callback and returns the URL of the MCP
+    /// client callback.
     ///
     /// The upstream signs in a user with an existing session without asking,
     /// so a sign-in link someone else started would otherwise complete
@@ -584,7 +795,7 @@ where
         &self,
         params: CallbackRequest,
         browser: Option<BrowserBinding>,
-    ) -> Result<String, CompleteCallbackError> {
+    ) -> Result<ClientDelivery, CompleteCallbackError> {
         let session_id = params
             .state
             .as_deref()
@@ -628,10 +839,10 @@ where
             if let Some(desc) = params.error_description {
                 params_to_append.push(("error_description", desc));
             }
-            return Ok(append_query_params(
-                &pending.client_redirect_uri,
-                &params_to_append,
-            ));
+            return Ok(ClientDelivery {
+                url: append_query_params(&pending.client_redirect_uri, &params_to_append),
+                method: pending.delivery,
+            });
         }
 
         let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
@@ -642,42 +853,90 @@ where
             .await
             .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
 
-        // The client may sit on the broker code for up to `AUTHORIZATION_CODE_TTL`
-        // before redeeming it, so record when the upstream token actually expires
-        // and count down from that at token exchange rather than replaying a stale
-        // `expires_in`.
-        let access_token_expires_at = SystemTime::now()
-            .checked_add(Duration::from_secs(tokens.expires_in))
-            .ok_or_else(|| {
-                CompleteCallbackError::AuthorizationCodeExchangeFailed(anyhow::anyhow!(
-                    "upstream expires_in {} is out of range",
-                    tokens.expires_in
-                ))
-            })?;
-
-        let issued_code = uuid::Uuid::new_v4().to_string();
-        self.inflight_auth
-            .insert_issued(
-                &issued_code,
-                IssuedAuthorizationCode {
-                    client_id: pending.client_id,
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    code_challenge: pending.code_challenge,
-                    redirect_uri: pending.client_redirect_uri.clone(),
-                    access_token_expires_at,
-                },
-            )
+        self.issue_code(pending, tokens)
             .await
-            .map_err(CompleteCallbackError::InflightStore)?;
+            .map_err(CompleteCallbackError::InflightStore)
+    }
 
-        Ok(append_query_params(
-            &pending.client_redirect_uri,
-            &[
-                ("code", issued_code),
-                ("state", pending.client_state.clone()),
-            ],
-        ))
+    #[tracing::instrument(
+        name = "mcp_oauth.email_sign_in.check",
+        skip_all,
+        err(level = "warn"),
+        fields(%session_id)
+    )]
+    async fn check_email_sign_in(
+        &self,
+        session_id: &str,
+        browser: &BrowserBinding,
+    ) -> Result<(), EmailSignInError> {
+        self.email_sign_in_session(session_id, browser).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        name = "mcp_oauth.email_sign_in.request_code",
+        skip_all,
+        err(level = "warn"),
+        fields(%session_id, client_id = tracing::field::Empty)
+    )]
+    async fn request_email_code(
+        &self,
+        session_id: &str,
+        email: &str,
+        browser: &BrowserBinding,
+    ) -> Result<EmailSignInStep, EmailSignInError> {
+        let pending = self.email_sign_in_session(session_id, browser).await?;
+        tracing::Span::current().record("client_id", pending.client_id.as_str());
+
+        match self.email_codes.request_code(email.trim()).await? {
+            EmailCodeRequest::Sent => Ok(EmailSignInStep::EnterCode),
+            EmailCodeRequest::SsoRequired { idp_id } => self
+                .oauth_provider
+                .construct_authorize_url(
+                    session_id,
+                    UpstreamLogin::Sso {
+                        idp_id: &idp_id,
+                        email: email.trim(),
+                    },
+                )
+                .map(EmailSignInStep::Sso)
+                .map_err(EmailSignInError::ConstructAuthorizeUrl),
+        }
+    }
+
+    /// The session is consumed only after the code redeems, so a mistyped code
+    /// costs one of the upstream's attempts rather than the whole sign-in.
+    #[tracing::instrument(
+        name = "mcp_oauth.email_sign_in.verify_code",
+        skip_all,
+        err(level = "warn"),
+        fields(%session_id, client_id = tracing::field::Empty)
+    )]
+    async fn verify_email_code(
+        &self,
+        session_id: &str,
+        email: &str,
+        code: &str,
+        browser: &BrowserBinding,
+    ) -> Result<ClientDelivery, EmailSignInError> {
+        let pending = self.email_sign_in_session(session_id, browser).await?;
+        tracing::Span::current().record("client_id", pending.client_id.as_str());
+
+        let tokens = self
+            .email_codes
+            .redeem_code(email.trim(), code.trim())
+            .await?;
+
+        let pending = self
+            .inflight_auth
+            .take_pending(session_id)
+            .await
+            .map_err(EmailSignInError::InflightStore)?
+            .ok_or(EmailSignInError::UnknownOrExpiredSession)?;
+
+        self.issue_code(pending, tokens)
+            .await
+            .map_err(EmailSignInError::InflightStore)
     }
 
     /// Exchanges a broker-issued authorization code for an upstream bearer
@@ -686,9 +945,14 @@ where
         &self,
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
+        let resource = self.resources.resolve(params.resource.as_deref());
+
         match params.grant_type.as_str() {
-            "authorization_code" => self.exchange_authorization_code_token(params).await,
-            "refresh_token" => self.refresh_token_exchange(params).await,
+            "authorization_code" => {
+                self.exchange_authorization_code_token(params, resource)
+                    .await
+            }
+            "refresh_token" => self.refresh_token_exchange(params, resource).await,
             _ => Err(TokenExchangeError::UnsupportedGrantType),
         }
     }
@@ -854,6 +1118,31 @@ pub enum StartAuthorizationError {
     /// Upstream authorize URL construction failed.
     #[error("failed to construct authorize URL")]
     ConstructAuthorizeUrl(anyhow::Error),
+    /// The user asked to carry the code themselves, which only a loopback
+    /// redirect URI this broker can safely show allows.
+    #[error("redirect_uri cannot be delivered manually")]
+    ManualDeliveryUnavailable,
+}
+
+/// Errors returned while signing in with an emailed code.
+#[derive(Debug, thiserror::Error)]
+pub enum EmailSignInError {
+    /// The pending session was missing or expired.
+    #[error("unknown or expired session")]
+    UnknownOrExpiredSession,
+    /// The form was submitted by a browser other than the one that started the
+    /// flow.
+    #[error("authorization was started in a different browser")]
+    DifferentBrowser,
+    /// The upstream refused or failed the step.
+    #[error(transparent)]
+    EmailCode(#[from] EmailCodeError),
+    /// Inflight auth state could not be loaded or updated.
+    #[error("failed to access inflight auth state")]
+    InflightStore(anyhow::Error),
+    /// Upstream authorize URL construction failed.
+    #[error("failed to construct authorize URL")]
+    ConstructAuthorizeUrl(anyhow::Error),
 }
 
 /// Errors returned when handling the upstream callback.
@@ -876,8 +1165,8 @@ pub enum CompleteCallbackError {
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),
     /// Upstream code exchange failed.
-    #[error("authorization code exchange failed")]
-    AuthorizationCodeExchangeFailed(anyhow::Error),
+    #[error("authorization code exchange failed: {0}")]
+    AuthorizationCodeExchangeFailed(UpstreamGrantError),
 }
 
 /// Errors returned when exchanging a broker-issued code for a bearer token.
@@ -926,9 +1215,17 @@ pub enum TokenExchangeError {
     /// Refresh token bindings could not be read or written.
     #[error("failed to access refresh token bindings")]
     RefreshTokenBindingStore(anyhow::Error),
-    /// Upstream refresh failed.
-    #[error("refresh token exchange failed")]
-    RefreshFailed(anyhow::Error),
+    /// Upstream refresh failed. An [`UpstreamGrantError::InvalidGrant`] is
+    /// the client's to fix by authorizing again; the rest are upstream or
+    /// broker faults.
+    #[error("refresh token exchange failed: {0}")]
+    RefreshFailed(UpstreamGrantError),
+    /// Client registrations could not be read.
+    #[error("failed to read client registrations")]
+    ClientRegistrationStore(anyhow::Error),
+    /// The resource's access token could not be minted.
+    #[error("failed to mint the access token")]
+    MintAccessToken(anyhow::Error),
 }
 
 /// Errors returned when revoking a token.

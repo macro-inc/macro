@@ -34,7 +34,7 @@ vi.mock('./Agents', () => ({
         Set up your own agent
       </button>
       <button type="button" onClick={props.onManageRuntimes}>
-        Manage paired runtimes
+        Manage paired machines
       </button>
     </div>
   ),
@@ -94,7 +94,7 @@ describe('AgentSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Manage paired runtimes' })
+      screen.getByRole('button', { name: 'Manage paired machines' })
     );
     expect(screen.getByRole('heading', { name: 'Runtimes page' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -131,7 +131,7 @@ it('opens a requested creation from runtimes and returns to the agent list on ca
   expect(screen.getByText('Agents page')).toBeTruthy();
   setKind('agent');
   fireEvent.click(
-    screen.getByRole('button', { name: 'Manage paired runtimes' })
+    screen.getByRole('button', { name: 'Manage paired machines' })
   );
   expect(screen.getByText('Runtimes page')).toBeTruthy();
   expect(kind()).toBeUndefined();

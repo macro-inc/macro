@@ -50,6 +50,7 @@ import {
   SettingsSection,
 } from './primitives';
 import { InviteToTeamDialog, useTeamViewer } from './Team';
+import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
   canRemoveTeamMember,
@@ -391,16 +392,24 @@ export function TeamMembers(props: { team: TeamSummary }) {
           <Show
             when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
           >
-            {/* Inverted (black on light, white on dark) so inviting is the
-                page's primary action. */}
-            <Button
-              variant="primary"
-              class="text-[15px]"
-              onClick={() => setShowInviteModal(true)}
-            >
-              <PlusIcon class="size-4" />
-              Invite
-            </Button>
+            <div class="flex items-center gap-2">
+              {/* A link someone sends themselves gets opened; keep it one
+                  click from the page alongside the email invite. */}
+              <CopyTeamInviteLinkButton
+                teamId={props.team.id}
+                class="text-[15px]"
+              />
+              {/* Inverted (black on light, white on dark) so inviting is the
+                  page's primary action. */}
+              <Button
+                variant="primary"
+                class="text-[15px]"
+                onClick={() => setShowInviteModal(true)}
+              >
+                <PlusIcon class="size-4" />
+                Invite
+              </Button>
+            </div>
           </Show>
         }
       >
