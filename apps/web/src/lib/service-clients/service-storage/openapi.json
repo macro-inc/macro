@@ -53076,6 +53076,14 @@
             "description": "Append rows to the table, in order, each with the cells it starts\nwith.",
             "required": ["rows", "kind"],
             "properties": {
+              "ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+              },
               "kind": {
                 "type": "string",
                 "enum": ["insert"]
@@ -59101,6 +59109,22 @@
               "kind": {
                 "type": "string",
                 "enum": ["view"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A row's.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A row's."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["row"]
               }
             }
           }
