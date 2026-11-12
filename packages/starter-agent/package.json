@@ -12,6 +12,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.322",
     "@livekit/agents": "1.9.5",
     "@livekit/rtc-node": "1.2.2",
+    "@img/sharp-wasm32": "0.35.5",
     "typescript": "5.9.3",
     "zod": "4.4.3",
     "playwright-core": "1.65.0",
