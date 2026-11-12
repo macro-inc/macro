@@ -86,11 +86,15 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- A native tool call held for owner approval must watch `request_context.cancel`
+  (`check_unless_cancelled`): the agent loop waits for running tools on cancel,
+  so an unwatched hold keeps a stopped turn alive.
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
   index into the turn part. Everyone else keeps `prompt`, which inlines every
-  guide.
+  guide. Like skill routing, it ranks on the latest user message and the one
+  before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
