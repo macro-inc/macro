@@ -37,7 +37,7 @@ import {
 
 // Views load as their own chunks the first time a split opens them.
 const ForYouRouteView = lazyNamed(
-  () => import('@app/features/ideas/route-views'),
+  () => import('@app/features/suggestions/route-views'),
   'ForYouRouteView'
 );
 const ActivityRouteView = lazyNamed(

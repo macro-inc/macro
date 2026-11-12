@@ -30,12 +30,12 @@ async function draftErrorResponseHandler(
 }
 
 import {
-  getAcceptIdeaUrl,
-  getDismissIdeaUrl,
-  getListIdeasUrl,
+  getAcceptSuggestionUrl,
+  getDismissSuggestionUrl,
+  getListSuggestionsUrl,
 } from './generated/client';
 import type {
-  AcceptIdeaRequest,
+  AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
@@ -43,9 +43,6 @@ import type {
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
-  Idea,
-  IdeaChanged,
-  Ideas,
   InProgressExecution,
   RoutineSuggestions,
   RoutineTemplate,
@@ -53,6 +50,9 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  Suggestion,
+  SuggestionChanged,
+  SuggestionFeed,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -209,24 +209,26 @@ export const scheduledActionClient = {
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
 
-  /** The caller's feed of ideas. `timezone` is the IANA zone they are in. */
-  listIdeas: (args: { timezone: string }) =>
-    scheduledActionFetch<Ideas>(getListIdeasUrl(args), { method: 'GET' }),
+  /** The caller's feed of suggestions. `timezone` is the IANA zone they are in. */
+  listSuggestions: (args: { timezone: string }) =>
+    scheduledActionFetch<SuggestionFeed>(getListSuggestionsUrl(args), {
+      method: 'GET',
+    }),
 
-  /** Take an idea up; a background prompt idea starts running. */
+  /** Take an suggestion up; a background prompt suggestion starts running. */
   /**
-   * `changed` is the idea as it is now, when it was rewritten since the caller
+   * `changed` is the suggestion as it is now, when it was rewritten since the caller
    * read it: nothing was taken up.
    */
-  acceptIdea: async (args: {
-    ideaId: string;
-    body: AcceptIdeaRequest;
+  acceptSuggestion: async (args: {
+    suggestionId: string;
+    body: AcceptSuggestionRequest;
   }): Promise<
-    Result<{ changed?: Idea }, ResultError<FetchWithTokenErrorCode>[]>
+    Result<{ changed?: Suggestion }, ResultError<FetchWithTokenErrorCode>[]>
   > => {
-    let changed: IdeaChanged | undefined;
+    let changed: SuggestionChanged | undefined;
     const result = await fetchWithToken<{}>(
-      `${scheduledActionHost}${getAcceptIdeaUrl(args.ideaId)}`,
+      `${scheduledActionHost}${getAcceptSuggestionUrl(args.suggestionId)}`,
       {
         method: 'POST',
         body: JSON.stringify(args.body),
@@ -239,14 +241,14 @@ export const scheduledActionClient = {
         },
       }
     );
-    if (changed) return ok({ changed: changed.idea });
+    if (changed) return ok({ changed: changed.suggestion });
 
     return result.map(() => ({}));
   },
 
   /** `keepalive` lets the call outlive a page that is closing. */
-  dismissIdea: (args: { ideaId: string; keepalive?: boolean }) =>
-    scheduledActionFetch(getDismissIdeaUrl(args.ideaId), {
+  dismissSuggestion: (args: { suggestionId: string; keepalive?: boolean }) =>
+    scheduledActionFetch(getDismissSuggestionUrl(args.suggestionId), {
       method: 'POST',
       keepalive: args.keepalive,
     }),

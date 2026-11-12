@@ -1,13 +1,13 @@
-//! Who counts in for nightly generations from the ideas feed: like an app
+//! Who counts in for nightly generations from the suggestions feed: like an app
 //! load, only paid plans, with their next run set for their night.
 
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use ideas::domain::ports::SuggestionAudience;
 use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
+use suggestions::domain::ports::SuggestionAudience;
 
 use super::night;
 use super::ports::{GenerationRepo, Plans};

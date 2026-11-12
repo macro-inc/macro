@@ -63,6 +63,7 @@ import {
 import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { createdRecently, forgetSessionCreated } from './recently-created';
 import { publishSessionTurn } from './session-turn';
+import { typedInClientId } from './ui-client';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -434,7 +435,11 @@ export class AgentSession {
 
     // The harness adopts the id the client speculated under; the response
     // names the id it was accepted under and `issue` reconciles the two.
-    const request: ControlRequest = { ...action, actionId };
+    const request: ControlRequest = {
+      ...action,
+      actionId,
+      ...this.typedIn(action),
+    };
     const result = trace
       ? await this.sendPrompt(trace, actionId, request)
       : await agentHarnessServiceClient.control(this.id, request);
@@ -475,6 +480,17 @@ export class AgentSession {
       );
     }
     return result;
+  }
+
+  /**
+   * The tab a prompt is typed in, so what the turn opens for the person
+   * reaches this tab (`macro.ui.open`).
+   */
+  private typedIn(action: AgentAction): { clientId?: string } {
+    if (action.type !== 'prompt') return {};
+
+    const clientId = typedInClientId();
+    return clientId ? { clientId } : {};
   }
 
   /**

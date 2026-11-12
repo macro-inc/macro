@@ -173,10 +173,10 @@ fn the_generation_scope_matches_the_sdk_catalog() {
             .join("/")
     };
     let intended = [
-        "scheduled-action.suggestIdea",
-        "scheduled-action.rewriteIdea",
-        "scheduled-action.retireIdea",
-        "scheduled-action.attachIdeaDraft",
+        "scheduled-action.addSuggestion",
+        "scheduled-action.rewriteSuggestion",
+        "scheduled-action.retireSuggestion",
+        "scheduled-action.attachSuggestionDraft",
         "scheduled-action.suggestRoutine",
         "scheduled-action.retireRoutineSuggestion",
         "email.createDraft",
@@ -302,7 +302,13 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "email.updateThreadState",
         "storage.setCrmContactEmail",
         "storage.setEmailSync",
-        "scheduled-action.attachIdeaDraft",
+        // Channel sections only arrange the person's own sidebar.
+        "storage.createChannelSection",
+        "storage.deleteChannelSection",
+        "storage.previewChannelSection",
+        "storage.setChannelSection",
+        "storage.updateChannelSection",
+        "scheduled-action.attachSuggestionDraft",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();

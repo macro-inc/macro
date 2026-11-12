@@ -356,15 +356,21 @@ pub struct FirstPrompt {
     pub prompt: String,
     /// Files the prompt refers to, in the order the user attached them.
     pub attachments: Vec<PromptAttachment>,
+    /// The app tab the person typed the prompt in, already admitted by
+    /// [`super::control::ControlPrincipal::admit_client`]. Recorded on the
+    /// first turn like a control prompt's, so the turn can show them things
+    /// in that tab.
+    pub client: Option<super::model::UiClientId>,
 }
 
 impl FirstPrompt {
-    /// A plain text prompt under a minted id.
+    /// A plain text prompt under a minted id, typed in no tab.
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
             action_id: None,
             prompt: prompt.into(),
             attachments: Vec::new(),
+            client: None,
         }
     }
 
@@ -1298,6 +1304,9 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
 }
 
 /// What accepting a control operation did with it.

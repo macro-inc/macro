@@ -116,24 +116,57 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             .get("x-request-id")
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default();
+        let route = request.extensions().get::<MatchedPath>();
+        let url_path = redacted_path(request.uri().path(), route.map(MatchedPath::as_str));
         let span = tracing::info_span!(
             target: HTTP_REQUEST_SPAN_TARGET,
             "http.request",
             otel.kind = "server",
             "http.request.method" = %request.method(),
             "http.route" = tracing::field::Empty,
-            "url.path" = request.uri().path(),
+            "url.path" = url_path.as_ref(),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
-        if let Some(route) = request.extensions().get::<MatchedPath>() {
+        if let Some(route) = route {
             span.record("http.route", route.as_str());
         }
         span
     }
+}
+
+/// Path parameters that carry a bearer credential (a sign-in session code, a
+/// one-time login or merge code, a meeting join or read-receipt token).
+/// `url.path` shows the route's placeholder in their place.
+const CREDENTIAL_PATH_PARAMS: &[&str] = &["{session_code}", "{code}", "{token}"];
+
+/// The request path for `url.path`, with each credential segment replaced by
+/// its route placeholder. Segments are matched from the end, because a nested
+/// router sees the path without its prefix while `MatchedPath` keeps it.
+/// Without a matched route nothing is replaced; a wildcard route that holds a
+/// credential falls back to the route itself.
+fn redacted_path<'a>(path: &'a str, route: Option<&'a str>) -> std::borrow::Cow<'a, str> {
+    let Some(route) = route.filter(|route| {
+        route
+            .split('/')
+            .any(|segment| CREDENTIAL_PATH_PARAMS.contains(&segment))
+    }) else {
+        return path.into();
+    };
+    let route_segments: Vec<&str> = route.split('/').collect();
+    let mut segments: Vec<&str> = path.split('/').collect();
+    if route_segments.len() < segments.len() || route.contains("{*") {
+        return route.into();
+    }
+    for (segment, route_segment) in segments.iter_mut().rev().zip(route_segments.iter().rev()) {
+        if CREDENTIAL_PATH_PARAMS.contains(route_segment) {
+            *segment = route_segment;
+        }
+    }
+    segments.join("/").into()
 }
 
 fn latency_millis(latency: Duration) -> u64 {

@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import calls from './en/calls';
@@ -13,7 +14,6 @@ import create from './en/create';
 import crm from './en/crm';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
-import ideas from './en/ideas';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -24,6 +24,7 @@ import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
+import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
@@ -34,6 +35,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentNavigation,
   accountManager,
   agentSetup,
   agentWork,
@@ -48,7 +50,7 @@ export default {
   crm,
   emailViews,
   entityActions,
-  ideas,
+  suggestions,
   localRuntime,
   mobile,
   nav,

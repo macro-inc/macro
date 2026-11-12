@@ -17,12 +17,12 @@ import type { RoutineSurface } from '../core/surfaces';
 
 /**
  * Where a list of suggestions is: a sidebar's dialog, the Routines page, or
- * among the person's ideas.
+ * the For you page.
  */
 export type SuggestionPlacement =
   | { kind: 'sidebar'; surface: RoutineSurface }
   | { kind: 'routines' }
-  | { kind: 'ideas' };
+  | { kind: 'forYou' };
 
 /** What enabling, editing and dismissing need from the app. */
 export type SuggestionActionsDeps = {

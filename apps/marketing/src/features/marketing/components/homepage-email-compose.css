@@ -40,7 +40,7 @@
 .homepage-email-fields { flex: none; padding-bottom: 4px; }
 .homepage-email-row { display: flex; align-items: center; gap: 8px; min-height: 48px; border-bottom: 1px solid #ffffff0d; }
 .homepage-email-label { flex: 0 0 56px; color: #737373; font-size: 14px; line-height: 20px; }
-.homepage-email-row input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; padding: 12px 0; font: 400 14px/20px 'Inter Variable', Inter, sans-serif; }
+.homepage-email-row input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; padding: 12px 0; font: 370 14px/20px 'Inter Variable', Inter, sans-serif; }
 .homepage-email-row input::placeholder { color: #737373; }
 .homepage-email-subject input { font-size: 15px; line-height: 24px; }
 .homepage-email-sender { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 999px; background: #ffffff0f; color: #fff; font-size: 14px; line-height: 20px; }
@@ -56,7 +56,6 @@
 .homepage-email-toolbar button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 33.75px; height: 33.75px; padding: 3.75px; background: transparent; border: 0; border-radius: 50%; color: #a8a8a8; }
 .homepage-email-toolbar button svg { width: 20.625px; height: 20.625px; }
 .homepage-email-toolbar button.homepage-email-send { background: #fff; color: oklch(0.17 0.002 250); }
-.homepage-email-send svg { stroke-width: 4px; }
 .homepage-email-toolbar button:disabled { opacity: .5; }
 .homepage-email-toolbar button.homepage-email-send:disabled { background: #ffffff08; color: #737373; opacity: 1; }
 .homepage-email-demo button:focus-visible { outline: 2px solid #a8a8a8; outline-offset: 2px; }

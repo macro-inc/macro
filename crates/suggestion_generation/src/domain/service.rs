@@ -1,8 +1,8 @@
-//! Generations: runs of hidden agent sessions that write a person's ideas
+//! Generations: runs of hidden agent sessions that write a person's suggestions
 //! and routine suggestions.
 //!
 //! A generation starts at onboarding ([`GenerationService::start`]) or in
-//! the person's night ([`GenerationService::nightly`]). It runs one ideas
+//! the person's night ([`GenerationService::nightly`]). It runs one suggestions
 //! session and the routines sessions of the [`SessionLayout`] at once, each
 //! for the person, hidden and non-billable (`SessionBilling::NonBillable`),
 //! each told what its kind's crate briefs it with. A session may only call
@@ -25,15 +25,15 @@ use agent_session::domain::routines::{
 use chrono::Utc;
 use chrono_tz::Tz;
 use feature_flags::FeatureFlags;
-use ideas::domain::model::{GenerationTrigger, SessionKind};
-use ideas::domain::ports::IdeaApi;
-use ideas::domain::service::IDEAS_FLAG;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use routine_program::Surface;
 use scheduled_action::domain::suggestions::ROUTINE_SUGGESTIONS_FLAG;
 use scheduled_action::domain::suggestions::model::RoutineGenerationReport;
 use scheduled_action::domain::suggestions::ports::RoutineSuggestionApi;
+use suggestions::domain::model::{GenerationTrigger, SessionKind};
+use suggestions::domain::ports::SuggestionApi;
+use suggestions::domain::service::SUGGESTIONS_FLAG;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -54,11 +54,11 @@ pub const ONBOARDING_ROUTINES_TIMEOUT: Duration = Duration::from_secs(240);
 /// The longest a nightly routines session runs: it reviews what it suggested
 /// before, too.
 pub const NIGHTLY_ROUTINES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-/// The longest an onboarding ideas session runs: the person is waiting.
-pub const ONBOARDING_IDEAS_TIMEOUT: Duration = Duration::from_secs(240);
-/// The longest a nightly ideas session runs: it researches the whole
+/// The longest an onboarding suggestions session runs: the person is waiting.
+pub const ONBOARDING_SUGGESTIONS_TIMEOUT: Duration = Duration::from_secs(240);
+/// The longest a nightly suggestions session runs: it researches the whole
 /// workspace.
-pub const NIGHTLY_IDEAS_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+pub const NIGHTLY_SUGGESTIONS_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// How long a session row may stay open before the sweep deletes it and
 /// its session: longer than any session.
 pub const STALE_SESSION: Duration = Duration::from_secs(20 * 60);
@@ -71,10 +71,10 @@ pub use super::night::NIGHT;
 /// Nightly runs at most once in this long, whatever the zone does.
 pub const NIGHTLY_EVERY: chrono::TimeDelta = chrono::TimeDelta::hours(20);
 /// How often a person's nightly run includes a routines session: once a
-/// week. Other nights run only the ideas session.
+/// week. Other nights run only the suggestions session.
 pub const ROUTINES_EVERY: chrono::TimeDelta = chrono::TimeDelta::days(7);
 /// Nightly generations one process runs at once. A nightly run is one
-/// ideas session of up to 15 minutes (a routines one too, weekly), so with
+/// suggestions session of up to 15 minutes (a routines one too, weekly), so with
 /// the harness's two processes and a tick every 5 minutes this starts about
 /// 48 people an hour, roughly 150 per zone's three-hour night: sized for
 /// the flagged rollout. `suggestion.nightly_short` says when it falls short.
@@ -91,8 +91,8 @@ const MAX_POLL: Duration = Duration::from_secs(5);
 const MAX_STATUS_FAILURES: u8 = 5;
 
 /// Starts and runs generations.
-pub struct GenerationService<Repo, Sessions, Routines, Ideas, Flags> {
-    runner: Arc<Runner<Repo, Sessions, Routines, Ideas>>,
+pub struct GenerationService<Repo, Sessions, Routines, SuggestionFeed, Flags> {
+    runner: Arc<Runner<Repo, Sessions, Routines, SuggestionFeed>>,
     flags: Option<Flags>,
     /// Who is on a paid plan; without it, nobody gets a nightly run.
     plans: Option<Arc<dyn Plans>>,
@@ -102,11 +102,11 @@ pub struct GenerationService<Repo, Sessions, Routines, Ideas, Flags> {
 }
 
 /// What a generation needs, shared with its background task.
-struct Runner<Repo, Sessions, Routines, Ideas> {
+struct Runner<Repo, Sessions, Routines, SuggestionFeed> {
     repo: Arc<Repo>,
     sessions: Arc<Sessions>,
     routines: Arc<Routines>,
-    ideas: Arc<Ideas>,
+    suggestions: Arc<SuggestionFeed>,
     agent: GenerationAgent,
     layout: SessionLayout,
 }
@@ -118,7 +118,7 @@ struct Run {
     user: MacroUserIdStr<'static>,
     trigger: GenerationTrigger,
     timezone: Tz,
-    ideas: bool,
+    suggestions: bool,
     routines: bool,
 }
 
@@ -141,13 +141,13 @@ struct Ended {
     kept: u32,
 }
 
-impl<Repo, Sessions, Routines, Ideas, Flags>
-    GenerationService<Repo, Sessions, Routines, Ideas, Flags>
+impl<Repo, Sessions, Routines, SuggestionFeed, Flags>
+    GenerationService<Repo, Sessions, Routines, SuggestionFeed, Flags>
 where
     Repo: GenerationRepo,
     Sessions: RoutineSessions,
     Routines: RoutineSuggestionApi,
-    Ideas: IdeaApi,
+    SuggestionFeed: SuggestionApi,
     Flags: FeatureFlags + 'static,
 {
     /// Generations run on `tasks` and stop at `shutdown`. Without `flags`
@@ -157,7 +157,7 @@ where
         repo: Arc<Repo>,
         sessions: Arc<Sessions>,
         routines: Arc<Routines>,
-        ideas: Arc<Ideas>,
+        suggestions: Arc<SuggestionFeed>,
         flags: Option<Flags>,
         agent: GenerationAgent,
         tasks: TaskTracker,
@@ -168,7 +168,7 @@ where
                 repo,
                 sessions,
                 routines,
-                ideas,
+                suggestions,
                 agent,
                 layout: SessionLayout::default(),
             }),
@@ -206,14 +206,14 @@ where
         self
     }
 
-    /// Which kinds are on for the person: ideas, routine suggestions.
+    /// Which kinds are on for the person: suggestions, routine suggestions.
     async fn kinds(&self, user: &MacroUserIdStr<'_>) -> (bool, bool) {
         let Some(flags) = &self.flags else {
             return (false, false);
         };
         match flags.load(user).await {
             Ok(flags) => (
-                flags.is_enabled(IDEAS_FLAG),
+                flags.is_enabled(SUGGESTIONS_FLAG),
                 flags.is_enabled(ROUTINE_SUGGESTIONS_FLAG),
             ),
             Err(error) => {
@@ -225,11 +225,11 @@ where
 
     /// Start the person's generation for `trigger` in the background, if
     /// one may start: their onboarding one runs once, a nightly one once a
-    /// night. Off when neither ideas nor routine suggestions are on.
+    /// night. Off when neither suggestions nor routine suggestions are on.
     #[tracing::instrument(name = "suggestion.generation.start", skip_all, fields(
         suggestion.generation.trigger = trigger.as_ref(),
         suggestion.generation.id = tracing::field::Empty,
-        suggestion.generation.ideas = tracing::field::Empty,
+        suggestion.generation.suggestions = tracing::field::Empty,
         suggestion.generation.routines = tracing::field::Empty,
     ), err)]
     pub async fn start(
@@ -238,13 +238,13 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<bool, GenerationError> {
-        let (ideas, mut routines) = self.kinds(user).await;
-        if !ideas && !routines {
+        let (suggestions, mut routines) = self.kinds(user).await;
+        if !suggestions && !routines {
             return Err(GenerationError::NotFound);
         }
         let now = Utc::now();
         let repo = &self.runner.repo;
-        // Routine suggestions come once a week; other nights only ideas.
+        // Routine suggestions come once a week; other nights only suggestions.
         if trigger == GenerationTrigger::Nightly
             && routines
             && repo
@@ -255,9 +255,9 @@ where
             routines = false;
         }
         let span = tracing::Span::current();
-        span.record("suggestion.generation.ideas", ideas);
+        span.record("suggestion.generation.suggestions", suggestions);
         span.record("suggestion.generation.routines", routines);
-        if !ideas && !routines {
+        if !suggestions && !routines {
             return Ok(false);
         }
         if trigger == GenerationTrigger::Onboarding && self.paid(user).await {
@@ -286,7 +286,7 @@ where
             user: user.clone(),
             trigger,
             timezone,
-            ideas,
+            suggestions,
             routines,
         };
         // Onboarding: a child of the request that started it, one trace. A
@@ -297,9 +297,9 @@ where
                 "suggestion.generation",
                 suggestion.generation.id = %generation,
                 suggestion.generation.trigger = trigger.as_ref(),
-                suggestion.generation.ideas = ideas,
+                suggestion.generation.suggestions = suggestions,
                 suggestion.generation.routines = routines,
-                suggestion.generation.ideas_kept = tracing::field::Empty,
+                suggestion.generation.suggestions_kept = tracing::field::Empty,
                 suggestion.generation.routines_kept = tracing::field::Empty,
                 suggestion.generation.retries = tracing::field::Empty,
                 suggestion.generation.outcome = tracing::field::Empty,
@@ -312,9 +312,9 @@ where
                     "suggestion.generation",
                     suggestion.generation.id = %generation,
                     suggestion.generation.trigger = trigger.as_ref(),
-                    suggestion.generation.ideas = ideas,
+                    suggestion.generation.suggestions = suggestions,
                     suggestion.generation.routines = routines,
-                    suggestion.generation.ideas_kept = tracing::field::Empty,
+                    suggestion.generation.suggestions_kept = tracing::field::Empty,
                     suggestion.generation.routines_kept = tracing::field::Empty,
                     suggestion.generation.retries = tracing::field::Empty,
                     suggestion.generation.outcome = tracing::field::Empty,
@@ -477,15 +477,15 @@ where
         Ok(stale.len())
     }
 
-    /// The person loaded the app in zone `timezone`: with ideas on and a
+    /// The person loaded the app in zone `timezone`: with suggestions on and a
     /// paid plan, they count as active for nightly runs.
     pub async fn seen(
         &self,
         user: &MacroUserIdStr<'static>,
         timezone: Tz,
     ) -> Result<(), GenerationError> {
-        let (ideas, _) = self.kinds(user).await;
-        if !ideas || !self.paid(user).await {
+        let (suggestions, _) = self.kinds(user).await;
+        if !suggestions || !self.paid(user).await {
             return Ok(());
         }
         let now = Utc::now();
@@ -521,19 +521,19 @@ where
     }
 }
 
-impl<Repo, Sessions, Routines, Ideas> Runner<Repo, Sessions, Routines, Ideas>
+impl<Repo, Sessions, Routines, SuggestionFeed> Runner<Repo, Sessions, Routines, SuggestionFeed>
 where
     Repo: GenerationRepo,
     Sessions: RoutineSessions,
     Routines: RoutineSuggestionApi,
-    Ideas: IdeaApi,
+    SuggestionFeed: SuggestionApi,
 {
-    /// The generation: its ideas session and its routines sessions at once.
+    /// The generation: its suggestions session and its routines sessions at once.
     async fn run(self: Arc<Self>, run: Run, shutdown: CancellationToken) {
         let span = tracing::Span::current();
-        let ideas = async {
-            if run.ideas {
-                Some(self.ideas_session(&run, &shutdown).await)
+        let suggestions = async {
+            if run.suggestions {
+                Some(self.suggestions_session(&run, &shutdown).await)
             } else {
                 None
             }
@@ -545,9 +545,9 @@ where
                 Vec::new()
             }
         };
-        let (ideas, routines) = tokio::join!(ideas, routines);
+        let (suggestions, routines) = tokio::join!(suggestions, routines);
         let retries = routines.iter().filter(|(_, retried)| *retried).count();
-        let ended: Vec<Ended> = ideas
+        let ended: Vec<Ended> = suggestions
             .into_iter()
             .chain(routines.iter().map(|(ended, _)| *ended))
             .collect();
@@ -564,7 +564,7 @@ where
         } else {
             GenerationOutcome::Failed
         };
-        let ideas_kept = ideas.map_or(0, |ended| ended.kept);
+        let suggestions_kept = suggestions.map_or(0, |ended| ended.kept);
         let routines_kept: u32 = routines.iter().map(|(ended, _)| ended.kept).sum();
         if run.routines {
             self.report_routines(&run, &routines, &shutdown).await;
@@ -577,7 +577,7 @@ where
         {
             tracing::error!(error = ?error, "could not record how a generation ended");
         }
-        span.record("suggestion.generation.ideas_kept", ideas_kept);
+        span.record("suggestion.generation.suggestions_kept", suggestions_kept);
         span.record("suggestion.generation.routines_kept", routines_kept);
         span.record("suggestion.generation.retries", retries);
         span.record("suggestion.generation.outcome", outcome.as_ref());
@@ -589,7 +589,7 @@ where
             trigger = run.trigger.as_ref(),
             outcome = outcome.as_ref(),
             sessions = ended.len(),
-            ideas_kept,
+            suggestions_kept,
             routines_kept,
             retries,
         );
@@ -630,19 +630,19 @@ where
             .await;
     }
 
-    /// The generation's one ideas session.
-    async fn ideas_session(&self, run: &Run, shutdown: &CancellationToken) -> Ended {
-        let brief = self.ideas.brief(run.trigger, run.timezone);
+    /// The generation's one suggestions session.
+    async fn suggestions_session(&self, run: &Run, shutdown: &CancellationToken) -> Ended {
+        let brief = self.suggestions.brief(run.trigger, run.timezone);
         let timeout = match run.trigger {
-            GenerationTrigger::Onboarding => ONBOARDING_IDEAS_TIMEOUT,
-            GenerationTrigger::Nightly => NIGHTLY_IDEAS_TIMEOUT,
+            GenerationTrigger::Onboarding => ONBOARDING_SUGGESTIONS_TIMEOUT,
+            GenerationTrigger::Nightly => NIGHTLY_SUGGESTIONS_TIMEOUT,
         };
         let session = AgentSessionId::new();
         let ending = self
             .session(
                 run,
                 session,
-                SessionKind::Ideas,
+                SessionKind::Suggestions,
                 &[],
                 brief,
                 timeout,
@@ -651,11 +651,11 @@ where
             )
             .await;
         let kept = self
-            .ideas
+            .suggestions
             .kept(run.generation, session.as_uuid())
             .await
             .inspect_err(|error| {
-                tracing::warn!(?error, "could not count an ideas session's changes")
+                tracing::warn!(?error, "could not count a suggestions session's changes")
             })
             .unwrap_or(0);
         Ended { ending, kept }

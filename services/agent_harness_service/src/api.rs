@@ -333,7 +333,7 @@ where
     Changes: AgentChanges,
 {
     // Every request's agent attribution is validated here: routes that tell
-    // an agent from the person (ideas, session scopes) rely on it, so the
+    // an agent from the person (suggestions, session scopes) rely on it, so the
     // service never serves without it.
     let correlation = states
         .correlation

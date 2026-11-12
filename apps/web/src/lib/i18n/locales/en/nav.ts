@@ -29,6 +29,7 @@ export default {
 
   // Open-in-split menu
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   openFullscreen: 'Open fullscreen',
   openInCurrentSplit: 'Open in current split',
   contentAlreadyOpen: 'Content already open',
@@ -36,6 +37,10 @@ export default {
   // Rail buttons
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
+  unseenItems: {
+    one: '{{count}} unseen item',
+    other: '{{count}} unseen items',
+  },
   activeCall: 'Active call',
   returnToCall: 'Return to call',
   nextMeeting: 'Next meeting: {{time}}',

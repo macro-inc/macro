@@ -118,9 +118,9 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
-        /// Never set: a catalog pick is not shown among ideas.
-        #[serde(default)]
-        idea: Option<RoutineIdea>,
+        /// Never set: a catalog pick is not shown among suggestions.
+        #[serde(default, rename = "card")]
+        card: Option<RoutineSuggestionCard>,
     },
     /// A routine the catalog lacks, checked as saving checks it.
     #[serde(rename_all = "camelCase")]
@@ -132,23 +132,24 @@ pub enum SuggestRequest {
         reason: String,
         surfaces: Vec<Surface>,
         keep_probability: f32,
-        /// How it shows among the person's ideas.
-        idea: RoutineIdea,
+        /// How it shows in the person's Suggestions feed.
+        card: RoutineSuggestionCard,
     },
 }
 
-/// How a drafted routine suggestion shows among the person's ideas: every
-/// routine a session drafts is also one idea, kept and closed with it.
+/// How a drafted routine suggestion shows in the person's Suggestions feed:
+/// every routine a session drafts is also one suggestion there, kept and
+/// closed with it.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RoutineIdea {
+pub struct RoutineSuggestionCard {
     /// What it does for the person, in a few words.
     pub title: String,
     /// 0 to 100: how much the person would regret missing it this week.
     pub importance: u8,
     /// The feed's filters it shows under.
     #[serde(default)]
-    pub categories: Vec<ideas::domain::model::Category>,
+    pub categories: Vec<suggestions::domain::model::Category>,
 }
 
 impl SuggestRequest {
@@ -194,16 +195,16 @@ pub struct CheckedSuggestion {
     pub reason: String,
     pub keep_probability: f32,
     pub pick: StoredPick,
-    /// A drafted routine's idea.
-    pub idea: Option<CheckedRoutineIdea>,
+    /// A drafted routine's suggestion.
+    pub card: Option<CheckedRoutineSuggestionCard>,
 }
 
-/// A drafted routine's idea, checked.
+/// A drafted routine's suggestion, checked.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CheckedRoutineIdea {
+pub struct CheckedRoutineSuggestionCard {
     pub title: String,
     pub importance: u8,
-    pub categories: Vec<ideas::domain::model::Category>,
+    pub categories: Vec<suggestions::domain::model::Category>,
 }
 
 /// A stored suggestion AI made.

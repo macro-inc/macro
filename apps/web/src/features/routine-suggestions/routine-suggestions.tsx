@@ -394,8 +394,8 @@ function useDiscoverItems(list: ReturnType<typeof useSuggestionList>) {
   });
 }
 
-/** How a routine idea's card words its suggestion. */
-export type RoutineIdeaText = {
+/** How the For you page's card words a routine suggestion. */
+export type RoutineCardText = {
   title: string;
   sentence: SuggestionSentencePart[];
   /** What starts it, e.g. "Fridays at 9:00 AM". */
@@ -403,19 +403,19 @@ export type RoutineIdeaText = {
 };
 
 /**
- * The suggestions behind routine ideas: each one's wording, opening it for
- * review, and saving it as a routine. Enabling one twice saves one routine.
+ * The routine suggestions the For you page shows: each one's wording, opening
+ * it for review, and saving it as a routine. Enabling one twice saves one routine.
  */
-export function useRoutineIdeaSuggestions() {
+export function useForYouRoutineSuggestions() {
   const list = useSuggestionList(
-    () => ({ kind: 'ideas' }),
+    () => ({ kind: 'forYou' }),
     () => {}
   );
   const find = (suggestionId: string) =>
     list.items()?.find((item) => item.id === suggestionId);
 
   return {
-    text(suggestionId: string): RoutineIdeaText | undefined {
+    text(suggestionId: string): RoutineCardText | undefined {
       const item = find(suggestionId);
       if (!item) return undefined;
 

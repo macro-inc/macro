@@ -422,3 +422,63 @@ fn current_trace_id_is_the_current_spans_and_none_outside_a_trace() {
         assert_eq!(current_trace_id(), Some(trace_id));
     });
 }
+
+#[tokio::test]
+async fn request_span_keeps_credential_path_params_out_of_url_path() {
+    for (route, uri, expected) in [
+        (
+            "/session/login/{session_code}",
+            "/session/login/fake-session-code",
+            "/session/login/{session_code}",
+        ),
+        (
+            "/oauth/passwordless/{code}",
+            "/oauth/passwordless/fake-login-code?email=a",
+            "/oauth/passwordless/{code}",
+        ),
+        (
+            "/meetings/join/{token}/participants",
+            "/meetings/join/fake-join-token/participants",
+            "/meetings/join/{token}/participants",
+        ),
+        // Other path params stay searchable.
+        (
+            "/documents/{id}/session/{session_code}",
+            "/documents/doc-1/session/fake-session-code",
+            "/documents/doc-1/session/{session_code}",
+        ),
+    ] {
+        let (subscriber, captured) = TracingCapture::new();
+        let _guard = set_default(subscriber);
+        tracing::callsite::rebuild_interest_cache();
+        let inner = Router::new()
+            .route(route, get(|| async {}))
+            .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+        // The gateway mounts every service under a prefix as well as at root.
+        let app = Router::new().merge(inner.clone()).nest("/auth", inner);
+
+        for prefix in ["", "/auth"] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("{prefix}{uri}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            // A nested router sees the path without its prefix.
+            let fields = captured.initial_span_fields.lock().unwrap().clone();
+            assert_eq!(
+                fields.get("url.path").unwrap(),
+                &format!("\"{expected}\""),
+                "{prefix}{uri}"
+            );
+            assert!(
+                fields.values().all(|value| !value.contains("fake-")),
+                "{fields:?}"
+            );
+        }
+    }
+}

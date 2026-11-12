@@ -8,11 +8,11 @@ mod test;
 /// A narrower scope than the person's own access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionScope {
-    /// A hidden suggestion generation session: it reads, writes ideas and
+    /// A hidden suggestion generation session: it reads, writes suggestions and
     /// routine suggestions through its own tools, and drafts email; nothing
     /// else.
     Generation,
-    /// A background run whose idea sends and posts nothing: it may change
+    /// A background run whose suggestion sends and posts nothing: it may change
     /// the person's own items, but nothing that reaches anyone else.
     NoSend,
 }
@@ -130,10 +130,10 @@ const SENDS: &[(&str, &str)] = &[
 /// Requests a generation session may make besides reads by method: its own
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
 const GENERATION_WRITES: &[(&str, &str)] = &[
-    ("POST", "/ideas"),
-    ("PATCH", "/ideas/{id}"),
-    ("POST", "/ideas/{id}/retire"),
-    ("PUT", "/ideas/{id}/draft"),
+    ("POST", "/suggestions"),
+    ("PATCH", "/suggestions/{id}"),
+    ("POST", "/suggestions/{id}/retire"),
+    ("PUT", "/suggestions/{id}/draft"),
     ("POST", "/scheduled-actions/suggestions"),
     ("POST", "/scheduled-actions/suggestions/{id}/retire"),
     ("POST", "/email/drafts"),

@@ -22,7 +22,6 @@ import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
-import { IdeaNamespace } from './entities/ideas/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
@@ -36,8 +35,10 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
@@ -109,6 +110,13 @@ export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
 export type { CreatedEntity } from './entities/routines/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -131,8 +139,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
 
-  /** ideas resources and operations. */
-  readonly ideas: IdeaNamespace;
+  /** suggestions resources and operations. */
+  readonly suggestions: SuggestionNamespace;
 
   /** unfurls resources and operations. */
   readonly unfurls: UnfurlNamespace;
@@ -191,6 +199,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Call the user's connected apps and MCP servers from a code execution. */
   readonly connectedApps: ConnectedAppNamespace;
+
+  /** Open items in the Macro app tab the user prompted from. */
+  readonly ui: UiNamespace;
 
   readonly favorites: FavoritesNamespace;
 
@@ -255,7 +266,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     const client = new MacroClient(opts);
     this._client = client;
     this.routines = new RoutineNamespace(client);
-    this.ideas = new IdeaNamespace(client);
+    this.suggestions = new SuggestionNamespace(client);
     this.unfurls = new UnfurlNamespace(client);
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
@@ -280,6 +291,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.connectedApps = new ConnectedAppNamespace(client);
+    this.ui = new UiNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
@@ -491,16 +503,6 @@ export {
 } from './entities/github-pull-requests/pull-request';
 export { Harness } from './entities/harnesses/harness';
 export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
-export {
-  Idea,
-  type IdeaChanges,
-  type IdeaItem,
-  type IdeaWriteOutcome,
-} from './entities/ideas/idea';
-export type {
-  IdeaReview,
-  IdeaSuggestion,
-} from './entities/ideas/namespace';
 export { GeneratedImage, StaticImage } from './entities/images/image';
 export type {
   GenerateImageAspectRatio,
@@ -568,8 +570,22 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export type {
+  SuggestionInput,
+  SuggestionsReview,
+} from './entities/suggestions/namespace';
+export {
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  ExternalProfilePicture,
+  type ProfilePicture,
+} from './entities/users/profile-picture';
 export type { ActivityReport } from './entities/users/user';
 export type {
   WebFetchOptions,

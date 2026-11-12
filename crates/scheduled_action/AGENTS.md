@@ -88,11 +88,12 @@ each run.
   (the `GenerationSessions` port, found from the request's code-mode
   invocation like a draft's check; anything else is 403 `NotSuggesting`).
   Suggestions are never rewritten; a retired catalog pick may be suggested
-  again, a dismissed one never. A drafted routine comes with its `idea` (title,
-  importance, categories) and is written with its routine idea in one
-  transaction (`ideas_db_utils`), refused when the idea would pass the ideas
-  limits; dismissing, retiring or saving it from the suggestion closes that idea
-  in the same transaction. A catalog pick takes no `idea`. Every kept and retired suggestion is logged in
+  again, a dismissed one never. A drafted routine comes with its `card` (title,
+  importance, categories) and is written with its `routine` suggestion in one
+  transaction (`suggestions_db_utils`), refused when that would pass the suggestion
+  limits; dismissing, retiring or saving it from the routine suggestion closes
+  that `routine` suggestion in the same transaction. A catalog pick takes no
+  `card`. Every kept and retired suggestion is logged in
   `suggestion_change`. `suggestions/decode.rs` is the trust boundary: a
   catalog key with knob values that fit their knob, or a drafted routine that
   passes saving's checks, kept switched off and never acting as the user; a
@@ -138,8 +139,10 @@ each run.
 - Owns: scheduled-action and event-trigger CRUD, dispatch (in-process or
   tokio), run history, and live-update notifications over the connection
   gateway.
-- An authenticated caller with a routine ID can read its detail; listing,
-  run history, and mutations stay owner-scoped.
+- Reading a routine, listing, run history, and mutations are owner-scoped:
+  ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
+  loads the routine only for its owner (`granted_action`). Without a grant
+  they answer 401; with a grant but not the owner, 404.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -205,6 +208,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   dates are never kept, so those properties only support any-change filters.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
+- GitHub presets do not configure subscriptions: use `../github/README.md`
+  and `../github/app-webhooks.json` for App registration and permission approval.
+  Keep event names open so new subscriptions need no routine parser changes.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`

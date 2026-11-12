@@ -3,7 +3,7 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { useIdeasFlag } from '@app/features/ideas/use-ideas-flag';
+import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-flag';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -13,16 +13,16 @@ import { HomeAgentComposer } from '../home-agent-composer';
 import { HomeSectionBoundary } from '../home-section-boundary';
 import { HomeRecommendedActions } from './home-recommended-actions';
 
-// Loaded only for people with ideas on.
-const HomeIdeas = lazyNamed(
-  () => import('@app/features/ideas/home-ideas'),
-  'HomeIdeas'
+// Loaded only for people with suggestions on.
+const HomePriorities = lazyNamed(
+  () => import('@app/features/suggestions/home-priorities'),
+  'HomePriorities'
 );
 
 /** Desktop Home's idle pane: the agent composer and suggested actions. */
 export function HomeChatStart() {
   const shell = useViewShell();
-  const ideas = useIdeasFlag();
+  const suggestions = useSuggestionsFlag();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
   return (
@@ -49,9 +49,9 @@ export function HomeChatStart() {
           <div
             class="mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 pt-6 pb-16"
             classList={{
-              'grid-rows-[max(0px,calc(40%-60px))_auto_1fr]': !ideas(),
+              'grid-rows-[max(0px,calc(40%-60px))_auto_1fr]': !suggestions(),
               // Today and the priorities need the room below the composer.
-              'grid-rows-[2.5rem_auto_1fr]': ideas(),
+              'grid-rows-[2.5rem_auto_1fr]': suggestions(),
             }}
             data-home-composer-align="agents"
           >
@@ -65,10 +65,10 @@ export function HomeChatStart() {
               </DebugSuspense>
             </div>
             <div class="min-h-0 min-w-0 pb-8">
-              {/* With ideas on, today and the top priorities take this place. */}
-              <Show when={ideas()} fallback={<HomeRecommendedActions />}>
+              {/* With suggestions on, today and the top priorities take this place. */}
+              <Show when={suggestions()} fallback={<HomeRecommendedActions />}>
                 <HomeSectionBoundary title="priorities" fallback={null}>
-                  <HomeIdeas />
+                  <HomePriorities />
                 </HomeSectionBoundary>
               </Show>
             </div>

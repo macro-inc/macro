@@ -545,6 +545,7 @@ async fn run() -> anyhow::Result<()> {
     if let Some(rollout) = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         connectors = connectors.with_rollout(rollout);
     }
@@ -760,6 +761,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
@@ -773,7 +775,9 @@ async fn run() -> anyhow::Result<()> {
                 pool.clone(),
             ),
         ),
-        runs: Arc::new(ideas::outbound::pg_idea_repo::PgIdeaRepo::new(pool.clone())),
+        runs: Arc::new(
+            suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
+        ),
     });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
@@ -857,6 +861,30 @@ async fn run() -> anyhow::Result<()> {
             connectors: tool_context.connector_tool_context.clone(),
             mcp_servers: tool_context.mcp_server_tool_context.clone(),
         }),
+    );
+    // A running program's `macro.ui.open`: the prompting person's own tab,
+    // through the gateway, within budgets every replica shares.
+    let ui_commands = agent_code_mode::domain::ui_commands::UiCommandService::new(
+        agent_code_mode::domain::ui_commands::UiCommandPorts {
+            store: Arc::clone(&execution_store),
+            active: Arc::clone(&execution_turns),
+            turns: Arc::new(code_mode::ui_commands::SessionUiTurns(session_repo.clone())),
+            flag: Arc::new(code_mode::ui_commands::NavigationFlag(
+                feature_flags.clone(),
+            )),
+            budgets: Arc::new(code_mode::ui_commands::RedisUiBudgets(
+                rate_limit::RateLimitServiceImpl {
+                    repo: rate_limit::RedisRateLimitAdapter {
+                        redis: redis.clone(),
+                    },
+                },
+            )),
+            delivery: Arc::new(code_mode::ui_commands::GatewayUiDelivery(
+                connection_gateway.clone(),
+            )),
+        },
+        agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
+            .context("the generated agent route table does not parse")?,
     );
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
         Arc::new(agent_code_mode::domain::CodeModeService::new(
@@ -1754,6 +1782,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -1834,6 +1863,7 @@ async fn run() -> anyhow::Result<()> {
             code_mode,
             reviews,
             connected_apps,
+            ui_commands,
             entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),

@@ -7,7 +7,7 @@ import { lazy } from 'solid-js';
  * fetches the likely-next ones once the first screen settles.
  */
 export const ForYouRouteView = lazyNamed(
-  () => import('@app/features/ideas/route-views'),
+  () => import('@app/features/suggestions/route-views'),
   'ForYouRouteView'
 );
 export const ActivityRouteView = lazyNamed(

@@ -8,7 +8,7 @@ type ChildrenProps = { children?: JSX.Element };
 const mocks = vi.hoisted(() => ({
   asideCollapsed: false,
   asideOverlay: false,
-  ideasEnabled: false,
+  suggestionsEnabled: false,
 }));
 
 vi.mock('@app/components/view-shell', () => ({
@@ -30,11 +30,11 @@ vi.mock('@app/components/view-shell', () => ({
 vi.mock('@channel/DebugSuspense', () => ({
   DebugSuspense: (props: ChildrenProps) => props.children,
 }));
-vi.mock('@app/features/ideas/use-ideas-flag', () => ({
-  useIdeasFlag: () => () => mocks.ideasEnabled,
+vi.mock('@app/features/suggestions/use-suggestions-flag', () => ({
+  useSuggestionsFlag: () => () => mocks.suggestionsEnabled,
 }));
-vi.mock('@app/features/ideas/home-ideas', () => ({
-  HomeIdeas: () => <div data-testid="home-ideas" />,
+vi.mock('@app/features/suggestions/home-priorities', () => ({
+  HomePriorities: () => <div data-testid="home-today" />,
 }));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
   DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
@@ -56,7 +56,7 @@ vi.mock('./home-recommended-actions', () => ({
 beforeEach(() => {
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
-  mocks.ideasEnabled = false;
+  mocks.suggestionsEnabled = false;
 });
 afterEach(cleanup);
 
@@ -91,18 +91,18 @@ describe('Home agent composer alignment', () => {
 });
 
 describe('Home below the composer', () => {
-  it('keeps the recommended actions while ideas are off', () => {
+  it('keeps the recommended actions while suggestions are off', () => {
     renderHome();
 
     expect(screen.getByTestId('home-suggestions')).toBeTruthy();
-    expect(screen.queryByTestId('home-ideas')).toBeNull();
+    expect(screen.queryByTestId('home-today')).toBeNull();
   });
 
-  it('shows today and the top priorities in their place when ideas are on', async () => {
-    mocks.ideasEnabled = true;
+  it('shows today and the top priorities in their place when suggestions are on', async () => {
+    mocks.suggestionsEnabled = true;
     renderHome();
 
-    expect(await screen.findByTestId('home-ideas')).toBeTruthy();
+    expect(await screen.findByTestId('home-today')).toBeTruthy();
     expect(screen.queryByTestId('home-suggestions')).toBeNull();
   });
 });

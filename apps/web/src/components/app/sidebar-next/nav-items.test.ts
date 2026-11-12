@@ -210,7 +210,7 @@ describe('orderNavItems', () => {
   });
 });
 
-it('lists For you only when ideas are on', () => {
+it('lists For you only when suggestions are on', () => {
   const hidden = visibleNavItems(defaultGates());
   const shown = visibleNavItems(defaultGates({ showForYou: true }));
 

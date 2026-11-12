@@ -1,9 +1,9 @@
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import HashStraight from '@phosphor/hash-straight.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Tag from '@phosphor/tag.svg';
-import X from '@phosphor/x.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import HashStraight from '@icon/system/regular/hash-straight.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Tag from '@icon/system/regular/tag.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { createSignal, Show } from 'solid-js';
