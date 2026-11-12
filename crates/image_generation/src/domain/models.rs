@@ -150,6 +150,8 @@ pub struct NewGeneratedImage {
     pub aspect_ratio: Option<ImageAspectRatio>,
     /// Reference images, resolved under the creating principal before generation.
     pub reference_images: Vec<ImageReference>,
+    /// The agent session the request is part of, recorded on its usage.
+    pub agent_session_id: Option<uuid::Uuid>,
 }
 
 /// A generated image stored in static file service.

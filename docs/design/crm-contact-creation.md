@@ -21,7 +21,7 @@ companies remain open.
 | CSV company import | Keep | Domain remains its matching key; name-only import needs a durable identifier contract. |
 | CSV contact import | Keep for this stage | Existing contacts are found by email; missing contacts use domain inference. Personal-address creation through import remains follow-on work. |
 | Email-only contact lookup in imports and pipeline actions | Change | Multiple visible matches produce an ambiguity error requiring an explicit contact ID; never choose a company arbitrarily. Hidden and cross-team records do not participate in a member's lookup. |
-| Email sync and backfill | Change | Existing domain inference, self-domain checks, sources and consent gates. Sent mail to personal-provider addresses creates a company-less contact only when no same-team identity exists; otherwise sent and received mail refresh the unique existing contact without changing its selected company. Personal sync requires the team to turn off "Keep personal emails out" (on by default); received mail only updates existing contacts. Other generic providers stay excluded. Turning the setting back on stops future sync only; contacts it added stay. Blocked domains are skipped, and blocking hides the company that owns the domain, its contacts, and company-less contacts at that domain; a contact attached to another company follows that company's domains and stays visible. Explicit creation does not manufacture mailbox-source rows. |
+| Email sync and backfill | Change | Existing domain inference, self-domain checks, sources and consent gates. Sent mail to personal-provider addresses creates a company-less contact only when no same-team identity exists; otherwise sent and received mail refresh the unique existing contact without changing its selected company. Personal sync requires the team to turn off "Keep personal emails out" (on by default); received mail only updates existing contacts. Other generic providers stay excluded. Turning the setting back on stops future sync only; contacts it added stay. An assigned company with email sync disabled suppresses email-derived interaction/source updates without changing the manual contact or relation. Enabled-parent refresh still requires exact-primary consent and eligible stored history. Domain exclusions suppress matching email contribution and backfill; adding or removing an exclusion does not hide, restore or delete company/contact records. Team exclusions apply to all contributors, personal exclusions only to their owner, and whole-thread participant checks also cover subdomains. Explicit creation does not manufacture mailbox-source rows. |
 | Ownership and visibility | Keep | Team membership and company receipt authorize creation; hidden companies remain restricted and contacts inherit hidden state. |
 | Company domains | Keep | Storage supports multiple domains; this stage does not add domain editing or primary selection. |
 
@@ -51,6 +51,14 @@ The second adds `crm_contacts.team_id` (backfilled from the company, with an
 insert trigger that fills it for writers on the previous code during a rolling
 deploy), makes `crm_contacts.email` and `company_id` nullable, and adds
 `team_crm_settings.exclude_personal_emails` and `crm_blocked_domains`.
+
+A later delivery adds `crm_contact_emails`, one row per address a contact is
+known by, with `crm_contacts.email` kept as the primary. A trigger records the
+primary there, so writers from before the table keep it complete during a
+rolling deploy, and a backfill covers existing contacts. Address lookups (personal
+sync and teardown, email scope prechecks, thread access, call linking, lookup
+by email) read that table; the team-wide activity scope still reads the primary. Until an API adds further addresses
+the table mirrors the primary and behavior is unchanged.
 
 Deploy nullable-aware readers to every consuming service before enabling
 nullable writes; use a reader-only compatibility release before deploying the

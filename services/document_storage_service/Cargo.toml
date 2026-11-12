@@ -105,7 +105,7 @@ connection = { path = "../../crates/connection", default-features = false, featu
   "outbound",
 ] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-contacts = { path = "../../crates/contacts" }
+contacts = { path = "../../crates/contacts", features = ["directory-names", "picture-fanout"] }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",
@@ -172,6 +172,7 @@ graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_databases = { path = "../../crates/graphql_databases" }
 
 graphql_calendar = { path = "../../crates/graphql_calendar" }
+graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
@@ -216,6 +217,9 @@ model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
+models_pagination = { path = "../../crates/models_pagination", features = [
+  "axum",
+] }
 models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }

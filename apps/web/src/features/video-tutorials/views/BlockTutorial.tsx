@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -41,6 +42,8 @@ function Entry(props: {
   tutorial: Tutorial;
   variant: 'row' | 'pill' | 'sidebar';
   class?: string;
+  /** Label the entry with the block's name, among other tutorials. */
+  named?: boolean;
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
   const shown = () => TUTORIALS[state.shown()] ?? props.tutorial;
@@ -67,7 +70,10 @@ function Entry(props: {
           <TutorialPillView {...entry()} class={props.class} />
         </Match>
         <Match when={props.variant === 'sidebar'}>
-          <TutorialSidebarItemView {...entry()} />
+          <TutorialSidebarItemView
+            {...entry()}
+            label={props.named ? props.tutorial.block : undefined}
+          />
         </Match>
       </Switch>
       <TutorialVideoDialog
@@ -95,12 +101,22 @@ function Entry(props: {
 }
 
 /**
+ * The block's tutorial, if it has one and this isn't a phone. Phones never
+ * show tutorials, so on them no entry, dialog or video mounts.
+ */
+function availableTutorial(id: TutorialId): Tutorial | undefined {
+  if (isMobile()) return undefined;
+  return TUTORIALS[id];
+}
+
+/**
  * A block's "Learn how to use" row, pinned at the top of its main list. Renders
- * nothing until the block's video exists in the catalog, or once dismissed.
+ * nothing until the block's video exists in the catalog, on phones, or once
+ * dismissed.
  */
 export function TutorialRow(props: { tutorial: TutorialId }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => <Entry tutorial={tutorial()} variant="row" />}
     </Show>
   );
@@ -109,7 +125,7 @@ export function TutorialRow(props: { tutorial: TutorialId }) {
 /** The entry as a button, centered in a block's empty state. */
 export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="pill" class={props.class} />
       )}
@@ -117,14 +133,19 @@ export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   );
 }
 
-/** The entry as a sidebar item, at the top of a block's sidebar. */
-export function TutorialSidebarItem(props: { tutorial: TutorialId }) {
+/**
+ * The entry as a sidebar item, at the top of a block's sidebar. `named` labels
+ * it with the block ("Macro Docs") for a sidebar that lists several tutorials.
+ */
+export function TutorialSidebarItem(props: {
+  tutorial: TutorialId;
+  named?: boolean;
+}) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
-      {(tutorial) => <Entry tutorial={tutorial()} variant="sidebar" />}
+    <Show when={availableTutorial(props.tutorial)}>
+      {(tutorial) => (
+        <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
+      )}
     </Show>
   );
 }
-
-/** Whether a block has a tutorial video yet (for layouts that reserve space). */
-export const hasTutorial = (id: TutorialId) => TUTORIALS[id] !== undefined;

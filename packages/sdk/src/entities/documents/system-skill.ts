@@ -6,6 +6,8 @@ import type { MacroClient } from '../../utils/client';
  * to AI like skill documents but have no document behind them. System skills
  * cannot be opened, edited, or deleted; reference them in AI inputs by id the
  * same way as skill documents, and read their instructions with `content()`.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class SystemSkill {
   private constructor(
@@ -19,6 +21,8 @@ export class SystemSkill {
   /**
    * The skill's complete markdown instructions. Read them before doing the
    * task the skill was named for, and follow them for that request only.
+   *
+   * @readonly
    */
   async content(): Promise<string> {
     return unwrap(

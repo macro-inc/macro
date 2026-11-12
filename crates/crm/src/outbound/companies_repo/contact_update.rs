@@ -19,6 +19,10 @@ impl CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // Reassignment changes the parent used by contribution/read eligibility.
+        // Serialize it with privacy changes and population before domain/row locks;
+        // taking this lock never enrolls a mailbox or requires consent.
+        Self::lock_email_privacy(&mut tx, *team_id, true).await?;
         let before = sqlx::query!(
             "SELECT company_id, email FROM crm_contacts WHERE id = $1 AND team_id = $2",
             contact_id,
@@ -61,7 +65,7 @@ impl CompaniesRepositoryImpl {
         for domain in domains {
             Self::lock_team_domain(&mut tx, team_id, &domain).await?;
         }
-        if !Self::team_crm_enabled(&mut tx, team_id).await? {
+        if !Self::team_exists(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);
         }
         let companies = sqlx::query!(
@@ -122,8 +126,10 @@ impl CompaniesRepositoryImpl {
         // whole team, including archived records, without exposing restricted ones.
         let duplicates = sqlx::query!(
             r#"SELECT ct.hidden OR COALESCE(co.hidden, FALSE) AS "hidden!"
-               FROM crm_contacts ct LEFT JOIN crm_companies co ON co.id = ct.company_id
-               WHERE ct.team_id = $1 AND LOWER(ct.email) = $2 AND ct.id <> $3"#,
+               FROM crm_contact_emails ce
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               LEFT JOIN crm_companies co ON co.id = ct.company_id
+               WHERE ce.email = LOWER(BTRIM($2)) AND ct.team_id = $1 AND ct.id <> $3"#,
             team_id,
             email,
             contact_id,

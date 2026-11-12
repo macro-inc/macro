@@ -40,6 +40,7 @@ export function Reactions(props: ReactionsProps) {
                 emoji={reaction.emoji}
                 count={reaction.users.length}
                 users={reaction.users}
+                names={reaction.names}
                 currentUserId={userId() ?? undefined}
                 selected={didCurrentUserReact()}
                 interactive={canReact()}

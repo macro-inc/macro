@@ -64,6 +64,23 @@ impl SearchProvider for FakeProvider {
     }
 }
 
+struct UnconfiguredProvider;
+
+#[async_trait]
+impl SearchProvider for UnconfiguredProvider {
+    fn pricing_model(&self) -> &'static str {
+        "tavily"
+    }
+
+    async fn search(&self, _: &SearchQuery) -> Result<Billed<Vec<WebSearchResult>>, ProviderError> {
+        Err(ProviderError::NotConfigured("TAVILY_API_KEY"))
+    }
+
+    async fn fetch(&self, _: &PageRequest) -> Result<Billed<FetchedPage>, ProviderError> {
+        Err(ProviderError::NotConfigured("TAVILY_API_KEY"))
+    }
+}
+
 #[derive(Default)]
 struct Recorder(Mutex<Vec<UsageEvent>>);
 
@@ -148,7 +165,7 @@ impl MacroAuthorizationService for FakeAuthorization {
 }
 
 fn router(
-    provider: Arc<FakeProvider>,
+    provider: Arc<dyn SearchProvider>,
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<Recorder>,
     limiter: FakeRateLimiter,
@@ -330,4 +347,34 @@ async fn unreadable_pages_and_bad_input_have_distinct_codes() {
         .unwrap();
     assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
     assert_eq!(json_body(invalid).await["code"], "invalid_request");
+}
+
+#[tokio::test]
+async fn an_unconfigured_provider_is_not_a_server_error() {
+    let app = router(
+        Arc::new(UnconfiguredProvider),
+        Arc::new(DisabledAiAdmissionService),
+        Arc::new(Recorder::default()),
+        FakeRateLimiter::default(),
+    );
+
+    for (uri, body) in [
+        ("/web/search", json!({ "query": "macro" })),
+        ("/web/fetch", json!({ "url": "https://example.com/" })),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(post(uri, Some("valid"), body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{uri}");
+        assert_eq!(
+            json_body(response).await,
+            json!({
+                "error": "web search is not configured: TAVILY_API_KEY is not set",
+                "code": "web_search_not_configured"
+            }),
+            "{uri}"
+        );
+    }
 }

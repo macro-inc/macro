@@ -1,80 +1,78 @@
-//! Per-owner tool presentation policy. Flags never grant permission to tools.
+//! Which tools a turn presents.
+
+use std::{future::Future, pin::Pin};
 
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
-use std::{future::Future, pin::Pin};
 
 #[cfg(test)]
 mod test;
 
-/// PostHog key evaluated for the authenticated session owner.
-pub const AI_CODE_MODE: &str = "ai-code-mode";
-
-/// Tool presentation for one conversational turn.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Tool presentation for one turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolMode {
-    /// The normal direct Macro tools and lazy catalog.
-    #[default]
+    /// The direct Macro tools: turns that cannot run code (summaries,
+    /// sessions without a user owner, or, unless the owner's turns are code
+    /// mode only, no code runner reachable).
     Standard,
-    /// SDK operations are hidden from direct calls and discovery.
+    /// Code mode: the SDK replaces every direct tool it covers.
     Code,
 }
 
-/// Select a stable tool mode once per turn, using the session owner's identity.
-pub trait ToolModeSelector: Send + Sync {
-    /// Resolve presentation policy; unavailable flags retain standard tools.
-    fn select<'a>(
+/// PostHog key evaluated for the session owner.
+pub const AI_SESSION_CODE_MODE_ONLY: &str = "ai-session-code-mode-only";
+
+/// Whether an owner's conversation turns never fall back to the direct tools:
+/// a turn whose code runner is missing fails instead.
+pub trait CodeModeOnlyPolicy: Send + Sync {
+    /// Whether `owner`'s turns are code mode only; unavailable flags are not.
+    fn requires<'a>(
         &'a self,
         owner: &'a MacroUserIdStr<'_>,
-    ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
 }
 
 /// Default when this deployment has no feature-flag provider.
-pub struct StandardTools;
+pub struct DirectFallback;
 
-impl ToolModeSelector for StandardTools {
-    fn select<'a>(
+impl CodeModeOnlyPolicy for DirectFallback {
+    fn requires<'a>(
         &'a self,
         _: &'a MacroUserIdStr<'_>,
-    ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
-        Box::pin(async { ToolMode::Standard })
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        Box::pin(async { false })
     }
 }
 
-/// Loads the owner's flags and applies the code-mode rollout policy.
-pub struct FlaggedToolMode<F> {
+/// Code mode only for owners with [`AI_SESSION_CODE_MODE_ONLY`].
+pub struct FlaggedCodeModeOnly<F> {
     flags: F,
 }
 
-impl<F: FeatureFlags> FlaggedToolMode<F> {
+impl<F: FeatureFlags> FlaggedCodeModeOnly<F> {
     /// Compose with a provider whose load has a bounded deadline.
     pub fn new(flags: F) -> Self {
         Self { flags }
     }
 }
 
-impl<F: FeatureFlags> ToolModeSelector for FlaggedToolMode<F> {
-    fn select<'a>(
+impl<F: FeatureFlags> CodeModeOnlyPolicy for FlaggedCodeModeOnly<F> {
+    fn requires<'a>(
         &'a self,
         owner: &'a MacroUserIdStr<'_>,
-    ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async move {
-            let flags = self
-                .flags
+            self.flags
                 .load(owner)
                 .await
                 .inspect_err(|error| {
                     tracing::warn!(
                         ?error,
-                        "feature flags unavailable; retaining standard agent tools"
+                        "feature flags unavailable; direct tools stay the fallback"
                     );
                 })
-                .unwrap_or_default();
-            if flags.is_enabled(AI_CODE_MODE) {
-                ToolMode::Code
-            } else {
-                ToolMode::Standard
-            }
+                .unwrap_or_default()
+                .is_enabled(AI_SESSION_CODE_MODE_ONLY)
         })
     }
 }

@@ -15,10 +15,15 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
-  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  agents and the SDK (companies, pipeline entries, pipeline exports as text or
+  a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
+  and CSV transfers (entries by record, fields by name, options by label),
+  merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
+  entry methods call them.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
@@ -76,7 +81,7 @@ tools/HTTP/GraphQL surfaces over them.
   and email-driven contact population. Cover legitimate company-domain
   exceptions with regression tests when correcting the blocklist.
 - `resolve_association` also accepts `CrmAssociation::Activity`: all records in
-  CRM-enabled teams within the viewer/verified-bot scope, excluding hidden rows
+  teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
 
@@ -91,15 +96,31 @@ tools/HTTP/GraphQL surfaces over them.
   including hidden rows; skip ambiguous identities and preserve manual company choices.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
-- Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
-  settings `SHARE`, then company/contact rows. Hold them through commit so
-  disable/purge and team deletion cannot race creation.
-- Bound pipeline read- and write-guard waits with a transaction-local five-second
-  timeout so waiters release pool connections needed by the holder's storage work.
+- CRM availability is team membership, independent of contribution consent.
+  Population takes the shared `crm-email:{team}` advisory lock, then the
+  `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
+  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
+  then the domain advisory lock and entity rows. Never run the mailbox scan
+  under a domain lock: a team backfill queues every population of the domain
+  behind it. Population transactions set a five-second `lock_timeout` and
+  return `CrmError::Contended` so their job is deferred, not held. Privacy changes
+  take the exclusive privacy lock before domain/entity locks. Keep locks through
+  commit; never wait on a domain or privacy lock after acquiring CRM entity
+  rows. Only shared team, mailbox and member row locks may precede a domain lock,
+  and no domain-lock holder may lock those rows exclusively.
+  Manual creation retains domain/parent/entity ordering without email consent.
+  Contact field edits take exclusive privacy coordination before discovery/domain
+  locks because reassignment changes contribution eligibility; they never require
+  consent or enable sync. Assigned personal contacts under disabled parent sync
+  retain their identity/company but receive no email-derived source/history writes.
+  Legacy enable is a compatibility no-op; disable/purge is retired.
+- Bound pipeline read- and write-guard waits, and contact population lock waits,
+  with a transaction-local five-second timeout so waiters release pool
+  connections needed by the holder's work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
-- Serialize domain visibility updates on the owning company row before reading
-  all its blocked domains; take no further domain locks after that row lock.
+- Domain exclusions affect contribution and CRM email reads, never record
+  visibility. Preserve archive state on block/unblock and consent withdrawal.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 
@@ -118,9 +139,22 @@ tools/HTTP/GraphQL surfaces over them.
   `hidden` flag and name. Email sync files personal-provider addresses
   (`is_personal_email_domain`) as company-less contacts when no identity exists and the team
   turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
-  domain. CRM-scoped previews still require a company contact. Company-less
-  contacts add no thread-access grant, but hidden ones suppress their team's
+  domain. CRM-scoped previews accept eligible company-less contacts using
+  their team and email address. Company-less contacts add no independent
+  thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+- Every address a contact is known by is a row in `crm_contact_emails`, stored
+  trimmed and lowercased. `crm_contacts.email` is the primary address, and a
+  trigger records it in that table. Find a contact by address through
+  `crm_contact_emails` (sync, teardown, email scope, thread access, call
+  linking); read `crm_contacts.email` only to display the primary. Three
+  paths still match the primary only: company-domain population (it upserts
+  on company and primary), contact search and listing, and the activity
+  scope, where joining every contact of a team to its addresses costs a probe
+  per contact and needs its own plan. A mailbox source is recorded per contact
+  and mailbox, not per address: before anything writes a second address,
+  teardown must keep the source while that mailbox still has mail with
+  another of the contact's addresses.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

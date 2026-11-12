@@ -2419,7 +2419,123 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
                 expected_roles.clone(),
             ),
             ("macro|member-two@example.com".to_string(), expected_roles),
+            (
+                "macro|owner@example.com".to_string(),
+                vec![RoleId::ProfessionalSubscriber],
+            ),
         ]
+    );
+}
+
+/// A team that took over its owner's personal subscription, as team creation does.
+fn team_on_owner_subscription(team_id: uuid::Uuid) -> MockTeamRepository {
+    let mut team = MockTeamRepository::new(Vec::new(), "Lapsed Team", Default::default())
+        .with_team_members(vec![
+            make_team_member(team_id, "macro|owner@example.com", TeamRole::Owner),
+            make_team_member(team_id, "macro|member@example.com", TeamRole::Member),
+        ]);
+    team.team_subscription_id = Some("sub_team".parse().unwrap());
+    team.stripe_customer_id = Some("cus_owner".parse().unwrap());
+    team
+}
+
+#[tokio::test]
+async fn team_payment_revoke_removes_owner_personal_pro_role_without_live_subscription() {
+    let team_id = uuid::Uuid::from_u128(5002);
+    let no_customer = MockTeamRepository {
+        stripe_customer_id: None,
+        ..team_on_owner_subscription(team_id)
+    };
+    let cases = [
+        // The team's subscription has lapsed and nothing else is live.
+        (
+            team_on_owner_subscription(team_id),
+            MockCustomerRepository {
+                no_active_subscription: true,
+                ..Default::default()
+            },
+        ),
+        (no_customer, MockCustomerRepository::default()),
+    ];
+    for (team, customer) in cases {
+        let roles = MockUserRolesAndPermissionsService::default();
+        let removals = roles.remove_calls.clone();
+        let service = build_member_plan_service(team, customer, roles);
+
+        service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+            .unwrap();
+
+        let member_roles = team_member_roles_to_remove();
+        assert_eq!(
+            *removals.lock().unwrap(),
+            vec![
+                ("macro|owner@example.com".to_string(), member_roles.clone()),
+                ("macro|member@example.com".to_string(), member_roles),
+                (
+                    "macro|owner@example.com".to_string(),
+                    vec![RoleId::ProfessionalSubscriber],
+                ),
+            ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn team_payment_revoke_keeps_owner_personal_pro_role_while_a_subscription_is_live() {
+    let team_id = uuid::Uuid::from_u128(5003);
+    // Another subscription pays for Pro, or the team's own is live again and
+    // this lapse event arrived late.
+    for live in ["sub_personal", "sub_team"] {
+        let customer = MockCustomerRepository {
+            subscription_id: live.parse().unwrap(),
+            ..Default::default()
+        };
+        let roles = MockUserRolesAndPermissionsService::default();
+        let removals = roles.remove_calls.clone();
+        let service =
+            build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
+
+        service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+            .unwrap();
+
+        let removals = removals.lock().unwrap();
+        assert_eq!(removals.len(), 2);
+        assert!(
+            removals
+                .iter()
+                .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
+        );
+    }
+}
+
+#[tokio::test]
+async fn team_payment_revoke_fails_for_retry_when_owner_subscription_lookup_fails() {
+    let team_id = uuid::Uuid::from_u128(5004);
+    let customer = MockCustomerRepository {
+        fail_subscription_lookup: true,
+        ..Default::default()
+    };
+    let roles = MockUserRolesAndPermissionsService::default();
+    let removals = roles.remove_calls.clone();
+    let service = build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
+
+    let result = service.revoke_permissions_for_team_members(&team_id).await;
+
+    assert!(matches!(
+        result,
+        Err(RevokePermissionsForTeamMembersError::TeamError(_))
+    ));
+    // Member roles are already gone; the webhook retry removes them again harmlessly.
+    let removals = removals.lock().unwrap();
+    assert_eq!(removals.len(), 2);
+    assert!(
+        removals
+            .iter()
+            .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
     );
 }
 
@@ -4275,55 +4391,40 @@ fn build_crm_enable_service(
     (service, populated)
 }
 
-/// Enabling with backfill enqueues a populate per team member.
+/// A legacy team toggle can no longer authorize other members' mailboxes.
 #[tokio::test]
-async fn test_enable_crm_with_backfill_enqueues_members() {
+async fn legacy_enable_never_enqueues_mailbox_backfill() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let (service, populated) = build_crm_enable_service(
         team_id,
         &["macro|owner@example.com", "macro|member@example.com"],
     );
-
-    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, true)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 2);
-    assert_eq!(response.backfill_failed, 0);
-    assert_eq!(
-        *populated.lock().unwrap(),
-        vec![
-            "macro|owner@example.com".to_string(),
-            "macro|member@example.com".to_string()
-        ]
-    );
+    for backfill in [true, false] {
+        let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+        let response = service
+            .set_team_crm_enabled(receipt, true, backfill)
+            .await
+            .unwrap();
+        assert!(response.enabled);
+        assert!(!response.changed);
+        assert_eq!(response.backfill_enqueued, 0);
+        assert_eq!(response.backfill_failed, 0);
+    }
+    assert!(populated.lock().unwrap().is_empty());
 }
 
-/// Enabling without backfill flips the flag but enqueues nothing.
+/// Old clients cannot invoke the destructive team-wide disable/purge flow.
 #[tokio::test]
-async fn test_enable_crm_without_backfill_skips_enqueue() {
+async fn legacy_disable_is_rejected_without_purging_crm() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let (service, populated) = build_crm_enable_service(
-        team_id,
-        &["macro|owner@example.com", "macro|member@example.com"],
-    );
-
+    let (service, populated) = build_crm_enable_service(team_id, &["macro|owner@example.com"]);
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, false)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 0);
-    assert_eq!(response.backfill_failed, 0);
+    assert!(matches!(
+        service.set_team_crm_enabled(receipt, false, false).await,
+        Err(TeamError::BadRequest(_))
+    ));
     assert!(populated.lock().unwrap().is_empty());
 }
 
@@ -8720,8 +8821,10 @@ async fn failed_renewal_revocation_waits_for_member_removal_reconciliation() {
         vec![(retained.user_id.to_string(), vec![RoleId::SubOpus])]
     );
     let removals = removals.lock().unwrap();
-    let (user, roles) = removals.last().unwrap();
-    assert_eq!(user, retained.user_id.as_ref());
+    let (_, roles) = removals
+        .iter()
+        .rfind(|(user, _)| user == retained.user_id.as_ref())
+        .unwrap();
     assert!(roles.contains(&RoleId::TeamSubscriber));
     assert!(roles.contains(&RoleId::SubOpus));
 }
@@ -8822,6 +8925,8 @@ async fn failed_renewal_marks_nonpaying_before_releasing_plan_change_guard() {
     );
     assert!(moves.lock().unwrap().is_empty());
     assert!(upserts.lock().unwrap().is_empty());
+    // Release the member's removal, then the owner's personal role removal.
+    resume.notify_one();
     resume.notify_one();
     revoke.await.unwrap().unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(2), upgrade)

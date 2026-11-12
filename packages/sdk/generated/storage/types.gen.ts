@@ -28,6 +28,10 @@ export type AccessRequest = {
      */
     id: string;
     /**
+     * The agent that asked on the requester's behalf, when one did.
+     */
+    requestedByAgent?: string | null;
+    /**
      * Requested upgrade.
      */
     requestedLevel: AccessLevel;
@@ -240,6 +244,38 @@ export type AddChannelBotRequest = {
 };
 
 /**
+ * Entries to add.
+ */
+export type AddEntriesRequest = {
+    /**
+     * Add a record again although it already has an entry here.
+     */
+    allowDuplicates?: boolean;
+    /**
+     * The records to add, each with its starting fields.
+     */
+    entries: Array<NewEntry>;
+};
+
+/**
+ * The entries added.
+ */
+export type AddEntriesResponse = {
+    /**
+     * The new entries, as saved.
+     */
+    added: Array<PipelineEntry>;
+    /**
+     * Existing entries of requested records that were not added again.
+     */
+    alreadyPresent: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
+
+/**
  * Request body for favoriting an entity.
  */
 export type AddFavoriteRequest = {
@@ -250,7 +286,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -319,6 +355,7 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    stopped_reason?: null | AgentStoppedReason;
 };
 
 /**
@@ -540,6 +577,11 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
  * `agent_session.visibility` column's.
  */
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
+ * Why an agent cannot run right now.
+ */
+export type AgentStoppedReason = 'no_runtime_access';
 
 /**
  * An agent session typing through its bot.
@@ -1343,7 +1385,7 @@ export type ApprovePairingRequest = {
      */
     name?: string | null;
     /**
-     * Owning team. Omit for a private, user-owned harness.
+     * Team to open the harness to. Omit to keep it to the approving user.
      */
     team_id?: string | null;
 };
@@ -1385,6 +1427,30 @@ export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
+
+/**
+ * Whether missing busy blocks can safely be interpreted as free time.
+ */
+export type AvailabilityCoverage = 'complete' | 'unknown';
+
+/**
+ * An exact, half-open interval of UTC instants, without event metadata.
+ */
+export type AvailabilityInterval = {
+    /**
+     * Exclusive end.
+     */
+    end: string;
+    /**
+     * Inclusive start.
+     */
+    start: string;
+};
+
+/**
+ * Why a person's unoccupied intervals cannot establish availability.
+ */
+export type AvailabilityUnknownReason = 'hidden' | 'unavailable' | 'truncated' | 'missing_time_zone' | 'invalid_time_zone' | 'invalid_interval' | 'conflicting_copies';
 
 /**
  * Where one viewer is inside a database right now: ephemeral, relayed to
@@ -3548,23 +3614,28 @@ export type ChannelJoinCodeResponse = {
 /**
  * A shared or account-private label grouping chat channels in the sidebar.
  *
- * `channel_ids` is viewer-relative: it lists only the labelled channels the
- * requesting user participates in. `channel_count` counts every channel in
- * the label so clients can warn accurately before a delete.
+ * `channel_ids` is viewer-relative: legacy labels include joined channels;
+ * sections also include viewable unjoined channels in the verified team.
+ * Legacy manual counts include every assignment; section counts reflect
+ * effective channels visible to the viewer.
  */
 export type ChannelLabel = {
     /**
-     * All assignments for a manual label; visible matches for a smart tag.
+     * Legacy assignments or smart matches; visible effective channels for sections.
      */
     channelCount: number;
     /**
-     * Channels in this label that the requesting user participates in.
+     * Effective channels visible to the viewer in this label or section.
      */
     channelIds: Array<string>;
     /**
      * When the label was created.
      */
     createdAt: string;
+    /**
+     * Explicit picks visible to the viewer (section responses only).
+     */
+    explicitChannelIds?: Array<string> | null;
     /**
      * Stable label id.
      */
@@ -4096,7 +4167,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -4485,6 +4556,65 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * The quote could not be anchored; nothing was posted.
+ */
+export type CommentOnTextRefused = {
+    /**
+     * Always `quote_not_placed`.
+     */
+    error: CommentOnTextRefusedCode;
+    /**
+     * Lists each appearance to choose from with `occurrence`, or says the
+     * text was not found.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of a quote the document cannot anchor to.
+ */
+export type CommentOnTextRefusedCode = 'quote_not_placed';
+
+/**
+ * A comment on a quoted passage.
+ */
+export type CommentOnTextRequest = {
+    /**
+     * Comment body in macro markdown.
+     */
+    content: string;
+    /**
+     * The people and items the body mentions, notified as in any comment.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Which appearance of the passage, counting from 1 in document order.
+     * Only needed when it appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * The passage to comment on, quoted exactly as the document reads: plain
+     * text without markdown syntax, within one paragraph, heading, list item
+     * or table cell.
+     */
+    quote: string;
+};
+
+/**
+ * The thread the comment started.
+ */
+export type CommentOnTextResponse = {
+    /**
+     * The posted comment, the root of its thread.
+     */
+    comment: Message;
+    /**
+     * The text the comment is anchored to, as the document reads.
+     */
+    markedText: string;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -4501,6 +4631,29 @@ export type CommittedChange = {
      * The version the batch produced.
      */
     version: TableVersion;
+};
+
+/**
+ * What a companies import did.
+ */
+export type CompanyImportResponse = {
+    /**
+     * Companies created.
+     */
+    created: number;
+    /**
+     * Companies the team already had.
+     */
+    existing: number;
+    /**
+     * Companies that could not be created.
+     */
+    failed: Array<SkippedImportRecord>;
+    pipeline?: null | PipelineImportResponse;
+    /**
+     * Rows without a domain like acme.com.
+     */
+    skippedRows: number;
 };
 
 /**
@@ -5377,6 +5530,27 @@ export type CreateProjectResponse = {
     error: boolean;
 };
 
+export type CreateSavedViewDefinitionRequest = {
+    /**
+     * Consumer configuration with its `kind` and `version`, at most 32 KiB.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    /**
+     * Client-chosen ID, reused to retry the same creation; generated when absent.
+     */
+    id?: string | null;
+    /**
+     * Nonempty display name, at most 120 characters.
+     */
+    name: string;
+    /**
+     * Team to share with, which the creator must belong to.
+     */
+    sharedTeamId?: string | null;
+};
+
 /**
  * Request body for creating a skill — a markdown document containing
  * instructions that AI reads and follows when the skill is referenced in an
@@ -5970,8 +6144,8 @@ export type CrmStagesResponse = {
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
- * except the `crm_enabled` killswitch, which is managed via
- * `PATCH /team/crm` on the auth service).
+ * except the retired `crm_enabled` flag). Email contribution consent and
+ * exclusions are managed separately through `/crm/email-privacy`.
  */
 export type CrmTeamSettingsResponse = {
     /**
@@ -6652,6 +6826,54 @@ export type DocumentInteractionMetadata = {
      * What triggered this interaction.
      */
     reason: InteractionReason;
+};
+
+/**
+ * A markdown document's body and the revision it was read at.
+ */
+export type DocumentMarkdown = {
+    /**
+     * The body as Markdown, in the format `text-content` returns.
+     */
+    markdown: string;
+    /**
+     * The document's version, as sync-service encodes it. Pass it back to
+     * write the body only if nobody has changed the document since.
+     */
+    revision: string;
+};
+
+/**
+ * Why a body read or write did not complete.
+ */
+export type DocumentMarkdownFailure = {
+    /**
+     * What went wrong.
+     */
+    error: DocumentMarkdownFailureCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a body read or write that did not complete.
+ */
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
+
+/**
+ * A body write that landed, or found the body already reading that way.
+ */
+export type DocumentMarkdownWritten = {
+    /**
+     * Whether the body changed; `false` when it already read that way.
+     */
+    changed: boolean;
+    /**
+     * The document's version after the write.
+     */
+    revision: string;
 };
 
 export type DocumentMetadata = {
@@ -8581,6 +8803,42 @@ export type EditPdfPlaceableCommentAnchorRequest = {
 };
 
 /**
+ * Changes to a pipeline's name, sharing, fields and options, applied
+ * together.
+ */
+export type EditPipelineRequest = {
+    /**
+     * Fields to add.
+     */
+    addFields?: Array<NewFieldRequest>;
+    /**
+     * Labels to add to select fields; for Stage, new stages go last.
+     */
+    addOptions?: Array<FieldOptions>;
+    /**
+     * A new name.
+     */
+    name?: string | null;
+    /**
+     * Fields to delete with their values.
+     */
+    removeFields?: Array<string>;
+    /**
+     * Options to delete.
+     */
+    removeOptions?: Array<OptionRemoval>;
+    /**
+     * Fields to rename.
+     */
+    renameFields?: Array<FieldRename>;
+    /**
+     * Options to relabel.
+     */
+    renameOptions?: Array<OptionRename>;
+    sharing?: null | PipelineSharing;
+};
+
+/**
  * One atomic batch of operations against the revision it was planned on.
  */
 export type EditSpreadsheetRequest = {
@@ -8690,6 +8948,11 @@ export type EffectSpecSoftEdgeOptions = string | {
      */
     sizePt?: number | null;
 };
+
+/**
+ * The audience affected by a domain exclusion.
+ */
+export type EmailBlockScope = 'team' | 'personal';
 
 /**
  * The email filters used to filter down what emails you search over.
@@ -8858,6 +9121,71 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * One explicit privacy change, avoiding lost updates to whole blocklists.
+ */
+export type EmailPrivacyChange = {
+    action: 'set_consent';
+    /**
+     * False withdraws this mailbox's CRM contribution without deleting records.
+     */
+    enabled: boolean;
+    /**
+     * Required when enabling; must match the displayed primary connection.
+     */
+    link_id?: string | null;
+} | {
+    action: 'add_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which contributions the exclusion affects.
+     */
+    scope: EmailBlockScope;
+} | {
+    action: 'remove_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which list to edit.
+     */
+    scope: EmailBlockScope;
+};
+
+/**
+ * Current consent and exclusions, readable by any team member.
+ */
+export type EmailPrivacySettings = {
+    /**
+     * Whether the caller can remove a team exclusion.
+     */
+    can_remove_team_domains: boolean;
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute; absent before email connection.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary connection; clients bind opt-in to this identifier.
+     */
+    mailbox_link_id?: string | null;
+    /**
+     * Domains excluded only for the caller's contributions.
+     */
+    personal_domains: Array<string>;
+    /**
+     * Domains excluded across the team, including legacy company exclusions.
+     */
+    team_domains: Array<string>;
+};
+
+/**
  * When an email follow-up should return the conversation.
  */
 export type EmailReminderCondition = 'if_no_reply' | 'regardless';
@@ -8914,7 +9242,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -9064,6 +9392,107 @@ export type EntityReference = {
  * Type of entity that can be referenced by entity properties.
  */
 export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+
+/**
+ * The changes to one entry: exactly one of `entryId` or `recordId`.
+ */
+export type EntryChanges = {
+    /**
+     * The entry.
+     */
+    entryId?: string | null;
+    /**
+     * The record whose single entry in the pipeline to change.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to set.
+     */
+    set: Array<FieldValueInput>;
+};
+
+/**
+ * One field's value before and after an update.
+ */
+export type EntryFieldChange = {
+    after?: null | EntryFieldValue;
+    before?: null | EntryFieldValue;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * A stored value in its field's own terms.
+ */
+export type EntryFieldValue = {
+    type: 'text';
+    /**
+     * Free text.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A number.
+     */
+    value: number;
+} | {
+    type: 'checkbox';
+    /**
+     * True or false.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'date_range';
+    /**
+     * A span of time, written start/end: 2026-10-12/2026-10-16.
+     */
+    value: string;
+} | {
+    type: 'labels';
+    /**
+     * Option labels, in the cell's order.
+     */
+    value: Array<string>;
+} | {
+    type: 'links';
+    /**
+     * URLs.
+     */
+    value: Array<string>;
+} | {
+    type: 'references';
+    /**
+     * Macro ids: people as macro| user ids, records or other items.
+     */
+    value: Array<string>;
+};
+
+/**
+ * The company or contact an entry tracks.
+ */
+export type EntryRecord = {
+    /**
+     * A company's domain or a contact's email.
+     */
+    detail?: string | null;
+    /**
+     * The CRM company or contact id.
+     */
+    id: string;
+    /**
+     * Its name; missing when the caller cannot see the record.
+     */
+    name?: string | null;
+};
 
 /**
  * A plain old json error response for use with axum.
@@ -9728,10 +10157,6 @@ export type ExternalChatProvider = 'whatsapp';
  */
 export type ExternalChatReaction = {
     /**
-     * Number of reacting people.
-     */
-    count: number;
-    /**
      * Emoji.
      */
     emoji: string;
@@ -9739,6 +10164,10 @@ export type ExternalChatReaction = {
      * Caller has this reaction.
      */
     mine: boolean;
+    /**
+     * The people who reacted with it, earliest first.
+     */
+    reactors: Array<ExternalChatPersonRef>;
 };
 
 /**
@@ -10019,7 +10448,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -10041,7 +10470,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -10052,6 +10481,88 @@ export type FavoritesList = {
      * The requesting user's favorites, in manual order.
      */
     favorites: Array<Favorite>;
+};
+
+/**
+ * Matched entries per option of one single-select field, such as Stage.
+ */
+export type FieldOptionCounts = {
+    /**
+     * Every option in order, with its count.
+     */
+    counts: Array<OptionCount>;
+    /**
+     * Matched entries with the field empty.
+     */
+    empty: number;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * Labels to add to a select field.
+ */
+export type FieldOptions = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The labels.
+     */
+    labels: Array<string>;
+};
+
+/**
+ * A field to rename.
+ */
+export type FieldRename = {
+    /**
+     * Its current name.
+     */
+    from: string;
+    /**
+     * Its new name.
+     */
+    to: string;
+};
+
+/**
+ * The sum of a number field over the matched entries.
+ */
+export type FieldTotal = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The sum.
+     */
+    sum: number;
+};
+
+/**
+ * A field and the text to write into it or match it against. Leave out both
+ * `value` and `values` to empty the field, or in a filter to match an empty
+ * field.
+ */
+export type FieldValueInput = {
+    /**
+     * The field's name, ignoring case.
+     */
+    field: string;
+    /**
+     * One value: an option label, a person as "me", an email or a macro|
+     * user id, a number, true/false, or a date.
+     */
+    value?: string | null;
+    /**
+     * Several values, for a field holding several. A filter matches an entry
+     * holding any of them.
+     */
+    values?: Array<string> | null;
 };
 
 /**
@@ -10241,6 +10752,38 @@ export type FilterTest = {
      * How the cell's references relate to these.
      */
     operator: SetOperator;
+};
+
+/**
+ * Which entries to read, and how to order them.
+ */
+export type FindEntriesRequest = {
+    /**
+     * Put the largest first.
+     */
+    descending?: boolean;
+    /**
+     * Every filter must match.
+     */
+    filters?: Array<FieldValueInput>;
+    /**
+     * Most entries to return, 1 to 5000; defaults to 50. Counts and totals
+     * cover every match regardless.
+     */
+    limit?: number | null;
+    /**
+     * Only entries tracking one of these companies or contacts.
+     */
+    recordIds?: Array<string>;
+    /**
+     * Text the record's name, domain or email must contain.
+     */
+    search?: string | null;
+    /**
+     * The field to order by; number, date and select fields order by value
+     * and stage order.
+     */
+    sortBy?: string | null;
 };
 
 export type FolderItem = {
@@ -10837,6 +11380,37 @@ export type Formula = {
      * The expression negated; a number.
      */
     operand: Formula;
+};
+
+/**
+ * The entries a query matched.
+ */
+export type FoundEntriesResponse = {
+    /**
+     * Whether every entry was read; a pipeline beyond 5000 entries is not,
+     * so counts and totals cover only the entries read.
+     */
+    complete: boolean;
+    /**
+     * Matched entries per option of each single-select field.
+     */
+    counts: Array<FieldOptionCounts>;
+    /**
+     * The first `limit` matches, in the requested order.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * How many entries matched in all.
+     */
+    matched: number;
+    /**
+     * The pipeline read, with its fields and version.
+     */
+    pipeline: PipelineFields;
+    /**
+     * The sum of each number field over the matched entries.
+     */
+    totals: Array<FieldTotal>;
 };
 
 export type GenericErrorResponse = {
@@ -11816,6 +12390,11 @@ export type GuideSpec = {
  */
 export type Harness = {
     /**
+     * What the caller may do with it. Reported as `none` where no caller is
+     * in question, such as to the daemon itself.
+     */
+    access?: HarnessAccess;
+    /**
      * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
@@ -11852,10 +12431,19 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
+     * Teams it is a team machine for: their every member is a user of it.
+     */
+    shared_team_ids?: Array<string>;
+    /**
      * Update timestamp.
      */
     updated_at: string;
 };
+
+/**
+ * What one caller may do with a machine.
+ */
+export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
@@ -11878,10 +12466,7 @@ export type HarnessAgent = {
 export type HarnessId = string;
 
 /**
- * Harness owner.
- *
- * Exactly one of a user or a team, mirroring the bots owner pattern. There
- * are no system harnesses.
+ * The person whose machine this is.
  */
 export type HarnessOwner = {
     type: 'user';
@@ -11889,12 +12474,30 @@ export type HarnessOwner = {
      * Owner user id.
      */
     user_id: string;
-} | {
+};
+
+/**
+ * An agent that lives on a machine, as opposed to a coding agent directed
+ * there turn by turn. Anyone who can reach it can talk to it; it stays up only
+ * while its own owner can use the machine.
+ */
+export type HarnessResident = {
     /**
-     * Owner team id.
+     * Bot id.
      */
-    team_id: string;
-    type: 'team';
+    bot_id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The user owning the agent, when a person does.
+     */
+    owner_user_id?: string | null;
+    /**
+     * The team owning the agent, when a team does.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -11952,6 +12555,27 @@ export type HashMap = {
 };
 
 export type HighlightType = 1 | 2 | 3;
+
+/**
+ * A companies CSV to import: exactly one of its text or a CSV file in
+ * Macro, and at most one of `pipelineId` or `newPipeline` for its Stage,
+ * Owner and Revenue values (a new private pipeline when neither is given).
+ */
+export type ImportCompaniesCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
+    newPipeline?: null | NewImportPipeline;
+    /**
+     * An existing company pipeline the caller can edit.
+     */
+    pipelineId?: string | null;
+};
 
 /**
  * Committed counters, never optimistic browser or uncommitted worker counts.
@@ -12047,6 +12671,20 @@ export type ImportPage = {
      * Binding summary used by the picker confirmation.
      */
     sourceBinding: SourceBinding;
+};
+
+/**
+ * A CSV to import: exactly one of its text or a CSV file in Macro.
+ */
+export type ImportPipelineCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
 };
 
 /**
@@ -12199,6 +12837,71 @@ export type InitialPropertyValue = {
 };
 
 /**
+ * Stable cursor for project history.
+ */
+export type InitiativeActivityCursor = {
+    /**
+     * Tie-breaker within the same timestamp.
+     */
+    id: string;
+    /**
+     * Time of the last scanned activity.
+     */
+    occurredAt: string;
+};
+
+/**
+ * History page. Access filtering can shorten records; follow nextCursor until exhausted.
+ */
+export type InitiativeActivityPage = {
+    nextCursor?: null | InitiativeActivityCursor;
+    /**
+     * Visible changes in newest-first order.
+     */
+    records: Array<InitiativeActivityRecord>;
+};
+
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export type InitiativeActivityRecord = {
+    /**
+     * Durable activity action tag.
+     */
+    action: string;
+    /**
+     * Typed payload for known actions. Absent for unknown actions.
+     */
+    actionPayload?: unknown;
+    /**
+     * Principal who acted.
+     */
+    actorId: string;
+    /**
+     * Stable record identifier, also used for realtime deduplication.
+     */
+    id: string;
+    /**
+     * Time of the change.
+     */
+    occurredAt: string;
+    /**
+     * Acting user's feed identity when a bot acted on their behalf.
+     */
+    subjectId: string;
+};
+
+/**
+ * An initiative's description.
+ */
+export type InitiativeDescription = {
+    /**
+     * GitHub-flavored markdown; empty while no one has opened or written it.
+     */
+    markdown: string;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -12293,6 +12996,73 @@ export type InitiativeList = {
      */
     initiatives: Array<InitiativeSummary>;
 };
+
+/**
+ * One authorized project collection page.
+ */
+export type InitiativePage = {
+    /**
+     * Rows in requested order.
+     */
+    initiatives: Array<InitiativePageRow>;
+    /**
+     * Continuation, absent when exhausted.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A project row with caller-specific permissions, properties and visible task progress.
+ */
+export type InitiativePageRow = InitiativeSummary & {
+    /**
+     * Number of visible tasks whose status is completed.
+     */
+    completedTaskCount: number;
+    /**
+     * Canonical property values.
+     */
+    properties: InitiativePropertySnapshot;
+    /**
+     * Number of associated tasks the caller may view.
+     */
+    taskCount: number;
+    /**
+     * Verified effective access for the caller.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Snapshot of canonical property values, never a second writable store.
+ */
+export type InitiativePropertySnapshot = {
+    /**
+     * Assigned user ids, independent of sharing membership.
+     */
+    assignees: Array<string>;
+    /**
+     * Whether the canonical task status represents completion.
+     */
+    completed: boolean;
+    /**
+     * Due timestamp, or unset.
+     */
+    dueDate?: string | null;
+    /**
+     * Priority option id, or unset.
+     */
+    priority?: string | null;
+    /**
+     * Status option id, or unset.
+     */
+    status?: string | null;
+};
+
+/**
+ * Supported collection ordering. Every ordering uses id as its final tie breaker.
+ */
+export type InitiativeSort = 'updated' | 'name' | 'due';
 
 /**
  * List-row view of an initiative.
@@ -13719,6 +14489,62 @@ export type NewColumn = {
 };
 
 /**
+ * One entry to add: at most one of `recordId` or `email`. A tracked
+ * pipeline's entry names its record; a generic pipeline's names none.
+ */
+export type NewEntry = {
+    /**
+     * A contact's email: that contact, or in a company pipeline its company.
+     */
+    email?: string | null;
+    /**
+     * A CRM company or contact id.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to fill in.
+     */
+    set?: Array<FieldValueInput>;
+};
+
+/**
+ * A field to add.
+ */
+export type NewFieldRequest = {
+    /**
+     * Its name, unique in the pipeline ignoring case.
+     */
+    name: string;
+    /**
+     * A select field's labels, in order.
+     */
+    options?: Array<string>;
+    /**
+     * Its type.
+     */
+    type: NewFieldType;
+};
+
+/**
+ * The type of a field to add.
+ */
+export type NewFieldType = 'text' | 'number' | 'checkbox' | 'date' | 'link' | 'select' | 'multi_select' | 'person' | 'people';
+
+/**
+ * A new company pipeline for a companies import.
+ */
+export type NewImportPipeline = {
+    /**
+     * Its name; defaults to the file's name.
+     */
+    name?: string | null;
+    /**
+     * Whether the team may edit it; private by default.
+     */
+    sharing?: PipelineSharing;
+};
+
+/**
  * A select or tag option to create.
  */
 export type NewOption = {
@@ -14114,6 +14940,20 @@ export type OpResult = {
 export type Operator = 'add' | 'subtract' | 'multiply' | 'divide';
 
 /**
+ * How many matched entries hold one option.
+ */
+export type OptionCount = {
+    /**
+     * Matched entries holding it.
+     */
+    count: number;
+    /**
+     * The option's label.
+     */
+    label: string;
+};
+
+/**
  * Identifier of an option of a select or tag column.
  */
 export type OptionId = string;
@@ -14132,6 +14972,38 @@ export type OptionRef = {
      * is refused.
      */
     label: string;
+};
+
+/**
+ * An option to delete, emptying the entries holding it.
+ */
+export type OptionRemoval = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The label.
+     */
+    label: string;
+};
+
+/**
+ * An option to relabel.
+ */
+export type OptionRename = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The current label.
+     */
+    from: string;
+    /**
+     * The new label.
+     */
+    to: string;
 };
 
 /**
@@ -14614,6 +15486,182 @@ export type Pipeline = {
      * Owning user; sharing never changes ownership.
      */
     userId: string;
+};
+
+/**
+ * A pipeline's entries as CSV text: Company and Domain (or Contact and
+ * Email), then one column per field, people as emails.
+ */
+export type PipelineCsvResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV.
+     */
+    csv: string;
+    /**
+     * The pipeline's name.
+     */
+    name: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * A pipeline's entries among those asked for.
+ */
+export type PipelineEntries = {
+    /**
+     * Its matching entries.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * The pipeline.
+     */
+    pipeline: AccessiblePipeline;
+};
+
+/**
+ * One pipeline entry.
+ */
+export type PipelineEntry = {
+    /**
+     * The entry: a row of the pipeline's table.
+     */
+    entryId: string;
+    /**
+     * Its other fields that hold a value, by name.
+     */
+    fields: {
+        [key: string]: EntryFieldValue;
+    };
+    record?: null | EntryRecord;
+};
+
+/**
+ * A pipeline saved as a CSV file in the caller's files.
+ */
+export type PipelineExportResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV document.
+     */
+    documentId: string;
+    /**
+     * Its name.
+     */
+    fileName: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * One field of a pipeline, named as people see it.
+ */
+export type PipelineFieldSummary = {
+    /**
+     * Whether it holds several values.
+     */
+    multiple: boolean;
+    /**
+     * The name entries and filters use.
+     */
+    name: string;
+    /**
+     * A select or tags field's labels in order: for Stage, the stages from
+     * first to last.
+     */
+    options: Array<string>;
+    /**
+     * Whether the caller cannot write it.
+     */
+    readOnly: boolean;
+    /**
+     * Whether every entry must have a value.
+     */
+    required: boolean;
+    /**
+     * What it holds.
+     */
+    type: PipelineFieldType;
+};
+
+/**
+ * What a field holds.
+ */
+export type PipelineFieldType = 'company' | 'contact' | 'text' | 'number' | 'checkbox' | 'date' | 'date_range' | 'link' | 'select' | 'tags' | 'person' | 'item' | 'relation' | 'formula';
+
+/**
+ * A pipeline with its fields.
+ */
+export type PipelineFields = AccessiblePipeline & {
+    /**
+     * Its fields in column order; a tracked pipeline's first names its record.
+     */
+    fields: Array<PipelineFieldSummary>;
+    /**
+     * Its table's version when read.
+     */
+    version: number;
+};
+
+/**
+ * What a pipeline import did.
+ */
+export type PipelineImportResponse = {
+    /**
+     * Entries added.
+     */
+    added: number;
+    /**
+     * Labels added to select fields so the CSV's values fit.
+     */
+    addedOptions: Array<FieldOptions>;
+    /**
+     * Rows whose record the pipeline already had.
+     */
+    alreadyPresent: number;
+    /**
+     * Companies or contacts the import created.
+     */
+    createdRecords: number;
+    /**
+     * Pipeline fields the CSV filled.
+     */
+    filledFields: Array<string>;
+    /**
+     * CSV columns matching no field the import can fill.
+     */
+    ignoredColumns: Array<string>;
+    /**
+     * Rows refused for a value their field cannot hold.
+     */
+    invalid: Array<SkippedImportRecord>;
+    /**
+     * The pipeline filled.
+     */
+    pipelineId: string;
+    /**
+     * Its name.
+     */
+    pipelineName: string;
+    /**
+     * Rows without a domain or email.
+     */
+    skippedRows: number;
+    /**
+     * Records that could not be found or created.
+     */
+    unresolved: Array<SkippedImportRecord>;
 };
 
 /**
@@ -15285,6 +16333,16 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * The companies or contacts to find entries for, across pipelines.
+ */
+export type RecordEntriesRequest = {
+    /**
+     * CRM company or contact ids.
+     */
+    recordIds: Array<string>;
+};
+
+/**
  * OpenAPI representation of streamed recording bytes.
  */
 export type RecordingBytes = Blob | File;
@@ -15297,6 +16355,34 @@ export type RegisterUploads = {
      * At most 50 descriptors; no duplicate identities in a call.
      */
     descriptors: Array<UploadDescriptor>;
+};
+
+/**
+ * Entries to delete; their companies and contacts stay in the CRM.
+ */
+export type RemoveEntriesRequest = {
+    /**
+     * Entries to delete.
+     */
+    entryIds?: Array<string>;
+    /**
+     * Records whose every entry in the pipeline to delete.
+     */
+    recordIds?: Array<string>;
+};
+
+/**
+ * The entries deleted.
+ */
+export type RemoveEntriesResponse = {
+    /**
+     * Each entry as it was.
+     */
+    removed: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
 };
 
 /**
@@ -15354,6 +16440,18 @@ export type ReorderPinRequest = {
      * The type of the pin
      */
     pinnedItemType: string;
+};
+
+export type ReorderSavedViewDefinitionsRequest = {
+    /**
+     * Visible definitions of that kind in their new order, at most 200;
+     * definitions left out follow them by creation time.
+     */
+    ids: Array<string>;
+    /**
+     * Consumer kind whose order is replaced, such as `email`.
+     */
+    kind: string;
 };
 
 /**
@@ -15687,6 +16785,12 @@ export type RowId = string;
  * A write to a table's rows.
  */
 export type RowsChange = {
+    /**
+     * The new rows' ids, minted by the client (UUIDv7), one per row in
+     * order, so later ops of the request and a retry can name them;
+     * left out, the server mints them.
+     */
+    ids?: Array<string>;
     kind: 'insert';
     /**
      * One entry per new row: the cells it starts with. Columns left out
@@ -15911,6 +17015,62 @@ export type SavedQuery = {
      * Identifier.
      */
     id: string;
+};
+
+/**
+ * A saved filter definition, not a snapshot of matching entities.
+ */
+export type SavedViewDefinition = {
+    /**
+     * Versioned configuration interpreted by the consuming feature, with its
+     * `kind` (such as `email` or `task`) and `version`.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+    /**
+     * Stable identity of this definition.
+     */
+    id: string;
+    /**
+     * Display name chosen by the owner.
+     */
+    name: string;
+    /**
+     * User who owns and can edit this definition.
+     */
+    ownerId: string;
+    /**
+     * Current revision, required by updates and deletion.
+     */
+    revision: number;
+    /**
+     * Team with access, or absent when the definition is private.
+     */
+    sharedTeamId?: string | null;
+    updatedAt: string;
+};
+
+/**
+ * A page in the viewer's own order, then by creation time and ID.
+ */
+export type SavedViewDefinitionPage = {
+    /**
+     * Opaque cursor for the next page, absent when the listing is complete.
+     */
+    nextCursor?: string | null;
+    /**
+     * Definitions the viewer can currently access.
+     */
+    views: Array<SavedViewDefinition>;
+};
+
+/**
+ * An explicit sharing change: a team, or `null` to make the definition private.
+ */
+export type SavedViewSharingRequest = {
+    teamId?: string | null;
 };
 
 /**
@@ -16210,14 +17370,27 @@ export type SetDocumentTeamShareRequest = {
  */
 export type SetEmailSyncRequest = {
     /**
-     * New value for `crm_companies.email_sync`. Purely a read-side
-     * visibility/permission gate — `soup` queries and email-permission
-     * checks require `email_sync = true` before exposing the
-     * company's emails team-wide. Populate continues to write CRM
-     * history regardless, so toggling never destroys data and
-     * re-enabling never requires a backfill.
+     * Allow eligible email contributions for this company's domains.
+     * Disabling excludes new ingestion and CRM thread access while preserving
+     * records. Re-enabling requires an admin, removes exact team exclusions,
+     * and schedules backfill only for explicitly consenting primary mailboxes.
+     * Personal and broader team exclusions continue to apply.
      */
     email_sync: boolean;
+};
+
+/**
+ * Request to open or close a machine to one of the owner's teams.
+ */
+export type SetHarnessTeamAccessRequest = {
+    /**
+     * Whether every member of the team may use the machine.
+     */
+    enabled: boolean;
+    /**
+     * The team, which the owner must belong to.
+     */
+    team_id: string;
 };
 
 /**
@@ -16297,7 +17470,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness';
 
 export type SharePermissionV2 = {
     /**
@@ -16416,6 +17589,20 @@ export type SkippedCell = {
      * The row.
      */
     row: string;
+};
+
+/**
+ * A record an import could not add, and why.
+ */
+export type SkippedImportRecord = {
+    /**
+     * The company's domain or the contact's email.
+     */
+    key: string;
+    /**
+     * What went wrong.
+     */
+    reason: string;
 };
 
 /**
@@ -16589,6 +17776,10 @@ export type SmartTagChannelMatch = {
      */
     id: string;
     /**
+     * Whether the viewer actively participates in this channel (section previews only).
+     */
+    isParticipant?: boolean | null;
+    /**
      * Channel display name.
      */
     name: string;
@@ -16603,7 +17794,7 @@ export type SmartTagPreview = {
      */
     channels: Array<SmartTagChannelMatch>;
     /**
-     * Number of matching channels the caller participates in, including overflow.
+     * Number of visible matches, including overflow; legacy previews count participants.
      */
     totalCount: number;
 };
@@ -17604,6 +18795,34 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * A paired runtime (a macrod machine), listed only by attention feeds: its
+ * access requests and removals are notifications filed under it, and it has
+ * no page of its own, so Settings → Machines opens it.
+ */
+export type SoupHarness = {
+    /**
+     * When the machine was paired.
+     */
+    createdAt: string;
+    /**
+     * The harness uuid.
+     */
+    id: string;
+    /**
+     * The machine's display name.
+     */
+    name: string;
+    /**
+     * The person or team that owns the machine.
+     */
+    ownerId: string;
+    /**
+     * When the machine was last changed.
+     */
+    updatedAt: string;
+};
+
+/**
  * An initiative (called a project in the frontend) in the Soup feed.
  */
 export type SoupInitiativeSoupPropertiesField = {
@@ -17725,6 +18944,12 @@ export type SoupItem = {
      */
     data: SoupDatabaseRowSoupPropertiesField;
     tag: 'databaseRow';
+} | {
+    /**
+     * Paired runtime, listed only by attention feeds.
+     */
+    data: SoupHarness;
+    tag: 'harness';
 };
 
 /**
@@ -18060,15 +19285,15 @@ export type SpreadsheetCellInput = {
      */
     address: string;
     /**
-     * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-     * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-     * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-     * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-     * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-     * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
+     * The new input: text or a formula, a number, true/false, or null to empty the cell.
      */
-    value: string;
+    value: SpreadsheetCellValue;
 };
+
+/**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
 
 /**
  * Applied edit summary.
@@ -19402,6 +20627,12 @@ export type TakenId = {
      */
     id: string;
     kind: 'view';
+} | {
+    /**
+     * A row's.
+     */
+    id: string;
+    kind: 'row';
 };
 
 /**
@@ -19498,6 +20729,61 @@ export type TaskSimilaritySearchResponse = {
      * Existing tasks similar to the draft.
      */
     results: Array<TaskSimilarityResult>;
+};
+
+/**
+ * Availability for exactly the members selected by the domain service.
+ */
+export type TeamAvailability = {
+    /**
+     * True only when all requested people and source intervals were covered.
+     */
+    complete: boolean;
+    /**
+     * Exclusive requested end.
+     */
+    end: string;
+    /**
+     * Common calendar gaps for every included person, present only with
+     * complete coverage. These are not working-hours or booking guarantees.
+     */
+    freeWindows?: Array<AvailabilityInterval> | null;
+    /**
+     * Included people, always including the requester.
+     */
+    members: Array<TeamMemberAvailability>;
+    /**
+     * Inclusive requested start.
+     */
+    start: string;
+    /**
+     * A concise explanation that does not overstate incomplete results.
+     */
+    summary: string;
+    /**
+     * Requested identifiers without a current team relationship. No profile
+     * or calendar data about those identifiers is disclosed.
+     */
+    unknownUserIds: Array<string>;
+};
+
+/**
+ * A bounded window and the teammates whose busy time to merge.
+ */
+export type TeamAvailabilityRequest = {
+    /**
+     * Exclusive instant.
+     */
+    end: string;
+    /**
+     * Inclusive instant.
+     */
+    start: string;
+    /**
+     * At most 100 current teammates; the requester is always included.
+     * Omit for the whole team; an empty list checks only the requester.
+     */
+    userIds?: Array<string> | null;
 };
 
 /**
@@ -19619,6 +20905,28 @@ export type TeamCalendarPage = {
  * What a user exposes through their team membership.
  */
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
+ * Busy time and confidence for one explicitly included person.
+ */
+export type TeamMemberAvailability = {
+    /**
+     * Merged known busy intervals clipped to the requested range.
+     */
+    busy: Array<AvailabilityInterval>;
+    /**
+     * Whether the whole requested range was established.
+     */
+    coverage: AvailabilityCoverage;
+    /**
+     * Reasons gaps in the busy intervals cannot be called free.
+     */
+    unknownReasons: Array<AvailabilityUnknownReason>;
+    /**
+     * Macro identifier of the included person.
+     */
+    userId: string;
+};
 
 /**
  * One teammate's out-of-office occurrence.
@@ -20282,6 +21590,34 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
+ * Entries to change.
+ */
+export type UpdateEntriesRequest = {
+    /**
+     * Refuse the change if the pipeline's table moved past this version.
+     */
+    baseVersion?: number | null;
+    /**
+     * Each entry's changes.
+     */
+    updates: Array<EntryChanges>;
+};
+
+/**
+ * The entries an update wrote.
+ */
+export type UpdateEntriesResponse = {
+    /**
+     * Each entry, in request order.
+     */
+    updated: Array<UpdatedPipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
+
+/**
  * A change to a form's facts; what is left out stays. The description,
  * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
@@ -20374,6 +21710,24 @@ export type UpdateMeetingRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
+export type UpdateSavedViewDefinitionRequest = {
+    /**
+     * Complete replacement configuration; absent keeps the current one.
+     */
+    config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Revision that must still be current when the update commits.
+     */
+    expectedRevision: number;
+    /**
+     * Replacement name; absent keeps the current one.
+     */
+    name?: string | null;
+    sharing?: null | SavedViewSharingRequest;
+};
+
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
@@ -20382,6 +21736,21 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * An updated entry.
+ */
+export type UpdatedPipelineEntry = {
+    /**
+     * The fields set, as they were and are.
+     */
+    changes: Array<EntryFieldChange>;
+    /**
+     * The entry.
+     */
+    entryId: string;
+    record?: null | EntryRecord;
 };
 
 /**
@@ -20562,11 +21931,41 @@ export type UserDocumentsResponse = {
     total: number;
 };
 
+/**
+ * Metadata for [`UserTopicEvent::PictureChanged`].
+ */
+export type UserPictureChangedMetadata = {
+    /**
+     * Static file id of the new picture; `None` when it is not a static file
+     * (set by URL) or the picture was removed.
+     */
+    file_id?: string | null;
+    /**
+     * URL of the new picture; `None` when the picture was removed.
+     */
+    url?: string | null;
+    /**
+     * User whose profile picture changed.
+     */
+    user_id: MacroUserIdStr;
+};
+
 export type UserPinsResponse = {
     /**
      * The pins returned from the query
      */
     recent: Array<PinnedItem>;
+};
+
+/**
+ * A user's profile picture changed or was removed.
+ */
+export type UserTopicEvent = {
+    event_type: 'user.picture_changed';
+    /**
+     * A user's profile picture changed or was removed.
+     */
+    metadata: UserPictureChangedMetadata;
 };
 
 export type UserViewsResponse = {
@@ -20968,7 +22367,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -21438,6 +22837,21 @@ export type WordDocumentResponse = {
      * Blocks with their ids and text, or what an edit changed.
      */
     content: string;
+};
+
+/**
+ * The body to write and the revision it was written against.
+ */
+export type WriteDocumentMarkdownRequest = {
+    /**
+     * The `revision` from the read this body is based on. The write applies
+     * only if the document is still at this revision.
+     */
+    expectedRevision: string;
+    /**
+     * The whole new body, as Markdown.
+     */
+    markdown: string;
 };
 
 /**
@@ -22263,6 +23677,30 @@ export type ListTeamOutOfOfficeResponses = {
 };
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
+
+export type GetTeamAvailabilityData = {
+    body: TeamAvailabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/team/availability';
+};
+
+export type GetTeamAvailabilityErrors = {
+    /**
+     * Invalid window or more than 100 teammates
+     */
+    400: unknown;
+    /**
+     * Team calendar sharing is disabled
+     */
+    404: unknown;
+};
+
+export type GetTeamAvailabilityResponses = {
+    200: TeamAvailability;
+};
+
+export type GetTeamAvailabilityResponse = GetTeamAvailabilityResponses[keyof GetTeamAvailabilityResponses];
 
 export type EventIcsData = {
     body?: never;
@@ -23554,6 +24992,187 @@ export type RenameChannelLabelResponses = {
 
 export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
+export type ListChannelSectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type ListChannelSectionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelSectionsError = ListChannelSectionsErrors[keyof ListChannelSectionsErrors];
+
+export type ListChannelSectionsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelSectionsResponse = ListChannelSectionsResponses[keyof ListChannelSectionsResponses];
+
+export type CreateChannelSectionData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type CreateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelSectionError = CreateChannelSectionErrors[keyof CreateChannelSectionErrors];
+
+export type CreateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelSectionResponse = CreateChannelSectionResponses[keyof CreateChannelSectionResponses];
+
+export type SetChannelSectionData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/channels/{channel_id}';
+};
+
+export type SetChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelSectionError = SetChannelSectionErrors[keyof SetChannelSectionErrors];
+
+export type SetChannelSectionResponses = {
+    204: void;
+};
+
+export type SetChannelSectionResponse = SetChannelSectionResponses[keyof SetChannelSectionResponses];
+
+export type PreviewChannelSectionData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/preview';
+};
+
+export type PreviewChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewChannelSectionError = PreviewChannelSectionErrors[keyof PreviewChannelSectionErrors];
+
+export type PreviewChannelSectionResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewChannelSectionResponse = PreviewChannelSectionResponses[keyof PreviewChannelSectionResponses];
+
+export type DeleteChannelSectionData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type DeleteChannelSectionErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelSectionError = DeleteChannelSectionErrors[keyof DeleteChannelSectionErrors];
+
+export type DeleteChannelSectionResponses = {
+    204: void;
+};
+
+export type DeleteChannelSectionResponse = DeleteChannelSectionResponses[keyof DeleteChannelSectionResponses];
+
+export type UpdateChannelSectionData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type UpdateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateChannelSectionError = UpdateChannelSectionErrors[keyof UpdateChannelSectionErrors];
+
+export type UpdateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type UpdateChannelSectionResponse = UpdateChannelSectionResponses[keyof UpdateChannelSectionResponses];
+
 export type CreateChannelData = {
     body: CreateChannelRequest;
     path?: never;
@@ -24664,6 +26283,25 @@ export type CreateCrmCompanyResponses = {
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
 
+export type ImportCrmCompaniesCsvData = {
+    body: ImportCompaniesCsvRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/companies/import';
+};
+
+export type ImportCrmCompaniesCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmCompaniesCsvError = ImportCrmCompaniesCsvErrors[keyof ImportCrmCompaniesCsvErrors];
+
+export type ImportCrmCompaniesCsvResponses = {
+    200: CompanyImportResponse;
+};
+
+export type ImportCrmCompaniesCsvResponse = ImportCrmCompaniesCsvResponses[keyof ImportCrmCompaniesCsvResponses];
+
 export type GetCompanyData = {
     body?: never;
     path: {
@@ -25050,6 +26688,32 @@ export type SetCrmContactNameResponses = {
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
 
+export type GetCrmEmailPrivacyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type GetCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
+
+export type UpdateCrmEmailPrivacyData = {
+    body: EmailPrivacyChange;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type UpdateCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
 export type ListCrmPipelinesData = {
     body?: never;
     path?: never;
@@ -25076,6 +26740,53 @@ export type CreateCrmPipelineResponses = {
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
 
+export type SearchCrmPipelineEntriesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Text the record's name, domain or email must contain.
+         */
+        search: string;
+        /**
+         * Most entries per pipeline, 1 to 5000; defaults to 50.
+         */
+        limit?: number | null;
+    };
+    url: '/crm/pipelines/entry-search';
+};
+
+export type SearchCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type SearchCrmPipelineEntriesError = SearchCrmPipelineEntriesErrors[keyof SearchCrmPipelineEntriesErrors];
+
+export type SearchCrmPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type SearchCrmPipelineEntriesResponse = SearchCrmPipelineEntriesResponses[keyof SearchCrmPipelineEntriesResponses];
+
+export type ListCrmRecordPipelineEntriesData = {
+    body: RecordEntriesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/record-entries';
+};
+
+export type ListCrmRecordPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmRecordPipelineEntriesError = ListCrmRecordPipelineEntriesErrors[keyof ListCrmRecordPipelineEntriesErrors];
+
+export type ListCrmRecordPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type ListCrmRecordPipelineEntriesResponse = ListCrmRecordPipelineEntriesResponses[keyof ListCrmRecordPipelineEntriesResponses];
+
 export type GetCrmPipelineData = {
     body?: never;
     path: {
@@ -25090,6 +26801,175 @@ export type GetCrmPipelineResponses = {
 };
 
 export type GetCrmPipelineResponse = GetCrmPipelineResponses[keyof GetCrmPipelineResponses];
+
+export type GetCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/csv';
+};
+
+export type GetCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type GetCrmPipelineCsvError = GetCrmPipelineCsvErrors[keyof GetCrmPipelineCsvErrors];
+
+export type GetCrmPipelineCsvResponses = {
+    200: PipelineCsvResponse;
+};
+
+export type GetCrmPipelineCsvResponse = GetCrmPipelineCsvResponses[keyof GetCrmPipelineCsvResponses];
+
+export type EditCrmPipelineData = {
+    body: EditPipelineRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/edit';
+};
+
+export type EditCrmPipelineErrors = {
+    400: ErrorResponse;
+};
+
+export type EditCrmPipelineError = EditCrmPipelineErrors[keyof EditCrmPipelineErrors];
+
+export type EditCrmPipelineResponses = {
+    200: PipelineFields;
+};
+
+export type EditCrmPipelineResponse = EditCrmPipelineResponses[keyof EditCrmPipelineResponses];
+
+export type UpdateCrmPipelineEntriesData = {
+    body: UpdateEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type UpdateCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateCrmPipelineEntriesError = UpdateCrmPipelineEntriesErrors[keyof UpdateCrmPipelineEntriesErrors];
+
+export type UpdateCrmPipelineEntriesResponses = {
+    200: UpdateEntriesResponse;
+};
+
+export type UpdateCrmPipelineEntriesResponse = UpdateCrmPipelineEntriesResponses[keyof UpdateCrmPipelineEntriesResponses];
+
+export type AddCrmPipelineEntriesData = {
+    body: AddEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type AddCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type AddCrmPipelineEntriesError = AddCrmPipelineEntriesErrors[keyof AddCrmPipelineEntriesErrors];
+
+export type AddCrmPipelineEntriesResponses = {
+    200: AddEntriesResponse;
+};
+
+export type AddCrmPipelineEntriesResponse = AddCrmPipelineEntriesResponses[keyof AddCrmPipelineEntriesResponses];
+
+export type FindCrmPipelineEntriesData = {
+    body: FindEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/find';
+};
+
+export type FindCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type FindCrmPipelineEntriesError = FindCrmPipelineEntriesErrors[keyof FindCrmPipelineEntriesErrors];
+
+export type FindCrmPipelineEntriesResponses = {
+    200: FoundEntriesResponse;
+};
+
+export type FindCrmPipelineEntriesResponse = FindCrmPipelineEntriesResponses[keyof FindCrmPipelineEntriesResponses];
+
+export type RemoveCrmPipelineEntriesData = {
+    body: RemoveEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/remove';
+};
+
+export type RemoveCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type RemoveCrmPipelineEntriesError = RemoveCrmPipelineEntriesErrors[keyof RemoveCrmPipelineEntriesErrors];
+
+export type RemoveCrmPipelineEntriesResponses = {
+    200: RemoveEntriesResponse;
+};
+
+export type RemoveCrmPipelineEntriesResponse = RemoveCrmPipelineEntriesResponses[keyof RemoveCrmPipelineEntriesResponses];
+
+export type ExportCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/export';
+};
+
+export type ExportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ExportCrmPipelineCsvError = ExportCrmPipelineCsvErrors[keyof ExportCrmPipelineCsvErrors];
+
+export type ExportCrmPipelineCsvResponses = {
+    200: PipelineExportResponse;
+};
+
+export type ExportCrmPipelineCsvResponse = ExportCrmPipelineCsvResponses[keyof ExportCrmPipelineCsvResponses];
+
+export type ImportCrmPipelineCsvData = {
+    body: ImportPipelineCsvRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/import';
+};
+
+export type ImportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmPipelineCsvError = ImportCrmPipelineCsvErrors[keyof ImportCrmPipelineCsvErrors];
+
+export type ImportCrmPipelineCsvResponses = {
+    200: PipelineImportResponse;
+};
+
+export type ImportCrmPipelineCsvResponse = ImportCrmPipelineCsvResponses[keyof ImportCrmPipelineCsvResponses];
 
 export type RenameCrmPipelineData = {
     body: RenamePipeline;
@@ -27190,6 +29070,57 @@ export type ReadCanvasSceneResponses = {
 
 export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
+export type CommentOnDocumentTextData = {
+    body: CommentOnTextRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/comments/text';
+};
+
+export type CommentOnDocumentTextErrors = {
+    /**
+     * Not a markdown or Word document, or an invalid quote or occurrence
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document comment access denied
+     */
+    403: ErrorResponse;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The quote appears more than once or not at all; nothing was posted
+     */
+    422: CommentOnTextRefused;
+    /**
+     * The comment could not be posted
+     */
+    500: ErrorResponse;
+    /**
+     * The comment could not be anchored; nothing was posted
+     */
+    502: ErrorResponse;
+};
+
+export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
+
+export type CommentOnDocumentTextResponses = {
+    200: CommentOnTextResponse;
+};
+
+export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
+
 export type CopyDocumentData = {
     body: CopyDocumentRequest;
     path: {
@@ -27435,6 +29366,96 @@ export type GetDocumentLocationV3Responses = {
 };
 
 export type GetDocumentLocationV3Response = GetDocumentLocationV3Responses[keyof GetDocumentLocationV3Responses];
+
+export type GetDocumentMarkdownData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type GetDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The body could not be read
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type GetDocumentMarkdownError = GetDocumentMarkdownErrors[keyof GetDocumentMarkdownErrors];
+
+export type GetDocumentMarkdownResponses = {
+    200: DocumentMarkdown;
+};
+
+export type GetDocumentMarkdownResponse = GetDocumentMarkdownResponses[keyof GetDocumentMarkdownResponses];
+
+export type WriteDocumentMarkdownData = {
+    body: WriteDocumentMarkdownRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type WriteDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an empty revision
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document changed since the revision was read; nothing was written
+     */
+    409: DocumentMarkdownFailure;
+    /**
+     * The write failed and may have applied
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type WriteDocumentMarkdownError = WriteDocumentMarkdownErrors[keyof WriteDocumentMarkdownErrors];
+
+export type WriteDocumentMarkdownResponses = {
+    200: DocumentMarkdownWritten;
+};
+
+export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
 
 export type PermanentlyDeleteDocumentData = {
     body?: never;
@@ -28711,7 +30732,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -28780,7 +30801,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
         /**
          * The id of the favorited entity.
          */
@@ -29482,6 +31503,26 @@ export type ListHarnessesResponses = {
 
 export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
 
+export type ListHarnessDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/directory';
+};
+
+export type ListHarnessDirectoryErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessDirectoryError = ListHarnessDirectoryErrors[keyof ListHarnessDirectoryErrors];
+
+export type ListHarnessDirectoryResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessDirectoryResponse = ListHarnessDirectoryResponses[keyof ListHarnessDirectoryResponses];
+
 export type DeleteSelfHarnessData = {
     body?: never;
     path?: never;
@@ -29616,6 +31657,56 @@ export type PatchHarnessResponses = {
 };
 
 export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
+
+export type ListHarnessResidentsData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/residents';
+};
+
+export type ListHarnessResidentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessResidentsError = ListHarnessResidentsErrors[keyof ListHarnessResidentsErrors];
+
+export type ListHarnessResidentsResponses = {
+    200: Array<HarnessResident>;
+};
+
+export type ListHarnessResidentsResponse = ListHarnessResidentsResponses[keyof ListHarnessResidentsResponses];
+
+export type SetHarnessTeamAccessData = {
+    body: SetHarnessTeamAccessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/team-access';
+};
+
+export type SetHarnessTeamAccessErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetHarnessTeamAccessError = SetHarnessTeamAccessErrors[keyof SetHarnessTeamAccessErrors];
+
+export type SetHarnessTeamAccessResponses = {
+    204: void;
+};
+
+export type SetHarnessTeamAccessResponse = SetHarnessTeamAccessResponses[keyof SetHarnessTeamAccessResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -29765,6 +31856,71 @@ export type CreateInitiativeResponses = {
 
 export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
 
+export type PageInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum rows, between one and one hundred; defaults to fifty.
+         */
+        limit?: number | null;
+        /**
+         * Opaque continuation returned by the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Case-insensitive name substring.
+         */
+        query?: string | null;
+        /**
+         * Required status option id.
+         */
+        status?: string | null;
+        /**
+         * Required priority option id.
+         */
+        priority?: string | null;
+        /**
+         * Required assignee user id.
+         */
+        assignee?: string | null;
+        /**
+         * Inclusive due-date lower bound.
+         */
+        dueAfter?: string | null;
+        /**
+         * Inclusive due-date upper bound.
+         */
+        dueBefore?: string | null;
+        /**
+         * Sort key; defaults to updated time.
+         */
+        sort?: InitiativeSort;
+        /**
+         * Descending order; defaults to true for updated time.
+         */
+        descending?: boolean | null;
+    };
+    url: '/initiatives/page';
+};
+
+export type PageInitiativesErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PageInitiativesError = PageInitiativesErrors[keyof PageInitiativesErrors];
+
+export type PageInitiativesResponses = {
+    200: InitiativePage;
+};
+
+export type PageInitiativesResponse = PageInitiativesResponses[keyof PageInitiativesResponses];
+
 export type DeleteInitiativeData = {
     body?: never;
     path: {
@@ -29859,6 +32015,87 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type GetInitiativeActivityData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: {
+        /**
+         * Only changes at or after this time.
+         */
+        after?: string;
+        /**
+         * Only changes before this time.
+         */
+        before?: string;
+        /**
+         * `occurredAt` of the previous page's `nextCursor`; send with `cursorId`.
+         */
+        cursorOccurredAt?: string;
+        /**
+         * `id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.
+         */
+        cursorId?: string;
+        /**
+         * Events to scan, 1 through 100; defaults to 100.
+         */
+        limit?: number;
+    };
+    url: '/initiatives/{initiative_id}/activity';
+};
+
+export type GetInitiativeActivityErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeActivityError = GetInitiativeActivityErrors[keyof GetInitiativeActivityErrors];
+
+export type GetInitiativeActivityResponses = {
+    200: InitiativeActivityPage;
+};
+
+export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
+
+export type GetInitiativeDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/description';
+};
+
+export type GetInitiativeDescriptionErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeDescriptionError = GetInitiativeDescriptionErrors[keyof GetInitiativeDescriptionErrors];
+
+export type GetInitiativeDescriptionResponses = {
+    200: InitiativeDescription;
+};
+
+export type GetInitiativeDescriptionResponse = GetInitiativeDescriptionResponses[keyof GetInitiativeDescriptionResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
@@ -30899,6 +33136,173 @@ export type CreateViewHandlerResponses = {
 };
 
 export type CreateViewHandlerResponse = CreateViewHandlerResponses[keyof CreateViewHandlerResponses];
+
+export type ListSavedViewDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only definitions of this consumer kind, such as `email`.
+         */
+        kind?: string;
+        /**
+         * Page size, 1 to 50; defaults to 25.
+         */
+        first?: number;
+        /**
+         * `nextCursor` from the previous page.
+         */
+        after?: string;
+    };
+    url: '/saved_views/definitions';
+};
+
+export type ListSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSavedViewDefinitionsError = ListSavedViewDefinitionsErrors[keyof ListSavedViewDefinitionsErrors];
+
+export type ListSavedViewDefinitionsResponses = {
+    200: SavedViewDefinitionPage;
+};
+
+export type ListSavedViewDefinitionsResponse = ListSavedViewDefinitionsResponses[keyof ListSavedViewDefinitionsResponses];
+
+export type CreateSavedViewDefinitionData = {
+    body: CreateSavedViewDefinitionRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions';
+};
+
+export type CreateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSavedViewDefinitionError = CreateSavedViewDefinitionErrors[keyof CreateSavedViewDefinitionErrors];
+
+export type CreateSavedViewDefinitionResponses = {
+    201: SavedViewDefinition;
+};
+
+export type CreateSavedViewDefinitionResponse = CreateSavedViewDefinitionResponses[keyof CreateSavedViewDefinitionResponses];
+
+export type ReorderSavedViewDefinitionsData = {
+    body: ReorderSavedViewDefinitionsRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions/order';
+};
+
+export type ReorderSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderSavedViewDefinitionsError = ReorderSavedViewDefinitionsErrors[keyof ReorderSavedViewDefinitionsErrors];
+
+export type ReorderSavedViewDefinitionsResponses = {
+    200: Array<SavedViewDefinition>;
+};
+
+export type ReorderSavedViewDefinitionsResponse = ReorderSavedViewDefinitionsResponses[keyof ReorderSavedViewDefinitionsResponses];
+
+export type DeleteSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to delete
+         */
+        saved_view_id: string;
+    };
+    query: {
+        /**
+         * Revision that must still be current when the deletion commits.
+         */
+        expectedRevision: number;
+    };
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type DeleteSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSavedViewDefinitionError = DeleteSavedViewDefinitionErrors[keyof DeleteSavedViewDefinitionErrors];
+
+export type DeleteSavedViewDefinitionResponses = {
+    204: void;
+};
+
+export type DeleteSavedViewDefinitionResponse = DeleteSavedViewDefinitionResponses[keyof DeleteSavedViewDefinitionResponses];
+
+export type GetSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to read
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type GetSavedViewDefinitionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSavedViewDefinitionError = GetSavedViewDefinitionErrors[keyof GetSavedViewDefinitionErrors];
+
+export type GetSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type GetSavedViewDefinitionResponse = GetSavedViewDefinitionResponses[keyof GetSavedViewDefinitionResponses];
+
+export type UpdateSavedViewDefinitionData = {
+    body: UpdateSavedViewDefinitionRequest;
+    path: {
+        /**
+         * The saved view to update
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type UpdateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSavedViewDefinitionError = UpdateSavedViewDefinitionErrors[keyof UpdateSavedViewDefinitionErrors];
+
+export type UpdateSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;

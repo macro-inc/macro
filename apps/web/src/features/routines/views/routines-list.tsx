@@ -1,6 +1,10 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
-import { RoutinesList } from '../components/routines-list';
+import {
+  type RoutinesDiscover,
+  RoutinesList,
+} from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineTemplate } from '../core/routine-templates';
 import { createRoutineRows } from '../primitives/routines-list';
@@ -15,8 +19,15 @@ export function RoutinesListView(props: {
   /** Templates to start from, above the list. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
+  /** Suggestions: a row above the list and the Discover tab. */
+  discover?: RoutinesDiscover;
 }) {
-  const rows = createRoutineRows(props.source, props.userId);
+  // A phone lists top-level routines only; what they created is on their pages.
+  const rows = createRoutineRows(
+    props.source,
+    props.userId,
+    () => !isTouchDevice()
+  );
   return (
     <RoutinesList
       showTitle={props.showTitle}
@@ -31,6 +42,7 @@ export function RoutinesListView(props: {
       onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
       templates={props.templates}
       onTemplate={props.onTemplate}
+      discover={props.discover}
     />
   );
 }
