@@ -36,16 +36,53 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
 }));
 
-// Phone layout (touch and under 640px), as `isMobile()` reports it.
-const layout = vi.hoisted(() => ({ phone: false }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => layout.phone }));
+// The device's primary pointer, read by the real `isTouchDevice()` through
+// `(pointer: coarse)`. jsdom has no matchMedia, and the helper queries it when
+// its module loads, so this stands in before any import runs.
+const device = vi.hoisted(() => {
+  const state = { coarse: false };
+  window.matchMedia = (query: string) =>
+    ({
+      media: query,
+      get matches() {
+        return query === '(pointer: coarse)' && state.coarse;
+      },
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+  return state;
+});
+
+/** Becomes a device of this size and pointer; the helper re-reads on resize. */
+function useDevice(device_: {
+  coarse: boolean;
+  width: number;
+  height: number;
+}) {
+  device.coarse = device_.coarse;
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: device_.width,
+  });
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    value: device_.height,
+  });
+  window.dispatchEvent(new Event('resize'));
+}
+
+const DESKTOP = { coarse: false, width: 1280, height: 800 };
 
 const play = vi.fn(() => Promise.resolve());
 const pause = vi.fn();
 
 beforeEach(() => {
   localStorage.clear();
-  layout.phone = false;
+  useDevice(DESKTOP);
   channelList.channels = [];
   openWithSplit.mockClear();
   track.mockClear();
@@ -343,7 +380,7 @@ describe('block tutorial sidebar item', () => {
   });
 });
 
-describe('block tutorials on phones', () => {
+describe('block tutorials on touch devices', () => {
   const renderEntries = () =>
     render(() => (
       <>
@@ -353,15 +390,23 @@ describe('block tutorials on phones', () => {
       </>
     ));
 
-  it('shows every entry on desktop', () => {
+  it.each([
+    ['a desktop window', DESKTOP],
+    ['a narrow desktop window', { coarse: false, width: 500, height: 800 }],
+  ])('shows every entry in %s', (_, size) => {
+    useDevice(size);
     renderEntries();
     expect(
       screen.getAllByRole('button', { name: /Learn how to use Macro/ })
     ).toHaveLength(3);
   });
 
-  it('mounts no entry, dialog or video on a phone', () => {
-    layout.phone = true;
+  it.each([
+    ['a phone', { coarse: true, width: 390, height: 844 }],
+    ['a phone in landscape', { coarse: true, width: 844, height: 390 }],
+    ['a tablet', { coarse: true, width: 1024, height: 1366 }],
+  ])('mounts no entry, dialog or video on %s', (_, size) => {
+    useDevice(size);
     renderEntries();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();

@@ -36,7 +36,9 @@ a background tab; adding Shift also switches to it. Every menu that offers
 project rows, Reviews) also offers **Open in new tab**, which opens the item in
 a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
 selected item. Tabs are not draggable.
-Tabs persist per user and restore on launch. In the browser and on other
+Tabs persist per user and restore on launch. Call pages (`/app/meet/...`) keep
+the strip although they hide the rest of the app chrome; switching tabs there
+leaves the call running in the background. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
@@ -1720,9 +1722,12 @@ Background history or channel refetches alone must not blank a settled empty
 category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
-then catch up with one coalesced refresh. Verify with cache reads slower than the
-250 ms update throttle, starting from an empty cache: entities appear without
-waiting for background updates to stop. Changing the query/category or closing
+then catch up with one coalesced refresh. A change after a quiet interval
+refreshes at once, and refreshes never start closer together than that
+interval: 2 s for the channel index and menu searches (rebuilt for the whole
+account), 250 ms for history. Verify
+with cache reads slower than that throttle, starting from an empty cache:
+entities appear without waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal
