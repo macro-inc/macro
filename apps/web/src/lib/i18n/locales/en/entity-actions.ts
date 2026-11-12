@@ -318,7 +318,7 @@ export default {
     one: 'Delete project?',
     other: 'Delete {{count}} projects?',
   },
-  deleteProjectsBody: {
+  deleteProjectsDescription: {
     one: 'The project and its activity will be deleted. Its tasks will remain in your workspace.',
     other:
       'These projects and their activity will be deleted. Their tasks will remain in your workspace.',
