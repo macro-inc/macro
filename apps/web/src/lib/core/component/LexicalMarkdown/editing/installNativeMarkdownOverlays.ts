@@ -12,6 +12,7 @@ import { registerNativeBlockNavigation } from '../plugins/block-decorator-naviga
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
 import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/native';
+import { registerNativeTabIndentation } from '../plugins/tab-indentation/native';
 import { registerNativeTableTouchSelection } from '../plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../plugins/trailing-paragraph/native';
 import { createMenuOperations } from '../shared/inlineMenu';
@@ -78,6 +79,7 @@ export function installNativeMarkdownOverlays(
   let comments: NativeComments | undefined;
   try {
     listeners.add(registerNativeBlockNavigation(view));
+    listeners.add(registerNativeTabIndentation(view));
     listeners.add(registerNativeChecklist(view));
     listeners.add(registerNativeListSwipeIndent(view, options.canEdit));
     if (options.comments) {

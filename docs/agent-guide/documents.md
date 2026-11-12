@@ -3484,3 +3484,5 @@ same-origin and fail external request attempts rather than contacting production
 For native body list swipes, use a touch profile and swipe a list row horizontally
 to indent or outdent. Verify vertical scrolling, read-only mode and overlay
 disposal/remount separately; desktop drag controls do not establish touch support.
+
+In the native Markdown body, press Tab in an empty paragraph: indentation grows to one level without inserting text. A second Tab respects the preceding-block depth limit, and Shift-Tab restores zero indentation. Code and table Tab behavior retain their own native command priorities.

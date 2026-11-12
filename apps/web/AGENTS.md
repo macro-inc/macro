@@ -2,6 +2,8 @@
 
 - Grant `local-network-access` in fresh Chromium contexts for the local HTTPS preview before waiting for document initialization; a blocked WebSocket is a harness failure.
 
+- Install the native Markdown Tab route with the body overlay lifecycle so the shared Key(Tab) indentation policy runs instead of the portable InsertTab fallback; retain Code and table key priorities.
+
 - Share checklist bar markup through TaskListBar and real contact/task queries through task-list-facts; keep planning in the Source renderer or native producer and pass only raw Date observations across the native facts boundary. Keep the native metadata host session-owned across visual remounts, reject a second host for that session, and defer facts inputs until after the construction-time observer returns and the actual Initialize readiness fence opens.
 
 - Match the native body Apple/Other view OS to Macro IS_MAC while retaining the separate iOS/Android composition priorities; generic history and Select All shortcuts use Lexical navigator.platform detection.
