@@ -317,7 +317,7 @@ mod foreign {
     #[derive(Default)]
     struct Log {
         calls: Mutex<Vec<String>>,
-        fail_clone_of: Mutex<Option<NodeKey>>,
+        fail_clone_of: Mutex<Option<(NodeKey, Arc<Error>)>>,
     }
     impl Log {
         fn push(&self, call: String) {
@@ -365,8 +365,10 @@ mod foreign {
                 "clone {:?} {:?} -> {:?}",
                 request.mode, request.constructor_key, request.destination_key
             ));
-            if *self.log.fail_clone_of.lock().expect("log") == Some(request.constructor_key) {
-                return Err(Error::Invariant("probe clone failed"));
+            if let Some((key, cause)) = &*self.log.fail_clone_of.lock().expect("log")
+                && *key == request.constructor_key
+            {
+                return Err(Error::ForeignReadFailed(cause.clone()));
             }
             Ok(ForeignInstanceClone {
                 instance: ForeignInstance::new(
@@ -384,7 +386,8 @@ mod foreign {
 
     #[derive(Debug, PartialEq)]
     struct ForeignOutcome {
-        result: Result<Vec<DiffOp>, String>,
+        /// Ops on success; on failure, whether the returned carrier holds the injected cause itself.
+        result: Result<Vec<DiffOp>, bool>,
         calls: Vec<String>,
         json: String,
         links: Vec<(NodeKey, Links, ElementLinks)>,
@@ -394,7 +397,7 @@ mod foreign {
     fn run_foreign(
         blocks: usize,
         anchor: usize,
-        fail: Option<usize>,
+        fail: Option<(usize, &Arc<Error>)>,
         general: bool,
     ) -> Result<ForeignOutcome, Error> {
         let log = Arc::new(Log::default());
@@ -437,7 +440,8 @@ mod foreign {
                 .bind_foreign_instance(*key, &identity, instance)?;
         }
         log.calls.lock().expect("log").clear();
-        *log.fail_clone_of.lock().expect("log") = fail.map(|index| paragraphs[index]);
+        *log.fail_clone_of.lock().expect("log") =
+            fail.map(|(index, cause)| (paragraphs[index], cause.clone()));
         let before = editor.state().clone();
         let force = general.then(force_general_splice);
         let result = editor
@@ -447,7 +451,12 @@ mod foreign {
                 Ok(())
             })
             .and_then(|(_, commit)| Ok(commit.diff(&DiffOptions::default())?.ops))
-            .map_err(|error| format!("{error:?}"));
+            .map_err(|error| match (&error, fail) {
+                (Error::ForeignReadFailed(carried), Some((_, cause))) => {
+                    Arc::ptr_eq(carried, cause)
+                }
+                _ => false,
+            });
         drop(force);
         let unchanged_after_failure = result.is_err() && before.same_snapshot(editor.state());
         let calls = log.calls.lock().expect("log").clone();
@@ -464,6 +473,8 @@ mod foreign {
     fn bound_foreign_siblings_see_the_same_callbacks_and_failures_in_both_paths()
     -> Result<(), Error> {
         let blocks = 7;
+        // One shared cause for both paths, so identity rather than equal text is compared.
+        let cause = Arc::new(Error::Invariant("probe clone failed"));
         for (anchor, fail) in [
             (0, None),
             (3, None),
@@ -472,6 +483,7 @@ mod foreign {
             (3, Some(4)),
             (0, Some(1)),
         ] {
+            let fail = fail.map(|index| (index, &cause));
             let new = run_foreign(blocks, anchor, fail, false)?;
             let old = run_foreign(blocks, anchor, fail, true)?;
             assert_eq!(new, old, "anchor {anchor} fail {fail:?}");
@@ -479,7 +491,13 @@ mod foreign {
                 new.calls.iter().any(|call| call.starts_with("clone")),
                 "bound siblings must clone on write: {new:?}"
             );
-            assert_eq!(new.result.is_err(), fail.is_some(), "{new:?}");
+            match &new.result {
+                Ok(_) => assert!(fail.is_none(), "{new:?}"),
+                Err(identical) => assert!(
+                    fail.is_some() && *identical,
+                    "the returned carrier must hold the injected cause: {new:?}"
+                ),
+            }
             assert_eq!(new.unchanged_after_failure, fail.is_some(), "{new:?}");
         }
         Ok(())
