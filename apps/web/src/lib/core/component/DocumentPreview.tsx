@@ -57,9 +57,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
-import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
-import Link from '@icon/system/regular/link.svg';
 import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
@@ -766,24 +764,20 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     try {
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
-        await copyCalendarEventMentionTarget(mentionTarget);
-        return;
+        return copyCalendarEventMentionTarget(mentionTarget, { silent: true });
       }
 
       await navigator.clipboard.writeText(documentLink());
-      toast.success('Copied document link to clipboard');
+      return true;
     } catch (e) {
       console.error(e);
       toast.failure('Could not copy link');
+      return false;
     }
   };
 
-  const handleCopyBranchName = () => {
-    fireAndForget(
-      copyBranchNameToClipboard(props.documentInfo.id),
-      'document-preview'
-    );
-  };
+  const handleCopyBranchName = () =>
+    copyBranchNameToClipboard(props.documentInfo.id, { silent: true });
 
   const isSplitAlreadyOpen = () => {
     const splitManager = globalSplitManager();
@@ -917,15 +911,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 Ask Macro
               </Dropdown.Item>
             </Show>
-            <Dropdown.Item onSelect={handleCopy}>
-              <Link class="size-4" />
-              Copy Link
-            </Dropdown.Item>
+            <Dropdown.CopyItem onCopy={handleCopy}>Copy Link</Dropdown.CopyItem>
             <Show when={props.documentInfo.type === 'task'}>
-              <Dropdown.Item onSelect={handleCopyBranchName}>
-                <GitBranchIcon class="size-4" />
+              <Dropdown.CopyItem onCopy={handleCopyBranchName}>
                 Copy Branch Name
-              </Dropdown.Item>
+              </Dropdown.CopyItem>
             </Show>
             <Show when={isOpenable() && !isSplitAlreadyOpen()}>
               <Dropdown.Item

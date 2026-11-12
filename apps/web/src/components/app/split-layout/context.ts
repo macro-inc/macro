@@ -27,7 +27,9 @@ export type SplitBottomPanelRegistration = {
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
   icon?: Component;
-  action?: (e?: MouseEvent) => void;
+  action?: (e?: MouseEvent) => void | Promise<unknown>;
+  /** Clipboard actions acknowledge completion inline without dismissing the menu. */
+  copy?: boolean;
   children?: SplitFileMenuAction[];
   muteMenu?: NotificationMuteMenuProps;
   /** Only set when the token's shortcut is executable from the split. */

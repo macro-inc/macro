@@ -46,7 +46,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Filter restored and newly recorded recent picks against the current picker set; retired and unknown names are never offered, while stored retired icons and aliases still render.
 - Preserve independent appearance overrides on unknown wire values: unknown colors fall back to type color, and unknown icon kinds retain their valid color.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
-- Keep the compact shared-visibility footer on both tabs; label editing actions “Change icon” without an ellipsis or leading menu icon.
+- Keep the compact shared-visibility footer on both tabs; label editing actions “Change icon” without an ellipsis and with the shared appearance icon.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.

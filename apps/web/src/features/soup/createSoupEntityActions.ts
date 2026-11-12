@@ -59,6 +59,30 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CubeIcon from '@icon/system/regular/cube.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import FlagIcon from '@icon/system/regular/flag.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import ProhibitIcon from '@icon/system/regular/prohibit.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TagIcon from '@icon/system/regular/tag.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import UserIcon from '@icon/system/regular/user.svg';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -74,7 +98,9 @@ export type SoupEntityActionItem = {
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   hotkeyToken?: HotkeyToken;
   shortcut?: string;
-  onClick: () => void | Promise<void>;
+  onClick: () => void | Promise<unknown>;
+  /** Clipboard actions keep the menu open and acknowledge success inline. */
+  copy?: boolean;
   destructive?: boolean;
   disabled?: boolean;
   muteMenu?: NotificationMuteMenuProps;
@@ -176,16 +202,16 @@ export function createSoupEntityActions(
     userId: () => userId(),
   });
   const removeFromProjectAction = makeRemoveFromProjectAction();
-  const copyLinkAction = makeCopyLinkAction();
-  const copyBranchNameAction = makeCopyBranchNameAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
+  const copyLinkAction = makeCopyLinkAction({ silent: true });
+  const copyBranchNameAction = makeCopyBranchNameAction({ silent: true });
+  const copyEntityIdAction = makeCopyEntityIdAction({ silent: true });
   const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const archiveSessionAction = makeArchiveSessionAction({
     userId: () => userId(),
   });
-  const githubLinkAction = makeGithubLinkAction();
+  const githubLinkAction = makeGithubLinkAction({ silent: true });
   const downloadAction = makeDownloadAction();
   const allProperties = useAllProperties();
   const taskProperty = (propertyId: string) =>
@@ -225,7 +251,7 @@ export function createSoupEntityActions(
         execute: (
           entities: EntityData[],
           soup: EntityActionListState
-        ) => Promise<void>
+        ) => Promise<unknown>
       ) =>
       () =>
         execute(entities, soup);
@@ -242,6 +268,7 @@ export function createSoupEntityActions(
       if (canExecuteAll(markNotDone.canExecute)) {
         topItems.push({
           id: 'mark-not-done',
+          icon: ArrowCounterClockwiseIcon,
           label: t('entityActions.markNotDone'),
           hotkeyToken: TOKENS.entity.action.markNotDone,
           onClick: handle(markNotDone.executeWithSoup),
@@ -249,6 +276,7 @@ export function createSoupEntityActions(
       } else if (canExecuteAll(markDone.canExecute)) {
         topItems.push({
           id: 'mark-done',
+          icon: CheckCircleIcon,
           label: t('entityActions.markDone'),
           hotkeyToken: TOKENS.entity.action.markDone,
           onClick: () =>
@@ -267,6 +295,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(markUnread.canExecute)) {
       topItems.push({
         id: 'mark-unread',
+        icon: EnvelopeIcon,
         label: t('entityActions.markUnread'),
         hotkeyToken: TOKENS.entity.action.markUnread,
         onClick: handle(markUnread.executeWithSoup),
@@ -277,6 +306,7 @@ export function createSoupEntityActions(
     ) {
       topItems.push({
         id: 'mark-read',
+        icon: EnvelopeOpenIcon,
         label: t('entityActions.markRead'),
         hotkeyToken: TOKENS.entity.action.markRead,
         onClick: handle(markRead.executeWithSoup),
@@ -287,6 +317,7 @@ export function createSoupEntityActions(
     ) {
       topItems.push({
         id: 'mark-notifications-read',
+        icon: EnvelopeOpenIcon,
         label: t('entityActions.markRead'),
         onClick: handle(markNotificationsRead.executeWithSoup),
       });
@@ -345,6 +376,7 @@ export function createSoupEntityActions(
       if (openableEntity('split')) {
         topItems.push({
           id: 'open-in-split',
+          icon: SidebarIcon,
           label: t('entityActions.openInNewSplit'),
           shortcut: 'shift+enter',
           // A layout with no room for another split cannot honor this: the open
@@ -357,6 +389,7 @@ export function createSoupEntityActions(
         const open = openEntity('tab');
         topItems.push({
           id: 'open-in-tab',
+          icon: ArrowSquareOutIcon,
           label: t('entityActions.openInNewTab'),
           onClick: () => openInNewTab(open),
         });
@@ -370,6 +403,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(renameAction.canExecute)) {
       middleItems.push({
         id: 'rename',
+        icon: PencilIcon,
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
@@ -377,6 +411,7 @@ export function createSoupEntityActions(
     } else if (singleProject && ownsProjects) {
       middleItems.push({
         id: 'rename',
+        icon: PencilIcon,
         label: t('entityActions.rename'),
         onClick: () => {
           openProjectEntityAction({
@@ -397,6 +432,7 @@ export function createSoupEntityActions(
     ) {
       middleItems.push({
         id: 'change-icon',
+        icon: PaintBrushIcon,
         label: t('appearance.title'),
         onClick: () => {
           changeIcon(entity);
@@ -407,6 +443,7 @@ export function createSoupEntityActions(
     if (entities.length === 1 && archiveSessionAction.canExecute(entities[0])) {
       middleItems.push({
         id: 'archive-session',
+        icon: ArchiveIcon,
         label: archiveSessionAction.isArchived(entities[0])
           ? t('entityActions.unarchive')
           : t('entityActions.archive'),
@@ -419,12 +456,14 @@ export function createSoupEntityActions(
     if (entities.length === 1 && channelPictureAction.canExecute(entities[0])) {
       middleItems.push({
         id: 'set-channel-picture',
+        icon: ImageIcon,
         label: t('entityActions.setChannelPicture'),
         onClick: () => channelPictureAction.execute(entities),
       });
       if (channelPictureAction.hasPicture(entities[0])) {
         middleItems.push({
           id: 'remove-channel-picture',
+          icon: ImageIcon,
           label: t('entityActions.removeChannelPicture'),
           onClick: () => channelPictureAction.remove(entities),
         });
@@ -435,9 +474,9 @@ export function createSoupEntityActions(
       const allFavorited = entities.every((entity) =>
         favoriteAction.isFavorited(entity)
       );
-      // No icon: the other items in this menu don't have one.
       middleItems.push({
         id: 'favorite',
+        icon: StarIcon,
         label: allFavorited
           ? t('entityActions.unfavorite')
           : t('entityActions.favorite'),
@@ -450,6 +489,7 @@ export function createSoupEntityActions(
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
+        icon: BellIcon,
         label: allMuted
           ? t('entityActions.unmuteNotifications')
           : t('entityActions.muteNotifications'),
@@ -462,6 +502,7 @@ export function createSoupEntityActions(
     if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
       middleItems.push({
         id: 'create-reminder',
+        icon: BellIcon,
         label: t('entityActions.remindMe'),
         hotkeyToken: TOKENS.entity.action.createReminder,
         // Not `handle`: the mark-done that follows needs this view's answer to
@@ -479,6 +520,7 @@ export function createSoupEntityActions(
     if (entities.length === 1 && openTagPicker) {
       middleItems.push({
         id: 'add-tag',
+        icon: TagIcon,
         label: t('entityActions.addTag'),
         onClick: openTagPicker,
       });
@@ -491,6 +533,7 @@ export function createSoupEntityActions(
     ) {
       middleItems.push({
         id: 'set-initiative',
+        icon: CubeIcon,
         label: t('entityActions.addToProject'),
         onClick: () => {
           if (isFeatureEnabled(enableProjects)) openProjectPicker();
@@ -501,27 +544,31 @@ export function createSoupEntityActions(
     // The task properties the hotkeys and command menu set, as the CRM group
     // below sets a company's.
     if (canExecuteAll(isTaskEntity)) {
-      for (const [propertyId, label, hotkeyToken] of [
+      for (const [propertyId, label, hotkeyToken, icon] of [
         [
           SYSTEM_PROPERTY_IDS.STATUS,
           t('entityActions.setStatus'),
           TOKENS.entity.action.status,
+          CheckCircleIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.PRIORITY,
           t('entityActions.setPriority'),
           TOKENS.entity.action.priority,
+          FlagIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.ASSIGNEES,
           t('entityActions.setAssignee'),
           TOKENS.entity.action.assignee,
+          UserIcon,
         ],
       ] as const) {
         const property = taskProperty(propertyId);
         if (!property) continue;
         middleItems.push({
           id: `set-${propertyId}`,
+          icon,
           label,
           hotkeyToken,
           onClick: () =>
@@ -539,6 +586,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(moveToProjectAction.canExecute)) {
       middleItems.push({
         id: 'move-to-folder',
+        icon: FolderIcon,
         label: t('entityActions.moveToFolder'),
         hotkeyToken: TOKENS.entity.action.moveToFolder,
         onClick: handle(moveToProjectAction.executeWithSoup),
@@ -548,6 +596,7 @@ export function createSoupEntityActions(
     if (viewedProjectId && canExecuteAll(removeFromProjectAction.canExecute)) {
       middleItems.push({
         id: 'remove-from-folder',
+        icon: FolderIcon,
         label: t('entityActions.removeFromFolder'),
         onClick: handle(removeFromProjectAction.executeWithSoup),
       });
@@ -556,6 +605,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(copyAction.canExecute)) {
       middleItems.push({
         id: 'duplicate',
+        icon: CopyIcon,
         label: t('entityActions.duplicate'),
         hotkeyToken: TOKENS.entity.action.copy,
         onClick: handle(copyAction.executeWithSoup),
@@ -566,6 +616,8 @@ export function createSoupEntityActions(
       if (copyLinkAction.canExecute(entities[0])) {
         middleItems.push({
           id: 'copy-link',
+          icon: LinkIcon,
+          copy: true,
           label: t('entityActions.copyLink'),
           hotkeyToken: TOKENS.entity.action.copyLink,
           onClick: handle(copyLinkAction.executeWithSoup),
@@ -575,6 +627,8 @@ export function createSoupEntityActions(
       if (copyBranchNameAction.canExecute(entities[0])) {
         middleItems.push({
           id: 'copy-branch-name',
+          icon: GitBranchIcon,
+          copy: true,
           label: t('entityActions.copyBranchName'),
           hotkeyToken: TOKENS.entity.action.copyBranchName,
           onClick: handle(copyBranchNameAction.executeWithSoup),
@@ -584,6 +638,7 @@ export function createSoupEntityActions(
       if (downloadAction.canExecute(entities[0])) {
         middleItems.push({
           id: 'download',
+          icon: DownloadIcon,
           label: t('entityActions.download'),
           onClick: handle(downloadAction.executeWithSoup),
         });
@@ -592,6 +647,8 @@ export function createSoupEntityActions(
       if (copyEntityIdAction.canExecute(entities[0])) {
         middleItems.push({
           id: 'copy-entity-id',
+          icon: CopyIcon,
+          copy: true,
           label: t('entityActions.copyId'),
           onClick: handle(copyEntityIdAction.executeWithSoup),
         });
@@ -602,11 +659,14 @@ export function createSoupEntityActions(
         middleItems.push(
           {
             id: 'copy-github-link',
+            icon: LinkIcon,
+            copy: true,
             label: t('entityActions.copyGithubLink'),
             onClick: () => githubLinkAction.copy(entity),
           },
           {
             id: 'open-on-github',
+            icon: ArrowSquareOutIcon,
             label: t('entityActions.openOnGitHub'),
             onClick: () => githubLinkAction.open(entity),
           }
@@ -617,12 +677,14 @@ export function createSoupEntityActions(
     if (canExecuteAll(shareAction.canExecute)) {
       middleItems.push({
         id: 'share',
+        icon: ShareIcon,
         label: t('entityActions.share'),
         onClick: handle(shareAction.executeWithSoup),
       });
     } else if (singleProject) {
       middleItems.push({
         id: 'share',
+        icon: ShareIcon,
         label: t('entityActions.share'),
         onClick: () => {
           openProjectEntityAction({ kind: 'share', id: singleProject.id });
@@ -644,6 +706,7 @@ export function createSoupEntityActions(
     ) {
       senderItems.push({
         id: 'sender-signal',
+        icon: EnvelopeOpenIcon,
         label: t('entityActions.senderToSignal'),
         onClick: handle(markSenderSignalAction.executeWithSoup),
       });
@@ -655,6 +718,7 @@ export function createSoupEntityActions(
     ) {
       senderItems.push({
         id: 'sender-noise',
+        icon: BellIcon,
         label: t('entityActions.senderToNoise'),
         onClick: handle(markSenderNoiseAction.executeWithSoup),
       });
@@ -663,6 +727,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(blockSenderAction.canExecute)) {
       senderItems.push({
         id: 'block-sender',
+        icon: ProhibitIcon,
         label: t('entityActions.blockSender'),
         onClick: handle(blockSenderAction.executeWithSoup),
       });
@@ -676,6 +741,7 @@ export function createSoupEntityActions(
     if (canExecuteAll(deleteAction.canExecute)) {
       deleteItems.push({
         id: 'delete',
+        icon: TrashIcon,
         label: t('entityActions.delete'),
         hotkeyToken: entities.every(isEmailEntity)
           ? TOKENS.email.trash
@@ -686,6 +752,7 @@ export function createSoupEntityActions(
     } else if (ownsProjects) {
       deleteItems.push({
         id: 'delete',
+        icon: TrashIcon,
         label: t('entityActions.delete'),
         onClick: () => {
           // Like the other delete path, drop the selection once rows are

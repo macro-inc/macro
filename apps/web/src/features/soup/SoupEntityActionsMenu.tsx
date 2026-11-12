@@ -5,7 +5,11 @@ import type {
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
+import {
+  CopyMenuItem,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { children, For, type JSX, Show } from 'solid-js';
@@ -58,7 +62,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     });
   };
 
-  const handleAction = async (onClick: () => void | Promise<void>) => {
+  const handleAction = async (onClick: () => void | Promise<unknown>) => {
     await onClick();
     props.onActionComplete?.();
   };
@@ -81,6 +85,17 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                     />
                   );
                 }
+                if (action.copy)
+                  return (
+                    <CopyMenuItem
+                      text={action.label}
+                      icon={action.icon}
+                      hotkeyToken={action.hotkeyToken}
+                      shortcut={action.shortcut}
+                      disabled={action.disabled}
+                      onCopy={async () => (await action.onClick()) !== false}
+                    />
+                  );
                 return (
                   <MenuItem
                     text={action.label}

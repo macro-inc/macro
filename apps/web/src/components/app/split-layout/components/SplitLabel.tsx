@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
+  CopyMenuItem,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -346,6 +347,16 @@ function SplitLabelContextMenu(props: ParentProps) {
   const item = (action: SplitFileMenuAction) => {
     if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
     const children = () => action.children?.filter(Boolean) ?? [];
+
+    if (action.copy)
+      return (
+        <CopyMenuItem
+          icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+          text={action.label}
+          hotkeyToken={action.hotkeyToken}
+          onCopy={async () => (await action.action?.()) !== false}
+        />
+      );
 
     return (
       <Show

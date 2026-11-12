@@ -43,11 +43,13 @@ export type MessageActionContext = {
   selectedText?: string;
   /** Resolved text exposed by a dynamic decorator for use in reply previews. */
   renderedText?: string;
+  /** Copy controls acknowledge success inline instead of showing a toast. */
+  silent?: boolean;
 };
 
 export type MessageActionHandler = (
   context: MessageActionContext
-) => void | Promise<void>;
+) => void | boolean | Promise<void | boolean>;
 
 export type MessageActions = {
   onReply?: MessageActionHandler;

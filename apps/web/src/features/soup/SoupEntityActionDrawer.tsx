@@ -5,15 +5,18 @@ import {
   type NotificationMuteMenuProps,
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
-import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { CopyButton, cn } from '@ui';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 export type SoupEntityDrawerAction = {
   id: string;
   label: string;
   destructive?: boolean;
   disabled?: boolean;
-  onClick: () => void | Promise<void>;
+  onClick: () => void | Promise<unknown>;
+  copy?: boolean;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   muteMenu?: NotificationMuteMenuProps;
 };
 
@@ -83,35 +86,64 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                       <MobileDrawer.Section class="flex flex-col shrink-0">
                         <For each={group.items}>
                           {(action) => (
-                            <MobileDrawer.Item
-                              type="button"
-                              disabled={
-                                action.disabled || action.muteMenu?.disabled
+                            <Show
+                              when={!action.copy}
+                              fallback={
+                                <CopyButton
+                                  as={MobileDrawer.Item}
+                                  disabled={action.disabled}
+                                  onClick={() => action.onClick()}
+                                >
+                                  <Show when={action.icon}>
+                                    {(icon) => (
+                                      <Dynamic
+                                        component={icon()}
+                                        class="size-4 shrink-0"
+                                      />
+                                    )}
+                                  </Show>
+                                  {action.label}
+                                </CopyButton>
                               }
-                              class={cn(
-                                action.destructive
-                                  ? 'text-failure-ink'
-                                  : 'text-ink',
-                                action.disabled && 'opacity-50'
-                              )}
-                              onClick={async (event) => {
-                                if (action.muteMenu) {
-                                  if (action.muteMenu.muted) {
-                                    action.muteMenu.onMute(false);
-                                    close();
-                                  } else setMuteActionId(action.id);
-                                  return;
-                                }
-                                props.beforeAction?.(
-                                  action,
-                                  event.currentTarget
-                                );
-                                await action.onClick();
-                                close();
-                              }}
                             >
-                              {action.label}
-                            </MobileDrawer.Item>
+                              <MobileDrawer.Item
+                                type="button"
+                                disabled={
+                                  action.disabled || action.muteMenu?.disabled
+                                }
+                                class={cn(
+                                  action.destructive
+                                    ? 'text-failure-ink'
+                                    : 'text-ink',
+                                  action.disabled && 'opacity-50'
+                                )}
+                                onClick={async (event) => {
+                                  if (action.muteMenu) {
+                                    if (action.muteMenu.muted) {
+                                      action.muteMenu.onMute(false);
+                                      close();
+                                    } else setMuteActionId(action.id);
+                                    return;
+                                  }
+                                  props.beforeAction?.(
+                                    action,
+                                    event.currentTarget
+                                  );
+                                  await action.onClick();
+                                  close();
+                                }}
+                              >
+                                <Show when={action.icon}>
+                                  {(icon) => (
+                                    <Dynamic
+                                      component={icon()}
+                                      class="size-4 shrink-0"
+                                    />
+                                  )}
+                                </Show>
+                                {action.label}
+                              </MobileDrawer.Item>
+                            </Show>
                           )}
                         </For>
                       </MobileDrawer.Section>

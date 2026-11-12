@@ -48,13 +48,21 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## More menus
+
+Action rows use the appropriate shared interface icon, including Mute and Change
+icon. Copy actions retain the open menu and focused row; the original icon changes
+to a green check after the clipboard write succeeds, then returns. Labels remain
+unchanged and success toasts do not appear. A failed copy keeps the original icon
+and reports the error. The same behavior applies to mobile action sheets.
+
 ## Entity icons and colors
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon** after Rename in an entity menu, without a leading menu icon.
-Document header icons open the picker separately from their breadcrumb name's
-navigation button. Header buttons are 24px with unchanged 16px glyphs and the
+**Change icon** after Rename in an entity menu, with its appearance icon.
+Document and task-project header icons open the picker separately from their
+breadcrumb name's navigation button. Header buttons are 24px with unchanged 16px glyphs and the
 shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.

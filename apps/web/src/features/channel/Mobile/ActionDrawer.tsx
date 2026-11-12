@@ -16,6 +16,7 @@ import PencilIcon from '@icon/system/regular/pencil.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
+import { CopyButton } from '@ui';
 import {
   type Component,
   createSignal,
@@ -272,20 +273,50 @@ export function ActionDrawer() {
                 <MobileDrawer.Section class="flex flex-col shrink-0">
                   <For each={nonDestructiveActions()}>
                     {(action) => (
-                      <MobileDrawer.Item
-                        type="button"
-                        data-message-action={action.id}
-                        ref={(el) => {
-                          const getTarget = action.getFocusTarget;
-                          if (getTarget) focusInput(el, () => ({ getTarget }));
-                        }}
-                        onClick={(event) => handleAction(action.onClick, event)}
+                      <Show
+                        when={
+                          action.id !== 'copy-link' &&
+                          action.id !== 'copy-message-text'
+                        }
+                        fallback={
+                          <CopyButton
+                            as={MobileDrawer.Item}
+                            data-message-action={action.id}
+                            onClick={async (event) => {
+                              const msg = message();
+                              if (!msg || !action.onClick) return false;
+                              return action.onClick({
+                                message: msg,
+                                event,
+                                silent: true,
+                              });
+                            }}
+                          >
+                            <span class="size-5 flex items-center justify-center shrink-0">
+                              {renderIcon(action.icon)}
+                            </span>
+                            {action.label}
+                          </CopyButton>
+                        }
                       >
-                        <span class="size-5 flex items-center justify-center shrink-0">
-                          {renderIcon(action.icon)}
-                        </span>
-                        {action.label}
-                      </MobileDrawer.Item>
+                        <MobileDrawer.Item
+                          type="button"
+                          data-message-action={action.id}
+                          ref={(el) => {
+                            const getTarget = action.getFocusTarget;
+                            if (getTarget)
+                              focusInput(el, () => ({ getTarget }));
+                          }}
+                          onClick={(event) =>
+                            handleAction(action.onClick, event)
+                          }
+                        >
+                          <span class="size-5 flex items-center justify-center shrink-0">
+                            {renderIcon(action.icon)}
+                          </span>
+                          {action.label}
+                        </MobileDrawer.Item>
+                      </Show>
                     )}
                   </For>
                 </MobileDrawer.Section>

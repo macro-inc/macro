@@ -75,7 +75,10 @@ export type CrmContext = {
   createContactPhoto?(email: string): Accessor<string | undefined>;
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
-  copyViewLink(config: import('../core/saved-view').CrmViewConfig): void;
+  copyViewLink(
+    config: import('../core/saved-view').CrmViewConfig,
+    options?: { silent?: boolean }
+  ): Promise<boolean>;
   copyPipelineLink(pipelineId: string): void;
   copyRecordLink(target: {
     type: 'company' | 'contact';

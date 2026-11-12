@@ -200,9 +200,9 @@ export function RoutineDetail(props: {
           )
         }
         onCopyPrompt={async (prompt) => {
-          if (await writeClipboardData({ 'text/plain': prompt }))
-            toast.success('Prompt copied');
-          else toast.alert('Could not copy prompt');
+          const copied = await writeClipboardData({ 'text/plain': prompt });
+          if (!copied) toast.alert('Could not copy prompt');
+          return copied;
         }}
         onShare={sharing().enabled ? share : undefined}
         onCompose={compose}

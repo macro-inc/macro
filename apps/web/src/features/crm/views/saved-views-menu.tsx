@@ -310,13 +310,11 @@ export function CompanyViewsMenu(
               </div>
             </div>
           </Show>
-          <Dropdown.Item
-            closeOnSelect
-            onSelect={() => copyShareLink(captureCurrentView())}
+          <Dropdown.CopyItem
+            onCopy={() => copyShareLink(captureCurrentView(), { silent: true })}
           >
-            <LinkIcon class="size-3.5 shrink-0 text-ink-muted" />
             <span class="flex-1 truncate">Copy link to current view</span>
-          </Dropdown.Item>
+          </Dropdown.CopyItem>
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

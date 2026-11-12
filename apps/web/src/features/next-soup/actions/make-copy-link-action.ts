@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { calendarEventLinkTarget } from '../utils';
@@ -58,7 +59,7 @@ const getEntityUrl = (entity: EntityData): string => {
   );
 };
 
-export const makeCopyLinkAction = () => {
+export const makeCopyLinkAction = (options: { silent?: boolean } = {}) => {
   const canExecute = (_entity: EntityData): boolean => true;
 
   const execute = async (entities: EntityData[]) => {
@@ -70,34 +71,46 @@ export const makeCopyLinkAction = () => {
     // route to link an event by id. Events copy the deep link the calendar's
     // own action writes, with the mention flavor behind it.
     if (entity.type === 'calendar_event') {
-      await copyCalendarEventMentionTarget({
-        ...calendarEventLinkTarget(entity),
-        title: entity.name || '(No title)',
-      });
-      return;
+      return copyCalendarEventMentionTarget(
+        {
+          ...calendarEventLinkTarget(entity),
+          title: entity.name || '(No title)',
+        },
+        options
+      );
     }
 
     const url = getEntityUrl(entity);
 
-    await navigator.clipboard.writeText(url);
-    toast.success(t('entityActions.toastLinkCopied'));
+    const copied = await writeClipboardData({ 'text/plain': url });
+    if (!copied) {
+      toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
+      return false;
+    }
+    if (!options.silent) toast.success(t('entityActions.toastLinkCopied'));
+    return true;
   };
 
   /** Blocks already know their id and URL discriminator even when their full
    * entity is absent from Quick Access (notably email threads and calls). */
   const executeByBlock = async (id: string, blockType: string) => {
-    await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ id, type: blockType })
-    );
-    toast.success(t('entityActions.toastLinkCopied'));
+    const copied = await writeClipboardData({
+      'text/plain': buildSimpleEntityUrl({ id, type: blockType }),
+    });
+    if (!copied) {
+      toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
+      return false;
+    }
+    if (!options.silent) toast.success(t('entityActions.toastLinkCopied'));
+    return true;
   };
 
   const executeWithSoup = async (
     entities: EntityData[],
     _soup: EntityActionListState
   ) => {
-    await execute(entities);
-    // Don't clear selection or change focus for copy link
+    // Don't clear selection or change focus for copy link.
+    return execute(entities);
   };
 
   return { canExecute, execute, executeByBlock, executeWithSoup };

@@ -41,6 +41,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, type EntityData } from '@entity';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
+import BellSlash from '@icon/system/regular/bell-slash.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -48,6 +49,7 @@ import Copy from '@icon/system/regular/copy.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
+import PaintBrush from '@icon/system/regular/paint-brush.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
@@ -57,7 +59,7 @@ import {
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
 import type { ItemType } from '@service-storage/itemType';
-import { cn, Dropdown, Hotkey } from '@ui';
+import { CopyButton, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
   createEffect,
@@ -90,7 +92,8 @@ export type DefaultFileOperation = {
 export type CustomFileOperation = {
   label: string;
   icon: Component;
-  action?: () => void;
+  action?: () => void | Promise<unknown>;
+  copy?: boolean;
   children?: SplitFileMenuAction[];
   group?: SplitFileMenuActionGroup;
 };
@@ -168,13 +171,22 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       );
     const children = () => action.children?.filter(Boolean) ?? [];
 
+    if (action.copy)
+      return (
+        <Dropdown.CopyItem
+          onCopy={async () => (await action.action?.()) !== false}
+        >
+          <SplitMenuItemContent {...action} icon={undefined} />
+        </Dropdown.CopyItem>
+      );
+
     return (
       <Show
         when={children().length > 0}
         fallback={
           <Dropdown.Item
-            onSelect={() => {
-              action.action?.();
+            onSelect={async () => {
+              await action.action?.();
               props.onOpenChange(false);
             }}
           >
@@ -249,6 +261,10 @@ function MobileRender(
             } else setMuting(true);
           }}
         >
+          <Dynamic
+            component={action.muteMenu.muted ? BellSimple : BellSlash}
+            class="size-4 shrink-0"
+          />
           {action.muteMenu.muted
             ? action.muteMenu.unmuteLabel
             : action.muteMenu.label}
@@ -261,6 +277,17 @@ function MobileRender(
     const children = () => action.children?.filter(Boolean) ?? [];
     const expanded = () => expandedSubmenu() === action;
 
+    if (action.copy)
+      return (
+        <CopyButton
+          as={MobileDrawer.Item}
+          class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
+          onClick={() => action.action?.()}
+        >
+          <SplitMenuItemContent {...action} showHotkey={false} />
+        </CopyButton>
+      );
+
     return (
       <Show
         when={children().length > 0}
@@ -268,8 +295,8 @@ function MobileRender(
           <MobileDrawer.Item
             type="button"
             class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
-            onClick={(e) => {
-              action.action?.(e);
+            onClick={async (e) => {
+              await action.action?.(e);
               props.onOpenChange(false);
             }}
           >
@@ -442,8 +469,8 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     onEmailSaved: props.onEmailReminderSaved,
   });
   const addTagAction = makeAddTagAction();
-  const copyLinkAction = makeCopyLinkAction();
-  const copyEntityIdAction = makeCopyEntityIdAction();
+  const copyLinkAction = makeCopyLinkAction({ silent: true });
+  const copyEntityIdAction = makeCopyEntityIdAction({ silent: true });
   const changeIcon = useChangeEntityIcon();
   // Read shortcut availability from row getters so focus changes update only
   // the hint, without recreating the action groups and losing menu focus.
@@ -481,6 +508,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       return;
     return {
       label: t('appearance.title'),
+      icon: PaintBrush,
       group: 'file',
       action: () => {
         setOpen(false);
@@ -515,7 +543,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       label: muted
         ? t('entityActions.unmuteNotifications')
         : t('entityActions.muteNotifications'),
-      icon: BellSimple,
+      icon: muted ? BellSimple : BellSlash,
       muteMenu: muteAction.menu([entity]),
       action: () => {
         fireAndForget(muteAction.execute([entity]), 'entity-actions');
@@ -578,16 +606,11 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return {
       label: t('entityActions.copyLink'),
       icon: Link,
-      action: () => {
-        if (entity) {
-          fireAndForget(copyLinkAction.execute([entity]), 'entity-actions');
-        } else {
-          fireAndForget(
-            copyLinkAction.executeByBlock(props.id, props.entityKind),
-            'entity-actions'
-          );
-        }
-      },
+      copy: true,
+      action: () =>
+        entity
+          ? copyLinkAction.execute([entity])
+          : copyLinkAction.executeByBlock(props.id, props.entityKind),
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.copyLink);
       },
@@ -598,9 +621,8 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const copyEntityIdOp = (): SplitFileMenuAction => ({
     label: t('entityActions.copyId'),
     icon: Copy,
-    action: () => {
-      fireAndForget(copyEntityIdAction.executeById(props.id), 'entity-actions');
-    },
+    copy: true,
+    action: () => copyEntityIdAction.executeById(props.id),
     get hotkeyToken() {
       return activeHotkeyToken(TOKENS.entity.action.copyEntityId);
     },

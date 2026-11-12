@@ -315,9 +315,7 @@ function TaskSavedViewMenuItems(props: {
         const record = props.record;
         props.defer(() => create(record));
       }}
-      onCopyLink={() =>
-        fireAndForget(copySavedViewLink(props.record.id), 'saved-views')
-      }
+      onCopyLink={() => copySavedViewLink(props.record.id)}
     />
   );
 }
@@ -511,9 +509,9 @@ async function copySavedViewLink(id: string) {
   replacePaneSearchParams(url.searchParams, [
     { [tasksTabSearch.namespace]: params },
   ]);
-  if (await writeClipboardData({ 'text/plain': url.toString() }))
-    toast.success('Link copied');
-  else toast.failure('Could not copy link');
+  const copied = await writeClipboardData({ 'text/plain': url.toString() });
+  if (!copied) toast.failure('Could not copy link');
+  return copied;
 }
 
 export function TaskSaveViewButton() {

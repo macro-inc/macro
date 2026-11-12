@@ -31,7 +31,10 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
-import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -79,17 +82,29 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
+          <Show when={source.project()}>
+            {(project) => (
+              <EntityAppearanceTrigger
+                entity={{
+                  type: 'initiative',
+                  id: project().id,
+                  name: project().name,
+                  ownerId: project().ownerId,
+                  appearance: project().appearance,
+                }}
+                editable={canEditProject(project())}
+              />
+            )}
+          </Show>
           <ViewBreadcrumbs.Button
             class="gap-1.5"
             isActive={item.isActive()}
             onClick={item.onSelect}
             tooltip={name()}
           >
-            <EntityIcon
-              targetType="initiative"
-              appearance={source.project()?.appearance}
-              size="xs"
-            />
+            <Show when={!source.project()}>
+              <EntityIcon targetType="initiative" size="xs" />
+            </Show>
             <span class="truncate">{name()}</span>
           </ViewBreadcrumbs.Button>
         </div>
@@ -124,8 +139,8 @@ function ProjectTitleMenu(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
   const changeIcon = useChangeEntityIcon();
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
@@ -196,14 +211,9 @@ function ProjectTitleMenu(props: {
           fireAndForget(setOption(property, optionId), 'projects')
         }
         onCopyLink={(row) =>
-          fireAndForget(
-            copyLink.executeByBlock(row.project.id, 'initiative'),
-            'projects'
-          )
+          copyLink.executeByBlock(row.project.id, 'initiative')
         }
-        onCopyId={(row) =>
-          fireAndForget(copyId.executeById(row.project.id), 'projects')
-        }
+        onCopyId={(row) => copyId.executeById(row.project.id)}
         onShare={props.onShare}
         onDelete={() => {
           setError(undefined);

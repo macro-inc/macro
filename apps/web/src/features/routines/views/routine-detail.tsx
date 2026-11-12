@@ -7,6 +7,7 @@ import { formatDateAndTime } from '@entity';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
@@ -128,7 +129,7 @@ export function RoutineDetailView(props: {
   onRename(name: string): void;
   onBack(): void;
   onDelete(): void;
-  onCopyPrompt(prompt: string): Promise<void>;
+  onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   onChangeIcon?(): void;
   identityIcon?: JSX.Element;
@@ -169,7 +170,8 @@ export function RoutineDetailView(props: {
     return draft ? draftPrompt(draft) : '';
   };
   const copyPrompt = async () => {
-    if (prompt()) await props.onCopyPrompt(prompt());
+    if (!prompt()) return false;
+    return props.onCopyPrompt(prompt());
   };
   /** Why the Enabled switch can't change right now. */
   const activationHint = () => {
@@ -252,7 +254,7 @@ export function RoutineDetailView(props: {
                   copyDisabled={!prompt()}
                   onRun={runNow}
                   onEnabled={(enabled) => props.source.setEnabled(enabled)}
-                  onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
+                  onCopyPrompt={copyPrompt}
                 />
               </>
             )
@@ -271,6 +273,7 @@ export function RoutineDetailView(props: {
                   <Dropdown.Group>
                     <Show when={props.onChangeIcon}>
                       <Dropdown.Item onSelect={props.onChangeIcon}>
+                        <PaintBrushIcon class="size-4" />
                         {t('appearance.title')}
                       </Dropdown.Item>
                     </Show>

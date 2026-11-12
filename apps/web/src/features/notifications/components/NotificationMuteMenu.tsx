@@ -8,6 +8,9 @@ import {
   SubTrigger,
 } from '@core/component/ContextMenu';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -86,6 +89,7 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
       fallback={
         <MenuItem
           text={props.unmuteLabel}
+          icon={BellIcon}
           disabled={props.disabled}
           onClick={() => {
             props.onMute(false);
@@ -95,7 +99,11 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
       }
     >
       <ContextMenu.Sub>
-        <SubTrigger text={props.label} disabled={props.disabled} />
+        <SubTrigger
+          text={props.label}
+          icon={BellSlashIcon}
+          disabled={props.disabled}
+        />
         <ContextMenuContent submenu class="min-w-64">
           <For each={muteOptions(props)}>
             {(option) => (
@@ -108,6 +116,7 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
                   disabled={props.disabled}
                   onSelect={option.select}
                 >
+                  <ClockIcon class="size-4 shrink-0" />
                   <span class="min-w-0 flex-1 truncate">{option.label}</span>
                   <Show when={option.deadline}>
                     {(deadline) => (
@@ -132,6 +141,7 @@ export function NotificationMuteOptions(props: MuteOptionsProps) {
     <For each={muteOptions(props)}>
       {(option) => (
         <MobileDrawer.Item disabled={props.disabled} onClick={option.select}>
+          <ClockIcon class="size-4 shrink-0" />
           <span class="min-w-0 flex-1">{option.label}</span>
           <Show when={option.deadline}>
             {(deadline) => (

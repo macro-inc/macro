@@ -81,7 +81,7 @@ async function openMenu() {
 const entries = () =>
   screen
     .getAllByRole('menuitem')
-    .map((item) => item.firstChild?.textContent ?? '');
+    .map((item) => item.querySelector('.flex-1')?.textContent ?? '');
 
 describe('project actions dropdown', () => {
   it('offers an owner every action the row menu has', async () => {

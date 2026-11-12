@@ -8,7 +8,6 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
-import GitBranch from '@icon/system/regular/git-branch.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -297,9 +296,8 @@ export function useDispatchAgentSplitFileActions(): {
   const copyAsPrompt: CustomFileOperation = {
     label: COPY_ACTION.name,
     icon: COPY_ACTION.icon,
-    action: () => {
-      fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
-    },
+    copy: true,
+    action: () => executeAction(COPY_ACTION, { silent: true }),
   };
 
   return {
@@ -369,28 +367,19 @@ export function DispatchAgentButton(
       </ButtonGroup>
       <Dropdown.Content>
         <Dropdown.Group>
-          <Dropdown.Item
-            onSelect={() => {
-              fireAndForget(executeAction(COPY_ACTION), 'dispatch-agent');
-              setOpen(false);
-            }}
+          <Dropdown.CopyItem
+            onCopy={() => executeAction(COPY_ACTION, { silent: true })}
           >
-            <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
             <span class="flex-1 truncate">{COPY_ACTION.name}</span>
-          </Dropdown.Item>
+          </Dropdown.CopyItem>
           <Show when={isTask()}>
-            <Dropdown.Item
-              onSelect={() => {
-                fireAndForget(
-                  copyBranchNameToClipboard(blockId),
-                  'dispatch-agent'
-                );
-                setOpen(false);
-              }}
+            <Dropdown.CopyItem
+              onCopy={() =>
+                copyBranchNameToClipboard(blockId, { silent: true })
+              }
             >
-              <GitBranch class="size-4 shrink-0" />
               <span class="flex-1 truncate">Copy branch name</span>
-            </Dropdown.Item>
+            </Dropdown.CopyItem>
           </Show>
           <Dropdown.Item
             onSelect={() => {
